@@ -10,12 +10,9 @@
 
 namespace quadrants::lang {
 
-// One offloaded task's launch-ready artifact, persisted so a fresh process can launch it with no compilation (no
-// CHI->LLVM, no link, no optimize, no PTX/ptxas). The code alone is not enough: the launcher and graph builder consume
-// the `OffloadedTask` metadata (entry-fn name, dims, graph_do_while / parallel-group / region / checkpoint ids,
-// adstack, snode/arg read-write sets) and the runtime needs `used_tree_ids`. `code` is the backend payload -- PTX on
-// CUDA under Option B. `used_tree_ids` / `struct_for_tls_sizes` are stored sorted so the on-disk bytes are
-// deterministic (their live form is an unordered_set).
+// One offloaded task's launch-ready artifact, persisted so a fresh process can launch it with no compilation. `code`
+// is the backend payload (PTX on CUDA); the launcher/graph builder also need the OffloadedTask metadata and
+// used_tree_ids, so the code alone isn't enough. The int vectors are stored sorted for deterministic on-disk bytes.
 struct PerTaskArtifact {
   std::vector<OffloadedTask> tasks;
   std::vector<int> used_tree_ids;
@@ -44,10 +41,9 @@ class PerTaskArtifactCache {
     if (!std::filesystem::exists(p, ec)) {
       return false;
     }
-    // A truncated/corrupt record (bad disk, tampering, format skew) must degrade to a miss, not a hard failure.
-    // `read_from_binary_file` trusts the on-disk length header and can over-read / assert on a partial file, so read
-    // the bytes and decode via the length-checked `read_from_binary`, as the offline-cache metadata loader does.
-    // The size guard stops `retrieve_length()` reading past a file shorter than the length header itself.
+    // Degrade a truncated/corrupt record to a miss, not a crash: read_from_binary_file trusts the on-disk length
+    // header and can over-read, so decode via the length-checked read_from_binary (size guard covers a file shorter
+    // than the header itself).
     const std::vector<uint8_t> bytes = read_data_from_file(p);
     if (bytes.size() < sizeof(std::size_t)) {
       return false;
@@ -55,10 +51,8 @@ class PerTaskArtifactCache {
     if (!read_from_binary(*out, bytes.data(), bytes.size())) {
       return false;
     }
-    // A record can decode structurally yet be semantically empty (format skew / corruption that still leaves a valid
-    // length header). Every genuine artifact has at least one task and a non-empty backend payload, so treat empty as a
-    // miss: otherwise the caller builds a module-less task from it, which can trip CompiledKernelData::check() on a
-    // probe or reach cuModuleLoadDataEx with empty PTX on a `.qdc` load.
+    // A record can decode yet be semantically empty (corruption that leaves a valid length header). A genuine artifact
+    // always has >=1 task and non-empty code; treat empty as a miss so the caller can't build a broken task.
     if (out->tasks.empty() || out->code.empty()) {
       return false;
     }
@@ -80,10 +74,9 @@ class PerTaskArtifactCache {
     write_to_binary_file(rec, tmp);
     std::filesystem::rename(tmp, p, ec);
     if (ec) {
-      // POSIX rename atomically replaces an existing `p`, but on Windows it fails when `p` exists -- including when `p`
-      // is a corrupt record `try_load` just declined. Without repair that entry would miss and recompile in every
-      // future process. Drop the stale destination and retry so it self-heals; if it still fails, remove the temp so we
-      // never leak a `.tmp`. (On POSIX the first rename succeeds, so this path is Windows-only.)
+      // POSIX rename replaces an existing `p` atomically, but Windows fails when `p` exists (e.g. a corrupt record
+      // try_load declined), leaving it to miss forever. Drop the stale destination and retry so it self-heals; only if
+      // that also fails, remove the temp. (POSIX takes the first rename, so this path is Windows-only.)
       std::error_code repair_ec;
       std::filesystem::remove(p, repair_ec);
       std::filesystem::rename(tmp, p, ec);
@@ -113,11 +106,10 @@ inline std::string pertask_artifact_dir_for(const std::string &offline_cache_fil
   return offline_cache_file_path + "/pertask_artifacts";
 }
 
-// Process-global artifact directory, set once at LLVM-program construction. `codegen.cpp` (probe), `jit_cuda.cpp`
-// (fill) and `compiled_kernel_data.cpp` (`.qdc` load) all sit far from a `CompileConfig`, so they read the resolved
-// path from here rather than re-deriving it. A process-global is sound because Quadrants permits only one live Program
-// (its ctor asserts `num_instances_ == 0`), so there is never a second program to race on or clobber this. EMPTY means
-// the tier is disabled (offline cache off) -- every cache op then no-ops, so this is also the single off switch.
+// Process-global artifact directory, set once at LLVM-program construction. The probe (codegen.cpp), fill
+// (jit_cuda.cpp) and `.qdc` load (compiled_kernel_data.cpp) have no CompileConfig at hand, so they read it here.
+// Sound as a global because Quadrants allows only one live Program (its ctor asserts num_instances_ == 0). Empty
+// disables the tier (the single off switch).
 inline std::string &pertask_artifact_dir_ref() {
   static std::string dir;
   return dir;

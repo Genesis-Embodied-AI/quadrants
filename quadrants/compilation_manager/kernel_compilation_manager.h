@@ -53,9 +53,8 @@ struct CompileResult {
   int per_construct_total{-1};
   int per_construct_cache_hit{-1};
   int per_construct_recompiled{-1};
-  // Per-task BACKEND cache stats: how many of this kernel's offloaded tasks were served from the cross-process per-task
-  // artifact cache vs recompiled. A construct expands to one or more tasks, so these are a finer-grained view than the
-  // per-construct counts. `-1` => the per-task artifact tier did not run (non-CUDA, or offline cache off).
+  // Per-task BACKEND cache stats: how many offloaded tasks were served from the cross-process artifact cache vs
+  // recompiled (a finer-grained view than the construct counts). `-1` => the tier did not run (non-CUDA, or cache off).
   int per_task_total{-1};
   int per_task_cache_hit{-1};
   int per_task_recompiled{-1};

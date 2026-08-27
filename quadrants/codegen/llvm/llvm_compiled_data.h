@@ -201,10 +201,9 @@ struct LLVMCompiledTask {
   QD_IO_DEF(tasks);
 };
 
-// One offloaded task's self-contained artifact for the per-task path. `module` is the freshly-built LLVM module;
-// after the JIT assembles it, `code` holds the backend payload (PTX on CUDA under Option B). `key` is the per-task IR
-// key (+`#index`) the cross-process artifact cache stores under; the metadata fields are the launch info that must
-// travel with the code, filled by the JIT (which ends up holding the built artifact).
+// One offloaded task's self-contained artifact for the per-task path. `module` is the freshly-built module; after the
+// JIT assembles it, `code` holds the backend payload (PTX on CUDA). `key` is the per-task IR key the cross-process
+// cache stores under; the metadata fields are the launch info that travels with the code.
 struct PerConstructArtifact {
   std::unique_ptr<llvm::Module> module{nullptr};
   std::vector<char> code;
@@ -219,9 +218,8 @@ struct LLVMCompiledKernel {
   std::unique_ptr<llvm::Module> module{nullptr};
   // Per-task artifacts for the per-task path; empty => JIT uses the whole-module `module`. Transient (not serialized).
   std::vector<PerConstructArtifact> per_construct_artifacts;
-  // The `key` of each `per_construct_artifacts` entry, in order. Unlike the artifacts this IS serialized: it is how a
-  // kernel whose code lives in per-task artifacts gets a whole-kernel `.qdc` entry; on load the artifacts are rebuilt
-  // from these keys via `PerTaskArtifactCache`.
+  // The `key` of each `per_construct_artifacts` entry, in order. Unlike the artifacts this IS serialized: it's how an
+  // artifact-backed kernel gets a `.qdc` entry, rebuilt from the cache on load via `PerTaskArtifactCache`.
   std::vector<std::string> per_task_artifact_keys;
   LLVMCompiledKernel() = default;
   LLVMCompiledKernel(LLVMCompiledKernel &&) = default;

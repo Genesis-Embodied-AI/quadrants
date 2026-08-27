@@ -72,10 +72,9 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
   const int n = (int)offloads.size();
   std::vector<std::unique_ptr<LLVMCompiledTask>> data(n);
 
-  // Cross-process per-task artifact cache. On a hit this process skips a task's ENTIRE compilation (CHI->LLVM, link,
-  // optimize, PTX, ptxas) and carries the cached PTX + launch metadata straight to the launcher. Only the CUDA JIT
-  // fills it today, and reuse needs the per-task composite module path, so the tier is CUDA-only; the empty dir
-  // (offline cache off) disables it. Each task's IR key is kept so the artifacts below can be stored under it.
+  // Cross-process per-task artifact cache: on a hit this process skips a task's entire compilation and carries the
+  // cached PTX + launch metadata to the launcher. CUDA-only (only the CUDA JIT fills it, via the composite-module
+  // path); an empty dir (offline cache off) disables it.
   const std::string art_dir = pertask_artifact_dir_ref();
   const bool artifact_tier = compile_config_.arch == Arch::cuda && !art_dir.empty();
   const PerTaskArtifactCache artifact_cache(art_dir);
@@ -85,28 +84,20 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
   std::atomic<int> n_hit{0}, n_recompiled{0};
 
   for (int i = 0; i < n; i++) {
-    // Record each task's kernel-wide index (clone() carries it onto the per-task copy below). Each task is then
-    // lowered in isolation, where its one-task block's local index is always 0, so QD_DUMP_CFG reads this to give
-    // per-task CFG dumps a collision-free `_task<i>` name. Unconditional and inert -- never affects codegen.
+    // Stamp each task's kernel-wide index: lowered in isolation, a task's block-local index is always 0, so QD_DUMP_CFG
+    // reads this to give per-task CFG dumps a collision-free name. Inert -- never affects codegen.
     offloads[i]->as<OffloadedStmt>()->task_index = i;
     auto compile_func = [&, i] {
       tlctx_.fetch_this_thread_struct_module();
       auto offload = irpass::analysis::clone(offloads[i].get());
       irpass::re_id(offload.get());
 
-      // Tasks kept entirely off the artifact cache -- neither probed nor stored (an empty key makes the JIT fill skip
-      // the store), because the printed body the key hashes does not faithfully or deterministically capture their
-      // compiled code:
-      //  - adstack tasks: lowering registers per-task AdStack sizing as a compile-time side effect a hit would skip;
-      //  - external-func tasks: the body carries the so/bc path + name but not its contents, so an in-place update keeps
-      //    the key and a hit would run stale external code;
-      //  - real-func calls (FuncCallStmt): the printer emits only the callee name, but codegen inlines its body, so a
-      //    callee-body edit keeps the key and a hit would run stale code. (The whole-kernel key folds callee bodies in
-      //    via emit_dependencies; matching that for the per-task key is deferred with the production binary key.)
-      //  - mem_access_opt (BLS/read-only hints, on struct-/mesh-for tasks): the printer serializes it from an
-      //    unordered_map<SNode*, unordered_set<>> whose iteration order varies run-to-run (ASLR), so the same task
-      //    could get different keys across processes and never hit. Deferred with the production binary key, which can
-      //    serialize these in a stable order without touching the shared IR printer.
+      // Skip the artifact cache for tasks whose printed body doesn't faithfully/deterministically capture their
+      // compiled code (empty key => the JIT fill also skips the store):
+      //  - adstack: lowering registers per-task AdStack sizing as a side effect a hit would skip;
+      //  - external-func: the body has the so/bc path + name, not its contents, so a stale update keeps the key;
+      //  - real-func (FuncCallStmt): the printer emits only the callee name, but codegen inlines its body;
+      //  - mem_access_opt (BLS/read-only hints): serialized from an unordered_map, so its order varies by process.
       bool artifact_eligible = artifact_tier && offload->as<OffloadedStmt>()->mem_access_opt.get_all().empty();
       if (artifact_eligible) {
         irpass::analysis::gather_statements(offload.get(), [&artifact_eligible](Stmt *s) {
@@ -117,17 +108,14 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
         });
       }
 
-      // The key is name/index-independent, but the compiled module bakes the task's kernel-wide index into its
-      // entry-fn / shared-array / adstack symbol names, so key on `#index` too: two byte-identical tasks at different
-      // indices (e.g. repeated deactivate loops) must not alias to one artifact and collide at link.
+      // Key on `#index` too: the module bakes the task's kernel-wide index into its symbol names, so two
+      // byte-identical tasks at different indices must not alias (they would collide at link).
       std::string cache_key;
       if (artifact_eligible) {
         cache_key = get_hashed_per_task_cache_key(compile_config_, pertask_caps, offload->as<OffloadedStmt>(), kernel) +
                     "#" + std::to_string(i);
-        // Under kernel profiling, defeat the name-free cross-kernel aliasing: the stored artifact carries this task's
-        // OffloadedTask::name, which CUDAContext::launch feeds to the profiler's trace(), so a hit from a differently
-        // named kernel would bill its time under the first kernel's name. Scoping the key by kernel name keeps
-        // profiler attribution correct, at the cost of less sharing -- acceptable in a diagnostic-only mode.
+        // Under kernel profiling, drop the name-free cross-kernel aliasing: the artifact carries OffloadedTask::name,
+        // which the profiler bills against, so a cross-kernel hit would misattribute time. Costs sharing only here.
         if (compile_config_.kernel_profiler) {
           cache_key += "@" + kernel->get_name();
         }
@@ -154,10 +142,9 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
   }
   worker.flush();
 
-  // Per-task path (CUDA-only): one self-contained artifact per task, built BEFORE the whole-module link consumes
-  // `data`. A hit carries the cached PTX (`code`) with a null module; a miss builds the module for the JIT to
-  // compile and store. The launch/graph metadata (`tasks`, tree ids) travels with each so the JIT can persist a
-  // complete record -- the code alone cannot be launched. 7 and 8 extend consumption to CPU / AMDGPU.
+  // Build one self-contained artifact per task BEFORE the whole-module link consumes `data`. A hit carries cached PTX
+  // with a null module; a miss builds+optimizes a module for the JIT to compile and store. Launch metadata (`tasks`,
+  // tree ids) travels with each so the JIT can persist a launchable record.
   std::vector<PerConstructArtifact> per_construct_artifacts;
   if (compile_config_.arch == Arch::cuda) {
     for (int i = 0; i < n; i++) {
@@ -187,10 +174,9 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
     }
   }
 
-  // A cross-process hit leaves a task with no LLVM module here, so the whole-kernel link is impossible (and
-  // unnecessary -- the launcher assembles the CUmodule from the per-task artifacts). The kernel-level `tasks` list
-  // must still be the in-order concatenation of every task's metadata: the launcher and CUDA graph builder run off
-  // it. Otherwise take the normal whole-module path.
+  // A cross-process hit leaves a task with no module, so the whole-kernel link is impossible and unneeded (the
+  // launcher assembles the CUmodule from the per-task artifacts). But `tasks` must still be the in-order concatenation
+  // of every task's metadata -- the launcher and CUDA graph builder run off it.
   const bool code_only_tasks = std::any_of(data.begin(), data.end(), [](const auto &d) { return d && !d->module; });
   LLVMCompiledKernel llvm_compiled_kernel;
   if (code_only_tasks) {
@@ -206,11 +192,10 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
     optimize_module(llvm_compiled_kernel.module.get());
   }
   llvm_compiled_kernel.per_construct_artifacts = std::move(per_construct_artifacts);
-  // Persistable form of the artifacts: only with no whole-kernel module (the `.qdc` describes the kernel purely as an
-  // ordered list of per-task artifact keys, rebuilt from the cache on load) AND only when every task is keyed. A kernel
-  // mixing a cache hit with an ineligible task (external-func / adstack carry no key) can't be described this way:
-  // persisting the empty key would write a `.qdc` that never loads (`try_load("")` always misses), forcing a recompile
-  // every process. Leaving the keys empty makes `dump_impl` skip the `.qdc` (unpersistable) instead of writing a dud.
+  // Persistable form: describe the kernel as an ordered list of per-task keys (rebuilt from the cache on load), but
+  // only with no whole-kernel module AND when every task is keyed. A mix of a hit and an unkeyed (ineligible) task
+  // can't be described this way; leaving keys empty makes dump_impl skip the `.qdc` rather than write one that never
+  // loads.
   if (code_only_tasks) {
     const auto &arts = llvm_compiled_kernel.per_construct_artifacts;
     const bool all_keyed = std::all_of(arts.begin(), arts.end(), [](const auto &a) { return !a.key.empty(); });
@@ -221,10 +206,8 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
       }
     }
   }
-  // Record per-task reuse counts on the program-scoped surface; the compilation manager reads them back and Python
-  // surfaces them as `PerOffloadCacheObservations.tasks_*`. Only when the artifact tier ran, so non-CUDA / cache-off
-  // compiles keep the -1 sentinel rather than reporting a misleading 0. n_hit + n_recompiled == n by construction
-  // (every task takes exactly one branch), so `n` is the task total.
+  // Record per-task reuse counts for PerOffloadCacheObservations.tasks_* (read back by the compilation manager). Only
+  // when the tier ran, so non-CUDA / cache-off compiles keep the -1 sentinel instead of a misleading 0.
   if (artifact_tier && prog != nullptr) {
     auto &cc = prog->per_construct_cache();
     std::lock_guard<std::mutex> g(cc.mu);

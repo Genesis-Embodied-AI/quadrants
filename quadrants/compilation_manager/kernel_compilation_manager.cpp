@@ -38,11 +38,9 @@ struct CacheCleanerUtils<CacheData> {
 
   // To remove other files except cache files and offline cache metadta files
   static void remove_other_files(const CacheCleanerConfig &config) {
-    // Intentionally does NOT touch the per-task artifact dir. Correctness across a Quadrants upgrade is handled by
-    // version-keying the artifacts (an upgrade yields fresh keys, so a stale artifact is never reused), so no wipe is
-    // needed here. A wipe would also be actively harmful: this runs before the metadata `dump()`, so it could delete
-    // artifacts the current process just generated and is about to reference from a freshly written `.qdc`, stranding
-    // that entry. Reclaiming orphaned old-version artifacts is left to the planned size-based eviction follow-up.
+    // Deliberately does NOT touch the per-task artifact dir. Upgrades stay correct via version-keying (fresh keys, so
+    // a stale artifact is never reused), and a wipe here would be harmful: it runs before dump(), so it could delete
+    // artifacts this process just wrote and references from a fresh `.qdc`. Reclaim: eviction follow-up.
   }
 
   // To check if a file is cache file
@@ -96,8 +94,8 @@ CompileResult KernelCompilationManager::load_or_compile(const CompileConfig &com
       recompiled = it->second.recompiled;
       cc.last_stats.erase(it);
     }
-    // Per-task artifact-cache counts recorded by the LLVM codegen driver (CUDA only). Consumed the same way as the
-    // construct counts so a later recompile of the same name cannot read a stale probe result.
+    // Per-task artifact-cache counts recorded by the codegen driver (CUDA only). Erased on read like the construct
+    // counts, so a later recompile of the same name can't read a stale probe result.
     auto tit = cc.last_task_stats.find(kernel_def.get_name());
     if (tit != cc.last_task_stats.end()) {
       task_total = tit->second.total;

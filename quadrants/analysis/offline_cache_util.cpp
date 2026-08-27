@@ -214,19 +214,17 @@ std::string get_hashed_offline_cache_key_of_device_caps(const DeviceCapabilityCo
 
 namespace {
 
-// Serialize one task by its printed CHI-IR text: the printer renders every statement's opcode, operands (by SSA
-// name), result type, immediate fields and the offload header, so this covers both the task body and its launch
-// metadata. Deterministic because `re_id` has just renumbered the task (SSA names are order-derived) and the wrapper
-// / dbg-info are suppressed. Caveat: external-func printing emits `so_func` as a raw pointer (non-deterministic), so
-// external-func tasks must not be cached until this keys on the so/asm/bc contents instead.
+// Serialize a task as its printed CHI-IR text (opcodes, SSA-named operands, types, immediates, offload header).
+// Stable across processes only because `re_id` just renumbered the task. The printer omits some codegen-relevant
+// state -- see the out-of-band fields in get_hashed_per_task_cache_key and the eligibility gate in codegen.cpp.
 std::string serialize_task_body(OffloadedStmt *task) {
   std::string s;
   irpass::print(task, &s, /*print_ir_dbg_info=*/false, /*print_kernel_wrapper=*/false);
   return s;
 }
 
-// SNode tree roots the task touches, for the layout signature. Over-approximating (extra trees) only costs dedup
-// precision, never soundness. Deterministic order: keyed by tree id.
+// SNode tree roots the task touches, for the key's layout signature. Over-approximating (extra trees) only costs
+// dedup precision, not soundness.
 std::vector<const SNode *> gather_task_snode_roots(OffloadedStmt *task) {
   std::map<int, const SNode *> roots;  // tree_id -> root (sorted, dedup)
   auto add = [&roots](const SNode *sn) {
@@ -247,14 +245,12 @@ std::vector<const SNode *> gather_task_snode_roots(OffloadedStmt *task) {
       add(s->input_snode);
       add(s->output_snode);
     } else if (auto *s = stmt->cast<ClearListStmt>()) {
-      // A clear-list offload has no header SNode (task->snode == nullptr); its target lives only on the body's
-      // ClearListStmt. Codegen bakes that SNode's layout-derived parent/child metadata into PTX, so it must key the tree.
+      // A clear-list offload has no header SNode; its target lives only on the body's ClearListStmt.
       add(s->snode);
     }
     return false;
   });
-  // listgen / gc / struct_for carry their target on the offload header, not in the body, and the printed IR
-  // distinguishes them only by the SNode's layout-derived name -- so fold the header SNode too.
+  // listgen / gc / struct_for carry their target SNode on the offload header, not in the body.
   add(task->snode);
   std::vector<const SNode *> out;
   out.reserve(roots.size());
@@ -274,8 +270,8 @@ std::string get_hashed_per_task_cache_key(const CompileConfig &config,
   QD_ASSERT(kernel);
   auto compile_config_key = get_offline_cache_key_of_compile_config(config);
   auto device_caps_key = get_offline_cache_key_of_device_caps(caps);
-  // The task reads args / writes returns through the kernel's context struct, whose layout is the kernel's
-  // parameter/return ABI, not the task body -- so identical bodies under different ABIs must not share a module.
+  // Args/returns flow through the kernel's context struct, whose layout is the kernel ABI, not the task body:
+  // identical bodies under different ABIs must not share a module.
   auto kernel_params_key = get_offline_cache_key_of_parameter_list(kernel->parameter_list);
   auto kernel_rets_key = get_offline_cache_key_of_rets(kernel->rets);
   std::string task_body_string = serialize_task_body(task);
@@ -286,9 +282,8 @@ std::string get_hashed_per_task_cache_key(const CompileConfig &config,
   hasher.process(device_caps_key.begin(), device_caps_key.end());
   hasher.process(kernel_params_key.begin(), kernel_params_key.end());
   hasher.process(kernel_rets_key.begin(), kernel_rets_key.end());
-  // Layout signature + id of each touched tree: struct-access code is inlined per task, so the tree layout (not just
-  // its name, which is all the printed IR carries) is part of the compiled code, and the module references that
-  // tree's struct-access functions by id, so a cached module is only reusable for the same tree instance.
+  // Per touched tree, its layout signature + id: struct-access code is inlined and referenced by tree id, so the
+  // printed IR's SNode name alone is not enough -- a cached module is reusable only for the same tree instance.
   for (const SNode *root : gather_task_snode_roots(task)) {
     std::string snode_key = get_hashed_offline_cache_key_of_snode(root);
     hasher.process(snode_key.begin(), snode_key.end());
@@ -297,24 +292,18 @@ std::string get_hashed_per_task_cache_key(const CompileConfig &config,
   }
   hasher.process(task_body_string.begin(), task_body_string.end());
   hasher.process(autodiff_mode_string.begin(), autodiff_mode_string.end());
-  // Graph-region tags: gdw level, stream-parallel group, graph_parallel_context region, checkpoint id. The printed
-  // body carries only gdw_level, yet all four steer CUDA codegen / the launcher's OffloadedTask metadata. That is why
-  // the whole-kernel key hashes them out-of-band (gen_offline_cache_key.cpp, emit_graph_region_key); without it, two
-  // tasks with identical bodies but different regions would alias to one artifact.
+  // Graph-region tags (gdw level, stream-parallel group, graph_parallel_region, checkpoint): the printed body carries
+  // only gdw_level, but all four steer codegen / launcher metadata (cf. gen_offline_cache_key's emit_graph_region_key).
   std::string region_key = std::to_string(task->graph_do_while_level_id) + ":" +
                            std::to_string(task->stream_parallel_group_id) + ":" +
                            std::to_string(task->graph_parallel_region_id) + ":" + std::to_string(task->checkpoint_id);
   hasher.process(region_key.begin(), region_key.end());
-  // bit_vectorized (quant-array struct-for): omitted by the offload printer, but CUDA codegen branches on it in
-  // create_offload_struct_for() to pick a different leaf block / coordinate-refinement path. Without it, a task
-  // switched between normal and bit-vectorized traversal keeps its key and could reuse PTX for the wrong traversal.
+  // bit_vectorized: omitted by the offload printer, but codegen branches on it (create_offload_struct_for) to pick a
+  // different traversal, so the same body under each setting must key differently.
   std::string bit_vectorized_key = task->is_bit_vectorized ? "bv1" : "bv0";
   hasher.process(bit_vectorized_key.begin(), bit_vectorized_key.end());
-  // Fold in the Quadrants build version. The whole-kernel `.qdc` cache is version-gated by its metadata (loader /
-  // cleaner drop a version-mismatched entry), but the per-task artifact cache has no such gate, so without this a probe
-  // on an upgraded Quadrants would hit a byte-identical key and reuse the OLD build's PTX. Keying on the version turns
-  // an upgrade into a clean miss; the orphaned old-version files are reclaimed by the planned size-based eviction
-  // follow-up (they are never reused in the meantime, since their keys no longer match).
+  // Quadrants build version: unlike the whole-kernel `.qdc` (version-gated by its metadata), this tier has no version
+  // gate, so without this an upgrade would reuse the old build's PTX under a byte-identical key.
   std::string version_string = std::to_string(QD_VERSION_MAJOR) + "." + std::to_string(QD_VERSION_MINOR) + "." +
                                std::to_string(QD_VERSION_PATCH);
   hasher.process(version_string.begin(), version_string.end());
