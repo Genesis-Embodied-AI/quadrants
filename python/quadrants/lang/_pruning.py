@@ -7,6 +7,7 @@ from ._exceptions import raise_exception
 from ._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
 from .exception import QuadrantsSyntaxError
 from .func import Func
+from .kernel_arguments import ArgMetadata
 
 
 def _flatten_arg_node(node: expr) -> tuple[str, str] | None:
