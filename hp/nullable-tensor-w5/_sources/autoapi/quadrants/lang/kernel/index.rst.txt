@@ -185,6 +185,10 @@ Module Contents
       :type:  quadrants.lang._kernel_types.FeLlCacheObservations
 
 
+   .. py:attribute:: per_offload_cache_observations
+      :type:  quadrants.lang._kernel_types.PerOffloadCacheObservations
+
+
    .. py:attribute:: launch_observations
 
 

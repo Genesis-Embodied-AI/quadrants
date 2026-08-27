@@ -397,9 +397,8 @@
         <span class="n">full_name</span> <span class="o">=</span> <span class="n">prefix_name</span> <span class="o">+</span> <span class="s2">"_"</span> <span class="o">+</span> <span class="n">name</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">annotation</span><span class="p">,</span> <span class="n">primitive_types</span><span class="o">.</span><span class="n">RefType</span><span class="p">):</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
-        <span class="c1"># Optional ndarray slot passed None: no runtime arg is declared for this specialization; bind the name to the</span>
-        <span class="c1"># injected template global (None) so qd.static(x is not None) specializes the present-only body away. Same</span>
-        <span class="c1"># shape as the qd.Tensor field/None branch below. See design.md W5.</span>
+        <span class="c1"># Optional ndarray + None declares no runtime arg; bind the name to the injected None global so</span>
+        <span class="c1"># qd.static(x is not None) specializes the present-only body away.</span>
         <span class="k">if</span> <span class="n">this_arg_features</span> <span class="ow">is</span> <span class="n">OPTIONAL_ABSENT</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">ctx</span><span class="o">.</span><span class="n">template_vars</span><span class="p">:</span>
                 <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">template_vars</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
