@@ -23,6 +23,10 @@ from quadrants.lang import (
 )
 from quadrants.lang import ops as qd_ops
 from quadrants.lang._dataclass_util import create_flat_name
+from quadrants.lang._final_dataclass_fields import (
+    final_field_names,
+    is_final_annotation,
+)
 from quadrants.lang._optional_annotation import OPTIONAL_ABSENT
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
@@ -151,14 +155,25 @@ class FunctionDefTransformer:
         argument_name: str,
         argument_type: Any,
         this_arg_features: tuple[Any, ...],
+        arg_value: Any = None,
     ) -> None:
         pruning = ctx.global_context.pruning
         func_id = ctx.func.func_id
         if dataclasses.is_dataclass(argument_type):
             ctx.create_variable(argument_name, argument_type)
+            final_names = final_field_names(argument_type)
             for field_idx, field in enumerate(dataclasses.fields(argument_type)):
                 flat_name = create_flat_name(argument_name, field.name)
                 if pruning.enforcing and flat_name not in pruning.used_vars_by_func_id[func_id]:
+                    continue
+                # Bind ``flat_name`` to the value off the instance so a rewritten ``config.field`` resolves to a Python
+                # constant in ``build_Name`` - what makes ``qd.static(config.field)`` legal on a plain frozen dataclass.
+                if field.name in final_names:
+                    assert arg_value is not None, (
+                        f"Final-annotated dataclass field {field.name!r} needs the runtime dataclass instance to "
+                        f"bake its value; kernel-arg dispatch omitted ``arg_value``"
+                    )
+                    ctx.create_variable(flat_name, getattr(arg_value, field.name))
                     continue
                 # if a field is a dataclass, then feed back into process_kernel_arg recursively
                 if dataclasses.is_dataclass(field.type):
@@ -167,6 +182,7 @@ class FunctionDefTransformer:
                         flat_name,
                         field.type,
                         this_arg_features[field_idx],
+                        getattr(arg_value, field.name) if arg_value is not None else None,
                     )
                 elif isinstance(field.type, type) and getattr(field.type, "_data_oriented", False):
                     # ``@qd.data_oriented`` field type inside a typed-dataclass kernel arg. The two patterns are
@@ -230,6 +246,7 @@ class FunctionDefTransformer:
                 arg_meta.name,
                 arg_meta.annotation,
                 ctx.arg_features[i] if ctx.arg_features is not None else (),
+                ctx.py_args[i] if ctx.py_args is not None else None,
             )
 
         FunctionDefTransformer._predeclare_struct_ndarrays(ctx)
@@ -331,6 +348,11 @@ class FunctionDefTransformer:
         argument_type: Any,
         data: Any,
     ) -> None:
+        # A ``Final[T]`` leaf @qd.func arg: ``data`` already carries the resolved Python value, so bind it directly for
+        # ``qd.static(cfg.field)``. Before the ``annotations.template`` check (``Final[T]`` is not a ``template``).
+        if is_final_annotation(argument_type):
+            ctx.create_variable(argument_name, data)
+            return None
         # Template arguments are passed by reference.
         if isinstance(argument_type, annotations.template):
             ctx.create_variable(argument_name, data)

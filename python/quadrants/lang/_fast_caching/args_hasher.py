@@ -11,6 +11,11 @@ from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorWrapper
 from quadrants.types.annotations import Template
 
+from .._final_dataclass_fields import (
+    final_field_names,
+    final_scalar_key,
+    subtree_has_final_fields,
+)
 from .._ndarray import ScalarNdarray
 from ..field import ScalarField
 from ..kernel_arguments import ArgMetadata
@@ -83,14 +88,25 @@ def dataclass_to_repr(raise_on_templated_floats: bool, path: tuple[str, ...], ar
             return None
         if cached is not None:
             return cached
+    # A baked ``Final[T]`` field's *value* must be in the offline cache key too, else a kernel baked with one value
+    # loads for a config carrying another. Test: ``test_final_field_value_is_part_of_offline_fastcache_key``.
+    final_names = final_field_names(type(arg))
+    # Never cache a Final-bearing subtree's repr: it must recompute each launch to re-run ``final_scalar_key``'s
+    # validation, so we never store one (the read above then falls through).
+    cacheable = is_frozen and not subtree_has_final_fields(type(arg))
     repr_l = []
     for field in dataclasses.fields(arg):
         child_value = getattr(arg, field.name)
+        if field.name in final_names:
+            # Serialize via ``final_scalar_key`` (collision-safe, process-stable) and skip ``stringify_obj_type``: it
+            # has no bare-``str`` case, so a ``Final[str]`` would return None and disable the cache for the whole arg.
+            repr_l.append(f"{field.name}: (final) = {final_scalar_key(child_value)}")
+            continue
         _repr = stringify_obj_type(raise_on_templated_floats, path + (field.name,), child_value, arg_meta=None)
         if _repr is None:
             if isinstance(child_value, _FIELD_TYPES) and field.type is not _TensorWrapper:
                 _mark_should_warn()
-            if is_frozen:
+            if cacheable:
                 try:
                     object.__setattr__(arg, "_qd_dc_repr", _DC_REPR_NONE)
                 except AttributeError:
@@ -101,7 +117,7 @@ def dataclass_to_repr(raise_on_templated_floats: bool, path: tuple[str, ...], ar
             full_repr += f" = {child_value}"
         repr_l.append(full_repr)
     result = "[" + ",".join(repr_l) + "]"
-    if is_frozen:
+    if cacheable:
         try:
             object.__setattr__(arg, "_qd_dc_repr", result)
         except AttributeError:
