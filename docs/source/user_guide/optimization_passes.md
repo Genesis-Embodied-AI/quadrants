@@ -99,7 +99,9 @@ This section is for the curious; you never have to think about it to write kerne
 
 The frontend stages above - the passes that turn your high-level kernel into offloaded tasks - can run either once over the whole kernel or, for eligible kernels, separately for each **top-level construct** (each independent top-level loop or serial run in your kernel). Compiling each construct in isolation produces the same offloaded tasks and the same results as the whole-kernel path, so the split is transparent.
 
-Quadrants automatically falls back to the whole-kernel path whenever per-construct compilation would not be equivalent: [autodiff](autodiff.md) kernels, certain specialized kernels, and kernels where one construct's value depends on state another construct produced in a way that cannot be recomputed in isolation (for example a local variable that one top-level loop builds up over its iterations and another construct then reads, or a snapshot of a field that a later construct reads after an intervening write).
+The advantage of compiling each construct in isolation is caching granularity: it allows the compiled result to be cached per offloaded task rather than only for the entire `qd.kernel`, so editing one construct need only recompile that construct rather than the whole kernel.
+
+Quadrants automatically falls back to the whole-kernel path whenever per-construct compilation would not be equivalent: [autodiff](autodiff.md) kernels, certain specialized kernels, and kernels where one construct's value depends on state another construct produced in a way that cannot be recomputed in isolation. For example, a local variable that one top-level loop builds up over its iterations and another construct then reads, or a snapshot of a field that a later construct reads after an intervening write.
 
 That last case looks like this:
 
@@ -136,7 +138,3 @@ print(obs.frontend_constructs_cache_hit)   # how many were reused (always 0: eve
 ```
 
 All three fields are `-1` when the split did not run for this compile - either because the kernel took the whole-kernel fallback above, or because the compiled kernel was served from a cache (the [offline cache](init_options.md#offline_cache) or [fastcache](fastcache.md)) so no frontend ran at all.
-
-### Diagnostics under the split
-
-The IR-inspection flags from [Inspecting what the compiler did](#inspecting-what-the-compiler-did) stay observation-only when the split runs: they never change which path is taken, they just report each construct separately for the intermediate stages so the output reflects exactly what was compiled. `QD_DUMP_IR` writes each construct's post-simplify snapshot to `<kernel>_construct<i>_after_simplify_I.ll` (the final `<kernel>_after_offload.ll` stays whole-kernel - it is the reassembled result of all constructs), `QD_DUMP_SIMPLIFY` writes its usual per-pass files for each construct, and `print_ir` prints each construct's passes under a `[per-construct frontend split] <kernel> construct <i>` banner. `QD_DUMP_CFG` is the exception - the split still declines when it is set, so the frontend runs once over the whole kernel.
