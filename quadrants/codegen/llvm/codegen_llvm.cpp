@@ -3462,11 +3462,13 @@ void TaskCodeGenLLVM::set_args_ptr(Callable *callable, llvm::Value *context, llv
 };
 
 LLVMCompiledTask LLVMCompiledTask::clone() const {
-  return {tasks, llvm::CloneModule(*module), used_tree_ids, struct_for_tls_sizes};
+  return {tasks, module ? llvm::CloneModule(*module) : nullptr, used_tree_ids, struct_for_tls_sizes};
 }
 
 LLVMCompiledKernel LLVMCompiledKernel::clone() const {
-  LLVMCompiledKernel result{tasks, llvm::CloneModule(*module)};
+  // `module` is null for an artifact-backed kernel (every task came from the per-task cache); its code lives in
+  // `per_construct_artifacts` instead, cloned below.
+  LLVMCompiledKernel result{tasks, module ? llvm::CloneModule(*module) : nullptr};
   result.per_task_artifact_keys = per_task_artifact_keys;
   // The launcher consumes a clone, so the per-task artifacts must travel with it.
   result.per_construct_artifacts.reserve(per_construct_artifacts.size());
