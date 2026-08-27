@@ -1,12 +1,10 @@
-// Per-construct FRONTEND split (no reuse tier).
+// Per-construct FRONTEND split.
 //
-// Runs the remaining pre-offload + offload frontend (simplify / merge_global_ptrs / offload) PER top-level construct
-// and reassembles, instead of once over the whole kernel, so a later cross-process cache can key and reuse each
-// construct's frontend output independently. Each construct is isolated by its BACKWARD SLICE and the pass falls back
-// to the whole-kernel path for anything not recompute-safe.
-//
-// This lives in its own file (only `maybe_split_frontend_per_construct` is called from `compile_to_offloads`) to keep
-// the central pass's contact area with this experimental feature small -- see AGENTS.md ("Minimize contact area").
+// Runs the pre-offload + offload frontend (simplify / merge_global_ptrs / offload) per top-level construct and
+// reassembles, instead of once over the whole kernel, so each construct's compilation can be cached independently.
+// Each construct is isolated by its BACKWARD SLICE, and the pass falls back to the whole-kernel path for anything not
+// recompute-safe. It lives in its own file (only `maybe_split_frontend_per_construct` is called from
+// `compile_to_offloads`) to keep the central pass's contact area small -- see AGENTS.md ("Minimize contact area").
 
 #include "quadrants/ir/ir.h"
 #include "quadrants/ir/statements.h"
@@ -38,12 +36,8 @@
 namespace quadrants::lang {
 namespace {
 
-// Feature-local statement gather that ALSO offers container statements (loops / if / while / offloaded) to the
-// predicate, not just leaf statements. The shared `irpass::analysis::gather_statements` never tests a container
-// itself: `BasicStmtVisitor` claims those types with typed overloads that recurse into the body without consulting
-// the predicate. The split needs the container statements too -- to detect container KINDS (`MeshForStmt`, dynamic
-// -parallel loops) and to walk a construct's whole subtree including nested loops -- so it does that traversal here
-// rather than widening the shared analysis API for this experimental pass (AGENTS.md: minimize contact area).
+// Statement gather whose predicate also sees CONTAINER statements. The shared `gather_statements` only tests leaves:
+// its typed container overloads recurse into the body without consulting the predicate.
 class ContainerAwareGatherer : public BasicStmtVisitor {
  public:
   using BasicStmtVisitor::visit;
@@ -69,20 +63,14 @@ class ContainerAwareGatherer : public BasicStmtVisitor {
   std::function<bool(Stmt *)> test_;
 };
 
-// Like `irpass::analysis::gather_statements` but the predicate also sees container statements. See
-// `ContainerAwareGatherer`.
 std::vector<Stmt *> gather_stmts_incl_containers(IRNode *root, const std::function<bool(Stmt *)> &test) {
   ContainerAwareGatherer gatherer(test);
   root->accept(&gatherer);
   return gatherer.results_;
 }
 
-// Two-phase operand-remapping cloner for a SUBSET of a block's top-level statements. Kept local to this experimental
-// pass (AGENTS.md: minimize contact area) rather than widening the shared cloner in analysis/clone.cpp, since only the
-// split needs subset cloning. Mirrors that file's `IRCloner`: phase 1 records original->clone for every statement
-// (including nested ones, by walking container bodies in lockstep), phase 2 rewrites each clone's operands to the clone
-// when the referent is in the subset and leaves it pointing at the original otherwise -- so a caller that needs a
-// self-contained block must pass a subset closed under operands.
+// Two-phase operand-remapping clone of a SUBSET of a block's top-level statements. The subset must be closed under
+// operands: an operand outside it is left pointing at the original rather than a clone.
 class SubsetCloner : public IRVisitor {
  public:
   enum Phase { register_operand_map, replace_operand } phase;
@@ -100,10 +88,9 @@ class SubsetCloner : public IRVisitor {
     auto *other_stmt = other_->as<Stmt>();
     if (phase == register_operand_map) {
       operand_map_[stmt] = other_stmt;
-      // Container clones (IfStmt / RangeForStmt / StructForStmt / WhileStmt) rebuild via a typed constructor rather
-      // than the copy ctor, dropping two fields the whole-kernel path relies on; restore both (a no-op for leaf stmts
-      // whose copy-ctor clone already has them). region_tag names the graph region (checkpoint cp_id, do_while level)
-      // the serial offloader schedules the task by; dbg_info carries the source traceback used by later diagnostics.
+      // Typed container clones (If/RangeFor/StructFor/While) rebuild via a constructor that drops these two fields;
+      // restore them. region_tag sets the serial offloader's task scheduling (checkpoint/do_while level); dbg_info the
+      // source traceback.
       other_stmt->region_tag = stmt->region_tag;
       other_stmt->dbg_info = stmt->dbg_info;
     } else {
@@ -172,11 +159,8 @@ class SubsetCloner : public IRVisitor {
   std::unordered_map<Stmt *, Stmt *> operand_map_;
 };
 
-// Clone only the listed top-level statements (in the given order) into a fresh Block. The per-construct frontend split
-// needs one isolated copy per construct, and cloning the entire block each time is O(constructs x block size) -- ~5.9 s
-// on a 130-construct / 2685-statement kernel; the slice a construct actually needs is tiny by comparison. Offload has
-// not run at the split seam, so the top-level statements are leaves or serial/for/if/while containers (mesh-for kernels
-// fall back before this point), which `SubsetCloner` handles.
+// Clone the listed top-level statements (in order) into a fresh Block. Cloning the whole block per construct would be
+// O(constructs x block size); a construct's slice is tiny by comparison.
 std::unique_ptr<Block> clone_block_subset(Block *block, const std::vector<int> &indices) {
   auto nb = std::make_unique<Block>();
   nb->set_parent_callable(block->parent_callable());
@@ -187,8 +171,7 @@ std::unique_ptr<Block> clone_block_subset(Block *block, const std::vector<int> &
     srcs.push_back(s);
     nb->insert(s->clone());  // deep-clones nested blocks; operands still point at the originals until remapped below
   }
-  // Same two-phase walk as analysis/clone.cpp's IRCloner, driven per statement pair because the source and target
-  // blocks no longer line up index-for-index.
+  // Driven per statement pair: after subsetting, source and target blocks no longer line up index-for-index.
   SubsetCloner cloner(nb.get());
   for (int p = 0; p < 2; p++) {
     cloner.phase = (p == 0) ? SubsetCloner::register_operand_map : SubsetCloner::replace_operand;
@@ -200,29 +183,20 @@ std::unique_ptr<Block> clone_block_subset(Block *block, const std::vector<int> &
   return nb;
 }
 
-// Run the whole pre-offload + offload frontend on ONE isolated top-level construct instead of once over the whole
-// kernel. Mirrors the kNone / non-mesh portion of the whole-kernel sequence in `compile_to_offloads` between simplify_I
-// and simplify_III, in the same order, so a per-construct compile produces the same tasks the whole-kernel path would
-// for that construct. `cb` is a construct already isolated + recomputed (other constructs dropped, shared defs DIE'd)
-// by `split_frontend_per_construct`.
+// Run the pre-offload + offload frontend on ONE isolated construct, mirroring the kNone/non-mesh whole-kernel sequence
+// in `compile_to_offloads` (simplify_I .. simplify_III, same order) so the construct yields the same tasks.
 void run_construct_frontend(IRNode *cb,
                             const CompileConfig &config,
                             const Kernel *kernel,
                             bool verbose,
                             int construct_index) {
   const std::string &name = kernel->get_name();
-  // print_ir / QD_DUMP_IR are observation-only under the split: instead of forcing the whole-kernel path, we let the
-  // split run and make its console prints / IR dumps reflect what was actually compiled -- one set per construct.
-  // print_ir already flows through `verbose` into each pass printer below; this banner just labels whose IR follows.
+  // print_ir / QD_DUMP_IR are observation-only: the split still runs, and its prints/dumps come out per construct.
   if (verbose)
     std::cout << "[per-construct frontend split] " << name << " construct " << construct_index << std::endl;
-  // QD_DUMP_IR: dump this construct's post-simplify_I IR to <kernel>_construct<i>_after_simplify_I.ll -- the
-  // intermediate stage the whole-kernel path can no longer show once the split runs the simplify stages per construct
-  // (the construct index keeps constructs from colliding on one filename). We deliberately do NOT emit a per-construct
-  // after_offload dump: compile_to_offloads.cpp still writes the whole-kernel reassembled <kernel>_after_offload.ll
-  // (every construct's offloaded tasks), so a per-construct copy would only duplicate it -- and would double-count in
-  // consumers that glob "*after_offload*" (e.g. test_loop_config_name, test_stable_gtmp_offsets). No-op unless
-  // QD_DUMP_IR=1.
+  // Dump only the post-simplify_I stage per construct -- the intermediate the whole-kernel path can no longer show
+  // once simplify runs per construct. No per-construct after_offload dump: the reassembled whole-kernel
+  // <kernel>_after_offload.ll already covers it, and a copy would double-count in consumers that glob after_offload.
   const char *dump_ir_env = std::getenv(DUMP_IR_ENV.data());
   const bool dump_ir = dump_ir_env != nullptr && std::string(dump_ir_env) == "1";
   auto dump_stage = [&](const std::string &stage) {
@@ -238,9 +212,7 @@ void run_construct_frontend(IRNode *cb,
     if (ofs.good())
       ofs << ir_str;
   };
-  // Mirror the whole-kernel path's `verify_if_debug` after each stage (compile_to_offloads.cpp). It is a no-op unless
-  // config.debug, so it is free in release builds; under debug=True it keeps the per-construct path catching malformed
-  // IR at the responsible pass instead of letting it slip through to codegen.
+  // `verify_if_debug` after each stage mirrors the whole-kernel path; a no-op unless config.debug.
   irpass::full_simplify(cb, config, {false, /*autodiff_enabled*/ false, name, verbose, "simplify_I"});
   irpass::analysis::verify_if_debug(cb, config);
   dump_stage("after_simplify_I");
@@ -268,20 +240,14 @@ void run_construct_frontend(IRNode *cb,
 bool block_has_mesh_for(Block *block) {
   if (block == nullptr)
     return false;
-  // Gathering containers is not optional here: `MeshForStmt` is a container, so a leaf-only gather would match
-  // nothing and silently pass every mesh kernel into the split, which produces IR that segfaults at launch.
+  // Must gather containers: `MeshForStmt` is a container, so a leaf-only gather would pass every mesh kernel through.
   return !gather_stmts_incl_containers(block, [](Stmt *s) { return s->is<MeshForStmt>(); }).empty();
 }
 
-// Whether the kernel contains a concurrently-executed region: a `qd.stream_parallel()` block or a
-// `qd.graph.parallel()` section, both of which tag their loops with a nonzero `stream_parallel_group_id` /
-// `graph_parallel_region_id`. Those regions run on separate streams while sharing one kernel context and its single
-// global-temporary buffer. The per-construct split runs `offload` INDEPENDENTLY per construct, and each run restarts
-// global-temporary offset allocation from zero, so two concurrent constructs (e.g. dynamic-bound loops whose bounds
-// flow through a global temp) would alias the same offset and race on the shared buffer -- a loop could consume the
-// other section's bound and skip iterations or read out of bounds. The whole-kernel offload instead assigns unique
-// offsets across all tasks, so fall back for any kernel with a concurrent region. Gathers containers so loops nested
-// inside the region's block are inspected too.
+// A concurrently-executed region: a `qd.stream_parallel()` / `qd.graph.parallel()` loop (nonzero
+// stream_parallel_group_id / graph_parallel_region_id). Such regions run on separate streams sharing one
+// global-temporary buffer, but the split runs `offload` per construct and each run restarts global-temp offsets from
+// zero, so two concurrent constructs would alias the same offset and race. Fall back for these.
 bool block_has_concurrent_region(Block *block) {
   if (block == nullptr)
     return false;
@@ -294,12 +260,10 @@ bool block_has_concurrent_region(Block *block) {
           }).empty();
 }
 
-// Resolve a local pointer to its base AllocaStmt: an AllocaStmt directly, a MatrixPtrStmt into one (matrix/vector
-// element), or a GetElementStmt into one (`qd.Struct` member). Returns nullptr when the pointer is not alloca-based
-// (e.g. a global pointer / global temporary), in which case it is not a local variable. Chasing GetElementStmt matters
-// for the cross-construct analyses: a struct member is stored via `LocalStoreStmt(GetElementStmt(alloca), ...)`, so
-// without following `src` the member's writer (and any producing loop) is dropped from a consumer's slice and it reads
-// the stale value.
+// Resolve a local pointer to its base AllocaStmt, chasing MatrixPtrStmt (matrix/vector element) and GetElementStmt
+// (`qd.Struct` member) origins. Returns nullptr for non-local pointers (global ptr / global temp). Following
+// GetElementStmt matters: a struct member store is `LocalStoreStmt(GetElementStmt(alloca), ...)`, so otherwise the
+// member's writer is dropped from a consumer's slice.
 Stmt *resolve_local_alloca(Stmt *ptr) {
   while (ptr != nullptr) {
     if (ptr->is<AllocaStmt>())
@@ -336,37 +300,29 @@ Stmt *top_level_owner(Stmt *s, Block *top, bool *inside_container) {
   return (b == top) ? cur : nullptr;
 }
 
-// Whether a top-level statement is a *real* observable effect that forces its segment to become a task. Pointer/address
-// computations (GlobalPtr/ExternalPtr/MatrixPtr) report has_global_side_effect()==true because of sparse activation,
-// but they are not standalone effects -- they are the address half of a load/store and get recomputed into whichever
-// construct consumes them (e.g. a dynamic loop bound `range(lo[None], hi[None])` lowers to GlobalPtr+GlobalLoad in a
-// serial segment that must NOT become its own task; it is recomputed into the loop construct via the backward slice).
+// A real observable effect that forces its segment to become a task. Pointer/address stmts (GlobalPtr/ExternalPtr/
+// MatrixPtr) report has_global_side_effect()==true but are only the address half of a load/store, so exclude them --
+// they get recomputed into whichever construct consumes them.
 bool stmt_is_task_effect(Stmt *s) {
   if (s->is<GlobalPtrStmt>() || s->is<ExternalPtrStmt>() || s->is<MatrixPtrStmt>())
     return false;
   return s->has_global_side_effect();
 }
 
-// A load from global memory (field / ndarray). These are side-effect-free, so the backward slice may recompute them
-// into a later construct -- subject to the shadowing check in `split_is_recompute_safe`.
 bool stmt_is_global_read(Stmt *s) {
   return s->is<GlobalLoadStmt>();
 }
 
-// A volatile global load (`qd.volatile_load`). Volatile semantics require the access to happen exactly once, in place,
-// on every execution -- so, unlike a plain load, it must NEVER be recomputed into another construct: cloning it turns
-// one source-level observation of a concurrently-updated cell into several and reorders it relative to surrounding
-// work.
+// A volatile load must be observed exactly once in place, so unlike a plain load it must never be recomputed into
+// another construct.
 bool stmt_is_volatile_load(Stmt *s) {
   auto *ld = s->cast<GlobalLoadStmt>();
   return ld != nullptr && ld->is_volatile;
 }
 
-// Segmentation of the top-level block the way `offload` will chunk it into tasks: every container statement
-// (RangeFor/StructFor/While/...) is its own segment, and every maximal run of consecutive non-container (serial)
-// statements is one serial segment. A construct = a segment that emits a task: containers always do; a serial run does
-// iff it contains a real effect (`stmt_is_task_effect`). A serial run of only pure value defs / pointer chains (e.g.
-// dynamic loop bounds) emits no task and is recomputed into whichever construct consumes it.
+// Segment the top-level block the way `offload` chunks it into tasks: each container is its own segment; each maximal
+// run of serial statements is one segment. A construct is a segment that emits a task -- containers always do, a serial
+// run only if it contains a real effect. A pure serial run emits no task and is recomputed into its consumers.
 struct TopLevelSegments {
   std::vector<int> seg_id;           // per top-level statement index -> segment id
   std::vector<bool> seg_emits_task;  // per segment -> is it a construct (emits a task)
@@ -473,11 +429,9 @@ std::unordered_map<Stmt *, std::vector<std::pair<int, Stmt *>>> gather_top_level
   return alloca_writers;
 }
 
-// Backward slice of construct `k`: segment k's whole subtree plus the transitive operand-def chain it reads
-// (const/arg/binop/pointer/field-load chains from earlier segments, recomputed into this construct), including the
-// top-level writers -- from earlier segments only, in source order -- of any local it loads. Computed on the ORIGINAL
-// block; returns the set of original statements the construct needs (no cloning -- callers clone the surviving
-// statements themselves).
+// Backward slice of construct `k`: k's subtree, the transitive operand chain it reads, and (for any local it loads)
+// that local's top-level writers from EARLIER segments. Computed on the original block; returns the needed original
+// statements, which callers clone.
 std::unordered_set<Stmt *> compute_construct_needed(
     Block *block,
     const std::vector<int> &seg_id,
@@ -489,8 +443,7 @@ std::unordered_set<Stmt *> compute_construct_needed(
   auto add_with_subtree = [&needed, &worklist](Stmt *s) {
     if (needed.insert(s).second)
       worklist.push_back(s);
-    // Gather containers too: a nested loop or branch has operands of its own (bounds, conditions) that the slice has
-    // to follow, so it has to enter the worklist like any other statement.
+    // Containers too: a nested loop/branch has its own operands (bounds, conditions) the slice must follow.
     for (Stmt *sub : gather_stmts_incl_containers(s, [](Stmt *) { return true; }))
       if (needed.insert(sub).second)
         worklist.push_back(sub);
@@ -506,10 +459,8 @@ std::unordered_set<Stmt *> compute_construct_needed(
     for (Stmt *op : s->get_operands())
       if (op != nullptr && needed.insert(op).second)
         worklist.push_back(op);
-    // Reaching an alloca means this construct reads the local; bring its top-level writers (and their operand chains)
-    // along, or the construct compiles against an uninitialized variable. Only writers in an EARLIER segment can supply
-    // the value read: a writer from k's own or a later segment must not be cloned in (writers inside k are already in
-    // `needed` via the segment loop above, so restricting to `seg_id < k` loses nothing).
+    // This construct reads a local: pull its writers from EARLIER segments only (a writer in k's own or a later
+    // segment must not be cloned in; own-segment writers are already in `needed`).
     if (s->is<AllocaStmt>()) {
       auto it = alloca_writers.find(s);
       if (it != alloca_writers.end()) {
@@ -543,12 +494,7 @@ bool split_is_recompute_safe(Block *block) {
   if (block == nullptr)
     return false;
 
-  // (1) Loop-carried locals. Writers are found generically via the shared `Store` trait (`stmt_local_write_allocas`)
-  // and readers via the shared `Load` trait (`stmt_local_read_allocas`), so any statement that touches a local counts
-  // without enumerating statement types: writers include `LocalStoreStmt`, `AtomicOpStmt`, a `qd.append`
-  // (`SNodeOpStmt::allocate`), a `@qd.real_func` writing through a `qd.ref` arg (`FuncCallStmt`), and an external /
-  // bitcode call (`ExternalFuncCallStmt`); readers include `LocalLoadStmt`, `AtomicOpStmt` (read-modify-write), and the
-  // `ReferenceStmt` that carries a `qd.ref` arg into a `@qd.real_func` even when the callee only READS the local.
+  // (1) Loop-carried locals: reject a loop-written local shared across more than one construct.
   auto accesses = irpass::analysis::gather_statements(
       block, [](Stmt *s) { return !stmt_local_read_allocas(s).empty() || !stmt_local_write_allocas(s).empty(); });
   std::unordered_map<Stmt *, std::set<Stmt *>> read_owners;        // alloca -> top-level constructs that read it
@@ -578,8 +524,7 @@ bool split_is_recompute_safe(Block *block) {
   std::unordered_map<Stmt *, int> top_index;
   for (int j = 0; j < n; j++)
     top_index[block->statements[j].get()] = j;
-  // Any real effect (`stmt_is_task_effect`) counts as an intervening mutation of global state: global/ndarray stores,
-  // global atomics, AND sparse-structure ops (`SNodeOpStmt` activate/deactivate inherit has_global_side_effect==true).
+  // Top-level positions performing a real effect (includes sparse-structure ops, not just stores/atomics).
   std::vector<bool> writes_global(n, false);
   for (Stmt *w : gather_stmts_incl_containers(block, [](Stmt *s) { return stmt_is_task_effect(s); })) {
     bool inside = false;
@@ -604,9 +549,8 @@ bool split_is_recompute_safe(Block *block) {
     if (b_lo < 0)
       continue;
     auto needed = compute_construct_needed(block, segs.seg_id, k, alloca_writers);
-    // (2) Every statement this construct recomputes from ANOTHER segment must be purely recomputable. An effectful
-    // statement (atomic, global store, sparse op, ...) already emits its own task in its home segment, so cloning it
-    // here would run the effect twice; a RandStmt would draw a fresh sample and advance the PRNG per clone.
+    // Scan the slice: (2) reject a non-recomputable producer recomputed from another segment; (3) track the earliest
+    // recomputed global read, checked against intervening effects below.
     int min_recomputed_read_pos = -1;
     for (Stmt *s : needed) {
       bool inside = false;
@@ -619,9 +563,7 @@ bool split_is_recompute_safe(Block *block) {
       int pos = it->second;
       if (segs.seg_id[pos] != k && (stmt_is_task_effect(s) || s->is<RandStmt>() || stmt_is_volatile_load(s)))
         return false;  // recomputing another segment's effect, PRNG draw, or volatile load would change behavior
-      // (3) Earliest top-level position of a global read this construct RECOMPUTES (one that lives in an earlier
-      // segment; reads in the construct's own segment are not moved). If a global write sits strictly between that read
-      // and the construct, the recomputed read would observe the mutation -> not safe.
+      // Earliest recomputed global read from an earlier segment (reads in k's own segment are not moved).
       if (stmt_is_global_read(s) && pos < b_lo && (min_recomputed_read_pos < 0 || pos < min_recomputed_read_pos))
         min_recomputed_read_pos = pos;
     }
@@ -674,9 +616,8 @@ void split_frontend_per_construct(IRNode *ir, const CompileConfig &config, const
   auto segs = segment_top_level(block);
   auto alloca_writers = gather_top_level_alloca_writers(block);
 
-  // Program-scoped record of this split's stats (total / hit / recompiled per kernel), read back by the compilation
-  // manager into the observability surface (there rather than in a backend codegen driver, to stay backend-agnostic).
-  // `hit` stays 0 until a reuse tier lands.
+  // Program-scoped stats (total / hit / recompiled per kernel), read back by the compilation manager to stay
+  // backend-agnostic. `hit` stays 0 until a reuse tier lands.
   PerConstructCache *cc = (kernel->program != nullptr) ? &kernel->program->per_construct_cache() : nullptr;
 
   std::vector<std::unique_ptr<Stmt>> tasks;
@@ -685,9 +626,7 @@ void split_frontend_per_construct(IRNode *ir, const CompileConfig &config, const
     if (!segs.seg_emits_task[k])
       continue;  // pure-def-only serial run: no standalone task, recomputed into consuming constructs below
     n_constructs++;
-    // Isolate construct k by its BACKWARD SLICE and keep only the surviving top-level statements. The slice is computed
-    // on the ORIGINAL block; cloning the whole block first and deleting afterwards is O(constructs x block size) so we
-    // clone only the construct that survives.
+    // Isolate construct k by its backward slice, keeping only the surviving top-level statements.
     auto needed = compute_construct_needed(block, segs.seg_id, k, alloca_writers);
     std::vector<int> keep_indices;
     for (int j = 0; j < n; j++) {
@@ -757,18 +696,14 @@ bool maybe_split_frontend_per_construct(IRNode *ir,
     return false;  // concurrent constructs share one global-temp buffer; per-construct offload would alias offsets
   if (!split_is_recompute_safe(block))
     return false;
-  // Cost guard. The split recompiles each construct over its backward slice, so a kernel whose constructs share a large
-  // serial prefix recompiles that prefix once per construct -- O(#constructs x prefix) frontend work for NO benefit
-  // until the cross-process cache lands. Bound the split to a small multiple of the whole-kernel compile and fall back
-  // above it. QD_SPLIT_MAX_COST_RATIO overrides the cap (for tuning / to disable the guard); QD_SPLIT_STATS=1 prints
-  // the per-kernel estimate. See `estimate_split_cost`.
+  // Cost guard: recompiling a large shared prefix once per construct is pure overhead with no reuse tier, so fall back
+  // above a ratio cap. QD_SPLIT_MAX_COST_RATIO overrides the cap; QD_SPLIT_STATS logs the per-kernel estimate.
   SplitCost cost = estimate_split_cost(block);
   double max_ratio = 4.0;
   if (const char *r = std::getenv("QD_SPLIT_MAX_COST_RATIO"))
     max_ratio = std::atof(r);
   const bool would_fall_back = cost.ratio() > max_ratio;
-  // QD_SPLIT_STATS: "1" prints per-kernel cost to stdout; any other value is treated as a file path to APPEND to
-  // (robust when kernels compile inside pytest-forked children, whose stdout is not captured). Debug/tuning only.
+  // QD_SPLIT_STATS: "1" prints the per-kernel cost; any other value is a file path to append to. Debug/tuning only.
   if (const char *sf = std::getenv("QD_SPLIT_STATS")) {
     std::ostringstream line;
     line << kernel->get_name() << " constructs=" << cost.n_constructs << " total_stmts=" << cost.total_stmts

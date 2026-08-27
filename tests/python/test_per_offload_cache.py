@@ -89,8 +89,7 @@ def test_per_construct_frontend_split_observations_reset_on_cached_relaunch() ->
     assert obs.frontend_constructs_total == 2, obs
     assert obs.frontend_constructs_cache_hit == 0, obs
 
-    # Second launch reuses the compiled artifact (no split runs), so the observation reports the no-split sentinel
-    # rather than the 2 constructs the first compile recorded.
+    # Second launch reuses the compiled artifact, so the observation resets to the sentinel.
     kernel_relaunch(arr)
     obs = kernel_relaunch._primal.per_offload_cache_observations
     assert obs.frontend_constructs_total == -1, obs
@@ -100,9 +99,8 @@ def test_per_construct_frontend_split_observations_reset_on_cached_relaunch() ->
 
 @test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
 def test_per_construct_frontend_split_correct_with_shared_serial_def() -> None:
-    # A serial prologue defines `base`, consumed by two later loop constructs. The backward slice must recompute the
-    # defining stores into each consuming construct (an operand-only slice would drop them and read zeros). Asserts the
-    # split fires and stays numerically correct.
+    # A serial prologue defines `base`, consumed by two later loop constructs; the backward slice must recompute the
+    # defining stores into each (an operand-only slice would drop them and read zeros).
     @qd.kernel
     def kernel_shared(x: qd.types.ndarray(), y: qd.types.ndarray()) -> None:
         base = _C[0] + _C[1]
@@ -126,10 +124,9 @@ def test_per_construct_frontend_split_correct_with_shared_serial_def() -> None:
 
 @test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
 def test_per_construct_frontend_split_scalar_reassigned_between_constructs() -> None:
-    # A top-level scalar is REASSIGNED between two constructs, so each loop must observe the store that precedes IT in
-    # source order (loop0 -> 1, loop1 -> 2). The backward slice may pull a local's writers only from EARLIER segments;
-    # cloning the later `a = 2` into loop0's slice would make the isolated loop0 read 2 instead of 1. Regression test
-    # for the source-order restriction on local writers in the slice.
+    # A top-level scalar is reassigned between two constructs, so each loop must read the store that precedes it
+    # (loop0 -> 1, loop1 -> 2). Guards the slice's source-order restriction: only writers from EARLIER segments are
+    # pulled in, else loop0 would clone the later `a = 2` and read 2.
     @qd.kernel
     def kernel_reassign(a_out: qd.types.ndarray(), b_out: qd.types.ndarray()) -> None:
         a = 1
@@ -144,9 +141,7 @@ def test_per_construct_frontend_split_scalar_reassigned_between_constructs() -> 
     kernel_reassign(a_arr, b_arr)
 
     obs = kernel_reassign._primal.per_offload_cache_observations
-    # The scalar is written at top level (not loop-carried), so the kernel is recompute-safe and the split fires.
     assert obs.frontend_constructs_total == 2, obs
-    # Each loop reads the value assigned immediately before it, NOT the later reassignment.
     assert (a_arr.to_numpy() == 1).all(), a_arr.to_numpy()
     assert (b_arr.to_numpy() == 2).all(), b_arr.to_numpy()
 
@@ -171,8 +166,6 @@ def test_per_construct_frontend_split_fallback_not_recompute_safe() -> None:
 
     obs = kernel_unsafe._primal.per_offload_cache_observations
     assert obs.frontend_constructs_total == -1, obs
-
-    # Correctness of the whole-kernel fallback path.
     assert np.allclose(y.to_numpy(), float(np.arange(_N).sum()), atol=1e-2), y.to_numpy()
 
 
@@ -196,9 +189,7 @@ def test_per_construct_frontend_split_fallback_field_load_shadowed() -> None:
 
     obs = kernel_shadow._primal.per_offload_cache_observations
     assert obs.frontend_constructs_total == -1, obs
-
-    # `base` must be the ORIGINAL x[0] (7.0), not the value the first loop wrote (2.0). A split that recomputed the
-    # load after the store would wrongly yield 2.0.
+    # `base` must stay the ORIGINAL x[0] (7.0), not the 2.0 the first loop wrote.
     assert np.allclose(y.to_numpy(), 7.0, atol=1e-2), y.to_numpy()
 
 
@@ -245,8 +236,7 @@ def test_per_construct_frontend_split_fallback_effectful_producer() -> None:
     obs = kernel_atomic._primal.per_offload_cache_observations
     assert obs.frontend_constructs_total == -1, obs
 
-    # The atomic must run exactly ONCE: counter == 1, and every out[i] is the pre-increment return value 0. A split that
-    # cloned the atomic into the loop construct would increment counter twice and store 1.
+    # Atomic runs exactly once: counter == 1, every out[i] the pre-increment 0.
     assert int(counter.to_numpy()[0]) == 1, counter.to_numpy()
     assert np.all(out.to_numpy() == 0), out.to_numpy()
 
@@ -271,8 +261,7 @@ def test_per_construct_frontend_split_fallback_random_producer() -> None:
     obs = kernel_rand._primal.per_offload_cache_observations
     assert obs.frontend_constructs_total == -1, obs
 
-    # Both loops must observe the SAME sample. If the split recomputed qd.random() per construct the two loops would get
-    # different draws.
+    # Both loops must observe the same sample (recomputing per construct would draw twice).
     assert np.allclose(x.to_numpy(), y.to_numpy()), (x.to_numpy(), y.to_numpy())
 
 
@@ -359,18 +348,15 @@ def test_per_construct_frontend_split_fallback_sparse_deactivate_shadow() -> Non
     obs = kernel_sparse._primal.per_offload_cache_observations
     assert obs.frontend_constructs_total == -1, obs
 
-    # snap captured the original x[0] == 7.0 before the deactivation, so every y[i] must be 7.0, not the 0 a
-    # recomputed-after-deactivate load would read.
+    # snap captured x[0] == 7.0 before the deactivation, so every y[i] must be 7.0, not 0.
     assert np.allclose(y.to_numpy(), 7.0), y.to_numpy()
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False, require=qd.extension.sparse)
 def test_per_construct_frontend_split_fallback_append_result_shared() -> None:
-    # `idx` captures the index returned by a top-level `qd.append` -- an `SNodeOpStmt::allocate` that writes its result
-    # through a local alloca WITHOUT a `LocalStoreStmt`. A later construct reads `idx`. If the append is not tracked as
-    # a local writer, the consumer's backward slice pulls a zero-initialized alloca (reads 0) and the effectful-producer
-    # gate never sees the append; the split must treat the append as a writer, notice the effect crossing constructs,
-    # and fall back.
+    # `idx` captures the index a top-level `qd.append` returns -- an `SNodeOpStmt::allocate` that writes its result
+    # through a local alloca with no `LocalStoreStmt`. Unless the append is tracked as a local writer, a later reader's
+    # slice pulls a zero-init alloca and the effectful-producer gate never sees it. Must fall back.
     a = qd.field(qd.i32)
     qd.root.dynamic(qd.i, 256).place(a)
 
@@ -392,8 +378,7 @@ def test_per_construct_frontend_split_fallback_append_result_shared() -> None:
     obs = kernel_append._primal.per_offload_cache_observations
     assert obs.frontend_constructs_total == -1, obs
 
-    # The append returns the pre-append length (3 elements were prefilled), so every out[i] must be 3 -- not the 0 a
-    # zero-init-alloca slice would read.
+    # The append returns the pre-append length (3 prefilled), so every out[i] must be 3, not 0.
     assert np.all(out.to_numpy() == 3), out.to_numpy()
 
 
@@ -439,10 +424,8 @@ def test_per_construct_frontend_split_dump_ir_observation_only(monkeypatch) -> N
     kernel_ir(arr)
 
     obs = kernel_ir._primal.per_offload_cache_observations
-    # The diagnostic did NOT disable the split; it ran and enumerated both constructs.
+    # The split still ran (not disabled) and wrote a per-construct IR snapshot for each construct.
     assert obs.frontend_constructs_total == 2, obs
-    # One per-construct IR snapshot per construct was written, so the dump reflects the split rather than a synthetic
-    # whole-kernel view.
     per_construct_dumps = glob.glob(os.path.join(_IR_DUMP_DIR, "*_construct*_after_simplify_I.ll"))
     listing = sorted(os.listdir(_IR_DUMP_DIR)) if os.path.isdir(_IR_DUMP_DIR) else "<no dump dir>"
     assert len(per_construct_dumps) >= 2, listing
@@ -522,19 +505,15 @@ def test_per_construct_frontend_split_fallback_realfunc_ref_write() -> None:
     obs = kernel_ref._primal.per_offload_cache_observations
     assert obs.frontend_constructs_total == -1, obs
 
-    # The real_func wrote _C[0] into `a` before the loop, so every out[i] must be _C[0] -- not the initial 5.0 a slice
-    # that dropped the FuncCallStmt writer would recompute.
+    # The real_func wrote _C[0] into `a` before the loop, so every out[i] must be _C[0], not the initial 5.0.
     assert np.allclose(out.to_numpy(), _C[0], atol=1.0), out.to_numpy()
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
 def test_per_construct_frontend_split_fallback_realfunc_ref_read() -> None:
-    # A local ACCUMULATED inside one top-level loop (loop-carried) is then read -- READ-ONLY -- by a `@qd.real_func`
-    # through a `qd.ref` argument in a LATER loop. That read reaches the callee as a `ReferenceStmt` (the shared `Load`
-    # trait) with no store destination, so a store-only scan of the consumer misses it. The loop-carried-local gate must
-    # still see the read via `get_load_pointers`; otherwise it accepts the split, isolates the second loop, drops the
-    # producing loop (whose write is inside a container, so it is not a top-level writer the slice recomputes), and the
-    # callee reads the 0.0 initialization instead of the accumulated value.
+    # A loop-carried local is read READ-ONLY by a `@qd.real_func` through a `qd.ref` arg in a later loop. That read is a
+    # `ReferenceStmt` (a Load) with no store destination, so a store-only scan would miss it and the loop-carried-local
+    # gate would wrongly accept the split. Detection must go through the shared Load trait.
     @qd.real_func
     def read_a(a: qd.ref(qd.f32)) -> qd.f32:
         return a
@@ -553,8 +532,7 @@ def test_per_construct_frontend_split_fallback_realfunc_ref_read() -> None:
     obs = kernel_ref_read._primal.per_offload_cache_observations
     assert obs.frontend_constructs_total == -1, obs
 
-    # `acc` accumulates to _N over the first loop, so every out[i] must be _N -- not the 0.0 initialization a slice that
-    # dropped the producing loop would recompute.
+    # `acc` accumulates to _N over the first loop, so every out[i] must be _N, not the 0.0 init.
     assert np.allclose(out.to_numpy(), float(_N)), out.to_numpy()
 
 
@@ -587,8 +565,7 @@ def test_per_construct_frontend_split_fallback_external_func_write() -> None:
     obs = kernel_ext._primal.per_offload_cache_observations
     assert obs.frontend_constructs_total == -1, obs
 
-    # The external call wrote 6.0 into `r` before the loop, so every out[i] must be 6.0, not the initial 0.0 a slice
-    # that dropped the ExternalFuncCallStmt writer would recompute.
+    # The external call wrote 6.0 into `r` before the loop, so every out[i] must be 6.0, not the initial 0.0.
     assert np.allclose(arr.to_numpy(), 6.0, atol=1e-3), arr.to_numpy()
 
 
