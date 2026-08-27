@@ -33,7 +33,7 @@ Whether to enable relaxed floating-point optimizations (fusing multiply-add oper
 
 ### `num_compile_threads`
 
-Number of host threads used to compile a single kernel's internal tasks in parallel. Default `4`. When Quadrants compiles a kernel it first splits it into several tasks (roughly one per parallel loop) and hands them to a pool of this many threads, so a kernel that splits into many tasks compiles faster on a machine with idle cores. (Distinct kernels are still each compiled lazily the first time they run; this option speeds up the compilation of one such kernel, not scheduling across kernels.) Lower it, or set `1`, on memory-constrained systems where many concurrent compilations would thrash memory. Only the LLVM backends (CPU, CUDA, AMDGPU) use it.
+Number of host threads used to compile a single kernel's internal tasks in parallel. Default `4`. When Quadrants compiles a kernel it first splits it into several tasks (roughly one per parallel loop) and hands them to a pool of this many threads, so a kernel that splits into many tasks compiles faster on a machine with idle cores. (Distinct kernels are still each compiled lazily the first time they run; this option speeds up the compilation of one such kernel, not scheduling across kernels.) Lower it, or set `1`, on memory-constrained systems where many concurrent compilations would thrash memory. Only the CPU, CUDA, and AMDGPU backends use it.
 
 ### `raise_on_templated_floats`
 

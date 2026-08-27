@@ -656,11 +656,11 @@ def _canonical_attr_value(val: Any, live: bool):
     """A deterministic, hashable, *lossless* snapshot of a class-dict value read at compile time
     (``cfg.x.__class__.<attr>``). Ints/str/bytes/None by value (type-tagged, so ``True``/``1`` differ); floats/complex
     by exact IEEE bits (``0.0``/``-0.0`` never collapse); tuples/lists/dicts recursively and sets order-independently,
-    each keeping its container type (``()`` vs ``[]``
-    compare unequal); an auto-generated slot descriptor reduces to an address-free ``(type, name)`` token (the owning
-    class carries identity); a user-bound class/callable also carries an identity component so distinct same-named
-    ``<locals>`` objects never collide. Anything else is rejected rather than collapsed to a lossy token that could
-    reuse a stale specialization after the value changes."""
+    each keeping its container type (``()`` vs ``[]`` compare unequal). A scalar subclass routes through
+    ``final_scalar_key`` (stateful-subclass rejection + subclass identity); an auto-generated slot descriptor reduces to
+    an address-free ``(type, name)`` token carrying its owner's identity. A Python class/callable, a builtin subclass,
+    or any other value whose observable content the key cannot capture is rejected rather than collapsed to a lossy
+    token that could reuse a stale specialization after the value changes."""
     if val is None:
         return None
     # A scalar *subclass* (or enum member) may carry per-instance state or a distinct class identity that the bare
