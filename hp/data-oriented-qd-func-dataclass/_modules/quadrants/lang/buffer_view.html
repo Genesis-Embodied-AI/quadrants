@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.buffer_view &#8212; Quadrants 1.0.1 documentation</title>
+    <title>quadrants.lang.buffer_view &#8212; Quadrants 1.3.1 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../../_static/documentation_options.js?v=292eb321"></script>
+    <script src="../../../_static/documentation_options.js?v=bb516dca"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.0.1" />
+  <meta name="docsearch:version" content="1.3.1" />
   
     
     <script src="../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.0.1 documentation</p>
+    <p class="title logo__title">Quadrants 1.3.1 documentation</p>
   
 </a></div>
     
@@ -342,17 +342,17 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.util</span><span class="w"> </span><span class="kn">import</span> <span class="n">quadrants_scope</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.buffer_view_type</span><span class="w"> </span><span class="kn">import</span> <span class="n">BufferViewType</span>
 
-<span class="n">_LOC_RE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;File &quot;(.+?)&quot;, line (\d+), in (\w+)&#39;</span><span class="p">)</span>
+<span class="n">_LOC_RE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s1">'File "(.+?)", line (\d+), in (\w+)'</span><span class="p">)</span>
 
 <span class="n">_CALLSTACK_WARNING_BYTE</span> <span class="o">=</span> <span class="mi">1024</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_build_callstack</span><span class="p">():</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Walk src_info_stack and extract deduplicated (file, line, func) frames.</span>
+<span class="w">    </span><span class="sd">"""Walk src_info_stack and extract deduplicated (file, line, func) frames.</span>
 
 <span class="sd">    Returns (kernel_name, callstack_str).</span>
 <span class="sd">    Warns if the callstack exceeds _CALLSTACK_WARNING_BYTE (large strings increase compiled binary size).</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">stack</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">src_info_stack</span>
     <span class="n">frames</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="n">prev_key</span> <span class="o">=</span> <span class="kc">None</span>
@@ -369,22 +369,22 @@
             <span class="n">prev_key</span> <span class="o">=</span> <span class="n">key</span>
 
     <span class="k">if</span> <span class="ow">not</span> <span class="n">frames</span><span class="p">:</span>
-        <span class="k">return</span> <span class="s2">&quot;&lt;unknown&gt;&quot;</span><span class="p">,</span> <span class="s2">&quot;&lt;unknown&gt;&quot;</span>
+        <span class="k">return</span> <span class="s2">"&lt;unknown&gt;"</span><span class="p">,</span> <span class="s2">"&lt;unknown&gt;"</span>
 
     <span class="n">kernel_name</span> <span class="o">=</span> <span class="n">frames</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_format_frame</span><span class="p">(</span><span class="n">fp</span><span class="p">,</span> <span class="n">ln</span><span class="p">,</span> <span class="n">fn</span><span class="p">,</span> <span class="n">depth</span><span class="p">):</span>
-        <span class="k">return</span> <span class="s2">&quot;  &quot;</span> <span class="o">*</span> <span class="n">depth</span> <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">fn</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">fp</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">ln</span><span class="si">}</span><span class="s2">)&quot;</span>
+        <span class="k">return</span> <span class="s2">"  "</span> <span class="o">*</span> <span class="n">depth</span> <span class="o">+</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">fn</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">fp</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">ln</span><span class="si">}</span><span class="s2">)"</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_format_chain</span><span class="p">(</span><span class="n">frame_list</span><span class="p">,</span> <span class="n">start_depth</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
-        <span class="k">return</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">_format_frame</span><span class="p">(</span><span class="n">fp</span><span class="p">,</span> <span class="n">ln</span><span class="p">,</span> <span class="n">fn</span><span class="p">,</span> <span class="n">start_depth</span> <span class="o">+</span> <span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="p">(</span><span class="n">fp</span><span class="p">,</span> <span class="n">ln</span><span class="p">,</span> <span class="n">fn</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">frame_list</span><span class="p">))</span>
+        <span class="k">return</span> <span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">_format_frame</span><span class="p">(</span><span class="n">fp</span><span class="p">,</span> <span class="n">ln</span><span class="p">,</span> <span class="n">fn</span><span class="p">,</span> <span class="n">start_depth</span> <span class="o">+</span> <span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="p">(</span><span class="n">fp</span><span class="p">,</span> <span class="n">ln</span><span class="p">,</span> <span class="n">fn</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">frame_list</span><span class="p">))</span>
 
     <span class="n">callstack</span> <span class="o">=</span> <span class="n">_format_chain</span><span class="p">(</span><span class="n">frames</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">callstack</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">_CALLSTACK_WARNING_BYTE</span><span class="p">:</span>
         <span class="n">_logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;BufferView debug callstack is </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">callstack</span><span class="p">)</span><span class="si">}</span><span class="s2"> bytes (limit </span><span class="si">{</span><span class="n">_CALLSTACK_WARNING_BYTE</span><span class="si">}</span><span class="s2">). &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;Large callstack strings increase compiled binary size.&quot;</span>
+            <span class="sa">f</span><span class="s2">"BufferView debug callstack is </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">callstack</span><span class="p">)</span><span class="si">}</span><span class="s2"> bytes (limit </span><span class="si">{</span><span class="n">_CALLSTACK_WARNING_BYTE</span><span class="si">}</span><span class="s2">). "</span>
+            <span class="sa">f</span><span class="s2">"Large callstack strings increase compiled binary size."</span>
         <span class="p">)</span>
 
     <span class="k">return</span> <span class="n">kernel_name</span><span class="p">,</span> <span class="n">callstack</span>
@@ -393,7 +393,7 @@
 <div class="viewcode-block" id="BufferView">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/buffer_view/index.html#quadrants.lang.buffer_view.BufferView">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">BufferView</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;A view into a sub-range [offset, offset+size) of an ndarray.</span>
+<span class="w">    </span><span class="sd">"""A view into a sub-range [offset, offset+size) of an ndarray.</span>
 
 <span class="sd">    Create via slice syntax::</span>
 
@@ -414,13 +414,13 @@
 <span class="sd">        def k(v: BufferView[qd.f32]):</span>
 <span class="sd">            for i in range(v.size):</span>
 <span class="sd">                v[i] *= 2.0</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="n">_is_quadrants_class</span> <span class="o">=</span> <span class="kc">True</span>
 
     <span class="nd">@classmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">__class_getitem__</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">dtype</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Enable ``BufferView[qd.f32]`` as a kernel/func type annotation.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Enable ``BufferView[qd.f32]`` as a kernel/func type annotation."""</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
             <span class="k">return</span> <span class="n">BufferViewType</span><span class="p">(</span><span class="o">*</span><span class="n">dtype</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">BufferViewType</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
@@ -435,7 +435,7 @@
                 <span class="n">dbg_info</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">src_info</span><span class="p">)</span>
                 <span class="n">arr_len</span> <span class="o">=</span> <span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">get_external_tensor_shape_along_axis</span><span class="p">(</span><span class="n">arr</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">dbg_info</span><span class="p">))</span>
                 <span class="n">offset_expr</span><span class="p">,</span> <span class="n">size_expr</span> <span class="o">=</span> <span class="n">Expr</span><span class="p">(</span><span class="n">offset</span><span class="p">),</span> <span class="n">Expr</span><span class="p">(</span><span class="n">size</span><span class="p">)</span>
-                <span class="n">msg</span> <span class="o">=</span> <span class="s2">&quot;BufferView construction out of range: offset=</span><span class="si">%d</span><span class="s2">, size=</span><span class="si">%d</span><span class="s2">, ndarray length=</span><span class="si">%d</span><span class="s2">.&quot;</span>
+                <span class="n">msg</span> <span class="o">=</span> <span class="s2">"BufferView construction out of range: offset=</span><span class="si">%d</span><span class="s2">, size=</span><span class="si">%d</span><span class="s2">, ndarray length=</span><span class="si">%d</span><span class="s2">."</span>
                 <span class="n">args</span> <span class="o">=</span> <span class="p">[</span><span class="n">offset_expr</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">size_expr</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">arr_len</span><span class="o">.</span><span class="n">ptr</span><span class="p">]</span>
                 <span class="n">impl</span><span class="o">.</span><span class="n">qd_assert</span><span class="p">((</span><span class="n">offset_expr</span> <span class="o">&gt;=</span> <span class="n">Expr</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">msg</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">dbg_info</span><span class="p">)</span>
                 <span class="n">impl</span><span class="o">.</span><span class="n">qd_assert</span><span class="p">((</span><span class="n">size_expr</span> <span class="o">&gt;=</span> <span class="n">Expr</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">msg</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">dbg_info</span><span class="p">)</span>
@@ -444,16 +444,16 @@
             <span class="c1"># Host-side path: coerce to int and validate bounds.</span>
             <span class="n">offset</span><span class="p">,</span> <span class="n">size</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">offset</span><span class="p">),</span> <span class="nb">int</span><span class="p">(</span><span class="n">size</span><span class="p">)</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">BufferView</span><span class="p">):</span>
-                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;Cannot nest BufferView(view, ...); use view.subview(offset, size) instead&quot;</span><span class="p">)</span>
-            <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="s2">&quot;grad&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;BufferView does not support ndarrays with gradients (needs_grad=True)&quot;</span><span class="p">)</span>
-            <span class="n">arr_shape</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="s2">&quot;shape&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">"Cannot nest BufferView(view, ...); use view.subview(offset, size) instead"</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="s2">"grad"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">"BufferView does not support ndarrays with gradients (needs_grad=True)"</span><span class="p">)</span>
+            <span class="n">arr_shape</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="s2">"shape"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">arr_shape</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">arr_shape</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
-                    <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;BufferView requires a 1D ndarray, got shape </span><span class="si">{</span><span class="n">arr_shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                    <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"BufferView requires a 1D ndarray, got shape </span><span class="si">{</span><span class="n">arr_shape</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">offset</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">size</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">offset</span> <span class="o">+</span> <span class="n">size</span> <span class="o">&gt;</span> <span class="n">arr_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
                     <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                        <span class="sa">f</span><span class="s2">&quot;BufferView out of range: offset=</span><span class="si">{</span><span class="n">offset</span><span class="si">}</span><span class="s2">, size=</span><span class="si">{</span><span class="n">size</span><span class="si">}</span><span class="s2">, ndarray length=</span><span class="si">{</span><span class="n">arr_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+                        <span class="sa">f</span><span class="s2">"BufferView out of range: offset=</span><span class="si">{</span><span class="n">offset</span><span class="si">}</span><span class="s2">, size=</span><span class="si">{</span><span class="n">size</span><span class="si">}</span><span class="s2">, ndarray length=</span><span class="si">{</span><span class="n">arr_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">"</span>
                     <span class="p">)</span>
 <div class="viewcode-block" id="BufferView.arr">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/buffer_view/index.html#quadrants.lang.buffer_view.BufferView.arr">[docs]</a>
@@ -472,31 +472,31 @@
 <div class="viewcode-block" id="BufferView.shape">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/buffer_view/index.html#quadrants.lang.buffer_view.BufferView.shape">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">shape</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the shape of this view as a tuple, e.g. ``(16,)``.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Returns the shape of this view as a tuple, e.g. ``(16,)``."""</span>
         <span class="k">return</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="p">,)</span></div>
 
 
 <div class="viewcode-block" id="BufferView.subview">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/buffer_view/index.html#quadrants.lang.buffer_view.BufferView.subview">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">subview</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a sub-range view within this view, with bounds checking.</span>
+<span class="w">        </span><span class="sd">"""Create a sub-range view within this view, with bounds checking.</span>
 
-<span class="sd">        Offsets are relative to this view&#39;s start, not the ndarray&#39;s::</span>
+<span class="sd">        Offsets are relative to this view's start, not the ndarray's::</span>
 
 <span class="sd">            a = data[8:24]          # offset=8, size=16 into data</span>
 <span class="sd">            b = a.subview(4, 8)     # offset=12, size=8 into data</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">inside_kernel</span><span class="p">():</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_subview_expr</span><span class="p">(</span><span class="n">Expr</span><span class="p">(</span><span class="n">offset</span><span class="p">),</span> <span class="n">Expr</span><span class="p">(</span><span class="n">size</span><span class="p">))</span>
         <span class="n">offset</span><span class="p">,</span> <span class="n">size</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">offset</span><span class="p">),</span> <span class="nb">int</span><span class="p">(</span><span class="n">size</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">offset</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">size</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">offset</span> <span class="o">+</span> <span class="n">size</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;subview out of range: offset=</span><span class="si">{</span><span class="n">offset</span><span class="si">}</span><span class="s2">, size=</span><span class="si">{</span><span class="n">size</span><span class="si">}</span><span class="s2">, parent size=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"subview out of range: offset=</span><span class="si">{</span><span class="n">offset</span><span class="si">}</span><span class="s2">, size=</span><span class="si">{</span><span class="n">size</span><span class="si">}</span><span class="s2">, parent size=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">BufferView</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">arr</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">offset</span> <span class="o">+</span> <span class="n">offset</span><span class="p">,</span> <span class="n">size</span><span class="p">)</span></div>
 
 
     <span class="nd">@quadrants_scope</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_subview_expr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Kernel-compilation path for subview: insert debug bounds assertions.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Kernel-compilation path for subview: insert debug bounds assertions."""</span>
         <span class="n">offset_expr</span> <span class="o">=</span> <span class="n">Expr</span><span class="p">(</span><span class="n">offset</span><span class="p">)</span>
         <span class="n">size_expr</span> <span class="o">=</span> <span class="n">Expr</span><span class="p">(</span><span class="n">size</span><span class="p">)</span>
         <span class="n">parent_size_expr</span> <span class="o">=</span> <span class="n">Expr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="p">)</span>
@@ -510,10 +510,10 @@
 
             <span class="n">kernel_name</span><span class="p">,</span> <span class="n">callstack</span> <span class="o">=</span> <span class="n">_build_callstack</span><span class="p">()</span>
             <span class="n">msg</span> <span class="o">=</span> <span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;BufferView subview Out Of Range: kernel[</span><span class="si">{</span><span class="n">kernel_name</span><span class="si">}</span><span class="s2">]&quot;</span>
-                <span class="s2">&quot; tid=</span><span class="si">%d</span><span class="s2">, subview offset=</span><span class="si">%d</span><span class="s2">, subview size=</span><span class="si">%d</span><span class="s2">, parent size=</span><span class="si">%d</span><span class="s2">.</span><span class="se">\n</span><span class="s2">&quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;Callstack:</span><span class="se">\n</span><span class="s2">&quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">callstack</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="sa">f</span><span class="s2">"BufferView subview Out Of Range: kernel[</span><span class="si">{</span><span class="n">kernel_name</span><span class="si">}</span><span class="s2">]"</span>
+                <span class="s2">" tid=</span><span class="si">%d</span><span class="s2">, subview offset=</span><span class="si">%d</span><span class="s2">, subview size=</span><span class="si">%d</span><span class="s2">, parent size=</span><span class="si">%d</span><span class="s2">.</span><span class="se">\n</span><span class="s2">"</span>
+                <span class="sa">f</span><span class="s2">"Callstack:</span><span class="se">\n</span><span class="s2">"</span>
+                <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">callstack</span><span class="si">}</span><span class="s2">"</span>
             <span class="p">)</span>
             <span class="n">args</span> <span class="o">=</span> <span class="p">[</span><span class="n">tid_expr</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">offset_expr</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">size_expr</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">parent_size_expr</span><span class="o">.</span><span class="n">ptr</span><span class="p">]</span>
 
@@ -525,18 +525,18 @@
         <span class="k">return</span> <span class="n">BufferView</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">arr</span><span class="p">,</span> <span class="n">new_offset</span><span class="p">,</span> <span class="n">size_expr</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Slice a view to create a subview (host-side only): ``view[2:6]``.</span>
+<span class="w">        </span><span class="sd">"""Slice a view to create a subview (host-side only): ``view[2:6]``.</span>
 
 <span class="sd">        In kernels, slicing goes through impl.subscript() -&gt; subview() instead.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">assert</span> <span class="p">(</span>
             <span class="ow">not</span> <span class="n">impl</span><span class="o">.</span><span class="n">inside_kernel</span><span class="p">()</span>
-        <span class="p">),</span> <span class="s2">&quot;BufferView.__getitem__ is not reachable in kernel scope; subscripts are dispatched via impl.subscript()&quot;</span>
+        <span class="p">),</span> <span class="s2">"BufferView.__getitem__ is not reachable in kernel scope; subscripts are dispatched via impl.subscript()"</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="nb">slice</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;BufferView host-side indexing requires a slice, got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">key</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"BufferView host-side indexing requires a slice, got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">key</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
         <span class="n">start</span><span class="p">,</span> <span class="n">stop</span><span class="p">,</span> <span class="n">step</span> <span class="o">=</span> <span class="n">key</span><span class="o">.</span><span class="n">indices</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">step</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;BufferView slice requires step=1, got step=</span><span class="si">{</span><span class="n">step</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"BufferView slice requires step=1, got step=</span><span class="si">{</span><span class="n">step</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">subview</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="nb">max</span><span class="p">(</span><span class="n">stop</span> <span class="o">-</span> <span class="n">start</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
 
     <span class="nd">@quadrants_scope</span>
@@ -558,10 +558,10 @@
             <span class="n">kernel_name</span><span class="p">,</span> <span class="n">callstack</span> <span class="o">=</span> <span class="n">_build_callstack</span><span class="p">()</span>
 
             <span class="n">msg</span> <span class="o">=</span> <span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;BufferView Out Of Range: kernel[</span><span class="si">{</span><span class="n">kernel_name</span><span class="si">}</span><span class="s2">]&quot;</span>
-                <span class="s2">&quot; tid=</span><span class="si">%d</span><span class="s2">, got index </span><span class="si">%d</span><span class="s2"> (offset=</span><span class="si">%d</span><span class="s2">, size=</span><span class="si">%d</span><span class="s2">).</span><span class="se">\n</span><span class="s2">&quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;Callstack:</span><span class="se">\n</span><span class="s2">&quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">callstack</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="sa">f</span><span class="s2">"BufferView Out Of Range: kernel[</span><span class="si">{</span><span class="n">kernel_name</span><span class="si">}</span><span class="s2">]"</span>
+                <span class="s2">" tid=</span><span class="si">%d</span><span class="s2">, got index </span><span class="si">%d</span><span class="s2"> (offset=</span><span class="si">%d</span><span class="s2">, size=</span><span class="si">%d</span><span class="s2">).</span><span class="se">\n</span><span class="s2">"</span>
+                <span class="sa">f</span><span class="s2">"Callstack:</span><span class="se">\n</span><span class="s2">"</span>
+                <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">callstack</span><span class="si">}</span><span class="s2">"</span>
             <span class="p">)</span>
 
             <span class="n">impl</span><span class="o">.</span><span class="n">qd_assert</span><span class="p">(</span>
@@ -587,13 +587,13 @@
 <div class="viewcode-block" id="BufferView.get_ndarray">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/buffer_view/index.html#quadrants.lang.buffer_view.BufferView.get_ndarray">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_ndarray</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the underlying ndarray (host-side only).&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Returns the underlying ndarray (host-side only)."""</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">arr</span></div>
 </div>
 
 
 
-<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;BufferView&quot;</span><span class="p">]</span>
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"BufferView"</span><span class="p">]</span>
 </pre></div>
 
                 </article>

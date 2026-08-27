@@ -1,6 +1,6 @@
 # Advanced: Building the CUDA graph conditional fatbin
 
-The `graph_do_while` feature uses a tiny CUDA kernel that calls `cudaGraphSetConditional` (a device-side function from NVIDIA's `libcudadevrt.a`) to control CUDA graph conditional while nodes. These conditional nodes require SM 9.0+ (Hopper or later); on older GPUs, `graph_do_while` falls back to a host-side loop automatically.
+The `qd.graph.do_while` feature uses a tiny CUDA kernel that calls `cudaGraphSetConditional` (a device-side function from NVIDIA's `libcudadevrt.a`) to control CUDA graph conditional while nodes. These conditional nodes require SM 9.0+ (Hopper or later); on older GPUs, `qd.graph.do_while` falls back to a host-side loop automatically.
 
 There are three distinct phases:
 

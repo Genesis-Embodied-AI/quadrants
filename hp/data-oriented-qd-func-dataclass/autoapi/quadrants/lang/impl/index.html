@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>quadrants.lang.impl &#8212; Quadrants 1.0.1 documentation</title>
+    <title>quadrants.lang.impl &#8212; Quadrants 1.3.1 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../../../_static/documentation_options.js?v=292eb321"></script>
+    <script src="../../../../_static/documentation_options.js?v=bb516dca"></script>
     <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="quadrants.lang.graph_status" href="../graph_status/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.0.1" />
+  <meta name="docsearch:version" content="1.3.1" />
   
     
     <script src="../../../../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.0.1 documentation</p>
+    <p class="title logo__title">Quadrants 1.3.1 documentation</p>
   
 </a></div>
     
@@ -441,7 +441,7 @@ The bool value in <cite>cond</cite> must can be determined at compile time.</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">year</span> <span class="o">=</span> <span class="mi">2001</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">test</span><span class="p">():</span>
-<span class="gp">&gt;&gt;&gt; </span>    <span class="n">qd</span><span class="o">.</span><span class="n">static_assert</span><span class="p">(</span><span class="n">year</span> <span class="o">%</span> <span class="mi">4</span> <span class="o">==</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;the year must be a lunar year&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">qd</span><span class="o">.</span><span class="n">static_assert</span><span class="p">(</span><span class="n">year</span> <span class="o">%</span> <span class="mi">4</span> <span class="o">==</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">"the year must be a lunar year"</span><span class="p">)</span>
 <span class="go">AssertionError: the year must be a lunar year</span>
 </pre></div>
 </div>
@@ -496,7 +496,7 @@ field to store the gradients.</p></li>
     <span class="o">&gt;&gt;&gt;</span> <span class="n">x2</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
     <span class="o">&gt;&gt;&gt;</span> <span class="n">qd</span><span class="o">.</span><span class="n">root</span><span class="o">.</span><span class="n">dense</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">ij</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">x2</span><span class="p">)</span>
     <span class="o">&gt;&gt;&gt;</span>
-    <span class="o">&gt;&gt;&gt;</span> <span class="n">x3</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="n">order</span><span class="o">=</span><span class="s1">&#39;ji&#39;</span><span class="p">)</span>
+    <span class="o">&gt;&gt;&gt;</span> <span class="n">x3</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="n">order</span><span class="o">=</span><span class="s1">'ji'</span><span class="p">)</span>
     <span class="o">&gt;&gt;&gt;</span> <span class="c1"># Equivalently</span>
     <span class="o">&gt;&gt;&gt;</span> <span class="n">x4</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
     <span class="o">&gt;&gt;&gt;</span> <span class="n">qd</span><span class="o">.</span><span class="n">root</span><span class="o">.</span><span class="n">dense</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">j</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="mi">8</span><span class="p">)</span><span class="o">.</span><span class="n">dense</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="mi">16</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">x4</span><span class="p">)</span>

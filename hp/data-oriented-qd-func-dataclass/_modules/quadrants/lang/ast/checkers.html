@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.ast.checkers &#8212; Quadrants 1.0.1 documentation</title>
+    <title>quadrants.lang.ast.checkers &#8212; Quadrants 1.3.1 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../../../_static/documentation_options.js?v=292eb321"></script>
+    <script src="../../../../_static/documentation_options.js?v=bb516dca"></script>
     <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.0.1" />
+  <meta name="docsearch:version" content="1.3.1" />
   
     
     <script src="../../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.0.1 documentation</p>
+    <p class="title logo__title">Quadrants 1.3.1 documentation</p>
   
 </a></div>
     
@@ -417,9 +417,9 @@
 <div class="viewcode-block" id="KernelSimplicityASTChecker.get_error_location">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/checkers/index.html#quadrants.lang.ast.checkers.KernelSimplicityASTChecker.get_error_location">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_error_location</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
-        <span class="c1"># -1 because ast&#39;s lineno is 1-based.</span>
+        <span class="c1"># -1 because ast's lineno is 1-based.</span>
         <span class="n">lineno</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_func_lineno</span> <span class="o">+</span> <span class="n">node</span><span class="o">.</span><span class="n">lineno</span> <span class="o">-</span> <span class="mi">1</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;file=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_func_file</span><span class="si">}</span><span class="s2"> kernel=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_func_name</span><span class="si">}</span><span class="s2"> line=</span><span class="si">{</span><span class="n">lineno</span><span class="si">}</span><span class="s2">&quot;</span></div>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"file=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_func_file</span><span class="si">}</span><span class="s2"> kernel=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_func_name</span><span class="si">}</span><span class="s2"> line=</span><span class="si">{</span><span class="n">lineno</span><span class="si">}</span><span class="s2">"</span></div>
 
 
     <span class="nd">@staticmethod</span>
@@ -442,7 +442,7 @@
             <span class="k">return</span>
 
         <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">top_level</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_scope</span><span class="o">.</span><span class="n">allows_more_stmt</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;No more statements allowed, at </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">get_error_location</span><span class="p">(</span><span class="n">node</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"No more statements allowed, at </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">get_error_location</span><span class="p">(</span><span class="n">node</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
         <span class="n">old_top_level</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">top_level</span>
         <span class="k">if</span> <span class="n">old_top_level</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_scope_guards</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">new_scope</span><span class="p">())</span>
@@ -467,12 +467,12 @@
         <span class="c1"># is_static = (isinstance(node.iter, ast.Call)</span>
         <span class="c1">#              and isinstance(node.iter.func, ast.Attribute)</span>
         <span class="c1">#              and isinstance(node.iter.func.value, ast.Name)</span>
-        <span class="c1">#              and node.iter.func.value.id == &#39;qd&#39;</span>
-        <span class="c1">#              and node.iter.func.attr == &#39;static&#39;)</span>
+        <span class="c1">#              and node.iter.func.value.id == 'qd'</span>
+        <span class="c1">#              and node.iter.func.attr == 'static')</span>
         <span class="c1"># if not (self.top_level or self.current_scope.allows_for_loop</span>
         <span class="c1">#         or is_static):</span>
         <span class="c1">#     raise QuadrantsSyntaxError(</span>
-        <span class="c1">#         f&#39;No more for loops allowed, at {self.get_error_location(node)}&#39;</span>
+        <span class="c1">#         f'No more for loops allowed, at {self.get_error_location(node)}'</span>
         <span class="c1">#     )</span>
         <span class="c1"># with self.new_scope():</span>
         <span class="c1">#     super().generic_visit(node)</span>

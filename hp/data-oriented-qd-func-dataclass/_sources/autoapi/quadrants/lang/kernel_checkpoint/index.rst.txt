@@ -21,8 +21,6 @@ Functions
 
    quadrants.lang.kernel_checkpoint.validate_resume_cookie
    quadrants.lang.kernel_checkpoint.translate_user_label_to_internal_cp_id
-   quadrants.lang.kernel_checkpoint.init_yield_on_arg_id_table
-   quadrants.lang.kernel_checkpoint.maybe_record_yield_on_arg
    quadrants.lang.kernel_checkpoint.forward_yield_on_table_to_ctx
    quadrants.lang.kernel_checkpoint.maybe_build_graph_status
 
@@ -49,27 +47,15 @@ Module Contents
    resume targets. Raises ``RuntimeError`` listing the available labels when the user passed an unknown one.
 
 
-.. py:function:: init_yield_on_arg_id_table(kernel: Any) -> None
-
-   Allocate / reset the per-launch ``cp_id -> C++ arg-id`` table at the top of ``launch_kernel``'s arg iteration.
-
-   Each entry defaults to ``-1`` ("no yield_on"); the per-arg loop below fills in the C++ arg id when it visits the
-   named parameter. Sized to the kernel's checkpoint count once per launch so any changes to the checkpoint set (only
-   possible via re-AST-walk) reset the table cleanly. No-op for kernels with no ``yield_on=`` checkpoints.
-
-
-.. py:function:: maybe_record_yield_on_arg(kernel: Any, arg_name: str, cpp_arg_id: int) -> None
-
-   Fill the ``cp_id -> C++ arg-id`` slot when the arg iterator visits a named ``yield_on=`` kernel parameter.
-
-   Walked once per kernel arg in ``launch_kernel``; cheap O(checkpoints) match. A single parameter can be the
-   ``yield_on=`` for multiple checkpoints (the inner loop fills every matching slot).
-
-
 .. py:function:: forward_yield_on_table_to_ctx(kernel: Any, launch_ctx: Any) -> None
 
-   Copy the resolved ``cp_id -> C++ arg-id`` table onto the launch context so the runtime can find each
-   ``yield_on=`` ndarray's device address at launch.
+   Copy the ``cp_id -> C++ arg-id`` table onto the launch context so the runtime can find each ``yield_on=``
+   ndarray's device address at launch.
+
+   The table (``kernel.checkpoint_yield_on_cpp_arg_ids``) is populated at AST-build time by
+   ``CheckpointTransformer.build_checkpoint_with`` via ``ASTTransformer._resolve_ndarray_kernel_arg_id``, which
+   uniformly handles bare kernel parameters (``yield_on=flag``) and ``@qd.data_oriented`` member ndarrays
+   (``yield_on=self.flag``). No per-launch arg iteration / name match is required.
 
 
 .. py:function:: maybe_build_graph_status(kernel: Any, default_ret: Any) -> Any

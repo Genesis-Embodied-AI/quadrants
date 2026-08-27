@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Register-resident tiles: Tile16x16 and Tile32x32 &#8212; Quadrants 1.0.1 documentation</title>
+    <title>Register-resident tiles: Tile16x16 and Tile32x32 &#8212; Quadrants 1.3.1 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../_static/documentation_options.js?v=292eb321"></script>
+    <script src="../_static/documentation_options.js?v=bb516dca"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Subgroup primitives" href="subgroup.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.0.1" />
+  <meta name="docsearch:version" content="1.3.1" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.0.1 documentation</p>
+    <p class="title logo__title">Quadrants 1.3.1 documentation</p>
   
 </a></div>
     
@@ -323,6 +323,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">SIMT primitives</span></p>
 <ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="gpu_execution_model.html">GPU execution model</a></li>
 <li class="toctree-l1"><a class="reference internal" href="atomics.html">Atomics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="block.html">Block primitives</a></li>
 <li class="toctree-l1"><a class="reference internal" href="grid.html">Grid primitives</a></li>
@@ -336,6 +337,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
 <ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="performance.html">Performance</a></li>
 <li class="toctree-l1"><a class="reference internal" href="fastcache.html">Fastcache</a></li>
 <li class="toctree-l1"><a class="reference internal" href="graph.html">Graph</a></li>
 <li class="toctree-l1"><a class="reference internal" href="streams.html">Streams</a></li>
@@ -344,7 +346,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Testing</span></p>
 <ul class="nav bd-sidenav">
-<li class="toctree-l1"><a class="reference internal" href="unit_testing.html">Unit testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="unit_testing.html">Advanced: Unit testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="kernel_coverage.html">Kernel code coverage</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
@@ -428,12 +430,12 @@
                   
   <section class="tex2jax_ignore mathjax_ignore" id="register-resident-tiles-tile16x16-and-tile32x32">
 <h1>Register-resident tiles: <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> and <code class="docutils literal notranslate"><span class="pre">Tile32x32</span></code><a class="headerlink" href="#register-resident-tiles-tile16x16-and-tile32x32" title="Link to this heading">#</a></h1>
-<p>Quadrants provides two register-resident matrix tile types:</p>
+<p>Quadrants provides two register-resident matrix tile types, each spread across the threads of one <a class="reference internal" href="gpu_execution_model.html#subgroup"><span class="std std-ref">subgroup</span></a> (warp / wavefront):</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">qd.simt.Tile16x16</span></code> — a 16x16 tile distributed across 16 threads in a subgroup (one row per thread, 16 scalar registers per thread).</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">qd.simt.Tile32x32</span></code> — a 32x32 tile distributed across 32 threads in a subgroup (one row per thread, 32 scalar registers per thread).</p></li>
 </ul>
-<p>Both have identical APIs (creation, slice-syntax load/store, <code class="docutils literal notranslate"><span class="pre">qd.outer</span></code> rank-1 updates, <code class="docutils literal notranslate"><span class="pre">cholesky_</span></code>, <code class="docutils literal notranslate"><span class="pre">solve_triangular_</span></code>, SharedArray interop) and use subgroup shuffles for cross-thread communication — no shared memory needed. The rest of this page documents the API in terms of <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code>; everything carries over to <code class="docutils literal notranslate"><span class="pre">Tile32x32</span></code> by swapping the class name and using <code class="docutils literal notranslate"><span class="pre">SIZE</span> <span class="pre">==</span> <span class="pre">32</span></code> / <code class="docutils literal notranslate"><span class="pre">block_dim=32</span></code>. The <a class="reference internal" href="#tile32x32"><code class="docutils literal notranslate"><span class="pre">Tile32x32</span></code> section</a> below has guidance on when to pick 32x32 vs 16x16 and a short example.</p>
+<p>Both have identical APIs (creation, slice-syntax load/store, <code class="docutils literal notranslate"><span class="pre">qd.outer</span></code> rank-1 updates, <code class="docutils literal notranslate"><span class="pre">cholesky_</span></code>, <code class="docutils literal notranslate"><span class="pre">solve_triangular_</span></code>, SharedArray interop) and use subgroup shuffles for cross-thread communication - no <a class="reference internal" href="gpu_execution_model.html#shared-memory"><span class="std std-ref">shared memory</span></a> needed. The rest of this page documents the API in terms of <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code>; everything carries over to <code class="docutils literal notranslate"><span class="pre">Tile32x32</span></code> by swapping the class name and using <code class="docutils literal notranslate"><span class="pre">SIZE</span> <span class="pre">==</span> <span class="pre">32</span></code> / <code class="docutils literal notranslate"><span class="pre">block_dim=32</span></code>. The <a class="reference internal" href="#tile32x32"><code class="docutils literal notranslate"><span class="pre">Tile32x32</span></code> section</a> below has guidance on when to pick 32x32 vs 16x16 and a short example.</p>
 <p>Tiles are useful for implementing blocked linear algebra kernels (Cholesky, triangular solve, etc.) where you want to keep working data in registers for maximum throughput.</p>
 <p>Both tiles run on all GPU backends supported by Quadrants: CUDA, AMD, Metal, and Vulkan. They build on <code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup.shuffle</span></code>, which is cross-platform — no vendor-specific libraries required. Using either tile on a CPU backend raises <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code>.</p>
 <section id="quick-start">
@@ -522,6 +524,12 @@
 </pre></div>
 </div>
 <p>Factorizes the tile in-place: replaces the lower triangle with <code class="docutils literal notranslate"><span class="pre">L</span></code> such that <code class="docutils literal notranslate"><span class="pre">L</span> <span class="pre">&#64;</span> <span class="pre">L^T</span> <span class="pre">≈</span> <span class="pre">A</span></code>. The <code class="docutils literal notranslate"><span class="pre">eps</span></code> parameter clamps the diagonal to avoid numerical issues with near-singular matrices. After this call, the lower triangle of <code class="docutils literal notranslate"><span class="pre">t</span></code> contains <code class="docutils literal notranslate"><span class="pre">L</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">eps</span></code> may be a single uniform value or a per-lane value: it is read only on the lane that owns each pivot, so lane <code class="docutils literal notranslate"><span class="pre">k</span></code> supplies the floor for pivot <code class="docutils literal notranslate"><span class="pre">k</span></code>.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Per-lane (relative) floor: lane k floors pivot k using its own row's original diagonal.</span>
+<span class="n">tid</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">subgroup</span><span class="o">.</span><span class="n">invocation_id</span><span class="p">()</span>
+<span class="n">t</span><span class="o">.</span><span class="n">cholesky_</span><span class="p">(</span><span class="n">eps_rel</span> <span class="o">*</span> <span class="n">a_orig_diag</span><span class="p">[</span><span class="n">tid</span><span class="p">])</span>
+</pre></div>
+</div>
 </section>
 <section id="triangular-solve">
 <h2>Triangular solve<a class="headerlink" href="#triangular-solve" title="Link to this heading">#</a></h2>
@@ -545,7 +553,7 @@
 </section>
 <section id="sharedarray-support">
 <h2>SharedArray support<a class="headerlink" href="#sharedarray-support" title="Link to this heading">#</a></h2>
-<p>Tiles can load from and store to <code class="docutils literal notranslate"><span class="pre">qd.simt.block.SharedArray</span></code> using the same slice syntax as device arrays:</p>
+<p>Tiles can load from and store to <code class="docutils literal notranslate"><span class="pre">qd.simt.block.SharedArray</span></code>, a <a class="reference internal" href="gpu_execution_model.html#shared-memory"><span class="std std-ref">shared-memory</span></a> array scoped to one block, using the same slice syntax as device arrays:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">sh</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">block</span><span class="o">.</span><span class="n">SharedArray</span><span class="p">((</span><span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">SIZE</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">SIZE</span><span class="p">),</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
 <span class="n">t</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
 <span class="n">t</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">src</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="n">N</span><span class="p">,</span> <span class="mi">0</span><span class="p">:</span><span class="n">N</span><span class="p">]</span>
@@ -561,7 +569,7 @@
 <h2>Kernel structure<a class="headerlink" href="#kernel-structure" title="Link to this heading">#</a></h2>
 <section id="block-size">
 <h3>Block size<a class="headerlink" href="#block-size" title="Link to this heading">#</a></h3>
-<p>Set <code class="docutils literal notranslate"><span class="pre">block_dim=qd.simt.Tile16x16.SIZE</span></code> so that each thread block contains exactly 16 threads — one per tile row:</p>
+<p>Call <code class="docutils literal notranslate"><span class="pre">qd.loop_config(block_dim=N)</span></code> at the top of the kernel to set the number of GPU threads per <a class="reference internal" href="gpu_execution_model.html#block"><span class="std std-ref">block</span></a> (the block dimension) to <code class="docutils literal notranslate"><span class="pre">N</span></code>. Set <code class="docutils literal notranslate"><span class="pre">N</span> <span class="pre">=</span> <span class="pre">qd.simt.Tile16x16.SIZE</span></code> so each block has exactly 16 threads, one per tile row:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">my_kernel</span><span class="p">(</span><span class="n">A</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="mi">3</span><span class="p">]):</span>
     <span class="n">N</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">SIZE</span>
@@ -600,7 +608,7 @@
     <span class="n">A</span><span class="p">[</span><span class="n">row0</span><span class="p">:</span><span class="n">row0</span><span class="o">+</span><span class="n">N</span><span class="p">,</span> <span class="n">col0</span><span class="p">:</span><span class="n">col0</span><span class="o">+</span><span class="n">N</span><span class="p">]</span> <span class="o">=</span> <span class="n">t</span>
 </pre></div>
 </div>
-<p><code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> and <code class="docutils literal notranslate"><span class="pre">Tile32x32</span></code> can be mixed within the same kernel — their slice-dispatch caches are independent.</p>
+<p><code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> and <code class="docutils literal notranslate"><span class="pre">Tile32x32</span></code> can be mixed within the same kernel.</p>
 <section id="when-to-pick-32x32-vs-16x16">
 <h3>When to pick 32x32 vs 16x16<a class="headerlink" href="#when-to-pick-32x32-vs-16x16" title="Link to this heading">#</a></h3>
 <div class="pst-scrollable-table-container"><table class="table">
@@ -615,12 +623,12 @@
 <tr class="row-even"><td><p>16x16</p></td>
 <td class="text-right"><p>16</p></td>
 <td class="text-right"><p>16</p></td>
-<td><p>Small problems where occupancy from many narrow blocks matters; very small N (e.g. N≤16 or N≈48) where the 32-tile would waste lanes</p></td>
+<td><p>Small problems where many narrow blocks keep the GPU busy; very small N (e.g. N &lt;= 16, or N around 48) where the 32-tile would waste lanes</p></td>
 </tr>
 <tr class="row-odd"><td><p>32x32</p></td>
 <td class="text-right"><p>32</p></td>
 <td class="text-right"><p>32</p></td>
-<td><p>Larger problems (N ≳ 32) where bigger tiles cut the number of blocked passes and the FMA chain inside <code class="docutils literal notranslate"><span class="pre">cholesky_</span></code> amortizes the larger register file</p></td>
+<td><p>Larger problems (roughly N &gt;= 32) where bigger tiles cut the number of blocked passes and the fused multiply-add (FMA) chain inside <code class="docutils literal notranslate"><span class="pre">cholesky_</span></code> amortizes the larger register file</p></td>
 </tr>
 </tbody>
 </table>
@@ -678,7 +686,7 @@
 </section>
 <section id="example-blocked-cholesky">
 <h2>Example: blocked Cholesky<a class="headerlink" href="#example-blocked-cholesky" title="Link to this heading">#</a></h2>
-<p>See <a class="reference download internal" download="" href="../_downloads/10e91aecf2d7d697024a911dd28bc249/cholesky_blocked.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">misc/demos/cholesky_blocked.py</span></code></span></a> for a complete blocked Cholesky factorization using Tile16x16, benchmarked against scalar-Crout baselines (shared memory with 64 threads, and blocked shared memory with 16 threads).</p>
+<p>See <a class="reference download internal" download="" href="../_downloads/10e91aecf2d7d697024a911dd28bc249/cholesky_blocked.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">misc/demos/cholesky_blocked.py</span></code></span></a> for a complete blocked Cholesky factorization using Tile16x16, benchmarked against scalar (non-tile) baselines (shared memory with 64 threads, and blocked shared memory with 16 threads).</p>
 <p>Results on RTX PRO 6000 Blackwell, 4096 environments, N=92, f32:</p>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
@@ -689,12 +697,12 @@
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p>baseline (scalar Crout, shared mem)</p></td>
+<tr class="row-even"><td><p>baseline (scalar, shared mem)</p></td>
 <td class="text-right"><p>64</p></td>
 <td class="text-right"><p>2766</p></td>
 <td class="text-right"><p>1.00x</p></td>
 </tr>
-<tr class="row-odd"><td><p>blocked (scalar Crout, shared mem)</p></td>
+<tr class="row-odd"><td><p>blocked (scalar, shared mem)</p></td>
 <td class="text-right"><p>16</p></td>
 <td class="text-right"><p>2556</p></td>
 <td class="text-right"><p>1.08x</p></td>

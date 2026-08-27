@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Performance Dispatch &#8212; Quadrants 1.0.1 documentation</title>
+    <title>Performance Dispatch &#8212; Quadrants 1.3.1 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../_static/documentation_options.js?v=292eb321"></script>
+    <script src="../_static/documentation_options.js?v=bb516dca"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Streams" href="streams.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.0.1" />
+  <meta name="docsearch:version" content="1.3.1" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.0.1 documentation</p>
+    <p class="title logo__title">Quadrants 1.3.1 documentation</p>
   
 </a></div>
     
@@ -323,6 +323,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">SIMT primitives</span></p>
 <ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="gpu_execution_model.html">GPU execution model</a></li>
 <li class="toctree-l1"><a class="reference internal" href="atomics.html">Atomics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="block.html">Block primitives</a></li>
 <li class="toctree-l1"><a class="reference internal" href="grid.html">Grid primitives</a></li>
@@ -336,6 +337,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
 <ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="performance.html">Performance</a></li>
 <li class="toctree-l1"><a class="reference internal" href="fastcache.html">Fastcache</a></li>
 <li class="toctree-l1"><a class="reference internal" href="graph.html">Graph</a></li>
 <li class="toctree-l1"><a class="reference internal" href="streams.html">Streams</a></li>
@@ -344,7 +346,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Testing</span></p>
 <ul class="nav bd-sidenav">
-<li class="toctree-l1"><a class="reference internal" href="unit_testing.html">Unit testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="unit_testing.html">Advanced: Unit testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="kernel_coverage.html">Kernel code coverage</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
@@ -548,16 +550,17 @@
 <td><p>Number of timed calls per implementation.</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">repeat_after_count</span></code></p></td>
-<td><p>0</p></td>
-<td><p>Re-run benchmarking after this many additional calls. 0 disables.</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+<td><p>Re-run benchmarking after this many additional calls. <code class="docutils literal notranslate"><span class="pre">0</span></code> (or less) disables; <code class="docutils literal notranslate"><span class="pre">None</span></code> lets <code class="docutils literal notranslate"><span class="pre">perf_dispatch</span></code> choose.</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">repeat_after_seconds</span></code></p></td>
-<td><p>1.0</p></td>
-<td><p>Re-run benchmarking after this many seconds have elapsed. 0 disables.</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+<td><p>Re-run benchmarking after this many seconds have elapsed. <code class="docutils literal notranslate"><span class="pre">0</span></code> (or less) disables; <code class="docutils literal notranslate"><span class="pre">None</span></code> lets <code class="docutils literal notranslate"><span class="pre">perf_dispatch</span></code> choose.</p></td>
 </tr>
 </tbody>
 </table>
 </div>
+<p><code class="docutils literal notranslate"><span class="pre">repeat_after_count</span></code> and <code class="docutils literal notranslate"><span class="pre">repeat_after_seconds</span></code> are OR’d - whichever fires first restarts benchmarking. A <code class="docutils literal notranslate"><span class="pre">None</span></code> trigger means “choose a suitable value for me”: if you give the other trigger an explicit value, the <code class="docutils literal notranslate"><span class="pre">None</span></code> one is left off; if you leave <strong>both</strong> as <code class="docutils literal notranslate"><span class="pre">None</span></code>, <code class="docutils literal notranslate"><span class="pre">perf_dispatch</span></code> re-benchmarks every 300 calls with no time-based trigger (so, e.g., <code class="docutils literal notranslate"><span class="pre">repeat_after_count=300</span></code> re-benchmarks purely by call count, with no hidden per-second re-evaluation).</p>
 <p>Example with custom tuning:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">perf_dispatch</span><span class="p">(</span>
     <span class="n">get_geometry_hash</span><span class="o">=</span><span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="nb">hash</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">),</span>
@@ -576,7 +579,7 @@
 <li><p><strong>Active phase</strong>: Each compatible implementation is called <code class="docutils literal notranslate"><span class="pre">active</span></code> times in round-robin order. The GPU is synchronized before and after each call to get accurate wall-clock measurements.</p></li>
 <li><p><strong>Selection</strong>: The implementation with the lowest active-phase time is cached as the winner for that geometry hash.</p></li>
 <li><p><strong>Steady state</strong>: Subsequent calls with the same geometry go directly to the cached winner with no overhead.</p></li>
-<li><p><strong>Re-evaluation</strong> (optional): After <code class="docutils literal notranslate"><span class="pre">repeat_after_count</span></code> calls or <code class="docutils literal notranslate"><span class="pre">repeat_after_seconds</span></code> seconds, the entire warmup + active cycle restarts from scratch, allowing the dispatcher to adapt if conditions change.</p></li>
+<li><p><strong>Re-evaluation</strong>: After <code class="docutils literal notranslate"><span class="pre">repeat_after_count</span></code> calls or <code class="docutils literal notranslate"><span class="pre">repeat_after_seconds</span></code> seconds (by default, every 300 calls), the entire warmup + active cycle restarts from scratch, allowing the dispatcher to adapt if conditions change.</p></li>
 </ol>
 </section>
 <section id="forcing-a-specific-implementation">
@@ -598,12 +601,12 @@
 </pre></div>
 </div>
 <p>This will produce output like:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">perf_dispatch</span> <span class="s1">&#39;my_op&#39;</span><span class="p">:</span> <span class="n">registered</span> <span class="s1">&#39;my_op_v1&#39;</span>
-<span class="n">perf_dispatch</span> <span class="s1">&#39;my_op&#39;</span><span class="p">:</span> <span class="n">registered</span> <span class="s1">&#39;my_op_v2&#39;</span>
-<span class="n">perf_dispatch</span> <span class="s1">&#39;my_op&#39;</span><span class="p">:</span> <span class="n">available</span> <span class="n">implementations</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;my_op_v1&#39;</span><span class="p">,</span> <span class="s1">&#39;my_op_v2&#39;</span><span class="p">]</span>
-<span class="n">perf_dispatch</span> <span class="s1">&#39;transform&#39;</span><span class="p">:</span> <span class="n">registered</span> <span class="s1">&#39;transform_v1&#39;</span>
-<span class="n">perf_dispatch</span> <span class="s1">&#39;transform&#39;</span><span class="p">:</span> <span class="n">registered</span> <span class="s1">&#39;transform_v2&#39;</span>
-<span class="n">perf_dispatch</span> <span class="s1">&#39;transform&#39;</span><span class="p">:</span> <span class="n">available</span> <span class="n">implementations</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;transform_v1&#39;</span><span class="p">,</span> <span class="s1">&#39;transform_v2&#39;</span><span class="p">]</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">perf_dispatch</span> <span class="s1">'my_op'</span><span class="p">:</span> <span class="n">registered</span> <span class="s1">'my_op_v1'</span>
+<span class="n">perf_dispatch</span> <span class="s1">'my_op'</span><span class="p">:</span> <span class="n">registered</span> <span class="s1">'my_op_v2'</span>
+<span class="n">perf_dispatch</span> <span class="s1">'my_op'</span><span class="p">:</span> <span class="n">available</span> <span class="n">implementations</span><span class="p">:</span> <span class="p">[</span><span class="s1">'my_op_v1'</span><span class="p">,</span> <span class="s1">'my_op_v2'</span><span class="p">]</span>
+<span class="n">perf_dispatch</span> <span class="s1">'transform'</span><span class="p">:</span> <span class="n">registered</span> <span class="s1">'transform_v1'</span>
+<span class="n">perf_dispatch</span> <span class="s1">'transform'</span><span class="p">:</span> <span class="n">registered</span> <span class="s1">'transform_v2'</span>
+<span class="n">perf_dispatch</span> <span class="s1">'transform'</span><span class="p">:</span> <span class="n">available</span> <span class="n">implementations</span><span class="p">:</span> <span class="p">[</span><span class="s1">'transform_v1'</span><span class="p">,</span> <span class="s1">'transform_v2'</span><span class="p">]</span>
 </pre></div>
 </div>
 <p>If the requested implementation name doesn’t match any registered function, a warning is printed and the dispatcher falls back to normal benchmarking.</p>

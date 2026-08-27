@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Optimization passes &#8212; Quadrants 1.0.1 documentation</title>
+    <title>Optimization passes &#8212; Quadrants 1.3.1 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../_static/documentation_options.js?v=292eb321"></script>
+    <script src="../_static/documentation_options.js?v=bb516dca"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Troubleshooting" href="troubleshooting.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.0.1" />
+  <meta name="docsearch:version" content="1.3.1" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.0.1 documentation</p>
+    <p class="title logo__title">Quadrants 1.3.1 documentation</p>
   
 </a></div>
     
@@ -323,6 +323,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">SIMT primitives</span></p>
 <ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="gpu_execution_model.html">GPU execution model</a></li>
 <li class="toctree-l1"><a class="reference internal" href="atomics.html">Atomics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="block.html">Block primitives</a></li>
 <li class="toctree-l1"><a class="reference internal" href="grid.html">Grid primitives</a></li>
@@ -336,6 +337,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
 <ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="performance.html">Performance</a></li>
 <li class="toctree-l1"><a class="reference internal" href="fastcache.html">Fastcache</a></li>
 <li class="toctree-l1"><a class="reference internal" href="graph.html">Graph</a></li>
 <li class="toctree-l1"><a class="reference internal" href="streams.html">Streams</a></li>
@@ -344,7 +346,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Testing</span></p>
 <ul class="nav bd-sidenav">
-<li class="toctree-l1"><a class="reference internal" href="unit_testing.html">Unit testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="unit_testing.html">Advanced: Unit testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="kernel_coverage.html">Kernel code coverage</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
@@ -438,28 +440,28 @@
 <li><p><strong>IR (intermediate representation)</strong> - the compiler’s internal version of your kernel: a flat list of small, explicitly-typed instructions, sitting between your Python source and the final machine code. Every pass reads and rewrites the IR; none of it is something you write by hand.</p></li>
 <li><p><strong>Pass</strong> - one transformation step over the IR. An <em>optimization</em> pass rewrites the IR into a form that produces the <strong>same results</strong> but runs faster or uses less memory. (Some passes are not optimizations but <em>lowering</em> steps - they translate high-level constructs into lower-level ones; this page focuses on the optimizations.)</p></li>
 <li><p><strong>Basic block</strong> - a straight-line run of instructions with no branches into or out of the middle. Control flow (<code class="docutils literal notranslate"><span class="pre">if</span></code>, loops) connects blocks together.</p></li>
-<li><p><strong>Offloaded task</strong> - after the <em>offload</em> step, your kernel is split into one or more tasks, and each task becomes a single device launch: one GPU grid launch on a GPU backend, or one parallel loop on CPU. A simple kernel is usually one task; a kernel with, say, a short serial preamble followed by a big parallel loop becomes several tasks that run back to back.</p></li>
+<li><p><strong>Offloaded task</strong> - after the <em>offload</em> step, your kernel is split into one or more tasks, and each task becomes a single device launch: one GPU launch on a GPU backend, or one parallel loop on CPU. A simple kernel is usually one task; a kernel with, say, a short serial preamble followed by a big parallel loop becomes several tasks that run back to back.</p></li>
 </ul>
 </section>
 <section id="the-compile-pipeline-at-a-glance">
 <h2>The compile pipeline at a glance<a class="headerlink" href="#the-compile-pipeline-at-a-glance" title="Link to this heading">#</a></h2>
 <p>Compilation runs as a fixed sequence of stages. Optimization passes are interleaved with the lowering steps that gradually turn high-level IR into device code:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Python (AST)
-   │  lower to IR, type-check
-   ▼
-high-level IR  ──► simplify ──► (autodiff, if requested) ──► simplify
-   │
-   ▼
-offload  (split the kernel into offloaded tasks)
-   │
-   ▼
-per-task IR  ──► simplify ──► lower memory access ──► simplify
-   │
-   ▼
-backend codegen  (LLVM → PTX/SASS, or SPIR-V, …)
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Python</span> <span class="p">(</span><span class="n">AST</span> <span class="o">=</span> <span class="n">abstract</span> <span class="n">syntax</span> <span class="n">tree</span><span class="p">)</span>
+   <span class="o">|</span>  <span class="n">lower</span> <span class="n">to</span> <span class="n">IR</span><span class="p">,</span> <span class="nb">type</span><span class="o">-</span><span class="n">check</span>
+   <span class="n">v</span>
+<span class="n">high</span><span class="o">-</span><span class="n">level</span> <span class="n">IR</span>  <span class="o">--&gt;</span> <span class="n">simplify</span> <span class="o">--&gt;</span> <span class="p">(</span><span class="n">autodiff</span> <span class="o">=</span> <span class="n">automatic</span> <span class="n">differentiation</span><span class="p">,</span> <span class="k">if</span> <span class="n">requested</span><span class="p">)</span> <span class="o">--&gt;</span> <span class="n">simplify</span>
+   <span class="o">|</span>
+   <span class="n">v</span>
+<span class="n">offload</span>  <span class="p">(</span><span class="n">split</span> <span class="n">the</span> <span class="n">kernel</span> <span class="n">into</span> <span class="n">offloaded</span> <span class="n">tasks</span><span class="p">)</span>
+   <span class="o">|</span>
+   <span class="n">v</span>
+<span class="n">per</span><span class="o">-</span><span class="n">task</span> <span class="n">IR</span>  <span class="o">--&gt;</span> <span class="n">simplify</span> <span class="o">--&gt;</span> <span class="n">lower</span> <span class="n">memory</span> <span class="n">access</span> <span class="o">--&gt;</span> <span class="n">simplify</span>
+   <span class="o">|</span>
+   <span class="n">v</span>
+<span class="n">backend</span> <span class="n">codegen</span>  <span class="p">(</span><span class="n">translate</span> <span class="n">IR</span> <span class="n">into</span> <span class="n">the</span> <span class="n">device</span> <span class="n">machine</span> <span class="n">code</span> <span class="n">your</span> <span class="n">GPU</span> <span class="n">runs</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>The “simplify” boxes are all the same routine (internally <code class="docutils literal notranslate"><span class="pre">full_simplify</span></code>), invoked at several points. Most of the interesting optimization work happens inside it.</p>
+<p>The “simplify” boxes are all the same routine, invoked at several points. Most of the interesting optimization work happens inside it. The optional autodiff step, run only when you ask Quadrants for gradients, is covered in <a class="reference internal" href="autodiff.html"><span class="std std-doc">Automatic differentiation</span></a>.</p>
 </section>
 <section id="the-simplify-loop">
 <h2>The simplify loop<a class="headerlink" href="#the-simplify-loop" title="Link to this heading">#</a></h2>
@@ -479,12 +481,12 @@ backend codegen  (LLVM → PTX/SASS, or SPIR-V, …)
 <td><p>Removes branches that can never be taken (e.g. the body of an <code class="docutils literal notranslate"><span class="pre">if</span></code> whose condition is always false).</p></td>
 </tr>
 <tr class="row-even"><td><p>Binary-op / algebraic simplification</p></td>
-<td><p>Applies arithmetic identities: <code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">*</span> <span class="pre">1</span> <span class="pre">→</span> <span class="pre">x</span></code>, <code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">+</span> <span class="pre">0</span> <span class="pre">→</span> <span class="pre">x</span></code>, <code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">*</span> <span class="pre">2</span> <span class="pre">→</span> <span class="pre">x</span> <span class="pre">+</span> <span class="pre">x</span></code>, and similar peephole rewrites.</p></td>
+<td><p>Applies arithmetic identities: <code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">*</span> <span class="pre">1</span> <span class="pre">-&gt;</span> <span class="pre">x</span></code>, <code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">+</span> <span class="pre">0</span> <span class="pre">-&gt;</span> <span class="pre">x</span></code>, <code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">*</span> <span class="pre">2</span> <span class="pre">-&gt;</span> <span class="pre">x</span> <span class="pre">+</span> <span class="pre">x</span></code>, and similar local rewrites over a short window of instructions (“peephole” optimizations).</p></td>
 </tr>
 <tr class="row-odd"><td><p>Constant folding</p></td>
 <td><p>Pre-computes expressions whose inputs are all known at compile time: <code class="docutils literal notranslate"><span class="pre">2</span> <span class="pre">*</span> <span class="pre">3</span> <span class="pre">→</span> <span class="pre">6</span></code>.</p></td>
 </tr>
-<tr class="row-even"><td><p>Dead-code elimination (<strong>DIE</strong>)</p></td>
+<tr class="row-even"><td><p>Dead-instruction elimination (<strong>DIE</strong>)</p></td>
 <td><p>Drops instructions whose results are never used. Runs several times per round, after passes that tend to create newly-dead instructions.</p></td>
 </tr>
 <tr class="row-odd"><td><p>Loop-invariant code motion (<strong>LICM</strong>)</p></td>
@@ -512,11 +514,10 @@ backend codegen  (LLVM → PTX/SASS, or SPIR-V, …)
 <li><p><strong>Dead-store elimination</strong> - if a write is overwritten before anyone reads it, the write is removed.</p></li>
 </ul>
 <p>Building and analyzing the CFG is the most expensive optimization in the pipeline, which is why it runs at most once per simplify stage rather than every round.</p>
-<p><strong>One CFG per offloaded task.</strong> The CFG optimization is built and run separately for each offloaded task, over that task’s IR alone - never over the whole <code class="docutils literal notranslate"><span class="pre">qd.kernel</span></code> at once. This is both faster to analyze and safe: because each task is a separate device launch, a value held in a register in one task cannot survive into the next one, so there is never anything to forward across a task boundary anyway. Anything written to global memory is treated as potentially read by a later task, so no store another task might need is dropped.</p>
 </section>
 <section id="controlling-the-passes">
 <h2>Controlling the passes<a class="headerlink" href="#controlling-the-passes" title="Link to this heading">#</a></h2>
-<p>All of these are fields of <code class="docutils literal notranslate"><span class="pre">CompileConfig</span></code>, so you set them at <code class="docutils literal notranslate"><span class="pre">qd.init(...)</span></code> (or via the matching <code class="docutils literal notranslate"><span class="pre">QD_&lt;UPPERCASE_NAME&gt;</span></code> environment variable). See <a class="reference internal" href="init_options.html"><span class="std std-doc">qd.init options</span></a> for the full list and the environment-variable convention.</p>
+<p>All of these are fields of <code class="docutils literal notranslate"><span class="pre">CompileConfig</span></code> (the Quadrants compiler-configuration object built from your <code class="docutils literal notranslate"><span class="pre">qd.init(...)</span></code> arguments), so you set them at <code class="docutils literal notranslate"><span class="pre">qd.init(...)</span></code> (or via the matching <code class="docutils literal notranslate"><span class="pre">QD_&lt;UPPERCASE_NAME&gt;</span></code> environment variable). See <a class="reference internal" href="init_options.html"><span class="std std-doc">qd.init options</span></a> for the full list and the environment-variable convention.</p>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
 <tr class="row-odd"><th class="head"><p>Option</p></th>
@@ -548,17 +549,59 @@ backend codegen  (LLVM → PTX/SASS, or SPIR-V, …)
 </tbody>
 </table>
 </div>
-<p>For everyday use, leave them at their defaults. The most common deliberate change is <code class="docutils literal notranslate"><span class="pre">cfg_optimization=False</span></code> when iterating on a kernel whose compile time is in your way. Note that, in general, changing these options is relatively fragile since the Quadrants tests run assuming the default values.</p>
+<p>For everyday use, leave them at their defaults - they are the best-supported and most reliable configuration. The most common deliberate change is <code class="docutils literal notranslate"><span class="pre">cfg_optimization=False</span></code> when iterating on a kernel whose compile time is in your way.</p>
 </section>
 <section id="inspecting-what-the-compiler-did">
 <h2>Inspecting what the compiler did<a class="headerlink" href="#inspecting-what-the-compiler-did" title="Link to this heading">#</a></h2>
-<p>These environment variables dump the IR so you can see the effect of each pass. Files are written to <code class="docutils literal notranslate"><span class="pre">debug_dump_path</span></code> (default <code class="docutils literal notranslate"><span class="pre">/tmp/ir/</span></code>):</p>
+<p>These environment variables dump the IR so you can see the effect of each pass. Files are written to the directory set by the <code class="docutils literal notranslate"><span class="pre">debug_dump_path</span></code> option in <code class="docutils literal notranslate"><span class="pre">qd.init(...)</span></code> (default <code class="docutils literal notranslate"><span class="pre">/tmp/ir/</span></code>):</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">QD_DUMP_IR=1</span></code> - writes an IR snapshot at each major pipeline stage (after lowering, before/after each simplify, after offload).</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">QD_DUMP_SIMPLIFY=1</span></code> - writes an IR snapshot after every individual pass on every iteration of the simplify loop. Verbose, but it shows exactly which pass changed what.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">QD_DUMP_CFG=1</span></code> - writes the control-flow graph itself. (This also forces the CFG pass back onto the whole-kernel path so the complete graph can be dumped.)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">QD_DUMP_CFG=1</span></code> - writes the control-flow graph itself, at the granularity the compiler actually uses: one graph per offloaded task once the kernel has been offloaded (files suffixed <code class="docutils literal notranslate"><span class="pre">_task&lt;N&gt;</span></code>), and the whole-kernel graph before offload and for kernels that are never offloaded.</p></li>
 </ul>
 <p>Setting <code class="docutils literal notranslate"><span class="pre">qd.init(print_ir=True)</span></code> prints the IR to the console at pipeline stages instead of writing files.</p>
+</section>
+<section id="under-the-hood-per-task-scoping">
+<h2>Under the hood: per-task scoping<a class="headerlink" href="#under-the-hood-per-task-scoping" title="Link to this heading">#</a></h2>
+<p>Once the kernel has been split into offloaded tasks, both CSE and the CFG optimization run over <strong>one offloaded task’s IR at a time</strong>, never over the whole <code class="docutils literal notranslate"><span class="pre">qd.kernel</span></code> at once. This is both faster to analyze and safe: because each task is a separate device launch, a value held in a register in one task cannot survive into the next one, so there is never anything to deduplicate or forward across a task boundary. Anything written to global memory is treated as potentially read by a later task, so no store another task might need is dropped.</p>
+</section>
+<section id="under-the-hood-per-construct-frontend-compilation">
+<h2>Under the hood: per-construct frontend compilation<a class="headerlink" href="#under-the-hood-per-construct-frontend-compilation" title="Link to this heading">#</a></h2>
+<p>This section is for the curious; you never have to think about it to write kernels - the behavior below is transparent and on by default.</p>
+<p>The frontend stages above - the passes that turn your high-level kernel into offloaded tasks - can run either once over the whole kernel or, for eligible kernels, separately for each <strong>top-level construct</strong> (each independent top-level loop or serial run in your kernel). Compiling each construct in isolation produces the same offloaded tasks and the same results as the whole-kernel path, so the split is transparent.</p>
+<p>The advantage of compiling each construct in isolation is caching granularity: it allows the compiled result to be cached per offloaded task rather than only for the entire <code class="docutils literal notranslate"><span class="pre">qd.kernel</span></code>, so editing one construct need only recompile that construct rather than the whole kernel.</p>
+<p>Quadrants automatically falls back to the whole-kernel path whenever per-construct compilation would not be equivalent: <a class="reference internal" href="autodiff.html"><span class="std std-doc">autodiff</span></a> kernels, certain specialized kernels, and kernels where one construct’s value depends on state another construct produced in a way that cannot be recomputed in isolation. For example, a local variable that one top-level loop builds up over its iterations and another construct then reads, or a snapshot of a field that a later construct reads after an intervening write.</p>
+<p>That last case looks like this:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">shadowed</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">y</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">base</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>                 <span class="c1"># snapshot of a field</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="mf">2.0</span>              <span class="c1"># a later construct overwrites x ...</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="n">y</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">base</span>             <span class="c1"># ... but this must still see the ORIGINAL x[0]</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">base</span></code> is a serial definition, so isolating the last loop would recompute <code class="docutils literal notranslate"><span class="pre">base</span> <span class="pre">=</span> <span class="pre">x[0]</span></code> inside it - now reading the overwritten <code class="docutils literal notranslate"><span class="pre">x[0]</span></code> (<code class="docutils literal notranslate"><span class="pre">2.0</span></code>) instead of the snapshot. Rather than track which fields each construct touches, Quadrants conservatively keeps any such kernel on the whole-kernel path.</p>
+<section id="inspecting-the-split">
+<h3>Inspecting the split<a class="headerlink" href="#inspecting-the-split" title="Link to this heading">#</a></h3>
+<p>You can see whether the split ran, and how many constructs it found, via the <code class="docutils literal notranslate"><span class="pre">per_offload_cache_observations</span></code> attribute on the kernel’s compiled <a class="reference internal" href="autodiff.html"><span class="std std-doc">primal</span></a> (the forward kernel object, accessed as <code class="docutils literal notranslate"><span class="pre">._primal</span></code>):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">my_kernel</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+=</span> <span class="mf">1.0</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+=</span> <span class="mf">2.0</span>
+
+<span class="n">my_kernel</span><span class="p">(</span><span class="n">some_array</span><span class="p">)</span>
+
+<span class="n">obs</span> <span class="o">=</span> <span class="n">my_kernel</span><span class="o">.</span><span class="n">_primal</span><span class="o">.</span><span class="n">per_offload_cache_observations</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">obs</span><span class="o">.</span><span class="n">frontend_constructs_total</span><span class="p">)</span>       <span class="c1"># number of constructs the split compiled</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">obs</span><span class="o">.</span><span class="n">frontend_constructs_recompiled</span><span class="p">)</span>  <span class="c1"># how many were (re)compiled this time</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">obs</span><span class="o">.</span><span class="n">frontend_constructs_cache_hit</span><span class="p">)</span>   <span class="c1"># how many were reused (always 0: every construct is recompiled)</span>
+</pre></div>
+</div>
+<p>All three fields are <code class="docutils literal notranslate"><span class="pre">-1</span></code> when the split did not run for this compile - either because the kernel took the whole-kernel fallback above, or because the compiled kernel was served from a cache (the <a class="reference internal" href="init_options.html#offline-cache"><span class="std std-ref">offline cache</span></a> or <a class="reference internal" href="fastcache.html"><span class="std std-doc">fastcache</span></a>) so no frontend ran at all.</p>
+</section>
 </section>
 </section>
 
@@ -615,6 +658,11 @@ backend codegen  (LLVM → PTX/SASS, or SPIR-V, …)
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#control-flow-graph-cfg-optimization">Control-flow-graph (CFG) optimization</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#controlling-the-passes">Controlling the passes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#inspecting-what-the-compiler-did">Inspecting what the compiler did</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#under-the-hood-per-task-scoping">Under the hood: per-task scoping</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#under-the-hood-per-construct-frontend-compilation">Under the hood: per-construct frontend compilation</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#inspecting-the-split">Inspecting the split</a></li>
+</ul>
+</li>
 </ul>
   </nav></div>
 

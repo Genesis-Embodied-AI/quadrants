@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.types.ndarray_type &#8212; Quadrants 1.0.1 documentation</title>
+    <title>quadrants.types.ndarray_type &#8212; Quadrants 1.3.1 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../../_static/documentation_options.js?v=292eb321"></script>
+    <script src="../../../_static/documentation_options.js?v=bb516dca"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.0.1" />
+  <meta name="docsearch:version" content="1.3.1" />
   
     
     <script src="../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.0.1 documentation</p>
+    <p class="title logo__title">Quadrants 1.3.1 documentation</p>
   
 </a></div>
     
@@ -350,7 +350,7 @@
 <span class="c1">#                Remove this function when the two args are totally deprecated.</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">_make_matrix_dtype_from_element_shape</span><span class="p">(</span><span class="n">element_dim</span><span class="p">,</span> <span class="n">element_shape</span><span class="p">,</span> <span class="n">primitive_dtype</span><span class="p">):</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">primitive_dtype</span><span class="p">,</span> <span class="n">CompoundType</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Cannot specifiy matrix dtype &quot;</span><span class="si">{</span><span class="n">primitive_dtype</span><span class="si">}</span><span class="s1">&quot; and element shape or dim at the same time.&#39;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s1">'Cannot specifiy matrix dtype "</span><span class="si">{</span><span class="n">primitive_dtype</span><span class="si">}</span><span class="s1">" and element shape or dim at the same time.'</span><span class="p">)</span>
 
     <span class="c1"># Scalars</span>
     <span class="k">if</span> <span class="n">element_dim</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">or</span> <span class="p">(</span><span class="n">element_shape</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">element_shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">):</span>
@@ -361,17 +361,17 @@
     <span class="k">if</span> <span class="n">element_dim</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="c1"># TODO: expand use case with arbitary tensor dims!</span>
         <span class="k">if</span> <span class="n">element_dim</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">element_dim</span> <span class="o">&gt;</span> <span class="mi">2</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Only scalars, vectors, and matrices are allowed as elements of qd.types.ndarray()&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Only scalars, vectors, and matrices are allowed as elements of qd.types.ndarray()"</span><span class="p">)</span>
         <span class="c1"># Check dim consistency. The matrix dtype will be cooked later.</span>
         <span class="k">if</span> <span class="n">element_shape</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">element_shape</span><span class="p">)</span> <span class="o">!=</span> <span class="n">element_dim</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;Both element_shape and element_dim are specified, but shape doesn&#39;t match specified dim: &quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">element_shape</span><span class="p">)</span><span class="si">}</span><span class="s2">!=</span><span class="si">{</span><span class="n">element_dim</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="sa">f</span><span class="s2">"Both element_shape and element_dim are specified, but shape doesn't match specified dim: "</span>
+                <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">element_shape</span><span class="p">)</span><span class="si">}</span><span class="s2">!=</span><span class="si">{</span><span class="n">element_dim</span><span class="si">}</span><span class="s2">"</span>
             <span class="p">)</span>
         <span class="n">mat_dtype</span> <span class="o">=</span> <span class="n">vector</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">primitive_dtype</span><span class="p">)</span> <span class="k">if</span> <span class="n">element_dim</span> <span class="o">==</span> <span class="mi">1</span> <span class="k">else</span> <span class="n">matrix</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">primitive_dtype</span><span class="p">)</span>
     <span class="k">elif</span> <span class="n">element_shape</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">element_shape</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">2</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Only scalars, vectors, and matrices are allowed as elements of qd.types.ndarray()&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Only scalars, vectors, and matrices are allowed as elements of qd.types.ndarray()"</span><span class="p">)</span>
         <span class="n">mat_dtype</span> <span class="o">=</span> <span class="p">(</span>
             <span class="n">vector</span><span class="p">(</span><span class="n">element_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">primitive_dtype</span><span class="p">)</span>
             <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">element_shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span>
@@ -381,7 +381,7 @@
 
 
 <span class="k">class</span><span class="w"> </span><span class="nc">NdarrayType</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Type annotation for arbitrary arrays, including external arrays (numpy ndarrays and torch tensors) and Quadrants ndarrays.</span>
+<span class="w">    </span><span class="sd">"""Type annotation for arbitrary arrays, including external arrays (numpy ndarrays and torch tensors) and Quadrants ndarrays.</span>
 
 <span class="sd">    For external arrays, we treat it as a Quadrants data container with Scalar, Vector or Matrix elements.</span>
 <span class="sd">    For Quadrants vector/matrix ndarrays, we will automatically identify element dimension and their corresponding axis by the</span>
@@ -402,7 +402,7 @@
 <span class="sd">          None if not specified, shapes of each element.</span>
 <span class="sd">          For example, element_shape must be 1d for vector and 2d tuple for matrix.</span>
 <span class="sd">          This argument is ignored for external arrays for now.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
@@ -412,10 +412,10 @@
         <span class="n">element_shape</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
         <span class="n">field_dim</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
         <span class="n">needs_grad</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-        <span class="n">boundary</span><span class="o">=</span><span class="s2">&quot;unsafe&quot;</span><span class="p">,</span>
+        <span class="n">boundary</span><span class="o">=</span><span class="s2">"unsafe"</span><span class="p">,</span>
     <span class="p">):</span>
         <span class="k">if</span> <span class="n">field_dim</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;The field_dim argument for ndarray type is already deprecated. Please use ndim instead.&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"The field_dim argument for ndarray type is already deprecated. Please use ndim instead."</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">element_dim</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">element_shape</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="o">=</span> <span class="n">_make_matrix_dtype_from_element_shape</span><span class="p">(</span><span class="n">element_dim</span><span class="p">,</span> <span class="n">element_shape</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
@@ -432,6 +432,14 @@
             <span class="n">args</span> <span class="o">=</span> <span class="p">(</span><span class="n">args</span><span class="p">,)</span>
         <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span>
 
+    <span class="k">def</span><span class="w"> </span><span class="fm">__or__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="c1"># ``NDArray[...]`` is an instance, not a class, so ``|`` cannot build a ``types.UnionType`` the way it does</span>
+        <span class="c1"># for class-style annotations; hand back a marker the annotation validator understands instead.</span>
+        <span class="c1"># TODO(quadrants#831): drop this once ``NDArray[...]`` evaluates to a type.</span>
+        <span class="k">if</span> <span class="n">other</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">other</span> <span class="ow">is</span> <span class="nb">type</span><span class="p">(</span><span class="kc">None</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">_OptionalNdarray</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">NotImplemented</span>
+
     <span class="k">def</span><span class="w"> </span><span class="nf">check_matched</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ndarray_type</span><span class="p">:</span> <span class="n">NdarrayTypeMetadata</span><span class="p">,</span> <span class="n">arg_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
         <span class="c1"># FIXME(Haidong) Cannot use Vector/MatrixType due to circular import</span>
         <span class="c1"># Use the CompuoundType instead to determine the specific typs.</span>
@@ -441,8 +449,8 @@
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">CompoundType</span><span class="p">):</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="o">.</span><span class="n">check_matched</span><span class="p">(</span><span class="n">ndarray_type</span><span class="o">.</span><span class="n">element_type</span><span class="p">):</span>  <span class="c1"># type: ignore</span>
                 <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">&quot;Invalid value for argument </span><span class="si">{</span><span class="n">arg_name</span><span class="si">}</span><span class="s2"> - required element type: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="o">.</span><span class="n">to_string</span><span class="p">()</span><span class="si">}</span><span class="s2">, &quot;</span>  <span class="c1"># type: ignore</span>
-                    <span class="sa">f</span><span class="s2">&quot;but </span><span class="si">{</span><span class="n">ndarray_type</span><span class="o">.</span><span class="n">element_type</span><span class="o">.</span><span class="n">to_string</span><span class="p">()</span><span class="si">}</span><span class="s2"> is provided&quot;</span>
+                    <span class="sa">f</span><span class="s2">"Invalid value for argument </span><span class="si">{</span><span class="n">arg_name</span><span class="si">}</span><span class="s2"> - required element type: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="o">.</span><span class="n">to_string</span><span class="p">()</span><span class="si">}</span><span class="s2">, "</span>  <span class="c1"># type: ignore</span>
+                    <span class="sa">f</span><span class="s2">"but </span><span class="si">{</span><span class="n">ndarray_type</span><span class="o">.</span><span class="n">element_type</span><span class="o">.</span><span class="n">to_string</span><span class="p">()</span><span class="si">}</span><span class="s2"> is provided"</span>
                 <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -451,26 +459,26 @@
 
                 <span class="k">if</span> <span class="ow">not</span> <span class="n">util</span><span class="o">.</span><span class="n">cook_dtype</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span> <span class="o">==</span> <span class="n">ndarray_type</span><span class="o">.</span><span class="n">element_type</span><span class="p">:</span>
                     <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
-                        <span class="sa">f</span><span class="s2">&quot;Expect element type </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2"> for argument </span><span class="si">{</span><span class="n">arg_name</span><span class="si">}</span><span class="s2">, but get </span><span class="si">{</span><span class="n">ndarray_type</span><span class="o">.</span><span class="n">element_type</span><span class="si">}</span><span class="s2">&quot;</span>
+                        <span class="sa">f</span><span class="s2">"Expect element type </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2"> for argument </span><span class="si">{</span><span class="n">arg_name</span><span class="si">}</span><span class="s2">, but get </span><span class="si">{</span><span class="n">ndarray_type</span><span class="o">.</span><span class="n">element_type</span><span class="si">}</span><span class="s2">"</span>
                     <span class="p">)</span>
 
         <span class="c1"># Check ndim match</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">ndarray_type</span><span class="o">.</span><span class="n">shape</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">ndarray_type</span><span class="o">.</span><span class="n">shape</span><span class="p">):</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;Invalid value for argument </span><span class="si">{</span><span class="n">arg_name</span><span class="si">}</span><span class="s2"> - required ndim=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="si">}</span><span class="s2">, but </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ndarray_type</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span><span class="si">}</span><span class="s2">d &quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;ndarray with shape </span><span class="si">{</span><span class="n">ndarray_type</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> is provided&quot;</span>
+                <span class="sa">f</span><span class="s2">"Invalid value for argument </span><span class="si">{</span><span class="n">arg_name</span><span class="si">}</span><span class="s2"> - required ndim=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="si">}</span><span class="s2">, but </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ndarray_type</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span><span class="si">}</span><span class="s2">d "</span>
+                <span class="sa">f</span><span class="s2">"ndarray with shape </span><span class="si">{</span><span class="n">ndarray_type</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> is provided"</span>
             <span class="p">)</span>
 
         <span class="c1"># Check needs_grad</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">needs_grad</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">needs_grad</span> <span class="o">&gt;</span> <span class="n">ndarray_type</span><span class="o">.</span><span class="n">needs_grad</span><span class="p">:</span>
-            <span class="c1"># It&#39;s okay to pass a needs_grad=True ndarray at runtime to a need_grad=False arg but not vice versa.</span>
+            <span class="c1"># It's okay to pass a needs_grad=True ndarray at runtime to a need_grad=False arg but not vice versa.</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;Invalid value for argument </span><span class="si">{</span><span class="n">arg_name</span><span class="si">}</span><span class="s2"> - required needs_grad=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">needs_grad</span><span class="si">}</span><span class="s2">, but &quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">ndarray_type</span><span class="o">.</span><span class="n">needs_grad</span><span class="si">}</span><span class="s2"> is provided&quot;</span>
+                <span class="sa">f</span><span class="s2">"Invalid value for argument </span><span class="si">{</span><span class="n">arg_name</span><span class="si">}</span><span class="s2"> - required needs_grad=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">needs_grad</span><span class="si">}</span><span class="s2">, but "</span>
+                <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">ndarray_type</span><span class="o">.</span><span class="n">needs_grad</span><span class="si">}</span><span class="s2"> is provided"</span>
             <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;NdarrayType(dtype=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2">, ndim=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="si">}</span><span class="s2">, layout=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">layout</span><span class="si">}</span><span class="s2">, needs_grad=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">needs_grad</span><span class="si">}</span><span class="s2">)&quot;</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"NdarrayType(dtype=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2">, ndim=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="si">}</span><span class="s2">, layout=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">layout</span><span class="si">}</span><span class="s2">, needs_grad=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">needs_grad</span><span class="si">}</span><span class="s2">)"</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="fm">__repr__</span><span class="p">()</span>
@@ -488,6 +496,16 @@
         <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
 
 
+<span class="k">class</span><span class="w"> </span><span class="nc">_OptionalNdarray</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Marks ``NDArray[...] | None``; the validator unwraps ``.inner`` and records the slot as optional."""</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">inner</span><span class="p">:</span> <span class="s2">"NdarrayType"</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">inner</span> <span class="o">=</span> <span class="n">inner</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"_OptionalNdarray(inner=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">inner</span><span class="si">!r}</span><span class="s2">)"</span>
+
+
 <div class="viewcode-block" id="ndarray">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/ndarray_type/index.html#quadrants.types.ndarray_type.ndarray">[docs]</a>
 <span class="n">ndarray</span> <span class="o">=</span> <span class="n">NdarrayType</span></div>
@@ -496,7 +514,7 @@
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/ndarray_type/index.html#quadrants.types.ndarray_type.NDArray">[docs]</a>
 <span class="n">NDArray</span> <span class="o">=</span> <span class="n">NdarrayType</span></div>
 
-<span class="sd">&quot;&quot;&quot;Alias for :class:`~quadrants.types.ndarray_type.NdarrayType`.</span>
+<span class="sd">"""Alias for :class:`~quadrants.types.ndarray_type.NdarrayType`.</span>
 
 <span class="sd">Example::</span>
 
@@ -508,10 +526,10 @@
 <span class="sd">    &gt;&gt;&gt; y = qd.ndarray(qd.f64, shape=n)</span>
 <span class="sd">    &gt;&gt;&gt; ... # calculate y</span>
 <span class="sd">    &gt;&gt;&gt; x = numpy.zeros(n)</span>
-<span class="sd">    &gt;&gt;&gt; to_numpy(x, y)  # `x` will be filled with `y`&#39;s data.</span>
-<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    &gt;&gt;&gt; to_numpy(x, y)  # `x` will be filled with `y`'s data.</span>
+<span class="sd">"""</span>
 
-<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;ndarray&quot;</span><span class="p">,</span> <span class="s2">&quot;NDArray&quot;</span><span class="p">]</span>
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"ndarray"</span><span class="p">,</span> <span class="s2">"NDArray"</span><span class="p">]</span>
 </pre></div>
 
                 </article>

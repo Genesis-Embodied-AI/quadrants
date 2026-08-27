@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Advanced: Contributing to quadrants &#8212; Quadrants 1.0.1 documentation</title>
+    <title>Advanced: Contributing to quadrants &#8212; Quadrants 1.3.1 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../_static/documentation_options.js?v=292eb321"></script>
+    <script src="../_static/documentation_options.js?v=bb516dca"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Optimization passes" href="optimization_passes.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.0.1" />
+  <meta name="docsearch:version" content="1.3.1" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.0.1 documentation</p>
+    <p class="title logo__title">Quadrants 1.3.1 documentation</p>
   
 </a></div>
     
@@ -323,6 +323,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">SIMT primitives</span></p>
 <ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="gpu_execution_model.html">GPU execution model</a></li>
 <li class="toctree-l1"><a class="reference internal" href="atomics.html">Atomics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="block.html">Block primitives</a></li>
 <li class="toctree-l1"><a class="reference internal" href="grid.html">Grid primitives</a></li>
@@ -336,6 +337,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
 <ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="performance.html">Performance</a></li>
 <li class="toctree-l1"><a class="reference internal" href="fastcache.html">Fastcache</a></li>
 <li class="toctree-l1"><a class="reference internal" href="graph.html">Graph</a></li>
 <li class="toctree-l1"><a class="reference internal" href="streams.html">Streams</a></li>
@@ -344,7 +346,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Testing</span></p>
 <ul class="nav bd-sidenav">
-<li class="toctree-l1"><a class="reference internal" href="unit_testing.html">Unit testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="unit_testing.html">Advanced: Unit testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="kernel_coverage.html">Kernel code coverage</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
@@ -439,7 +441,7 @@
 <section id="running-tests">
 <h2>Running tests<a class="headerlink" href="#running-tests" title="Link to this heading">#</a></h2>
 <p>Run the test suite with <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">tests/run_tests.py</span></code>. CLI arguments are forwarded to pytest. For example, to run only Metal tests matching a keyword:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="n">tests</span><span class="o">/</span><span class="n">run_tests</span><span class="o">.</span><span class="n">py</span> <span class="o">--</span><span class="n">arch</span> <span class="n">metal</span> <span class="o">-</span><span class="n">k</span> <span class="s2">&quot;test_tile16_cholesky&quot;</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="n">tests</span><span class="o">/</span><span class="n">run_tests</span><span class="o">.</span><span class="n">py</span> <span class="o">--</span><span class="n">arch</span> <span class="n">metal</span> <span class="o">-</span><span class="n">k</span> <span class="s2">"test_cholesky"</span>
 </pre></div>
 </div>
 <p>The target architecture can also be set via the <code class="docutils literal notranslate"><span class="pre">QD_WANTED_ARCHS</span></code> environment variable (comma-separated, e.g. <code class="docutils literal notranslate"><span class="pre">QD_WANTED_ARCHS=metal,vulkan</span></code>).</p>
@@ -505,21 +507,21 @@
 </pre></div>
 </div>
 <p>You could then set the environment variable <code class="docutils literal notranslate"><span class="pre">CMAKE_ARGS</span></code> (scikit-build-core’s CMake-args passthrough) to configure the build. <code class="docutils literal notranslate"><span class="pre">build.py</span></code> reads it, layers on the toolchain options it manages, and exports it back. For instance, to disable the CUDA and AMDGPU backends:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">export</span> <span class="n">CMAKE_ARGS</span><span class="o">=</span><span class="s2">&quot;-DQD_WITH_CUDA=OFF -DQD_WITH_AMDGPU=OFF&quot;</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">export</span> <span class="n">CMAKE_ARGS</span><span class="o">=</span><span class="s2">"-DQD_WITH_CUDA=OFF -DQD_WITH_AMDGPU=OFF"</span>
 </pre></div>
 </div>
 <p>To direct <code class="docutils literal notranslate"><span class="pre">cmake</span></code> where to look at for some dependencies, for example <code class="docutils literal notranslate"><span class="pre">LLVM</span></code>, you could either use an environment variable <code class="docutils literal notranslate"><span class="pre">LLVM_DIR</span></code> or specify the cmake option <code class="docutils literal notranslate"><span class="pre">LLVM_ROOT</span></code>:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># using an env var</span>
-<span class="n">export</span> <span class="n">LLVM_DIR</span><span class="o">=</span><span class="s2">&quot;/path/to/llvm/&quot;</span>
+<span class="n">export</span> <span class="n">LLVM_DIR</span><span class="o">=</span><span class="s2">"/path/to/llvm/"</span>
 <span class="c1"># or with a cmake option</span>
-<span class="n">export</span> <span class="n">CMAKE_ARGS</span><span class="o">=</span><span class="s2">&quot;$CMAKE_ARGS -DLLVM_ROOT=/path/to/llvm&quot;</span>
+<span class="n">export</span> <span class="n">CMAKE_ARGS</span><span class="o">=</span><span class="s2">"$CMAKE_ARGS -DLLVM_ROOT=/path/to/llvm"</span>
 </pre></div>
 </div>
 <section id="building-with-the-amd-gpu-backend-linux">
 <h3>Building with the AMD GPU backend (Linux)<a class="headerlink" href="#building-with-the-amd-gpu-backend-linux" title="Link to this heading">#</a></h3>
 <p>The AMD GPU backend is Linux-only (it is force-disabled on macOS and Windows) and is off by default, so enable it explicitly through <code class="docutils literal notranslate"><span class="pre">CMAKE_ARGS</span></code>:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">./</span><span class="n">build</span><span class="o">.</span><span class="n">py</span> <span class="o">--</span><span class="n">shell</span>
-<span class="n">CMAKE_ARGS</span><span class="o">=</span><span class="s2">&quot;-DQD_WITH_AMDGPU=ON -DQD_WITH_CUDA=OFF&quot;</span> <span class="n">pip</span> <span class="n">install</span> <span class="o">--</span><span class="n">no</span><span class="o">-</span><span class="n">build</span><span class="o">-</span><span class="n">isolation</span> <span class="o">-</span><span class="n">e</span> <span class="o">.</span> <span class="o">-</span><span class="n">v</span>
+<span class="n">CMAKE_ARGS</span><span class="o">=</span><span class="s2">"-DQD_WITH_AMDGPU=ON -DQD_WITH_CUDA=OFF"</span> <span class="n">pip</span> <span class="n">install</span> <span class="o">--</span><span class="n">no</span><span class="o">-</span><span class="n">build</span><span class="o">-</span><span class="n">isolation</span> <span class="o">-</span><span class="n">e</span> <span class="o">.</span> <span class="o">-</span><span class="n">v</span>
 </pre></div>
 </div>
 </section>
@@ -630,6 +632,18 @@
 <li><p><code class="docutils literal notranslate"><span class="pre">LLVM</span></code> libraries used by host runtime: statically or dynamically linked, used to lower the kernel’s final IR to machine code on the host. The CI uses an LLVM version compiled from source.</p></li>
 </ol>
 </section>
+<section id="running-hand-edited-ir-or-ptx">
+<h3>Running hand-edited IR or PTX<a class="headerlink" href="#running-hand-edited-ir-or-ptx" title="Link to this heading">#</a></h3>
+<p>A dump written by <code class="docutils literal notranslate"><span class="pre">QD_DUMP_IR</span></code> (see <a class="reference internal" href="debug.html#dumping-compiled-ir"><span class="std std-ref">Dumping compiled IR</span></a>) can be edited and fed back in, which is a quick way to try an instruction sequence by hand before changing codegen. <code class="docutils literal notranslate"><span class="pre">QD_LOAD_IR=1</span></code> makes the LLVM backends reparse <code class="docutils literal notranslate"><span class="pre">&lt;debug_dump_path&gt;/&lt;task&gt;_llvm.ll</span></code> instead of using the module they just built, and <code class="docutils literal notranslate"><span class="pre">QUADRANTS_LOAD_PTX=1</span></code> makes the CUDA backend read <code class="docutils literal notranslate"><span class="pre">&lt;debug_dump_path&gt;/&lt;name&gt;.ptx</span></code> instead of the PTX it just compiled. Both are read as integers, so <code class="docutils literal notranslate"><span class="pre">0</span></code> leaves them off.</p>
+<p>Both caches have to be off in the script under test, since the replacement files are only read while a kernel is being compiled and a cached kernel is handed back without compiling. <code class="docutils literal notranslate"><span class="pre">qd.init</span></code> raises a <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> rather than let an already-cached kernel keep silently running its old code. <code class="docutils literal notranslate"><span class="pre">offline_cache</span></code> has an environment variable, <code class="docutils literal notranslate"><span class="pre">src_ll_cache</span></code> does not, so the latter has to be passed to <code class="docutils literal notranslate"><span class="pre">qd.init</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">cuda</span><span class="p">,</span> <span class="n">offline_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">src_ll_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">QD_DUMP_IR</span><span class="o">=</span><span class="m">1</span><span class="w"> </span><span class="nv">QD_DEBUG_DUMP_PATH</span><span class="o">=</span>/tmp/ir<span class="w"> </span>python<span class="w"> </span>my_script.py<span class="w">  </span><span class="c1"># dump, then edit the files under /tmp/ir</span>
+<span class="nv">QD_LOAD_IR</span><span class="o">=</span><span class="m">1</span><span class="w"> </span><span class="nv">QD_DEBUG_DUMP_PATH</span><span class="o">=</span>/tmp/ir<span class="w"> </span>python<span class="w"> </span>my_script.py<span class="w">  </span><span class="c1"># run what you edited</span>
+</pre></div>
+</div>
+</section>
 <section id="building-llvm-for-debugging-it">
 <h3>Building LLVM for debugging it<a class="headerlink" href="#building-llvm-for-debugging-it" title="Link to this heading">#</a></h3>
 <p>Sometimes, it could be useful to have a <code class="docutils literal notranslate"><span class="pre">LLVM</span></code> version that allows to print intermediate passes or with debug symbols to find out where and why LLVM fails (for example, when Instruction Selection fails). To do so you would have to build LLVM by yourself. If so, you should take some inspiration from our <a class="reference external" href="https://github.com/Genesis-Embodied-AI/quadrants-sdk-builds/blob/main/.github/workflows/llvm-ci.yml">CI pipeline to build LLVM</a> to tweak a little bit to your liking (and not enable/disable options that would create discrepancies).</p>
@@ -710,6 +724,7 @@
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#advanced">Advanced</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ci-convention-about-compilers-llvm">CI Convention about compilers/LLVM</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#running-hand-edited-ir-or-ptx">Running hand-edited IR or PTX</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#building-llvm-for-debugging-it">Building LLVM for debugging it</a></li>
 </ul>
 </li>

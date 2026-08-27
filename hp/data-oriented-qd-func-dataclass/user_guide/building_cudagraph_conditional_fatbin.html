@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Advanced: Building the CUDA graph conditional fatbin &#8212; Quadrants 1.0.1 documentation</title>
+    <title>Advanced: Building the CUDA graph conditional fatbin &#8212; Quadrants 1.3.1 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../_static/documentation_options.js?v=292eb321"></script>
+    <script src="../_static/documentation_options.js?v=bb516dca"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Advanced: Contributing to quadrants" href="contributing.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.0.1" />
+  <meta name="docsearch:version" content="1.3.1" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.0.1 documentation</p>
+    <p class="title logo__title">Quadrants 1.3.1 documentation</p>
   
 </a></div>
     
@@ -323,6 +323,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">SIMT primitives</span></p>
 <ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="gpu_execution_model.html">GPU execution model</a></li>
 <li class="toctree-l1"><a class="reference internal" href="atomics.html">Atomics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="block.html">Block primitives</a></li>
 <li class="toctree-l1"><a class="reference internal" href="grid.html">Grid primitives</a></li>
@@ -336,6 +337,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
 <ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="performance.html">Performance</a></li>
 <li class="toctree-l1"><a class="reference internal" href="fastcache.html">Fastcache</a></li>
 <li class="toctree-l1"><a class="reference internal" href="graph.html">Graph</a></li>
 <li class="toctree-l1"><a class="reference internal" href="streams.html">Streams</a></li>
@@ -344,7 +346,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Testing</span></p>
 <ul class="nav bd-sidenav">
-<li class="toctree-l1"><a class="reference internal" href="unit_testing.html">Unit testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="unit_testing.html">Advanced: Unit testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="kernel_coverage.html">Kernel code coverage</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
@@ -428,7 +430,7 @@
                   
   <section class="tex2jax_ignore mathjax_ignore" id="advanced-building-the-cuda-graph-conditional-fatbin">
 <h1>Advanced: Building the CUDA graph conditional fatbin<a class="headerlink" href="#advanced-building-the-cuda-graph-conditional-fatbin" title="Link to this heading">#</a></h1>
-<p>The <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> feature uses a tiny CUDA kernel that calls <code class="docutils literal notranslate"><span class="pre">cudaGraphSetConditional</span></code> (a device-side function from NVIDIA’s <code class="docutils literal notranslate"><span class="pre">libcudadevrt.a</span></code>) to control CUDA graph conditional while nodes. These conditional nodes require SM 9.0+ (Hopper or later); on older GPUs, <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> falls back to a host-side loop automatically.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code> feature uses a tiny CUDA kernel that calls <code class="docutils literal notranslate"><span class="pre">cudaGraphSetConditional</span></code> (a device-side function from NVIDIA’s <code class="docutils literal notranslate"><span class="pre">libcudadevrt.a</span></code>) to control CUDA graph conditional while nodes. These conditional nodes require SM 9.0+ (Hopper or later); on older GPUs, <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code> falls back to a host-side loop automatically.</p>
 <p>There are three distinct phases:</p>
 <ol class="arabic simple">
 <li><p><strong>Fatbin generation</strong> (rare, manual) — A developer runs <code class="docutils literal notranslate"><span class="pre">scripts/build_condition_kernel_fatbin.py</span></code> (and the sibling <code class="docutils literal notranslate"><span class="pre">build_checkpoint_gate_fatbin.py</span></code> / <code class="docutils literal notranslate"><span class="pre">build_checkpoint_yield_check_fatbin.py</span></code>), which compiles the kernel and device-links it with <code class="docutils literal notranslate"><span class="pre">libcudadevrt.a</span></code> to resolve <code class="docutils literal notranslate"><span class="pre">cudaGraphSetConditional</span></code>. Each script emits <strong>one fatbin per build toolkit</strong> (see Prerequisites), all committed to git in a single C header. Requires the CUDA toolkits listed below.</p></li>
@@ -474,7 +476,7 @@
 <h2>Verifying the committed fatbins<a class="headerlink" href="#verifying-the-committed-fatbins" title="Link to this heading">#</a></h2>
 <p><code class="docutils literal notranslate"><span class="pre">tests/python/test_fatbin_arch_coverage.py</span></code> holds an explicit, hand-maintained <code class="docutils literal notranslate"><span class="pre">EXPECTED_LAYOUT</span></code> for each committed <code class="docutils literal notranslate"><span class="pre">*_fatbin.h</span></code> — the architectures and the CUDA toolkit expected in every blob (e.g. <code class="docutils literal notranslate"><span class="pre">sm_90</span> <span class="pre">/</span> <span class="pre">sm_100</span> <span class="pre">/</span> <span class="pre">sm_120</span></code> built with CUDA 12.8 in blob 0 and <code class="docutils literal notranslate"><span class="pre">sm_110</span></code> built with CUDA 13.0+ in blob 1 for the condition kernel). It deliberately does <em>not</em> re-derive this from <code class="docutils literal notranslate"><span class="pre">scripts/_fatbin_common.py</span></code>, so a regression in the <code class="docutils literal notranslate"><span class="pre">SM_TOOLKIT</span></code> mapping is caught rather than silently baked into a new header. For every embedded cubin it checks both the SASS arch and the build toolkit that <code class="docutils literal notranslate"><span class="pre">cuobjdump</span></code> reports, so it directly asserts the load-bearing fact behind #2942: the sm_120 (RTX 5090) cubin is built with the wide-compatibility CUDA 12.8, not a newer toolkit that would reintroduce <code class="docutils literal notranslate"><span class="pre">CUDA_ERROR_INVALID_IMAGE</span></code> on 570-series drivers. It also drift-guards each <code class="docutils literal notranslate"><span class="pre">SM_VERSIONS</span></code> list against the arch set actually baked into the checked-in header.</p>
 <p>The test shells out to <code class="docutils literal notranslate"><span class="pre">cuobjdump</span></code>, so it is skipped unless <code class="docutils literal notranslate"><span class="pre">cuobjdump</span></code> is on <code class="docutils literal notranslate"><span class="pre">PATH</span></code>; the toolkit providing it must also be at least as new as the newest one used to build the fatbins (CUDA 13.0+, for sm_110), otherwise the affected header is skipped rather than failed. Run it after regenerating:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Make a recent CUDA toolkit&#39;s cuobjdump visible on PATH, e.g.:</span>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Make a recent CUDA toolkit's cuobjdump visible on PATH, e.g.:</span>
 <span class="nb">export</span><span class="w"> </span><span class="nv">PATH</span><span class="o">=</span>/usr/local/cuda/bin:<span class="nv">$PATH</span>
 python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/python/test_fatbin_arch_coverage.py<span class="w"> </span>-v
 </pre></div>

@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.simt.sorting &#8212; Quadrants 1.0.1 documentation</title>
+    <title>quadrants.lang.simt.sorting &#8212; Quadrants 1.3.1 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../../../_static/documentation_options.js?v=292eb321"></script>
+    <script src="../../../../_static/documentation_options.js?v=bb516dca"></script>
     <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.0.1" />
+  <meta name="docsearch:version" content="1.3.1" />
   
     
     <script src="../../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.0.1 documentation</p>
+    <p class="title logo__title">Quadrants 1.3.1 documentation</p>
   
 </a></div>
     
@@ -332,7 +332,7 @@
                   
   <h1>Source code for quadrants.lang.simt.sorting</h1><div class="highlight"><pre>
 <span></span><span class="c1"># pyright: reportInvalidTypeForm=false, reportOperatorIssue=false, reportArgumentType=false</span>
-<span class="sd">&quot;&quot;&quot;Subgroup-scoped sorting primitives.</span>
+<span class="sd">"""Subgroup-scoped sorting primitives.</span>
 
 <span class="sd">Split out from `quadrants.lang.simt.subgroup` for the same reason `reductions` was: it keeps that module focused on</span>
 <span class="sd">data movement (shuffle / broadcast / ballot / lanemask / vote primitives) and groups all sort-shaped helpers under one</span>
@@ -351,7 +351,7 @@
 
 <span class="sd">The full-subgroup form ``bitonic_sort_kv(key, value)`` is a one-liner that picks ``log2_size = log2_group_size()``,</span>
 <span class="sd">following the same convention as ``reduce_add`` / ``reduce_all_add`` / etc.</span>
-<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">"""</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.kernel_impl</span><span class="w"> </span><span class="kn">import</span> <span class="n">func</span>
@@ -368,8 +368,8 @@
 <span class="c1"># Classic 1-D bitonic sorting network laid out across ``2**log2_size`` consecutive lanes, one ``(key, value)`` pair per</span>
 <span class="c1"># lane.  For each outer ``k_log2`` in ``[1, log2_size]`` and inner ``j_log2`` in ``[k_log2 - 1, 0]``, lane ``i``</span>
 <span class="c1"># exchanges with lane ``i ^ (1 &lt;&lt; j_log2)`` via two ``shuffle`` ops.  Whether ``i`` keeps the min or max of the pair</span>
-<span class="c1"># is decided by two bits of the lane id: ``(i &amp; (1 &lt;&lt; j_log2)) == 0`` says &quot;I&#39;m the low partner of this swap&quot; and</span>
-<span class="c1"># ``(i &amp; (1 &lt;&lt; k_log2)) == 0`` says &quot;this is an ascending half of the bitonic sequence&quot;.  When those bits agree the</span>
+<span class="c1"># is decided by two bits of the lane id: ``(i &amp; (1 &lt;&lt; j_log2)) == 0`` says "I'm the low partner of this swap" and</span>
+<span class="c1"># ``(i &amp; (1 &lt;&lt; k_log2)) == 0`` says "this is an ascending half of the bitonic sequence".  When those bits agree the</span>
 <span class="c1"># lane keeps the min, otherwise the max.</span>
 <span class="c1">#</span>
 <span class="c1"># The compare is a lex compare on ``(key, value)``: ties on ``key`` break on ascending ``value``.  This is *not* a</span>
@@ -385,7 +385,7 @@
 <div class="viewcode-block" id="bitonic_sort_kv_tiled">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/sorting/index.html#quadrants.lang.simt.sorting.bitonic_sort_kv_tiled">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">bitonic_sort_kv_tiled</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;In-register ascending lex sort on ``(key, value)`` pairs across ``2**log2_size`` consecutive lanes.</span>
+<span class="w">    </span><span class="sd">"""In-register ascending lex sort on ``(key, value)`` pairs across ``2**log2_size`` consecutive lanes.</span>
 
 <span class="sd">    Sorts ``(key, value)`` pairs by ascending ``key``; ties on ``key`` break on ascending ``value`` (lex order on the</span>
 <span class="sd">    ``(key, value)`` tuple).  Each lane holds one pair on entry; on exit, lane ``i`` (within its ``2**log2_size``-aligned</span>
@@ -403,7 +403,7 @@
 
 <span class="sd">    * ``2**log2_size`` must not exceed the active subgroup size on the target: up to 32 on CUDA / Metal /</span>
 <span class="sd">      Vulkan-wave32, up to 64 on AMDGPU (every AMDGPU target is pinned to wave64).  ``log2_size = 0`` is the degenerate</span>
-<span class="sd">      &quot;every lane is its own tile of 1&quot; case -- the function returns ``(key, value)`` unchanged.</span>
+<span class="sd">      "every lane is its own tile of 1" case -- the function returns ``(key, value)`` unchanged.</span>
 <span class="sd">    * ``log2_size`` is a ``qd.template()`` compile-time constant; the body is fully unrolled into exactly</span>
 <span class="sd">      ``log2_size * (log2_size + 1) / 2`` compare-exchange stages, each one two ``shuffle`` ops + a lex compare + a</span>
 <span class="sd">      predicated assignment.  For ``log2_size = 5`` (32 lanes) this is the standard 15-stage bitonic schedule.</span>
@@ -418,8 +418,8 @@
 
 <span class="sd">    1. Load real data into the low ``n`` lanes (``lane &lt; n``).</span>
 <span class="sd">    2. Initialise the high lanes (``lane &gt;= n``) with a sentinel key that compares greater than every real key</span>
-<span class="sd">       (``+inf`` for floats, ``INT_MAX`` / ``UINT_MAX`` for ints) and any safe value (often ``-1`` for an &quot;invalid</span>
-<span class="sd">       index&quot; marker).</span>
+<span class="sd">       (``+inf`` for floats, ``INT_MAX`` / ``UINT_MAX`` for ints) and any safe value (often ``-1`` for an "invalid</span>
+<span class="sd">       index" marker).</span>
 <span class="sd">    3. Call ``bitonic_sort_kv_tiled(key, value, log2_size)``.</span>
 <span class="sd">    4. Read back only the low ``n`` lanes; the sentinels have drifted to the high end of the tile.</span>
 
@@ -427,19 +427,19 @@
 
 <span class="sd">    Float NaN handling on the key (or value) is implementation-defined: comparisons with NaN return false on most</span>
 <span class="sd">    backends, so NaN-keyed lanes drift to an arbitrary position within the sorted tile and the result loses its</span>
-<span class="sd">    &quot;sorted&quot; guarantee.  Bit-cast the key to a same-width integer dtype if you need a portable NaN-respecting order.</span>
+<span class="sd">    "sorted" guarantee.  Bit-cast the key to a same-width integer dtype if you need a portable NaN-respecting order.</span>
 
 <span class="sd">    Cost is exactly ``log2_size * (log2_size + 1)`` ``shuffle`` ops (two per compare-exchange stage, one for the</span>
-<span class="sd">    partner&#39;s key and one for the partner&#39;s value) plus the same number of lex compares + predicated assignments, all</span>
-<span class="sd">    fully unrolled into the calling kernel&#39;s IR.  No barriers, no shared memory, no launch overhead.  The shuffle</span>
+<span class="sd">    partner's key and one for the partner's value) plus the same number of lex compares + predicated assignments, all</span>
+<span class="sd">    fully unrolled into the calling kernel's IR.  No barriers, no shared memory, no launch overhead.  The shuffle</span>
 <span class="sd">    pattern is the partner-XOR butterfly used by every other ``_tiled`` op in this module, so on AMDGPU the wave64</span>
 <span class="sd">    cross-half handling (the ``permlane64`` + dual ``ds_bpermute`` lowering described in `AMDGPU wave64 cross-half</span>
 <span class="sd">    lowering`) is inherited transparently.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">lane</span> <span class="o">=</span> <span class="n">invocation_id</span><span class="p">()</span>
     <span class="c1"># ``tile_mask`` is the low ``log2_size`` bits, i.e. the lane-id-within-tile mask.  We AND ``k_mask`` with it when</span>
     <span class="c1"># reading the outer-stage direction bit so the sort treats every tile as an independent ascending sort: without</span>
-    <span class="c1"># this, tile 1 (lanes ``[tile_size, 2*tile_size)``) would land &quot;descending&quot; at the final ``k_log2 == log2_size``</span>
+    <span class="c1"># this, tile 1 (lanes ``[tile_size, 2*tile_size)``) would land "descending" at the final ``k_log2 == log2_size``</span>
     <span class="c1"># stage, because the unmasked ``(lane &amp; tile_size) == 0`` test flips between adjacent tiles.  When</span>
     <span class="c1"># ``log2_size == log2_group_size()`` the mask is a no-op (``k_mask &lt;= tile_size`` always, and ``k_mask &lt; tile_size``</span>
     <span class="c1"># leaves the bit untouched; ``k_mask == tile_size`` zeroes it but every lane in the subgroup already had that bit</span>
@@ -471,21 +471,21 @@
 <div class="viewcode-block" id="bitonic_sort_kv">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/sorting/index.html#quadrants.lang.simt.sorting.bitonic_sort_kv">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">bitonic_sort_kv</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;``bitonic_sort_kv_tiled`` across the entire subgroup -- the lex-smallest ``2**log2_group_size()`` pairs end up</span>
+<span class="w">    </span><span class="sd">"""``bitonic_sort_kv_tiled`` across the entire subgroup -- the lex-smallest ``2**log2_group_size()`` pairs end up</span>
 <span class="sd">    in ascending lane order.</span>
 
 <span class="sd">    Plain Python wrapper (not ``@qd.func``): the ``log2_group_size()`` int is resolved at compile time and flows into</span>
-<span class="sd">    the underlying ``@qd.func``&#39;s ``template()`` parameter, so the generated IR is identical to a hand-written</span>
+<span class="sd">    the underlying ``@qd.func``'s ``template()`` parameter, so the generated IR is identical to a hand-written</span>
 <span class="sd">    ``bitonic_sort_kv_tiled(key, value, 5)`` on wave32 backends or ``bitonic_sort_kv_tiled(key, value, 6)`` on AMDGPU</span>
 <span class="sd">    wave64.  See `bitonic_sort_kv_tiled` for the full contract, the short-input pattern, and the NaN caveat.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="k">return</span> <span class="n">bitonic_sort_kv_tiled</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">log2_group_size</span><span class="p">())</span></div>
 
 
 
 <span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>
-    <span class="s2">&quot;bitonic_sort_kv_tiled&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;bitonic_sort_kv&quot;</span><span class="p">,</span>
+    <span class="s2">"bitonic_sort_kv_tiled"</span><span class="p">,</span>
+    <span class="s2">"bitonic_sort_kv"</span><span class="p">,</span>
 <span class="p">]</span>
 </pre></div>
 

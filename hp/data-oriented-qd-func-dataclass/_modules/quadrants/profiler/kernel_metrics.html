@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.profiler.kernel_metrics &#8212; Quadrants 1.0.1 documentation</title>
+    <title>quadrants.profiler.kernel_metrics &#8212; Quadrants 1.3.1 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../../_static/documentation_options.js?v=292eb321"></script>
+    <script src="../../../_static/documentation_options.js?v=bb516dca"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.0.1" />
+  <meta name="docsearch:version" content="1.3.1" />
   
     
     <script src="../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.0.1 documentation</p>
+    <p class="title logo__title">Quadrants 1.3.1 documentation</p>
   
 </a></div>
     
@@ -339,7 +339,7 @@
 <div class="viewcode-block" id="CuptiMetric">
 <a class="viewcode-back" href="../../../autoapi/quadrants/profiler/kernel_metrics/index.html#quadrants.profiler.kernel_metrics.CuptiMetric">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">CuptiMetric</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;A class to add CUPTI metric for :class:`~quadrants.profiler.kernel_profiler.KernelProfiler`.</span>
+<span class="w">    </span><span class="sd">"""A class to add CUPTI metric for :class:`~quadrants.profiler.kernel_profiler.KernelProfiler`.</span>
 
 <span class="sd">    This class is designed to add user selected CUPTI metrics.</span>
 <span class="sd">    Only available for the CUDA backend now, i.e. you need ``qd.init(kernel_profiler=True, arch=qd.cuda)``.</span>
@@ -368,23 +368,23 @@
 <span class="sd">        &gt;&gt;&gt;         y[None] += x[i]</span>
 
 <span class="sd">        &gt;&gt;&gt; global_op_atom = qd.profiler.CuptiMetric(</span>
-<span class="sd">        &gt;&gt;&gt;     name=&#39;l1tex__t_set_accesses_pipe_lsu_mem_global_op_atom.sum&#39;,</span>
-<span class="sd">        &gt;&gt;&gt;     header=&#39; global.atom &#39;,</span>
-<span class="sd">        &gt;&gt;&gt;     val_format=&#39;    {:8.0f} &#39;)</span>
+<span class="sd">        &gt;&gt;&gt;     name='l1tex__t_set_accesses_pipe_lsu_mem_global_op_atom.sum',</span>
+<span class="sd">        &gt;&gt;&gt;     header=' global.atom ',</span>
+<span class="sd">        &gt;&gt;&gt;     val_format='    {:8.0f} ')</span>
 
 <span class="sd">        &gt;&gt;&gt; # add and set user defined metrics</span>
-<span class="sd">        &gt;&gt;&gt; profiling_metrics = qd.profiler.get_predefined_cupti_metrics(&#39;global_access&#39;) + [global_op_atom]</span>
+<span class="sd">        &gt;&gt;&gt; profiling_metrics = qd.profiler.get_predefined_cupti_metrics('global_access') + [global_op_atom]</span>
 <span class="sd">        &gt;&gt;&gt; qd.profiler.set_kernel_profile_metrics(profiling_metrics)</span>
 
 <span class="sd">        &gt;&gt;&gt; for i in range(16):</span>
 <span class="sd">        &gt;&gt;&gt;     reduction()</span>
-<span class="sd">        &gt;&gt;&gt; qd.profiler.print_kernel_profiler_info(&#39;trace&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; qd.profiler.print_kernel_profiler_info('trace')</span>
 
 <span class="sd">    Note:</span>
 <span class="sd">        For details about using CUPTI in Quadrants, please visit https://docs.taichi-lang.org/docs/profiler#advanced-mode.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">header</span><span class="o">=</span><span class="s2">&quot;unnamed_header&quot;</span><span class="p">,</span> <span class="n">val_format</span><span class="o">=</span><span class="s2">&quot;     </span><span class="si">{:8.0f}</span><span class="s2"> &quot;</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="mf">1.0</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">header</span><span class="o">=</span><span class="s2">"unnamed_header"</span><span class="p">,</span> <span class="n">val_format</span><span class="o">=</span><span class="s2">"     </span><span class="si">{:8.0f}</span><span class="s2"> "</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="mf">1.0</span><span class="p">):</span>
 <div class="viewcode-block" id="CuptiMetric.name">
 <a class="viewcode-back" href="../../../autoapi/quadrants/profiler/kernel_metrics/index.html#quadrants.profiler.kernel_metrics.CuptiMetric.name">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span></div>
@@ -406,131 +406,131 @@
 
 <span class="c1"># Global Memory Metrics</span>
 <span class="n">dram_utilization</span> <span class="o">=</span> <span class="n">CuptiMetric</span><span class="p">(</span>
-    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;dram__throughput.avg.pct_of_peak_sustained_elapsed&quot;</span><span class="p">,</span>
-    <span class="n">header</span><span class="o">=</span><span class="s2">&quot; global.uti &quot;</span><span class="p">,</span>
-    <span class="n">val_format</span><span class="o">=</span><span class="s2">&quot;   </span><span class="si">{:6.2f}</span><span class="s2"> % &quot;</span><span class="p">,</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"dram__throughput.avg.pct_of_peak_sustained_elapsed"</span><span class="p">,</span>
+    <span class="n">header</span><span class="o">=</span><span class="s2">" global.uti "</span><span class="p">,</span>
+    <span class="n">val_format</span><span class="o">=</span><span class="s2">"   </span><span class="si">{:6.2f}</span><span class="s2"> % "</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="n">dram_bytes_sum</span> <span class="o">=</span> <span class="n">CuptiMetric</span><span class="p">(</span>
-    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;dram__bytes.sum&quot;</span><span class="p">,</span>
-    <span class="n">header</span><span class="o">=</span><span class="s2">&quot;  global.R&amp;W &quot;</span><span class="p">,</span>
-    <span class="n">val_format</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">{:9.3f}</span><span class="s2"> MB &quot;</span><span class="p">,</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"dram__bytes.sum"</span><span class="p">,</span>
+    <span class="n">header</span><span class="o">=</span><span class="s2">"  global.R&amp;W "</span><span class="p">,</span>
+    <span class="n">val_format</span><span class="o">=</span><span class="s2">"</span><span class="si">{:9.3f}</span><span class="s2"> MB "</span><span class="p">,</span>
     <span class="n">scale</span><span class="o">=</span><span class="mf">1.0</span> <span class="o">/</span> <span class="mi">1024</span> <span class="o">/</span> <span class="mi">1024</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="n">dram_bytes_throughput</span> <span class="o">=</span> <span class="n">CuptiMetric</span><span class="p">(</span>
-    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;dram__bytes.sum.per_second&quot;</span><span class="p">,</span>
-    <span class="n">header</span><span class="o">=</span><span class="s2">&quot; global.R&amp;W/s &quot;</span><span class="p">,</span>
-    <span class="n">val_format</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">{:8.3f}</span><span class="s2"> GB/s &quot;</span><span class="p">,</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"dram__bytes.sum.per_second"</span><span class="p">,</span>
+    <span class="n">header</span><span class="o">=</span><span class="s2">" global.R&amp;W/s "</span><span class="p">,</span>
+    <span class="n">val_format</span><span class="o">=</span><span class="s2">"</span><span class="si">{:8.3f}</span><span class="s2"> GB/s "</span><span class="p">,</span>
     <span class="n">scale</span><span class="o">=</span><span class="mf">1.0</span> <span class="o">/</span> <span class="mi">1024</span> <span class="o">/</span> <span class="mi">1024</span> <span class="o">/</span> <span class="mi">1024</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="n">dram_bytes_read</span> <span class="o">=</span> <span class="n">CuptiMetric</span><span class="p">(</span>
-    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;dram__bytes_read.sum&quot;</span><span class="p">,</span>
-    <span class="n">header</span><span class="o">=</span><span class="s2">&quot;   global.R &quot;</span><span class="p">,</span>
-    <span class="n">val_format</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">{:8.3f}</span><span class="s2"> MB &quot;</span><span class="p">,</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"dram__bytes_read.sum"</span><span class="p">,</span>
+    <span class="n">header</span><span class="o">=</span><span class="s2">"   global.R "</span><span class="p">,</span>
+    <span class="n">val_format</span><span class="o">=</span><span class="s2">"</span><span class="si">{:8.3f}</span><span class="s2"> MB "</span><span class="p">,</span>
     <span class="n">scale</span><span class="o">=</span><span class="mf">1.0</span> <span class="o">/</span> <span class="mi">1024</span> <span class="o">/</span> <span class="mi">1024</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="n">dram_read_throughput</span> <span class="o">=</span> <span class="n">CuptiMetric</span><span class="p">(</span>
-    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;dram__bytes_read.sum.per_second&quot;</span><span class="p">,</span>
-    <span class="n">header</span><span class="o">=</span><span class="s2">&quot;   global.R/s &quot;</span><span class="p">,</span>
-    <span class="n">val_format</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">{:8.3f}</span><span class="s2"> GB/s &quot;</span><span class="p">,</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"dram__bytes_read.sum.per_second"</span><span class="p">,</span>
+    <span class="n">header</span><span class="o">=</span><span class="s2">"   global.R/s "</span><span class="p">,</span>
+    <span class="n">val_format</span><span class="o">=</span><span class="s2">"</span><span class="si">{:8.3f}</span><span class="s2"> GB/s "</span><span class="p">,</span>
     <span class="n">scale</span><span class="o">=</span><span class="mf">1.0</span> <span class="o">/</span> <span class="mi">1024</span> <span class="o">/</span> <span class="mi">1024</span> <span class="o">/</span> <span class="mi">1024</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="n">dram_bytes_write</span> <span class="o">=</span> <span class="n">CuptiMetric</span><span class="p">(</span>
-    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;dram__bytes_write.sum&quot;</span><span class="p">,</span>
-    <span class="n">header</span><span class="o">=</span><span class="s2">&quot;   global.W &quot;</span><span class="p">,</span>
-    <span class="n">val_format</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">{:8.3f}</span><span class="s2"> MB &quot;</span><span class="p">,</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"dram__bytes_write.sum"</span><span class="p">,</span>
+    <span class="n">header</span><span class="o">=</span><span class="s2">"   global.W "</span><span class="p">,</span>
+    <span class="n">val_format</span><span class="o">=</span><span class="s2">"</span><span class="si">{:8.3f}</span><span class="s2"> MB "</span><span class="p">,</span>
     <span class="n">scale</span><span class="o">=</span><span class="mf">1.0</span> <span class="o">/</span> <span class="mi">1024</span> <span class="o">/</span> <span class="mi">1024</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="n">dram_write_throughput</span> <span class="o">=</span> <span class="n">CuptiMetric</span><span class="p">(</span>
-    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;dram__bytes_write.sum.per_second&quot;</span><span class="p">,</span>
-    <span class="n">header</span><span class="o">=</span><span class="s2">&quot;   global.W/s &quot;</span><span class="p">,</span>
-    <span class="n">val_format</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">{:8.3f}</span><span class="s2"> GB/s &quot;</span><span class="p">,</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"dram__bytes_write.sum.per_second"</span><span class="p">,</span>
+    <span class="n">header</span><span class="o">=</span><span class="s2">"   global.W/s "</span><span class="p">,</span>
+    <span class="n">val_format</span><span class="o">=</span><span class="s2">"</span><span class="si">{:8.3f}</span><span class="s2"> GB/s "</span><span class="p">,</span>
     <span class="n">scale</span><span class="o">=</span><span class="mf">1.0</span> <span class="o">/</span> <span class="mi">1024</span> <span class="o">/</span> <span class="mi">1024</span> <span class="o">/</span> <span class="mi">1024</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="c1"># Shared Memory Metrics</span>
 <span class="n">shared_utilization</span> <span class="o">=</span> <span class="n">CuptiMetric</span><span class="p">(</span>
-    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;l1tex__data_pipe_lsu_wavefronts_mem_shared.avg.pct_of_peak_sustained_elapsed&quot;</span><span class="p">,</span>
-    <span class="n">header</span><span class="o">=</span><span class="s2">&quot; uqd.shared &quot;</span><span class="p">,</span>
-    <span class="n">val_format</span><span class="o">=</span><span class="s2">&quot;   </span><span class="si">{:6.2f}</span><span class="s2"> % &quot;</span><span class="p">,</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"l1tex__data_pipe_lsu_wavefronts_mem_shared.avg.pct_of_peak_sustained_elapsed"</span><span class="p">,</span>
+    <span class="n">header</span><span class="o">=</span><span class="s2">" uqd.shared "</span><span class="p">,</span>
+    <span class="n">val_format</span><span class="o">=</span><span class="s2">"   </span><span class="si">{:6.2f}</span><span class="s2"> % "</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="n">shared_transactions_load</span> <span class="o">=</span> <span class="n">CuptiMetric</span><span class="p">(</span>
-    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum&quot;</span><span class="p">,</span>
-    <span class="n">header</span><span class="o">=</span><span class="s2">&quot; shared.trans.W &quot;</span><span class="p">,</span>
-    <span class="n">val_format</span><span class="o">=</span><span class="s2">&quot;     </span><span class="si">{:10.0f}</span><span class="s2"> &quot;</span><span class="p">,</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum"</span><span class="p">,</span>
+    <span class="n">header</span><span class="o">=</span><span class="s2">" shared.trans.W "</span><span class="p">,</span>
+    <span class="n">val_format</span><span class="o">=</span><span class="s2">"     </span><span class="si">{:10.0f}</span><span class="s2"> "</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="n">shared_transactions_store</span> <span class="o">=</span> <span class="n">CuptiMetric</span><span class="p">(</span>
-    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;l1tex__data_pipe_lsu_wavefronts_mem_shared_op_st.sum&quot;</span><span class="p">,</span>
-    <span class="n">header</span><span class="o">=</span><span class="s2">&quot; shared.trans.R &quot;</span><span class="p">,</span>
-    <span class="n">val_format</span><span class="o">=</span><span class="s2">&quot;     </span><span class="si">{:10.0f}</span><span class="s2"> &quot;</span><span class="p">,</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"l1tex__data_pipe_lsu_wavefronts_mem_shared_op_st.sum"</span><span class="p">,</span>
+    <span class="n">header</span><span class="o">=</span><span class="s2">" shared.trans.R "</span><span class="p">,</span>
+    <span class="n">val_format</span><span class="o">=</span><span class="s2">"     </span><span class="si">{:10.0f}</span><span class="s2"> "</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="n">shared_bank_conflicts_store</span> <span class="o">=</span> <span class="n">CuptiMetric</span><span class="p">(</span>
-    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;l1tex__data_bank_conflicts_pipe_lsu_mem_shared_op_st.sum&quot;</span><span class="p">,</span>
-    <span class="n">header</span><span class="o">=</span><span class="s2">&quot; bank.conflict.W &quot;</span><span class="p">,</span>
-    <span class="n">val_format</span><span class="o">=</span><span class="s2">&quot;      </span><span class="si">{:10.0f}</span><span class="s2"> &quot;</span><span class="p">,</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"l1tex__data_bank_conflicts_pipe_lsu_mem_shared_op_st.sum"</span><span class="p">,</span>
+    <span class="n">header</span><span class="o">=</span><span class="s2">" bank.conflict.W "</span><span class="p">,</span>
+    <span class="n">val_format</span><span class="o">=</span><span class="s2">"      </span><span class="si">{:10.0f}</span><span class="s2"> "</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="n">shared_bank_conflicts_load</span> <span class="o">=</span> <span class="n">CuptiMetric</span><span class="p">(</span>
-    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;l1tex__data_bank_conflicts_pipe_lsu_mem_shared_op_ld.sum&quot;</span><span class="p">,</span>
-    <span class="n">header</span><span class="o">=</span><span class="s2">&quot; bank.conflict.R &quot;</span><span class="p">,</span>
-    <span class="n">val_format</span><span class="o">=</span><span class="s2">&quot;      </span><span class="si">{:10.0f}</span><span class="s2"> &quot;</span><span class="p">,</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"l1tex__data_bank_conflicts_pipe_lsu_mem_shared_op_ld.sum"</span><span class="p">,</span>
+    <span class="n">header</span><span class="o">=</span><span class="s2">" bank.conflict.R "</span><span class="p">,</span>
+    <span class="n">val_format</span><span class="o">=</span><span class="s2">"      </span><span class="si">{:10.0f}</span><span class="s2"> "</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="c1"># Atomic Metrics</span>
 <span class="n">global_op_atom</span> <span class="o">=</span> <span class="n">CuptiMetric</span><span class="p">(</span>
-    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;l1tex__t_set_accesses_pipe_lsu_mem_global_op_atom.sum&quot;</span><span class="p">,</span>
-    <span class="n">header</span><span class="o">=</span><span class="s2">&quot; global.atom &quot;</span><span class="p">,</span>
-    <span class="n">val_format</span><span class="o">=</span><span class="s2">&quot;    </span><span class="si">{:8.0f}</span><span class="s2"> &quot;</span><span class="p">,</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"l1tex__t_set_accesses_pipe_lsu_mem_global_op_atom.sum"</span><span class="p">,</span>
+    <span class="n">header</span><span class="o">=</span><span class="s2">" global.atom "</span><span class="p">,</span>
+    <span class="n">val_format</span><span class="o">=</span><span class="s2">"    </span><span class="si">{:8.0f}</span><span class="s2"> "</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="n">global_op_reduction</span> <span class="o">=</span> <span class="n">CuptiMetric</span><span class="p">(</span>
-    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;l1tex__t_set_accesses_pipe_lsu_mem_global_op_red.sum&quot;</span><span class="p">,</span>
-    <span class="n">header</span><span class="o">=</span><span class="s2">&quot; global.red &quot;</span><span class="p">,</span>
-    <span class="n">val_format</span><span class="o">=</span><span class="s2">&quot;   </span><span class="si">{:8.0f}</span><span class="s2"> &quot;</span><span class="p">,</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"l1tex__t_set_accesses_pipe_lsu_mem_global_op_red.sum"</span><span class="p">,</span>
+    <span class="n">header</span><span class="o">=</span><span class="s2">" global.red "</span><span class="p">,</span>
+    <span class="n">val_format</span><span class="o">=</span><span class="s2">"   </span><span class="si">{:8.0f}</span><span class="s2"> "</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="c1"># Hardware Utilization Metrics</span>
 <span class="n">sm_throughput</span> <span class="o">=</span> <span class="n">CuptiMetric</span><span class="p">(</span>
-    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;smsp__cycles_active.avg.pct_of_peak_sustained_elapsed&quot;</span><span class="p">,</span>
-    <span class="n">header</span><span class="o">=</span><span class="s2">&quot; core.uti &quot;</span><span class="p">,</span>
-    <span class="n">val_format</span><span class="o">=</span><span class="s2">&quot; </span><span class="si">{:6.2f}</span><span class="s2"> % &quot;</span><span class="p">,</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"smsp__cycles_active.avg.pct_of_peak_sustained_elapsed"</span><span class="p">,</span>
+    <span class="n">header</span><span class="o">=</span><span class="s2">" core.uti "</span><span class="p">,</span>
+    <span class="n">val_format</span><span class="o">=</span><span class="s2">" </span><span class="si">{:6.2f}</span><span class="s2"> % "</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="n">dram_throughput</span> <span class="o">=</span> <span class="n">CuptiMetric</span><span class="p">(</span>
-    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed&quot;</span><span class="p">,</span>
-    <span class="n">header</span><span class="o">=</span><span class="s2">&quot;  mem.uti &quot;</span><span class="p">,</span>
-    <span class="n">val_format</span><span class="o">=</span><span class="s2">&quot; </span><span class="si">{:6.2f}</span><span class="s2"> % &quot;</span><span class="p">,</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed"</span><span class="p">,</span>
+    <span class="n">header</span><span class="o">=</span><span class="s2">"  mem.uti "</span><span class="p">,</span>
+    <span class="n">val_format</span><span class="o">=</span><span class="s2">" </span><span class="si">{:6.2f}</span><span class="s2"> % "</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="n">l1tex_throughput</span> <span class="o">=</span> <span class="n">CuptiMetric</span><span class="p">(</span>
-    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;l1tex__throughput.avg.pct_of_peak_sustained_elapsed&quot;</span><span class="p">,</span>
-    <span class="n">header</span><span class="o">=</span><span class="s2">&quot;   L1.uti &quot;</span><span class="p">,</span>
-    <span class="n">val_format</span><span class="o">=</span><span class="s2">&quot; </span><span class="si">{:6.2f}</span><span class="s2"> % &quot;</span><span class="p">,</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"l1tex__throughput.avg.pct_of_peak_sustained_elapsed"</span><span class="p">,</span>
+    <span class="n">header</span><span class="o">=</span><span class="s2">"   L1.uti "</span><span class="p">,</span>
+    <span class="n">val_format</span><span class="o">=</span><span class="s2">" </span><span class="si">{:6.2f}</span><span class="s2"> % "</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="n">l2_throughput</span> <span class="o">=</span> <span class="n">CuptiMetric</span><span class="p">(</span>
-    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;lts__throughput.avg.pct_of_peak_sustained_elapsed&quot;</span><span class="p">,</span>
-    <span class="n">header</span><span class="o">=</span><span class="s2">&quot;   L2.uti &quot;</span><span class="p">,</span>
-    <span class="n">val_format</span><span class="o">=</span><span class="s2">&quot; </span><span class="si">{:6.2f}</span><span class="s2"> % &quot;</span><span class="p">,</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"lts__throughput.avg.pct_of_peak_sustained_elapsed"</span><span class="p">,</span>
+    <span class="n">header</span><span class="o">=</span><span class="s2">"   L2.uti "</span><span class="p">,</span>
+    <span class="n">val_format</span><span class="o">=</span><span class="s2">" </span><span class="si">{:6.2f}</span><span class="s2"> % "</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="c1"># Misc Metrics</span>
-<span class="n">l1_hit_rate</span> <span class="o">=</span> <span class="n">CuptiMetric</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;l1tex__t_sector_hit_rate.pct&quot;</span><span class="p">,</span> <span class="n">header</span><span class="o">=</span><span class="s2">&quot;   L1.hit &quot;</span><span class="p">,</span> <span class="n">val_format</span><span class="o">=</span><span class="s2">&quot; </span><span class="si">{:6.2f}</span><span class="s2"> % &quot;</span><span class="p">)</span>
+<span class="n">l1_hit_rate</span> <span class="o">=</span> <span class="n">CuptiMetric</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"l1tex__t_sector_hit_rate.pct"</span><span class="p">,</span> <span class="n">header</span><span class="o">=</span><span class="s2">"   L1.hit "</span><span class="p">,</span> <span class="n">val_format</span><span class="o">=</span><span class="s2">" </span><span class="si">{:6.2f}</span><span class="s2"> % "</span><span class="p">)</span>
 
-<span class="n">l2_hit_rate</span> <span class="o">=</span> <span class="n">CuptiMetric</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;lts__t_sector_hit_rate.pct&quot;</span><span class="p">,</span> <span class="n">header</span><span class="o">=</span><span class="s2">&quot;   L2.hit &quot;</span><span class="p">,</span> <span class="n">val_format</span><span class="o">=</span><span class="s2">&quot; </span><span class="si">{:6.2f}</span><span class="s2"> % &quot;</span><span class="p">)</span>
+<span class="n">l2_hit_rate</span> <span class="o">=</span> <span class="n">CuptiMetric</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"lts__t_sector_hit_rate.pct"</span><span class="p">,</span> <span class="n">header</span><span class="o">=</span><span class="s2">"   L2.hit "</span><span class="p">,</span> <span class="n">val_format</span><span class="o">=</span><span class="s2">" </span><span class="si">{:6.2f}</span><span class="s2"> % "</span><span class="p">)</span>
 
 <span class="n">achieved_occupancy</span> <span class="o">=</span> <span class="n">CuptiMetric</span><span class="p">(</span>
-    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;sm__warps_active.avg.pct_of_peak_sustained_active&quot;</span><span class="p">,</span>
-    <span class="n">header</span><span class="o">=</span><span class="s2">&quot; occupancy&quot;</span><span class="p">,</span>
-    <span class="n">val_format</span><span class="o">=</span><span class="s2">&quot;   </span><span class="si">{:6.0f}</span><span class="s2"> &quot;</span><span class="p">,</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"sm__warps_active.avg.pct_of_peak_sustained_active"</span><span class="p">,</span>
+    <span class="n">header</span><span class="o">=</span><span class="s2">" occupancy"</span><span class="p">,</span>
+    <span class="n">val_format</span><span class="o">=</span><span class="s2">"   </span><span class="si">{:6.0f}</span><span class="s2"> "</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="c1"># metric suite: global load &amp; store</span>
@@ -574,29 +574,29 @@
 
 <span class="c1"># Predefined metrics suites</span>
 <span class="n">predefined_cupti_metrics</span> <span class="o">=</span> <span class="p">{</span>
-    <span class="s2">&quot;global_access&quot;</span><span class="p">:</span> <span class="n">global_access</span><span class="p">,</span>
-    <span class="s2">&quot;shared_access&quot;</span><span class="p">:</span> <span class="n">shared_access</span><span class="p">,</span>
-    <span class="s2">&quot;atomic_access&quot;</span><span class="p">:</span> <span class="n">atomic_access</span><span class="p">,</span>
-    <span class="s2">&quot;cache_hit_rate&quot;</span><span class="p">:</span> <span class="n">cache_hit_rate</span><span class="p">,</span>
-    <span class="s2">&quot;device_utilization&quot;</span><span class="p">:</span> <span class="n">device_utilization</span><span class="p">,</span>
+    <span class="s2">"global_access"</span><span class="p">:</span> <span class="n">global_access</span><span class="p">,</span>
+    <span class="s2">"shared_access"</span><span class="p">:</span> <span class="n">shared_access</span><span class="p">,</span>
+    <span class="s2">"atomic_access"</span><span class="p">:</span> <span class="n">atomic_access</span><span class="p">,</span>
+    <span class="s2">"cache_hit_rate"</span><span class="p">:</span> <span class="n">cache_hit_rate</span><span class="p">,</span>
+    <span class="s2">"device_utilization"</span><span class="p">:</span> <span class="n">device_utilization</span><span class="p">,</span>
 <span class="p">}</span>
 
 
 <div class="viewcode-block" id="get_predefined_cupti_metrics">
 <a class="viewcode-back" href="../../../autoapi/quadrants/profiler/kernel_metrics/index.html#quadrants.profiler.kernel_metrics.get_predefined_cupti_metrics">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">get_predefined_cupti_metrics</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Returns the specified cupti metric.</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_predefined_cupti_metrics</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">""</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Returns the specified cupti metric.</span>
 
-<span class="sd">    Accepted arguments are &#39;global_access&#39;, &#39;shared_access&#39;, &#39;atomic_access&#39;,</span>
-<span class="sd">    &#39;cache_hit_rate&#39;, &#39;device_utilization&#39;.</span>
+<span class="sd">    Accepted arguments are 'global_access', 'shared_access', 'atomic_access',</span>
+<span class="sd">    'cache_hit_rate', 'device_utilization'.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        name (str): cupti metri name.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">predefined_cupti_metrics</span><span class="p">:</span>
-        <span class="n">_qd_core</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s2">&quot;Valid Quadrants predefined metrics list (str):&quot;</span><span class="p">)</span>
+        <span class="n">_qd_core</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s2">"Valid Quadrants predefined metrics list (str):"</span><span class="p">)</span>
         <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">predefined_cupti_metrics</span><span class="p">:</span>
-            <span class="n">_qd_core</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    &#39;</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+            <span class="n">_qd_core</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="sa">f</span><span class="s2">"    '</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">'"</span><span class="p">)</span>
         <span class="k">return</span> <span class="kc">None</span>
     <span class="k">return</span> <span class="n">predefined_cupti_metrics</span><span class="p">[</span><span class="n">name</span><span class="p">]</span></div>
 
@@ -604,11 +604,11 @@
 
 <span class="c1"># Default metrics list</span>
 <span class="n">default_cupti_metrics</span> <span class="o">=</span> <span class="p">[</span><span class="n">dram_bytes_sum</span><span class="p">]</span>
-<span class="sd">&quot;&quot;&quot;The metrics list, each is an instance of the :class:`~quadrants.profiler.CuptiMetric`.</span>
+<span class="sd">"""The metrics list, each is an instance of the :class:`~quadrants.profiler.CuptiMetric`.</span>
 <span class="sd">Default to `dram_bytes_sum`.</span>
-<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">"""</span>
 
-<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;CuptiMetric&quot;</span><span class="p">,</span> <span class="s2">&quot;get_predefined_cupti_metrics&quot;</span><span class="p">]</span>
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"CuptiMetric"</span><span class="p">,</span> <span class="s2">"get_predefined_cupti_metrics"</span><span class="p">]</span>
 </pre></div>
 
                 </article>

@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.matrix_ops_utils &#8212; Quadrants 1.0.1 documentation</title>
+    <title>quadrants.lang.matrix_ops_utils &#8212; Quadrants 1.3.1 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../../_static/documentation_options.js?v=292eb321"></script>
+    <script src="../../../_static/documentation_options.js?v=bb516dca"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.0.1" />
+  <meta name="docsearch:version" content="1.3.1" />
   
     
     <script src="../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.0.1 documentation</p>
+    <p class="title logo__title">Quadrants 1.3.1 documentation</p>
   
 </a></div>
     
@@ -395,7 +395,7 @@
 
 <div class="viewcode-block" id="assert_tensor">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix_ops_utils/index.html#quadrants.lang.matrix_ops_utils.assert_tensor">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">assert_tensor</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">msg</span><span class="o">=</span><span class="s2">&quot;not tensor type: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">assert_tensor</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">msg</span><span class="o">=</span><span class="s2">"not tensor type: </span><span class="si">{}</span><span class="s2">"</span><span class="p">):</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">Matrix</span><span class="p">):</span>
         <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="kc">None</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">Expr</span><span class="p">)</span> <span class="ow">and</span> <span class="n">m</span><span class="o">.</span><span class="n">is_tensor</span><span class="p">():</span>
@@ -406,7 +406,7 @@
 
 <div class="viewcode-block" id="assert_vector">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix_ops_utils/index.html#quadrants.lang.matrix_ops_utils.assert_vector">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">assert_vector</span><span class="p">(</span><span class="n">msg</span><span class="o">=</span><span class="s2">&quot;expected a vector, got </span><span class="si">{}</span><span class="s2">&quot;</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">assert_vector</span><span class="p">(</span><span class="n">msg</span><span class="o">=</span><span class="s2">"expected a vector, got </span><span class="si">{}</span><span class="s2">"</span><span class="p">):</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">check</span><span class="p">(</span><span class="n">v</span><span class="p">):</span>
         <span class="k">if</span> <span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">Expr</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">Matrix</span><span class="p">))</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="n">get_shape</span><span class="p">())</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="kc">None</span>
@@ -418,7 +418,7 @@
 
 <div class="viewcode-block" id="assert_list">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix_ops_utils/index.html#quadrants.lang.matrix_ops_utils.assert_list">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">assert_list</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">msg</span><span class="o">=</span><span class="s2">&quot;not a list: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">assert_list</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">msg</span><span class="o">=</span><span class="s2">"not a list: </span><span class="si">{}</span><span class="s2">"</span><span class="p">):</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
         <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="kc">None</span>
     <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="n">msg</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">x</span><span class="p">))</span></div>
@@ -427,14 +427,14 @@
 
 <div class="viewcode-block" id="arg_foreach_check">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix_ops_utils/index.html#quadrants.lang.matrix_ops_utils.arg_foreach_check">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">arg_foreach_check</span><span class="p">(</span><span class="o">*</span><span class="n">arg_indices</span><span class="p">,</span> <span class="n">fns</span><span class="o">=</span><span class="p">[],</span> <span class="n">logic</span><span class="o">=</span><span class="s2">&quot;or&quot;</span><span class="p">,</span> <span class="n">msg</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">arg_foreach_check</span><span class="p">(</span><span class="o">*</span><span class="n">arg_indices</span><span class="p">,</span> <span class="n">fns</span><span class="o">=</span><span class="p">[],</span> <span class="n">logic</span><span class="o">=</span><span class="s2">"or"</span><span class="p">,</span> <span class="n">msg</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">check</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">arg_indices</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
                 <span class="n">arg</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="n">arg</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
-            <span class="k">if</span> <span class="n">logic</span> <span class="o">==</span> <span class="s2">&quot;or&quot;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">logic</span> <span class="o">==</span> <span class="s2">"or"</span><span class="p">:</span>
                 <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">arg</span><span class="p">:</span>
                     <span class="n">passed</span> <span class="o">=</span> <span class="kc">False</span>
                     <span class="k">for</span> <span class="n">fn</span> <span class="ow">in</span> <span class="n">fns</span><span class="p">:</span>
@@ -444,13 +444,13 @@
                             <span class="k">break</span>
                     <span class="k">if</span> <span class="ow">not</span> <span class="n">passed</span><span class="p">:</span>
                         <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="n">msg</span>
-            <span class="k">elif</span> <span class="n">logic</span> <span class="o">==</span> <span class="s2">&quot;and&quot;</span><span class="p">:</span>
+            <span class="k">elif</span> <span class="n">logic</span> <span class="o">==</span> <span class="s2">"and"</span><span class="p">:</span>
                 <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">arg</span><span class="p">:</span>
                     <span class="n">ok</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">do_check</span><span class="p">(</span><span class="n">fns</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
                     <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
                         <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="n">msg</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown logic: </span><span class="si">{</span><span class="n">logic</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Unknown logic: </span><span class="si">{</span><span class="n">logic</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
         <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="kc">None</span>
 
     <span class="k">return</span> <span class="n">check</span></div>
@@ -489,10 +489,10 @@
         <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">Expr</span><span class="p">):</span>
             <span class="n">shapes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">tuple</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">get_rvalue_type</span><span class="p">()</span><span class="o">.</span><span class="n">shape</span><span class="p">()))</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;same_shapes() received an unexpected argument of type: </span><span class="si">{</span><span class="n">x</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"same_shapes() received an unexpected argument of type: </span><span class="si">{</span><span class="n">x</span><span class="si">}</span><span class="s2">"</span>
 
     <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">shapes</span><span class="p">))</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
-        <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;required shapes to be the same, got shapes </span><span class="si">{</span><span class="n">shapes</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"required shapes to be the same, got shapes </span><span class="si">{</span><span class="n">shapes</span><span class="si">}</span><span class="s2">"</span>
     <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="kc">None</span></div>
 
 
@@ -503,7 +503,7 @@
     <span class="n">assert_tensor</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
     <span class="n">shape</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">get_shape</span><span class="p">()</span>
     <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">2</span> <span class="ow">or</span> <span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span>
-        <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;expected a square matrix, got shape </span><span class="si">{</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"expected a square matrix, got shape </span><span class="si">{</span><span class="n">shape</span><span class="si">}</span><span class="s2">"</span>
     <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="kc">None</span></div>
 
 
@@ -514,7 +514,7 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">check</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
         <span class="n">assert_tensor</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
         <span class="n">shape</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">get_shape</span><span class="p">()</span>
-        <span class="k">return</span> <span class="n">shape</span><span class="p">[</span><span class="n">dim</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">limit</span><span class="p">,</span> <span class="p">(</span><span class="sa">f</span><span class="s2">&quot;only dimension &lt; </span><span class="si">{</span><span class="n">limit</span><span class="si">}</span><span class="s2"> is supported, got shape </span><span class="si">{</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">shape</span><span class="p">[</span><span class="n">dim</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">limit</span><span class="p">,</span> <span class="p">(</span><span class="sa">f</span><span class="s2">"only dimension &lt; </span><span class="si">{</span><span class="n">limit</span><span class="si">}</span><span class="s2"> is supported, got shape </span><span class="si">{</span><span class="n">shape</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="n">check</span></div>
 
@@ -527,15 +527,15 @@
         <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="kc">None</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">Expr</span><span class="p">)</span> <span class="ow">and</span> <span class="n">x</span><span class="o">.</span><span class="n">val_int</span><span class="p">()</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="kc">None</span>
-    <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;not an integer: </span><span class="si">{</span><span class="n">x</span><span class="si">}</span><span class="s2"> of type </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span></div>
+    <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"not an integer: </span><span class="si">{</span><span class="n">x</span><span class="si">}</span><span class="s2"> of type </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">"</span></div>
 
 
 
 <div class="viewcode-block" id="check_matmul">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix_ops_utils/index.html#quadrants.lang.matrix_ops_utils.check_matmul">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">check_matmul</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
-    <span class="n">assert_tensor</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;left hand side is not a matrix: </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-    <span class="n">assert_tensor</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;right hand side is not a matrix: </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">y</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">assert_tensor</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"left hand side is not a matrix: </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="n">assert_tensor</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"right hand side is not a matrix: </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">y</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
     <span class="n">x_shape</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">get_shape</span><span class="p">()</span>
     <span class="n">y_shape</span> <span class="o">=</span> <span class="n">y</span><span class="o">.</span><span class="n">get_shape</span><span class="p">()</span>
     <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">x_shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
@@ -544,13 +544,13 @@
         <span class="k">if</span> <span class="n">x_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="n">y_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
             <span class="k">return</span> <span class="p">(</span>
                 <span class="kc">False</span><span class="p">,</span>
-                <span class="sa">f</span><span class="s2">&quot;dimension mismatch between </span><span class="si">{</span><span class="n">x_shape</span><span class="si">}</span><span class="s2"> and </span><span class="si">{</span><span class="n">y_shape</span><span class="si">}</span><span class="s2"> for left multiplication&quot;</span><span class="p">,</span>
+                <span class="sa">f</span><span class="s2">"dimension mismatch between </span><span class="si">{</span><span class="n">x_shape</span><span class="si">}</span><span class="s2"> and </span><span class="si">{</span><span class="n">y_shape</span><span class="si">}</span><span class="s2"> for left multiplication"</span><span class="p">,</span>
             <span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">x_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">!=</span> <span class="n">y_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
             <span class="k">return</span> <span class="p">(</span>
                 <span class="kc">False</span><span class="p">,</span>
-                <span class="sa">f</span><span class="s2">&quot;dimension mismatch between </span><span class="si">{</span><span class="n">x_shape</span><span class="si">}</span><span class="s2"> and </span><span class="si">{</span><span class="n">y_shape</span><span class="si">}</span><span class="s2"> for matrix multiplication&quot;</span><span class="p">,</span>
+                <span class="sa">f</span><span class="s2">"dimension mismatch between </span><span class="si">{</span><span class="n">x_shape</span><span class="si">}</span><span class="s2"> and </span><span class="si">{</span><span class="n">y_shape</span><span class="si">}</span><span class="s2"> for matrix multiplication"</span><span class="p">,</span>
             <span class="p">)</span>
     <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="kc">None</span></div>
 
@@ -563,7 +563,7 @@
     <span class="k">if</span> <span class="n">ok</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">get_shape</span><span class="p">())</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
         <span class="k">return</span> <span class="p">(</span>
             <span class="kc">False</span><span class="p">,</span>
-            <span class="s2">&quot;`transpose()` cannot apply to a vector. If you want something like `a @ b.transpose()`, write `a.outer_product(b)` instead.&quot;</span><span class="p">,</span>
+            <span class="s2">"`transpose()` cannot apply to a vector. If you want something like `a @ b.transpose()`, write `a.outer_product(b)` instead."</span><span class="p">,</span>
         <span class="p">)</span>
     <span class="k">return</span> <span class="n">ok</span><span class="p">,</span> <span class="n">msg</span></div>
 

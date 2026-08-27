@@ -123,8 +123,10 @@ Guidelines for `get_geometry_hash`:
 |---|---|---|
 | `warmup` | 3 | Number of untimed warmup calls per implementation before measuring. |
 | `active` | 1 | Number of timed calls per implementation. |
-| `repeat_after_count` | 0 | Re-run benchmarking after this many additional calls. 0 disables. |
-| `repeat_after_seconds` | 1.0 | Re-run benchmarking after this many seconds have elapsed. 0 disables. |
+| `repeat_after_count` | `None` | Re-run benchmarking after this many additional calls. `0` (or less) disables; `None` lets `perf_dispatch` choose. |
+| `repeat_after_seconds` | `None` | Re-run benchmarking after this many seconds have elapsed. `0` (or less) disables; `None` lets `perf_dispatch` choose. |
+
+`repeat_after_count` and `repeat_after_seconds` are OR'd - whichever fires first restarts benchmarking. A `None` trigger means "choose a suitable value for me": if you give the other trigger an explicit value, the `None` one is left off; if you leave **both** as `None`, `perf_dispatch` re-benchmarks every 300 calls with no time-based trigger (so, e.g., `repeat_after_count=300` re-benchmarks purely by call count, with no hidden per-second re-evaluation).
 
 Example with custom tuning:
 
@@ -144,7 +146,7 @@ def my_op(a: qd.types.NDArray[qd.f32, 1], b: qd.types.NDArray[qd.f32, 1]): ...
 2. **Active phase**: Each compatible implementation is called `active` times in round-robin order. The GPU is synchronized before and after each call to get accurate wall-clock measurements.
 3. **Selection**: The implementation with the lowest active-phase time is cached as the winner for that geometry hash.
 4. **Steady state**: Subsequent calls with the same geometry go directly to the cached winner with no overhead.
-5. **Re-evaluation** (optional): After `repeat_after_count` calls or `repeat_after_seconds` seconds, the entire warmup + active cycle restarts from scratch, allowing the dispatcher to adapt if conditions change.
+5. **Re-evaluation**: After `repeat_after_count` calls or `repeat_after_seconds` seconds (by default, every 300 calls), the entire warmup + active cycle restarts from scratch, allowing the dispatcher to adapt if conditions change.
 
 ## Forcing a specific implementation
 

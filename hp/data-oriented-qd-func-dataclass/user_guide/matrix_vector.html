@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Matrix and Vector &#8212; Quadrants 1.0.1 documentation</title>
+    <title>Matrix and Vector &#8212; Quadrants 1.3.1 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../_static/documentation_options.js?v=292eb321"></script>
+    <script src="../_static/documentation_options.js?v=bb516dca"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Scalar tensors" href="scalar_tensors.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.0.1" />
+  <meta name="docsearch:version" content="1.3.1" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.0.1 documentation</p>
+    <p class="title logo__title">Quadrants 1.3.1 documentation</p>
   
 </a></div>
     
@@ -323,6 +323,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">SIMT primitives</span></p>
 <ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="gpu_execution_model.html">GPU execution model</a></li>
 <li class="toctree-l1"><a class="reference internal" href="atomics.html">Atomics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="block.html">Block primitives</a></li>
 <li class="toctree-l1"><a class="reference internal" href="grid.html">Grid primitives</a></li>
@@ -336,6 +337,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
 <ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="performance.html">Performance</a></li>
 <li class="toctree-l1"><a class="reference internal" href="fastcache.html">Fastcache</a></li>
 <li class="toctree-l1"><a class="reference internal" href="graph.html">Graph</a></li>
 <li class="toctree-l1"><a class="reference internal" href="streams.html">Streams</a></li>
@@ -344,7 +346,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Testing</span></p>
 <ul class="nav bd-sidenav">
-<li class="toctree-l1"><a class="reference internal" href="unit_testing.html">Unit testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="unit_testing.html">Advanced: Unit testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="kernel_coverage.html">Kernel code coverage</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
@@ -663,7 +665,7 @@
 </pre></div>
 </div>
 <p>Run your kernel once. For each <code class="docutils literal notranslate"><span class="pre">quadrants_kernel_nvptx_NNNN.ptx</span></code> file in the working directory:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ptxas<span class="w"> </span>--verbose<span class="w"> </span>-arch<span class="o">=</span>sm_86<span class="w"> </span>quadrants_kernel_nvptx_0007.ptx<span class="w"> </span>-o<span class="w"> </span>/dev/null<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s2">&quot;spill|stack&quot;</span>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ptxas<span class="w"> </span>--verbose<span class="w"> </span>-arch<span class="o">=</span>sm_86<span class="w"> </span>quadrants_kernel_nvptx_0007.ptx<span class="w"> </span>-o<span class="w"> </span>/dev/null<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s2">"spill|stack"</span>
 </pre></div>
 </div>
 <p>Sample output:</p>
@@ -677,7 +679,7 @@
 <section id="inspect-the-ptx-directly-for-local-memory-loads-stores">
 <h3>2. Inspect the PTX directly for local-memory loads / stores<a class="headerlink" href="#inspect-the-ptx-directly-for-local-memory-loads-stores" title="Link to this heading">#</a></h3>
 <p>NVIDIA’s PTX assembly uses the mnemonics <code class="docutils literal notranslate"><span class="pre">ld.local</span></code> and <code class="docutils literal notranslate"><span class="pre">st.local</span></code> for loads and stores against per-thread local memory (off-chip DRAM). Any kernel that spills must contain these mnemonics. Grep the dumped PTX for them:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>grep<span class="w"> </span>-nE<span class="w"> </span><span class="s2">&quot;ld\.local|st\.local&quot;</span><span class="w"> </span>quadrants_kernel_nvptx_0007.ptx<span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-20
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>grep<span class="w"> </span>-nE<span class="w"> </span><span class="s2">"ld\.local|st\.local"</span><span class="w"> </span>quadrants_kernel_nvptx_0007.ptx<span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-20
 </pre></div>
 </div>
 <p>Matches that aren’t from deliberate <code class="docutils literal notranslate"><span class="pre">qd.simt.shared_array</span></code> accesses (those use the shared-memory mnemonics <code class="docutils literal notranslate"><span class="pre">ld.shared</span></code> / <code class="docutils literal notranslate"><span class="pre">st.shared</span></code>, not the <code class="docutils literal notranslate"><span class="pre">.local</span></code> ones) are spill traffic.</p>
@@ -695,7 +697,7 @@
 </pre></div>
 </div>
 <p>Dumps <code class="docutils literal notranslate"><span class="pre">quadrants_kernel_cuda_llvm_ir_optimized_NNNN.ll</span></code>. In LLVM IR, every per-function stack allocation appears as an <code class="docutils literal notranslate"><span class="pre">alloca</span></code> instruction. The optimizer tries to promote each <code class="docutils literal notranslate"><span class="pre">alloca</span></code> into a register-resident value; any <code class="docutils literal notranslate"><span class="pre">alloca</span></code> that survives the optimizer into the post-optimization dump is a stack slot it couldn’t promote, and it will become PTX local memory. Grep for them:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>grep<span class="w"> </span>-nE<span class="w"> </span><span class="s2">&quot;alloca&quot;</span><span class="w"> </span>quadrants_kernel_cuda_llvm_ir_optimized_0007.ll<span class="w"> </span><span class="p">|</span><span class="w"> </span>head
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>grep<span class="w"> </span>-nE<span class="w"> </span><span class="s2">"alloca"</span><span class="w"> </span>quadrants_kernel_cuda_llvm_ir_optimized_0007.ll<span class="w"> </span><span class="p">|</span><span class="w"> </span>head
 </pre></div>
 </div>
 </section>

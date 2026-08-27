@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.examples.minimal &#8212; Quadrants 1.0.1 documentation</title>
+    <title>quadrants.examples.minimal &#8212; Quadrants 1.3.1 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../../_static/documentation_options.js?v=292eb321"></script>
+    <script src="../../../_static/documentation_options.js?v=bb516dca"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.0.1" />
+  <meta name="docsearch:version" content="1.3.1" />
   
     
     <script src="../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.0.1 documentation</p>
+    <p class="title logo__title">Quadrants 1.3.1 documentation</p>
   
 </a></div>
     
@@ -338,9 +338,9 @@
 <div class="viewcode-block" id="lcg_ti">
 <a class="viewcode-back" href="../../../autoapi/quadrants/examples/minimal/index.html#quadrants.examples.minimal.lcg_ti">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">lcg_ti</span><span class="p">(</span><span class="n">B</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">lcg_its</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Linear congruential generator https://en.wikipedia.org/wiki/Linear_congruential_generator</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">B</span><span class="p">):</span>
         <span class="n">x</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
         <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">lcg_its</span><span class="p">):</span>
@@ -360,7 +360,7 @@
     <span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">int32</span><span class="p">,</span> <span class="p">(</span><span class="n">B</span><span class="p">,))</span>
 
     <span class="n">lcg_ti</span><span class="p">(</span><span class="n">B</span><span class="p">,</span> <span class="n">lcg_its</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
-    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;LCG for B=</span><span class="si">{</span><span class="n">B</span><span class="si">}</span><span class="s2">, lcg_its=</span><span class="si">{</span><span class="n">lcg_its</span><span class="si">}</span><span class="s2">: &quot;</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">())</span>  <span class="c1"># pylint: disable=no-member</span></div>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"LCG for B=</span><span class="si">{</span><span class="n">B</span><span class="si">}</span><span class="s2">, lcg_its=</span><span class="si">{</span><span class="n">lcg_its</span><span class="si">}</span><span class="s2">: "</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">())</span>  <span class="c1"># pylint: disable=no-member</span></div>
 
 
 

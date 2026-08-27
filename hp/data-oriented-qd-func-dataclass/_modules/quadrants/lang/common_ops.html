@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.common_ops &#8212; Quadrants 1.0.1 documentation</title>
+    <title>quadrants.lang.common_ops &#8212; Quadrants 1.3.1 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../../_static/documentation_options.js?v=292eb321"></script>
+    <script src="../../../_static/documentation_options.js?v=bb516dca"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.0.1" />
+  <meta name="docsearch:version" content="1.3.1" />
   
     
     <script src="../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.0.1 documentation</p>
+    <p class="title logo__title">Quadrants 1.3.1 documentation</p>
   
 </a></div>
     
@@ -343,7 +343,7 @@
 <div class="viewcode-block" id="QuadrantsOperations">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/common_ops/index.html#quadrants.lang.common_ops.QuadrantsOperations">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">QuadrantsOperations</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The base class of quadrants operations of expressions. Subclasses: :class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""The base class of quadrants operations of expressions. Subclasses: :class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`"""</span>
 
     <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
         <span class="c1"># Make pylint happy</span>
@@ -453,63 +453,63 @@
         <span class="k">return</span> <span class="n">ops</span><span class="o">.</span><span class="n">logical_not</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_atomic_add</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the new expression of computing atomic add between self and a given operand.</span>
+<span class="w">        </span><span class="sd">"""Return the new expression of computing atomic add between self and a given operand.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            other (Any): Given operand.</span>
 
 <span class="sd">        Returns:</span>
-<span class="sd">            :class:`~quadrants.lang.expr.Expr`: The computing expression of atomic add.&quot;&quot;&quot;</span>
+<span class="sd">            :class:`~quadrants.lang.expr.Expr`: The computing expression of atomic add."""</span>
         <span class="k">return</span> <span class="n">ops</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_atomic_mul</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the new expression of computing atomic mul between self and a given operand.</span>
+<span class="w">        </span><span class="sd">"""Return the new expression of computing atomic mul between self and a given operand.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            other (Any): Given operand.</span>
 
 <span class="sd">        Returns:</span>
-<span class="sd">            :class:`~quadrants.lang.expr.Expr`: The computing expression of atomic mul.&quot;&quot;&quot;</span>
+<span class="sd">            :class:`~quadrants.lang.expr.Expr`: The computing expression of atomic mul."""</span>
         <span class="k">return</span> <span class="n">ops</span><span class="o">.</span><span class="n">atomic_mul</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_atomic_sub</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the new expression of computing atomic sub between self and a given operand.</span>
+<span class="w">        </span><span class="sd">"""Return the new expression of computing atomic sub between self and a given operand.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            other (Any): Given operand.</span>
 
 <span class="sd">        Returns:</span>
-<span class="sd">            :class:`~quadrants.lang.expr.Expr`: The computing expression of atomic sub.&quot;&quot;&quot;</span>
+<span class="sd">            :class:`~quadrants.lang.expr.Expr`: The computing expression of atomic sub."""</span>
         <span class="k">return</span> <span class="n">ops</span><span class="o">.</span><span class="n">atomic_sub</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_atomic_and</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the new expression of computing atomic and between self and a given operand.</span>
+<span class="w">        </span><span class="sd">"""Return the new expression of computing atomic and between self and a given operand.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            other (Any): Given operand.</span>
 
 <span class="sd">        Returns:</span>
-<span class="sd">            :class:`~quadrants.lang.expr.Expr`: The computing expression of atomic and.&quot;&quot;&quot;</span>
+<span class="sd">            :class:`~quadrants.lang.expr.Expr`: The computing expression of atomic and."""</span>
         <span class="k">return</span> <span class="n">ops</span><span class="o">.</span><span class="n">atomic_and</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_atomic_xor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the new expression of computing atomic xor between self and a given operand.</span>
+<span class="w">        </span><span class="sd">"""Return the new expression of computing atomic xor between self and a given operand.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            other (Any): Given operand.</span>
 
 <span class="sd">        Returns:</span>
-<span class="sd">            :class:`~quadrants.lang.expr.Expr`: The computing expression of atomic xor.&quot;&quot;&quot;</span>
+<span class="sd">            :class:`~quadrants.lang.expr.Expr`: The computing expression of atomic xor."""</span>
         <span class="k">return</span> <span class="n">ops</span><span class="o">.</span><span class="n">atomic_xor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_atomic_or</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the new expression of computing atomic or between self and a given operand.</span>
+<span class="w">        </span><span class="sd">"""Return the new expression of computing atomic or between self and a given operand.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            other (Any): Given operand.</span>
 
 <span class="sd">        Returns:</span>
-<span class="sd">            :class:`~quadrants.lang.expr.Expr`: The computing expression of atomic or.&quot;&quot;&quot;</span>
+<span class="sd">            :class:`~quadrants.lang.expr.Expr`: The computing expression of atomic or."""</span>
         <span class="k">return</span> <span class="n">ops</span><span class="o">.</span><span class="n">atomic_or</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span>
 
     <span class="c1"># In-place operators in python scope returns NotImplemented to fall back to normal operators</span>
@@ -549,7 +549,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">_atomic_or</span><span class="p">(</span><span class="n">other</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span>
 
-    <span class="c1"># we don&#39;t support atomic_mul/truediv/floordiv/mod yet:</span>
+    <span class="c1"># we don't support atomic_mul/truediv/floordiv/mod yet:</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__imul__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
         <span class="k">if</span> <span class="n">in_python_scope</span><span class="p">():</span>
             <span class="k">return</span> <span class="bp">NotImplemented</span>
@@ -593,44 +593,44 @@
         <span class="k">return</span> <span class="bp">self</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_assign</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Assign the expression of the given operand to self.</span>
+<span class="w">        </span><span class="sd">"""Assign the expression of the given operand to self.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            other (Any): Given operand.</span>
 
 <span class="sd">        Returns:</span>
-<span class="sd">            :class:`~quadrants.lang.expr.Expr`: The expression after assigning.&quot;&quot;&quot;</span>
+<span class="sd">            :class:`~quadrants.lang.expr.Expr`: The expression after assigning."""</span>
         <span class="k">return</span> <span class="n">ops</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_augassign</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">op</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Generate the computing expression between self and the given operand of given operator and assigned to self.</span>
+<span class="w">        </span><span class="sd">"""Generate the computing expression between self and the given operand of given operator and assigned to self.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            x (Any): Given operand.</span>
-<span class="sd">            op (str): The name of operator.&quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">&quot;Add&quot;</span><span class="p">:</span>
+<span class="sd">            op (str): The name of operator."""</span>
+        <span class="k">if</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">"Add"</span><span class="p">:</span>
             <span class="bp">self</span> <span class="o">+=</span> <span class="n">x</span>
-        <span class="k">elif</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">&quot;Sub&quot;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">"Sub"</span><span class="p">:</span>
             <span class="bp">self</span> <span class="o">-=</span> <span class="n">x</span>
-        <span class="k">elif</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">&quot;Mult&quot;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">"Mult"</span><span class="p">:</span>
             <span class="bp">self</span> <span class="o">*=</span> <span class="n">x</span>
-        <span class="k">elif</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">&quot;Div&quot;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">"Div"</span><span class="p">:</span>
             <span class="bp">self</span> <span class="o">/=</span> <span class="n">x</span>
-        <span class="k">elif</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">&quot;FloorDiv&quot;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">"FloorDiv"</span><span class="p">:</span>
             <span class="bp">self</span> <span class="o">//=</span> <span class="n">x</span>
-        <span class="k">elif</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">&quot;Mod&quot;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">"Mod"</span><span class="p">:</span>
             <span class="bp">self</span> <span class="o">%=</span> <span class="n">x</span>
-        <span class="k">elif</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">&quot;BitAnd&quot;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">"BitAnd"</span><span class="p">:</span>
             <span class="bp">self</span> <span class="o">&amp;=</span> <span class="n">x</span>
-        <span class="k">elif</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">&quot;BitOr&quot;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">"BitOr"</span><span class="p">:</span>
             <span class="bp">self</span> <span class="o">|=</span> <span class="n">x</span>
-        <span class="k">elif</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">&quot;BitXor&quot;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">"BitXor"</span><span class="p">:</span>
             <span class="bp">self</span> <span class="o">^=</span> <span class="n">x</span>
-        <span class="k">elif</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">&quot;RShift&quot;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">"RShift"</span><span class="p">:</span>
             <span class="bp">self</span> <span class="o">&gt;&gt;=</span> <span class="n">x</span>
-        <span class="k">elif</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">&quot;LShift&quot;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">"LShift"</span><span class="p">:</span>
             <span class="bp">self</span> <span class="o">&lt;&lt;=</span> <span class="n">x</span>
-        <span class="k">elif</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">&quot;Pow&quot;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">"Pow"</span><span class="p">:</span>
             <span class="bp">self</span> <span class="o">**=</span> <span class="n">x</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="k">assert</span> <span class="kc">False</span><span class="p">,</span> <span class="n">op</span>
