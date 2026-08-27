@@ -1440,7 +1440,9 @@
                     <span class="ow">or</span> <span class="n">template_node</span><span class="o">.</span><span class="n">id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">ctx</span><span class="o">.</span><span class="n">template_vars</span>
                 <span class="p">):</span>
                     <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                        <span class="sa">f</span><span class="s1">'Operator "</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s1">" inside `qd.static` requires a direct `qd.template()` or `qd.Tensor` kernel argument and `None`.'</span>
+                        <span class="sa">f</span><span class="s1">'Operator "</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s1">" inside `qd.static` compares a direct kernel argument against `None`. '</span>
+                        <span class="s2">"The argument must be annotated `qd.Tensor | None`, `qd.types.Template | None`, "</span>
+                        <span class="s2">"or `qd.types.NDArray[...] | None`."</span>
                     <span class="p">)</span>
                 <span class="k">if</span> <span class="n">template_side</span> <span class="o">==</span> <span class="s2">"left"</span><span class="p">:</span>
                     <span class="n">l</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">template_vars</span><span class="p">[</span><span class="n">template_node</span><span class="o">.</span><span class="n">id</span><span class="p">]</span>
