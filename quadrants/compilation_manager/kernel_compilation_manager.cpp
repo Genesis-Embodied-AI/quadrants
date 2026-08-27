@@ -40,13 +40,19 @@ struct CacheCleanerUtils<CacheData> {
 
   // To remove other files except cache files and offline cache metadta files
   static void remove_other_files(const CacheCleanerConfig &config) {
-    // Drop the per-task artifact cache (a sibling dir under the same offline-cache root) whenever the whole-kernel
-    // cache is version-invalidated. That tier has no version-gated metadata of its own, so it must share this
-    // lifecycle or a probe on the newer build could reuse stale PTX. `config.path` is
-    // `<root>/kernel_compilation_manager`, so its parent is the root the artifact dir hangs off.
-    const auto root = std::filesystem::path(config.path).parent_path().string();
+    // Drop the per-task artifact cache (sibling dirs under the same offline-cache root) whenever the whole-kernel cache
+    // is version-invalidated. That tier has no version-gated metadata of its own, so it must share this lifecycle or a
+    // probe on the newer build could reuse stale PTX. The dirs are sm-scoped (pertask_artifacts_sm_<cc>), so match by
+    // prefix. `config.path` is `<root>/kernel_compilation_manager`, so its parent is the root they hang off.
+    const std::filesystem::path root = std::filesystem::path(config.path).parent_path();
+    const std::string prefix = std::filesystem::path(pertask_artifact_dir_for(root.string())).filename().string();
     std::error_code ec;
-    std::filesystem::remove_all(pertask_artifact_dir_for(root), ec);
+    for (std::filesystem::directory_iterator it(root, ec), end; !ec && it != end; it.increment(ec)) {
+      if (it->path().filename().string().rfind(prefix, 0) == 0) {
+        std::error_code rm_ec;
+        std::filesystem::remove_all(it->path(), rm_ec);
+      }
+    }
   }
 
   // To check if a file is cache file

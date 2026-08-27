@@ -774,7 +774,10 @@ def test_per_task_artifacts_cleared_on_version_invalidation() -> None:
         kernel_v(a)
         qd.reset()  # flush metadata + .qdc + artifacts to disk
 
-        art_dir = os.path.join(base, "pertask_artifacts")
+        # The dir is sm-scoped (pertask_artifacts_sm_<cc>), so match by prefix rather than a fixed name.
+        art_dirs = [d for d in os.listdir(base) if d.startswith("pertask_artifacts")]
+        assert art_dirs, "expected a per-task artifact dir after a cold compile"
+        art_dir = os.path.join(base, art_dirs[0])
         assert os.path.isdir(art_dir) and os.listdir(art_dir), "expected per-task artifacts after a cold compile"
 
         # Make the whole-kernel metadata unreadable so the cleaner treats the cache as version-invalid.
@@ -791,7 +794,8 @@ def test_per_task_artifacts_cleared_on_version_invalidation() -> None:
         )
         qd.reset()
 
-        assert not os.path.exists(art_dir), "version-invalidation clean must remove the per-task artifact dir"
+        remaining = [d for d in os.listdir(base) if d.startswith("pertask_artifacts")]
+        assert not remaining, f"version-invalidation clean must remove the per-task artifact dir(s), found {remaining}"
     finally:
         qd.reset()
         shutil.rmtree(base, ignore_errors=True)

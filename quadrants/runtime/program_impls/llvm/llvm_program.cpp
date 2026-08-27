@@ -14,6 +14,7 @@
 #if defined(QD_WITH_CUDA)
 #include "quadrants/codegen/cuda/codegen_cuda.h"
 #include "quadrants/runtime/cuda/kernel_launcher.h"
+#include "quadrants/rhi/cuda/cuda_context.h"
 #endif
 
 #if defined(QD_WITH_AMDGPU)
@@ -33,8 +34,18 @@ LlvmProgramImpl::LlvmProgramImpl(CompileConfig &config_, KernelProfilerBase *pro
   // Resolve the per-task artifact directory once, beside the `.qdc` files, so the codegen probe and the CUDA JIT fill
   // agree without re-deriving it from the config. Empty => the tier is off (no offline cache), which makes every
   // artifact-cache op a no-op -- this is the single gate for the tier.
-  pertask_artifact_dir_ref() =
-      config_.offline_cache ? pertask_artifact_dir_for(config_.offline_cache_file_path) : std::string();
+  std::string pertask_dir;
+  if (config_.offline_cache) {
+    pertask_dir = pertask_artifact_dir_for(config_.offline_cache_file_path);
+#if defined(QD_WITH_CUDA)
+    // The artifacts hold sm-specific PTX, so scope the dir by compute capability exactly as PtxCache does. Otherwise a
+    // shared offline_cache_file_path across GPUs of differing capability would serve PTX targeted at the wrong SM.
+    if (config_.arch == Arch::cuda) {
+      pertask_dir += "_sm_" + std::to_string(CUDAContext::get_instance().get_compute_capability());
+    }
+#endif
+  }
+  pertask_artifact_dir_ref() = pertask_dir;
 }
 
 std::unique_ptr<StructCompiler> LlvmProgramImpl::compile_snode_tree_types_impl(SNodeTree *tree) {

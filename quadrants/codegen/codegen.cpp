@@ -94,28 +94,28 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
       auto offload = irpass::analysis::clone(offloads[i].get());
       irpass::re_id(offload.get());
 
-      // The task key is name/index-independent, but the compiled module bakes the task's kernel-wide index into its
+      // Tasks kept entirely off the artifact cache -- neither probed nor stored (an empty key makes the JIT fill skip
+      // the store): adstack tasks, whose lowering registers per-task AdStack sizing as a compile-time side effect a hit
+      // would skip; and external-func tasks, whose printed body carries the so/bc path + name but not its contents (see
+      // serialize_task_body), so an in-place update keeps the key and a hit would run stale external code.
+      bool artifact_eligible = artifact_tier;
+      if (artifact_eligible) {
+        irpass::analysis::gather_statements(offload.get(), [&artifact_eligible](Stmt *s) {
+          if (s->is<AdStackAllocaStmt>() || s->is<ExternalFuncCallStmt>()) {
+            artifact_eligible = false;
+          }
+          return false;
+        });
+      }
+
+      // The key is name/index-independent, but the compiled module bakes the task's kernel-wide index into its
       // entry-fn / shared-array / adstack symbol names, so key on `#index` too: two byte-identical tasks at different
       // indices (e.g. repeated deactivate loops) must not alias to one artifact and collide at link.
       std::string cache_key;
-      if (artifact_tier) {
+      if (artifact_eligible) {
         cache_key = get_hashed_per_task_cache_key(compile_config_, pertask_caps, offload->as<OffloadedStmt>(), kernel) +
                     "#" + std::to_string(i);
         pertask_keys[i] = cache_key;
-      }
-
-      // Autodiff tasks register per-task AdStack sizing into the program-scoped adstack cache as a compile-time side
-      // effect keyed on {kernel_name, task index}; a cache hit would skip that, so keep adstack tasks off the reuse
-      // path and always lower them.
-      bool has_adstack = false;
-      irpass::analysis::gather_statements(offload.get(), [&has_adstack](Stmt *s) {
-        if (s->is<AdStackAllocaStmt>()) {
-          has_adstack = true;
-        }
-        return false;
-      });
-
-      if (artifact_tier && !has_adstack) {
         PerTaskArtifact rec;
         if (artifact_cache.try_load(cache_key, &rec)) {
           // Hit: reconstruct a metadata-only task (no LLVM module exists here) and keep the PTX for the JIT.

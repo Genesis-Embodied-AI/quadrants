@@ -94,10 +94,11 @@ inline std::string pertask_artifact_dir_for(const std::string &offline_cache_fil
   return offline_cache_file_path + "/pertask_artifacts";
 }
 
-// Program-scoped artifact directory, set once at LLVM-program construction. `codegen.cpp` (probe), `jit_cuda.cpp`
+// Process-global artifact directory, set once at LLVM-program construction. `codegen.cpp` (probe), `jit_cuda.cpp`
 // (fill) and `compiled_kernel_data.cpp` (`.qdc` load) all sit far from a `CompileConfig`, so they read the resolved
-// path from here rather than re-deriving it. EMPTY means the tier is disabled (offline cache off) -- every cache op
-// then no-ops, so this is also the single off switch.
+// path from here rather than re-deriving it. A process-global is sound because Quadrants permits only one live Program
+// (its ctor asserts `num_instances_ == 0`), so there is never a second program to race on or clobber this. EMPTY means
+// the tier is disabled (offline cache off) -- every cache op then no-ops, so this is also the single off switch.
 inline std::string &pertask_artifact_dir_ref() {
   static std::string dir;
   return dir;
