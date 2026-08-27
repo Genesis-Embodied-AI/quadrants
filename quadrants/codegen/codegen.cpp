@@ -17,6 +17,13 @@
 #include "quadrants/ir/statements.h"
 #include "quadrants/ir/transforms.h"
 #include "quadrants/analysis/offline_cache_util.h"
+#include "quadrants/codegen/llvm/per_task_artifact_cache.h"
+
+#include <algorithm>
+#include <atomic>
+#include <cstdio>
+#include <cstdlib>
+#include <unordered_set>
 
 namespace quadrants::lang {
 
@@ -62,8 +69,22 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
   QD_ASSERT(block);
 
   auto &offloads = block->statements;
-  std::vector<std::unique_ptr<LLVMCompiledTask>> data(offloads.size());
-  for (int i = 0; i < offloads.size(); i++) {
+  const int n = (int)offloads.size();
+  std::vector<std::unique_ptr<LLVMCompiledTask>> data(n);
+
+  // Cross-process per-task artifact cache. On a hit this process skips a task's ENTIRE compilation (CHI->LLVM, link,
+  // optimize, PTX, ptxas) and carries the cached PTX + launch metadata straight to the launcher. Only the CUDA JIT
+  // fills it today, and reuse needs the per-task composite module path, so the tier is CUDA-only; the empty dir
+  // (offline cache off) disables it. Each task's IR key is kept so the artifacts below can be stored under it.
+  const std::string art_dir = pertask_artifact_dir_ref();
+  const bool artifact_tier = compile_config_.arch == Arch::cuda && !art_dir.empty();
+  const PerTaskArtifactCache artifact_cache(art_dir);
+  const DeviceCapabilityConfig pertask_caps = prog->get_device_caps();
+  std::vector<std::string> pertask_keys(n);
+  std::vector<std::vector<char>> artifact_codes(n);
+  std::atomic<int> n_hit{0}, n_recompiled{0};
+
+  for (int i = 0; i < n; i++) {
     // Record each task's kernel-wide index (clone() carries it onto the per-task copy below). Each task is then
     // lowered in isolation, where its one-task block's local index is always 0, so QD_DUMP_CFG reads this to give
     // per-task CFG dumps a collision-free `_task<i>` name. Unconditional and inert -- never affects codegen.
@@ -73,36 +94,115 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
       auto offload = irpass::analysis::clone(offloads[i].get());
       irpass::re_id(offload.get());
 
+      // The task key is name/index-independent, but the compiled module bakes the task's kernel-wide index into its
+      // entry-fn / shared-array / adstack symbol names, so key on `#index` too: two byte-identical tasks at different
+      // indices (e.g. repeated deactivate loops) must not alias to one artifact and collide at link.
+      std::string cache_key;
+      if (artifact_tier) {
+        cache_key =
+            get_hashed_per_task_cache_key(compile_config_, pertask_caps, offload->as<OffloadedStmt>(), kernel) + "#" +
+            std::to_string(i);
+        pertask_keys[i] = cache_key;
+      }
+
+      // Autodiff tasks register per-task AdStack sizing into the program-scoped adstack cache as a compile-time side
+      // effect keyed on {kernel_name, task index}; a cache hit would skip that, so keep adstack tasks off the reuse
+      // path and always lower them.
+      bool has_adstack = false;
+      irpass::analysis::gather_statements(offload.get(), [&has_adstack](Stmt *s) {
+        if (s->is<AdStackAllocaStmt>()) {
+          has_adstack = true;
+        }
+        return false;
+      });
+
+      if (artifact_tier && !has_adstack) {
+        PerTaskArtifact rec;
+        if (artifact_cache.try_load(cache_key, &rec)) {
+          // Hit: reconstruct a metadata-only task (no LLVM module exists here) and keep the PTX for the JIT.
+          data[i] = std::make_unique<LLVMCompiledTask>(
+              rec.tasks, nullptr, std::unordered_set<int>(rec.used_tree_ids.begin(), rec.used_tree_ids.end()),
+              std::unordered_set<int>(rec.struct_for_tls_sizes.begin(), rec.struct_for_tls_sizes.end()));
+          artifact_codes[i] = std::move(rec.code);
+          n_hit.fetch_add(1, std::memory_order_relaxed);
+          return;
+        }
+      }
+
       Block blk;
       blk.insert(std::move(offload));
       auto new_data = this->compile_task(i, compile_config_, nullptr, &blk);
       data[i] = std::make_unique<LLVMCompiledTask>(std::move(new_data));
+      n_recompiled.fetch_add(1, std::memory_order_relaxed);
     };
     worker.enqueue(compile_func);
   }
   worker.flush();
 
-  // Per-task path (CUDA-only): one self-contained module per task, built BEFORE the whole-module link consumes
-  // `data`. Only the CUDA launcher consumes per_construct_artifacts, so gate on CUDA to avoid paying an extra
-  // per-task link + optimize on CPU / AMDGPU (7 and 8 extend consumption to those backends).
+  // Per-task path (CUDA-only): one self-contained artifact per task, built BEFORE the whole-module link consumes
+  // `data`. A hit carries the cached PTX (`code`) with a null module; a miss builds the module for the JIT to
+  // compile and store. The launch/graph metadata (`tasks`, tree ids) travels with each so the JIT can persist a
+  // complete record -- the code alone cannot be launched. 7 and 8 extend consumption to CPU / AMDGPU.
   std::vector<PerConstructArtifact> per_construct_artifacts;
   if (compile_config_.arch == Arch::cuda) {
-    for (int i = 0; i < (int)data.size(); i++) {
-      if (!data[i] || !data[i]->module)
+    for (int i = 0; i < n; i++) {
+      if (!data[i])
         continue;
       PerConstructArtifact art;
-      std::vector<std::unique_ptr<LLVMCompiledTask>> one;
-      one.push_back(std::make_unique<LLVMCompiledTask>(data[i]->clone()));
-      auto linked_one = tlctx_.link_compiled_tasks(std::move(one));
-      optimize_module(linked_one.module.get());
-      art.module = std::move(linked_one.module);
+      art.key = pertask_keys[i];
+      if (!artifact_codes[i].empty()) {
+        art.code = std::move(artifact_codes[i]);
+        art.tasks = data[i]->tasks;
+      } else {
+        if (!data[i]->module)
+          continue;
+        std::vector<std::unique_ptr<LLVMCompiledTask>> one;
+        one.push_back(std::make_unique<LLVMCompiledTask>(data[i]->clone()));
+        auto linked_one = tlctx_.link_compiled_tasks(std::move(one));
+        optimize_module(linked_one.module.get());
+        art.module = std::move(linked_one.module);
+        art.tasks = linked_one.tasks;
+      }
+      // Sorted for deterministic on-disk bytes (unordered_set upstream).
+      art.used_tree_ids.assign(data[i]->used_tree_ids.begin(), data[i]->used_tree_ids.end());
+      art.struct_for_tls_sizes.assign(data[i]->struct_for_tls_sizes.begin(), data[i]->struct_for_tls_sizes.end());
+      std::sort(art.used_tree_ids.begin(), art.used_tree_ids.end());
+      std::sort(art.struct_for_tls_sizes.begin(), art.struct_for_tls_sizes.end());
       per_construct_artifacts.push_back(std::move(art));
     }
   }
 
-  auto llvm_compiled_kernel = tlctx_.link_compiled_tasks(std::move(data));
-  optimize_module(llvm_compiled_kernel.module.get());
+  // A cross-process hit leaves a task with no LLVM module here, so the whole-kernel link is impossible (and
+  // unnecessary -- the launcher assembles the CUmodule from the per-task artifacts). The kernel-level `tasks` list
+  // must still be the in-order concatenation of every task's metadata: the launcher and CUDA graph builder run off
+  // it. Otherwise take the normal whole-module path.
+  const bool code_only_tasks = std::any_of(data.begin(), data.end(), [](const auto &d) { return d && !d->module; });
+  LLVMCompiledKernel llvm_compiled_kernel;
+  if (code_only_tasks) {
+    for (auto &d : data) {
+      if (!d)
+        continue;
+      for (auto &t : d->tasks) {
+        llvm_compiled_kernel.tasks.push_back(t);
+      }
+    }
+  } else {
+    llvm_compiled_kernel = tlctx_.link_compiled_tasks(std::move(data));
+    optimize_module(llvm_compiled_kernel.module.get());
+  }
   llvm_compiled_kernel.per_construct_artifacts = std::move(per_construct_artifacts);
+  // Persistable form of the artifacts: only meaningful with no whole-kernel module, i.e. when the `.qdc` entry must
+  // describe this kernel purely as an ordered list of per-task artifact keys (rebuilt from the cache on load).
+  if (code_only_tasks) {
+    llvm_compiled_kernel.per_task_artifact_keys.reserve(llvm_compiled_kernel.per_construct_artifacts.size());
+    for (const auto &a : llvm_compiled_kernel.per_construct_artifacts) {
+      llvm_compiled_kernel.per_task_artifact_keys.push_back(a.key);
+    }
+  }
+  if (artifact_tier && std::getenv("QD_PERTASK_STATS")) {
+    std::fprintf(stderr, "[per-task] kernel=%s total=%d hit=%d recompiled=%d\n", kernel->get_name().c_str(), n,
+                 n_hit.load(), n_recompiled.load());
+  }
   return llvm_compiled_kernel;
 }
 

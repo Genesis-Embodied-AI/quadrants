@@ -23,12 +23,18 @@
 
 #include "quadrants/codegen/llvm/kernel_compiler.h"
 #include "quadrants/codegen/llvm/compiled_kernel_data.h"
+#include "quadrants/codegen/llvm/per_task_artifact_cache.h"
 
 namespace quadrants::lang {
 LlvmProgramImpl::LlvmProgramImpl(CompileConfig &config_, KernelProfilerBase *profiler)
     : ProgramImpl(config_), compilation_workers("compile", config_.print_ir ? 1 : config_.num_compile_threads) {
   runtime_exec_ = std::make_unique<LlvmRuntimeExecutor>(config_, profiler, this);
   cache_data_ = std::make_unique<LlvmOfflineCache>();
+  // Resolve the per-task artifact directory once, beside the `.qdc` files, so the codegen probe, the CUDA JIT fill,
+  // and the `.qdc` loader all agree without re-deriving it from the config. Empty => the tier is off (no offline
+  // cache), which makes every artifact-cache op a no-op.
+  pertask_artifact_dir_ref() =
+      config_.offline_cache ? pertask_artifact_dir_for(config_.offline_cache_file_path) : std::string();
 }
 
 std::unique_ptr<StructCompiler> LlvmProgramImpl::compile_snode_tree_types_impl(SNodeTree *tree) {

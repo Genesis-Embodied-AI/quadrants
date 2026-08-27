@@ -84,26 +84,16 @@ class PerTaskArtifactCache {
 };
 
 inline std::string pertask_artifact_dir_for(const std::string &offline_cache_file_path) {
-  if (offline_cache_file_path.empty()) {
-    return std::string("/tmp/qd_pertask_artifacts");
-  }
   return offline_cache_file_path + "/pertask_artifacts";
 }
 
-// `CompiledKernelData::load_impl` needs the artifact dir but sits far from any `CompileConfig`; artifacts always live
-// beside the `.qdc` files, so resolve it once when the LLVM program is constructed (before any kernel loads/compiles).
+// Program-scoped artifact directory, set once at LLVM-program construction. `codegen.cpp` (probe), `jit_cuda.cpp`
+// (fill) and `compiled_kernel_data.cpp` (`.qdc` load) all sit far from a `CompileConfig`, so they read the resolved
+// path from here rather than re-deriving it. EMPTY means the tier is disabled (offline cache off) -- every cache op
+// then no-ops, so this is also the single off switch.
 inline std::string &pertask_artifact_dir_ref() {
   static std::string dir;
   return dir;
-}
-
-inline void set_pertask_artifact_dir_from_offline_cache(const std::string &offline_cache_file_path) {
-  pertask_artifact_dir_ref() = pertask_artifact_dir_for(offline_cache_file_path);
-}
-
-inline std::string resolved_pertask_artifact_dir() {
-  const auto &d = pertask_artifact_dir_ref();
-  return d.empty() ? pertask_artifact_dir_for(std::string()) : d;
 }
 
 }  // namespace quadrants::lang
