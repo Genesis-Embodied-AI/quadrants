@@ -10,10 +10,27 @@ from quadrants.types.primitive_types import i32, u32
 
 
 def sync():
+    """Subgroup-scope thread-converging barrier: every lane in the subgroup must reach the call before any lane
+    proceeds. Call from uniform control flow with all lanes active; calling from divergent control flow is
+    implementation-defined (CUDA's ``nvvm.bar.warp.sync`` deadlocks if the mask does not match the active set).
+
+    Lowers to ``OpControlBarrier(Subgroup, Subgroup, 0)`` on SPIR-V, ``__syncwarp(0xFFFFFFFF)`` on CUDA (reconverges
+    lanes that diverged under independent thread scheduling on Volta+), and ``llvm.amdgcn.wave.barrier`` on AMDGPU (a
+    compiler reordering barrier on lockstep GCN waves, a real wave-scope barrier on RDNA). The legacy name
+    ``subgroup.barrier()`` is a deprecated alias that forwards here.
+    """
     return impl.call_internal("subgroupBarrier", with_runtime_context=False)
 
 
 def mem_fence():
+    """Subgroup-scope memory fence: orders memory operations within the subgroup without requiring thread convergence.
+
+    Lowers to ``OpMemoryBarrier(Subgroup, AcquireRelease | UniformMemory | WorkgroupMemory)`` on SPIR-V,
+    ``__threadfence_block()`` on CUDA, and ``fence syncscope("workgroup") seq_cst`` on AMDGPU. The CUDA and AMDGPU
+    forms are workgroup-scope -- over-strict for the subgroup-scope ask but correct, since the subgroup is a strict
+    subset of the workgroup. Call from uniform control flow with all lanes active (same caveats as `sync`). The legacy
+    name ``subgroup.memory_barrier()`` is a deprecated alias that forwards here.
+    """
     return impl.call_internal("subgroupMemoryBarrier", with_runtime_context=False)
 
 
@@ -228,6 +245,18 @@ def all_equal_tiled(value, log2_size: template()):
 
 
 def broadcast(value, index):
+    """Every lane in the subgroup returns the ``value`` held by the lane whose subgroup-local id equals ``index``.
+
+    Expresses intent ("read lane ``index``") more directly than ``shuffle(value, index)``, and on backends with a
+    dedicated broadcast may map to a cheaper instruction. Same dtype rules as `shuffle`. Lowers to ``__shfl_sync`` on
+    CUDA, ``OpGroupNonUniformBroadcast`` on SPIR-V, and ``ds_bpermute`` on AMDGPU (a single wave-wide ``ds_bpermute``
+    on CDNA wave64, a ``permlane64``-driven cross-half select on RDNA wave64).
+
+    On SPIR-V, ``index`` **must be dynamically uniform** -- the same value on every lane in the subgroup -- because
+    ``OpGroupNonUniformBroadcast`` requires it; passing a per-lane-varying ``index`` is undefined behaviour. On CUDA /
+    AMDGPU, ``index`` may vary per lane and the call is identical to ``shuffle(value, index)``; use `shuffle` directly
+    if you need a per-lane-varying source lane.
+    """
     return impl.call_internal("subgroupBroadcast", value, index, with_runtime_context=False)
 
 
@@ -336,6 +365,11 @@ def log2_group_size() -> int:
 
 
 def invocation_id():
+    """Return this lane's subgroup-local index, in ``0 .. group_size() - 1`` (an ``i32``), on every backend.
+
+    Used both as a lane id when computing a target lane for `shuffle` / `broadcast`, and as a per-lane identifier in
+    cooperative algorithms.
+    """
     return impl.call_internal("subgroupInvocationId", with_runtime_context=False)
 
 
@@ -345,6 +379,18 @@ def invocation_id():
 
 
 def shuffle(value, index):
+    """Each lane returns the ``value`` held by the lane whose subgroup-local id equals ``index``.
+
+    ``value`` is a scalar in a register; supported dtypes are 32- and 64-bit signed / unsigned integers and ``f32`` /
+    ``f64`` (64-bit types are split into two 32-bit shuffles on AMDGPU; CUDA dispatches to its native 64-bit helpers).
+    ``index`` is a ``u32``; if it is out of range for the active subgroup the result is implementation-defined, so pass
+    `invocation_id`-derived values or known-good lane ids.
+
+    Lowers to ``__shfl_sync`` on CUDA and ``OpGroupNonUniformShuffle`` on SPIR-V. On AMDGPU it goes through
+    ``ds_bpermute``; wave64 shuffles that cross the 32-lane boundary use a single wave-wide ``ds_bpermute`` on CDNA, or
+    a ``permlane64 + ds_bpermute + select`` sequence on RDNA (a few extra cycles). See the cross-half lowering comments
+    in ``runtime.cpp`` for the per-ISA details.
+    """
     return impl.call_internal("subgroupShuffle", value, index, with_runtime_context=False)
 
 
@@ -362,10 +408,26 @@ def shuffle_xor(value, mask):
 
 
 def shuffle_up(value, offset):
+    """Lane ``i`` returns the ``value`` held by lane ``i - offset``.
+
+    Lanes near the bottom of the subgroup -- where ``i - offset < 0`` -- receive an implementation-defined value
+    (typically their own ``value``), so the bottom ``offset`` lanes' results should be ignored or masked. Same dtype
+    rules as `shuffle`; ``offset`` is a ``u32``. Lowers to ``__shfl_up_sync`` on CUDA and ``OpGroupNonUniformShuffleUp``
+    on SPIR-V; on AMDGPU it is emulated with ``ds_bpermute``, with wave64 cross-half cases handled the same way as
+    `shuffle`.
+    """
     return impl.call_internal("subgroupShuffleUp", value, offset, with_runtime_context=False)
 
 
 def shuffle_down(value, offset):
+    """Lane ``i`` returns the ``value`` held by lane ``i + offset``.
+
+    Lanes near the top of the subgroup -- where ``i + offset >= group_size()`` -- receive an implementation-defined
+    value (typically their own ``value``), so reduction patterns must only trust lane 0's final result or mask out the
+    out-of-range lanes. Same dtype rules as `shuffle`; ``offset`` is a ``u32``. Lowers to ``__shfl_down_sync`` on CUDA
+    and ``OpGroupNonUniformShuffleDown`` on SPIR-V; on AMDGPU it is emulated with ``ds_bpermute``, with wave64
+    cross-half cases handled the same way as `shuffle`.
+    """
     return impl.call_internal("subgroupShuffleDown", value, offset, with_runtime_context=False)
 
 

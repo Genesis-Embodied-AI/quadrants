@@ -11,7 +11,7 @@
 Run the test suite with `python tests/run_tests.py`. CLI arguments are forwarded to pytest. For example, to run only Metal tests matching a keyword:
 
 ```
-python tests/run_tests.py --arch metal -k "test_tile16_cholesky"
+python tests/run_tests.py --arch metal -k "test_cholesky"
 ```
 
 The target architecture can also be set via the `QD_WANTED_ARCHS` environment variable (comma-separated, e.g. `QD_WANTED_ARCHS=metal,vulkan`).
@@ -227,6 +227,21 @@ Quadrants comprises at least three important parts:
 1. `quadrants` host runtime: Made with a mix of Python and C++. The C++ core is compiled using the OS default C/C++ compiler.
 2. `quadrants` device runtime (bitcode): C++ code compiled using `clang++` from the distribution/OS. Using `clang++` is required as it has to support the same targets as `LLVM`.
 3. `LLVM` libraries used by host runtime: statically or dynamically linked, used to lower the kernel's final IR to machine code on the host. The CI uses an LLVM version compiled from source.
+
+### Running hand-edited IR or PTX
+
+A dump written by `QD_DUMP_IR` (see [Dumping compiled IR](./debug.md#dumping-compiled-ir)) can be edited and fed back in, which is a quick way to try an instruction sequence by hand before changing codegen. `QD_LOAD_IR=1` makes the LLVM backends reparse `<debug_dump_path>/<task>_llvm.ll` instead of using the module they just built, and `QUADRANTS_LOAD_PTX=1` makes the CUDA backend read `<debug_dump_path>/<name>.ptx` instead of the PTX it just compiled. Both are read as integers, so `0` leaves them off.
+
+Both caches have to be off in the script under test, since the replacement files are only read while a kernel is being compiled and a cached kernel is handed back without compiling. `qd.init` raises a `ValueError` rather than let an already-cached kernel keep silently running its old code. `offline_cache` has an environment variable, `src_ll_cache` does not, so the latter has to be passed to `qd.init`:
+
+```python
+qd.init(arch=qd.cuda, offline_cache=False, src_ll_cache=False)
+```
+
+```bash
+QD_DUMP_IR=1 QD_DEBUG_DUMP_PATH=/tmp/ir python my_script.py  # dump, then edit the files under /tmp/ir
+QD_LOAD_IR=1 QD_DEBUG_DUMP_PATH=/tmp/ir python my_script.py  # run what you edited
+```
 
 ### Building LLVM for debugging it
 

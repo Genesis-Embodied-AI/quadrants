@@ -48,7 +48,7 @@ def func(fn=None, *, is_real_function=False, requires_top_level=False):
         fn (Callable): The Python function to be decorated
         is_real_function (bool): Whether the function is a real function
         requires_top_level (bool): **Experimental** (behaviour/API may change). If True, the func may only
-            be called at the **top level** of a kernel (or directly inside a ``while qd.graph_do_while(...)``
+            be called at the **top level** of a kernel (or directly inside a ``while qd.graph.do_while(...)``
             body). Calling it nested inside ordinary runtime ``for`` / ``if`` / ``while`` control flow raises a
             :class:`QuadrantsSyntaxError` at compile time. Intended for multi-phase device ops whose per-phase
             top-level ``for`` loops must each lower to their own offloaded launch (e.g. the ``qd.algorithms``
@@ -320,7 +320,7 @@ class _BoundedDifferentiableMethod:
         return self._adjoint(self._kernel_owner, *args, **kwargs)
 
 
-def data_oriented(cls=None, *, stable_members: bool = False):
+def data_oriented(cls=None, *, stable_members: bool = False, template_primitives: bool = True):
     """Marks a class as Quadrants compatible.
 
     To allow for modularized code, Quadrants provides this decorator so that
@@ -351,18 +351,28 @@ def data_oriented(cls=None, *, stable_members: bool = False):
             (~1-2 us/call savings on Genesis-style containers with dozens of ndarray attrs). Reassigning a member on
             a ``stable_members`` class is undefined behaviour - the previously-compiled kernel will be reused even if
             the new ndarray has different dtype/ndim/layout. May also be set as a class-level attribute
-            ``_qd_stable_members = True`` (equivalent).
+            ``_qd_stable_members = True`` (equivalent). See ``docs/source/user_guide/compound_types.md``.
 
             Note: this flag is *purely* a launch-time perf hint. It no longer affects fastcache argument hashing - the
             fastcache key is derived from pruning info (the set of flat names the kernel actually reads), and
             unrecognised types at kernel-read paths fail fastcache loudly with a one-shot ``[UNKNOWN_TYPE]`` +
             ``[INVALID_FUNC]`` diagnostic (no qualname fallback). See ``docs/source/user_guide/fastcache.md``.
+        template_primitives (bool): controls how the primitive (``int`` / ``float`` / ``bool``)
+            members of instances of this class are treated when an instance is passed into a kernel
+            as a ``qd.template()`` argument (including as the implicit ``self`` of a member kernel).
+            When ``True`` (the default, and the historical behaviour) each primitive member is baked
+            into the compiled kernel as a compile-time constant: mutating it afterwards does not take
+            effect until the kernel is re-specialised. When ``False`` every primitive member accessed
+            by the kernel is instead lifted into a runtime scalar kernel argument, so its value is
+            read fresh on every launch and may be mutated without recompiling. A primitive lifted
+            this way may not be used inside ``qd.static(...)`` (doing so raises
+            ``QuadrantsSyntaxError``), since that context requires a compile-time constant.
 
     Returns:
         The decorated class (or, when called with arguments, a decorator).
     """
     if cls is None:
-        return lambda c: data_oriented(c, stable_members=stable_members)
+        return lambda c: data_oriented(c, stable_members=stable_members, template_primitives=template_primitives)
 
     def make_kernel_indirect(fun, is_property, attr_name):
         # Capture the primal at decoration time so the per-call path skips the ``_BoundedDifferentiableMethod``
@@ -404,6 +414,7 @@ def data_oriented(cls=None, *, stable_members: bool = False):
     cls._data_oriented = True
     if stable_members:
         cls._qd_stable_members = True
+    cls._qd_template_primitives = template_primitives
 
     return cls
 

@@ -224,34 +224,6 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
 #undef UNARY_STD
   }
 
-  llvm::Value *optimized_reduction(AtomicOpStmt *stmt) override {
-    if (!stmt->is_reduction) {
-      return nullptr;
-    }
-    QD_ASSERT(stmt->val->ret_type->is<PrimitiveType>());
-    PrimitiveTypeID prim_type = stmt->val->ret_type->cast<PrimitiveType>()->type;
-
-    std::unordered_map<PrimitiveTypeID, std::unordered_map<AtomicOpType, std::string>> fast_reductions;
-
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::add] = "reduce_add_i32";
-    fast_reductions[PrimitiveTypeID::f32][AtomicOpType::add] = "reduce_add_f32";
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::min] = "reduce_min_i32";
-    fast_reductions[PrimitiveTypeID::f32][AtomicOpType::min] = "reduce_min_f32";
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::max] = "reduce_max_i32";
-    fast_reductions[PrimitiveTypeID::f32][AtomicOpType::max] = "reduce_max_f32";
-
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::bit_and] = "reduce_and_i32";
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::bit_or] = "reduce_or_i32";
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::bit_xor] = "reduce_xor_i32";
-
-    AtomicOpType op = stmt->op_type;
-    if (fast_reductions.find(prim_type) == fast_reductions.end()) {
-      return nullptr;
-    }
-    QD_ASSERT(fast_reductions.at(prim_type).find(op) != fast_reductions.at(prim_type).end());
-    return call(fast_reductions.at(prim_type).at(op), {llvm_val[stmt->dest], llvm_val[stmt->val]});
-  }
-
   void visit(RangeForStmt *for_stmt) override {
     create_naive_range_for(for_stmt);
   }
@@ -417,6 +389,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       }
       current_task->block_dim = stmt->block_dim;
       current_task->stream_parallel_group_id = stmt->stream_parallel_group_id;
+      current_task->graph_parallel_region_id = stmt->graph_parallel_region_id;
       current_task->checkpoint_id = stmt->checkpoint_id;
       QD_ASSERT(current_task->grid_dim != 0);
       QD_ASSERT(current_task->block_dim != 0);

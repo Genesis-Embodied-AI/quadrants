@@ -496,6 +496,29 @@ def test_stream_parallel_rejects_mixed_top_level():
 
 
 @test_utils.test()
+def test_stream_parallel_rejects_graph():
+    """qd.stream_parallel() is incompatible with graph=True kernels."""
+    from quadrants.lang.exception import QuadrantsSyntaxError
+
+    N = 64
+    a = qd.field(qd.f32, shape=(N,))
+    b = qd.field(qd.f32, shape=(N,))
+
+    with pytest.raises(QuadrantsSyntaxError, match="not compatible with graph=True"):
+
+        @qd.kernel(graph=True)
+        def bad_kernel():
+            with qd.stream_parallel():
+                for i in range(N):
+                    a[i] = 1.0
+            with qd.stream_parallel():
+                for j in range(N):
+                    b[j] = 2.0
+
+        bad_kernel()
+
+
+@test_utils.test()
 def test_stream_with_ndarray():
     N = 1024
 

@@ -59,6 +59,28 @@ def test_args_hasher_numeric_maybe_template(annotation: object, cache_value: boo
 
 
 @test_utils.test()
+def test_args_hasher_none_is_cacheable() -> None:
+    """A ``None`` argument must hash to a stable key rather than disabling fast cache.
+
+    Reaching the catch-all in ``stringify_obj_type`` makes ``hash_args`` return ``FastcacheSkip.WARN``, which disables
+    fast cache for the whole call. ``None`` is a singleton, so it is tagged with a constant instead: it hashes, the
+    hash is stable across calls, and it does not poison the other arguments in the same call.
+    """
+    for annotation in (None, qd.Tensor, qd.template(), qd.Template):
+        arg_meta = ArgMetadata(name="", annotation=annotation)
+        hash1 = args_hasher.hash_args(False, [None], [arg_meta])
+        assert not isinstance(hash1, FastcacheSkip)
+        assert hash1
+        hash2 = args_hasher.hash_args(False, [None], [arg_meta])
+        assert hash1 == hash2
+
+    # A None argument does not disable fast cache for the other (valid) arguments in the same call.
+    mixed = args_hasher.hash_args(False, [None, 3], [None, None])
+    assert not isinstance(mixed, FastcacheSkip)
+    assert mixed
+
+
+@test_utils.test()
 def test_args_hasher_bool() -> None:
     seen = set()
     for arg in (False, np.bool(False)):
@@ -105,6 +127,58 @@ def test_args_hasher_data_oriented() -> None:
 
     foo = Foo()
     assert args_hasher.hash_args(False, [foo], [None]) is not None
+
+
+@test_utils.test()
+def test_args_hasher_data_oriented_template_primitives_value_not_keyed() -> None:
+    """A normal @qd.data_oriented bakes primitive members into the kernel, so the fastcache key includes their value.
+    @qd.data_oriented(template_primitives=False) lifts them to runtime scalar args instead, so the key must depend on
+    the primitive's *type* only - otherwise fastcache would recompile on every value change, defeating the feature."""
+
+    @qd.data_oriented(template_primitives=False)
+    class Runtime:
+        def __init__(self, k):
+            self.k = k
+
+    @qd.data_oriented
+    class Baked:
+        def __init__(self, k):
+            self.k = k
+
+    h = args_hasher.hash_args
+
+    # Lifted (runtime) primitive: value change -> same key.
+    h_rt = h(False, [Runtime(3)], [None])
+    assert h_rt is not None and not isinstance(h_rt, FastcacheSkip)
+    assert h_rt == h(False, [Runtime(7)], [None])
+
+    # Baked primitive (default): value change -> different key.
+    h_baked = h(False, [Baked(3)], [None])
+    assert h_baked is not None and not isinstance(h_baked, FastcacheSkip)
+    assert h_baked != h(False, [Baked(7)], [None])
+
+
+@test_utils.test()
+def test_args_hasher_data_oriented_template_primitives_nested_value_not_keyed() -> None:
+    """The type-only keying applies through nested template_primitives=False data_oriented members and alongside
+    ndarray members (the engine-F shape: Engine -> subsystem -> bare-primitive loop bound + ndarray buffers)."""
+
+    @qd.data_oriented(template_primitives=False)
+    class Inner:
+        def __init__(self, n_rt):
+            self.n_rt = n_rt
+            self.buf = qd.ndarray(qd.f64, shape=(4,))
+
+    @qd.data_oriented(template_primitives=False)
+    class Outer:
+        def __init__(self, n_rt):
+            self.cap = 1000
+            self.inner = Inner(n_rt)
+
+    h = args_hasher.hash_args
+    h4 = h(False, [Outer(4)], [None])
+    assert h4 is not None and not isinstance(h4, FastcacheSkip)
+    assert h4 == h(False, [Outer(6)], [None])
 
 
 @test_utils.test()

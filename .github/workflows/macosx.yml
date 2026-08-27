@@ -54,14 +54,27 @@ jobs:
   test:
     needs: build_mac
     name: Test on Mac
+    # Split the previously-combined `--arch metal,vulkan,cpu` run into one job per backend
+    # (see MAC_TEST_ARCH in 4_test.sh). Each job then carries only ~1/3 of the suite, which
+    # keeps a single runner from being oversubscribed during test teardown - the cause of
+    # the recent Mac CI timeouts - and lets the three backends run in parallel. The build
+    # is unchanged (one wheel per Python version, shared by all three legs).
     strategy:
       fail-fast: false
       matrix:
         MAC_OS_VERSION: [26]
         PYTHON_VERSION: ['3.10', '3.11', '3.12', '3.13']
+        ARCH: [metal, vulkan, cpu]
         include:
           - MAC_OS_VERSION: 15
             PYTHON_VERSION: '3.10'
+            ARCH: metal
+          - MAC_OS_VERSION: 15
+            PYTHON_VERSION: '3.10'
+            ARCH: vulkan
+          - MAC_OS_VERSION: 15
+            PYTHON_VERSION: '3.10'
+            ARCH: cpu
     runs-on: macos-${{ matrix.MAC_OS_VERSION }}
     steps:
       - uses: actions/checkout@v4
@@ -88,6 +101,8 @@ jobs:
         run: |
           bash .github/workflows/scripts_new/macosx/3_install.sh
       - name: Mac OS X test
+        env:
+          MAC_TEST_ARCH: ${{ matrix.ARCH }}
         run: |
           bash .github/workflows/scripts_new/macosx/4_test.sh
   publish_pypi:

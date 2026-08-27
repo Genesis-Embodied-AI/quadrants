@@ -9,13 +9,12 @@ import scipy.linalg
 
 import quadrants as qd
 from quadrants.lang.exception import QuadrantsSyntaxError
-from quadrants.lang.simt import _tile16, _tile32
-from quadrants.lang.simt._tile16 import (
-    _make_tile16x16,
+from quadrants.lang.simt import _tile
+from quadrants.lang.simt._tile import (
+    _make_tile,
     _TileSliceProxy,
     _VecSliceProxy,
 )
-from quadrants.lang.simt._tile32 import _make_tile32x32
 from quadrants.types import primitive_types
 
 from tests import test_utils
@@ -28,15 +27,20 @@ _EPS_VALS = {qd.f32: 1e-6, qd.f64: 1e-14}
 
 
 # --- Parametrize over tile size ----------------------------------------------------------------
+import functools as _functools  # noqa: E402
 import types as _types  # noqa: E402
 
 _TILE_PARAMS = [
     pytest.param(
-        _types.SimpleNamespace(proxy=qd.simt.Tile16x16, make=_make_tile16x16, size=16, m_size=40, name="tile16"),
+        _types.SimpleNamespace(
+            proxy=qd.simt.Tile16x16, make=_functools.partial(_make_tile, 16), size=16, m_size=40, name="tile16"
+        ),
         id="tile16",
     ),
     pytest.param(
-        _types.SimpleNamespace(proxy=qd.simt.Tile32x32, make=_make_tile32x32, size=32, m_size=80, name="tile32"),
+        _types.SimpleNamespace(
+            proxy=qd.simt.Tile32x32, make=_functools.partial(_make_tile, 32), size=32, m_size=80, name="tile32"
+        ),
         id="tile32",
     ),
 ]
@@ -88,18 +92,18 @@ def test_zeros(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype, use_zeros_a
     Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel(fastcache=True)
-    def k1(dst_arr: Ann, N: qd.Template):
+    def k1(dst_arr: Ann, N: qd.Template, use_alias: qd.Template):
         qd.loop_config(block_dim=N)
         tile_size = N
         for _ in range(tile_size):
-            if qd.static(use_zeros_alias):
+            if qd.static(use_alias):
                 t = Tile.zeros()
                 t._store(dst_arr, 0, tile_size, 0, tile_size)
             else:
                 t = Tile()
                 t._store(dst_arr, 0, tile_size, 0, tile_size)
 
-    k1(dst, tdim)
+    k1(dst, tdim, use_zeros_alias)
     np.testing.assert_allclose(dst.to_numpy(), np.zeros((tdim, tdim), dtype=np_dtype))
 
 
@@ -117,7 +121,7 @@ def test_eye(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype, inplace):
     Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel(fastcache=True)
-    def k1(src_arr: Ann, dst_arr: Ann, N: qd.Template):
+    def k1(src_arr: Ann, dst_arr: Ann, N: qd.Template, inplace: qd.Template):
         qd.loop_config(block_dim=N)
         tile_size = N
         for _ in range(tile_size):
@@ -132,7 +136,7 @@ def test_eye(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype, inplace):
 
     data = np.arange(tdim * tdim, dtype=np_dtype).reshape(tdim, tdim) + 100.0
     src.from_numpy(data)
-    k1(src, dst, tdim)
+    k1(src, dst, tdim, inplace)
     np.testing.assert_allclose(dst.to_numpy(), np.eye(tdim, dtype=np_dtype))
 
 
@@ -424,7 +428,7 @@ def test_store_partial_cols_untouched(TILE, make_tile, tdim, m_size, tensor_type
 
 
 def test_make_caching(TILE, make_tile, tdim, m_size):
-    """_make_tile16x16 must return the same object for the same dtype."""
+    """_make_tile must return the same object for the same (N, dtype)."""
     a = make_tile(qd.f32)
     b = make_tile(qd.f32)
     assert a is b
@@ -907,7 +911,7 @@ def test_load_slice_errors(TILE, make_tile, tdim, m_size, bad_slice, match):
     dst = qd.ndarray(qd.f32, (tdim, tdim))
 
     @qd.kernel(fastcache=True)
-    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2], N: qd.Template):
+    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2], N: qd.Template, bad_slice: qd.Template):
         qd.loop_config(block_dim=N)
         tile_size = N
         for _ in range(tile_size):
@@ -923,7 +927,7 @@ def test_load_slice_errors(TILE, make_tile, tdim, m_size, bad_slice, match):
             d[0:tile_size, 0:tile_size] = t
 
     with pytest.raises(QuadrantsSyntaxError, match=match):
-        k1(src, dst, tdim)
+        k1(src, dst, tdim, bad_slice)
 
 
 @pytest.mark.parametrize(
@@ -942,7 +946,7 @@ def test_store_slice_errors(TILE, make_tile, tdim, m_size, bad_slice, match):
     dst = qd.ndarray(qd.f32, (tdim, tdim))
 
     @qd.kernel(fastcache=True)
-    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2], N: qd.Template):
+    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2], N: qd.Template, bad_slice: qd.Template):
         qd.loop_config(block_dim=N)
         tile_size = N
         for _ in range(tile_size):
@@ -958,7 +962,7 @@ def test_store_slice_errors(TILE, make_tile, tdim, m_size, bad_slice, match):
                 d[0:, 0:tile_size] = t
 
     with pytest.raises(QuadrantsSyntaxError, match=match):
-        k1(src, dst, tdim)
+        k1(src, dst, tdim, bad_slice)
 
 
 @test_utils.test(arch=qd.gpu)
@@ -1104,7 +1108,7 @@ def test_vec_slice_errors(TILE, make_tile, tdim, m_size, bad_slice):
     dst = qd.ndarray(qd.f32, (tdim, tdim))
 
     @qd.kernel(fastcache=True)
-    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2], N: qd.Template):
+    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2], N: qd.Template, bad_slice: qd.Template):
         qd.loop_config(block_dim=N)
         tile_size = N
         for _ in range(tile_size):
@@ -1117,7 +1121,7 @@ def test_vec_slice_errors(TILE, make_tile, tdim, m_size, bad_slice):
             d[0:tile_size, 0:tile_size] = t
 
     with pytest.raises(QuadrantsSyntaxError, match="both start and stop"):
-        k1(src, dst, tdim)
+        k1(src, dst, tdim, bad_slice)
 
 
 # =============================================================================
@@ -1328,7 +1332,14 @@ def test_shared_array_partial_cols(TILE, make_tile, tdim, m_size, partial_store,
     dst = qd.field(dtype=qd.f32, shape=(tdim, tdim))
 
     @qd.kernel(fastcache=True)
-    def k1(src_f: qd.Template, dst_f: qd.Template, NCOLS: qd.i32, N: qd.Template):
+    def k1(
+        src_f: qd.Template,
+        dst_f: qd.Template,
+        NCOLS: qd.i32,
+        N: qd.Template,
+        partial_store: qd.Template,
+        partial_load: qd.Template,
+    ):
         qd.loop_config(block_dim=N)
         tile_size = N
         for _ in range(tile_size):
@@ -1356,7 +1367,7 @@ def test_shared_array_partial_cols(TILE, make_tile, tdim, m_size, partial_store,
 
     data = np.arange(tdim * tdim, dtype=np.float32).reshape(tdim, tdim) + 1.0
     src.from_numpy(data)
-    k1(src, dst, NCOLS, tdim)
+    k1(src, dst, NCOLS, tdim, partial_store, partial_load)
     result = dst.to_numpy()
     np.testing.assert_allclose(result[:, :NCOLS], data[:, :NCOLS])
     if partial_load:
@@ -1543,11 +1554,12 @@ def test_vec_proxy_non_identity_dtype(TILE, make_tile, tdim, m_size):
     assert nonid_dtype == qd.f32
     assert id(nonid_dtype) not in primitive_types.type_ids  # precondition the old dtype(0.0) tripped on
 
-    # The tile-class cache is process-global and keyed by dtype value, so a previously cached identity-dtype class
-    # would mask the regression.  Drop the entry so the class is rebuilt capturing this non-identity dtype, and
-    # restore the cache afterwards so we don't leak a deepcopy-keyed entry into other tests.
-    cache = _tile16._tile16_cache if TILE is qd.simt.Tile16x16 else _tile32._tile32_cache
-    cache.pop(nonid_dtype, None)
+    # The tile-class cache is process-global and keyed by (N, dtype) value, so a previously cached identity-dtype class
+    # would mask the regression.  Drop the entry so the class is rebuilt capturing this non-identity dtype, and restore
+    # the cache afterwards so we don't leak a deepcopy-keyed entry into other tests.
+    cache = _tile._tile_cache
+    cache_key = (tdim, nonid_dtype)
+    cache.pop(cache_key, None)
     try:
         Tile = make_tile(nonid_dtype)
         Ann = _ann(qd.field, qd.f32, 2)
@@ -1598,7 +1610,7 @@ def test_vec_proxy_non_identity_dtype(TILE, make_tile, tdim, m_size):
         col3 = V3[1, K0 : K0 + tdim, COL]
         np.testing.assert_allclose(out3.to_numpy(), R - np.outer(col3, col3), atol=1e-5)
     finally:
-        cache.pop(nonid_dtype, None)
+        cache.pop(cache_key, None)
 
 
 @test_utils.test(arch=qd.gpu)

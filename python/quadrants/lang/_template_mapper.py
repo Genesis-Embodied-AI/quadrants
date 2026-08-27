@@ -6,13 +6,16 @@ from quadrants.lang import impl
 from quadrants.lang.impl import Program
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import is_data_oriented
+from quadrants.types import ndarray_type
 
 from .._test_tools import warnings_helper
 from ._kernel_types import ArgsHash
+from ._optional_annotation import OPTIONAL_ABSENT
 from ._template_mapper_hotpath import (
     _extract_arg,
     _primitive_types,
     _struct_nd_paths_for,
+    annotation_has_final_subtree,
 )
 
 # Per-class disposition for the args_hash ndarray-id walk in ``TemplateMapper.lookup``: one of ``_SKIP`` (this class
@@ -70,11 +73,19 @@ class TemplateMapper:
         self._mapping_cache: dict[ArgsHash, tuple[int, Key]] = {}
         self._mapping_cache_tracker: dict[ArgsHash, list[ReferenceType | None]] = {}
         self._prog_weakref: ReferenceType[Program] | None = None
+        # Whether a Final-bearing argument disables the instance-keyed ``_mapping_cache`` (see
+        # ``annotation_has_final_subtree``). Computed lazily on first ``lookup`` so its ``Final`` validation runs then.
+        self._mapping_cache_disabled: bool | None = None
 
     def extract(self, raise_on_templated_floats: bool, args: tuple[Any, ...]) -> Key:
+        # Optional ndarray + None gets its own key: _extract_arg's NdarrayType branch reads .shape and raises on None.
         return tuple(
             [
-                _extract_arg(raise_on_templated_floats, arg, kernel_arg.annotation, kernel_arg.name)
+                (
+                    OPTIONAL_ABSENT
+                    if arg is None and kernel_arg.optional and type(kernel_arg.annotation) is ndarray_type.NdarrayType
+                    else _extract_arg(raise_on_templated_floats, arg, kernel_arg.annotation, kernel_arg.name)
+                )
                 for arg, kernel_arg in zip(args, self.arguments)
             ]
         )
@@ -145,12 +156,21 @@ class TemplateMapper:
                 nd_ids.append(id(v))
         if nd_ids:
             args_hash = args_hash + tuple(nd_ids)
-        try:
-            mapping_cache_tracker = self._mapping_cache_tracker[args_hash]
-        except KeyError:
-            pass
-        if mapping_cache_tracker:
-            return self._mapping_cache[args_hash]
+        # A Final-bearing argument disables this cache: serving a prior ``(count, key)`` would skip ``extract()`` and
+        # its per-launch ``final_scalar_key`` revalidation. Final-free mappers are unaffected.
+        cache_disabled = self._mapping_cache_disabled
+        if cache_disabled is None:
+            cache_disabled = self._mapping_cache_disabled = any(
+                annotation_has_final_subtree(kernel_arg.annotation) for kernel_arg in self.arguments
+            )
+
+        if not cache_disabled:
+            try:
+                mapping_cache_tracker = self._mapping_cache_tracker[args_hash]
+            except KeyError:
+                pass
+            if mapping_cache_tracker:
+                return self._mapping_cache[args_hash]
 
         key = self.extract(raise_on_templated_floats, args)
         try:
@@ -158,27 +178,29 @@ class TemplateMapper:
         except KeyError:
             count = self.mapping[key] = len(self.mapping)
 
-        # Note that it is important to prepend the cache tracker with 'None' to avoid misclassifying no argument with
-        # expired cache entry caused by deallocated argument.
-        mapping_cache_tracker_: list[ReferenceType | None] = [None]
+        # Skip the store too when disabled, so the read above always misses and every launch revalidates.
+        if not cache_disabled:
+            # Note that it is important to prepend the cache tracker with 'None' to avoid misclassifying no argument with
+            # expired cache entry caused by deallocated argument.
+            mapping_cache_tracker_: list[ReferenceType | None] = [None]
 
-        # Clear the tracker (original invalidation) and also remove the stale
-        # dict entries so they do not accumulate indefinitely.
-        def _evict_callback(ref, _tracker=mapping_cache_tracker_, _self=self, _hash=args_hash):
-            _tracker.clear()
-            _self._mapping_cache.pop(_hash, None)
-            _self._mapping_cache_tracker.pop(_hash, None)
+            # Clear the tracker (original invalidation) and also remove the stale
+            # dict entries so they do not accumulate indefinitely.
+            def _evict_callback(ref, _tracker=mapping_cache_tracker_, _self=self, _hash=args_hash):
+                _tracker.clear()
+                _self._mapping_cache.pop(_hash, None)
+                _self._mapping_cache_tracker.pop(_hash, None)
 
-        try:
-            # Note that it is necessary to handle primitive types separately because it does not make sense to use
-            # these arguments to track the lifetime of the corresponding cache entry and taking weakref of primitive
-            # types if forbidden anyway.
-            mapping_cache_tracker_ += [
-                ReferenceType(arg, _evict_callback) for arg in args if type(arg) not in _primitive_types
-            ]
-            self._mapping_cache_tracker[args_hash] = mapping_cache_tracker_
-            self._mapping_cache[args_hash] = (count, key)
-        except TypeError as e:
-            warnings_helper.warn_once(f"{e}. Template mapper caching disabled.")
+            try:
+                # Note that it is necessary to handle primitive types separately because it does not make sense to use
+                # these arguments to track the lifetime of the corresponding cache entry and taking weakref of primitive
+                # types if forbidden anyway.
+                mapping_cache_tracker_ += [
+                    ReferenceType(arg, _evict_callback) for arg in args if type(arg) not in _primitive_types
+                ]
+                self._mapping_cache_tracker[args_hash] = mapping_cache_tracker_
+                self._mapping_cache[args_hash] = (count, key)
+            except TypeError as e:
+                warnings_helper.warn_once(f"{e}. Template mapper caching disabled.")
 
         return (count, key)

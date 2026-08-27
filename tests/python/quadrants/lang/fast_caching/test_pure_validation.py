@@ -43,6 +43,20 @@ def test_pure_validation_prim():
 
 
 @test_utils.test()
+def test_pure_validation_str():
+    # A captured ``str`` global is cache-unsafe in the same way as a captured int/float, so it must trigger a purity
+    # violation. Direct access (not wrapped in ``qd.static``) of a lowercase-named global raises.
+    s = "hello"
+
+    @qd.kernel(pure=True)
+    def k1():
+        print(s)
+
+    with pytest.raises(qd.QuadrantsCompilationError):
+        k1()
+
+
+@test_utils.test()
 def test_pure_validation_field():
     a = qd.field(qd.i32, (10,))
 
@@ -282,3 +296,43 @@ def test_pure_validation_non_quadrants_attribute_warns():
 
     with pytest.warns(UserWarning, match=r"\[PURE\.VIOLATION\]"):
         assert k1() == 32
+
+
+# Restricted to a single (CPU) arch on purpose: the purity check is a Python-side AST analysis and is entirely
+# arch-independent, and running it across multiple archs in one worker lets a fastcache hit from one arch suppress the
+# warning on the next, which makes ``pytest.warns`` flaky.
+@test_utils.test(arch=qd.cpu)
+def test_pure_validation_static_scope_warns():
+    # Transition period: a captured global accessed inside a ``qd.static`` scope of a pure kernel only warns instead of
+    # raising, to give downstream code time to migrate such constants to kernel parameters.
+    assert qd.lang is not None
+    arch = qd.lang.impl.current_cfg().arch
+    qd.init(arch=arch, offline_cache=False)
+
+    use_alias = True
+
+    @qd.kernel(pure=True)
+    def k1() -> qd.i32:
+        ret = 0
+        if qd.static(use_alias):
+            ret = 1
+        return ret
+
+    with pytest.warns(UserWarning, match=r"\[PURE\.VIOLATION\]"):
+        assert k1() == 1
+
+    class Cfg:
+        def __init__(self) -> None:
+            self.flag = True
+
+    cfg = Cfg()
+
+    @qd.kernel(pure=True)
+    def k2() -> qd.i32:
+        ret = 0
+        if qd.static(cfg.flag):
+            ret = 1
+        return ret
+
+    with pytest.warns(UserWarning, match=r"\[PURE\.VIOLATION\]"):
+        assert k2() == 1

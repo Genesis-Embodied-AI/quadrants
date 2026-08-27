@@ -232,6 +232,7 @@ class LowerAST : public IRVisitor {
       new_for->loop_name = stmt->loop_name;
       new_for->index_offsets = offsets;
       new_for->stream_parallel_group_id = stmt->stream_parallel_group_id;
+      new_for->graph_parallel_region_id = stmt->graph_parallel_region_id;
       new_for->checkpoint_id = stmt->checkpoint_id;
       new_for->graph_do_while_level_id = stmt->graph_do_while_level_id;
       VecStatement new_statements;
@@ -269,6 +270,7 @@ class LowerAST : public IRVisitor {
                                                       /*range_hint=*/fmt::format("arg ({})", fmt::join(arg_id, ", ")),
                                                       /*loop_name=*/stmt->loop_name);
       new_for->stream_parallel_group_id = stmt->stream_parallel_group_id;
+      new_for->graph_parallel_region_id = stmt->graph_parallel_region_id;
       new_for->checkpoint_id = stmt->checkpoint_id;
       new_for->graph_do_while_level_id = stmt->graph_do_while_level_id;
       VecStatement new_statements;
@@ -306,6 +308,7 @@ class LowerAST : public IRVisitor {
                                                         stmt->strictly_serialized, /*range_hint=*/"",
                                                         /*loop_name=*/stmt->loop_name);
         new_for->stream_parallel_group_id = stmt->stream_parallel_group_id;
+        new_for->graph_parallel_region_id = stmt->graph_parallel_region_id;
         new_for->checkpoint_id = stmt->checkpoint_id;
         new_for->graph_do_while_level_id = stmt->graph_do_while_level_id;
         new_for->body->insert(std::make_unique<LoopIndexStmt>(new_for.get(), 0), 0);

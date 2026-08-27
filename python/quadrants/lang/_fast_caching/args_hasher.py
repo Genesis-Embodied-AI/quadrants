@@ -12,12 +12,17 @@ from quadrants._tensor_wrapper import Tensor as _TensorWrapper
 from quadrants.types.annotations import Template
 
 from .._dataclass_util import create_flat_name
+from .._final_dataclass_fields import (
+    final_field_names,
+    final_scalar_key,
+    subtree_has_final_fields,
+)
 from .._ndarray import ScalarNdarray
 from .._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
 from ..field import ScalarField
 from ..kernel_arguments import ArgMetadata
 from ..matrix import MatrixField, MatrixNdarray, VectorNdarray
-from ..util import is_data_oriented, is_dataclass_instance
+from ..util import is_data_oriented, is_dataclass_instance, wants_runtime_primitives
 from .hash_utils import hash_iterable_strings
 
 _FIELD_TYPES = (ScalarField, MatrixField)
@@ -40,6 +45,12 @@ g_num_ignored_calls = 0
 FIELD_METADATA_CACHE_VALUE = "add_value_to_cache_key"
 
 _DC_REPR_NONE = object()
+
+# arg_meta used when walking the children of a ``@qd.data_oriented(template_primitives=False)`` object. Its annotation
+# is non-Template (so primitive members contribute their *type* only, not their value, since they are lifted to runtime
+# scalar args rather than baked into the kernel) and non-Tensor (so a stray ``qd.field`` child still triggers the
+# warn-and-disable path, exactly as for a normal data_oriented object).
+_NON_TEMPLATE_CHILD_META = ArgMetadata(None, "")
 
 
 # Sentinel returned by ``stringify_obj_type`` whenever fastcache cannot safely hash a value:
@@ -186,9 +197,16 @@ def dataclass_to_repr(
     # unsound (a later kernel's narrower pruning set could skip the offending field and be entitled to fastcache,
     # but would inherit the earlier kernel's cached ``_DC_REPR_NONE``). Pruned walks re-walk on every call - which
     # is fine, since the ``dataclasses.fields()`` cost is dwarfed by the pruning-narrowed field iteration itself.
+    #
+    # A Final-bearing subtree is excluded from the cache for a second, independent reason: its repr must be recomputed
+    # each launch to re-run ``final_scalar_key``'s validation. Both conditions fold into ``cacheable``, which gates the
+    # read as well as the write - a Final-bearing type is therefore never stored, so the read below cannot hit.
     is_frozen = type(arg).__hash__ is not None
-    cache_unpruned = is_frozen and pruning_paths is None
-    if cache_unpruned:
+    # A baked ``Final[T]`` field's *value* must be in the offline cache key too, else a kernel baked with one value
+    # loads for a config carrying another. Test: ``test_final_field_value_is_part_of_offline_fastcache_key``.
+    final_names = final_field_names(type(arg))
+    cacheable = is_frozen and pruning_paths is None and not subtree_has_final_fields(type(arg))
+    if cacheable:
         cached = getattr(arg, "_qd_dc_repr", None)
         if cached is _DC_REPR_NONE:
             return _FAIL_FASTCACHE
@@ -196,10 +214,20 @@ def dataclass_to_repr(
             return cached
     repr_l = []
     for field in dataclasses.fields(arg):
+        child_value = getattr(arg, field.name)
+        if field.name in final_names:
+            # Serialize via ``final_scalar_key`` (collision-safe, process-stable) and skip ``stringify_obj_type``: it
+            # has no bare-``str`` case, so a ``Final[str]`` would return None and disable the cache for the whole arg.
+            #
+            # Included regardless of ``pruning_paths``: a Final value is baked into the generated code, so dropping it
+            # from the key because the pruning set does not mention it would silently reuse a kernel baked with a
+            # different constant if that set ever under-reports a Final read. The narrow walk exists to make keys
+            # cheaper, and is not worth trading that guarantee for.
+            repr_l.append(f"{field.name}: (final) = {final_scalar_key(child_value)}")
+            continue
         child_flat = _child_flat(parent_flat, field.name)
         if not _is_path_used(pruning_paths, child_flat):
             continue
-        child_value = getattr(arg, field.name)
         _repr = stringify_obj_type(
             raise_on_templated_floats,
             path + (field.name,),
@@ -211,7 +239,7 @@ def dataclass_to_repr(
         if _repr is _FAIL_FASTCACHE:
             if isinstance(child_value, _FIELD_TYPES) and field.type is not _TensorWrapper:
                 _mark_should_warn()
-            if cache_unpruned:
+            if cacheable:
                 try:
                     object.__setattr__(arg, "_qd_dc_repr", _DC_REPR_NONE)
                 except AttributeError:
@@ -222,7 +250,7 @@ def dataclass_to_repr(
             full_repr += f" = {child_value}"
         repr_l.append(full_repr)
     result = "[" + ",".join(repr_l) + "]"
-    if cache_unpruned:
+    if cacheable:
         try:
             object.__setattr__(arg, "_qd_dc_repr", result)
         except AttributeError:
@@ -340,6 +368,10 @@ def stringify_obj_type(
             _dict = _asdict()
         except AttributeError:
             _dict = obj.__dict__
+        # A normal @qd.data_oriented bakes primitive members into the kernel (value in the cache key); one declared
+        # with template_primitives=False lifts them to runtime args (type only - value must NOT enter the key, or it
+        # would recompile on every value change, defeating the feature). Decide per object, since the flag is per class.
+        child_meta = _NON_TEMPLATE_CHILD_META if wants_runtime_primitives(obj) else ArgMetadata(Template, "")
         for k, v in _dict.items():
             # Skip Quadrants method-descriptor cache entries. ``QuadrantsCallable.__get__`` stashes the per-instance
             # ``BoundQuadrantsCallable`` on ``instance.__dict__`` so subsequent ``instance.method`` lookups skip the
@@ -354,7 +386,7 @@ def stringify_obj_type(
                 raise_on_templated_floats,
                 (*path, k),
                 v,
-                ArgMetadata(Template, ""),
+                child_meta,
                 pruning_paths=pruning_paths,
                 parent_flat=child_flat,
             )
@@ -377,6 +409,9 @@ def stringify_obj_type(
         return "np.bool_"
     if isinstance(obj, enum.Enum):
         return f"enum-{obj.name}-{obj.value}"
+    if obj is None:
+        # ``None`` is a singleton, so its type fully determines its value and a constant tag is a complete cache key.
+        return "None"
     # Unrecognised type at a kernel-read path - fail fastcache loudly. See ``_fail_unknown_type``.
     return _fail_unknown_type(obj, path)
 

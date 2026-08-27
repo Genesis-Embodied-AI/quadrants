@@ -188,9 +188,13 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
       i++;
     } else {
       size_t group_start = i;
-      while (i < offloaded_tasks.size() && offloaded_tasks[i].stream_parallel_group_id != 0) {
-        i++;
-      }
+      // Bound the fork/join batch to a single qd.graph_parallel_context() region/level/checkpoint via the shared
+      // boundary helper (next_stream_parallel_run in llvm_compiled_data.h), the same definition
+      // GraphManager::build_level uses. Two regions written back-to-back carry distinct graph_parallel_region_id and
+      // emit no serial task between them to break the run, so without this the second region's sections would fork
+      // alongside -- and race -- the first's, dropping the inter-region join (region B could read region A's writes
+      // early). This streaming path is the pre-SM 9.0 fallback and every graph_do_while iteration that streams.
+      i = next_stream_parallel_run(offloaded_tasks, i, offloaded_tasks.size());
 
       // Run all per-task adstack setup on active_stream before recording the fence event, so that
       // publish_adstack_metadata's async H2D copies are covered by the event that pool streams wait on.
@@ -599,7 +603,13 @@ KernelLauncher::Handle KernelLauncher::register_llvm_kernel(const LLVM::Compiled
     auto *executor = get_runtime_executor();
 
     auto data = compiled.get_internal_data().compiled_data.clone();
-    auto *jit_module = executor->create_jit_module(std::move(data.module));
+    JITModule *jit_module = nullptr;
+    if (!data.per_construct_artifacts.empty()) {
+      // Per-task path: load each per-task module separately (composite JITModule) instead of the whole-module PTX.
+      jit_module = executor->create_jit_module_per_task(std::move(data.per_construct_artifacts));
+    } else {
+      jit_module = executor->create_jit_module(std::move(data.module));
+    }
 
     // Populate ctx
     ctx.jit_module = jit_module;

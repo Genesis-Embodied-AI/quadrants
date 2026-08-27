@@ -2080,6 +2080,7 @@ void TaskCodegen::generate_serial_kernel(OffloadedStmt *stmt) {
   // Initialise the adstack overflow-signal accumulator before any user code so the zero-init dominates
   // every push site and the task-end read. See `ensure_any_overflow_signal_var` doc for details.
   ensure_any_overflow_signal_var();
+  preload_ad_stack_metadata_strides();
   spirv::Value cond = ir_->eq(ir_->get_global_invocation_id(0),
                               ir_->uint_immediate_number(ir_->u32_type(), 0));  // if (gl_GlobalInvocationID.x > 0)
   spirv::Label then_label = ir_->new_label();
@@ -2134,6 +2135,7 @@ void TaskCodegen::generate_range_for_kernel(OffloadedStmt *stmt) {
 
   ir_->start_function(kernel_function_);
   ensure_any_overflow_signal_var();
+  preload_ad_stack_metadata_strides();
   const std::string total_elems_name("total_elems");
   spirv::Value total_elems;
   spirv::Value begin_expr_value;
@@ -2319,6 +2321,7 @@ void TaskCodegen::generate_struct_for_kernel(OffloadedStmt *stmt) {
   // we can do grid-strided loop.
   ir_->start_function(kernel_function_);
   ensure_any_overflow_signal_var();
+  preload_ad_stack_metadata_strides();
 
   auto listgen_buffer = get_buffer_value(BufferType::ListGen, PrimitiveType::u32);
   auto listgen_count_ptr = ir_->struct_array_access(ir_->u32_type(), listgen_buffer, ir_->const_i32_zero_);
@@ -2743,6 +2746,24 @@ spirv::Value TaskCodegen::get_ad_stack_metadata_stride_int() {
   return ad_stack_metadata_stride_int_;
 }
 
+// Seed the two memoized stride loads at the task entry block so the cached SSA ids dominate every adstack heap
+// access in the body. The getters above memoize the OpLoad emitted at their first call site; without this preload
+// the first f32 (or i32) heap access of the task can sit inside a conditional block - e.g. one arm of an `if`
+// whose sibling arm also hits the heap - and every access in a sibling block would then reuse an SSA id that does
+// not dominate it. `spirv-val` rejects such a module (SPIR-V section 2.16), and SPIRV-Cross silently emits the
+// reused id as a plain uninitialized MSL variable: the per-thread heap base `row_id * stride` collapses to
+// whatever the garbage register holds (typically 0), racing every thread of the dispatch onto the same heap row
+// and corrupting reverse-mode gradients on Metal. Gated on the pre-pass adstack count so tasks without adstacks
+// do not bind the AdStackMetadata buffer at all; tasks with adstacks always read it anyway, so the preload adds
+// no binding and at most one dead u32 load when only one of the two heaps is used.
+void TaskCodegen::preload_ad_stack_metadata_strides() {
+  if (num_ad_stacks_ == 0) {
+    return;
+  }
+  get_ad_stack_metadata_stride_float();
+  get_ad_stack_metadata_stride_int();
+}
+
 spirv::Value TaskCodegen::get_ad_stack_heap_thread_base_float() {
   // `row_id * per_thread_stride`. `row_id` is loaded fresh at every call from the Function-scope
   // `ad_stack_row_id_var_float_` (declared at the first alloca visit, written at the float Lowest Common Ancestor (LCA)
@@ -2822,11 +2843,11 @@ spirv::Value TaskCodegen::ad_stack_heap_int_ptr(spirv::Value slot_offset, spirv:
 
 // Lazily load the per-alloca `(offset, max_size)` pair for `info` from the AdStackMetadata buffer and cache the
 // SSA ids on `info`. The metadata buffer layout is `[stride_float, stride_int, offset_0, max_size_0, offset_1,
-// max_size_1, ...]` so slot i lives at buffer indices `2 + 2*i` and `2 + 2*i + 1`. First-call emission happens
-// at the first push / load-top / load-top-adj site for this alloca (the AllocaStmt visitor sets `stack_id` and
-// caches the buffer + stride eagerly so it dominates every sibling body). The adjoint offset for f32 adstacks
-// is a derived `OpIAdd` rather than an extra buffer load - mirrors the host launcher's `offset + max_size`
-// prefix-sum layout for the primal/adjoint pair.
+// max_size_1, ...]` so slot i lives at buffer indices `2 + 2*i` and `2 + 2*i + 1`. The AllocaStmt visitor calls
+// this eagerly at the alloca site so the OpLoads dominate every sibling push / load-top / load-top-adj body; the
+// two shared stride words are seeded even earlier, at the task entry block, by `preload_ad_stack_metadata_strides`.
+// The adjoint offset for f32 adstacks is a derived `OpIAdd` rather than an extra buffer load - mirrors the host
+// launcher's `offset + max_size` prefix-sum layout for the primal/adjoint pair.
 // Allocate the per-task overflow-signal accumulator at the function entry block and zero-initialize it.
 // Holds the maximum `stack_id + 1` value seen across all overflowing push sites in this thread; 0 means no
 // overflow. Read + conditionally atomic-max'd to the host-visible AdStackOverflow buffer at task-end.

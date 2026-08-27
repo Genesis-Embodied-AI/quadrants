@@ -18,6 +18,7 @@ The following compound types are available:
 | `@qd.func` instance methods         | no                                    | yes                                   | yes                                 |
 | Member declaration                  | type-annotated class fields           | live attributes (no annotations)      | type-annotated class fields         |
 | Kernel-arg annotation               | `MyStruct` (the dataclass type)       | `qd.Template`                       | `MyStruct` (the struct type)        |
+| Primitive members are               | runtime args, or compile-time constants when annotated [`Final[T]`](#compile-time-constant-fields-typingfinal) | compile-time constants by default ([opt out](#runtime-primitives-template_primitivesfalse)) | fields of the in-kernel struct |
 
 > ⚠️ **Deprecation: `@dataclasses.dataclass` instance passed via `qd.Template`.**
 > Passing a `@dataclasses.dataclass` instance into a `qd.Template`-annotated kernel parameter is not supported and emits a `DeprecationWarning` at compile time. In a future release it will become an error.
@@ -30,6 +31,7 @@ It's of course very subjective, but some guidelines you could consider:
 
 - if you are trying to write a python class that runs on the GPU => use a `@qd.data_oriented`
 - if you are trying to write typed dataclasses, for passing data around between the `@data_oriented` classes, and between methods of the same `@data_oriented` class => use `@dataclasses.dataclass`es
+- if you are writing a **static configuration object** - a bag of flags and sizes fixed at setup time, used to specialize kernels => use a frozen `@dataclasses.dataclass` with [`Final[T]`](#compile-time-constant-fields-typingfinal) fields
 - `@qd.dataclass` is used to create structured element types for field tensors. We also use it to create the Cholesky [tiles](tile.md).
 
 ## dataclasses.dataclass
@@ -142,9 +144,59 @@ Note: assigning a sub-struct to a local variable and then passing it (`t = s.inn
 
 A `dataclasses.dataclass` may be either non-frozen (the default) or frozen (`@dataclass(frozen=True)`). Both work as kernel arguments, but **kernel launch is faster with `frozen=True`** (because it enables some optimizations that would otherwise not be possible). Recommend `frozen=True` unless you specifically need to rebind members after construction. Note that rebinding members after construction contradicts certain best practices; for example, it is typically incompatible with type linters such as pyright and mypy.
 
+### Compile-time constant fields: `typing.Final`
+
+By default a primitive dataclass field becomes a **runtime** kernel argument: you can change its value between launches without recompiling, and the kernel reads the fresh value each launch. That also means the value is not known at compile time, so it cannot be used inside [`qd.static(...)`](static.md), as a static loop bound, or to eliminate a branch at compile time.
+
+Annotate the field with `typing.Final[T]` to make it a **compile-time constant** instead. The value is baked into the compiled kernel:
+
+```python
+import dataclasses
+from typing import Final
+
+@dataclasses.dataclass(frozen=True)
+class SimConfig:
+    enable_gravity: Final[bool]   # compile-time constant
+    n_substeps: Final[int]        # compile-time constant
+    gain: int                     # ordinary runtime kernel argument
+
+@qd.kernel
+def integrate(config: SimConfig, positions: qd.types.NDArray[qd.i32, 1]):
+    # Legal because n_substeps is Final: qd.static requires a compile-time constant.
+    steps = qd.static(config.n_substeps)
+    for i in positions:
+        # This branch is resolved at compile time; the untaken side is not compiled at all.
+        if qd.static(config.enable_gravity):
+            positions[i] -= 1
+        positions[i] += config.gain * steps   # gain read at runtime
+
+integrate(SimConfig(enable_gravity=True, n_substeps=4, gain=3), positions)
+```
+
+This is the recommended pattern for **static configuration objects** - bags of flags and sizes that are fixed once at setup time and used to specialize kernels. It replaces the older approach of declaring such a config as `@qd.data_oriented` and passing it via `qd.Template` purely to obtain compile-time member reads.
+
+Semantics of a `Final[T]` field:
+
+- **Baked into the kernel.** `config.field` inside a kernel body (or inside a `@qd.func` called from one) resolves at compile time to the field's actual Python value.
+- **Each distinct value compiles a separate kernel.** Quadrants decides which compiled kernel to reuse by looking at the field's value.
+- **Not a kernel argument.** A `Final` field occupies no kernel argument slot and costs nothing at launch.
+- **Mixing is fine.** Final and ordinary fields coexist in the same dataclass, at any nesting depth.
+
+Restrictions:
+
+- **Every class on the path to the field must be frozen** (`frozen=True`, or `unsafe_hash=True` if you must keep one mutable). A baked value must not be reassignable, so a non-frozen `@dataclass` is rejected both when it declares a `Final` field itself and when it merely *holds* another dataclass that has one - rebinding that inner object would change a baked value without recompiling. `unsafe_hash=True` does **not** snapshot the instance: a `Final`-bearing instance is re-read on every launch (Quadrants deliberately skips its per-instance caches so the `Final`-value checks re-run), so a later reassignment is *not* ignored - changing a `Final` field selects a different compiled kernel, and changing an ordinary field supplies its new runtime value. Because each distinct `Final` value compiles a separate kernel, treat `Final` fields as fixed and reserve `unsafe_hash` for mutating the ordinary ones.
+- **`T` must be a value Quadrants can bake as a literal**: `bool`, `int`, `float`, `str`, or a member of an `enum.Enum` subclass. Arrays, `qd.dataclass` structs, [`qd.Tensor`](tensor.md), nested dataclasses and arbitrary objects are rejected. To make a nested dataclass's leaves compile-time, mark those leaf fields `Final` rather than the nested field itself.
+- **An `enum` baked this way must be *plain*: state-free, behavior-free and scalar-valued.** Quadrants keys a baked member on its class plus its name/value, so it rejects (at first launch) any enum that carries something a kernel could additionally observe but the key cannot capture: per-member state (attributes set in `__init__`, or a populated `__slots__` slot - e.g. `config.mode.unit`), user-defined methods, properties, class variables or overridden operators on the class (e.g. `config.mode.label`, a custom `==`), or a member `value` that is not itself a bakeable scalar. Plain `Enum` / `IntEnum` / `IntFlag` members (including composites) are fine. A locally-defined or otherwise dynamically-recreated enum class is still accepted, but it is distinguished only within a single process, so it will not reuse another process's on-disk cached kernel; define enums at module scope if you want that cross-process reuse.
+- **`Final[float]` requires the [`raise_on_templated_floats`](init_options.md#raise_on_templated_floats) `qd.init` option to be off** (its default). That option makes Quadrants reject `float` values that drive kernel specialization, and a `Final[float]` field does exactly that, so it is rejected when the option is enabled.
+- **String annotations are rejected.** `from __future__ import annotations` leaves the annotation unresolved, so Quadrants cannot see the `Final` and would silently treat the field as an ordinary runtime argument. This raises an error rather than quietly doing the wrong thing.
+
+If you want the opposite trade-off for a `@qd.data_oriented` class (primitive members that are *runtime* rather than baked), see [Runtime primitives: `template_primitives=False`](#runtime-primitives-template_primitivesfalse).
+
 ### Under the hood
 
 A `dataclasses.dataclass` is a Python-only container. The compiler reads it at compile time and flattens its members into individual kernel parameters — the container itself has no memory layout and doesn't exist on the kernel side. Inside a kernel, tensor members are read-write through indexing (`s.x[i] = ...`), but the member *binding* itself (`s.x = other_tensor`) cannot be reassigned from inside a kernel.
+
+**Reserved field names (`_qd_` prefix).** Field names beginning with `_qd_` are reserved for Quadrants' internal state; defining a dataclass field with such a name is unsupported and gives undefined behavior.
 
 ## qd.data_oriented
 
@@ -212,6 +264,37 @@ Simulation(100).step()   # compiles kernel #1 with n=100 baked in
 Simulation(200).step()   # compiles kernel #2 with n=200 baked in
 ```
 
+#### Runtime primitives: `template_primitives=False`
+
+If you want to change a primitive member's value **from Python between launches without triggering a recompile**, decorate the class with `@qd.data_oriented(template_primitives=False)`. Every primitive member the kernel actually accesses (`int`, `float`, `bool`, including those reached through nested `dataclasses.dataclass` / `@qd.data_oriented` members) is then lifted into a runtime scalar kernel argument and read fresh on every launch, instead of being compiled into the kernel as a constant. The member stays read-only inside the kernel (it is a kernel argument, not a writable variable): you mutate it in Python, and the kernel sees the new value on the next launch.
+
+```python
+@qd.data_oriented(template_primitives=False)
+class Simulation:
+    def __init__(self):
+        self.n = 100
+        self.x = qd.ndarray(qd.f32, shape=(256,))
+
+    @qd.kernel
+    def step(self):
+        for i in range(self.n):
+            self.x[i] += 1.0
+
+sim = Simulation()
+sim.step()        # compiles once; n is a runtime kernel argument
+sim.n = 200       # no recompilation
+sim.step()        # the new value of n takes effect immediately
+```
+
+Notes and restrictions:
+
+- **dtype** follows the runtime defaults - an `int` / `bool` member becomes the default integer type (`qd.i32`, unless you override the runtime default integer type in `qd.init()`) and a `float` member becomes the default float type (`qd.f32`, unless you override the runtime default float type in `qd.init()`). A member whose value falls outside the default integer range will overflow where a baked literal would not; if you need exact wide-integer constants, keep the default (baked) behaviour.
+- **dtype is fixed at first compile**: the kernel-argument dtype is chosen from the member's Python type the first time the kernel compiles, and is *not* re-specialised if you later reassign the member to a different type. The live value is coerced to that dtype on every launch, so binding a `float` to a member that was first seen as an `int` truncates it (exactly as passing a `float` to an `int`-typed kernel argument would). Keep a lifted member's type stable across launches; if the type itself must vary, use the default (baked) behaviour, which re-specialises the kernel per type.
+- **Pruning**: only the primitives the kernel actually reads are turned into kernel arguments, so a class with many primitive members does not blow up the kernel argument count.
+- **`qd.static` is an error**: a lifted primitive cannot be used inside [`qd.static(...)`](static.md), because that context requires a compile-time constant. Doing so raises `QuadrantsSyntaxError`. Use the default `template_primitives=True` for values that must be baked (e.g. unrolled loop bounds).
+- **No re-specialisation on value change**: because the value is a runtime argument, mutating it never triggers a recompile. Distinct instances of the class still compile separately (the kernel is keyed per instance), exactly as with the default.
+- This is **opt-in**: the default `@qd.data_oriented` continues to bake primitive members as shown above.
+
 ### Tensor members
 
 `@qd.data_oriented` classes may hold tensor members of any backend: `qd.field`, `qd.ndarray`, or [qd.Tensor](tensor.md).
@@ -242,7 +325,7 @@ state.step()
 
 ### Under the hood
 
-Like `dataclasses.dataclass`, a `@qd.data_oriented` object is Python-only — the compiler flattens it into individual kernel parameters and the object itself has no kernel-side representation. Unlike `dataclasses.dataclass` it needs no member annotations: the compiler reads the live instance's attributes directly. Primitive members are baked into the kernel as constants, so each distinct primitive value compiles a new specialized kernel.
+Like `dataclasses.dataclass`, a `@qd.data_oriented` object is Python-only - the compiler flattens it into individual kernel parameters and the object itself has no kernel-side representation. Unlike `dataclasses.dataclass` it needs no member annotations: the compiler reads the live instance's attributes directly. Primitive members are baked into the kernel as constants by default, so each distinct primitive value compiles a new specialized kernel - unless the class is decorated `@qd.data_oriented(template_primitives=False)`, in which case the accessed primitives become runtime kernel arguments (see [Runtime primitives](#runtime-primitives-template_primitivesfalse) above).
 
 ## qd.dataclass / qd.types.struct
 

@@ -34,7 +34,7 @@ def build_wheel(python: Command) -> None:
         case ("Linux", "arm64") | ("Linux", "aarch64"):
             plat = "manylinux_2_27_aarch64"
         case ("Darwin", _):
-            plat = "macosx_11_0_arm64"
+            plat = "macosx_13_0_arm64"
 
     # Clear stale wheels so the tag-stamping step below is unambiguous.
     for whl in glob.glob("dist/quadrants-*.whl"):
