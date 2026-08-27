@@ -52,7 +52,17 @@ class PerTaskArtifactCache {
     if (bytes.size() < sizeof(std::size_t)) {
       return false;
     }
-    return read_from_binary(*out, bytes.data(), bytes.size());
+    if (!read_from_binary(*out, bytes.data(), bytes.size())) {
+      return false;
+    }
+    // A record can decode structurally yet be semantically empty (format skew / corruption that still leaves a valid
+    // length header). Every genuine artifact has at least one task and a non-empty backend payload, so treat empty as a
+    // miss: otherwise the caller builds a module-less task from it, which can trip CompiledKernelData::check() on a
+    // probe or reach cuModuleLoadDataEx with empty PTX on a `.qdc` load.
+    if (out->tasks.empty() || out->code.empty()) {
+      return false;
+    }
+    return true;
   }
 
   void store(const std::string &ir_key, const PerTaskArtifact &rec) const {
