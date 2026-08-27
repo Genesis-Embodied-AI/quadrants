@@ -62,9 +62,8 @@ class FunctionDefTransformer:
         full_name = prefix_name + "_" + name
         if not isinstance(annotation, primitive_types.RefType):
             ctx.kernel_args.append(name)
-        # Optional ndarray slot passed None: no runtime arg is declared for this specialization; bind the name to the
-        # injected template global (None) so qd.static(x is not None) specializes the present-only body away. Same
-        # shape as the qd.Tensor field/None branch below. See design.md W5.
+        # Optional ndarray + None declares no runtime arg; bind the name to the injected None global so
+        # qd.static(x is not None) specializes the present-only body away.
         if this_arg_features is OPTIONAL_ABSENT:
             if name in ctx.template_vars:
                 return True, ctx.template_vars[name]

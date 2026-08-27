@@ -295,9 +295,7 @@ class FuncBase:
                 arg.annotation == template
                 or isinstance(arg.annotation, template)
                 or arg.annotation is _TensorClass
-                # An optional ndarray slot is dual-nature: registering it as a template slot is what lets presence
-                # (``None`` vs an array) specialize, exactly as a qd.Tensor slot does. A present value still consumes
-                # a runtime arg via the NdarrayType decl path. See design.md W5.
+                # An optional ndarray registers as a template slot so presence (None vs array) can specialize.
                 or (arg.optional and type(arg.annotation) is ndarray_type.NdarrayType)
             ):
                 self.template_slot_locations.append(i)

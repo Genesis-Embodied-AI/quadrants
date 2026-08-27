@@ -72,9 +72,7 @@ class TemplateMapper:
         self._prog_weakref: ReferenceType[Program] | None = None
 
     def extract(self, raise_on_templated_floats: bool, args: tuple[Any, ...]) -> Key:
-        # An optional ndarray slot passed None specializes on absence: give it a stable, dedicated key instead of
-        # running _extract_arg, whose NdarrayType branch reads .shape off the value and raises on None. (qd.Tensor /
-        # Template already produce a valid None key, so leave those to _extract_arg.)
+        # Optional ndarray + None uses a dedicated key: _extract_arg's NdarrayType branch reads .shape and raises on None.
         return tuple(
             [
                 (

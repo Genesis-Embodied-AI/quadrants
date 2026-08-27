@@ -11,7 +11,7 @@ from quadrants.types.ndarray_type import NdarrayType
 
 from tests import test_utils
 
-# Parse + normalization (decoration-time, no qd.init()): the union spelling is accepted and marks the slot optional.
+# Parse + normalization (decoration-time): the union spelling is accepted and marks the slot optional.
 
 
 def _arg0(kernel):
@@ -25,7 +25,7 @@ def test_tensor_union_parses_and_marks_optional():
 
     meta = _arg0(k)
     assert meta.optional is True
-    # None is stripped: the stored annotation is the bare qd.Tensor, so downstream dispatch is unchanged.
+    # None is stripped: the stored annotation is the bare qd.Tensor.
     assert meta.annotation is qd.Tensor
 
 
@@ -157,7 +157,7 @@ def test_template_union_none_and_present_run():
     assert out.to_numpy()[0] == 7
 
 
-# Runtime: qd.types.NDArray[...] | None launches with a value present and with None (dual-nature slot).
+# Runtime: qd.types.NDArray[...] | None launches with a value present and with None.
 
 
 @test_utils.test()
@@ -175,8 +175,7 @@ def test_ndarray_union_present_value_runs():
 
 @test_utils.test()
 def test_ndarray_union_none_launches_absent():
-    """None on an optional ndarray slot is specialized away and consumes no runtime arg, so a following required
-    ndarray slot is still bound correctly."""
+    """Absent optional ndarray consumes no runtime arg; the following required slot still binds correctly."""
     a = qd.ndarray(qd.f32, shape=(4,))
 
     @qd.kernel
@@ -190,8 +189,7 @@ def test_ndarray_union_none_launches_absent():
 
 @test_utils.test()
 def test_ndarray_union_none_and_present_specialize_separately():
-    """qd.static(x is not None) selects the branch: present adds x, absent leaves out untouched. The two calls
-    compile distinct specializations."""
+    """Present and absent calls compile distinct specializations via qd.static(x is not None)."""
     out = qd.ndarray(qd.f32, shape=(4,))
     bias = qd.ndarray(qd.f32, shape=(4,))
     bias.from_numpy(np.full(4, 100.0, dtype=np.float32))
@@ -215,8 +213,7 @@ def test_ndarray_union_none_and_present_specialize_separately():
 
 @test_utils.test()
 def test_ndarray_union_absent_in_middle_preserves_arg_binding():
-    """An absent optional ndarray slot between two required ndarray slots consumes no runtime arg, so both required
-    slots still bind to their own buffers (runtime-arg accounting stays aligned)."""
+    """An absent optional ndarray between two required slots keeps runtime-arg accounting aligned."""
     first = qd.ndarray(qd.f32, shape=(4,))
     last = qd.ndarray(qd.f32, shape=(4,))
 
@@ -235,14 +232,13 @@ def test_ndarray_union_absent_in_middle_preserves_arg_binding():
     np.testing.assert_array_equal(last.to_numpy(), np.arange(4, dtype=np.float32) * 2.0)
 
 
-# ndarray autodiff is only supported on these backends (mirrors test_ad_ndarray.py; vulkan is excluded).
+# ndarray autodiff is only supported on these backends (vulkan excluded).
 _archs_support_ndarray_ad = [qd.cpu, qd.cuda, qd.amdgpu, qd.metal]
 
 
 @test_utils.test(arch=_archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_ndarray_union_autodiff_present():
-    """Autodiff through a present optional ndarray slot matches the non-optional case: the forward pass writes p and
-    the backward pass (.grad) accumulates a.grad."""
+    """Autodiff through a present optional ndarray slot matches the non-optional case."""
     N = 10
 
     @qd.kernel
