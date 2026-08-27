@@ -72,7 +72,7 @@ class TemplateMapper:
         self._prog_weakref: ReferenceType[Program] | None = None
 
     def extract(self, raise_on_templated_floats: bool, args: tuple[Any, ...]) -> Key:
-        # Optional ndarray + None uses a dedicated key: _extract_arg's NdarrayType branch reads .shape and raises on None.
+        # Optional ndarray + None gets its own key: _extract_arg's NdarrayType branch reads .shape and raises on None.
         return tuple(
             [
                 (
