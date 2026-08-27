@@ -190,12 +190,19 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
     optimize_module(llvm_compiled_kernel.module.get());
   }
   llvm_compiled_kernel.per_construct_artifacts = std::move(per_construct_artifacts);
-  // Persistable form of the artifacts: only meaningful with no whole-kernel module, i.e. when the `.qdc` entry must
-  // describe this kernel purely as an ordered list of per-task artifact keys (rebuilt from the cache on load).
+  // Persistable form of the artifacts: only with no whole-kernel module (the `.qdc` describes the kernel purely as an
+  // ordered list of per-task artifact keys, rebuilt from the cache on load) AND only when every task is keyed. A kernel
+  // mixing a cache hit with an ineligible task (external-func / adstack carry no key) can't be described this way:
+  // persisting the empty key would write a `.qdc` that never loads (`try_load("")` always misses), forcing a recompile
+  // every process. Leaving the keys empty makes `dump_impl` skip the `.qdc` (unpersistable) instead of writing a dud.
   if (code_only_tasks) {
-    llvm_compiled_kernel.per_task_artifact_keys.reserve(llvm_compiled_kernel.per_construct_artifacts.size());
-    for (const auto &a : llvm_compiled_kernel.per_construct_artifacts) {
-      llvm_compiled_kernel.per_task_artifact_keys.push_back(a.key);
+    const auto &arts = llvm_compiled_kernel.per_construct_artifacts;
+    const bool all_keyed = std::all_of(arts.begin(), arts.end(), [](const auto &a) { return !a.key.empty(); });
+    if (all_keyed) {
+      llvm_compiled_kernel.per_task_artifact_keys.reserve(arts.size());
+      for (const auto &a : arts) {
+        llvm_compiled_kernel.per_task_artifact_keys.push_back(a.key);
+      }
     }
   }
   // Record per-task reuse counts on the program-scoped surface; the compilation manager reads them back and Python
