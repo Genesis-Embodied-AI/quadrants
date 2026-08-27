@@ -246,6 +246,10 @@ std::vector<const SNode *> gather_task_snode_roots(OffloadedStmt *task) {
     } else if (auto *s = stmt->cast<GetChStmt>()) {
       add(s->input_snode);
       add(s->output_snode);
+    } else if (auto *s = stmt->cast<ClearListStmt>()) {
+      // A clear-list offload has no header SNode (task->snode == nullptr); its target lives only on the body's
+      // ClearListStmt. Codegen bakes that SNode's layout-derived parent/child metadata into PTX, so it must key the tree.
+      add(s->snode);
     }
     return false;
   });
