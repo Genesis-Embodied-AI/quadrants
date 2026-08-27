@@ -244,6 +244,8 @@ Microbenchmark on an RTX PRO 6000 Blackwell with a container holding 30 `qd.ndar
 
 **Trade-off:** with `stable_members=True`, reassigning an ndarray member on an instance is undefined behavior - the previously compiled kernel will be reused even if the new ndarray has a different `dtype`, `ndim`, or layout, silently bit-reinterpreting the new array's storage. Set it only on classes whose ndarray members are allocated once (typically in `__init__`) and never rebound. See [Reassigning ndarray members](#reassigning-ndarray-members) below for the supported alternative.
 
+`stable_members` concerns only ndarray members and is independent of [`template_primitives`](#runtime-primitives-template_primitivesfalse), which concerns primitive members; the two can be combined, e.g. `@qd.data_oriented(stable_members=True, template_primitives=False)`.
+
 ### Primitive members
 
 Primitive members on `self` (e.g. `int`, `float`, `bool`, `enum.Enum`) are supported, but they are treated as **template values**: each distinct primitive value across instances triggers a new kernel compilation, with the value baked into the compiled kernel.
