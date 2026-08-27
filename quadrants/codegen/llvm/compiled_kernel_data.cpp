@@ -30,9 +30,8 @@ std::unique_ptr<lang::CompiledKernelData> CompiledKernelData::clone() const {
 CompiledKernelData::Err CompiledKernelData::check() const {
   const auto &compiled_data = data_.compiled_data;
   const auto &tasks = compiled_data.tasks;
-  // Artifact-backed kernel: tasks came from the on-disk per-task cache, so there's no whole-kernel module here (the
-  // CUDA JIT assembles the per-task artifacts). The module-based checks below would null-deref; validate what this
-  // representation guarantees instead -- every task has a carrying artifact.
+  // Artifact-backed kernel: no whole-kernel module (tasks came from the per-task cache), so the module checks below
+  // would null-deref -- instead require that every task has a carrying artifact.
   if (!compiled_data.module) {
     if (compiled_data.per_construct_artifacts.empty() || tasks.empty()) {
       return Err::kCompiledKernelDataBroken;
@@ -72,9 +71,8 @@ CompiledKernelData::Err CompiledKernelData::load_impl(const CompiledKernelDataFi
   } catch (const liong::json::JsonException &) {
     return Err::kParseMetadataFailed;
   }
-  // Counterpart of the artifact-backed dump below: an empty src_code means the device code is per-task artifacts named
-  // by `per_task_artifact_keys`, not LLVM IR. Rebuild them from the cache and leave `module` null (the launcher takes
-  // the per-task path when `per_construct_artifacts` is non-empty).
+  // Empty src_code marks an artifact-backed kernel: device code is per-task artifacts named by
+  // `per_task_artifact_keys`, not IR. Rebuild them from the cache and leave `module` null (launcher takes that path).
   if (file.src_code().empty()) {
     const auto &keys = data_.compiled_data.per_task_artifact_keys;
     if (keys.empty()) {
@@ -86,8 +84,7 @@ CompiledKernelData::Err CompiledKernelData::load_impl(const CompiledKernelDataFi
     for (const auto &k : keys) {
       PerTaskArtifact rec;
       if (!cache.try_load(k, &rec)) {
-        // An artifact was evicted or the cache dir moved: fail the load so the manager recompiles rather than
-        // producing a kernel with a missing task.
+        // Evicted artifact or moved cache dir: fail the load so the manager recompiles rather than run a missing task.
         QD_DEBUG("artifact-backed kernel: missing per-task artifact {}", k);
         return Err::kParseSrcCodeFailed;
       }
@@ -121,9 +118,8 @@ CompiledKernelData::Err CompiledKernelData::dump_impl(CompiledKernelDataFile &fi
   } catch (const liong::json::JsonException &) {
     return Err::kSerMetadataFailed;
   }
-  // Artifact-backed kernel: no whole-kernel module, device code lives as per-task artifacts. It still needs a `.qdc`
-  // entry, or the whole-kernel cache stays empty and every run re-pays the per-construct path. Metadata already
-  // carries `tasks` + `per_task_artifact_keys`, so write an empty src_code instead of IR text.
+  // Artifact-backed kernel: no module, so write an empty src_code -- the metadata's `per_task_artifact_keys` rebuild it
+  // on load. Still emit a `.qdc`, else the whole-kernel cache stays empty and every run re-pays the split.
   if (!data_.compiled_data.module) {
     if (data_.compiled_data.per_task_artifact_keys.empty()) {
       return Err::kSerSrcCodeFailed;  // nothing to point at: genuinely unpersistable

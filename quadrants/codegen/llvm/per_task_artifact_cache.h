@@ -10,9 +10,8 @@
 
 namespace quadrants::lang {
 
-// One offloaded task's launch-ready artifact, persisted so a fresh process can launch it with no compilation. `code`
-// is the backend payload (PTX on CUDA); the launcher/graph builder also need the OffloadedTask metadata and
-// used_tree_ids, so the code alone isn't enough. The int vectors are stored sorted for deterministic on-disk bytes.
+// One offloaded task's launch-ready artifact, persisted so a fresh process launches it with no compilation. `code` is
+// the backend payload (PTX on CUDA); the launch metadata / used_tree_ids are needed too, so code alone isn't enough.
 struct PerTaskArtifact {
   std::vector<OffloadedTask> tasks;
   std::vector<int> used_tree_ids;

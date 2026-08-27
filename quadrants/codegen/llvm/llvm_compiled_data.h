@@ -201,9 +201,8 @@ struct LLVMCompiledTask {
   QD_IO_DEF(tasks);
 };
 
-// One offloaded task's self-contained artifact for the per-task path. `module` is the freshly-built module; after the
-// JIT assembles it, `code` holds the backend payload (PTX on CUDA). `key` is the per-task IR key the cross-process
-// cache stores under; the metadata fields are the launch info that travels with the code.
+// One offloaded task's self-contained artifact for the per-task path. `module` is the freshly-built module; the JIT
+// later fills `code` with the backend payload (PTX on CUDA). `key` is the per-task cache key it's stored under.
 struct PerConstructArtifact {
   std::unique_ptr<llvm::Module> module{nullptr};
   std::vector<char> code;

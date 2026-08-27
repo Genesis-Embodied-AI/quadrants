@@ -72,9 +72,8 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
   const int n = (int)offloads.size();
   std::vector<std::unique_ptr<LLVMCompiledTask>> data(n);
 
-  // Cross-process per-task artifact cache: on a hit this process skips a task's entire compilation and carries the
-  // cached PTX + launch metadata to the launcher. CUDA-only (only the CUDA JIT fills it, via the composite-module
-  // path); an empty dir (offline cache off) disables it.
+  // Cross-process per-task artifact cache: a hit skips a task's entire compilation and carries cached PTX + launch
+  // metadata to the launcher. CUDA-only; an empty dir means offline cache is off (tier disabled).
   const std::string art_dir = pertask_artifact_dir_ref();
   const bool artifact_tier = compile_config_.arch == Arch::cuda && !art_dir.empty();
   const PerTaskArtifactCache artifact_cache(art_dir);
@@ -84,8 +83,7 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
   std::atomic<int> n_hit{0}, n_recompiled{0};
 
   for (int i = 0; i < n; i++) {
-    // Stamp each task's kernel-wide index: lowered in isolation, a task's block-local index is always 0, so QD_DUMP_CFG
-    // reads this to give per-task CFG dumps a collision-free name. Inert -- never affects codegen.
+    // Only used to give per-task QD_DUMP_CFG dumps a collision-free name; inert in codegen.
     offloads[i]->as<OffloadedStmt>()->task_index = i;
     auto compile_func = [&, i] {
       tlctx_.fetch_this_thread_struct_module();
@@ -142,9 +140,8 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
   }
   worker.flush();
 
-  // Build one self-contained artifact per task BEFORE the whole-module link consumes `data`. A hit carries cached PTX
-  // with a null module; a miss builds+optimizes a module for the JIT to compile and store. Launch metadata (`tasks`,
-  // tree ids) travels with each so the JIT can persist a launchable record.
+  // Build one self-contained artifact per task BEFORE the whole-module link consumes `data`: a hit carries cached PTX
+  // (null module), a miss builds+optimizes a module for the JIT to compile and store.
   std::vector<PerConstructArtifact> per_construct_artifacts;
   if (compile_config_.arch == Arch::cuda) {
     for (int i = 0; i < n; i++) {
@@ -174,9 +171,8 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
     }
   }
 
-  // A cross-process hit leaves a task with no module, so the whole-kernel link is impossible and unneeded (the
-  // launcher assembles the CUmodule from the per-task artifacts). But `tasks` must still be the in-order concatenation
-  // of every task's metadata -- the launcher and CUDA graph builder run off it.
+  // A cross-process hit leaves a task with no module, so skip the whole-kernel link (the launcher assembles the
+  // CUmodule from the per-task artifacts); still concatenate every task's metadata into `tasks`, which it runs off.
   const bool code_only_tasks = std::any_of(data.begin(), data.end(), [](const auto &d) { return d && !d->module; });
   LLVMCompiledKernel llvm_compiled_kernel;
   if (code_only_tasks) {
@@ -192,10 +188,8 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
     optimize_module(llvm_compiled_kernel.module.get());
   }
   llvm_compiled_kernel.per_construct_artifacts = std::move(per_construct_artifacts);
-  // Persistable form: describe the kernel as an ordered list of per-task keys (rebuilt from the cache on load), but
-  // only with no whole-kernel module AND when every task is keyed. A mix of a hit and an unkeyed (ineligible) task
-  // can't be described this way; leaving keys empty makes dump_impl skip the `.qdc` rather than write one that never
-  // loads.
+  // Persist the kernel as an ordered key list (rebuilt on load) only when every task is keyed: an unkeyed (ineligible)
+  // task would write a `.qdc` that never loads, so leave the list empty and let dump_impl skip persistence.
   if (code_only_tasks) {
     const auto &arts = llvm_compiled_kernel.per_construct_artifacts;
     const bool all_keyed = std::all_of(arts.begin(), arts.end(), [](const auto &a) { return !a.key.empty(); });
