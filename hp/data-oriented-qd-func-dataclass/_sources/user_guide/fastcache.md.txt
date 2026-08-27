@@ -132,6 +132,8 @@ When any of these change, the resulting key is different, so a new compilation o
 
 1. **If the kernel does not read or write a variable, it is entirely ignored by fastcache.** It will not cause fastcache to fail, nor emit a warning, nor emit an error.
 
+   "The kernel" here means every version of it that has been compiled: if `qd.static(...)` makes one version read `state.x` and another read `state.y`, then both members count as read for both versions, because a single cache entry describes which members the kernel source touches. A member that no version reads is still ignored entirely.
+
 2. **Unrecognised types at variables the kernel reads or writes must not be silently dropped or hashed by type-name.** If the value of such a variable has a type fastcache doesn't explicitly handle (Pydantic models, UUIDs, third-party tensor wrappers, ...), fastcache is disabled for the call with a one-shot `[FASTCACHE][UNKNOWN_TYPE]` warning identifying the offending type plus an `[INVALID_FUNC]` log line confirming the cache is off.
 
 ## Advanced

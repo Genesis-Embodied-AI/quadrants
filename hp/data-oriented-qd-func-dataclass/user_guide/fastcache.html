@@ -622,8 +622,10 @@
 <p>When any of these change, the resulting key is different, so a new compilation occurs and a new entry is stored. Previous entries remain on disk - multiple cached versions coexist. You do not need to manually clear the cache when making code changes - the hash mismatch causes a transparent recompilation.</p>
 <section id="two-strict-invariants">
 <h3>Two strict invariants<a class="headerlink" href="#two-strict-invariants" title="Link to this heading">#</a></h3>
-<ol class="arabic simple">
-<li><p><strong>If the kernel does not read or write a variable, it is entirely ignored by fastcache.</strong> It will not cause fastcache to fail, nor emit a warning, nor emit an error.</p></li>
+<ol class="arabic">
+<li><p><strong>If the kernel does not read or write a variable, it is entirely ignored by fastcache.</strong> It will not cause fastcache to fail, nor emit a warning, nor emit an error.</p>
+<p>“The kernel” here means every version of it that has been compiled: if <code class="docutils literal notranslate"><span class="pre">qd.static(...)</span></code> makes one version read <code class="docutils literal notranslate"><span class="pre">state.x</span></code> and another read <code class="docutils literal notranslate"><span class="pre">state.y</span></code>, then both members count as read for both versions, because a single cache entry describes which members the kernel source touches. A member that no version reads is still ignored entirely.</p>
+</li>
 <li><p><strong>Unrecognised types at variables the kernel reads or writes must not be silently dropped or hashed by type-name.</strong> If the value of such a variable has a type fastcache doesn’t explicitly handle (Pydantic models, UUIDs, third-party tensor wrappers, …), fastcache is disabled for the call with a one-shot <code class="docutils literal notranslate"><span class="pre">[FASTCACHE][UNKNOWN_TYPE]</span></code> warning identifying the offending type plus an <code class="docutils literal notranslate"><span class="pre">[INVALID_FUNC]</span></code> log line confirming the cache is off.</p></li>
 </ol>
 </section>

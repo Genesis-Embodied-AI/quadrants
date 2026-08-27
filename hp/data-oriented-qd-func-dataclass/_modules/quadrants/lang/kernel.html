@@ -932,9 +932,11 @@
                     <span class="c1"># Fast-cache restore skips AST transformation, so rebuild the AST-transformer-produced metadata from</span>
                     <span class="c1"># the cache value: nested graph_do_while level table (with the AST-resolved flat C++ arg-id) plus</span>
                     <span class="c1"># the per-checkpoint yield_on / user-label tables. Mirrors what `function_def_transformer.py` +</span>
-                    <span class="c1"># `checkpoint_transformer.py` + `build_While` would have written. Prefer L2's cached levels; fall</span>
-                    <span class="c1"># back to L1's if L2 didn't carry them (or schema mismatch).</span>
-                    <span class="n">_cached_levels</span> <span class="o">=</span> <span class="n">cache_value</span><span class="o">.</span><span class="n">graph_do_while_levels</span> <span class="ow">or</span> <span class="n">cached_graph_do_while_levels</span>
+                    <span class="c1"># `checkpoint_transformer.py` + `build_While` would have written. Only L2's levels are used: the</span>
+                    <span class="c1"># level table belongs to this specialization (a `qd.graph_do_while` inside a `qd.static` branch</span>
+                    <span class="c1"># exists in some specializations and not others), while the L1 copy is shared by all of them, and</span>
+                    <span class="c1"># the schema version is part of both keys so an L2 entry always carries its own table.</span>
+                    <span class="n">_cached_levels</span> <span class="o">=</span> <span class="n">cache_value</span><span class="o">.</span><span class="n">graph_do_while_levels</span>
                     <span class="k">if</span> <span class="n">_cached_levels</span><span class="p">:</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span> <span class="o">=</span> <span class="p">[</span>
                             <span class="n">GraphDoWhileLevel</span><span class="p">(</span><span class="n">cond_arg_name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">parent_id</span><span class="o">=</span><span class="n">parent</span><span class="p">,</span> <span class="n">cond_cpp_arg_id</span><span class="o">=</span><span class="n">cpp_arg_id</span><span class="p">)</span>
@@ -1129,8 +1131,10 @@
             <span class="n">py_args</span><span class="o">=</span><span class="n">py_args</span><span class="p">,</span>
             <span class="n">arg_metas</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">,</span>
         <span class="p">)</span>
+        <span class="c1"># Assigned unconditionally: ``persist_l1_and_set_l2_key`` re-keys the L2 entry (returning ``generated=False``)</span>
+        <span class="c1"># when this specialization turned out to read paths the shared L1 entry didn't list.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span> <span class="o">=</span> <span class="n">new_fast_checksum</span>
         <span class="k">if</span> <span class="n">generated</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span> <span class="o">=</span> <span class="n">new_fast_checksum</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_key_generated</span> <span class="o">=</span> <span class="kc">True</span>
 
 <div class="viewcode-block" id="Kernel.launch_kernel">
