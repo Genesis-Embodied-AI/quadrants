@@ -157,7 +157,7 @@ def test_template_union_none_and_present_run():
     assert out.to_numpy()[0] == 7
 
 
-# Runtime: qd.types.NDArray[...] | None launches with a value present and with None.
+# Runtime: qd.types.NDArray[...] | None
 
 
 @test_utils.test()

@@ -228,7 +228,7 @@ add_bias(out, bias)   # present: bias is a qd.Tensor (or a bare field / ndarray)
 
 The bare `qd.Tensor` spelling (above) keeps accepting `None`, so `x: qd.Tensor` and `x: qd.Tensor | None` behave the same at runtime; `T | None` is the form to prefer when you want the optionality visible in the signature. Only the two-member `T | None` union is accepted - other unions (`A | B`, `A | B | None`) and `| None` on any other annotation family are rejected at kernel-registration time.
 
-All three families accept `None` at launch: `qd.Tensor | None`, `qd.types.Template | None` and `qd.types.NDArray[...] | None`. For an optional `qd.types.NDArray` argument, passing `None` specializes the guarded operations away and consumes no runtime argument slot, the same way an absent `qd.Tensor` does; a present array is dispatched by its dtype, rank and gradient state exactly as a non-optional ndarray argument is.
+All three families accept `None` at launch: `qd.Tensor | None`, `qd.types.Template | None` and `qd.types.NDArray[...] | None`. For an optional `qd.types.NDArray` argument, passing `None` specializes away any branch guarded with `if qd.static(x is not None):` and consumes no runtime argument slot; a present array is dispatched by its dtype, rank and gradient state exactly as a non-optional ndarray argument is.
 
 `qd.Tensor` is also the right annotation when storing a tensor as a `dataclasses.dataclass` member:
 
