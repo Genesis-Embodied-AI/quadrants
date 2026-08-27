@@ -224,8 +224,8 @@ def test_per_construct_frontend_split_fallback_field_load_shadowed() -> None:
 def test_per_construct_frontend_split_fallback_carried_rmw_local() -> None:
     # Two constructs each read-modify-write the same local `s`, and the second also stores it. The second construct
     # depends on the value the first produced, so it is not recomputable per-construct (its slice would drop the first
-    # loop and restart `s` from the serial init). Checking readers against the *union* of writer constructs would wrongly
-    # accept this (both readers are also writers), so the gate must reject it and fall back.
+    # loop and restart `s` from the serial init). Checking readers against the *union* of writer constructs would
+    # wrongly accept this (both readers are also writers), so the gate must reject it and fall back.
     @qd.kernel
     def kernel_carry(out: qd.types.ndarray()) -> None:
         s = 1
@@ -612,17 +612,18 @@ def test_per_construct_frontend_split_fallback_external_func_write() -> None:
 
 @test_utils.test(arch=qd.cuda, offline_cache=False)
 def test_per_construct_frontend_split_graph_do_while() -> None:
-    # A `qd.graph.do_while` kernel is driven from the HOST: `offload` flattens the loop body into a CONTIGUOUS run of
-    # tasks all tagged with the loop's `graph_do_while_level_id`, and the host graph driver relaunches that run each
-    # iteration until the on-device break flag fires. The per-construct split offloads each construct in isolation and
-    # reassembles, which re-runs the offloader's serial-bucket / region-tag assignment out of whole-kernel context: a
-    # serial task (e.g. a pass-made global-temp materialization, whose region tag defaults to level -1) can flush at the
-    # wrong level and get wedged out of the body's contiguous run, so the host loop counter is stranded outside the body,
-    # never decrements, and the kernel spins forever (this is what hung Genesis's decomposed rigid constraint solver on
-    # coupled contact). The split therefore REATTACHES each construct's do_while level onto its reassembled tasks (see
-    # `construct_gdw_level` in split_frontend_per_construct.cpp) so the body stays one contiguous same-level run. Assert
-    # the split FIRES (this is the giant-solver kernel we most want per-construct-cacheable, so it must NOT be gated out)
-    # and the reassembled loop is still correct: the do_while runs 3 times and increments x each time, so x must end at 3.
+    # A `qd.graph.do_while` kernel is driven from the HOST: `offload` flattens the loop body into a CONTIGUOUS run
+    # of tasks all tagged with the loop's `graph_do_while_level_id`, and the host graph driver relaunches that run
+    # each iteration until the on-device break flag fires. The per-construct split offloads each construct in
+    # isolation and reassembles, which re-runs the offloader's serial-bucket / region-tag assignment out of
+    # whole-kernel context: a serial task (e.g. a pass-made global-temp materialization, whose region tag defaults
+    # to level -1) can flush at the wrong level and get wedged out of the body's contiguous run, so the host loop
+    # counter is stranded outside the body, never decrements, and the kernel spins forever (this is what hung
+    # Genesis's decomposed rigid constraint solver on coupled contact). The split therefore REATTACHES each
+    # construct's do_while level onto its reassembled tasks (see `construct_gdw_level` in
+    # split_frontend_per_construct.cpp) so the body stays one contiguous same-level run. Assert the split FIRES
+    # (this is the giant-solver kernel we most want per-construct-cacheable, so it must NOT be gated out) and the
+    # reassembled loop is still correct: the do_while runs 3 times and increments x each time, so x must end at 3.
     @qd.kernel(graph=True)
     def run(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndim=0)) -> None:
         while qd.graph.do_while(counter):
