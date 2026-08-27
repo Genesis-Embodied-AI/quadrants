@@ -614,7 +614,7 @@
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.arch">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">arch</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Arch</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.arch" title="Link to this definition">#</a></dt>
-<dd><p>Target backend the kernels run on (e.g. qd.cpu, qd.cuda, qd.vulkan, qd.metal). Defaults to qd.cpu when arch is not specified.</p>
+<dd><p>Target backend the kernels run on (e.g. qd.cpu, qd.cuda, qd.vulkan, qd.metal). Defaults to qd.cpu when arch is not specified. Also settable via the QD_ARCH environment variable; if both are set, this argument takes precedence and a warning is logged.</p>
 </dd></dl>
 
 <dl class="py property">

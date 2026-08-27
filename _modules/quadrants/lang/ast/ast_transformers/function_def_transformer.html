@@ -360,6 +360,7 @@
     <span class="n">final_field_names</span><span class="p">,</span>
     <span class="n">is_final_annotation</span><span class="p">,</span>
 <span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._optional_annotation</span><span class="w"> </span><span class="kn">import</span> <span class="n">OPTIONAL_ABSENT</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">ASTTransformerFuncContext</span><span class="p">,</span>
 <span class="p">)</span>
@@ -400,6 +401,13 @@
         <span class="n">full_name</span> <span class="o">=</span> <span class="n">prefix_name</span> <span class="o">+</span> <span class="s2">"_"</span> <span class="o">+</span> <span class="n">name</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">annotation</span><span class="p">,</span> <span class="n">primitive_types</span><span class="o">.</span><span class="n">RefType</span><span class="p">):</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="c1"># Optional ndarray + None declares no runtime arg; bind the name to the injected None global so</span>
+        <span class="c1"># qd.static(x is not None) specializes the present-only body away.</span>
+        <span class="k">if</span> <span class="n">this_arg_features</span> <span class="ow">is</span> <span class="n">OPTIONAL_ABSENT</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">ctx</span><span class="o">.</span><span class="n">template_vars</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">template_vars</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+            <span class="k">assert</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_vars</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+            <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_vars</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
         <span class="c1"># qd.Tensor value-dispatch. The first slot of this_arg_features is a string marker placed by</span>
         <span class="c1"># _template_mapper_hotpath. The annotation is the wrapper class itself (``qd.Tensor``).</span>
         <span class="k">if</span> <span class="n">annotation</span> <span class="ow">is</span> <span class="n">_TensorClass</span><span class="p">:</span>
