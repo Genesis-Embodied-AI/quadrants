@@ -124,6 +124,13 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
       if (artifact_eligible) {
         cache_key = get_hashed_per_task_cache_key(compile_config_, pertask_caps, offload->as<OffloadedStmt>(), kernel) +
                     "#" + std::to_string(i);
+        // Under kernel profiling, defeat the name-free cross-kernel aliasing: the stored artifact carries this task's
+        // OffloadedTask::name, which CUDAContext::launch feeds to the profiler's trace(), so a hit from a differently
+        // named kernel would bill its time under the first kernel's name. Scoping the key by kernel name keeps
+        // profiler attribution correct, at the cost of less sharing -- acceptable in a diagnostic-only mode.
+        if (compile_config_.kernel_profiler) {
+          cache_key += "@" + kernel->get_name();
+        }
         pertask_keys[i] = cache_key;
         PerTaskArtifact rec;
         if (artifact_cache.try_load(cache_key, &rec)) {
