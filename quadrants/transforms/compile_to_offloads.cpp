@@ -92,6 +92,16 @@ void compile_to_offloads(IRNode *ir,
   }
 
   dump_ir("before_simplify_I");
+
+  // Optionally run the remaining frontend (simplify / merge_global_ptrs / offload) per top-level construct and
+  // reassemble, instead of once over the whole kernel. The seam is here, after the structural prefix and before the
+  // expensive passes. The gate + split live in transforms/split_frontend_per_construct.cpp; it returns true iff it
+  // fired, and falls back to the whole-kernel path below otherwise.
+  if (irpass::maybe_split_frontend_per_construct(ir, config, kernel, verbose, autodiff_mode)) {
+    dump_ir("after_offload");
+    return;
+  }
+
   irpass::full_simplify(
       ir, config,
       {false, /*autodiff_enabled*/ autodiff_mode != AutodiffMode::kNone, kernel->get_name(), verbose, "simplify_I"});

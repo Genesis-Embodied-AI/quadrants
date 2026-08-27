@@ -48,6 +48,12 @@ struct CompileResult {
   const CompiledKernelData &compiled_kernel_data;
   bool cache_hit;
   std::string cache_key;
+  // Per-construct FRONTEND cache stats for this compile. `-1` => the per-construct frontend split did not run (the
+  // whole-kernel path took it, e.g. autodiff or mesh). Surfaced to Python as `PerOffloadCacheObservations`. A
+  // construct can expand to several offloaded tasks; the per-task reuse counts are added by the cross-process cache PR.
+  int per_construct_total{-1};
+  int per_construct_cache_hit{-1};
+  int per_construct_recompiled{-1};
 };
 
 namespace tests {
