@@ -666,3 +666,132 @@ def test_per_construct_frontend_split_struct_member_recomputed() -> None:
     # dropped the GetElementStmt writer would read.
     assert np.allclose(out1.to_numpy(), _C[0], atol=1.0), out1.to_numpy()
     assert np.allclose(out2.to_numpy(), _C[0], atol=1.0), out2.to_numpy()
+
+
+# --- Cross-process per-task artifact cache (CUDA-only backend reuse tier) ---------------------------------------------
+#
+# The per-task artifact cache stores each offloaded task's fully compiled code + launch metadata on disk, keyed by the
+# task's own IR (name-free), so a later process reuses an unchanged task instead of recompiling it. Only CUDA fills it,
+# and it is gated on `offline_cache`. Reuse is reported on `PerOffloadCacheObservations.tasks_*` (-1 when the tier did
+# not run).
+
+
+@test_utils.test(arch=qd.cuda, offline_cache=False)
+def test_per_task_artifact_cache_disabled_without_offline_cache() -> None:
+    # `offline_cache` is the sole gate for the per-task disk tier; with it off the tier never runs, so the per-task
+    # counts stay at the -1 sentinel. The FRONTEND split is independent of the flag and still fires -- asserting both
+    # shows the flag gates only the disk tier, not the split.
+    @qd.kernel
+    def kernel_two_loops(x: qd.types.ndarray(qd.f32, ndim=1)) -> None:
+        for i in x:
+            x[i] = x[i] * 2.0 + 1.0
+        for i in x:
+            x[i] = x[i] - 3.0
+
+    arr = qd.ndarray(qd.f32, shape=(_N,))
+    arr.from_numpy(np.arange(_N, dtype=np.float32))
+    kernel_two_loops(arr)
+
+    obs = kernel_two_loops._primal.per_offload_cache_observations
+    assert obs.frontend_constructs_total == 2, obs
+    assert obs.tasks_total == -1, obs
+    assert obs.tasks_cache_hit == -1, obs
+    assert obs.tasks_recompiled == -1, obs
+    assert np.allclose(arr.to_numpy(), np.arange(_N) * 2.0 + 1.0 - 3.0), arr.to_numpy()
+
+
+def test_per_task_artifact_cache_reuses_shared_task_cross_process() -> None:
+    # Two DIFFERENT kernels sharing a byte-identical first loop. A fresh runtime (cold in-memory, warm disk) compiling
+    # the second must load that shared task's artifact from disk -- written when the first ran in the prior "process" --
+    # while recompiling only the loop that differs. The per-task key is name-free, so the identical task aliases to one
+    # artifact across the two kernels. Uses a re-`init` with the same cache path to emulate a second process, matching
+    # test_offline_cache.py; the artifacts are written at JIT time, so no teardown is needed to flush them.
+    if qd.cuda not in test_utils.expected_archs():
+        pytest.skip("per-task artifact cache is CUDA-only")
+
+    cache_dir = tempfile.mkdtemp()
+    try:
+        qd.init(arch=qd.cuda, offline_cache=True, offline_cache_file_path=cache_dir)
+
+        @qd.kernel
+        def k_first(x: qd.types.ndarray(qd.f32, ndim=1)) -> None:
+            for i in x:
+                x[i] = x[i] * 2.0 + 1.0
+            for i in x:
+                x[i] = x[i] - 3.0
+
+        a = qd.ndarray(qd.f32, shape=(_N,))
+        a.from_numpy(np.arange(_N, dtype=np.float32))
+        k_first(a)
+        obs1 = k_first._primal.per_offload_cache_observations
+        assert obs1.tasks_total >= 2, obs1
+        assert obs1.tasks_cache_hit == 0, obs1
+
+        # Second "process": fresh runtime, same disk. `k_second` is a new kernel (whole-kernel entry misses, codegen
+        # runs), but its first loop matches `k_first`'s, so that task is served from disk.
+        qd.init(arch=qd.cuda, offline_cache=True, offline_cache_file_path=cache_dir)
+
+        @qd.kernel
+        def k_second(x: qd.types.ndarray(qd.f32, ndim=1)) -> None:
+            for i in x:
+                x[i] = x[i] * 2.0 + 1.0
+            for i in x:
+                x[i] = x[i] + 7.0
+
+        b = qd.ndarray(qd.f32, shape=(_N,))
+        b.from_numpy(np.arange(_N, dtype=np.float32))
+        k_second(b)
+        obs2 = k_second._primal.per_offload_cache_observations
+        assert obs2.tasks_cache_hit > 0, obs2
+        assert obs2.tasks_recompiled >= 1, obs2
+        assert obs2.tasks_cache_hit + obs2.tasks_recompiled == obs2.tasks_total, obs2
+
+        assert np.allclose(b.to_numpy(), np.arange(_N) * 2.0 + 1.0 + 7.0), b.to_numpy()
+    finally:
+        qd.reset()
+        shutil.rmtree(cache_dir, ignore_errors=True)
+
+
+def test_per_task_artifacts_cleared_on_version_invalidation() -> None:
+    # The per-task artifact dir shares the offline cache's lifecycle: it has no version-gated metadata of its own, so
+    # the cleaner must drop it whenever it version-invalidates the whole-kernel cache -- otherwise a probe on a newer
+    # build could reuse stale PTX. Simulate an unreadable (version-invalid) metadata file and run a version-policy
+    # clean at teardown; the artifact dir must be gone.
+    if qd.cuda not in test_utils.expected_archs():
+        pytest.skip("per-task artifact cache is CUDA-only")
+
+    base = tempfile.mkdtemp()
+    try:
+        qd.init(arch=qd.cuda, offline_cache=True, offline_cache_file_path=base)
+
+        @qd.kernel
+        def kernel_v(x: qd.types.ndarray(qd.f32, ndim=1)) -> None:
+            for i in x:
+                x[i] = x[i] + 1.0
+
+        a = qd.ndarray(qd.f32, shape=(_N,))
+        a.from_numpy(np.zeros(_N, dtype=np.float32))
+        kernel_v(a)
+        qd.reset()  # flush metadata + .qdc + artifacts to disk
+
+        art_dir = os.path.join(base, "pertask_artifacts")
+        assert os.path.isdir(art_dir) and os.listdir(art_dir), "expected per-task artifacts after a cold compile"
+
+        # Make the whole-kernel metadata unreadable so the cleaner treats the cache as version-invalid.
+        with open(os.path.join(base, "kernel_compilation_manager", "qdcache.qdb"), "wb") as f:
+            f.write(b"\x00\x00")
+
+        # A version-policy clean runs at teardown; it must wipe the artifact dir alongside the `.qdc` files.
+        qd.init(
+            arch=qd.cuda,
+            offline_cache=True,
+            offline_cache_file_path=base,
+            offline_cache_cleaning_policy="version",
+            offline_cache_max_size_of_files=1024**3,
+        )
+        qd.reset()
+
+        assert not os.path.exists(art_dir), "version-invalidation clean must remove the per-task artifact dir"
+    finally:
+        qd.reset()
+        shutil.rmtree(base, ignore_errors=True)

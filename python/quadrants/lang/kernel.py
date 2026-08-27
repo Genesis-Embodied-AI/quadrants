@@ -725,6 +725,9 @@ class Kernel(FuncBase):
                     frontend_constructs_total=compile_result.per_construct_total,
                     frontend_constructs_cache_hit=compile_result.per_construct_cache_hit,
                     frontend_constructs_recompiled=compile_result.per_construct_recompiled,
+                    tasks_total=compile_result.per_task_total,
+                    tasks_cache_hit=compile_result.per_task_cache_hit,
+                    tasks_recompiled=compile_result.per_task_recompiled,
                 )
                 if self.fast_checksum:
                     src_hasher.store(

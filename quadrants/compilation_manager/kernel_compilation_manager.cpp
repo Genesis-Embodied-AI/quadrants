@@ -2,11 +2,13 @@
 
 #include "quadrants/analysis/offline_cache_util.h"
 #include "quadrants/codegen/compiled_kernel_data.h"
+#include "quadrants/codegen/llvm/per_task_artifact_cache.h"
 #include "quadrants/program/program.h"
 #include "quadrants/program/per_construct_cache.h"
 #include "quadrants/util/offline_cache.h"
 #include "quadrants/util/environ_config.h"
 
+#include <filesystem>
 #include <mutex>
 
 namespace quadrants::lang {
@@ -38,7 +40,13 @@ struct CacheCleanerUtils<CacheData> {
 
   // To remove other files except cache files and offline cache metadta files
   static void remove_other_files(const CacheCleanerConfig &config) {
-    // Do nothing
+    // Drop the per-task artifact cache (a sibling dir under the same offline-cache root) whenever the whole-kernel
+    // cache is version-invalidated. That tier has no version-gated metadata of its own, so it must share this
+    // lifecycle or a probe on the newer build could reuse stale PTX. `config.path` is
+    // `<root>/kernel_compilation_manager`, so its parent is the root the artifact dir hangs off.
+    const auto root = std::filesystem::path(config.path).parent_path().string();
+    std::error_code ec;
+    std::filesystem::remove_all(pertask_artifact_dir_for(root), ec);
   }
 
   // To check if a file is cache file
@@ -81,6 +89,7 @@ CompileResult KernelCompilationManager::load_or_compile(const CompileConfig &com
   // disk-restored entry and staying consistent across cache tiers. Consume the entry so a later whole-kernel recompile
   // of the same name cannot read a stale split result.
   int total = -1, cache_hit_count = -1, recompiled = -1;
+  int task_total = -1, task_hit = -1, task_recompiled = -1;
   if (!cache_hit && kernel_def.program != nullptr) {
     auto &cc = kernel_def.program->per_construct_cache();
     std::lock_guard<std::mutex> g(cc.mu);
@@ -91,8 +100,18 @@ CompileResult KernelCompilationManager::load_or_compile(const CompileConfig &com
       recompiled = it->second.recompiled;
       cc.last_stats.erase(it);
     }
+    // Per-task artifact-cache counts recorded by the LLVM codegen driver (CUDA only). Consumed the same way as the
+    // construct counts so a later recompile of the same name cannot read a stale probe result.
+    auto tit = cc.last_task_stats.find(kernel_def.get_name());
+    if (tit != cc.last_task_stats.end()) {
+      task_total = tit->second.total;
+      task_hit = tit->second.hit;
+      task_recompiled = tit->second.recompiled;
+      cc.last_task_stats.erase(tit);
+    }
   }
-  return CompileResult{ckd, cache_hit, kernel_key, total, cache_hit_count, recompiled};
+  return CompileResult{ckd,        cache_hit,  kernel_key, total,          cache_hit_count,
+                       recompiled, task_total, task_hit,   task_recompiled};
 }
 
 void KernelCompilationManager::dump() {

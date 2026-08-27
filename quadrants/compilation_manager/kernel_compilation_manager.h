@@ -49,11 +49,16 @@ struct CompileResult {
   bool cache_hit;
   std::string cache_key;
   // Per-construct FRONTEND cache stats for this compile. `-1` => the per-construct frontend split did not run (the
-  // whole-kernel path took it, e.g. autodiff or mesh). Surfaced to Python as `PerOffloadCacheObservations`. A
-  // construct can expand to several offloaded tasks; the per-task reuse counts are added by the cross-process cache PR.
+  // whole-kernel path took it, e.g. autodiff or mesh). Surfaced to Python as `PerOffloadCacheObservations`.
   int per_construct_total{-1};
   int per_construct_cache_hit{-1};
   int per_construct_recompiled{-1};
+  // Per-task BACKEND cache stats: how many of this kernel's offloaded tasks were served from the cross-process per-task
+  // artifact cache vs recompiled. A construct expands to one or more tasks, so these are a finer-grained view than the
+  // per-construct counts. `-1` => the per-task artifact tier did not run (non-CUDA, or offline cache off).
+  int per_task_total{-1};
+  int per_task_cache_hit{-1};
+  int per_task_recompiled{-1};
 };
 
 namespace tests {
