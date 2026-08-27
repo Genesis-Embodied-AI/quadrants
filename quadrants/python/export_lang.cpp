@@ -167,7 +167,8 @@ void export_lang(nb::module_ &m) {
       .def(nb::init<>())
       .def_rw("arch", &CompileConfig::arch,
               "Target backend the kernels run on (e.g. qd.cpu, qd.cuda, qd.vulkan, qd.metal). Defaults to qd.cpu when "
-              "arch is not specified.")
+              "arch is not specified. Also settable via the QD_ARCH environment variable; if both are set, this "
+              "argument takes precedence and a warning is logged.")
       .def_rw("opt_level", &CompileConfig::opt_level,
               "Quadrants IR optimization level. At 0, IR-level optimizations such as common-subexpression elimination "
               "are disabled; any value above 0 enables them. This is not an LLVM -O level.")

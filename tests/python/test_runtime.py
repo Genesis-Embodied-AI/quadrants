@@ -143,6 +143,21 @@ def test_init_arch(arch):
         assert qd.lang.impl.current_cfg().arch == arch
 
 
+def test_init_arch_optional_defaults_to_cpu():
+    with patch_os_environ_helper({}, excludes=["QD_ARCH"]):
+        qd.init()
+        assert qd.lang.impl.current_cfg().arch == qd.cpu
+
+
+@pytest.mark.parametrize("arch", test_utils.expected_archs())
+def test_init_arch_arg_overrides_env(arch):
+    # QD_ARCH is an unsupported backend, so if it still overrode the argument, adaptive_arch_select would fall back to
+    # cpu and the assert would fail.
+    with patch_os_environ_helper({"QD_ARCH": "opencl"}, excludes=["QD_ARCH"]):
+        qd.init(arch=arch)
+        assert qd.lang.impl.current_cfg().arch == arch
+
+
 @test_utils.test(arch=qd.cpu)
 def test_init_bad_arg():
     with pytest.raises(KeyError):

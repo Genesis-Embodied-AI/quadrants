@@ -493,8 +493,11 @@ def init(
     # select arch (backend):
     env_arch = os.environ.get("QD_ARCH")
     if env_arch is not None:
-        _logging.info(f"Following QD_ARCH setting up for arch={env_arch}")
-        arch = _qd_core.arch_from_name(env_arch)
+        if arch is not None:
+            _qd_core.warn(f'Environment variable QD_ARCH={env_arch} overridden by qd.init argument "arch"')
+        else:
+            _logging.info(f"Following QD_ARCH setting up for arch={env_arch}")
+            arch = _qd_core.arch_from_name(env_arch)
     cfg.arch = adaptive_arch_select(arch, enable_fallback)
     print(f"[Quadrants] Starting on arch={_qd_core.arch_name(cfg.arch)}")
 
