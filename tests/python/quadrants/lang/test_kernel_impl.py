@@ -146,6 +146,40 @@ def test_pure_kernel_parameter() -> None:
 
 
 @test_utils.test()
+def test_member_kernel_rejects_foreign_owner() -> None:
+    """Pin the "you forgot @qd.data_oriented" diagnostic for both routes into a member kernel.
+
+    ``data_oriented`` replaces each member kernel with its own closure, so a call that skips instance binding -
+    ``SomeClass.member(other)`` - reaches that closure directly rather than the generic class-kernel wrapper. Both
+    entry points must reject an owner that isn't data-oriented, otherwise a foreign object is forwarded into kernel
+    materialization and fails later (or compiles against the wrong owner).
+    """
+    a = qd.ndarray(qd.i32, (10,))
+
+    @qd.data_oriented
+    class Decorated:
+        @qd.kernel
+        def write(self, arr: qd.types.NDArray) -> None:
+            arr[0] = 7
+
+    class Undecorated:
+        @qd.kernel
+        def write(self, arr: qd.types.NDArray) -> None:
+            arr[0] = 8
+
+    Decorated().write(a)
+    assert a[0] == 7
+
+    # Unbound call on the decorated class with a foreign owner.
+    with pytest.raises(qd.QuadrantsSyntaxError, match="Undecorated.*qd.data_oriented"):
+        Decorated.write(Undecorated(), a)
+
+    # The class that never got the decorator, called the ordinary way.
+    with pytest.raises(qd.QuadrantsSyntaxError, match="Undecorated.*qd.data_oriented"):
+        Undecorated().write(a)
+
+
+@test_utils.test()
 def test_fastcache_kernel_parameter() -> None:
     arch = qd.lang.impl.current_cfg().arch
     qd.init(arch=arch, offline_cache=False, src_ll_cache=True)

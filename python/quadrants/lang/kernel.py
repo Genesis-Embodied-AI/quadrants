@@ -474,9 +474,11 @@ class Kernel(FuncBase):
                     # Fast-cache restore skips AST transformation, so rebuild the AST-transformer-produced metadata from
                     # the cache value: nested graph_do_while level table (with the AST-resolved flat C++ arg-id) plus
                     # the per-checkpoint yield_on / user-label tables. Mirrors what `function_def_transformer.py` +
-                    # `checkpoint_transformer.py` + `build_While` would have written. Prefer L2's cached levels; fall
-                    # back to L1's if L2 didn't carry them (or schema mismatch).
-                    _cached_levels = cache_value.graph_do_while_levels or cached_graph_do_while_levels
+                    # `checkpoint_transformer.py` + `build_While` would have written. Only L2's levels are used: the
+                    # level table belongs to this specialization (a `qd.graph_do_while` inside a `qd.static` branch
+                    # exists in some specializations and not others), while the L1 copy is shared by all of them, and
+                    # the schema version is part of both keys so an L2 entry always carries its own table.
+                    _cached_levels = cache_value.graph_do_while_levels
                     if _cached_levels:
                         self.graph_do_while_levels = [
                             GraphDoWhileLevel(cond_arg_name=name, parent_id=parent, cond_cpp_arg_id=cpp_arg_id)
@@ -668,8 +670,10 @@ class Kernel(FuncBase):
             py_args=py_args,
             arg_metas=self.arg_metas,
         )
+        # Assigned unconditionally: ``persist_l1_and_set_l2_key`` re-keys the L2 entry (returning ``generated=False``)
+        # when this specialization turned out to read paths the shared L1 entry didn't list.
+        self.fast_checksum = new_fast_checksum
         if generated:
-            self.fast_checksum = new_fast_checksum
             self.src_ll_cache_observations.cache_key_generated = True
 
     def launch_kernel(

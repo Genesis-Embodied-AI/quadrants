@@ -375,13 +375,17 @@ def data_oriented(cls=None, *, stable_members: bool = False, template_primitives
         return lambda c: data_oriented(c, stable_members=stable_members, template_primitives=template_primitives)
 
     def make_kernel_indirect(fun, is_property, attr_name):
-        # Capture the primal at decoration time so the per-call path skips the ``_BoundedDifferentiableMethod``
-        # allocation. The class itself is validated when ``_BoundedDifferentiableMethod`` is invoked via the
-        # ``.grad()`` path; for the common primal call here we replicate the check inline.
+        # Capture the primal at decoration time so a member-kernel call reaches it through this single closure rather
+        # than through ``fun``'s generic ``wrapped_classkernel`` -> ``wrapped_func`` pair. The owner check that
+        # ``wrapped_classkernel`` performs is therefore replicated inline below: an unbound call such as
+        # ``Klass.step(not_an_instance)`` lands here directly, and must keep naming the class that is missing the
+        # decorator instead of compiling the kernel against a foreign owner.
         primal = fun._primal
 
         @wraps(fun)
         def _kernel_indirect(self, *args, **kwargs):
+            if not getattr(self, "_data_oriented", False):
+                raise QuadrantsSyntaxError(f"Please decorate class {type(self).__name__} with @qd.data_oriented")
             try:
                 return primal(self, *args, **kwargs)
             except (QuadrantsCompilationError, QuadrantsRuntimeError) as e:
@@ -390,6 +394,10 @@ def data_oriented(cls=None, *, stable_members: bool = False, template_primitives
                 raise type(e)("\n" + str(e)) from None
 
         ret = QuadrantsCallable(fun, _kernel_indirect)
+        # ``QuadrantsCallable.__init__`` finishes with ``update_wrapper(self, fun)``, which copies ``fun.__dict__``
+        # over the freshly-set attributes - including ``fun``'s own ``wrapper``. Without re-setting it here every call
+        # would route back through ``fun``'s wrapper chain and ``_kernel_indirect`` would never run.
+        ret.wrapper = _kernel_indirect
         # setattr-after-class doesn't trigger __set_name__; set the name explicitly so QuadrantsCallable.__get__ can
         # cache the BoundQuadrantsCallable on instance.__dict__.
         ret._attr_name = attr_name

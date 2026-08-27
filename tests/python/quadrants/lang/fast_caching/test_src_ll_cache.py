@@ -572,6 +572,76 @@ def test_src_ll_cache_hit_predeclare_struct_ndarrays_pruned(tmp_path: pathlib.Pa
     np.testing.assert_array_equal(state.c.to_numpy(), np.zeros(N, dtype=np.int32))
 
 
+@test_utils.test()
+def test_src_ll_cache_pruning_union_across_static_branches(tmp_path: pathlib.Path) -> None:
+    """Pin: the L1 pruning entry is shared by every specialization of a kernel source, so it must hold the *union*
+    of the paths they read - which paths a kernel reads is not a source+config property once ``qd.static`` selects
+    a branch.
+
+    Without the union, the first specialization to compile fixes the entry (here ``flag=True``, reading ``s.flag``
+    and ``s.x``), and a sibling specialization (``flag=False``, reading ``s.y``) derives its L2 key from that set -
+    a key that ignores ``s.y`` entirely. A later process whose ``s.y`` has a different dtype then computes the same
+    key and is served the artifact compiled for the old dtype: the observed failure wrote f32 bits into an i32
+    ndarray (``1073741824`` instead of ``2``).
+
+    Run 4 pins the other side of the fix: growing the union must converge, not turn every launch into a recompile.
+    """
+    import numpy as np  # local import keeps the test module's top-level deps unchanged
+
+    arch = getattr(qd, qd.lang.impl.current_cfg().arch.name)
+    N = 4
+
+    @qd.data_oriented
+    class State:
+        def __init__(self, flag, x, y) -> None:
+            self.flag = flag
+            self.x = x
+            self.y = y
+
+    @qd.pure
+    @qd.kernel
+    def write_branch(s: qd.template()) -> None:
+        if qd.static(s.flag):
+            for i in range(N):
+                s.x[i] = 1
+        else:
+            for i in range(N):
+                s.y[i] = 2
+
+    def run(flag: bool, y_dtype):
+        qd.reset()
+        qd.init(arch=arch, offline_cache_file_path=str(tmp_path), offline_cache=True)
+        x = qd.ndarray(qd.f32, shape=(N,))
+        y = qd.ndarray(y_dtype, shape=(N,))
+        write_branch(State(flag, x, y))
+        return write_branch._primal.src_ll_cache_observations.cache_loaded, y.to_numpy()
+
+    # Run 1: cold compile of the flag=True specialization - L1 records ``s.flag`` + ``s.x``, not ``s.y``.
+    loaded, _ = run(True, qd.f32)
+    assert not loaded
+
+    # Run 2: the flag=False specialization reads ``s.y``. Its L2 key must cover ``s.y``, which means growing the
+    # L1 union first (pre-fix it silently keyed on the run-1 path set instead).
+    loaded, y_values = run(False, qd.f32)
+    assert not loaded
+    np.testing.assert_array_equal(y_values, np.full(N, 2, dtype=np.float32))
+
+    # Run 3: same specialization, but ``s.y`` is i32 now. A dtype change on a path this specialization reads must
+    # change its key; pre-fix the key was identical and the f32 artifact was reused.
+    loaded, y_values = run(False, qd.i32)
+    assert not loaded, (
+        "fastcache hit after a dtype change on s.y - the L2 key was narrowed by a pruning set that omits s.y, "
+        "so the artifact compiled for f32 is being launched against an i32 ndarray"
+    )
+    np.testing.assert_array_equal(y_values, np.full(N, 2, dtype=np.int32))
+
+    # Run 4: repeat of run 3. Both specializations have now compiled under the grown union, so keys are stable and
+    # the artifact must be served from cache.
+    loaded, y_values = run(False, qd.i32)
+    assert loaded, "expected a fastcache hit once the pruning union stopped growing"
+    np.testing.assert_array_equal(y_values, np.full(N, 2, dtype=np.int32))
+
+
 class ModifySubFuncKernelArgs(pydantic.BaseModel):
     arch: str
     offline_cache_file_path: str

@@ -7,7 +7,9 @@ hash can walk *only* paths the kernel reads:
 
   - L1 (this module's ``make_source_config_key`` + ``load_pruning_info`` / ``store_pruning_info``): keyed by
     source+config only (no args). Stores ``PruningInfo`` - the set of kernel-accessed flat names (e.g.
-    ``__qd_state__qd_x``) plus the ``graph_do_while_levels`` table (also a kernel-source property).
+    ``__qd_state__qd_x``) plus the ``graph_do_while_levels`` table (also a kernel-source property). The flat-name set
+    is the *union* over every specialization compiled so far, not the reads of one specialization - see "Pruning is
+    per-specialization" below.
 
   - L2 (``make_full_cache_key`` + ``load_full`` / ``store_full``): keyed by L1 key + the *narrow* args hash computed
     with pruning info from L1. Stores the C++ ``frontend_cache_key`` that names the compiled artifact.
@@ -23,6 +25,21 @@ codegen, so dropping it from the hash is correct by construction. Paths the kern
 ``args_hasher.stringify_obj_type``; if it encounters an unrecognised type at such a path it fails the call's fastcache
 loudly (one-shot ``[FASTCACHE][UNKNOWN_TYPE]`` warning identifying the offending ``type(v).__qualname__``), so a missed
 type registration is impossible to miss and cannot serve stale cached results.
+
+Pruning is per-specialization
+-----------------------------
+Which paths a kernel reads is *not* a pure function of source+config: ``qd.static(state.flag)`` can make one
+specialization read ``state.x`` and another read ``state.y``. Since a single L1 entry is shared by every
+specialization of the same source, keying an L2 entry by only the first specialization's paths would let a later
+process serve that entry after a dtype / ndim / baked-value change on a path the entry's own specialization does read
+(observed: an artifact compiled for ``y: f32`` reused for ``y: i32``).
+
+The L1 entry therefore holds the union of the paths read by every specialization compiled so far, and
+``persist_l1_and_set_l2_key`` grows that union - and re-derives the L2 key from it - whenever a freshly compiled
+specialization reads something the entry did not list. This keeps the invariant that every stored L2 entry's key was
+derived from a path set that *covers* the reads of the specialization it names, so a change at any path that
+specialization reads always changes its key. The cost is that a path read by only one specialization also enters the
+keys of its siblings (over-invalidation, never under-invalidation).
 """
 
 import importlib
@@ -59,8 +76,10 @@ _L2_MARKER = "l2"
 # arg-ids for qd.graph_do_while conditions and qd.checkpoint(yield_on=...) targets so the launch path can forward them
 # directly without per-launch name matching (necessary for @qd.data_oriented member ndarrays). v4 added the per-slot
 # `checkpoint_user_label_enum_qualnames` table so an IntEnum cp_id (e.g. `qd.checkpoint(Stage.SIM, ...)`) round-trips
-# through fast-cache restore as the original IntEnum member rather than the underlying int.
-_CACHE_VALUE_SCHEMA_VERSION = "cachevalue-v4-intenum-qualnames"
+# through fast-cache restore as the original IntEnum member rather than the underlying int. v5 made the L1 flat-name
+# set a union over specializations (see "Pruning is per-specialization" above): entries written before that could name
+# an artifact whose key omitted paths its own specialization reads, so they must not be read back.
+_CACHE_VALUE_SCHEMA_VERSION = "cachevalue-v5-pruning-union"
 
 
 def _intenum_member_qualname(value: Any) -> str | None:
@@ -187,16 +206,21 @@ def compute_narrow_args_hash(
 
 
 class L1CacheValue(BaseModel):
-    """Persisted L1 entry - pruning info that's source-and-config-deterministic (not args-dependent).
+    """Persisted L1 entry - pruning info that's args-independent (though not specialization-independent).
 
     Pruning info is the set of *flat names* (``__qd_<arg>__qd_<child>__qd_...``) that the kernel actually reads.
     Computed during compile (``Pruning.used_vars_by_func_id``); persisted here so subsequent calls can build
-    a narrow args hash without having to recompile.
+    a narrow args hash without having to recompile. The stored set is the union over every specialization compiled so
+    far (grown by ``persist_l1_and_set_l2_key``), because ``qd.static`` can make different specializations of the same
+    source read different paths - see "Pruning is per-specialization" in the module docstring.
 
-    ``graph_do_while_levels`` is also stored here because it's a property of the kernel source (not of any
-    particular arg value). Each entry is ``(cond_arg_name, parent_id, cond_cpp_arg_id)``, indexed by level id (outer
-    before inner); ``cond_cpp_arg_id`` is AST-resolved and so is a source property too - see ``CacheValue`` for why the
-    launch path needs it.
+    ``graph_do_while_levels`` is also stored here, as a pre-compile seed for the L1-hit / L2-miss path: each entry is
+    ``(cond_arg_name, parent_id, cond_cpp_arg_id)``, indexed by level id (outer before inner), and ``cond_cpp_arg_id``
+    is AST-resolved - see ``CacheValue`` for why the launch path needs it. The copy that a fast-cache *restore*
+    installs comes from ``CacheValue`` rather than from here, since a ``qd.graph_do_while`` nested inside a
+    ``qd.static`` branch belongs to the specializations that compile that branch, not to every sibling. The seed
+    itself is discarded whenever the AST walk runs (``ASTGenerator`` clears the table before ``build_While``
+    repopulates it).
 
     ``hashed_function_source_infos`` is the same content-hash list used for L2 validation; an L1 hit is
     rejected if any helper source has changed since the L1 entry was written, even if the kernel source
@@ -214,7 +238,10 @@ def store_pruning_info(
     used_py_dataclass_parameters: set[str],
     graph_do_while_levels: list[tuple[str, int, int]] | None = None,
 ) -> None:
-    """Persist the L1 entry after a cold compile. See ``L1CacheValue`` for what's stored / why."""
+    """Persist the L1 entry after a cold compile, or re-persist it with a grown flat-name union.
+
+    See ``L1CacheValue`` for what's stored / why, and ``persist_l1_and_set_l2_key`` for when the union grows.
+    """
     if not source_config_key:
         return
     cache = PythonSideCache()
@@ -240,20 +267,27 @@ def persist_l1_and_set_l2_key(
     py_args: tuple[Any, ...],
     arg_metas: Sequence[ArgMetadata],
 ) -> tuple[str | None, bool]:
-    """After a successful materialize, persist L1 (if missing) and derive the L2 key.
+    """After a successful materialize, persist L1 (if missing or incomplete) and derive the L2 key.
 
-    Two responsibilities:
+    Three responsibilities:
 
       1. If L1 was missing (``pruning_paths_from_l1 is None``), write the freshly-computed pruning info so the next
          call from a new process can skip the args-walk warm-up.
 
-      2. If ``fast_checksum`` is still ``None`` (either L1 was missing, or L1 hit but phase 2 of the warm-call load
-         path saw a FIELD-related ``FastcacheSkip`` and kept ``None``), compute the narrow args hash now using the
-         just-populated pruning info and derive the L2 key.
+      2. If L1 was present but does not list every path this specialization reads (``qd.static`` branching - see
+         "Pruning is per-specialization" in the module docstring), grow the entry to the union and discard the L2 key
+         phase 2 derived from the too-narrow set: keeping it would store this artifact under a key that ignores paths
+         it actually depends on, so a later process would serve it after a dtype / ndim / baked-value change on one of
+         them.
+
+      3. If ``fast_checksum`` is ``None`` at that point (L1 was missing, the key was just discarded by 2., or L1 hit
+         but phase 2 of the warm-call load path saw a FIELD-related ``FastcacheSkip`` and kept ``None``), compute the
+         narrow args hash now, using the path set that L1 now holds, and derive the L2 key from it.
 
     Returns ``(new_fast_checksum, generated)`` where ``generated`` is True iff this call freshly produced a non-None
-    L2 key (i.e. ``fast_checksum`` was ``None`` on entry and is non-None on return). The caller assigns
-    ``new_fast_checksum`` back to its kernel and uses ``generated`` to update its cache-observations counter.
+    L2 key for a kernel that had none (i.e. ``fast_checksum`` was ``None`` on entry and is non-None on return). The
+    caller assigns ``new_fast_checksum`` back to its kernel unconditionally - it may be a *re-keyed* value even when
+    ``generated`` is False - and uses ``generated`` to update its cache-observations counter.
 
     Returns ``(None, False)`` if fastcache is inactive for this kernel (``l1_key`` falsy / source info missing /
     used-params not recorded), or ``(fast_checksum, False)`` if nothing changed.
@@ -264,6 +298,8 @@ def persist_l1_and_set_l2_key(
         return fast_checksum, False
     if used_py_dataclass_parameters is None:
         return fast_checksum, False
+    had_checksum = fast_checksum is not None
+    key_paths = used_py_dataclass_parameters
     if pruning_paths_from_l1 is None:
         store_pruning_info(
             l1_key,
@@ -271,6 +307,19 @@ def persist_l1_and_set_l2_key(
             used_py_dataclass_parameters,
             graph_do_while_levels=graph_do_while_levels,
         )
+    elif used_py_dataclass_parameters <= pruning_paths_from_l1:
+        key_paths = pruning_paths_from_l1
+    else:
+        # This specialization reads paths the shared L1 entry doesn't list. Grow the entry so every future
+        # specialization keys on the same superset, and re-derive this artifact's L2 key from it.
+        key_paths = pruning_paths_from_l1 | used_py_dataclass_parameters
+        store_pruning_info(
+            l1_key,
+            visited_functions,
+            key_paths,
+            graph_do_while_levels=graph_do_while_levels,
+        )
+        fast_checksum = None
     # If phase 2 didn't run (L1 cold) or returned None (FIELD encountered earlier - but in that case post-compile
     # narrow hashing would also see the FIELD and produce None, which is fine: we want fast_checksum to stay None
     # so no L2 entry is stored), compute the narrow args hash now.
@@ -280,10 +329,10 @@ def persist_l1_and_set_l2_key(
             kernel_source_info,
             py_args,
             arg_metas,
-            used_py_dataclass_parameters,
+            key_paths,
         )
         if narrow_args_hash is not None:
-            return make_full_cache_key(l1_key, narrow_args_hash), True
+            return make_full_cache_key(l1_key, narrow_args_hash), not had_checksum
     return fast_checksum, False
 
 
