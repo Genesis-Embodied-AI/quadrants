@@ -395,6 +395,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.shell</span><span class="w"> </span><span class="kn">import</span> <span class="n">_shell_pop_print</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.util</span><span class="w"> </span><span class="kn">import</span> <span class="n">cook_dtype</span><span class="p">,</span> <span class="n">is_data_oriented</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">ndarray_type</span><span class="p">,</span>
     <span class="n">primitive_types</span><span class="p">,</span>
     <span class="n">template</span><span class="p">,</span>
 <span class="p">)</span>
@@ -1104,6 +1105,13 @@
                 <span class="k">if</span> <span class="n">needed_</span> <span class="ow">is</span> <span class="n">template</span> <span class="ow">or</span> <span class="nb">type</span><span class="p">(</span><span class="n">needed_</span><span class="p">)</span> <span class="ow">is</span> <span class="n">template</span><span class="p">:</span>
                     <span class="n">template_num</span> <span class="o">+=</span> <span class="mi">1</span>
                     <span class="n">i_out</span> <span class="o">+=</span> <span class="mi">1</span>
+                    <span class="k">continue</span>
+                <span class="k">if</span> <span class="p">(</span>
+                    <span class="n">val</span> <span class="ow">is</span> <span class="kc">None</span>
+                    <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">[</span><span class="n">i_in</span><span class="p">]</span><span class="o">.</span><span class="n">optional</span>
+                    <span class="ow">and</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">[</span><span class="n">i_in</span><span class="p">]</span><span class="o">.</span><span class="n">annotation</span><span class="p">)</span> <span class="ow">is</span> <span class="n">ndarray_type</span><span class="o">.</span><span class="n">NdarrayType</span>
+                <span class="p">):</span>
+                    <span class="c1"># Optional ndarray + None is specialized away at compile time, so it consumes no runtime arg.</span>
                     <span class="k">continue</span>
                 <span class="c1"># FIXME: This shortcut skips _recursive_set_args() solely when val._qd_all_field is true and the annotation is</span>
                 <span class="c1"># a dataclass, but _recursive_set_args() is where the strict provided_arg_type-is-needed_arg_type check lives.</span>
