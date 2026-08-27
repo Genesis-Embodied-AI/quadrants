@@ -2,7 +2,9 @@
 
 #include "quadrants/common/core.h"
 #include "quadrants/common/serialization.h"
+#include "quadrants/ir/analysis.h"
 #include "quadrants/ir/snode.h"
+#include "quadrants/ir/statements.h"
 #include "quadrants/ir/transforms.h"
 #include "quadrants/program/compile_config.h"
 #include "quadrants/program/kernel.h"
@@ -10,6 +12,7 @@
 
 #include "picosha2.h"
 
+#include <map>
 #include <vector>
 
 namespace quadrants::lang {
@@ -205,6 +208,94 @@ std::string get_hashed_offline_cache_key_of_device_caps(const DeviceCapabilityCo
   hasher.finish();
   auto res = picosha2::get_hash_hex_string(hasher);
   res.insert(res.begin(), 'T');  // The key must start with a letter
+  return res;
+}
+
+namespace {
+
+// Serialize one task by its printed CHI-IR text: the printer renders every statement's opcode, operands (by SSA
+// name), result type, immediate fields and the offload header, so this covers both the task body and its launch
+// metadata. Deterministic because `re_id` has just renumbered the task (SSA names are order-derived) and the wrapper
+// / dbg-info are suppressed. Caveat: external-func printing emits `so_func` as a raw pointer (non-deterministic), so
+// external-func tasks must not be cached until this keys on the so/asm/bc contents instead.
+std::string serialize_task_body(OffloadedStmt *task) {
+  std::string s;
+  irpass::print(task, &s, /*print_ir_dbg_info=*/false, /*print_kernel_wrapper=*/false);
+  return s;
+}
+
+// SNode tree roots the task touches, for the layout signature. Over-approximating (extra trees) only costs dedup
+// precision, never soundness. Deterministic order: keyed by tree id.
+std::vector<const SNode *> gather_task_snode_roots(OffloadedStmt *task) {
+  std::map<int, const SNode *> roots;  // tree_id -> root (sorted, dedup)
+  auto add = [&roots](const SNode *sn) {
+    if (sn == nullptr) {
+      return;
+    }
+    const SNode *root = sn->get_root();
+    roots[root->get_snode_tree_id()] = root;
+  };
+  irpass::analysis::gather_statements(task, [&add](Stmt *stmt) {
+    if (auto *s = stmt->cast<GlobalPtrStmt>()) {
+      add(s->snode);
+    } else if (auto *s = stmt->cast<SNodeOpStmt>()) {
+      add(s->snode);
+    } else if (auto *s = stmt->cast<SNodeLookupStmt>()) {
+      add(s->snode);
+    } else if (auto *s = stmt->cast<GetChStmt>()) {
+      add(s->input_snode);
+      add(s->output_snode);
+    }
+    return false;
+  });
+  // listgen / gc / struct_for carry their target on the offload header, not in the body, and the printed IR
+  // distinguishes them only by the SNode's layout-derived name -- so fold the header SNode too.
+  add(task->snode);
+  std::vector<const SNode *> out;
+  out.reserve(roots.size());
+  for (const auto &[tree_id, root] : roots) {
+    out.push_back(root);
+  }
+  return out;
+}
+
+}  // namespace
+
+std::string get_hashed_per_task_cache_key(const CompileConfig &config,
+                                          const DeviceCapabilityConfig &caps,
+                                          OffloadedStmt *task,
+                                          const Kernel *kernel) {
+  QD_ASSERT(task);
+  QD_ASSERT(kernel);
+  auto compile_config_key = get_offline_cache_key_of_compile_config(config);
+  auto device_caps_key = get_offline_cache_key_of_device_caps(caps);
+  // The task reads args / writes returns through the kernel's context struct, whose layout is the kernel's
+  // parameter/return ABI, not the task body -- so identical bodies under different ABIs must not share a module.
+  auto kernel_params_key = get_offline_cache_key_of_parameter_list(kernel->parameter_list);
+  auto kernel_rets_key = get_offline_cache_key_of_rets(kernel->rets);
+  std::string task_body_string = serialize_task_body(task);
+  std::string autodiff_mode_string = std::to_string(static_cast<std::size_t>(kernel->autodiff_mode));
+
+  picosha2::hash256_one_by_one hasher;
+  hasher.process(compile_config_key.begin(), compile_config_key.end());
+  hasher.process(device_caps_key.begin(), device_caps_key.end());
+  hasher.process(kernel_params_key.begin(), kernel_params_key.end());
+  hasher.process(kernel_rets_key.begin(), kernel_rets_key.end());
+  // Layout signature + id of each touched tree: struct-access code is inlined per task, so the tree layout (not just
+  // its name, which is all the printed IR carries) is part of the compiled code, and the module references that
+  // tree's struct-access functions by id, so a cached module is only reusable for the same tree instance.
+  for (const SNode *root : gather_task_snode_roots(task)) {
+    std::string snode_key = get_hashed_offline_cache_key_of_snode(root);
+    hasher.process(snode_key.begin(), snode_key.end());
+    std::string tree_id_key = std::to_string(root->get_snode_tree_id());
+    hasher.process(tree_id_key.begin(), tree_id_key.end());
+  }
+  hasher.process(task_body_string.begin(), task_body_string.end());
+  hasher.process(autodiff_mode_string.begin(), autodiff_mode_string.end());
+  hasher.finish();
+
+  auto res = picosha2::get_hash_hex_string(hasher);
+  res.insert(res.begin(), 'K');  // task-key prefix; a letter, distinct from the 'T' kernel key
   return res;
 }
 
