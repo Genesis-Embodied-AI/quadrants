@@ -95,14 +95,19 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
       irpass::re_id(offload.get());
 
       // Tasks kept entirely off the artifact cache -- neither probed nor stored (an empty key makes the JIT fill skip
-      // the store), because the printed body the key hashes does not faithfully capture their compiled code:
+      // the store), because the printed body the key hashes does not faithfully or deterministically capture their
+      // compiled code:
       //  - adstack tasks: lowering registers per-task AdStack sizing as a compile-time side effect a hit would skip;
       //  - external-func tasks: the body carries the so/bc path + name but not its contents, so an in-place update keeps
       //    the key and a hit would run stale external code;
       //  - real-func calls (FuncCallStmt): the printer emits only the callee name, but codegen inlines its body, so a
       //    callee-body edit keeps the key and a hit would run stale code. (The whole-kernel key folds callee bodies in
       //    via emit_dependencies; matching that for the per-task key is deferred with the production binary key.)
-      bool artifact_eligible = artifact_tier;
+      //  - mem_access_opt (BLS/read-only hints, on struct-/mesh-for tasks): the printer serializes it from an
+      //    unordered_map<SNode*, unordered_set<>> whose iteration order varies run-to-run (ASLR), so the same task
+      //    could get different keys across processes and never hit. Deferred with the production binary key, which can
+      //    serialize these in a stable order without touching the shared IR printer.
+      bool artifact_eligible = artifact_tier && offload->as<OffloadedStmt>()->mem_access_opt.get_all().empty();
       if (artifact_eligible) {
         irpass::analysis::gather_statements(offload.get(), [&artifact_eligible](Stmt *s) {
           if (s->is<AdStackAllocaStmt>() || s->is<ExternalFuncCallStmt>() || s->is<FuncCallStmt>()) {

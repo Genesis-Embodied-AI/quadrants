@@ -2,13 +2,11 @@
 
 #include "quadrants/analysis/offline_cache_util.h"
 #include "quadrants/codegen/compiled_kernel_data.h"
-#include "quadrants/codegen/llvm/per_task_artifact_cache.h"
 #include "quadrants/program/program.h"
 #include "quadrants/program/per_construct_cache.h"
 #include "quadrants/util/offline_cache.h"
 #include "quadrants/util/environ_config.h"
 
-#include <filesystem>
 #include <mutex>
 
 namespace quadrants::lang {
@@ -40,19 +38,11 @@ struct CacheCleanerUtils<CacheData> {
 
   // To remove other files except cache files and offline cache metadta files
   static void remove_other_files(const CacheCleanerConfig &config) {
-    // Drop the per-task artifact cache (sibling dirs under the same offline-cache root) whenever the whole-kernel cache
-    // is version-invalidated. That tier has no version-gated metadata of its own, so it must share this lifecycle or a
-    // probe on the newer build could reuse stale PTX. The dirs are sm-scoped (pertask_artifacts_sm_<cc>), so match by
-    // prefix. `config.path` is `<root>/kernel_compilation_manager`, so its parent is the root they hang off.
-    const std::filesystem::path root = std::filesystem::path(config.path).parent_path();
-    const std::string prefix = std::filesystem::path(pertask_artifact_dir_for(root.string())).filename().string();
-    std::error_code ec;
-    for (std::filesystem::directory_iterator it(root, ec), end; !ec && it != end; it.increment(ec)) {
-      if (it->path().filename().string().rfind(prefix, 0) == 0) {
-        std::error_code rm_ec;
-        std::filesystem::remove_all(it->path(), rm_ec);
-      }
-    }
+    // Intentionally does NOT touch the per-task artifact dir. Correctness across a Quadrants upgrade is handled by
+    // version-keying the artifacts (an upgrade yields fresh keys, so a stale artifact is never reused), so no wipe is
+    // needed here. A wipe would also be actively harmful: this runs before the metadata `dump()`, so it could delete
+    // artifacts the current process just generated and is about to reference from a freshly written `.qdc`, stranding
+    // that entry. Reclaiming orphaned old-version artifacts is left to the planned size-based eviction follow-up.
   }
 
   // To check if a file is cache file

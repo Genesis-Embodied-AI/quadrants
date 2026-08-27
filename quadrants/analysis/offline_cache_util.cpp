@@ -304,7 +304,8 @@ std::string get_hashed_per_task_cache_key(const CompileConfig &config,
   // Fold in the Quadrants build version. The whole-kernel `.qdc` cache is version-gated by its metadata (loader /
   // cleaner drop a version-mismatched entry), but the per-task artifact cache has no such gate, so without this a probe
   // on an upgraded Quadrants would hit a byte-identical key and reuse the OLD build's PTX. Keying on the version turns
-  // an upgrade into a clean miss; the stale files are reclaimed by the cache-clean version sweep.
+  // an upgrade into a clean miss; the orphaned old-version files are reclaimed by the planned size-based eviction
+  // follow-up (they are never reused in the meantime, since their keys no longer match).
   std::string version_string = std::to_string(QD_VERSION_MAJOR) + "." + std::to_string(QD_VERSION_MINOR) + "." +
                                std::to_string(QD_VERSION_PATCH);
   hasher.process(version_string.begin(), version_string.end());

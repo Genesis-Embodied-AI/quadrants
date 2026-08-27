@@ -1,7 +1,5 @@
 // The IRPrinter prints the IR in a human-readable format
 
-#include <algorithm>
-
 #include "quadrants/ir/expression_printer.h"
 #include "quadrants/ir/ir.h"
 #include "quadrants/ir/statements.h"
@@ -16,23 +14,11 @@ namespace {
 
 std::string scratch_pad_info(const MemoryAccessOptions &opt) {
   std::string ser;
-  auto all = opt.get_all();
-  if (!all.empty()) {
+  if (!opt.get_all().empty()) {
     ser += "mem_access_opt [ ";
-    // `get_all()` is an unordered_map<SNode*, unordered_set<flag>>: both levels iterate in a hash/pointer order that
-    // varies run-to-run (ASLR). Sort before serializing so this string -- and the per-task artifact cache key derived
-    // from the printed body -- is identical across processes, which cross-process reuse depends on.
-    std::vector<std::pair<std::string, std::vector<SNodeAccessFlag>>> entries;
-    entries.reserve(all.size());
-    for (auto &rec : all) {
-      std::vector<SNodeAccessFlag> flags(rec.second.begin(), rec.second.end());
-      std::sort(flags.begin(), flags.end());
-      entries.emplace_back(rec.first->get_node_type_name_hinted(), std::move(flags));
-    }
-    std::sort(entries.begin(), entries.end());
-    for (const auto &[name, flags] : entries) {
-      for (auto flag : flags) {
-        ser += name + ":" + snode_access_flag_name(flag) + " ";
+    for (auto &rec : opt.get_all()) {
+      for (auto flag : rec.second) {
+        ser += rec.first->get_node_type_name_hinted() + ":" + snode_access_flag_name(flag) + " ";
       }
     }
     ser += "] ";
