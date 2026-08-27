@@ -95,13 +95,17 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
       irpass::re_id(offload.get());
 
       // Tasks kept entirely off the artifact cache -- neither probed nor stored (an empty key makes the JIT fill skip
-      // the store): adstack tasks, whose lowering registers per-task AdStack sizing as a compile-time side effect a hit
-      // would skip; and external-func tasks, whose printed body carries the so/bc path + name but not its contents (see
-      // serialize_task_body), so an in-place update keeps the key and a hit would run stale external code.
+      // the store), because the printed body the key hashes does not faithfully capture their compiled code:
+      //  - adstack tasks: lowering registers per-task AdStack sizing as a compile-time side effect a hit would skip;
+      //  - external-func tasks: the body carries the so/bc path + name but not its contents, so an in-place update keeps
+      //    the key and a hit would run stale external code;
+      //  - real-func calls (FuncCallStmt): the printer emits only the callee name, but codegen inlines its body, so a
+      //    callee-body edit keeps the key and a hit would run stale code. (The whole-kernel key folds callee bodies in
+      //    via emit_dependencies; matching that for the per-task key is deferred with the production binary key.)
       bool artifact_eligible = artifact_tier;
       if (artifact_eligible) {
         irpass::analysis::gather_statements(offload.get(), [&artifact_eligible](Stmt *s) {
-          if (s->is<AdStackAllocaStmt>() || s->is<ExternalFuncCallStmt>()) {
+          if (s->is<AdStackAllocaStmt>() || s->is<ExternalFuncCallStmt>() || s->is<FuncCallStmt>()) {
             artifact_eligible = false;
           }
           return false;
