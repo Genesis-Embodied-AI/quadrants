@@ -1,28 +1,17 @@
-"""Per-construct FRONTEND split (no reuse tier).
+"""Per-construct FRONTEND split.
 
-`compile_to_offloads` splits the frontend (simplify / merge_global_ptrs / offload) to run per top-level construct
-instead of once over the whole kernel, isolating each construct by its backward slice (in
-`transforms/split_frontend_per_construct.cpp`), and falls back to the whole-kernel path for kernels that are not
-recompute-safe: autodiff, mesh-for, a concurrently-executed region (`qd.stream_parallel()` / `qd.graph.parallel()`,
-whose constructs share one global-temp buffer), a loop-produced local shared across constructs, a `qd.append` index a
-later construct consumes, a local a later construct reads that a `@qd.real_func` (via a `qd.ref` argument) or an
-external / bitcode call wrote to, a loop-carried local a later construct reads read-only through a `qd.ref` argument, a
-non-recomputable producer a later construct would clone (an effectful one such as a global atomic, a non-deterministic
-`qd.random()`, or a `qd.volatile_load()`), or a serial field load that a later construct would recompute after an
-intervening effect (a store, atomic, or sparse activate/deactivate) mutated global state. It also declines the split
-when `QD_DUMP_CFG` asks for a whole-kernel CFG dump (cfg_optimization, a pre-existing pass, forces the whole-kernel path
-under it); `QD_DUMP_IR` / `QD_DUMP_SIMPLIFY` / `print_ir` are observation-only and keep the split active, emitting their
-output per construct. This PR ships the split WITHOUT a reuse tier, so it recompiles every construct on every compile;
-the reuse (a disk manifest keyed by a stable per-construct cache key) is added by the cross-process cache PR.
+`compile_to_offloads` runs the frontend (simplify / merge_global_ptrs / offload) per top-level construct instead of
+once over the whole kernel, isolating each construct by its backward slice (see
+`transforms/split_frontend_per_construct.cpp` for the split and the recompute-safety fallback conditions).
 
-These tests assert the split's STRUCTURE and CORRECTNESS, not reuse:
- - the split fires for recompute-safe kernels and enumerates the expected constructs, with
-   `frontend_constructs_recompiled == frontend_constructs_total` and `frontend_constructs_cache_hit == 0`;
- - kernels that are not recompute-safe fall back to the whole-kernel path (`frontend_constructs_total == -1`);
+These tests assert the split's structure and correctness (there is no reuse tier yet):
+ - the split fires for recompute-safe kernels, with `frontend_constructs_recompiled == frontend_constructs_total` and
+   `frontend_constructs_cache_hit == 0`;
+ - non-recompute-safe kernels fall back to the whole-kernel path (`frontend_constructs_total == -1`);
  - results stay numerically correct through the split-and-reassemble path.
 
-Counts are exposed as `kernel._primal.per_offload_cache_observations`. `offline_cache=False` so the on-disk
-whole-kernel cache never short-circuits codegen and the split always runs on the (cold) compile.
+Counts are exposed as `kernel._primal.per_offload_cache_observations`. `offline_cache=False` so the on-disk cache never
+short-circuits codegen and the split always runs on the cold compile.
 """
 
 import glob
@@ -75,24 +64,17 @@ def test_per_construct_frontend_split_enumerates_all_constructs() -> None:
     kernel_a(arr)
 
     obs = kernel_a._primal.per_offload_cache_observations
-    # The split ran and enumerated all four constructs. With no reuse tier, every construct is recompiled and none is
-    # a cache hit -- this pins down that the split is reuse-free by construction (the flip to hit > 0 is what the
-    # cross-process cache PR asserts once it adds the disk manifest).
+    # Four independent loops enumerate as four constructs; with no reuse tier every one is recompiled, none a hit.
     assert obs.frontend_constructs_total == 4, obs
     assert obs.frontend_constructs_recompiled == obs.frontend_constructs_total, obs
     assert obs.frontend_constructs_cache_hit == 0, obs
-
-    # Numerical correctness: the reassembled per-construct tasks compute the same sum as the whole-kernel path would.
     assert np.allclose(arr.to_numpy(), sum(_C), atol=1.0), arr.to_numpy()
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
 def test_per_construct_frontend_split_observations_reset_on_cached_relaunch() -> None:
-    # `per_offload_cache_observations` is a single per-Kernel attribute describing the MOST RECENT compile. A relaunch
-    # served from a cached artifact runs no frontend split, so the counts must reset to the no-split sentinel (-1)
-    # instead of leaking the previous split's counts. This exercises the in-process compiled-kernel reuse path; the
-    # fastcache-restore path Codex flagged is the same code -- both hand `launch_kernel` a ready artifact and skip
-    # `prog.compile_kernel`, so the reset covers both.
+    # `per_offload_cache_observations` describes only the MOST RECENT compile. A relaunch served from a cached artifact
+    # runs no split, so the counts must reset to the no-split sentinel (-1) rather than leak the previous split's counts.
     @qd.kernel
     def kernel_relaunch(x: qd.types.ndarray()) -> None:
         for i in range(_N):
@@ -612,18 +594,10 @@ def test_per_construct_frontend_split_fallback_external_func_write() -> None:
 
 @test_utils.test(arch=qd.cuda, offline_cache=False)
 def test_per_construct_frontend_split_graph_do_while() -> None:
-    # A `qd.graph.do_while` kernel is driven from the HOST: `offload` flattens the loop body into a CONTIGUOUS run
-    # of tasks all tagged with the loop's `graph_do_while_level_id`, and the host graph driver relaunches that run
-    # each iteration until the on-device break flag fires. The per-construct split offloads each construct in
-    # isolation and reassembles, which re-runs the offloader's serial-bucket / region-tag assignment out of
-    # whole-kernel context: a serial task (e.g. a pass-made global-temp materialization, whose region tag defaults
-    # to level -1) can flush at the wrong level and get wedged out of the body's contiguous run, so the host loop
-    # counter is stranded outside the body, never decrements, and the kernel spins forever (this is what hung
-    # Genesis's decomposed rigid constraint solver on coupled contact). The split therefore REATTACHES each
-    # construct's do_while level onto its reassembled tasks (see `construct_gdw_level` in
-    # split_frontend_per_construct.cpp) so the body stays one contiguous same-level run. Assert the split FIRES
-    # (this is the giant-solver kernel we most want per-construct-cacheable, so it must NOT be gated out) and the
-    # reassembled loop is still correct: the do_while runs 3 times and increments x each time, so x must end at 3.
+    # A `qd.graph.do_while` body is a host-driven, contiguous same-level task run (see `construct_gdw_level`). The split
+    # must fire on it (not fall back) and reattach each construct's level so the body stays contiguous; a mis-leveled
+    # task strands the loop counter outside the body and the kernel spins forever. Assert the split fires and the loop
+    # is still correct: it runs 3 times incrementing x, so x must end at 3.
     @qd.kernel(graph=True)
     def run(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndim=0)) -> None:
         while qd.graph.do_while(counter):
@@ -639,27 +613,18 @@ def test_per_construct_frontend_split_graph_do_while() -> None:
     run(x, counter)
 
     obs = run._primal.per_offload_cache_observations
-    # Split fired (do_while kernels are no longer gated out), with no reuse tier (every construct recompiled).
     assert obs.frontend_constructs_total >= 1, obs
     assert obs.frontend_constructs_recompiled == obs.frontend_constructs_total, obs
     assert obs.frontend_constructs_cache_hit == 0, obs
-
-    # Correct + terminating: a mis-leveled reassembled task would strand the counter outside the loop body -> the host
-    # do_while never terminates (hang) or the increment runs the wrong number of times.
     assert np.all(x.to_numpy() == 3), x.to_numpy()
 
 
 @test_utils.test(arch=qd.cuda, offline_cache=False)
 def test_per_construct_frontend_split_nested_graph_do_while() -> None:
-    # NESTED `qd.graph.do_while`: an outer loop resets and drives an inner loop. The graph_do_while transformer FLATTENS
-    # the nest before the frontend split runs, so the top-level block is a flat run of single-level constructs -- the
-    # inner-body range-for and the inner counter decrement carry `graph_do_while_level_id == 1`, while the inner reset
-    # and outer decrement carry level 0. This guards `construct_gdw_level`'s container branch (which re-stamps a whole
-    # construct to a for-loop's own level): if it recovered the WRONG level for a deeper-nested construct it would
-    # collapse the two levels together, and the host driver -- which rebuilds the loop nest purely from the flat tasks'
-    # level ids -- would either run the inner loop the wrong number of times or strand a counter and hang. Assert the
-    # split FIRES on the nested kernel and the reassembled two-level nest is still correct: x is incremented once per
-    # (outer, inner) iteration, so it must end at _OUTER * _INNER, and the outer counter must drain to 0.
+    # Nested `qd.graph.do_while`: the transformer flattens the nest into single-level constructs before the split, so
+    # the inner-body work carries level 1 and the outer work level 0. This exercises `construct_gdw_level`'s container
+    # branch at a non-zero level; collapsing the two levels would miscount the inner loop or strand a counter. Assert
+    # the split fires and the nest is correct: x increments once per (outer, inner), ending at _OUTER * _INNER.
     _OUTER, _INNER = 3, 4
 
     @qd.kernel(graph=True)
@@ -688,13 +653,9 @@ def test_per_construct_frontend_split_nested_graph_do_while() -> None:
     run(x, outer, inner)
 
     obs = run._primal.per_offload_cache_observations
-    # Split fired on the nested kernel (no per-level gating), every construct recompiled (no reuse tier).
     assert obs.frontend_constructs_total >= 1, obs
     assert obs.frontend_constructs_recompiled == obs.frontend_constructs_total, obs
     assert obs.frontend_constructs_cache_hit == 0, obs
-
-    # Correct + terminating: collapsing the inner level onto the outer (or vice versa) would miscount the nested work or
-    # strand a counter -> wrong total or a hang.
     assert np.all(x.to_numpy() == _OUTER * _INNER), x.to_numpy()
     assert outer.to_numpy() == 0, outer.to_numpy()
 

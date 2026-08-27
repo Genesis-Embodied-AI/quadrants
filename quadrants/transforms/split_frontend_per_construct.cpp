@@ -100,17 +100,10 @@ class SubsetCloner : public IRVisitor {
     auto *other_stmt = other_->as<Stmt>();
     if (phase == register_operand_map) {
       operand_map_[stmt] = other_stmt;
-      // The hand-written container clones (IfStmt / RangeForStmt / StructForStmt / WhileStmt) rebuild via a typed
-      // constructor, not the copy ctor, so they drop two fields the whole-kernel path keeps; restore both here for
-      // every cloned statement (a no-op re-copy for leaf stmts, whose QD_DEFINE_CLONE copy-ctor clone already has
-      // them). region_tag marks the graph region (`qd.checkpoint` cp_id, `qd.graph.do_while` level, ...) a statement
-      // belongs to; losing it makes the serial offloader tag the task at the default (e.g. checkpoint_id -1 =
-      // always-run instead of gated on `resume`) so a statement gated inside a region is mis-scheduled. This copy keeps
-      // side-effecting statements' checkpoint/level tags through the clone; the graph_do_while level is additionally
-      // reattached per construct on reassembly (see `construct_gdw_level`) to cover pass-made tasks whose tags the
-      // clone can't recover. dbg_info carries the source traceback; losing it empties `get_tb()` so later per-construct
-      // diagnostics (e.g. offload.cpp's block-dim-too-large warning on a cloned StructForStmt) print without a source
-      // location.
+      // Container clones (IfStmt / RangeForStmt / StructForStmt / WhileStmt) rebuild via a typed constructor rather
+      // than the copy ctor, dropping two fields the whole-kernel path relies on; restore both (a no-op for leaf stmts
+      // whose copy-ctor clone already has them). region_tag names the graph region (checkpoint cp_id, do_while level)
+      // the serial offloader schedules the task by; dbg_info carries the source traceback used by later diagnostics.
       other_stmt->region_tag = stmt->region_tag;
       other_stmt->dbg_info = stmt->dbg_info;
     } else {
@@ -410,24 +403,15 @@ TopLevelSegments segment_top_level(Block *block) {
 // Sentinel from `construct_gdw_level`: leave the construct's per-task levels as offload assigned them.
 constexpr int kKeepOffloadGdwLevel = INT_MIN;
 
-// The graph_do_while level ALL of construct k's reassembled tasks must carry so the host driver keeps a do_while body
-// as one contiguous, same-level task run. A `qd.graph.do_while` loop is driven from the HOST: `offload` flattens the
-// body into a contiguous run of tasks all tagged with the loop's `graph_do_while_level_id`, and the host graph driver
-// rebuilds the loop nesting from that flat, contiguity-assuming task list, relaunching the run until the on-device
-// break flag fires (see offload.cpp's serial-bucket note that a stray task wedged into a body's run makes "the loop
-// counter never decrement"). WHY the level needs recovering after a per-construct offload: the whole-kernel offloader
-// runs a serial task at the level its side-effecting statements were WRITTEN at (their `region_tag`), OR -- for a task
-// created by a later pass (a recomputed global-temp materialization, whose `region_tag.is_set` is false -> level -1) --
-// at whatever level the neighbouring properly-tagged work in its serial bucket sets. Offloading a construct in
-// ISOLATION strands such a pass-made store alone in its bucket with no level-0 neighbour, so it flushes at the default
-// level -1 and, once reassembled, wedges a stray -1 task into the middle of the do_while body's level-0 run -- the loop
-// counter is then stranded outside the body and never decrements, so the kernel spins forever (this is what hung
-// Genesis's decomposed rigid solver `_kernel_solve_graph`). We recover the level from construct k's OWN source segment
-// -- which at the split seam is still frontend-tagged (is_set=true), before any pass manufactures untagged stores: a
-// container segment's reliable `graph_do_while_level_id`, else its side-effecting serial statements' `region_tag`.
-// Returns kKeepOffloadGdwLevel (no re-stamp) for the rare serial segment whose side effects straddle >1 level --
-// offload already split those into per-level tasks, so re-stamping them to one level would be wrong. A no-op for
-// non-graph kernels (every construct is level -1, which offload already assigned).
+// The graph_do_while level every one of construct k's reassembled tasks must carry. The host graph driver rebuilds a
+// `qd.graph.do_while` loop from a flat task list, grouping a contiguous run of same-level tasks as one loop body; a
+// task at the wrong level wedged into that run strands the loop counter outside the body so it never decrements.
+// Offloading a construct in isolation can misplace a serial task whose `region_tag` is unset (level -1) -- e.g. a
+// pass-made global-temp materialization -- because it no longer has a correctly-tagged neighbour to borrow from. We
+// recover the intended level from k's own source segment, still frontend-tagged at the split seam: a container's
+// `graph_do_while_level_id`, else its side-effecting serial statements' `region_tag`. Returns kKeepOffloadGdwLevel
+// (no re-stamp) when a serial segment's side effects straddle >1 level (offload already split those per level) and for
+// non-graph kernels (all level -1, as offload assigned).
 int construct_gdw_level(Block *block, const std::vector<int> &seg_id, int k) {
   const int n = (int)block->statements.size();
   int level = kKeepOffloadGdwLevel;
@@ -435,8 +419,7 @@ int construct_gdw_level(Block *block, const std::vector<int> &seg_id, int k) {
     if (seg_id[j] != k)
       continue;
     Stmt *s = block->statements[j].get();
-    // A container is its own segment (see `segment_top_level`), so its own reliable level tags the whole construct --
-    // including any recomputed serial prefix the loop consumes, matching the whole-kernel offloader's pre-for flush.
+    // A container is its own segment, so its own level tags the whole construct (matching the whole-kernel offloader).
     if (auto *rf = s->cast<RangeForStmt>())
       return rf->graph_do_while_level_id;
     if (auto *sf = s->cast<StructForStmt>())
@@ -454,13 +437,9 @@ int construct_gdw_level(Block *block, const std::vector<int> &seg_id, int k) {
   return level;
 }
 
-// The locals (allocas) a statement writes. Reads the shared `Store` trait (`get_store_destination`) so it covers EVERY
-// way the frontend mutates a function-scope variable without enumerating statement types: a `LocalStoreStmt`, an
-// `AtomicOpStmt`, a `qd.append` (`SNodeOpStmt::allocate`, which writes the returned index into its `val` alloca WITHOUT
-// a `LocalStoreStmt`), and a `@qd.real_func` call that mutates a local through a `qd.ref` argument (`FuncCallStmt`).
-// Non-local destinations (global pointers, ndarrays, snode roots) resolve to nullptr and are dropped. Missing any of
-// these would let a consuming construct's backward slice keep a bare zero-initialized alloca (reading the stale value)
-// while the effectful-producer gate never sees the writer to force a fallback.
+// The locals (allocas) a statement writes, via the shared `Store` trait so it covers every mutation path without
+// enumerating statement types (LocalStore, AtomicOp, `qd.append`, a `qd.ref` arg mutated by a `@qd.real_func`).
+// Non-local destinations resolve to nullptr and are dropped.
 std::vector<Stmt *> stmt_local_write_allocas(Stmt *s) {
   std::vector<Stmt *> out;
   for (Stmt *dest : irpass::analysis::get_store_destination(s))
@@ -469,14 +448,9 @@ std::vector<Stmt *> stmt_local_write_allocas(Stmt *s) {
   return out;
 }
 
-// The locals (allocas) a statement reads. Mirrors `stmt_local_write_allocas` but reads the shared `Load` trait
-// (`get_load_pointers`), so it covers EVERY way a construct observes a function-scope variable without enumerating
-// statement types: a `LocalLoadStmt`, an `AtomicOpStmt` (read-modify-write), and -- crucially -- a `ReferenceStmt`,
-// which is how a `qd.ref` argument to a `@qd.real_func` reaches the callee even when the callee only READS it. A
-// read-only ref has a `Load` `ReferenceStmt` but no store destination, so a store-only scan misses it; the
-// loop-carried-local gate below would then not see the read and could wrongly accept a split whose consuming construct
-// reads a local produced inside another construct's loop. Non-local pointers (global loads, ndarrays) resolve to
-// nullptr and are dropped.
+// The locals (allocas) a statement reads, via the shared `Load` trait. Covers LocalLoad, AtomicOp (read-modify-write),
+// and crucially `ReferenceStmt` -- a read-only `qd.ref` arg into a `@qd.real_func` is a Load with no store
+// destination, so a store-only scan would miss it and the loop-carried-local gate could wrongly accept the split.
 std::vector<Stmt *> stmt_local_read_allocas(Stmt *s) {
   std::vector<Stmt *> out;
   for (Stmt *ptr : irpass::analysis::get_load_pointers(s))
@@ -485,12 +459,9 @@ std::vector<Stmt *> stmt_local_read_allocas(Stmt *s) {
   return out;
 }
 
-// Top-level writers of each local variable, for the backward slice. A `LocalLoadStmt`'s only operand is the alloca (or
-// a `MatrixPtrStmt` into it), never the store that gave it its value, so an operand-closed slice pulls in a bare,
-// zero-initialized alloca and silently reads zeros. `split_is_recompute_safe` has already rejected kernels where a
-// local is produced *inside* another construct's loop, so every writer that matters here is top-level and safe to
-// recompute into the consuming construct. Each writer is paired with its top-level source index so the slice can keep
-// only the writers that PRECEDE the consuming construct (see `compute_construct_needed`).
+// Top-level writers of each local, for the backward slice: a `LocalLoadStmt`'s operand is the alloca, not the store
+// that gave it its value, so an operand-closed slice would otherwise read a bare zero-initialized alloca. Each writer
+// is paired with its top-level source index so the slice keeps only writers preceding the consumer.
 std::unordered_map<Stmt *, std::vector<std::pair<int, Stmt *>>> gather_top_level_alloca_writers(Block *block) {
   std::unordered_map<Stmt *, std::vector<std::pair<int, Stmt *>>> alloca_writers;
   const int n = (int)block->statements.size();
@@ -535,12 +506,10 @@ std::unordered_set<Stmt *> compute_construct_needed(
     for (Stmt *op : s->get_operands())
       if (op != nullptr && needed.insert(op).second)
         worklist.push_back(op);
-    // Reaching an alloca means this construct reads the local; bring its top-level writers (and their own operand
-    // chains) along, or the construct compiles against an uninitialized variable. Only writers that PRECEDE construct k
-    // in source order (an earlier segment) can supply the value it reads: cloning in a writer from k's own segment or a
-    // LATER one is wrong -- in `a = 1; loop0; a = 2; loop1`, pulling `a = 2` into loop0's slice would make the isolated
-    // loop0 read 2 instead of 1. Writers inside construct k itself are already in `needed` via the segment loop above,
-    // so restricting to `seg_id < k` loses nothing.
+    // Reaching an alloca means this construct reads the local; bring its top-level writers (and their operand chains)
+    // along, or the construct compiles against an uninitialized variable. Only writers in an EARLIER segment can supply
+    // the value read: a writer from k's own or a later segment must not be cloned in (writers inside k are already in
+    // `needed` via the segment loop above, so restricting to `seg_id < k` loses nothing).
     if (s->is<AllocaStmt>()) {
       auto it = alloca_writers.find(s);
       if (it != alloca_writers.end()) {
@@ -555,35 +524,21 @@ std::unordered_set<Stmt *> compute_construct_needed(
   return needed;
 }
 
-// Split-safety gate. Cross-construct SSA that is purely recomputable -- consts, args, top-level pure arithmetic -- is
-// fine: clone+die duplicates it into each construct. Three things are NOT recomputable and force a fall back to the
-// whole-kernel path:
+// Split-safety gate. Purely recomputable cross-construct SSA (consts, args, top-level pure arithmetic) is fine --
+// clone+die duplicates it into each construct. Three things are not, and force a fall back to the whole-kernel path:
 //
-//   (1) Loop-carried locals. A local produced INSIDE a top-level loop and consumed by another construct cannot be
-//       reconstructed, because the producing loop is dropped from the consumer's slice. It is safe only when every
-//       access (read or loop-write) of that local stays within a SINGLE construct. Checking readers against the
-//       *union* of writer constructs is unsound: when two constructs both read-modify-write the same local, each is
-//       "covered" by the union, yet the second still consumes the value the first produced.
+//   (1) Loop-carried locals: a local produced inside a top-level loop and consumed by another construct cannot be
+//       reconstructed once the producing loop is dropped from the consumer's slice. Safe only when every access of the
+//       local stays within a SINGLE construct -- checking readers against the union of writer constructs is unsound
+//       (two constructs that each read-modify-write it are both "covered", yet the second consumes the first's value).
 //
-//   (2) Non-recomputable producers cloned into a consumer. The backward slice pulls the writers (and operand chains)
-//       of any local a construct reads. Cloning such a producer into a consuming construct is only sound if it is a
-//       pure, deterministic function of recomputed operands. Three kinds are not: an EFFECTFUL statement (e.g. a local
-//       capturing the return of a global `AtomicOpStmt`, or a sparse op) already emits its own task in its home
-//       segment, so cloning it runs the effect again (`old = atomic_add(counter, 1); for i: out[i] = old` increments
-//       `counter` twice); a NON-DETERMINISTIC statement (`RandStmt`) resamples and advances the PRNG once per clone
-//       (`r = random(); for i: x[i] = r; for i: y[i] = r` gives the two loops different values); and a VOLATILE load
-//       (`qd.volatile_load`) must be observed exactly once in place, so cloning it into several constructs turns one
-//       read of a concurrently-updated cell into several. Any statement the slice would recompute from a DIFFERENT
-//       segment must therefore be none of effectful, a `RandStmt`, or a volatile load.
+//   (2) Non-recomputable producers the slice would clone into a consumer: an EFFECTFUL statement (its task already
+//       runs in its home segment, so a clone runs the effect twice), a NON-DETERMINISTIC `RandStmt` (resamples /
+//       advances the PRNG per clone), or a VOLATILE load (must be observed exactly once in place).
 //
-//   (3) Field loads snapshotted before a later construct. The backward slice recomputes a serial def -- including a
-//       field/ndarray LOAD -- into every construct that consumes it. That is sound only if no construct BETWEEN the
-//       original load and the consuming construct performs a real effect (any `stmt_is_task_effect`: a global/ndarray
-//       store, a global atomic, or a sparse activate/deactivate); otherwise the recomputed load, now executing inside
-//       the later construct, observes the mutation instead of the source-order snapshot (e.g.
-//       `base = x[0]; for ..: x[0] = 2; for i: y[i] = base` would read 2 instead of the original x[0]). Neither field
-//       identity nor effect target is tracked, so this is conservative -- an unrelated store/sparse op also triggers
-//       the fallback -- which keeps correctness while costing only the rare shadowed-snapshot kernel a split.
+//   (3) A field/ndarray load recomputed into a later construct past an intervening effect: if any construct between the
+//       load and the consumer performs a real effect, the recomputed load observes the mutation instead of the
+//       source-order snapshot. Conservative -- field identity is not tracked, so an unrelated store also falls back.
 bool split_is_recompute_safe(Block *block) {
   if (block == nullptr)
     return false;
@@ -679,16 +634,11 @@ bool split_is_recompute_safe(Block *block) {
   return true;
 }
 
-// How much frontend work the split would do relative to the whole-kernel path. Each construct is compiled over its
-// BACKWARD SLICE, so a statement several constructs read (e.g. a serial prefix that computes a value every construct
-// consumes) is recomputed into -- and recompiled once per -- each of them. The split's frontend cost is therefore
-// `sum over constructs of |slice|`, versus the whole-kernel path's single pass over the block. The ratio of the two is
-// ~1 when constructs are close to disjoint (the split is compile-neutral -- verified: a kernel of independent loops
-// compiles in the same time split or not) and grows toward ~#constructs when they share a large prefix (each extra
-// construct re-pays the whole prefix). This PR ships the split with NO reuse cache, so that recompute is pure overhead;
-// `maybe_split_frontend_per_construct` uses this to fall back before paying an unbounded multiple of the whole-kernel
-// compile (a real kernel with a large shared prefix and many loops otherwise blows the frontend up by 10x+, which -- on
-// Genesis's biggest kernels under CI load -- pushed a single test past the per-test timeout).
+// Frontend work the split would do relative to the whole-kernel path. Each construct is compiled over its backward
+// slice, so a shared serial prefix is recompiled once per construct: cost is `sum over constructs of |slice|` vs the
+// whole-kernel single pass. The ratio is ~1 for near-disjoint constructs and grows toward ~#constructs when they share
+// a large prefix. With no reuse cache that recompute is pure overhead, so `maybe_split_frontend_per_construct` falls
+// back above a ratio cap.
 struct SplitCost {
   long long sum_slice_stmts = 0;
   int total_stmts = 0;
@@ -712,15 +662,11 @@ SplitCost estimate_split_cost(Block *block) {
   return c;
 }
 
-// Split the flat top-level block into constructs right after lower_ast + the structural prefix, run the full
-// per-construct frontend on each (recomputing shared top-level defs into every construct that reads them), and
-// reassemble the produced OffloadedStmts in source order. Compiling each construct independently keeps its
-// simplify/merge_global_ptrs working set tiny, and makes each construct's frontend output independently keyable --
-// which the cross-process cache PR uses to skip unchanged constructs. This PR runs the split with NO reuse tier (every
-// construct is recompiled every compile). Correctness for recompute-safe kernels rests on two things: cross-construct
-// global-temp hubs dissolve via recompute, and cross-construct memory ordering is preserved by keeping tasks in
-// original construct order. The caller (`maybe_split_frontend_per_construct`) has already restricted this to
-// autodiff_mode==kNone / non-mesh / recompute-safe kernels.
+// Split the flat top-level block into constructs, run the full per-construct frontend on each (recomputing shared
+// top-level defs into every construct that reads them), and reassemble the produced OffloadedStmts in source order.
+// Correctness for recompute-safe kernels rests on cross-construct global-temp hubs dissolving via recompute and
+// cross-construct memory ordering being preserved by the source-order reassembly. The caller has already restricted
+// this to autodiff_mode==kNone / non-mesh / recompute-safe kernels.
 void split_frontend_per_construct(IRNode *ir, const CompileConfig &config, const Kernel *kernel, bool verbose) {
   auto *block = ir->cast<Block>();
   QD_ASSERT(block != nullptr);
@@ -729,9 +675,8 @@ void split_frontend_per_construct(IRNode *ir, const CompileConfig &config, const
   auto alloca_writers = gather_top_level_alloca_writers(block);
 
   // Program-scoped record of this split's stats (total / hit / recompiled per kernel), read back by the compilation
-  // manager (`KernelCompilationManager::load_or_compile`) into the observability surface -- reading it there rather
-  // than in a backend codegen driver keeps the counts backend-agnostic (LLVM and SPIR-V alike). This PR ships no reuse
-  // tier, so `hit` stays 0; the cross-process manifest PR turns this into an actual per-construct cache.
+  // manager into the observability surface (there rather than in a backend codegen driver, to stay backend-agnostic).
+  // `hit` stays 0 until a reuse tier lands.
   PerConstructCache *cc = (kernel->program != nullptr) ? &kernel->program->per_construct_cache() : nullptr;
 
   std::vector<std::unique_ptr<Stmt>> tasks;
@@ -754,15 +699,10 @@ void split_frontend_per_construct(IRNode *ir, const CompileConfig &config, const
     irpass::die(cb);  // clean up anything left dead after slicing (recompute per construct)
     irpass::re_id(cb);
 
-    // Run the full per-construct frontend on the isolated construct and take its produced tasks. This PR ships the
-    // split with NO reuse tier, so every construct is recompiled here; the cross-process manifest PR keys this output
-    // (by a stable per-construct cache key it introduces) and reuses an unchanged construct's tasks instead.
     run_construct_frontend(cb, config, kernel, verbose, /*construct_index=*/n_constructs - 1);
     n_recompiled++;
-    // Reattach the construct's graph_do_while level onto its produced tasks so the reassembled body stays one
-    // contiguous same-level run (see `construct_gdw_level`). Load-bearing for `qd.graph.do_while` kernels, where a
-    // pass-made serial task otherwise flushes at level -1 in isolation and wedges into the body's level-0 run, hanging
-    // the host loop. A no-op for non-graph kernels and for tasks offload already tagged correctly.
+    // Reattach the construct's graph_do_while level onto its tasks so a do_while body stays one contiguous same-level
+    // run after isolated offload (see `construct_gdw_level`).
     const int level = construct_gdw_level(block, segs.seg_id, k);
     while (!cb->statements.empty()) {
       auto t = cb->extract(0);
@@ -800,25 +740,15 @@ bool maybe_split_frontend_per_construct(IRNode *ir,
     const char *v = std::getenv(env.data());
     return v != nullptr && std::string(v) == "1";
   };
-  // QD_DUMP_CFG still forces the whole-kernel path. Unlike the other dump flags it is NOT observation-only under the
-  // split: cfg_optimization (a pre-existing pass, not touched by this PR) both changes its own scope under QD_DUMP_CFG
-  // (dumping the whole-kernel CFG instead of the per-task CFGs a normal build uses) and names its dump files by phase,
-  // not construct -- so running the split under it would collide every construct's CFG into one filename. Making
-  // QD_DUMP_CFG observation-only means reworking cfg_optimization, which is deferred to a separate PR; until then keep
-  // the whole-kernel fallback for it so its dump matches the whole graph.
-  //
-  // QD_DUMP_IR, QD_DUMP_SIMPLIFY and print_ir, by contrast, are observation-only: the split still runs and their output
-  // is emitted PER CONSTRUCT, reflecting what the split actually compiled rather than perturbing it. QD_DUMP_IR ->
-  // run_construct_frontend writes <kernel>_construct<i>_*.ll; QD_DUMP_SIMPLIFY -> simplify.cpp keys its filenames off a
-  // global call counter, so each construct's passes already land in distinct files; print_ir -> each construct's pass
-  // printer prints under a per-construct banner. See docs/source/user_guide/optimization_passes.md.
+  // QD_DUMP_CFG forces the whole-kernel path: cfg_optimization dumps the whole-kernel CFG and names files by phase, not
+  // construct, so running the split under it would collide every construct's CFG into one filename. The other dump
+  // flags (QD_DUMP_IR / QD_DUMP_SIMPLIFY / print_ir) are observation-only -- the split still runs and emits output per
+  // construct. See docs/source/user_guide/optimization_passes.md.
   if (env_is_enabled(DUMP_CFG_ENV))
     return false;
-  // QD_KERNEL_COVERAGE (python/quadrants/lang/_kernel_coverage.py) rewrites every kernel to store a probe into a global
-  // coverage field before each source line. Those probe stores add top-level global-write constructs (so the partition
-  // no longer matches the source structure) and, in graph/checkpoint kernels, land between a yield gate and its loop --
-  // per-construct reassembly then moves them and corrupts both the coverage signal and yield/resume behavior. Coverage
-  // is a measurement mode, so keep the split transparent by falling back to the whole-kernel path.
+  // QD_KERNEL_COVERAGE inserts per-line probe stores that add global-write constructs and, in graph/checkpoint kernels,
+  // land between a yield gate and its loop; per-construct reassembly would move them and corrupt the coverage signal
+  // and yield/resume behavior. It is a measurement mode, so keep it transparent by falling back.
   if (env_is_enabled("QD_KERNEL_COVERAGE"))
     return false;
   if (block_has_mesh_for(block))
