@@ -35,6 +35,10 @@ from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import _kernel_impl_dataclass, impl
 from quadrants.lang._dataclass_util import create_flat_name
+from quadrants.lang._final_dataclass_fields import (
+    final_field_names,
+    subtree_has_final_fields,
+)
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang._signature import get_func_signature
 from quadrants.lang._wrap_inspect import get_source_info_and_src
@@ -73,7 +77,9 @@ from quadrants.types.utils import is_signed
 _TENSOR_T_NDARRAY_LAUNCH_ANNOTATION = ndarray_type.NdarrayType()
 
 from ._kernel_types import KernelBatchedArgType
+from ._optional_annotation import split_optional
 from ._template_mapper import TemplateMapper
+from ._template_mapper_hotpath import _is_external_array
 
 MAX_ARG_NUM = 512
 
@@ -123,9 +129,14 @@ def _get_frozen_dc_plan(
     # check so a stale plan from a different kernel specialization is never returned.
     if entry is not None and entry[0] is used_params:
         return entry[1]
+    # ``Final[T]`` fields are baked constants with no runtime arg slot, so exclude them from the plan to keep the arg
+    # count consistent.
+    final_names = final_field_names(struct_cls)
     entries: list[tuple[str, str, Any]] = []
     for field in fields_dict.values():
         if field._field_type is not _FIELD:
+            continue
+        if field.name in final_names:
             continue
         full_name = create_flat_name(basename, field.name)
         if full_name not in used_params:
@@ -136,11 +147,8 @@ def _get_frozen_dc_plan(
     return plan
 
 
-def _get_frozen_dc_unwrapped(v: Any, fields_dict: dict) -> dict[str, Any]:
-    """Return a dict mapping field_name -> unwrapped value for a frozen dataclass, caching on the instance."""
-    cached = getattr(v, "_qd_dc_unwrapped", None)
-    if cached is not None:
-        return cached
+def _compute_frozen_dc_unwrapped(v: Any, fields_dict: dict) -> dict[str, Any]:
+    """field_name -> unwrapped value for a frozen dataclass (no caching)."""
     unwrapped: dict[str, Any] = {}
     for field in fields_dict.values():
         if field._field_type is not _FIELD:
@@ -149,12 +157,30 @@ def _get_frozen_dc_unwrapped(v: Any, fields_dict: dict) -> dict[str, Any]:
         if _tensor_wrapper._any_tensor_constructed and type(val) in _TENSOR_WRAPPER_TYPES:
             val = val._unwrap()
         unwrapped[field.name] = val
+    return unwrapped
+
+
+def _get_frozen_dc_unwrapped(v: Any, fields_dict: dict) -> dict[str, Any]:
+    """field_name -> unwrapped value for a frozen dataclass, cached on the instance.
+
+    A ``Final``-bearing subtree is exempt from the cache (and from the ``_qd_all_field`` shortcut): like the
+    spec-key/offline-repr/mapper caches it must re-read every launch so ``Final``-value validation re-runs, and an
+    ``unsafe_hash=True`` instance may also mutate an *ordinary* field between launches - a stale cache would keep
+    sending the first-launch value. (Such a config always has a non-``Field`` scalar leaf, so ``_qd_all_field`` would
+    be ``False`` anyway; leaving it unset defaults to ``False``, i.e. the full ``_recursive_set_args`` path.)
+    """
+    if subtree_has_final_fields(type(v)):
+        return _compute_frozen_dc_unwrapped(v, fields_dict)
+    cached = getattr(v, "_qd_dc_unwrapped", None)
+    if cached is not None:
+        return cached
+    unwrapped = _compute_frozen_dc_unwrapped(v, fields_dict)
     try:
         object.__setattr__(v, "_qd_dc_unwrapped", unwrapped)
     except AttributeError:
         pass
-    # Cache whether ALL unwrapped values are Fields (zero launch-context slots).  This is a property of the instance
-    # alone — independent of which kernel or field-subset is active — so a simple boolean suffices and survives
+    # Cache whether ALL unwrapped values are Fields (zero launch-context slots). This is a property of the instance
+    # alone - independent of which kernel or field-subset is active - so a simple boolean suffices and survives
     # qd.reset() harmlessly (the boolean remains valid as long as the instance is alive).
     if getattr(v, "_qd_all_field", None) is None:
         from quadrants.lang.field import Field as _Field  # pylint: disable=C0415
@@ -240,12 +266,14 @@ class FuncBase:
             if param.kind != inspect.Parameter.POSITIONAL_OR_KEYWORD:
                 raise QuadrantsSyntaxError('Quadrants kernels only support "positional or keyword" parameters')
             annotation = param.annotation
+            optional = False
             if param.annotation is inspect.Parameter.empty:
                 if i == 0 and (self.is_classkernel or self.is_classfunc):  # The |self| parameter
                     annotation = template()
                 elif self.is_kernel or self.is_real_function:
                     raise QuadrantsSyntaxError("Quadrants kernels parameters must be type annotated")
             else:
+                annotation, optional = split_optional(annotation)
                 annotation_type = type(annotation)
                 if annotation_type is ndarray_type.NdarrayType:
                     pass
@@ -282,12 +310,18 @@ class FuncBase:
                     raise QuadrantsSyntaxError(
                         f"Invalid type annotation (argument {i}) of Quadrants kernel: {annotation}"
                     )
-            self.arg_metas.append(ArgMetadata(annotation, param.name, param.default))
-            self.orig_arguments.append(ArgMetadata(annotation, param.name, param.default))
+            self.arg_metas.append(ArgMetadata(annotation, param.name, param.default, optional=optional))
+            self.orig_arguments.append(ArgMetadata(annotation, param.name, param.default, optional=optional))
 
         self.template_slot_locations: list[int] = []
         for i, arg in enumerate(self.arg_metas):
-            if arg.annotation == template or isinstance(arg.annotation, template) or arg.annotation is _TensorClass:
+            if (
+                arg.annotation == template
+                or isinstance(arg.annotation, template)
+                or arg.annotation is _TensorClass
+                # An optional ndarray registers as a template slot so presence (None vs array) can specialize.
+                or (arg.optional and type(arg.annotation) is ndarray_type.NdarrayType)
+            ):
                 self.template_slot_locations.append(i)
 
     def _populate_global_vars_for_templates(
@@ -619,7 +653,7 @@ class FuncBase:
         if needed_arg_type is _TensorClass:
             if type(v) in _TENSOR_WRAPPER_TYPES:
                 v = v._unwrap()
-            if isinstance(v, Ndarray):
+            if isinstance(v, Ndarray) or _is_external_array(v):
                 needed_arg_type = cast(Type, _TENSOR_T_NDARRAY_LAUNCH_ANNOTATION)
                 needed_arg_type_id = id(needed_arg_type)
                 needed_arg_basetype = type(needed_arg_type)
@@ -650,7 +684,13 @@ class FuncBase:
         if needed_arg_fields is not None:
             if provided_arg_type is not needed_arg_type:
                 raise QuadrantsRuntimeError("needed", needed_arg_type, "!= provided", provided_arg_type)
+            # Must agree with the compile-time gate (``_rebinding_is_prevented``): ``__hash__ is not None`` alone
+            # disagrees for a ``frozen=True`` class that also hand-sets ``__hash__ = None`` (compile bakes its ``Final``
+            # fields, so launch must take the frozen plan too). The ``or`` only runs when ``__hash__ is None``.
             is_frozen = needed_arg_type.__hash__ is not None
+            if not is_frozen:
+                params = getattr(needed_arg_type, "__dataclass_params__", None)
+                is_frozen = params is not None and (params.frozen or params.unsafe_hash)
             idx = 0
             if is_frozen:
                 # PERF: Frozen-dataclass fast path. Uses the pre-computed field plan (which fields are active for this
@@ -676,8 +716,12 @@ class FuncBase:
                         callbacks,
                     )
                     idx += num_args_
-                return idx, True
-            # Non-frozen dataclass: original path with full iteration and filtering.
+                # A Final-bearing subtree must not cache its launch context (``args_hash`` keys on ``id(arg)``, so a
+                # cached buffer would resend the first-launch values): re-read every launch so a mutated ordinary field
+                # supplies its new value and ``final_scalar_key`` re-validates. Matches ``args_hasher``'s repr gate.
+                return idx, not subtree_has_final_fields(needed_arg_type)
+            # Non-frozen dataclass: original path. No ``Final`` handling - ``final_field_names`` rejects ``Final`` on a
+            # non-frozen class, so such a class already failed during template mapping.
             is_launch_ctx_cacheable = False
             for field in needed_arg_fields.values():
                 if field._field_type is not _FIELD:
