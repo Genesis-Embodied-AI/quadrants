@@ -296,9 +296,9 @@ void LlvmRuntimeExecutor::print_memory_profiler_info(std::vector<std::unique_ptr
 
   fmt::print("\n[Memory Profiler]\n");
 
-  // Integer sizes below use fmt::group_digits(...) so thousand separators are added locale-independently
-  // (e.g. 10000 -> "10,000"), avoiding a process-wide std::locale::global() mutation and any dependency on a
-  // specific installed locale such as en_US.UTF-8.
+  // Integer sizes below are printed with fmt::group_digits(...), which adds thousand separators locale-independently
+  // (e.g. 10000 -> "10,000"), avoiding a process-wide std::locale::global() mutation and any dependency on a specific
+  // installed locale such as en_US.UTF-8.
 
   std::function<void(SNode *, int)> visit = [&](SNode *snode, int depth) {
     auto element_list = runtime_query<void *>("LLVMRuntime_get_element_lists", result_buffer, llvm_runtime_, snode->id);
