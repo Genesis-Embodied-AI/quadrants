@@ -1365,9 +1365,8 @@ llvm::Value *TaskCodeGenLLVM::atomic_op_using_cas(llvm::Value *dest,
 
   {
     int bits = data_type_bits(type);
-    // Preserve dest's address space; with AMDGPU address-space-at-source
-    // tagging, dests can arrive in addrspace(1) and a cross-addrspace bitcast
-    // to generic is invalid IR. addrspace is 0 for CPU/CUDA, so no-op there.
+    // Preserve dest's addrspace: an AMDGPU addrspace(1) dest cannot be bitcast
+    // to a generic pointer. No-op for CPU/CUDA (addrspace 0).
     unsigned dest_as = dest->getType()->isPointerTy() ? dest->getType()->getPointerAddressSpace() : 0;
     llvm::PointerType *typeIntPtr = llvm::PointerType::get(*llvm_context, dest_as);
     llvm::IntegerType *typeIntTy = get_integer_type(bits);
@@ -1756,9 +1755,8 @@ void TaskCodeGenLLVM::visit(ExternalPtrStmt *stmt) {
   auto *gep = builder->CreateGEP(struct_type, llvm_val.at(stmt->base_ptr),
                                  {tlctx->get_constant(0), tlctx->get_constant(int(stmt->is_grad) + 1)});
   llvm::Value *ptr_val = builder->CreateLoad(tlctx->get_data_type(ptr_type), gep);
-  // field -> data level: tag the loaded ndarray data pointer. Downstream
-  // element bitcasts follow ptr_val's address space (ptr_val_as) so CPU/CUDA
-  // stay in addrspace(0) while AMDGPU stays in addrspace(1).
+  // Tag the ndarray data pointer; downstream element bitcasts inherit its
+  // addrspace via ptr_val_as rather than hardcoding addrspace(0).
   ptr_val = maybe_tag_amdgpu_global_ptr(ptr_val);
   unsigned ptr_val_as = ptr_val->getType()->getPointerAddressSpace();
 
@@ -3431,11 +3429,8 @@ void TaskCodeGenLLVM::set_struct_to_buffer(const StructType *struct_type,
 }
 
 llvm::Value *TaskCodeGenLLVM::maybe_tag_amdgpu_global_ptr(llvm::Value *ptr) {
-  // Single choke point for AMDGPU address-space-at-source tagging: tag an
-  // argument-walk pointer as addrspace(1) so InferAddressSpaces can collapse
-  // the per-access re-casts into global_load/global_store. A no-op on CPU/CUDA
-  // (arch guard) and on values that are already addrspace(1) or not pointers,
-  // so those backends emit byte-identical IR.
+  // Tag a device pointer as addrspace(1) so InferAddressSpaces can promote
+  // dependent flat_* accesses to global_*. AMDGPU only; no-op elsewhere.
   if (current_arch() != Arch::amdgpu || ptr == nullptr || !ptr->getType()->isPointerTy() ||
       ptr->getType()->getPointerAddressSpace() == 1) {
     return ptr;
@@ -3458,14 +3453,10 @@ llvm::Value *TaskCodeGenLLVM::get_struct_arg(const std::vector<int> &index, bool
     return gep;
   }
   llvm::Value *loaded = builder->CreateLoad(tlctx->get_data_type(arg_type), gep);
-  // args -> field level: tag the loaded ndarray struct base pointer, but only
-  // for the top-level kernel. A Function (@qd.real_func) callee receives its
-  // args -- including qd.ref(...) reference parameters -- through a caller-local
-  // alloca buffer (see visit(FuncCallStmt)), so those pointers reference private
-  // storage; tagging them addrspace(1) would make the callee read/write private
-  // data through global memory. Top-level ndarray-data promotion is unaffected,
-  // and ndarray data pointers used inside a callee are still tagged where their
-  // global-backed data pointer is loaded (visit(ExternalPtrStmt)).
+  // Don't tag a Function (@qd.real_func) callee's args: they come from a
+  // caller-local alloca (private memory), e.g. qd.ref(...) params, so tagging
+  // them global would be unsound. ndarray data used in a callee is still tagged
+  // at its ExternalPtrStmt load, where the pointer is genuinely global.
   if (dynamic_cast<const Function *>(current_callable) == nullptr) {
     loaded = maybe_tag_amdgpu_global_ptr(loaded);
   }
@@ -3482,12 +3473,9 @@ llvm::Value *TaskCodeGenLLVM::get_args_ptr(const Callable *callable, llvm::Value
   args_ptr = builder->CreatePointerCast(args_ptr, llvm::PointerType::get(llvm::PointerType::get(args_type, 0), 0));
   // loading the address of the arg buffer (args_type *)
   args_ptr = builder->CreateLoad(llvm::PointerType::get(args_type, 0), args_ptr);
-  // context -> args record level: tag the loaded args-buffer pointer, but only
-  // for the top-level kernel. Its arg buffer is device-staged in global memory,
-  // whereas a Function (@qd.real_func) callee receives a caller-local alloca
-  // buffer (see visit(FuncCallStmt)); tagging that as addrspace(1) would make
-  // the callee read its scalar parameters through global memory pointing at
-  // private storage.
+  // Only the top-level kernel's arg buffer is device-staged in global memory; a
+  // Function (@qd.real_func) callee's buffer is a caller-local alloca, so don't
+  // tag it.
   if (dynamic_cast<const Function *>(callable) == nullptr) {
     args_ptr = maybe_tag_amdgpu_global_ptr(args_ptr);
   }

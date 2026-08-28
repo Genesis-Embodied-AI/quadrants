@@ -327,18 +327,12 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     }
   }
 
-  // AMDGPU address-space-at-source: ndarray data and global temporaries live in
-  // hipMalloc'd global memory, so their pointers are tagged addrspace(1) at the
-  // point they are materialized. InferAddressSpaces then propagates the tag and
-  // dependent loads/stores lower to global_load/global_store/global_atomic
-  // instead of generic flat_*. ndarray data pointers (ExternalPtrStmt) are
-  // tagged by the shared base codegen (maybe_tag_amdgpu_global_ptr), so only
-  // the AMDGPU-specific sources (global temporaries, matrix-element GEPs) are
-  // overridden here.
+  // Device memory is addrspace(1) on AMDGPU. Tagging pointers as addrspace(1)
+  // where they are materialized lets InferAddressSpaces promote dependent flat_*
+  // accesses to global_*. ndarray data pointers are tagged in the shared base
+  // codegen; only the AMDGPU-specific sources are overridden here.
 
   void visit(GlobalTemporaryStmt *stmt) override {
-    // Global temporaries live in the runtime's global temporary buffer
-    // (hipMalloc'd, used by reductions / atomics).
     TaskCodeGenLLVM::visit(stmt);
     auto *current = llvm_val[stmt];
     if (current && current->getType()->isPointerTy() && current->getType()->getPointerAddressSpace() != 1) {
@@ -348,10 +342,9 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
   }
 
   void visit(MatrixPtrStmt *stmt) override {
-    // Base codegen unconditionally bitcasts/inttoptrs the origin into
-    // addrspace(0), which strips any addrspace tag applied at the source.
-    // Preserve the origin address space here so matrix-element accesses on
-    // global-backed origins keep landing in global memory.
+    // Base codegen forces the result to addrspace(0) (routing the byte-offset
+    // path through inttoptr), stripping the source tag. Preserve the origin
+    // addrspace so global-backed matrix elements stay in global memory.
     auto *origin_ptr = llvm_val[stmt->origin];
     unsigned origin_as = origin_ptr->getType()->isPointerTy() ? origin_ptr->getType()->getPointerAddressSpace() : 0;
     if (stmt->offset_used_as_index()) {
@@ -360,9 +353,6 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       llvm_val[stmt] =
           builder->CreateGEP(origin_pointee_ty, casted_ptr, {tlctx->get_constant(0), llvm_val[stmt->offset]});
     } else {
-      // Byte-offset GEP preserves pointer provenance and address space,
-      // avoiding the PtrToInt/IntToPtr round-trip that breaks addrspace
-      // tagging and confuses InferAddressSpaces.
       auto *byte_ptr =
           builder->CreateBitCast(origin_ptr, llvm::PointerType::get(llvm::Type::getInt8Ty(*llvm_context), origin_as));
       auto *address_offset = builder->CreateSExt(llvm_val[stmt->offset], llvm::Type::getInt64Ty(*llvm_context));

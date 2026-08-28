@@ -183,10 +183,8 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
 
   llvm::Value *get_args_ptr(const Callable *callable, llvm::Value *context);
 
-  // AMDGPU address-space-at-source: tag an argument-walk pointer as
-  // addrspace(1) so InferAddressSpaces can collapse the per-access re-casts into
-  // global_load/global_store. No-op unless arch == amdgpu and the value is a
-  // non-addrspace(1) pointer, so CPU/CUDA stay byte-identical.
+  // Tag a device pointer as addrspace(1) so InferAddressSpaces can promote its
+  // flat_* accesses to global_*. AMDGPU only; no-op elsewhere.
   llvm::Value *maybe_tag_amdgpu_global_ptr(llvm::Value *ptr);
 
   void set_args_ptr(Callable *callable, llvm::Value *context, llvm::Value *ptr);
