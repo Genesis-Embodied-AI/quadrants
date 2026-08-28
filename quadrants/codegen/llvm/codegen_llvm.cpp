@@ -3510,7 +3510,15 @@ LLVMCompiledTask LLVMCompiledTask::clone() const {
 }
 
 LLVMCompiledKernel LLVMCompiledKernel::clone() const {
-  return {tasks, llvm::CloneModule(*module)};
+  LLVMCompiledKernel result{tasks, llvm::CloneModule(*module)};
+  // The launcher consumes a clone, so the per-task modules must travel with it.
+  result.per_construct_artifacts.reserve(per_construct_artifacts.size());
+  for (auto &a : per_construct_artifacts) {
+    PerConstructArtifact c;
+    c.module = a.module ? llvm::CloneModule(*a.module) : nullptr;
+    result.per_construct_artifacts.push_back(std::move(c));
+  }
+  return result;
 }
 
 }  // namespace quadrants::lang

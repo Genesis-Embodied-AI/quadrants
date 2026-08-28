@@ -1,5 +1,7 @@
 #include <chrono>
+#include <mutex>
 #include <random>
+#include <vector>
 
 #include "quadrants/runtime/cuda/jit_cuda.h"
 #include "quadrants/runtime/llvm/llvm_context.h"
@@ -32,22 +34,44 @@ std::string moduleToDumpName(llvm::Module *const M) {
   return M->getName().str();
 }
 
-JITModuleCUDA::JITModuleCUDA(void *module) : module_(module) {
+JITModuleCUDA::JITModuleCUDA(void *module) : modules_{module} {
+}
+
+JITModuleCUDA::JITModuleCUDA(std::vector<void *> modules) : modules_(std::move(modules)) {
 }
 
 void *JITModuleCUDA::lookup_function(const std::string &name) {
   // TODO: figure out why using the guard leads to wrong tests results
   // auto context_guard = CUDAContext::get_instance().get_guard();
   CUDAContext::get_instance().make_current();
+  {
+    std::lock_guard<std::mutex> g(func_mu_);
+    auto it = func_cache_.find(name);
+    if (it != func_cache_.end()) {
+      return it->second;
+    }
+  }
   void *func = nullptr;
   auto t = Time::get_time();
-  auto err = CUDADriver::get_instance().module_get_function.call_with_warning(&func, module_, name.c_str());
-  if (err) {
+  auto &drv = CUDADriver::get_instance();
+  // The symbol lives in exactly one module. Use the non-warning `call` so probing the other modules (which return
+  // CUDA_ERROR_NOT_FOUND) does not spam the log; only a miss across *all* modules is an error.
+  for (void *m : modules_) {
+    void *f = nullptr;
+    if (drv.module_get_function.call(&f, m, name.c_str()) == 0 && f != nullptr) {
+      func = f;
+      break;
+    }
+  }
+  if (func == nullptr) {
     QD_ERROR("Cannot look up function {}", name);
   }
   t = Time::get_time() - t;
   QD_TRACE("CUDA module_get_function {} costs {} ms", name, t * 1000);
-  QD_ASSERT(func != nullptr);
+  {
+    std::lock_guard<std::mutex> g(func_mu_);
+    func_cache_[name] = func;
+  }
   return func;
 }
 
@@ -86,7 +110,7 @@ JITSessionCUDA::JITSessionCUDA(QuadrantsLLVMContext *tlctx,
   program_impl_->register_needs_finalizing(finalizer_.get());
 }
 
-JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M, int max_reg) {
+std::string JITSessionCUDA::compile_module_to_ptx_with_dump(std::unique_ptr<llvm::Module> &module) {
   // Read through get_environ_config, as codegen_llvm.cpp does for QD_DUMP_IR and QD_LOAD_IR, so that a value of 0
   // turns the variable off here too rather than only its absence.
   const bool dump_ir = get_environ_config(DUMP_IR_ENV.data()) != 0;
@@ -95,7 +119,7 @@ JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M, int max_r
   // Capture the dump name before compile_module_to_ptx renames functions via convert().
   std::string dump_name;
   if (dump_ir || load_ptx_from_dump) {
-    dump_name = moduleToDumpName(M.get());
+    dump_name = moduleToDumpName(module.get());
   }
 
   if (dump_ir && !dump_name.empty()) {
@@ -105,14 +129,14 @@ JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M, int max_r
     std::error_code EC;
     llvm::raw_fd_ostream dest_file(filename.string(), EC);
     if (!EC) {
-      M->print(dest_file, nullptr);
+      module->print(dest_file, nullptr);
     } else {
       std::cout << "problem dumping file " << filename.string() << ": " << EC.message() << std::endl;
       QD_ERROR("Failed to dump LLVM IR to file: {}", filename.string());
     }
   }
 
-  auto ptx = compile_module_to_ptx(M);
+  auto ptx = compile_module_to_ptx(module);
   if (this->config_.print_kernel_asm) {
     static FileSequenceWriter writer("quadrants_kernel_nvptx_{:04d}.ptx", "module NVPTX");
     writer.write(ptx);
@@ -147,6 +171,11 @@ JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M, int max_r
       QD_WARN("Failed to open PTX file for loading: {}", ptx_path.string());
     }
   }
+  return ptx;
+}
+
+JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M, int max_reg) {
+  auto ptx = compile_module_to_ptx_with_dump(M);
 
   // TODO: figure out why using the guard leads to wrong tests results
   // auto context_guard = CUDAContext::get_instance().get_guard();
@@ -177,6 +206,41 @@ JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M, int max_r
   // cudaModules.push_back(cudaModule);
   modules.push_back(std::make_unique<JITModuleCUDA>(cuda_module));
   return modules.back().get();
+}
+
+// LLVM->PTX stays serialised: per-task modules may share an LLVMContext, unsafe for concurrent codegen.
+static std::mutex g_ptxgen_mu;
+
+JITModule *JITSessionCUDA::add_module_per_task(std::vector<PerConstructArtifact> artifacts, int max_reg) {
+  // Per-task path (toolkit-free): compile each self-contained task module to PTX and load it as its OWN CUmodule via
+  // the driver (cuModuleLoadDataEx); the composite JITModuleCUDA below resolves tasks by name across the N modules.
+  // No `ptxas`, no relocatable cubins, no `cuLink`, so this runs on a driver-only machine. Per-task reuse rides on
+  // `PtxCache` (PTX, keyed on LLVM text, consulted inside compile_module_to_ptx) plus the driver compute cache (SASS).
+  (void)max_reg;  // No link step here (per-task whole-module driver load), so there is nowhere to apply max-reg.
+  auto &drv = CUDADriver::get_instance();
+
+  // The cheap LLVM->PTX step (the expensive PTX->SASS now happens in the driver at load, cached in ~/.nv/ComputeCache).
+  // Use the dump-aware variant so QD_DUMP_IR / QD_LOAD_IR behave the same per task as on the whole-module path.
+  std::vector<std::string> ptxs(artifacts.size());
+  for (std::size_t i = 0; i < artifacts.size(); i++) {
+    std::lock_guard<std::mutex> g(g_ptxgen_mu);
+    ptxs[i] = compile_module_to_ptx_with_dump(artifacts[i].module);
+  }
+
+  CUDAContext::get_instance().make_current();
+  [[maybe_unused]] auto _ = CUDAContext::get_instance().get_lock_guard();
+
+  std::vector<void *> mods;
+  mods.reserve(ptxs.size());
+  for (auto &ptx : ptxs) {
+    void *cuda_module = nullptr;
+    // c_str() hands over the NUL-terminated image cuModuleLoadDataEx wants, exactly like the whole-module path.
+    QD_ERROR_IF(drv.module_load_data_ex.call(&cuda_module, ptx.c_str(), 0, nullptr, nullptr),
+                "module_load_data_ex (per-task) failed");
+    mods.push_back(cuda_module);
+  }
+  this->modules.push_back(std::make_unique<JITModuleCUDA>(std::move(mods)));
+  return this->modules.back().get();
 }
 
 llvm::DataLayout JITSessionCUDA::get_data_layout() {

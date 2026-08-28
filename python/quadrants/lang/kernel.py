@@ -35,6 +35,7 @@ from quadrants._lib.core.quadrants_python import (
     KernelLaunchContext,
 )
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
+from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import _kernel_impl_dataclass, impl, runtime_ops
 
 # `qd.checkpoint` pause / resume model helpers. See `kernel_checkpoint.py` for the full extracted surface; `Kernel`
@@ -61,6 +62,7 @@ from quadrants.lang.impl import Program
 from quadrants.lang.shell import _shell_pop_print
 from quadrants.lang.util import cook_dtype, is_data_oriented
 from quadrants.types import (
+    ndarray_type,
     primitive_types,
     template,
 )
@@ -76,6 +78,7 @@ from ._kernel_types import (
     KernelBatchedArgType,
     LaunchObservations,
     LaunchStats,
+    PerOffloadCacheObservations,
     SrcLlCacheObservations,
 )
 from ._pruning import Pruning
@@ -380,6 +383,7 @@ class Kernel(FuncBase):
 
         self.src_ll_cache_observations: SrcLlCacheObservations = SrcLlCacheObservations()
         self.fe_ll_cache_observations: FeLlCacheObservations = FeLlCacheObservations()
+        self.per_offload_cache_observations: PerOffloadCacheObservations = PerOffloadCacheObservations()
         self.launch_observations = LaunchObservations()
 
         self.launch_context_buffer_cache = LaunchContextBufferCache()
@@ -402,6 +406,7 @@ class Kernel(FuncBase):
         self._last_compiled_kernel_data = None
         self.src_ll_cache_observations = SrcLlCacheObservations()
         self.fe_ll_cache_observations = FeLlCacheObservations()
+        self.per_offload_cache_observations = PerOffloadCacheObservations()
 
     def _try_load_fastcache(self, args: tuple[Any, ...], key: "CompiledKernelKeyType") -> set[str] | None:
         frontend_cache_key: str | None = None
@@ -638,6 +643,13 @@ class Kernel(FuncBase):
                     template_num += 1
                     i_out += 1
                     continue
+                if (
+                    val is None
+                    and self.arg_metas[i_in].optional
+                    and type(self.arg_metas[i_in].annotation) is ndarray_type.NdarrayType
+                ):
+                    # Optional ndarray + None is specialized away at compile time, so it consumes no runtime arg.
+                    continue
                 # FIXME: This shortcut skips _recursive_set_args() solely when val._qd_all_field is true and the annotation is
                 # a dataclass, but _recursive_set_args() is where the strict provided_arg_type-is-needed_arg_type check lives.
                 # As a result, once an instance has _qd_all_field=True, passing it to a kernel parameter annotated with a
@@ -717,6 +729,11 @@ class Kernel(FuncBase):
                 compiled_kernel_data = compile_result.compiled_kernel_data
                 if compile_result.cache_hit:
                     self.fe_ll_cache_observations.cache_hit = True
+                self.per_offload_cache_observations = PerOffloadCacheObservations(
+                    frontend_constructs_total=compile_result.per_construct_total,
+                    frontend_constructs_cache_hit=compile_result.per_construct_cache_hit,
+                    frontend_constructs_recompiled=compile_result.per_construct_recompiled,
+                )
                 if self.fast_checksum:
                     src_hasher.store(
                         compile_result.cache_key,
@@ -732,6 +749,13 @@ class Kernel(FuncBase):
                         checkpoint_user_labels_by_cp_id=list(self.checkpoint_user_labels_by_cp_id),
                     )
                     self.src_ll_cache_observations.cache_stored = True
+            else:
+                # No frontend ran this launch: `compiled_kernel_data` was served from a cache -- either an
+                # already-compiled specialization on this Kernel object, or a fastcache restore (`_try_load_fastcache`)
+                # that supplies the artifact directly and bypasses `prog.compile_kernel`. Report the per-construct
+                # split's no-split sentinel (-1) rather than leaving a previous specialization's counts visible; this
+                # matches the C++ cache-hit path, which also reports -1 in `KernelCompilationManager::load_or_compile`.
+                self.per_offload_cache_observations = PerOffloadCacheObservations()
             self._last_compiled_kernel_data = compiled_kernel_data
             launch_ctx.use_graph = self.use_graph and _GRAPH_ENABLED
             if self.use_graph and qd_stream is not None:
@@ -909,38 +933,35 @@ class Kernel(FuncBase):
 
         self.raise_on_templated_floats = config.raise_on_templated_floats
         py_args = self.fuse_args(is_func=False, is_pyfunc=False, py_args=py_args, kwargs=kwargs, global_context=None)
-        # Tensor-wrapper unwrap (stork-17). Substitute each ``qd.Tensor`` instance (including ``VectorTensor`` /
-        # ``MatrixTensor`` subclasses) with its underlying ``Ndarray`` / ``ScalarField`` impl *before* anything
-        # downstream observes the arg tuple — including the autograd tape (uses identity), the template mapper
-        # (cache-keys on ``id(arg)``), ``_extract_arg``, and the AST builder. This guarantees JIT cache stability:
-        # ``id(Tensor(impl))`` differs across constructions, but ``id(impl)`` is stable, so wrapper-or-not yields
-        # identical cache keys.
+        # Tensor-wrapper unwrap (stork-17). Canonicalize ``qd.Tensor`` slots, plus wrapper positions discovered on
+        # the first launch, before the autograd tape and identity-keyed caches observe the arg tuple.
         #
-        # PERF: On first call, record which arg positions are Tensor wrappers. On subsequent calls, skip entirely
-        # (empty indices) or unwrap only the cached positions (no full-arg scan). For a kernel with 30 args and 1
+        # PERF: On first call, record the candidate arg positions. On subsequent calls, skip entirely (empty
+        # candidates) or type-check only the cached positions (no full-arg scan). For a kernel with 30 args and 1
         # Tensor, this reduces per-call type checks from 30 to 1.
         #
-        # Safety of caching: kernel parameter annotations are fixed per position (they come from the function
-        # signature and are stored in ``self.mapper.arguments``). Whether a given position receives a Tensor wrapper
-        # or a bare impl is determined by the caller's annotation pattern, which is stable across calls — a user who
-        # passes ``qd.Tensor(impl)`` at position *i* will do so on every call, because the annotation (``qd.Tensor``,
-        # ``qd.Template``, ``qd.types.ndarray()``, or a dataclass type) doesn't change. The template mapper
-        # enforces a fixed arg count (``len(args) == self.num_args``), so cached indices cannot go out of bounds.
+        # ``qd.Tensor`` slots may alternate wrappers, ``None``, and bare impls, so annotation positions remain
+        # candidates even when the first value is not wrapped. Other annotations retain first-call discovery. The
+        # template mapper enforces a fixed arg count, so cached indices cannot go out of bounds.
         if _tensor_wrapper._any_tensor_constructed:  # pyright: ignore[reportOptionalMemberAccess]
             _indices = self._tensor_unwrap_indices
             if _indices is None:
-                _indices = tuple(i for i, a in enumerate(py_args) if type(a) in _TENSOR_WRAPPER_TYPES)
+                _indices = tuple(
+                    i
+                    for i, (a, m) in enumerate(zip(py_args, self.arg_metas))
+                    if type(a) in _TENSOR_WRAPPER_TYPES or m.annotation is _TensorClass
+                )
                 self._tensor_unwrap_indices = _indices
-                if _indices:
-                    py_args_l = list(py_args)
-                    for i in _indices:
-                        py_args_l[i] = py_args_l[i]._impl  # pyright: ignore[reportAttributeAccessIssue]
-                    py_args = tuple(py_args_l)
-            elif _indices:
-                py_args_l = list(py_args)
+            if _indices:
+                py_args_l = None
                 for i in _indices:
-                    py_args_l[i] = py_args_l[i]._impl  # pyright: ignore[reportAttributeAccessIssue]
-                py_args = tuple(py_args_l)
+                    _arg = py_args[i]
+                    if type(_arg) in _TENSOR_WRAPPER_TYPES:
+                        if py_args_l is None:
+                            py_args_l = list(py_args)
+                        py_args_l[i] = _arg._impl
+                if py_args_l is not None:
+                    py_args = tuple(py_args_l)
 
         # Transform the primal kernel to forward mode grad kernel
         # then recover to primal when exiting the forward mode manager

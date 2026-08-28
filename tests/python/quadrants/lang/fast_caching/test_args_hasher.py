@@ -59,6 +59,28 @@ def test_args_hasher_numeric_maybe_template(annotation: object, cache_value: boo
 
 
 @test_utils.test()
+def test_args_hasher_none_is_cacheable() -> None:
+    """A ``None`` argument must hash to a stable key rather than disabling fast cache.
+
+    Reaching the catch-all in ``stringify_obj_type`` makes ``hash_args`` return ``FastcacheSkip.WARN``, which disables
+    fast cache for the whole call. ``None`` is a singleton, so it is tagged with a constant instead: it hashes, the
+    hash is stable across calls, and it does not poison the other arguments in the same call.
+    """
+    for annotation in (None, qd.Tensor, qd.template(), qd.Template):
+        arg_meta = ArgMetadata(name="", annotation=annotation)
+        hash1 = args_hasher.hash_args(False, [None], [arg_meta])
+        assert not isinstance(hash1, FastcacheSkip)
+        assert hash1
+        hash2 = args_hasher.hash_args(False, [None], [arg_meta])
+        assert hash1 == hash2
+
+    # A None argument does not disable fast cache for the other (valid) arguments in the same call.
+    mixed = args_hasher.hash_args(False, [None, 3], [None, None])
+    assert not isinstance(mixed, FastcacheSkip)
+    assert mixed
+
+
+@test_utils.test()
 def test_args_hasher_bool() -> None:
     seen = set()
     for arg in (False, np.bool(False)):
