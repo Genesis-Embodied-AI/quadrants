@@ -103,9 +103,9 @@ def test_floor_div_pythonic():
 @test_utils.test()
 def test_exact_div_field_int(x, m):
     # Regression test for quadrants#749. An exactly-divisible float / (runtime int) must be correctly rounded. Under
-    # fast_math on AMDGPU the afn (ApproxFunc) flag lowered `fdiv` to an approximate v_rcp_f32 reciprocal, so
-    # 180.0 / 180 returned 0.99999994. The divisor is read from a field so it stays a runtime value and is not
-    # constant-folded exactly at compile time. No-op on CPU/CUDA, where fdiv ignores afn.
+    # fast_math on AMDGPU the afn (ApproxFunc) flag lowered `fdiv` to an approximate v_rcp_f32 reciprocal, so 180.0/180
+    # returned 0.99999994. The divisor is read from a field so it stays a runtime value and is not constant-folded at
+    # compile time. No-op on CPU/CUDA, where fdiv ignores afn.
     divisor = qd.field(qd.i32, shape=())
     result = qd.field(qd.f32, shape=())
 
@@ -128,9 +128,8 @@ def test_exact_div_field_int(x, m):
 )
 @test_utils.test()
 def test_floor_exact_div_field_int(x, m):
-    # Companion to test_exact_div_field_int: the approximate reciprocal made floor(a / b) land one cell low
-    # (floor(180.0 / 180) == 0.0 instead of 1.0), silently corrupting spatial hashing and grid indexing. See
-    # quadrants#749.
+    # Companion to test_exact_div_field_int: the approximate reciprocal made floor(a / b) land one cell low, e.g.
+    # floor(180.0/180) == 0.0 instead of 1.0, silently corrupting spatial hashing and grid indexing. See quadrants#749.
     divisor = qd.field(qd.i32, shape=())
     result = qd.field(qd.f32, shape=())
 

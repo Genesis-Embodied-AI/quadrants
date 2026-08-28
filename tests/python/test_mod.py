@@ -100,12 +100,11 @@ def test_py_style_unsigned_mod():
 )
 @test_utils.test()
 def test_py_style_float_mod_field_int(x, m):
-    # Regression test for quadrants#749. Under fast_math the global IRBuilder carries the afn (ApproxFunc) flag,
-    # which on AMDGPU lowers `fdiv` to an approximate v_rcp_f32 reciprocal (~2.5 ULP). Exactly-divisible cases such as
-    # 180.0 / 180 then return 0.99999994, so the `a - floor(a/b)*b` float-modulo expansion yields the unreduced
-    # dividend (e.g. 180.0 instead of 0.0). The divisor is read from a field so it stays a runtime value and is not
-    # constant-folded exactly at compile time (a literal divisor would hide the bug). No-op on CPU/CUDA, where fdiv
-    # ignores afn.
+    # Regression test for quadrants#749. Under fast_math the global IRBuilder carries the afn (ApproxFunc) flag, which
+    # on AMDGPU lowers `fdiv` to an approximate v_rcp_f32 reciprocal (~2.5 ULP). Exactly-divisible cases such as
+    # 180.0/180 then return 0.99999994, so the `a - floor(a/b)*b` float-modulo expansion yields the unreduced dividend
+    # (e.g. 180.0 instead of 0.0). The divisor is read from a field, so it is a runtime value that is not folded to a
+    # constant at compile time (a literal divisor would hide the bug). No-op on CPU/CUDA, where fdiv ignores afn.
     divisor = qd.field(qd.i32, shape=())
     result = qd.field(qd.f32, shape=())
 
