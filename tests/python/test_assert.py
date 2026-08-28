@@ -339,3 +339,40 @@ def test_amdgpu_assert_dead_context_reuse_raises():
             raise SystemExit("post-assert GPU work silently succeeded on a dead HIP context")
         """
     )
+
+
+@pytest.mark.skipif(not _amdgpu_available_for_assert_tests(), reason="AMDGPU not available/wanted")
+def test_amdgpu_out_of_bound_check_only_raises():
+    """Bounds checking can be enabled without debug (check_out_of_bound=True, debug=False), and it
+    lowers to the same in-kernel assert -> __builtin_trap() path. The pinned assert state + host
+    hook must therefore be installed in this mode too; otherwise an out-of-bounds access traps into
+    an untranslatable generic HIP launch failure on a dead context instead of the bounds error
+    (Codex #871 P1). Non-debug kernels do not auto-synchronize, so we sync explicitly to surface it.
+    """
+    _run_amdgpu_assert_child(
+        """
+        import quadrants as qd
+        qd.init(arch=qd.amdgpu, debug=False, check_out_of_bound=True, gdb_trigger=False)
+
+        @qd.kernel
+        def write_oob(a: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+            for i in range(10):
+                a[i] = 1  # a has 8 elements; i in {8, 9} is out of bounds
+
+        arr = qd.ndarray(qd.i32, shape=(8,))
+
+        raised = None
+        try:
+            write_oob(arr)
+            qd.sync()  # debug=False does not auto-sync; force the trap's launch failure to surface
+        except qd.QuadrantsAssertionError as e:
+            raised = e
+
+        if raised is None:
+            raise SystemExit(
+                "expected QuadrantsAssertionError for an out-of-bounds access with "
+                "check_out_of_bound=True, debug=False"
+            )
+        assert "Out of bound access" in str(raised), str(raised)
+        """
+    )

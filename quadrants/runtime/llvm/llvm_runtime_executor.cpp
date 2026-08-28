@@ -961,10 +961,15 @@ void LlvmRuntimeExecutor::materialize_runtime(KernelProfilerBase *profiler, uint
                                       adstack_overflow_task_id_dev_ptr_);
   }
 
-  // AMDGPU debug assert: allocate pinned coherent host memory for assert state so the host can
-  // format QuadrantsAssertionError after `__builtin_trap()` kills the dispatch (HIP context dead;
-  // device retrieval kernels cannot run). Gated on debug + amdgpu only.
-  if (config_.debug && config_.arch == Arch::amdgpu) {
+  // AMDGPU assert: allocate pinned coherent host memory for assert state so the host can format
+  // QuadrantsAssertionError after `__builtin_trap()` kills the dispatch (HIP context dead; device
+  // retrieval kernels cannot run). Installed whenever an AssertStmt can be emitted for this arch,
+  // i.e. debug OR check_out_of_bound: the bounds-check pass lowers to the same unconditional trap
+  // path, so a check_out_of_bound=True, debug=False program must also get the pinned state + hook.
+  // Otherwise an out-of-bounds access would trap into an untranslatable generic launch failure on a
+  // dead context instead of surfacing the bounds error. (debug forces check_out_of_bound=true, so
+  // the disjunction is really just check_out_of_bound, but it is spelled out for robustness.)
+  if ((config_.debug || config_.check_out_of_bound) && config_.arch == Arch::amdgpu) {
 #if defined(QD_WITH_AMDGPU)
     void *host_slot = nullptr;
     AMDGPUDriver::get_instance().mem_alloc_host(&host_slot, sizeof(AmdgpuAssertErrorStateHostView),

@@ -57,6 +57,10 @@ Assertions support constant strings and f-strings for the error message.
 
 Note: `assert` is compiled into the kernel but only checked at runtime when `debug=True`. On Linux ARM64, assertions are not currently supported.
 
+#### AMDGPU: assertions end the GPU context
+
+On the AMDGPU backend a failed in-kernel assertion (including a `check_out_of_bound` bounds-check failure) is implemented by trapping the entire GPU dispatch, which is what lets the failure raise `QuadrantsAssertionError` instead of deadlocking sibling threads waiting on a barrier. A side effect is that the HIP context is left permanently unusable afterward: the assertion is delivered exactly once, and the common "catch the `QuadrantsAssertionError` and keep going" pattern does not work here. Any further GPU work in the same process - including re-initializing Quadrants - raises a hard error rather than silently returning stale results. To recover, start a fresh process. This limitation is specific to AMDGPU debug / bounds-checking runs; CUDA, CPU, and Metal are unaffected.
+
 ## Performance impact
 
 Debug mode adds runtime checks to every field access and assertion, which can significantly slow down kernel execution. It is intended for development and debugging, not production use.
