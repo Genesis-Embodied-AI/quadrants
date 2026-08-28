@@ -1366,7 +1366,7 @@ llvm::Value *TaskCodeGenLLVM::atomic_op_using_cas(llvm::Value *dest,
   {
     int bits = data_type_bits(type);
     // Preserve dest's addrspace: an AMDGPU addrspace(1) dest cannot be bitcast
-    // to a generic pointer. No-op for CPU/CUDA (addrspace 0).
+    // to a generic pointer.
     unsigned dest_as = dest->getType()->isPointerTy() ? dest->getType()->getPointerAddressSpace() : 0;
     llvm::PointerType *typeIntPtr = llvm::PointerType::get(*llvm_context, dest_as);
     llvm::IntegerType *typeIntTy = get_integer_type(bits);
@@ -1755,8 +1755,6 @@ void TaskCodeGenLLVM::visit(ExternalPtrStmt *stmt) {
   auto *gep = builder->CreateGEP(struct_type, llvm_val.at(stmt->base_ptr),
                                  {tlctx->get_constant(0), tlctx->get_constant(int(stmt->is_grad) + 1)});
   llvm::Value *ptr_val = builder->CreateLoad(tlctx->get_data_type(ptr_type), gep);
-  // Tag the ndarray data pointer; downstream element bitcasts inherit its
-  // addrspace via ptr_val_as rather than hardcoding addrspace(0).
   ptr_val = maybe_tag_amdgpu_global_ptr(ptr_val);
   unsigned ptr_val_as = ptr_val->getType()->getPointerAddressSpace();
 
@@ -3429,8 +3427,6 @@ void TaskCodeGenLLVM::set_struct_to_buffer(const StructType *struct_type,
 }
 
 llvm::Value *TaskCodeGenLLVM::maybe_tag_amdgpu_global_ptr(llvm::Value *ptr) {
-  // Tag a device pointer as addrspace(1) so InferAddressSpaces can promote
-  // dependent flat_* accesses to global_*. AMDGPU only; no-op elsewhere.
   if (current_arch() != Arch::amdgpu || ptr == nullptr || !ptr->getType()->isPointerTy() ||
       ptr->getType()->getPointerAddressSpace() == 1) {
     return ptr;
@@ -3454,9 +3450,8 @@ llvm::Value *TaskCodeGenLLVM::get_struct_arg(const std::vector<int> &index, bool
   }
   llvm::Value *loaded = builder->CreateLoad(tlctx->get_data_type(arg_type), gep);
   // Don't tag a Function (@qd.real_func) callee's args: they come from a
-  // caller-local alloca (private memory), e.g. qd.ref(...) params, so tagging
-  // them global would be unsound. ndarray data used in a callee is still tagged
-  // at its ExternalPtrStmt load, where the pointer is genuinely global.
+  // caller-local alloca (private memory, e.g. qd.ref params), so tagging them
+  // global would be unsound.
   if (dynamic_cast<const Function *>(current_callable) == nullptr) {
     loaded = maybe_tag_amdgpu_global_ptr(loaded);
   }

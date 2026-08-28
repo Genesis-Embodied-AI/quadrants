@@ -33,7 +33,6 @@ def test_amdgpu_global_as_promotes_flat_to_global(monkeypatch, tmp_path):
     y = np.zeros(n, dtype=np.float32)
     saxpy(x, y, 2.0)
 
-    # Functional sanity check.
     np.testing.assert_allclose(y, 2.0, rtol=1e-6)
 
     gcn_files = sorted(glob.glob(str(tmp_path / "quadrants_kernel_amdgcn_*.gcn")))

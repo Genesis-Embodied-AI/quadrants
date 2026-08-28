@@ -327,10 +327,9 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     }
   }
 
-  // Device memory is addrspace(1) on AMDGPU. Tagging pointers as addrspace(1)
-  // where they are materialized lets InferAddressSpaces promote dependent flat_*
-  // accesses to global_*. ndarray data pointers are tagged in the shared base
-  // codegen; only the AMDGPU-specific sources are overridden here.
+  // Device memory is addrspace(1) on AMDGPU. Tagging pointers where they are
+  // materialized lets InferAddressSpaces promote dependent flat_* accesses to
+  // global_*. (ndarray data pointers are tagged in the shared base codegen.)
 
   void visit(GlobalTemporaryStmt *stmt) override {
     TaskCodeGenLLVM::visit(stmt);
@@ -342,9 +341,8 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
   }
 
   void visit(MatrixPtrStmt *stmt) override {
-    // Base codegen forces the result to addrspace(0) (routing the byte-offset
-    // path through inttoptr), stripping the source tag. Preserve the origin
-    // addrspace so global-backed matrix elements stay in global memory.
+    // Base codegen strips the source tag (forces addrspace(0), via inttoptr on
+    // the byte-offset path); preserve the origin addrspace instead.
     auto *origin_ptr = llvm_val[stmt->origin];
     unsigned origin_as = origin_ptr->getType()->isPointerTy() ? origin_ptr->getType()->getPointerAddressSpace() : 0;
     if (stmt->offset_used_as_index()) {
