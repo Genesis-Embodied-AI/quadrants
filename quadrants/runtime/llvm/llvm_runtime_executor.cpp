@@ -710,6 +710,17 @@ void LlvmRuntimeExecutor::finalize() {
     }
 #endif
   }
+#if defined(QD_WITH_AMDGPU)
+  // Teardown complete: close the launch-failure suppression window opened in pre_finalize() /
+  // the top of finalize() so it cannot leak into a subsequent qd.init() in the same process. All
+  // teardown synchronize()/free calls above have already run under the open window, so from here a
+  // launch failure on a dead context is surfaced as a hard error again instead of being silently
+  // swallowed. materialize_runtime() also clears this on the next init; clearing here additionally
+  // covers the gap between finalize() and that next init (e.g. driver calls during re-init).
+  if (config_.arch == Arch::amdgpu) {
+    amdgpu_set_device_in_teardown(false);
+  }
+#endif
   finalized_ = true;
 }
 
@@ -965,13 +976,13 @@ void LlvmRuntimeExecutor::materialize_runtime(KernelProfilerBase *profiler, uint
 
   // AMDGPU assert: allocate pinned coherent host memory for assert state so the host can format
   // QuadrantsAssertionError after `__builtin_trap()` kills the dispatch (HIP context dead; device
-  // retrieval kernels cannot run). Installed whenever an AssertStmt can be emitted for this arch,
-  // i.e. debug OR check_out_of_bound: the bounds-check pass lowers to the same unconditional trap
-  // path, so a check_out_of_bound=True, debug=False program must also get the pinned state + hook.
-  // Otherwise an out-of-bounds access would trap into an untranslatable generic launch failure on a
-  // dead context instead of surfacing the bounds error. (debug forces check_out_of_bound=true, so
-  // the disjunction is really just check_out_of_bound, but it is spelled out for robustness.)
-  if ((config_.debug || config_.check_out_of_bound) && config_.arch == Arch::amdgpu) {
+  // retrieval kernels cannot run). Installed unconditionally on AMDGPU, not just in debug /
+  // check_out_of_bound: quadrants_assert_format -> __builtin_trap is also reached by *internal*
+  // runtime assertions (e.g. "Out of pre-allocated memory" in allocate_from_reserved_memory, or the
+  // ListManager bounds checks) that fire regardless of debug or check_out_of_bound. Without the
+  // pinned state + hook those would trap into an untranslatable generic launch failure on a dead
+  // context instead of surfacing the real error message.
+  if (config_.arch == Arch::amdgpu) {
 #if defined(QD_WITH_AMDGPU)
     void *host_slot = nullptr;
     AMDGPUDriver::get_instance().mem_alloc_host(&host_slot, sizeof(AmdgpuAssertErrorStateHostView),
