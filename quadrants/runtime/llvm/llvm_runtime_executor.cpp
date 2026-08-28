@@ -231,6 +231,10 @@ JITModule *LlvmRuntimeExecutor::create_jit_module(std::unique_ptr<llvm::Module> 
   return jit_session_->add_module(std::move(module));
 }
 
+JITModule *LlvmRuntimeExecutor::create_jit_module_per_task(std::vector<PerConstructArtifact> artifacts) {
+  return jit_session_->add_module_per_task(std::move(artifacts));
+}
+
 JITModule *LlvmRuntimeExecutor::get_runtime_jit_module() {
   return runtime_jit_module_;
 }
@@ -247,8 +251,9 @@ void LlvmRuntimeExecutor::print_list_manager_info(void *list_manager, uint64 *re
 
   auto size_MB = 1e-6f * num_active_chunks * elements_per_chunk * element_size;
 
-  fmt::print(" length={:n}     {:n} chunks x [{:n} x {:n} B]  total={:.4f} MB\n", list_manager_len, num_active_chunks,
-             elements_per_chunk, element_size, size_MB);
+  fmt::print(" length={}     {} chunks x [{} x {} B]  total={:.4f} MB\n", fmt::group_digits(list_manager_len),
+             fmt::group_digits(num_active_chunks), fmt::group_digits(elements_per_chunk),
+             fmt::group_digits(element_size), size_MB);
 }
 
 Program *LlvmRuntimeExecutor::get_program() const {
@@ -346,11 +351,6 @@ void LlvmRuntimeExecutor::print_memory_profiler_info(std::vector<std::unique_ptr
 
   fmt::print("\n[Memory Profiler]\n");
 
-  std::locale::global(std::locale("en_US.UTF-8"));
-  // So that thousand separators are added to "{:n}" slots in fmtlib.
-  // E.g., 10000 is printed as "10,000".
-  // TODO: is there a way to set locale only locally in this function?
-
   std::function<void(SNode *, int)> visit = [&](SNode *snode, int depth) {
     auto element_list = runtime_query<void *>("LLVMRuntime_get_element_lists", result_buffer, llvm_runtime_, snode->id);
 
@@ -379,9 +379,10 @@ void LlvmRuntimeExecutor::print_memory_profiler_info(std::vector<std::unique_ptr
           print_list_manager_info(data_list, result_buffer);
 
           fmt::print(
-              "  Allocated elements={:n}; free list length={:n}; recycled list "
-              "length={:n}\n",
-              free_list_used, free_list_len, recycled_list_len);
+              "  Allocated elements={}; free list length={}; recycled list "
+              "length={}\n",
+              fmt::group_digits(free_list_used), fmt::group_digits(free_list_len),
+              fmt::group_digits(recycled_list_len));
         }
       }
     }
@@ -397,7 +398,8 @@ void LlvmRuntimeExecutor::print_memory_profiler_info(std::vector<std::unique_ptr
   auto total_requested_memory =
       runtime_query<std::size_t>("LLVMRuntime_get_total_requested_memory", result_buffer, llvm_runtime_);
 
-  fmt::print("Total requested dynamic memory (excluding alignment padding): {:n} B\n", total_requested_memory);
+  fmt::print("Total requested dynamic memory (excluding alignment padding): {} B\n",
+             fmt::group_digits(total_requested_memory));
 }
 
 DevicePtr LlvmRuntimeExecutor::get_snode_tree_device_ptr(int tree_id) {

@@ -67,7 +67,7 @@ Building and analyzing the CFG is the most expensive optimization in the pipelin
 
 ## Controlling the passes
 
-All of these are fields of `CompileConfig`, so you set them at `qd.init(...)` (or via the matching `QD_<UPPERCASE_NAME>` environment variable). See [qd.init options](./init_options.md) for the full list and the environment-variable convention.
+All of these are fields of `CompileConfig` (the Quadrants compiler-configuration object built from your `qd.init(...)` arguments), so you set them at `qd.init(...)` (or via the matching `QD_<UPPERCASE_NAME>` environment variable). See [qd.init options](./init_options.md) for the full list and the environment-variable convention.
 
 | Option | Default | Effect |
 |--------|---------|--------|
@@ -85,10 +85,56 @@ These environment variables dump the IR so you can see the effect of each pass. 
 
 - `QD_DUMP_IR=1` - writes an IR snapshot at each major pipeline stage (after lowering, before/after each simplify, after offload).
 - `QD_DUMP_SIMPLIFY=1` - writes an IR snapshot after every individual pass on every iteration of the simplify loop. Verbose, but it shows exactly which pass changed what.
-- `QD_DUMP_CFG=1` - writes the control-flow graph itself. (This also forces the CFG pass back onto the whole-kernel path so the complete graph can be dumped.)
+- `QD_DUMP_CFG=1` - writes the control-flow graph itself, at the granularity the compiler actually uses: one graph per offloaded task once the kernel has been offloaded (files suffixed `_task<N>`), and the whole-kernel graph before offload and for kernels that are never offloaded.
 
 Setting `qd.init(print_ir=True)` prints the IR to the console at pipeline stages instead of writing files.
 
 ## Under the hood: per-task scoping
 
 Once the kernel has been split into offloaded tasks, both CSE and the CFG optimization run over **one offloaded task's IR at a time**, never over the whole `qd.kernel` at once. This is both faster to analyze and safe: because each task is a separate device launch, a value held in a register in one task cannot survive into the next one, so there is never anything to deduplicate or forward across a task boundary. Anything written to global memory is treated as potentially read by a later task, so no store another task might need is dropped.
+
+## Under the hood: per-construct frontend compilation
+
+This section is for the curious; you never have to think about it to write kernels - the behavior below is transparent and on by default.
+
+The frontend stages above - the passes that turn your high-level kernel into offloaded tasks - can run either once over the whole kernel or, for eligible kernels, separately for each **top-level construct** (each independent top-level loop or serial run in your kernel). Compiling each construct in isolation produces the same offloaded tasks and the same results as the whole-kernel path, so the split is transparent.
+
+The advantage of compiling each construct in isolation is caching granularity: it allows the compiled result to be cached per offloaded task rather than only for the entire `qd.kernel`, so editing one construct need only recompile that construct rather than the whole kernel.
+
+Quadrants automatically falls back to the whole-kernel path whenever per-construct compilation would not be equivalent: [autodiff](autodiff.md) kernels, certain specialized kernels, and kernels where one construct's value depends on state another construct produced in a way that cannot be recomputed in isolation. For example, a local variable that one top-level loop builds up over its iterations and another construct then reads, or a snapshot of a field that a later construct reads after an intervening write.
+
+That last case looks like this:
+
+```python
+@qd.kernel
+def shadowed(x: qd.types.NDArray[qd.f32, 1], y: qd.types.NDArray[qd.f32, 1]) -> None:
+    base = x[0]                 # snapshot of a field
+    for i in range(x.shape[0]):
+        x[i] = 2.0              # a later construct overwrites x ...
+    for i in range(y.shape[0]):
+        y[i] = base             # ... but this must still see the ORIGINAL x[0]
+```
+
+`base` is a serial definition, so isolating the last loop would recompute `base = x[0]` inside it - now reading the overwritten `x[0]` (`2.0`) instead of the snapshot. Rather than track which fields each construct touches, Quadrants conservatively keeps any such kernel on the whole-kernel path.
+
+### Inspecting the split
+
+You can see whether the split ran, and how many constructs it found, via the `per_offload_cache_observations` attribute on the kernel's compiled [primal](autodiff.md) (the forward kernel object, accessed as `._primal`):
+
+```python
+@qd.kernel
+def my_kernel(x: qd.types.NDArray[qd.f32, 1]) -> None:
+    for i in range(x.shape[0]):
+        x[i] += 1.0
+    for i in range(x.shape[0]):
+        x[i] += 2.0
+
+my_kernel(some_array)
+
+obs = my_kernel._primal.per_offload_cache_observations
+print(obs.frontend_constructs_total)       # number of constructs the split compiled
+print(obs.frontend_constructs_recompiled)  # how many were (re)compiled this time
+print(obs.frontend_constructs_cache_hit)   # how many were reused (always 0: every construct is recompiled)
+```
+
+All three fields are `-1` when the split did not run for this compile - either because the kernel took the whole-kernel fallback above, or because the compiled kernel was served from a cache (the [offline cache](init_options.md#offline_cache) or [fastcache](fastcache.md)) so no frontend ran at all.
