@@ -4,10 +4,17 @@
 #include "quadrants/ir/analysis.h"
 #include "quadrants/ir/visitors.h"
 #include "quadrants/program/program.h"
+#include "quadrants/transforms/offload_stable_key.h"
 
 #include <set>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
+#include <vector>
+#include <algorithm>
+#include <typeinfo>
+#include <cstdint>
+#include <string>
 
 namespace quadrants::lang {
 
@@ -109,6 +116,7 @@ class Offloader {
         const GraphRegionTag tag = bucket_has_side_effect ? bucket_tag : fallback_tag;
         pending_serial_statements->graph_do_while_level_id = tag.graph_do_while_level_id;
         pending_serial_statements->stream_parallel_group_id = tag.stream_parallel_group_id;
+        pending_serial_statements->graph_parallel_region_id = tag.graph_parallel_region_id;
         pending_serial_statements->checkpoint_id = tag.checkpoint_id;
         root_block->insert(std::move(pending_serial_statements));
         pending_serial_statements = Stmt::make_typed<OffloadedStmt>(OffloadedStmt::TaskType::serial, arch, kernel);
@@ -156,7 +164,9 @@ class Offloader {
       auto &stmt = root_statements[i];
       // Note that stmt->parent is root_block, which doesn't contain stmt now.
       if (auto s = stmt->cast<RangeForStmt>(); s && !s->strictly_serialized) {
-        assemble_serial_statements(GraphRegionTag{s->graph_do_while_level_id, s->stream_parallel_group_id});
+        GraphRegionTag pre_for_tag{s->graph_do_while_level_id, s->stream_parallel_group_id};
+        pre_for_tag.graph_parallel_region_id = s->graph_parallel_region_id;
+        assemble_serial_statements(pre_for_tag);
         auto offloaded = Stmt::make_typed<OffloadedStmt>(OffloadedStmt::TaskType::range_for, arch, kernel);
         // offloaded->body is an empty block now.
         offloaded->grid_dim = config.saturating_grid_dim;
@@ -192,12 +202,15 @@ class Offloader {
         }
         offloaded->range_hint = s->range_hint;
         offloaded->stream_parallel_group_id = s->stream_parallel_group_id;
+        offloaded->graph_parallel_region_id = s->graph_parallel_region_id;
         offloaded->graph_do_while_level_id = s->graph_do_while_level_id;
         offloaded->checkpoint_id = s->checkpoint_id;
         offloaded->loop_name = s->loop_name;
         root_block->insert(std::move(offloaded));
       } else if (auto st = stmt->cast<StructForStmt>()) {
-        assemble_serial_statements(GraphRegionTag{st->graph_do_while_level_id, st->stream_parallel_group_id});
+        GraphRegionTag pre_for_tag{st->graph_do_while_level_id, st->stream_parallel_group_id};
+        pre_for_tag.graph_parallel_region_id = st->graph_parallel_region_id;
+        assemble_serial_statements(pre_for_tag);
         emit_struct_for(st, root_block, config, st->mem_access_opt);
       } else if (auto st = stmt->cast<MeshForStmt>()) {
         assemble_serial_statements(GraphRegionTag{st->graph_do_while_level_id, /*group=*/0});
@@ -309,6 +322,7 @@ class Offloader {
     offloaded_struct_for->num_cpu_threads = std::min(for_stmt->num_cpu_threads, config.cpu_max_num_threads);
     offloaded_struct_for->mem_access_opt = mem_access_opt;
     offloaded_struct_for->stream_parallel_group_id = for_stmt->stream_parallel_group_id;
+    offloaded_struct_for->graph_parallel_region_id = for_stmt->graph_parallel_region_id;
     offloaded_struct_for->graph_do_while_level_id = for_stmt->graph_do_while_level_id;
     offloaded_struct_for->checkpoint_id = for_stmt->checkpoint_id;
     offloaded_struct_for->loop_name = for_stmt->loop_name;
@@ -432,6 +446,29 @@ class IdentifyValuesUsedInOtherOffloads : public BasicStmtVisitor {
     QD_ASSERT(current_offloaded_);
   }
 
+  // Record the values written into each local (alloca) so GlobalTmpOrdering can fold an alloca's def/update chain
+  // into its ordering key. Allocas have no operands, so a content key alone keys them on statement kind + type only
+  // and two same-typed cross-offload locals share a key (PR #864 review r3797057477). Recorded during the same
+  // traversal that collects cross-offload values; dest is squashed so element stores into local tensors are
+  // attributed to their base alloca.
+  void record_local_store(Stmt *dest, Stmt *store) {
+    if (dest == nullptr)
+      return;
+    Stmt *base = SquashPtrOffset::run(dest);
+    if (base != nullptr && base->is<AllocaStmt>())
+      alloca_stores_[base].push_back(store);
+  }
+
+  void visit(LocalStoreStmt *stmt) override {
+    record_local_store(stmt->dest, stmt);
+    generic_visit(stmt);
+  }
+
+  void visit(AtomicOpStmt *stmt) override {
+    record_local_store(stmt->dest, stmt);
+    generic_visit(stmt);
+  }
+
   void test_and_allocate(Stmt *stmt) {
     if (stmt == nullptr)
       return;
@@ -447,10 +484,22 @@ class IdentifyValuesUsedInOtherOffloads : public BasicStmtVisitor {
       return;
     if ((config_.arch == Arch::vulkan || config_.arch == Arch::metal) && demotable_axis_load(stmt))
       return;
-    // Not yet allocated
-    if (local_to_global_.find(top_level_ptr) == local_to_global_.end()) {
-      local_to_global_[top_level_ptr] = allocate_global(top_level_ptr->ret_type);
+    // Collect (dedup, in traversal order) the cross-offload value. Offset assignment is deferred to assign_offsets()
+    // so it can be done in a stable content-keyed order (S2a') rather than traversal order.
+    if (!value_seen_.count(top_level_ptr)) {
+      value_seen_.insert(top_level_ptr);
+      ordered_values_.push_back(top_level_ptr);
     }
+  }
+
+  // Assign a global-temp offset to every collected cross-offload value, reusing allocate_global's sizing/alignment
+  // verbatim. GlobalTmpOrdering first reorders the values into a content-keyed order (see offload_stable_key.h), so
+  // a slot's offset is a function of its content rather than of traversal order -- which is what keeps a task's IR,
+  // and therefore its cache key, stable across edits elsewhere in the kernel.
+  void assign_offsets() {
+    GlobalTmpOrdering().sort(ordered_values_, alloca_stores_);
+    for (auto *v : ordered_values_)
+      local_to_global_[v] = allocate_global(v->ret_type);
   }
 
   void generic_visit(Stmt *stmt) {
@@ -475,6 +524,7 @@ class IdentifyValuesUsedInOtherOffloads : public BasicStmtVisitor {
                              OffloadedRanges *offloaded_ranges) {
     IdentifyValuesUsedInOtherOffloads pass(config, stmt_to_offloaded, offloaded_ranges);
     root->accept(&pass);
+    pass.assign_offsets();
     return pass.local_to_global_;
   }
 
@@ -486,6 +536,12 @@ class IdentifyValuesUsedInOtherOffloads : public BasicStmtVisitor {
   StmtToOffsetMap local_to_global_;
   Stmt *current_offloaded_;
   std::size_t global_offset_;
+  // Cross-offload values in first-encounter (traversal) order, offset assignment deferred to assign_offsets().
+  std::vector<Stmt *> ordered_values_;
+  std::unordered_set<Stmt *> value_seen_;
+  // Per-alloca list of the local-store / atomic statements that write into it, in traversal order. Consumed by
+  // GlobalTmpOrdering to give same-typed cross-offload locals distinct content-derived ordering keys.
+  GlobalTmpOrdering::AllocaStores alloca_stores_;
 };
 
 // Store intermediate values to globals so that statements in later offloaded

@@ -286,20 +286,25 @@ std::unique_ptr<SizeExpr> expr_sub(std::unique_ptr<SizeExpr> a, std::unique_ptr<
     return SizeExpr::make_const(0);
   }
   // Fuse `Sub(MaxOverRange(X, B, E, body_a), MaxOverRange(Y, B, E, body_b))` into
-  // `MaxOverRange(X, B, E, Sub(body_a, body_b[Y->X]))` when the two wrappers are over the SAME user loop.
-  // `expr_equal` on the ends gates this via alpha-equivalence (see `expr_equal_alpha`'s comment): it only
-  // returns true when the two independently-built range wrappers bottom out at the same source IR loop, so
-  // fusing is semantically identical to the user's per-iteration paired subtraction. Without fusion the
+  // `MaxOverRange(X, B, E, Sub(body_a, body_b[Y->X]))` when the two wrappers iterate the SAME source IR loop.
+  // Fusing is then semantically identical to the user's per-iteration paired subtraction. Without fusion the
   // unfused form evaluates to `max_i body_a(i) - max_j body_b(j)` at runtime, which under-counts
   // `max_i (body_a(i) - body_b(i))` whenever the per-operand maxima are attained at different indices.
-  // Cross-user-loop fusion (two MaxOverRange wrappers from two independent enclosing loops that happen to
-  // iterate over same-axis ndarray shapes) is NOT safe: the user's two loops use independent indices, and
-  // fusing under a single `v` fabricates an index pairing that does not exist in the source - the bound
-  // collapses to `max_v (arr_a[v] - arr_b[v])` over `min(shape_a, shape_b)`, which silently misses any peak
-  // in `arr_a` past `shape_b` and drives the adstack toward overflow at `qd.sync()`. Those cases fall to
-  // the `MaxOverRange_a` over-approximation below.
+  //
+  // The `source_loop` pointer, not alpha-equivalence of the begin / end subtrees, is what proves the two
+  // wrappers share an iteration. Two wrappers built for reads at unrelated indices can carry alpha-equal ends
+  // yet pair nothing in the source: whenever an index cannot be chased to a `LoopIndexStmt`, the wrapper falls
+  // back to `MaxOverRange(v, 0, shape_along_axis)` with `source_loop == nullptr`, so a difference of two
+  // adjacent reads under one enclosing loop - `arr[i + 1] - arr[i]`, the offset-array trip count of a ragged
+  // inner loop - produces two whole-shape fallback wrappers whose ends are both the same `ExternalTensorShape`.
+  // Fusing those under a single `v` fabricates the pairing `arr[v] - arr[v]`, whose body subtracts to zero and
+  // collapses the whole inner loop's push multiplier to zero, undersizing the stack into an overflow at
+  // `qd.sync()`. Requiring a non-null shared `source_loop` keeps the fusion for genuinely paired reads and
+  // routes every fallback-wrapped difference to the `MaxOverRange_a` over-approximation below, which stays a
+  // sound upper bound (`max(0, a - b) <= a` for non-negative `b`).
   if (a->kind == SizeExpr::Kind::MaxOverRange && b->kind == SizeExpr::Kind::MaxOverRange && a->operands.size() == 3 &&
-      b->operands.size() == 3 && expr_equal(a->operands[0].get(), b->operands[0].get()) &&
+      b->operands.size() == 3 && a->source_loop != nullptr && a->source_loop == b->source_loop &&
+      expr_equal(a->operands[0].get(), b->operands[0].get()) &&
       expr_equal(a->operands[1].get(), b->operands[1].get())) {
     // Decline the fusion when the resulting body would mix a `FieldLoad` and an `ExternalTensorRead`. Each
     // side is independently host-foldable (its MaxOverRange wraps a closed subtree), but the fused body
@@ -316,13 +321,15 @@ std::unique_ptr<SizeExpr> expr_sub(std::unique_ptr<SizeExpr> a, std::unique_ptr<
     if (!would_mix) {
       int32_t var_x = a->var_id;
       int32_t var_y = b->var_id;
+      // Both wrappers share this loop (gated above), so the fused wrapper iterates it too.
+      Stmt *fused_loop = a->source_loop;
       auto body_b_renamed = b->operands[2] ? b->operands[2]->clone() : nullptr;
       if (body_b_renamed != nullptr && var_x != var_y) {
         substitute_var_in_place(body_b_renamed.get(), var_y, var_x);
       }
       auto new_body = expr_sub(std::move(a->operands[2]), std::move(body_b_renamed));
       return SizeExpr::make_max_over_range(var_x, std::move(a->operands[0]), std::move(a->operands[1]),
-                                           std::move(new_body));
+                                           std::move(new_body), fused_loop);
     }
   }
   // Sound upper bound on `Sub(a, b)` when both operands are `MaxOverRange` and we could not fuse them (cross-
@@ -739,7 +746,8 @@ std::unique_ptr<SizeExpr> build_value_expr(Stmt *stmt, IRNode *root, int32_t *va
         if (!begin_e || !end_e) {
           return nullptr;
         }
-        result = SizeExpr::make_max_over_range(wrap.var_id, std::move(begin_e), std::move(end_e), std::move(result));
+        result = SizeExpr::make_max_over_range(wrap.var_id, std::move(begin_e), std::move(end_e), std::move(result),
+                                               wrap.loop);
       }
       return result;
     }
@@ -852,7 +860,8 @@ std::unique_ptr<SizeExpr> build_value_expr(Stmt *stmt, IRNode *root, int32_t *va
         if (!begin_e || !end_e) {
           return nullptr;
         }
-        result = SizeExpr::make_max_over_range(var_id, std::move(begin_e), std::move(end_e), std::move(result));
+        result =
+            SizeExpr::make_max_over_range(var_id, std::move(begin_e), std::move(end_e), std::move(result), range_for);
       }
       return result;
     }
@@ -1008,7 +1017,8 @@ std::unique_ptr<SizeExpr> build_value_expr(Stmt *stmt, IRNode *root, int32_t *va
         if (!begin_e || !end_e) {
           return nullptr;
         }
-        result = SizeExpr::make_max_over_range(wrap.var_id, std::move(begin_e), std::move(end_e), std::move(result));
+        result = SizeExpr::make_max_over_range(wrap.var_id, std::move(begin_e), std::move(end_e), std::move(result),
+                                               wrap.loop);
       }
       return result;
     }

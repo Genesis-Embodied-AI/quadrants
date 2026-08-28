@@ -599,7 +599,7 @@ def _emit_exclusive_scan_add(buf, off, n, levels_remaining: int):
     Plain-Python helper run during kernel tracing (the scan counterpart of radix sort's ``_emit_pass``): it makes the
     ``@qd.func`` calls (:func:`_graph_scan_reduce` / :func:`_graph_scan_base` / :func:`_graph_scan_downsweep`) that each
     become a top-level offloaded GPU launch - and a node in the enclosing captured graph. Call it at the **top level**
-    of a kernel (a ``while qd.graph_do_while(...)`` body also counts as top level); never nest it in ordinary runtime
+    of a kernel (a ``while qd.graph.do_while(...)`` body also counts as top level); never nest it in ordinary runtime
     ``for`` / ``if`` / ``while`` control flow, which would demote the phase loops and collapse the per-phase grid-wide
     barriers.
 

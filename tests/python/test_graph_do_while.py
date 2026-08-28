@@ -43,7 +43,7 @@ def test_graph_do_while_counter():
 
     @qd.kernel(graph=True)
     def graph_loop(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndim=0)):
-        while qd.graph_do_while(counter):
+        while qd.graph.do_while(counter):
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1
             for i in range(1):
@@ -90,7 +90,7 @@ def test_graph_do_while_with_bounds_checks_iterates_correctly():
 
     @qd.kernel(graph=True)
     def graph_loop_checked(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndim=0)):
-        while qd.graph_do_while(counter):
+        while qd.graph.do_while(counter):
             for i in qd.static(range(N)):
                 x[i] = x[i] + 1
             for i in range(1):
@@ -118,7 +118,7 @@ def test_graph_do_while_boolean_done():
         threshold: qd.i32,
         keep_going: qd.types.ndarray(qd.i32, ndim=0),
     ):
-        while qd.graph_do_while(keep_going):
+        while qd.graph.do_while(keep_going):
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1
             for i in range(1):
@@ -162,7 +162,7 @@ def test_graph_do_while_multiple_loops():
         y: qd.types.ndarray(qd.f32, ndim=1),
         counter: qd.types.ndarray(qd.i32, ndim=0),
     ):
-        while qd.graph_do_while(counter):
+        while qd.graph.do_while(counter):
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1.0
             for i in range(y.shape[0]):
@@ -213,7 +213,7 @@ def test_graph_do_while_swap_counter_ndarray():
 
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=1), c: qd.types.ndarray(qd.i32, ndim=0)):
-        while qd.graph_do_while(c):
+        while qd.graph.do_while(c):
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1
             for i in range(1):
@@ -256,7 +256,7 @@ def test_graph_do_while_alternate_counter_ndarrays():
 
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=1), c: qd.types.ndarray(qd.i32, ndim=0)):
-        while qd.graph_do_while(c):
+        while qd.graph.do_while(c):
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1
             for i in range(1):
@@ -292,11 +292,11 @@ def test_graph_do_while_alternate_counter_ndarrays():
 
 @test_utils.test()
 def test_graph_do_while_without_graph_raises():
-    """Using qd.graph_do_while without graph=True should raise."""
+    """Using qd.graph.do_while without graph=True should raise."""
 
     @qd.kernel
     def k(x: qd.types.ndarray(qd.i32, ndim=1), c: qd.types.ndarray(qd.i32, ndim=0)):
-        while qd.graph_do_while(c):
+        while qd.graph.do_while(c):
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1
 
@@ -313,20 +313,171 @@ def test_graph_do_while_nonexistent_arg_raises():
 
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=1), c: qd.types.ndarray(qd.i32, ndim=0)):
-        while qd.graph_do_while(nonexistent):
+        while qd.graph.do_while(nonexistent):
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1
 
     x = qd.ndarray(qd.i32, shape=(4,))
     c = qd.ndarray(qd.i32, shape=())
     c.from_numpy(np.array(1, dtype=np.int32))
-    with pytest.raises(qd.QuadrantsSyntaxError, match="does not match any parameter"):
+    with pytest.raises(qd.QuadrantsSyntaxError, match="does not resolve to an ndarray kernel parameter"):
         k(x, c)
+
+
+@test_utils.test()
+def test_graph_do_while_with_dataclass_member_counter():
+    """`qd.graph.do_while(params.counter)` for a ``@dataclasses.dataclass`` kernel parameter takes the same
+    AST-build-time resolution path as the ``self.counter`` form -- the loop drives entirely from the device-side
+    counter just like the bare-parameter case."""
+    import dataclasses  # pylint: disable=import-outside-toplevel
+
+    N = 4
+
+    @dataclasses.dataclass
+    class Params:
+        x: qd.types.NDArray[qd.i32, 1]
+        counter: qd.types.NDArray[qd.i32, 0]
+
+    @qd.kernel(graph=True)
+    def step(params: Params):
+        while qd.graph.do_while(params.counter):
+            for i in range(params.x.shape[0]):
+                params.x[i] = params.x[i] + 1
+            for _ in range(1):
+                params.counter[()] = params.counter[()] - 1
+
+    params = Params(
+        x=qd.ndarray(qd.i32, shape=(N,)),
+        counter=qd.ndarray(qd.i32, shape=()),
+    )
+    params.x.from_numpy(np.zeros(N, dtype=np.int32))
+    params.counter.from_numpy(np.array(3, dtype=np.int32))
+    step(params)
+    np.testing.assert_array_equal(params.x.to_numpy(), np.full(N, 3, dtype=np.int32))
+    assert params.counter.to_numpy() == 0
+    levels = step._primal.graph_do_while_levels
+    assert len(levels) == 1
+    # Dataclass-parameter member access gets pre-rewritten to a flattened parameter name (`__qd_params__qd_counter`)
+    # before the graph_do_while transformer sees it, so the readable label round-trips in the flattened form. The
+    # functional contract -- a valid flat C++ arg-id resolves and the loop drives off the device-side counter -- is the
+    # same as for the bare-param / `self.counter` forms.
+    assert "counter" in levels[0].cond_arg_name
+    assert levels[0].cond_cpp_arg_id >= 0
+
+
+@test_utils.test()
+def test_graph_do_while_with_member_nonexistent_attribute_raises():
+    """`qd.graph.do_while(self.nonexistent_attr)` must raise the same user-facing `does not resolve to an ndarray kernel
+    parameter` diagnostic as the bare-name nonexistent case. The AST-time resolver wraps the underlying attribute lookup
+    failure so the user sees one consistent error pattern across bare-name and attribute forms."""
+    N = 4
+
+    @qd.data_oriented
+    class Sim:
+        def __init__(self):
+            self.x = qd.ndarray(qd.i32, shape=(N,))
+            self.counter = qd.ndarray(qd.i32, shape=())
+
+        @qd.kernel(graph=True)
+        def step(self):
+            while qd.graph.do_while(self.nonexistent_counter):  # type: ignore[attr-defined]
+                for i in range(self.x.shape[0]):
+                    self.x[i] = self.x[i] + 1
+
+    sim = Sim()
+    with pytest.raises(qd.QuadrantsSyntaxError, match="does not resolve to an ndarray kernel parameter"):
+        sim.step()
+
+
+@test_utils.test()
+def test_graph_do_while_with_data_oriented_member_nested():
+    """Nested `qd.graph.do_while(self.outer)` containing `qd.graph.do_while(self.inner)` exercises the level-table
+    machinery with member ndarrays: each level resolves its own flat C++ arg-id at AST-build time, the parent_id chain
+    links inner -> outer, and the loop body iterates `outer_iters * inner_iters` times the same as the bare-parameter
+    version (see `test_graph_do_while_nested_two_levels`)."""
+    if not _is_graph_do_while_natively_supported() and not (
+        impl.current_cfg().arch in (qd.x64, qd.arm64, qd.amdgpu, qd.vulkan, qd.metal)
+    ):
+        pytest.skip("backend does not implement graph_do_while")
+    N = 4
+
+    @qd.data_oriented
+    class Sim:
+        def __init__(self):
+            self.x = qd.ndarray(qd.i32, shape=(N,))
+            self.outer = qd.ndarray(qd.i32, shape=())
+            self.inner = qd.ndarray(qd.i32, shape=())
+            self.inner_start = qd.ndarray(qd.i32, shape=())
+
+        @qd.kernel(graph=True)
+        def step(self):
+            while qd.graph.do_while(self.outer):
+                for _ in range(1):
+                    self.inner[()] = self.inner_start[()]
+                while qd.graph.do_while(self.inner):
+                    for i in range(self.x.shape[0]):
+                        self.x[i] = self.x[i] + 1
+                    for _ in range(1):
+                        self.inner[()] = self.inner[()] - 1
+                for _ in range(1):
+                    self.outer[()] = self.outer[()] - 1
+
+    sim = Sim()
+    sim.x.from_numpy(np.zeros(N, dtype=np.int32))
+    sim.outer.from_numpy(np.array(3, dtype=np.int32))
+    sim.inner.from_numpy(np.array(2, dtype=np.int32))
+    sim.inner_start.from_numpy(np.array(2, dtype=np.int32))
+    sim.step()
+    np.testing.assert_array_equal(sim.x.to_numpy(), np.full(N, 6, dtype=np.int32))
+    assert sim.outer.to_numpy() == 0
+    levels = sim.step._primal.graph_do_while_levels
+    assert len(levels) == 2
+    assert levels[0].cond_arg_name == "self.outer"
+    assert levels[1].cond_arg_name == "self.inner"
+    assert levels[0].parent_id == -1
+    assert levels[1].parent_id == 0
+    assert levels[0].cond_cpp_arg_id >= 0
+    assert levels[1].cond_cpp_arg_id >= 0
+    assert levels[0].cond_cpp_arg_id != levels[1].cond_cpp_arg_id
+
+
+@test_utils.test()
+def test_graph_do_while_with_data_oriented_member_counter():
+    """`qd.graph.do_while(self.counter)` resolves the member ndarray to the loop condition's flat C++ arg-id at
+    AST-build time via ``ASTTransformer._resolve_ndarray_kernel_arg_id``, lifting the previous bare-parameter
+    restriction. The metadata exposed on the kernel records the readable label (``"self.counter"``) plus the resolved
+    arg-id; the loop behaviour matches the bare-parameter form below."""
+    N = 4
+
+    @qd.data_oriented
+    class Sim:
+        def __init__(self):
+            self.x = qd.ndarray(qd.i32, shape=(N,))
+            self.counter = qd.ndarray(qd.i32, shape=())
+
+        @qd.kernel(graph=True)
+        def step(self):
+            while qd.graph.do_while(self.counter):
+                for i in range(self.x.shape[0]):
+                    self.x[i] = self.x[i] + 1
+                for _ in range(1):
+                    self.counter[()] = self.counter[()] - 1
+
+    sim = Sim()
+    sim.x.from_numpy(np.zeros(N, dtype=np.int32))
+    sim.counter.from_numpy(np.array(3, dtype=np.int32))
+    sim.step()
+    np.testing.assert_array_equal(sim.x.to_numpy(), np.full(N, 3, dtype=np.int32))
+    assert sim.counter.to_numpy() == 0
+    levels = sim.step._primal.graph_do_while_levels
+    assert len(levels) == 1
+    assert levels[0].cond_arg_name == "self.counter"
+    assert levels[0].cond_cpp_arg_id >= 0
 
 
 @qd.kernel(graph=True, fastcache=True)
 def _fastcache_do_while_kernel(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndim=0)):
-    while qd.graph_do_while(counter):
+    while qd.graph.do_while(counter):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1
         for i in range(1):
@@ -405,10 +556,10 @@ def _fastcache_nested_do_while_kernel(
     inner: qd.types.ndarray(qd.i32, ndim=0),
     inner_start: qd.types.ndarray(qd.i32, ndim=0),
 ):
-    while qd.graph_do_while(outer):
+    while qd.graph.do_while(outer):
         for _ in range(1):
             inner[()] = inner_start[()]
-        while qd.graph_do_while(inner):
+        while qd.graph.do_while(inner):
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1
             for _ in range(1):
@@ -505,10 +656,10 @@ def test_graph_do_while_nested_two_levels():
         outer: qd.types.ndarray(qd.i32, ndim=0),
         inner: qd.types.ndarray(qd.i32, ndim=0),
     ):
-        while qd.graph_do_while(outer):
+        while qd.graph.do_while(outer):
             for _ in range(1):
                 inner[()] = INNER
-            while qd.graph_do_while(inner):
+            while qd.graph.do_while(inner):
                 for i in range(x.shape[0]):
                     x[i] = x[i] + 1
                 for _ in range(1):
@@ -542,10 +693,10 @@ def test_graph_do_while_nested_two_levels():
         outer: qd.types.ndarray(qd.i32, ndim=0),
         inner: qd.types.ndarray(qd.i32, ndim=0),
     ):
-        while qd.graph_do_while(outer):
+        while qd.graph.do_while(outer):
             for _ in range(1):
                 inner[()] = INNER2
-            while qd.graph_do_while(inner):
+            while qd.graph.do_while(inner):
                 for i in range(x.shape[0]):
                     x[i] = x[i] + 1
                 for _ in range(1):
@@ -570,13 +721,13 @@ def test_graph_do_while_nested_three_levels():
         b: qd.types.ndarray(qd.i32, ndim=0),
         c: qd.types.ndarray(qd.i32, ndim=0),
     ):
-        while qd.graph_do_while(a):
+        while qd.graph.do_while(a):
             for _ in range(1):
                 b[()] = B
-            while qd.graph_do_while(b):
+            while qd.graph.do_while(b):
                 for _ in range(1):
                     c[()] = C
-                while qd.graph_do_while(c):
+                while qd.graph.do_while(c):
                     for i in range(x.shape[0]):
                         x[i] = x[i] + 1
                     for _ in range(1):
@@ -617,12 +768,12 @@ def test_graph_do_while_siblings():
         c1: qd.types.ndarray(qd.i32, ndim=0),
         c2: qd.types.ndarray(qd.i32, ndim=0),
     ):
-        while qd.graph_do_while(c1):
+        while qd.graph.do_while(c1):
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1
             for _ in range(1):
                 c1[()] = c1[()] - 1
-        while qd.graph_do_while(c2):
+        while qd.graph.do_while(c2):
             for i in range(y.shape[0]):
                 y[i] = y[i] + 2
             for _ in range(1):
@@ -659,7 +810,7 @@ def test_graph_do_while_mixed_with_top_level_for_loops():
     def k(x: qd.types.ndarray(qd.i32, ndim=1), c: qd.types.ndarray(qd.i32, ndim=0)):
         for i in range(x.shape[0]):
             x[i] = x[i] + 100
-        while qd.graph_do_while(c):
+        while qd.graph.do_while(c):
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1
             for _ in range(1):
@@ -700,7 +851,7 @@ def test_graph_do_while_canonical_seed_writeback_idiom():
 
     @qd.kernel(graph=True)
     def iterate(q_iter: qd.types.ndarray(qd.i32, ndim=1), c: qd.types.ndarray(qd.i32, ndim=0)):
-        while qd.graph_do_while(c):
+        while qd.graph.do_while(c):
             for i in range(q_iter.shape[0]):
                 q_iter[i] = q_iter[i] + 1
             for _ in range(1):
@@ -739,12 +890,12 @@ def test_graph_do_while_nested_mixed_with_for_loops():
     ):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1000
-        while qd.graph_do_while(outer):
+        while qd.graph.do_while(outer):
             for _ in range(1):
                 inner[()] = INNER
             for i in range(x.shape[0]):
                 x[i] = x[i] + 10
-            while qd.graph_do_while(inner):
+            while qd.graph.do_while(inner):
                 for i in range(x.shape[0]):
                     x[i] = x[i] + 1
                 for _ in range(1):
@@ -783,10 +934,10 @@ def test_graph_do_while_nested_dynamic_bounds():
         outer: qd.types.ndarray(qd.i32, ndim=0),
         inner: qd.types.ndarray(qd.i32, ndim=0),
     ):
-        while qd.graph_do_while(outer):
+        while qd.graph.do_while(outer):
             for _ in range(1):
                 inner[()] = 2
-            while qd.graph_do_while(inner):
+            while qd.graph.do_while(inner):
                 for i in range(n[()]):
                     x[i] = x[i] + 1
                 for _ in range(1):
@@ -830,7 +981,7 @@ def test_graph_do_while_bare_top_level_statement_runs_once():
         # Bare top-level statements: run exactly once.
         seen[()] = seen[()] + 1  # incremented once iff this runs once (not per loop iteration)
         x[0] = 100
-        while qd.graph_do_while(c):
+        while qd.graph.do_while(c):
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1
             c[()] = c[()] - 1  # bare assignment inside the loop body: runs every iteration, no wrapping
@@ -863,7 +1014,7 @@ def test_graph_do_while_bare_statement_in_nested_body_runs_every_iteration():
 
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=1), c: qd.types.ndarray(qd.i32, ndim=0)):
-        while qd.graph_do_while(c):
+        while qd.graph.do_while(c):
             x[0] = x[0] + 1  # bare statement inside the loop body: runs every iteration
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1
@@ -900,7 +1051,7 @@ def test_graph_do_while_top_level_func_call_keeps_parallelism():
     @qd.kernel(graph=True)
     def step(x: qd.types.ndarray(qd.i32, ndim=1), c: qd.types.ndarray(qd.i32, ndim=0)):
         add_one(x)  # top-level @qd.func call: runs once
-        while qd.graph_do_while(c):
+        while qd.graph.do_while(c):
             add_one(x)  # inside the loop: runs every iteration
             c[()] = c[()] - 1
 
@@ -937,7 +1088,7 @@ def test_graph_do_while_trailing_serial_func_runs_once():
         c: qd.types.ndarray(qd.i32, ndim=0),
     ):
         seed(x, acc)
-        while qd.graph_do_while(c):
+        while qd.graph.do_while(c):
             for i in range(N):
                 x[i] = x[i] + 1
             c[()] = c[()] - 1
@@ -969,7 +1120,7 @@ def test_graph_do_while_loop_config_allowed():
         qd.loop_config(block_dim=8)
         for i in range(x.shape[0]):
             x[i] = 0
-        while qd.graph_do_while(c):
+        while qd.graph.do_while(c):
             qd.loop_config(block_dim=8)
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1
@@ -992,7 +1143,7 @@ def test_graph_do_while_inside_for_loop_raises():
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=1), c: qd.types.ndarray(qd.i32, ndim=0)):
         for _ in range(2):
-            while qd.graph_do_while(c):
+            while qd.graph.do_while(c):
                 for i in range(x.shape[0]):
                     x[i] = x[i] + 1
                 for _ in range(1):

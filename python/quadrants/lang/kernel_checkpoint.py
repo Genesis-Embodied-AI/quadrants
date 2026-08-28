@@ -46,36 +46,17 @@ def translate_user_label_to_internal_cp_id(kernel: Any, user_label: int) -> int:
     )
 
 
-def init_yield_on_arg_id_table(kernel: Any) -> None:
-    """Allocate / reset the per-launch ``cp_id -> C++ arg-id`` table at the top of ``launch_kernel``'s arg iteration.
-
-    Each entry defaults to ``-1`` ("no yield_on"); the per-arg loop below fills in the C++ arg id when it visits the
-    named parameter. Sized to the kernel's checkpoint count once per launch so any changes to the checkpoint set (only
-    possible via re-AST-walk) reset the table cleanly. No-op for kernels with no ``yield_on=`` checkpoints.
-    """
-    if kernel.checkpoint_yield_on_args:
-        kernel._checkpoint_yield_on_cpp_arg_ids = [-1] * len(kernel.checkpoint_yield_on_args)
-
-
-def maybe_record_yield_on_arg(kernel: Any, arg_name: str, cpp_arg_id: int) -> None:
-    """Fill the ``cp_id -> C++ arg-id`` slot when the arg iterator visits a named ``yield_on=`` kernel parameter.
-
-    Walked once per kernel arg in ``launch_kernel``; cheap O(checkpoints) match. A single parameter can be the
-    ``yield_on=`` for multiple checkpoints (the inner loop fills every matching slot).
-    """
-    if not kernel.checkpoint_yield_on_args:
-        return
-    for cp_idx, yield_name in enumerate(kernel.checkpoint_yield_on_args):
-        if yield_name is not None and arg_name == yield_name:
-            kernel._checkpoint_yield_on_cpp_arg_ids[cp_idx] = cpp_arg_id
-
-
 def forward_yield_on_table_to_ctx(kernel: Any, launch_ctx: Any) -> None:
-    """Copy the resolved ``cp_id -> C++ arg-id`` table onto the launch context so the runtime can find each
-    ``yield_on=`` ndarray's device address at launch.
+    """Copy the ``cp_id -> C++ arg-id`` table onto the launch context so the runtime can find each ``yield_on=``
+    ndarray's device address at launch.
+
+    The table (``kernel.checkpoint_yield_on_cpp_arg_ids``) is populated at AST-build time by
+    ``CheckpointTransformer.build_checkpoint_with`` via ``ASTTransformer._resolve_ndarray_kernel_arg_id``, which
+    uniformly handles bare kernel parameters (``yield_on=flag``) and ``@qd.data_oriented`` member ndarrays
+    (``yield_on=self.flag``). No per-launch arg iteration / name match is required.
     """
-    if kernel.checkpoint_yield_on_args and hasattr(kernel, "_checkpoint_yield_on_cpp_arg_ids"):
-        launch_ctx.checkpoint_yield_on_arg_ids = tuple(kernel._checkpoint_yield_on_cpp_arg_ids)
+    if kernel.checkpoint_yield_on_cpp_arg_ids:
+        launch_ctx.checkpoint_yield_on_arg_ids = tuple(kernel.checkpoint_yield_on_cpp_arg_ids)
 
 
 def maybe_build_graph_status(kernel: Any, default_ret: Any) -> Any:

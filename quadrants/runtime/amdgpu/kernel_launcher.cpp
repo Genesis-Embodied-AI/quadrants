@@ -180,9 +180,14 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
       ++i;
     } else {
       size_t group_start = i;
-      while (i < offloaded_tasks.size() && offloaded_tasks[i].stream_parallel_group_id != 0) {
-        i++;
-      }
+      // Bound the fork/join batch to a single qd.graph_parallel_context() region/level/checkpoint via the shared
+      // boundary helper (next_stream_parallel_run in llvm_compiled_data.h), the same definition
+      // GraphManager::build_level uses. Two regions written back-to-back carry distinct graph_parallel_region_id and
+      // emit no serial task between them to break the run, so without this the second region's sections would fork
+      // alongside -- and race -- the first's, dropping the inter-region join (region B could read region A's writes
+      // early). AMDGPU always streams graph_do_while, so this is the live path for the documented
+      // region-inside-graph_do_while pattern.
+      i = next_stream_parallel_run(offloaded_tasks, i, offloaded_tasks.size());
 
       // Run all per-task adstack setup on active_stream before recording the fence event, so that
       // publish_adstack_metadata's async H2D copies are covered by the event that pool streams wait on.

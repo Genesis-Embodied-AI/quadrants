@@ -363,6 +363,19 @@ def is_data_oriented(obj: Any) -> bool:
     return False
 
 
+def wants_runtime_primitives(obj: Any) -> bool:
+    # True when ``obj`` is an instance of a class decorated ``@qd.data_oriented(template_primitives=False)``, meaning
+    # its primitive (int/float/bool) members should be lifted into runtime scalar kernel args rather than baked into
+    # the compiled kernel as compile-time constants. Uses the same metaclass-safe MRO ``__dict__`` walk as
+    # ``is_data_oriented`` (never ``getattr``). The flag stores the ``template_primitives`` value (True = bake, the
+    # default), so runtime-lifting is requested iff the nearest flag in the MRO is explicitly ``False``.
+    for klass in type(obj).__mro__:
+        flag = klass.__dict__.get("_qd_template_primitives")
+        if flag is not None:
+            return flag is False
+    return False
+
+
 def is_dataclass_instance(obj: Any) -> bool:
     # Metaclass-safe replacement for ``dataclasses.is_dataclass(obj) and not isinstance(obj, type)``. The stdlib
     # implementation calls ``hasattr(type(obj), '__dataclass_fields__')``, which delegates to the metaclass

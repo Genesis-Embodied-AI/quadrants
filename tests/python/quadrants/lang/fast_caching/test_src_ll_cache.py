@@ -294,14 +294,14 @@ def src_ll_cache_has_return_child(args: list[str]) -> None:
 
     @qd.pure
     @qd.kernel
-    def k1(a: qd.i32, output: qd.types.NDArray[qd.i32, 1]) -> bool:
+    def k1(a: qd.i32, output: qd.types.NDArray[qd.i32, 1], return_something: qd.Template) -> bool:
         output[0] = a
-        if qd.static(args_obj.return_something):
+        if qd.static(return_something):
             return True
 
     output = qd.ndarray(qd.i32, (10,))
     if args_obj.return_something:
-        assert k1(3, output)
+        assert k1(3, output, args_obj.return_something)
         # Sanity check that the kernel actually ran, and did something.
         assert output[0] == 3
         assert k1._primal.src_ll_cache_observations.cache_key_generated == args_obj.expect_used_src_ll_cache
@@ -314,7 +314,7 @@ def src_ll_cache_has_return_child(args: list[str]) -> None:
         with pytest.raises(
             qd.QuadrantsSyntaxError, match="Kernel has a return type but does not have a return statement"
         ):
-            k1(3, output)
+            k1(3, output, args_obj.return_something)
     print(TEST_RAN)
     sys.exit(RET_SUCCESS)
 

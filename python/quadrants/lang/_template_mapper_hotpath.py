@@ -26,9 +26,12 @@ a consequence of inlining 'is_dataclass' and 'fields'.
 """
 
 import dataclasses
+import sys
 import weakref
 from dataclasses import _FIELD, _FIELDS
 from typing import Any, Union
+
+import numpy as np
 
 from quadrants import _tensor_wrapper
 from quadrants._lib import core as _qd_core
@@ -39,6 +42,11 @@ from quadrants._tensor import (
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang._dataclass_util import create_flat_name
+from quadrants.lang._final_dataclass_fields import (
+    final_field_names,
+    final_scalar_key,
+    subtree_has_final_fields,
+)
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.buffer_view import BufferView as BufferViewInstance
@@ -71,9 +79,31 @@ AnnotationType = Union[
 ]
 
 
+def annotation_has_final_subtree(annotation: Any) -> bool:
+    """True iff ``annotation`` is a dataclass type whose transitive subtree declares a ``Final`` field. The ``_FIELDS``
+    probe is needed because ``subtree_has_final_fields`` would raise on the non-dataclass annotation shapes a kernel
+    arg can carry. ``TemplateMapper.lookup`` uses it to disable its instance-keyed cache for a Final-bearing mapper.
+    """
+    return getattr(annotation, _FIELDS, None) is not None and subtree_has_final_fields(annotation)
+
+
 _ExprCxx = _qd_core.ExprCxx
 _composite_mutable_types = {list, dict, set}
-_primitive_types = {int, float, bool}
+# ``type(None)`` belongs here so ``None`` arguments are treated like other primitives and excluded from the
+# weakref-based spec-key cache tracker in ``TemplateMapper.lookup``: ``weakref.ref(None)`` raises ``TypeError``, and
+# ``None`` is an immortal singleton that never needs lifetime tracking. Without it, the spec-key cache entry for a
+# ``None`` argument is dropped and every such launch re-runs full spec-key extraction.
+_primitive_types = {int, float, bool, type(None)}
+_np_ndarray = np.ndarray
+
+
+def _is_external_array(arg: Any) -> bool:
+    if isinstance(arg, _np_ndarray):
+        return True
+    torch = sys.modules.get("torch")
+    if torch is not None:
+        return isinstance(arg, torch.Tensor)
+    return False
 
 
 # Per-instance ndarray-path cache, stored OFF-instance in a module-level ``id(arg) -> list[paths]`` dict and cleaned
@@ -239,7 +269,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         if type(arg) in _TENSOR_WRAPPER_TYPES:
             arg = arg._unwrap()
         arg_type = type(arg)
-        if issubclass(arg_type, (Ndarray, AnyArray)):
+        if issubclass(arg_type, (Ndarray, AnyArray)) or _is_external_array(arg):
             return (_TENSOR_T_NDARRAY_MARKER,) + tuple(
                 _extract_arg(
                     raise_on_templated_floats,
@@ -388,32 +418,71 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         # is hashable, but a user can enforce a dataclass to be consider frozen for a user perspective without being
         # truly frozen by specifying 'unsafe_hash=True'. If a user is doing this on purpose, it makes sense to honor it.
         is_frozen = annotation.__hash__ is not None
-        if is_frozen:
+        # Serve the ``_qd_spec_key`` cache only in the default (non-strict) mode: the cached key is
+        # setting-independent, but the ``Final[float]`` guard below is not, and an early return would also skip the
+        # recursion that runs it on nested frozen dataclasses. A Final-bearing subtree is never served either - the
+        # write below refuses to store one, so this read falls through and re-runs validation each launch.
+        if is_frozen and not raise_on_templated_floats:
             try:
-                # Note that it is necessary to store the key at instance-level instead of class-level because because
-                # multiple instances of the same class may have different memory layout (although unusual).
-                # One limitation is that storing '_key' is then impossible for dataclasses enforcing 'slots=True',
-                # but this not the default option and almost never used in practice because of other limitations.
-                return arg._key
+                # Instance-level (not class-level): instances of one class may differ in memory layout. The reserved
+                # ``_qd_`` prefix avoids collision with a user field named ``_key``. Absent under ``slots=True``.
+                return arg._qd_spec_key
             except AttributeError:
                 pass
-        key = tuple(
-            [
-                _extract_arg(
-                    raise_on_templated_floats,
-                    getattr(arg, field.name),
-                    field.type,
-                    create_flat_name(arg_name, field.name),
-                )
-                for field in annotation_fields.values()
-                if field._field_type is _FIELD
-            ]
-        )
-        if is_frozen:
+        # ``Final[T]`` fields drive the key by *value*; other fields keep the recursive ``_extract_arg``. PERF: with no
+        # Final fields (the common case) we take the original comprehension verbatim.
+        final_names = final_field_names(annotation)
+        if final_names:
+            key_parts = []
+            for field in annotation_fields.values():
+                if field._field_type is not _FIELD:
+                    continue
+                field_value = getattr(arg, field.name)
+                if field.name in final_names:
+                    # A ``Final[float]`` drives specialisation, so honour ``raise_on_templated_floats`` like a
+                    # ``qd.template()`` float. The ``isinstance`` runs only in strict mode; ``bool`` is not a ``float``.
+                    if raise_on_templated_floats and (
+                        type(field_value) is float or isinstance(field_value, (float, np.floating))
+                    ):
+                        raise ValueError(
+                            f"Floats not allowed as templated types: {annotation.__name__}.{field.name} is "
+                            f"``Final[float]``, so its value is baked into the compiled kernel and each distinct "
+                            f"value compiles a separate kernel. Drop the ``Final`` to make it an ordinary runtime "
+                            f"field, or unset ``raise_on_templated_floats``."
+                        )
+                    # ``live=True``: in-process key, so a subclass/enum is keyed by class identity. The offline
+                    # fastcache passes ``live=False`` (see ``final_scalar_key`` / ``args_hasher``).
+                    key_parts.append(final_scalar_key(field_value, live=True))
+                else:
+                    key_parts.append(
+                        _extract_arg(
+                            raise_on_templated_floats,
+                            field_value,
+                            field.type,
+                            create_flat_name(arg_name, field.name),
+                        )
+                    )
+            key = tuple(key_parts)
+        else:
+            key = tuple(
+                [
+                    _extract_arg(
+                        raise_on_templated_floats,
+                        getattr(arg, field.name),
+                        field.type,
+                        create_flat_name(arg_name, field.name),
+                    )
+                    for field in annotation_fields.values()
+                    if field._field_type is _FIELD
+                ]
+            )
+        # Store the cache only for a ``Final``-free subtree; a Final-bearing one must revalidate every launch, so we
+        # never store one (making the read above fall through).
+        if is_frozen and not subtree_has_final_fields(annotation):
             try:
-                object.__setattr__(arg, "_key", key)
+                object.__setattr__(arg, "_qd_spec_key", key)
             except AttributeError:
-                # Impossible to store _key at instance-level if 'slots=True'. It will be recomputed systematically.
+                # Impossible to store _qd_spec_key at instance-level if 'slots=True'. It is recomputed each time.
                 pass
         return key
     if annotation_type is sparse_matrix_builder:

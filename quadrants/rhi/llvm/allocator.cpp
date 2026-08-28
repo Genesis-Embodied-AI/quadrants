@@ -43,8 +43,9 @@ uint64_t *CachingAllocator::allocate(LlvmDevice *device, const LlvmDevice::LlvmR
       ptr_map_.insert(std::make_pair(remaining_head, remaining_sz));
     }
     ret = reinterpret_cast<uint64_t *>(it_blk->second);
-    mem_blocks_.erase(it_blk);
+    // Erase from ptr_map_ first: mem_blocks_.erase(it_blk) invalidates it_blk.
     ptr_map_.erase(it_blk->second);
+    mem_blocks_.erase(it_blk);
 
   } else {
     ret = reinterpret_cast<uint64_t *>(device->allocate_llvm_runtime_memory_jit(params));

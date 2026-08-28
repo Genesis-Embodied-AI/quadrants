@@ -336,7 +336,10 @@ if(QD_WITH_PYTHON)
     # NOMINSIZE: keep the project optimization level (-O3) for the binding layer instead of nanobind's
     # default -Os, matching the previous pybind11 NO_EXTRAS build and avoiding per-call overhead in the
     # hot launch path. NB_STATIC links the nanobind core statically (single extension module).
-    nanobind_add_module(${CORE_WITH_PYBIND_LIBRARY_NAME} NB_STATIC NOMINSIZE ${QUADRANTS_PYBIND_SOURCE})
+    # NB_DOMAIN: isolate our nb_internals (type registry + the leak-warning flag) from any other
+    # nanobind extension sharing the process. Without it we build in the default domain, so our
+    # nb::set_leak_warnings(false) would also silence unrelated default-domain extensions' diagnostics.
+    nanobind_add_module(${CORE_WITH_PYBIND_LIBRARY_NAME} NB_DOMAIN quadrants NB_STATIC NOMINSIZE ${QUADRANTS_PYBIND_SOURCE})
 
     # Remove symbols from static libs: https://stackoverflow.com/a/14863432/12003165
     if (LINUX)

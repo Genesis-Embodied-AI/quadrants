@@ -1,6 +1,7 @@
 #include "quadrants/runtime/llvm/llvm_runtime_executor.h"
 #include "quadrants/program/adstack_size_expr_eval.h"
 
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -173,6 +174,10 @@ QuadrantsLLVMContext *LlvmRuntimeExecutor::get_llvm_context() {
 
 JITModule *LlvmRuntimeExecutor::create_jit_module(std::unique_ptr<llvm::Module> module) {
   return jit_session_->add_module(std::move(module));
+}
+
+JITModule *LlvmRuntimeExecutor::create_jit_module_per_task(std::vector<PerConstructArtifact> artifacts) {
+  return jit_session_->add_module_per_task(std::move(artifacts));
 }
 
 JITModule *LlvmRuntimeExecutor::get_runtime_jit_module() {
@@ -754,6 +759,12 @@ void LlvmRuntimeExecutor::materialize_runtime(KernelProfilerBase *profiler, uint
     runtime_objects_prealloc_buffer =
         preallocate_memory(iroundup(runtime_objects_prealloc_size + result_buffer_size, quadrants_page_size),
                            preallocated_runtime_objects_allocs_);
+
+    // `runtime_initialize` bump-allocates page-aligned blocks out of this chunk against the budget computed above,
+    // which is an exact sum of page-rounded sizes with no slack for base misalignment. A sub-page-aligned base
+    // overruns the chunk and trips a sticky in-kernel assert that kills this process's whole CUDA context, so check
+    // the invariant here where the failure is still attributable.
+    QD_ASSERT(reinterpret_cast<std::uintptr_t>(runtime_objects_prealloc_buffer) % quadrants_page_size == 0);
 
     *result_buffer_ptr = (uint64_t *)((uint8_t *)runtime_objects_prealloc_buffer + runtime_objects_prealloc_size);
 #else

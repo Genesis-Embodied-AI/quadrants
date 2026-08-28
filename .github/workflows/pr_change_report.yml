@@ -12,7 +12,6 @@ concurrency:
 permissions:
   contents: read
   pull-requests: write
-  checks: write
 jobs:
   pr-change-report:
     name: PR change report
@@ -196,44 +195,28 @@ jobs:
             /tmp/pr_change_report/touched_ranges.txt
             /tmp/pr_change_report/function_ranges.jsonl
 
-      - name: Publish PR change report Check
-        if: steps.inputs.outputs.skip != 'true' && github.event_name == 'pull_request'
-        id: publish_check
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const fs = require('fs');
-            let body = fs.readFileSync('/tmp/pr_change_report/report_check.md', 'utf8');
-            const MAX_TEXT = 65000;
-            let truncated = false;
-            if (body.length > MAX_TEXT) {
-              body = body.substring(0, MAX_TEXT) +
-                '\n\n---\n*Report truncated. Download the full report from the workflow artifacts.*';
-              truncated = true;
-            }
-            const summary = truncated
-              ? 'Per-file totals + per-function breakdown (truncated — see artifacts for full report).'
-              : 'Per-file totals + per-function breakdown of code-line additions and removals.';
-            const check = await github.rest.checks.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              head_sha: context.payload.pull_request.head.sha,
-              name: 'PR change report',
-              status: 'completed',
-              conclusion: 'success',
-              output: {
-                title: 'PR change report',
-                summary: summary,
-                text: body,
-              },
-            });
-            core.setOutput('check-url', check.data.html_url);
+      # Render the report into this job's step summary rather than a standalone check run created
+      # via checks.create({head_sha}). A check run made that way cannot be bound to this workflow's
+      # check suite, so GitHub buckets it under an arbitrary workflow (it showed up as e.g.
+      # "Check non-ASCII characters / PR change report"). The step summary lives on this run's
+      # page, so it is always attributed to the "PR change report" workflow.
+      - name: Write report to job summary
+        if: steps.inputs.outputs.skip != 'true'
+        run: |
+          # Job summaries allow up to 1 MiB; cap well under that and fall back to the uploaded
+          # artifact for the (rare) oversized report.
+          MAX_BYTES=900000
+          if [ "$(wc -c < /tmp/pr_change_report/report_check.md)" -gt "$MAX_BYTES" ]; then
+            head -c "$MAX_BYTES" /tmp/pr_change_report/report_check.md >> "$GITHUB_STEP_SUMMARY"
+            printf '\n\n---\n*Report truncated. Download the full report from the workflow artifacts.*\n' \
+              >> "$GITHUB_STEP_SUMMARY"
+          else
+            cat /tmp/pr_change_report/report_check.md >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Post PR comment
         if: steps.inputs.outputs.skip != 'true' && github.event_name == 'pull_request'
         uses: actions/github-script@v8
-        env:
-          REPORT_URL: ${{ steps.publish_check.outputs.check-url }}
         with:
           script: |
             const fs = require('fs');
@@ -244,8 +227,10 @@ jobs:
             const totalRemoved = summary.reduce((acc, s) => acc + s.removed, 0);
             const text = `Total: ${numFiles} file(s) changed, ` +
               `+${totalAdded} -${totalRemoved} code lines.`;
-            const url = process.env.REPORT_URL;
-            const body = url ? `[${text}](${url})` : text;
+            // Link to this run's summary page, which hosts the full per-file / per-function report.
+            const url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}` +
+              `/actions/runs/${context.runId}`;
+            const body = `[${text}](${url})`;
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,

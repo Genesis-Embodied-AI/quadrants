@@ -77,14 +77,15 @@ void GraphManager::ensure_checkpoint_gate_kernel_loaded() {
 
   auto &driver = CUDADriver::get_instance();
 
-  static_assert(kCheckpointGateKernelFatbinSize > 0,
-                "Checkpoint gate kernel fatbin is empty -- regenerate with "
+  static_assert(kCheckpointGateKernelFatbinCount > 0,
+                "Checkpoint gate kernel fatbin table is empty -- regenerate with "
                 "scripts/build_checkpoint_gate_fatbin.py");
 
-  uint32_t ret = driver.module_load_data.call(&gate_kernel_module_, kCheckpointGateKernelFatbin);
+  uint32_t ret =
+      load_first_matching_fatbin(kCheckpointGateKernelFatbins, kCheckpointGateKernelFatbinCount, &gate_kernel_module_);
   QD_ERROR_IF(ret != CUDA_SUCCESS,
               "Failed to load qd.checkpoint gate kernel fatbin (CUDA error {}). This SM ({}) "
-              "may not be included in the fatbin -- regenerate with "
+              "may not be included in the fatbins -- regenerate with "
               "scripts/build_checkpoint_gate_fatbin.py",
               ret, cc);
 
@@ -107,14 +108,15 @@ void GraphManager::ensure_checkpoint_yield_check_kernel_loaded() {
   auto &driver = CUDADriver::get_instance();
   int cc = CUDAContext::get_instance().get_compute_capability();
 
-  static_assert(kCheckpointYieldCheckKernelFatbinSize > 0,
-                "Checkpoint yield-check kernel fatbin is empty -- regenerate with "
+  static_assert(kCheckpointYieldCheckKernelFatbinCount > 0,
+                "Checkpoint yield-check kernel fatbin table is empty -- regenerate with "
                 "scripts/build_checkpoint_yield_check_fatbin.py");
 
-  uint32_t ret = driver.module_load_data.call(&yield_check_kernel_module_, kCheckpointYieldCheckKernelFatbin);
+  uint32_t ret = load_first_matching_fatbin(kCheckpointYieldCheckKernelFatbins, kCheckpointYieldCheckKernelFatbinCount,
+                                            &yield_check_kernel_module_);
   QD_ERROR_IF(ret != CUDA_SUCCESS,
               "Failed to load qd.checkpoint yield-check kernel fatbin (CUDA error {}). This SM "
-              "({}) may not be included in the fatbin -- regenerate with "
+              "({}) may not be included in the fatbins -- regenerate with "
               "scripts/build_checkpoint_yield_check_fatbin.py",
               ret, cc);
 
