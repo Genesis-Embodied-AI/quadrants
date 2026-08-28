@@ -182,10 +182,11 @@ def test_static_is_rejects_runtime_operands():
 
     with pytest.raises(
         qd.QuadrantsSyntaxError,
-        match=r'Operator "is" inside `qd.static` requires a direct `qd.template\(\)` or `qd.Tensor` kernel argument and `None`',
+        match=r'Operator "is" inside `qd.static` compares a direct kernel argument against `None`',
     ):
         scalar(0)
 
+    # A non-optional ndarray still rejects; presence checks need the opt-in qd.types.NDArray[...] | None form.
     @qd.kernel
     def array(value: qd.types.ndarray()) -> qd.i32:
         return 1 if qd.static(value is not None) else 0
@@ -193,7 +194,7 @@ def test_static_is_rejects_runtime_operands():
     value = qd.ndarray(qd.i32, shape=(1,))
     with pytest.raises(
         qd.QuadrantsSyntaxError,
-        match=r'Operator "is not" inside `qd.static` requires a direct `qd.template\(\)` or `qd.Tensor` kernel argument and `None`',
+        match=r'Operator "is not" inside `qd.static` compares a direct kernel argument against `None`',
     ):
         array(value)
 
@@ -203,7 +204,7 @@ def test_static_is_rejects_runtime_operands():
 
     with pytest.raises(
         qd.QuadrantsSyntaxError,
-        match=r'Operator "is" inside `qd.static` requires a direct `qd.template\(\)` or `qd.Tensor` kernel argument and `None`',
+        match=r'Operator "is" inside `qd.static` compares a direct kernel argument against `None`',
     ):
         reserved_name(None)
 
@@ -216,7 +217,7 @@ def test_static_is_rejects_runtime_operands():
 
     with pytest.raises(
         qd.QuadrantsSyntaxError,
-        match=r'Operator "is" inside `qd.static` requires a direct `qd.template\(\)` or `qd.Tensor` kernel argument and `None`',
+        match=r'Operator "is" inside `qd.static` compares a direct kernel argument against `None`',
     ):
         shadowed_template(7)
 
@@ -236,6 +237,18 @@ def test_static_is_accepts_tensor_presence():
 
 
 @test_utils.test()
+def test_static_is_accepts_optional_ndarray_presence():
+    @qd.kernel
+    def present(value: qd.types.NDArray[qd.i32, 1] | None) -> qd.i32:
+        return 1 if qd.static(value is not None) else 0
+
+    array = qd.ndarray(qd.i32, shape=(1,))
+
+    assert present(None) == 0
+    assert present(array) == 1
+
+
+@test_utils.test()
 def test_static_is_rejects_non_none_identity():
     @qd.kernel
     def same(value: qd.template()) -> qd.i32:
@@ -243,7 +256,7 @@ def test_static_is_rejects_non_none_identity():
 
     with pytest.raises(
         qd.QuadrantsSyntaxError,
-        match=r'Operator "is" inside `qd.static` requires a direct `qd.template\(\)` or `qd.Tensor` kernel argument and `None`',
+        match=r'Operator "is" inside `qd.static` compares a direct kernel argument against `None`',
     ):
         same(qd.i32)
 

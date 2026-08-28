@@ -167,7 +167,8 @@ void export_lang(nb::module_ &m) {
       .def(nb::init<>())
       .def_rw("arch", &CompileConfig::arch,
               "Target backend the kernels run on (e.g. qd.cpu, qd.cuda, qd.vulkan, qd.metal). Defaults to qd.cpu when "
-              "arch is not specified.")
+              "arch is not specified. Also settable via the QD_ARCH environment variable; if both are set, this "
+              "argument takes precedence and a warning is logged.")
       .def_rw("opt_level", &CompileConfig::opt_level,
               "Quadrants IR optimization level. At 0, IR-level optimizations such as common-subexpression elimination "
               "are disabled; any value above 0 enables them. This is not an LLVM -O level.")
@@ -197,8 +198,6 @@ void export_lang(nb::module_ &m) {
       .def_rw("print_accessor_ir", &CompileConfig::print_accessor_ir,
               "Also include field accessor kernels in the IR printout. Only has an effect together with print_ir on "
               "the LLVM backends, which otherwise suppress accessor kernels.")
-      .def_rw("use_llvm", &CompileConfig::use_llvm,
-              "Intended to select the LLVM backend for code generation; currently has no effect, as nothing reads it.")
       .def_rw("print_struct_llvm_ir", &CompileConfig::print_struct_llvm_ir,
               "Print the LLVM IR generated for the data-structure (SNode) module.")
       .def_rw("print_kernel_llvm_ir", &CompileConfig::print_kernel_llvm_ir,
@@ -214,15 +213,6 @@ void export_lang(nb::module_ &m) {
               "variables. The print_* options ignore this path: the IR-printing ones (e.g. print_ir) go to stdout, "
               "while the LLVM-IR and assembly ones (e.g. print_kernel_llvm_ir, print_kernel_asm) write files in the "
               "current working directory.")
-      .def_rw("simplify_before_lower_access", &CompileConfig::simplify_before_lower_access,
-              "Intended to run the simplify pass before the lower-access pass; currently has no effect, as nothing "
-              "reads it.")
-      .def_rw("simplify_after_lower_access", &CompileConfig::simplify_after_lower_access,
-              "Intended to run the simplify pass after the lower-access pass; currently has no effect, as nothing "
-              "reads it.")
-      .def_rw("lower_access", &CompileConfig::lower_access,
-              "Intended to lower high-level field accesses to low-level pointer arithmetic; currently has no effect, "
-              "as nothing reads it (this lowering always runs).")
       .def_rw("move_loop_invariant_outside_if", &CompileConfig::move_loop_invariant_outside_if,
               "Hoist loop-invariant computations out of conditional branches. Runs only within the "
               "advanced_optimization pipeline.")
@@ -230,13 +220,7 @@ void export_lang(nb::module_ &m) {
               "Cache loop-invariant global loads into locals inside loops.")
       .def_rw("default_cpu_block_dim", &CompileConfig::default_cpu_block_dim,
               "Number of iterations per CPU parallel-for block.")
-      .def_rw("cpu_block_dim_adaptive", &CompileConfig::cpu_block_dim_adaptive,
-              "Intended to let the CPU backend choose the parallel-for block size adaptively; currently has no effect, "
-              "as nothing reads it (the CPU block size is always default_cpu_block_dim).")
       .def_rw("default_gpu_block_dim", &CompileConfig::default_gpu_block_dim, "Default GPU thread-block size.")
-      .def_rw("gpu_max_reg", &CompileConfig::gpu_max_reg,
-              "Intended to cap the number of registers per GPU thread (0 = driver default); currently has no effect, "
-              "as the value is not yet passed to the GPU JIT.")
       .def_rw("saturating_grid_dim", &CompileConfig::saturating_grid_dim,
               "Target GPU grid size (number of blocks) on the CUDA/AMDGPU backends; 0 lets Quadrants pick based on "
               "occupancy. It is an upper bound rather than a guarantee: reverse-mode kernels that carry an autodiff "
@@ -250,10 +234,6 @@ void export_lang(nb::module_ &m) {
               "Maximum number of CPU threads used to run kernels (the runtime thread pool and CPU parallel-for loops). "
               "Compilation threads are governed separately by num_compile_threads.")
       .def_rw("random_seed", &CompileConfig::random_seed, "Seed for Quadrants' random-number generation.")
-      .def_rw("verbose_kernel_launches", &CompileConfig::verbose_kernel_launches,
-              "Intended to log a message on every kernel launch; currently has no effect.")
-      .def_rw("verbose", &CompileConfig::verbose,
-              "Intended to print verbose logging during initialization and compilation; currently has no effect.")
       .def_rw("demote_dense_struct_fors", &CompileConfig::demote_dense_struct_fors,
               "Lower dense struct-for loops to ordinary range-for loops. Forced on for the Vulkan/Metal (SPIR-V) "
               "backends, where the value you pass is ignored.")
@@ -576,7 +556,10 @@ void export_lang(nb::module_ &m) {
       .def_prop_ro("compiled_kernel_data",
                    [](const CompileResult &self) -> const CompiledKernelData & { return self.compiled_kernel_data; })
       .def_ro("cache_hit", &CompileResult::cache_hit)
-      .def_ro("cache_key", &CompileResult::cache_key);
+      .def_ro("cache_key", &CompileResult::cache_key)
+      .def_ro("per_construct_total", &CompileResult::per_construct_total)
+      .def_ro("per_construct_cache_hit", &CompileResult::per_construct_cache_hit)
+      .def_ro("per_construct_recompiled", &CompileResult::per_construct_recompiled);
 
   nb::class_<Axis>(m, "Axis").def(nb::init<int>());
   nb::class_<SNode>(m, "SNodeCxx")

@@ -62,6 +62,7 @@ from quadrants.lang.impl import Program
 from quadrants.lang.shell import _shell_pop_print
 from quadrants.lang.util import cook_dtype, is_data_oriented
 from quadrants.types import (
+    ndarray_type,
     primitive_types,
     template,
 )
@@ -77,6 +78,7 @@ from ._kernel_types import (
     KernelBatchedArgType,
     LaunchObservations,
     LaunchStats,
+    PerOffloadCacheObservations,
     SrcLlCacheObservations,
 )
 from ._pruning import Pruning
@@ -381,6 +383,7 @@ class Kernel(FuncBase):
 
         self.src_ll_cache_observations: SrcLlCacheObservations = SrcLlCacheObservations()
         self.fe_ll_cache_observations: FeLlCacheObservations = FeLlCacheObservations()
+        self.per_offload_cache_observations: PerOffloadCacheObservations = PerOffloadCacheObservations()
         self.launch_observations = LaunchObservations()
 
         self.launch_context_buffer_cache = LaunchContextBufferCache()
@@ -403,6 +406,7 @@ class Kernel(FuncBase):
         self._last_compiled_kernel_data = None
         self.src_ll_cache_observations = SrcLlCacheObservations()
         self.fe_ll_cache_observations = FeLlCacheObservations()
+        self.per_offload_cache_observations = PerOffloadCacheObservations()
 
     def _try_load_fastcache(self, args: tuple[Any, ...], key: "CompiledKernelKeyType") -> set[str] | None:
         frontend_cache_key: str | None = None
@@ -639,6 +643,13 @@ class Kernel(FuncBase):
                     template_num += 1
                     i_out += 1
                     continue
+                if (
+                    val is None
+                    and self.arg_metas[i_in].optional
+                    and type(self.arg_metas[i_in].annotation) is ndarray_type.NdarrayType
+                ):
+                    # Optional ndarray + None is specialized away at compile time, so it consumes no runtime arg.
+                    continue
                 # FIXME: This shortcut skips _recursive_set_args() solely when val._qd_all_field is true and the annotation is
                 # a dataclass, but _recursive_set_args() is where the strict provided_arg_type-is-needed_arg_type check lives.
                 # As a result, once an instance has _qd_all_field=True, passing it to a kernel parameter annotated with a
@@ -718,6 +729,11 @@ class Kernel(FuncBase):
                 compiled_kernel_data = compile_result.compiled_kernel_data
                 if compile_result.cache_hit:
                     self.fe_ll_cache_observations.cache_hit = True
+                self.per_offload_cache_observations = PerOffloadCacheObservations(
+                    frontend_constructs_total=compile_result.per_construct_total,
+                    frontend_constructs_cache_hit=compile_result.per_construct_cache_hit,
+                    frontend_constructs_recompiled=compile_result.per_construct_recompiled,
+                )
                 if self.fast_checksum:
                     src_hasher.store(
                         compile_result.cache_key,
@@ -733,6 +749,13 @@ class Kernel(FuncBase):
                         checkpoint_user_labels_by_cp_id=list(self.checkpoint_user_labels_by_cp_id),
                     )
                     self.src_ll_cache_observations.cache_stored = True
+            else:
+                # No frontend ran this launch: `compiled_kernel_data` was served from a cache -- either an
+                # already-compiled specialization on this Kernel object, or a fastcache restore (`_try_load_fastcache`)
+                # that supplies the artifact directly and bypasses `prog.compile_kernel`. Report the per-construct
+                # split's no-split sentinel (-1) rather than leaving a previous specialization's counts visible; this
+                # matches the C++ cache-hit path, which also reports -1 in `KernelCompilationManager::load_or_compile`.
+                self.per_offload_cache_observations = PerOffloadCacheObservations()
             self._last_compiled_kernel_data = compiled_kernel_data
             launch_ctx.use_graph = self.use_graph and _GRAPH_ENABLED
             if self.use_graph and qd_stream is not None:

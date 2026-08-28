@@ -33,7 +33,11 @@ Whether to enable relaxed floating-point optimizations (fusing multiply-add oper
 
 ### `num_compile_threads`
 
-Number of host threads used to compile a single kernel's internal tasks in parallel. Default `4`. When Quadrants compiles a kernel it first splits it into several tasks (roughly one per parallel loop) and hands them to a pool of this many threads, so a kernel that splits into many tasks compiles faster on a machine with idle cores. (Distinct kernels are still each compiled lazily the first time they run; this option speeds up the compilation of one such kernel, not scheduling across kernels.) Lower it, or set `1`, on memory-constrained systems where many concurrent compilations would thrash memory. Only the LLVM backends (CPU, CUDA, AMDGPU) use it.
+Number of host threads used to compile a single kernel's internal tasks in parallel. Default `4`. When Quadrants compiles a kernel it first splits it into several tasks (roughly one per parallel loop) and hands them to a pool of this many threads, so a kernel that splits into many tasks compiles faster on a machine with idle cores. (Distinct kernels are still each compiled lazily the first time they run; this option speeds up the compilation of one such kernel, not scheduling across kernels.) Lower it, or set `1`, on memory-constrained systems where many concurrent compilations would thrash memory. Only the CPU, CUDA, and AMDGPU backends use it.
+
+### `raise_on_templated_floats`
+
+Default `False`. Some kernel arguments make Quadrants compile a separate, specialized copy of the kernel for each distinct *value* it sees (rather than one copy per distinct *type*) - notably a plain Python `float` passed as a `qd.Template` argument, or a [`Final[float]`](./compound_types.md#compile-time-constant-fields-typingfinal) field on a dataclass argument. Because two floats are rarely exactly equal, letting a `float` drive this per-value specialization can quietly recompile the kernel on almost every launch and inflate both compile time and on-disk cache size. Set `raise_on_templated_floats=True` to make Quadrants raise an error whenever a `float` value would be used this way, turning that silent trap into an explicit failure; leave it at the default `False` to allow float-valued templates.
 
 ## Reverse-mode autodiff
 
@@ -137,3 +141,9 @@ These are compiler settings, so most do not apply to the pure-Python `qd.python`
 - `short_circuit_operators` (`bool`, default `True`): use short-circuit evaluation for `and`/`or` inside kernels (also settable via `QD_SHORT_CIRCUIT_OPERATORS`).
 - `print_full_traceback` (`bool`, default `False`): print the full Python traceback when an exception propagates out of Quadrants (also settable via `QD_PRINT_FULL_TRACEBACK`).
 - `unrolling_limit` (`int`, default `32`): maximum number of iterations a static loop may be unrolled before a warning is emitted; `0` disables the warning (also settable via `QD_UNROLLING_LIMIT`).
+
+## Removed options
+
+These options were accepted by `qd.init` in earlier versions but never had any effect (nothing in the compiler or runtime read their value), so they have been removed: `use_llvm`, `lower_access`, `simplify_before_lower_access`, `simplify_after_lower_access`, `verbose`, `verbose_kernel_launches`, `gpu_max_reg`, and `cpu_block_dim_adaptive`. Passing any of them to `qd.init` now raises a `KeyError` (they were previously ignored), and the corresponding `QD_<NAME>` environment variables are no longer read. If your code passed any of these, drop them: none of them changed behavior.
+
+The `block_dim_adaptive` keyword of `qd.loop_config` (the helper that sets directives such as GPU block size and CPU parallelization for the loop that immediately follows it) has also been removed. It was the only setter for `cpu_block_dim_adaptive` and equally had no effect, so `qd.loop_config(block_dim_adaptive=...)` now raises a `TypeError`; drop the argument. The CPU parallel-for block size is controlled by `default_cpu_block_dim`.
