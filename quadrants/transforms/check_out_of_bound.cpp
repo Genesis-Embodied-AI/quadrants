@@ -2,6 +2,7 @@
 #include "quadrants/ir/statements.h"
 #include "quadrants/ir/transforms.h"
 #include "quadrants/ir/visitors.h"
+#include "quadrants/rhi/arch.h"
 #include "quadrants/transforms/check_out_of_bound.h"
 #include "quadrants/transforms/utils.h"
 #include <set>
@@ -16,8 +17,29 @@ class CheckOutOfBound : public BasicStmtVisitor {
   std::set<int> visited;
   DelayedIRModifier modifier;
   std::string kernel_name;
+  // AMDGPU only: the in-kernel assert is non-terminating there (see runtime.cpp), so a wave that fails a
+  // bounds check keeps executing instead of being killed. Clamp the offending access index into
+  // [0, size-1] so the subsequent load/store stays in bounds (no GPU memory fault, which on some AMD
+  // arches would escalate to an uncatchable HSA exception) while the recorded assertion still surfaces on
+  // the host after sync. Other backends (CPU early-returns, CUDA `asm("exit;")`) never continue, so they
+  // leave the access untouched and this is false for them.
+  bool clamp_oob_index_ = false;
 
-  explicit CheckOutOfBound(const std::string &kernel_name) : kernel_name(kernel_name) {
+  explicit CheckOutOfBound(const std::string &kernel_name, bool clamp_oob_index)
+      : kernel_name(kernel_name), clamp_oob_index_(clamp_oob_index) {
+  }
+
+  // Return clamp(index, 0, size_minus_one) = min(max(index, 0), size_minus_one), appending the ops to
+  // `stmts`. Used to keep a post-assert AMDGPU access in bounds.
+  Stmt *clamp_index_to_bounds(VecStatement &stmts, Stmt *index, Stmt *zero, Stmt *size_minus_one) {
+    auto lo = stmts.push_back<BinaryOpStmt>(BinaryOpType::max, index, zero);
+    return stmts.push_back<BinaryOpStmt>(BinaryOpType::min, lo, size_minus_one);
+  }
+
+  // Point `ptr`'s operand slot that currently holds `*index_slot` at `clamped` (updates use-def correctly).
+  void redirect_index_operand(Stmt *ptr, Stmt **index_slot, Stmt *clamped) {
+    int slot = ptr->locate_operand(index_slot);
+    ptr->set_operand(slot, clamped);
   }
 
   bool is_done(Stmt *stmt) {
@@ -75,6 +97,14 @@ class CheckOutOfBound : public BasicStmtVisitor {
 
       auto input_index = stmt->indices[i];
       args.emplace_back(input_index);
+
+      if (clamp_oob_index_) {
+        // Clamp against the runtime external shape so the post-assert AMDGPU access stays in bounds.
+        auto one = new_stmts.push_back<ConstStmt>(TypedConstant(1));
+        auto size_minus_one = new_stmts.push_back<BinaryOpStmt>(BinaryOpType::sub, upper_bound, one);
+        auto clamped = clamp_index_to_bounds(new_stmts, stmt->indices[i], zero, size_minus_one);
+        redirect_index_operand(stmt, &stmt->indices[i], clamped);
+      }
     }
 
     for (int i = 0; i < stmt->indices.size(); i++) {
@@ -129,6 +159,13 @@ class CheckOutOfBound : public BasicStmtVisitor {
         input_index = new_stmts.push_back<BinaryOpStmt>(BinaryOpType::add, input_index, offset);
       }
       args.emplace_back(input_index);
+
+      if (clamp_oob_index_) {
+        // Clamp against the field size so the post-assert AMDGPU access stays in bounds.
+        auto size_minus_one = new_stmts.push_back<ConstStmt>(TypedConstant(size_i - 1));
+        auto clamped = clamp_index_to_bounds(new_stmts, stmt->indices[i], zero, size_minus_one);
+        redirect_index_operand(stmt, &stmt->indices[i], clamped);
+      }
     }
     offset_msg += ") ";
     msg += ") " + (has_offset ? offset_msg : "") + "with indices (";
@@ -181,6 +218,13 @@ class CheckOutOfBound : public BasicStmtVisitor {
 
     std::vector<Stmt *> args = {index};
     new_stmts.push_back<AssertStmt>(result, msg, args);
+
+    if (clamp_oob_index_) {
+      // Clamp the flattened matrix offset into [0, size-1] for the post-assert AMDGPU access.
+      auto clamped = clamp_index_to_bounds(new_stmts, index, zero, upper_bound);
+      redirect_index_operand(stmt, &stmt->offset, clamped);
+    }
+
     modifier.insert_before(stmt, std::move(new_stmts));
     set_done(stmt);
   }
@@ -208,7 +252,9 @@ class CheckOutOfBound : public BasicStmtVisitor {
   }
 
   static bool run(IRNode *node, const CompileConfig &config, const std::string &kernel_name) {
-    CheckOutOfBound checker(kernel_name);
+    // Only AMDGPU needs the post-assert index clamp: its in-kernel assert is non-terminating, so a failed
+    // bounds check falls through to the access. CPU/CUDA stop the thread at the assert and never do.
+    CheckOutOfBound checker(kernel_name, arch_is_amdgpu(config.arch));
     bool modified = false;
     while (true) {
       node->accept(&checker);
