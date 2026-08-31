@@ -201,16 +201,25 @@ struct LLVMCompiledTask {
   QD_IO_DEF(tasks);
 };
 
-// One offloaded task's self-contained module, for the per-task module path.
+// One offloaded task's self-contained artifact for the per-task path. `module` is the freshly-built module; the JIT
+// later fills `code` with the backend payload (PTX on CUDA). `key` is the per-task cache key it's stored under.
 struct PerConstructArtifact {
   std::unique_ptr<llvm::Module> module{nullptr};
+  std::vector<char> code;
+  std::string key;
+  std::vector<OffloadedTask> tasks;
+  std::vector<int> used_tree_ids;
+  std::vector<int> struct_for_tls_sizes;
 };
 
 struct LLVMCompiledKernel {
   std::vector<OffloadedTask> tasks;
   std::unique_ptr<llvm::Module> module{nullptr};
-  // Per-task modules for the per-task path; empty => JIT uses the whole-module `module`. Transient (not in QD_IO_DEF).
+  // Per-task artifacts for the per-task path; empty => JIT uses the whole-module `module`. Transient (not serialized).
   std::vector<PerConstructArtifact> per_construct_artifacts;
+  // The `key` of each `per_construct_artifacts` entry, in order. Unlike the artifacts this IS serialized: it's how an
+  // artifact-backed kernel gets a `.qdc` entry, rebuilt from the cache on load via `PerTaskArtifactCache`.
+  std::vector<std::string> per_task_artifact_keys;
   LLVMCompiledKernel() = default;
   LLVMCompiledKernel(LLVMCompiledKernel &&) = default;
   LLVMCompiledKernel &operator=(LLVMCompiledKernel &&) = default;
@@ -218,7 +227,7 @@ struct LLVMCompiledKernel {
       : tasks(std::move(tasks)), module(std::move(module)) {
   }
   LLVMCompiledKernel clone() const;
-  QD_IO_DEF(tasks);
+  QD_IO_DEF(tasks, per_task_artifact_keys);
 };
 
 // The exclusive end of the maximal run of stream-parallel tasks starting at `start` that belong to the SAME

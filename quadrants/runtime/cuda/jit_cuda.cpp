@@ -6,6 +6,7 @@
 #include "quadrants/runtime/cuda/jit_cuda.h"
 #include "quadrants/runtime/llvm/llvm_context.h"
 #include "quadrants/codegen/ir_dump.h"
+#include "quadrants/codegen/llvm/per_task_artifact_cache.h"
 #include "quadrants/util/environ_config.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Transforms/Scalar/LoopStrengthReduce.h"
@@ -219,12 +220,32 @@ JITModule *JITSessionCUDA::add_module_per_task(std::vector<PerConstructArtifact>
   (void)max_reg;  // No link step here (per-task whole-module driver load), so there is nowhere to apply max-reg.
   auto &drv = CUDADriver::get_instance();
 
+  // Cross-process fill site: a hit already carries cached PTX (`code`), used verbatim; a miss compiles the module and
+  // the result -- PTX plus the launch metadata that must travel with it -- is stored under the task's IR key so a
+  // later process skips this compilation entirely. No-ops when the dir is empty (offline cache off).
+  const PerTaskArtifactCache artifact_cache(pertask_artifact_dir_ref());
   // The cheap LLVM->PTX step (the expensive PTX->SASS now happens in the driver at load, cached in ~/.nv/ComputeCache).
   // Use the dump-aware variant so QD_DUMP_IR / QD_LOAD_IR behave the same per task as on the whole-module path.
   std::vector<std::string> ptxs(artifacts.size());
   for (std::size_t i = 0; i < artifacts.size(); i++) {
-    std::lock_guard<std::mutex> g(g_ptxgen_mu);
-    ptxs[i] = compile_module_to_ptx_with_dump(artifacts[i].module);
+    if (!artifacts[i].code.empty()) {
+      ptxs[i].assign(artifacts[i].code.begin(), artifacts[i].code.end());
+      continue;
+    }
+    std::string ptx;
+    {
+      std::lock_guard<std::mutex> g(g_ptxgen_mu);
+      ptx = compile_module_to_ptx_with_dump(artifacts[i].module);
+    }
+    if (!artifacts[i].key.empty()) {
+      PerTaskArtifact rec;
+      rec.tasks = artifacts[i].tasks;
+      rec.used_tree_ids = artifacts[i].used_tree_ids;
+      rec.struct_for_tls_sizes = artifacts[i].struct_for_tls_sizes;
+      rec.code.assign(ptx.begin(), ptx.end());
+      artifact_cache.store(artifacts[i].key, rec);
+    }
+    ptxs[i] = std::move(ptx);
   }
 
   CUDAContext::get_instance().make_current();
