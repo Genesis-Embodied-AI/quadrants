@@ -840,6 +840,11 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">launch_context_buffer_cache</span> <span class="o">=</span> <span class="n">LaunchContextBufferCache</span><span class="p">()</span></div>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">_struct_ndarray_launch_info_by_key</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">CompiledKernelKeyType</span><span class="p">,</span> <span class="nb">list</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="c1"># Launch-time no-alias guard. A key is present (value True) only when its split relied on cross-parameter ndarray</span>
+        <span class="c1"># disjointness; those keys check their actual args for aliasing per launch and, on a violation, launch the</span>
+        <span class="c1"># whole-kernel variant cached here (compiled with the split disabled). Absent keys skip the check entirely.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_split_alias_guard_by_key</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">CompiledKernelKeyType</span><span class="p">,</span> <span class="nb">bool</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_compiled_no_split_by_key</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">CompiledKernelKeyType</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="c1"># Launch info for primitives lifted from ``@qd.data_oriented(template_primitives=False)`` template args (see</span>
         <span class="c1"># ``predeclare_struct_primitives``). Maps key -&gt; list of ``(arg_id, template_arg_idx, attr_chain, kind)``.</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_struct_primitive_launch_info_by_key</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">CompiledKernelKeyType</span><span class="p">,</span> <span class="nb">list</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
@@ -918,6 +923,10 @@
                 <span class="p">)</span>
                 <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">compiled_kernel_data_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]:</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_loaded</span> <span class="o">=</span> <span class="kc">True</span>
+                    <span class="c1"># A fastcache restore bypasses prog.compile_kernel, so arm the launch-time no-alias guard here too</span>
+                    <span class="c1"># when the restored split relied on cross-parameter ndarray disjointness (read off the artifact).</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">compiled_kernel_data_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span><span class="o">.</span><span class="n">split_assumed_ndarray_disjoint</span><span class="p">():</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">_split_alias_guard_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">used_py_dataclass_parameters_by_key_enforcing</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">cache_value</span><span class="o">.</span><span class="n">used_py_dataclass_parameters</span>
                     <span class="c1"># Fast-cache restore skips AST transformation, so rebuild the AST-transformer-produced metadata from</span>
                     <span class="c1"># the cache value: nested graph_do_while level table (with the AST-resolved flat C++ arg-id) plus</span>
@@ -1266,6 +1275,11 @@
 
                 <span class="n">compile_result</span><span class="p">:</span> <span class="n">CompileResult</span> <span class="o">=</span> <span class="n">prog</span><span class="o">.</span><span class="n">compile_kernel</span><span class="p">(</span><span class="n">prog_config</span><span class="p">,</span> <span class="n">prog_device_cap</span><span class="p">,</span> <span class="n">t_kernel</span><span class="p">)</span>
                 <span class="n">compiled_kernel_data</span> <span class="o">=</span> <span class="n">compile_result</span><span class="o">.</span><span class="n">compiled_kernel_data</span>
+                <span class="c1"># Arm the launch-time no-alias guard for this key iff its split relied on cross-parameter ndarray</span>
+                <span class="c1"># disjointness (read from the compiled kernel, so it is set on a cache hit too). Store only True keys so</span>
+                <span class="c1"># the per-launch check below stays a single dict lookup for every other kernel.</span>
+                <span class="k">if</span> <span class="n">compile_result</span><span class="o">.</span><span class="n">split_assumed_ndarray_disjoint</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_split_alias_guard_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
                 <span class="k">if</span> <span class="n">compile_result</span><span class="o">.</span><span class="n">cache_hit</span><span class="p">:</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">fe_ll_cache_observations</span><span class="o">.</span><span class="n">cache_hit</span> <span class="o">=</span> <span class="kc">True</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">per_offload_cache_observations</span> <span class="o">=</span> <span class="n">PerOffloadCacheObservations</span><span class="p">(</span>
@@ -1299,6 +1313,19 @@
                 <span class="c1"># matches the C++ cache-hit path, which also reports -1 in `KernelCompilationManager::load_or_compile`.</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">per_offload_cache_observations</span> <span class="o">=</span> <span class="n">PerOffloadCacheObservations</span><span class="p">()</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_last_compiled_kernel_data</span> <span class="o">=</span> <span class="n">compiled_kernel_data</span>
+            <span class="c1"># Launch-time no-alias guard: the split may have assumed two ndarray params never alias, which is unsound if</span>
+            <span class="c1"># this call binds the same ndarray to both. When that happens, launch the whole-kernel variant (never</span>
+            <span class="c1"># recomputes across a write, so always correct) instead. `_last_compiled_kernel_data` above keeps the fast</span>
+            <span class="c1"># split as the cached default for the common disjoint call.</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_split_alias_guard_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_launch_has_aliased_ndarrays</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">args</span><span class="p">):</span>
+                <span class="n">no_split</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compiled_no_split_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">no_split</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">no_split</span> <span class="o">=</span> <span class="n">prog</span><span class="o">.</span><span class="n">compile_kernel</span><span class="p">(</span>
+                        <span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">(),</span> <span class="n">prog</span><span class="o">.</span><span class="n">get_device_caps</span><span class="p">(),</span> <span class="n">t_kernel</span><span class="p">,</span> <span class="n">disable_split</span><span class="o">=</span><span class="kc">True</span>
+                    <span class="p">)</span><span class="o">.</span><span class="n">compiled_kernel_data</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_compiled_no_split_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">no_split</span>
+                <span class="n">compiled_kernel_data</span> <span class="o">=</span> <span class="n">no_split</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">per_offload_cache_observations</span> <span class="o">=</span> <span class="n">PerOffloadCacheObservations</span><span class="p">()</span>
             <span class="n">launch_ctx</span><span class="o">.</span><span class="n">use_graph</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_graph</span> <span class="ow">and</span> <span class="n">_GRAPH_ENABLED</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_graph</span> <span class="ow">and</span> <span class="n">qd_stream</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
@@ -1364,6 +1391,45 @@
             <span class="k">return</span> <span class="n">launch_ctx</span><span class="o">.</span><span class="n">get_struct_ret_float</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span>
         <span class="k">raise</span> <span class="n">QuadrantsRuntimeTypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Invalid return type on index=</span><span class="si">{</span><span class="n">indices</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span></div>
 
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_launch_has_aliased_ndarrays</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""True if two ndarray parameters of this launch may share one backing device allocation.</span>
+
+<span class="sd">        Only called for keys whose split relied on cross-parameter ndarray disjointness (see the launch guard). Two</span>
+<span class="sd">        ndarray args alias in the compiled kernel iff their ``DeviceAllocation`` matches -- the launcher derives each</span>
+<span class="sd">        arg's device pointer from ``alloc_id``, so that (not the wrapper address) is the identity to compare. An arg</span>
+<span class="sd">        whose id cannot be read is treated as a possible alias, so an unrecognized argument shape falls back to the</span>
+<span class="sd">        always-correct whole-kernel path rather than risking the split. Covers plain ndarray args and ndarrays reached</span>
+<span class="sd">        through ``@qd.data_oriented`` struct members.</span>
+<span class="sd">        """</span>
+        <span class="n">seen</span><span class="p">:</span> <span class="nb">set</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">_collides</span><span class="p">(</span><span class="n">nd</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">nd</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">False</span>
+            <span class="n">arr</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">nd</span><span class="p">,</span> <span class="s2">"arr"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">ident</span> <span class="o">=</span> <span class="n">arr</span><span class="o">.</span><span class="n">device_alloc_id</span><span class="p">()</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">True</span>
+            <span class="k">if</span> <span class="n">ident</span> <span class="ow">in</span> <span class="n">seen</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">True</span>
+            <span class="n">seen</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">ident</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span>
+
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">meta</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">meta</span><span class="o">.</span><span class="n">annotation</span><span class="p">)</span> <span class="ow">is</span> <span class="n">ndarray_type</span><span class="o">.</span><span class="n">NdarrayType</span><span class="p">:</span>
+                <span class="n">val</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+                <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">val</span><span class="p">)</span> <span class="ow">in</span> <span class="n">_TENSOR_WRAPPER_TYPES</span><span class="p">:</span>
+                    <span class="n">val</span> <span class="o">=</span> <span class="n">val</span><span class="o">.</span><span class="n">_unwrap</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">_collides</span><span class="p">(</span><span class="n">val</span><span class="p">):</span>
+                    <span class="k">return</span> <span class="kc">True</span>
+        <span class="n">struct_nd_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_struct_ndarray_launch_info_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">struct_nd_info</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">_arg_id</span><span class="p">,</span> <span class="n">template_arg_idx</span><span class="p">,</span> <span class="n">attr_chain</span> <span class="ow">in</span> <span class="n">struct_nd_info</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">_collides</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_resolve_struct_ndarray</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">template_arg_idx</span><span class="p">,</span> <span class="n">attr_chain</span><span class="p">)):</span>
+                    <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="kc">False</span>
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_struct_ndarray</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">template_arg_idx</span><span class="p">,</span> <span class="n">attr_chain</span><span class="p">):</span>
