@@ -531,8 +531,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
     const auto &parameter = kv.second;
     if (parameter.is_array) {
       const auto arr_sz = ctx.array_runtime_sizes[arg_id];
-      const bool is_host_external =
-          ctx.device_allocation_type[arg_id] == LaunchContextBuilder::DevAllocType::kNone;
+      const bool is_host_external = ctx.device_allocation_type[arg_id] == LaunchContextBuilder::DevAllocType::kNone;
       // A zero-extent external array (numpy/pytorch shape like (0,) or (100, 0, 200)) has no bytes to
       // stage. We normally skip it, but under debug bounds-checking the AMDGPU assert is non-terminating,
       // so an out-of-bounds access clamps its index to 0 and still dereferences this pointer -- it must be
