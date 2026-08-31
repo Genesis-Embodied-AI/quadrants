@@ -166,10 +166,7 @@ def update_positions(pos: Position) -> None:
         update_position(pos.x, i)
 ```
 
-Note: when the annotated type is frozen, the flattened launch arguments are cached on the instance on first
-use. Do not rebind a field after the first launch; the kernel would keep using the stale cached value. Frozen
-dataclasses forbid rebinding by design, so this only affects code that deliberately bypasses that (e.g.
-`object.__setattr__`, or an `unsafe_hash=True` non-frozen dataclass).
+Note: when the annotated type is frozen, the flattened launch arguments are cached on the instance on first use. Do not rebind a field after the first launch; the kernel would keep using the stale cached value. Frozen dataclasses forbid rebinding by design, so this only affects code that deliberately bypasses that (e.g. `object.__setattr__`, or an `unsafe_hash=True` non-frozen dataclass).
 
 ### Compile-time constant fields: `typing.Final`
 

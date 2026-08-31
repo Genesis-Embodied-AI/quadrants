@@ -634,10 +634,7 @@ my_struct.b[37] 5
         <span class="n">update_position</span><span class="p">(</span><span class="n">pos</span><span class="o">.</span><span class="n">x</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>Note: when the annotated type is frozen, the flattened launch arguments are cached on the instance on first
-use. Do not rebind a field after the first launch; the kernel would keep using the stale cached value. Frozen
-dataclasses forbid rebinding by design, so this only affects code that deliberately bypasses that (e.g.
-<code class="docutils literal notranslate"><span class="pre">object.__setattr__</span></code>, or an <code class="docutils literal notranslate"><span class="pre">unsafe_hash=True</span></code> non-frozen dataclass).</p>
+<p>Note: when the annotated type is frozen, the flattened launch arguments are cached on the instance on first use. Do not rebind a field after the first launch; the kernel would keep using the stale cached value. Frozen dataclasses forbid rebinding by design, so this only affects code that deliberately bypasses that (e.g. <code class="docutils literal notranslate"><span class="pre">object.__setattr__</span></code>, or an <code class="docutils literal notranslate"><span class="pre">unsafe_hash=True</span></code> non-frozen dataclass).</p>
 </section>
 <section id="compile-time-constant-fields-typing-final">
 <h3>Compile-time constant fields: <code class="docutils literal notranslate"><span class="pre">typing.Final</span></code><a class="headerlink" href="#compile-time-constant-fields-typing-final" title="Link to this heading">#</a></h3>
