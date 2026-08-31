@@ -28,18 +28,11 @@ type registration is impossible to miss and cannot serve stale cached results.
 
 Pruning is per-specialization
 -----------------------------
-Which paths a kernel reads is *not* a pure function of source+config: ``qd.static(state.flag)`` can make one
-specialization read ``state.x`` and another read ``state.y``. Since a single L1 entry is shared by every
-specialization of the same source, keying an L2 entry by only the first specialization's paths would let a later
-process serve that entry after a dtype / ndim / baked-value change on a path the entry's own specialization does read
-(observed: an artifact compiled for ``y: f32`` reused for ``y: i32``).
-
-The L1 entry therefore holds the union of the paths read by every specialization compiled so far, and
-``persist_l1_and_set_l2_key`` grows that union - and re-derives the L2 key from it - whenever a freshly compiled
-specialization reads something the entry did not list. This keeps the invariant that every stored L2 entry's key was
-derived from a path set that *covers* the reads of the specialization it names, so a change at any path that
-specialization reads always changes its key. The cost is that a path read by only one specialization also enters the
-keys of its siblings (over-invalidation, never under-invalidation).
+Which paths a kernel reads is not a source+config property: ``qd.static(state.flag)`` can make one specialization
+read ``state.x`` and another read ``state.y``. One L1 entry is shared by all of them, so it holds the union of their
+paths and every L2 key is derived from that union. The invariant this buys: a stored L2 entry's key covers every path
+the specialization it names reads, so a dtype / ndim / baked-value change at any of them changes the key. The cost is
+over-invalidation - a path read by one specialization enters its siblings' keys too.
 """
 
 import importlib
@@ -77,8 +70,7 @@ _L2_MARKER = "l2"
 # directly without per-launch name matching (necessary for @qd.data_oriented member ndarrays). v4 added the per-slot
 # `checkpoint_user_label_enum_qualnames` table so an IntEnum cp_id (e.g. `qd.checkpoint(Stage.SIM, ...)`) round-trips
 # through fast-cache restore as the original IntEnum member rather than the underlying int. v5 made the L1 flat-name
-# set a union over specializations (see "Pruning is per-specialization" above): entries written before that could name
-# an artifact whose key omitted paths its own specialization reads, so they must not be read back.
+# set a union over specializations, so a v4 entry can name an artifact whose key omits paths it depends on.
 _CACHE_VALUE_SCHEMA_VERSION = "cachevalue-v5-pruning-union"
 
 
@@ -210,17 +202,14 @@ class L1CacheValue(BaseModel):
 
     Pruning info is the set of *flat names* (``__qd_<arg>__qd_<child>__qd_...``) that the kernel actually reads.
     Computed during compile (``Pruning.used_vars_by_func_id``); persisted here so subsequent calls can build
-    a narrow args hash without having to recompile. The stored set is the union over every specialization compiled so
-    far (grown by ``persist_l1_and_set_l2_key``), because ``qd.static`` can make different specializations of the same
-    source read different paths - see "Pruning is per-specialization" in the module docstring.
+    a narrow args hash without having to recompile. The stored set is the union over specializations - see "Pruning is
+    per-specialization" in the module docstring.
 
-    ``graph_do_while_levels`` is also stored here, as a pre-compile seed for the L1-hit / L2-miss path: each entry is
-    ``(cond_arg_name, parent_id, cond_cpp_arg_id)``, indexed by level id (outer before inner), and ``cond_cpp_arg_id``
-    is AST-resolved - see ``CacheValue`` for why the launch path needs it. The copy that a fast-cache *restore*
-    installs comes from ``CacheValue`` rather than from here, since a ``qd.graph_do_while`` nested inside a
-    ``qd.static`` branch belongs to the specializations that compile that branch, not to every sibling. The seed
-    itself is discarded whenever the AST walk runs (``ASTGenerator`` clears the table before ``build_While``
-    repopulates it).
+    ``graph_do_while_levels`` is only a pre-compile seed for the L1-hit / L2-miss path (the AST walk clears and
+    rebuilds the table anyway); a fast-cache *restore* takes the table from ``CacheValue`` instead, since a
+    ``qd.graph_do_while`` nested inside a ``qd.static`` branch belongs to some specializations and not others. Each
+    entry is ``(cond_arg_name, parent_id, cond_cpp_arg_id)``, indexed by level id (outer before inner); see
+    ``CacheValue`` for why the launch path needs the AST-resolved ``cond_cpp_arg_id``.
 
     ``hashed_function_source_infos`` is the same content-hash list used for L2 validation; an L1 hit is
     rejected if any helper source has changed since the L1 entry was written, even if the kernel source
@@ -238,10 +227,7 @@ def store_pruning_info(
     used_py_dataclass_parameters: set[str],
     graph_do_while_levels: list[tuple[str, int, int]] | None = None,
 ) -> None:
-    """Persist the L1 entry after a cold compile, or re-persist it with a grown flat-name union.
-
-    See ``L1CacheValue`` for what's stored / why, and ``persist_l1_and_set_l2_key`` for when the union grows.
-    """
+    """Persist the L1 entry, or re-persist it with a grown union. See ``L1CacheValue`` for what's stored / why."""
     if not source_config_key:
         return
     cache = PythonSideCache()
@@ -269,28 +255,19 @@ def persist_l1_and_set_l2_key(
 ) -> tuple[str | None, bool]:
     """After a successful materialize, persist L1 (if missing or incomplete) and derive the L2 key.
 
-    Three responsibilities:
+      1. L1 missing (``pruning_paths_from_l1 is None``): store the freshly-computed pruning info so the next call
+         from a new process can skip the args-walk warm-up.
 
-      1. If L1 was missing (``pruning_paths_from_l1 is None``), write the freshly-computed pruning info so the next
-         call from a new process can skip the args-walk warm-up.
+      2. L1 present but not listing every path this specialization reads: grow it to the union, and drop the L2 key
+         phase 2 derived from the smaller set - that key ignores paths this artifact depends on.
 
-      2. If L1 was present but does not list every path this specialization reads (``qd.static`` branching - see
-         "Pruning is per-specialization" in the module docstring), grow the entry to the union and discard the L2 key
-         phase 2 derived from the too-narrow set: keeping it would store this artifact under a key that ignores paths
-         it actually depends on, so a later process would serve it after a dtype / ndim / baked-value change on one of
-         them.
+      3. No ``fast_checksum`` at that point (L1 missing, dropped by 2., or phase 2 saw a FIELD-related
+         ``FastcacheSkip``): derive the L2 key from the path set L1 now holds.
 
-      3. If ``fast_checksum`` is ``None`` at that point (L1 was missing, the key was just discarded by 2., or L1 hit
-         but phase 2 of the warm-call load path saw a FIELD-related ``FastcacheSkip`` and kept ``None``), compute the
-         narrow args hash now, using the path set that L1 now holds, and derive the L2 key from it.
-
-    Returns ``(new_fast_checksum, generated)`` where ``generated`` is True iff this call freshly produced a non-None
-    L2 key for a kernel that had none (i.e. ``fast_checksum`` was ``None`` on entry and is non-None on return). The
-    caller assigns ``new_fast_checksum`` back to its kernel unconditionally - it may be a *re-keyed* value even when
-    ``generated`` is False - and uses ``generated`` to update its cache-observations counter.
-
-    Returns ``(None, False)`` if fastcache is inactive for this kernel (``l1_key`` falsy / source info missing /
-    used-params not recorded), or ``(fast_checksum, False)`` if nothing changed.
+    Returns ``(new_fast_checksum, generated)``, where ``generated`` means the kernel had no L2 key on entry and now
+    has one (it drives the caller's cache-observations counter). Case 2. re-keys with ``generated`` False, so the
+    caller must assign ``new_fast_checksum`` either way. ``(None, False)`` means fastcache is inactive for this
+    kernel (``l1_key`` falsy / source info missing / used-params not recorded).
     """
     if not l1_key:
         return None, False
@@ -310,8 +287,7 @@ def persist_l1_and_set_l2_key(
     elif used_py_dataclass_parameters <= pruning_paths_from_l1:
         key_paths = pruning_paths_from_l1
     else:
-        # This specialization reads paths the shared L1 entry doesn't list. Grow the entry so every future
-        # specialization keys on the same superset, and re-derive this artifact's L2 key from it.
+        # Grow the shared entry so all specializations key on the same superset.
         key_paths = pruning_paths_from_l1 | used_py_dataclass_parameters
         store_pruning_info(
             l1_key,

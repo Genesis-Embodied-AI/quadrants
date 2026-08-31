@@ -375,11 +375,9 @@ def data_oriented(cls=None, *, stable_members: bool = False, template_primitives
         return lambda c: data_oriented(c, stable_members=stable_members, template_primitives=template_primitives)
 
     def make_kernel_indirect(fun, is_property, attr_name):
-        # Capture the primal at decoration time so a member-kernel call reaches it through this single closure rather
-        # than through ``fun``'s generic ``wrapped_classkernel`` -> ``wrapped_func`` pair. The owner check that
-        # ``wrapped_classkernel`` performs is therefore replicated inline below: an unbound call such as
-        # ``Klass.step(not_an_instance)`` lands here directly, and must keep naming the class that is missing the
-        # decorator instead of compiling the kernel against a foreign owner.
+        # Capture the primal at decoration time so a call skips ``fun``'s ``wrapped_classkernel`` -> ``wrapped_func``
+        # pair. That pair is also where the owner check lives, hence the copy of it below - an unbound
+        # ``Klass.step(not_an_instance)`` reaches this closure directly.
         primal = fun._primal
 
         @wraps(fun)
@@ -394,9 +392,8 @@ def data_oriented(cls=None, *, stable_members: bool = False, template_primitives
                 raise type(e)("\n" + str(e)) from None
 
         ret = QuadrantsCallable(fun, _kernel_indirect)
-        # ``QuadrantsCallable.__init__`` finishes with ``update_wrapper(self, fun)``, which copies ``fun.__dict__``
-        # over the freshly-set attributes - including ``fun``'s own ``wrapper``. Without re-setting it here every call
-        # would route back through ``fun``'s wrapper chain and ``_kernel_indirect`` would never run.
+        # ``QuadrantsCallable.__init__`` ends with ``update_wrapper(self, fun)``, which copies ``fun``'s own
+        # ``wrapper`` over the one just passed to the constructor.
         ret.wrapper = _kernel_indirect
         # setattr-after-class doesn't trigger __set_name__; set the name explicitly so QuadrantsCallable.__get__ can
         # cache the BoundQuadrantsCallable on instance.__dict__.
