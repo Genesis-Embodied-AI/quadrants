@@ -90,8 +90,7 @@ class JITModuleCPU : public JITModule {
  public:
   JITModuleCPU(JITSessionCPU *session, JITDylib *dylib) : session_(session), dylibs_{dylib} {
   }
-  JITModuleCPU(JITSessionCPU *session, std::vector<JITDylib *> dylibs)
-      : session_(session), dylibs_(std::move(dylibs)) {
+  JITModuleCPU(JITSessionCPU *session, std::vector<JITDylib *> dylibs) : session_(session), dylibs_(std::move(dylibs)) {
   }
 
   void *lookup_function(const std::string &name) override;
