@@ -32,6 +32,7 @@
 #include "llvm/Support/DynamicLibrary.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/Error.h"
+#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Transforms/InstCombine/InstCombine.h"
 #include "llvm/Transforms/Scalar.h"
@@ -49,6 +50,7 @@
 #include "quadrants/jit/jit_session.h"
 #include "quadrants/util/file_sequence_writer.h"
 #include "quadrants/runtime/llvm/llvm_context.h"
+#include "quadrants/codegen/llvm/per_task_artifact_cache.h"
 
 namespace quadrants::lang {
 
@@ -80,10 +82,16 @@ class JITSessionCPU;
 class JITModuleCPU : public JITModule {
  private:
   JITSessionCPU *session_;
-  JITDylib *dylib_;
+  // The whole-module path resolves in one dylib; the per-task path (add_module_per_task) resolves across N, one per
+  // task. A task's entry symbol lives in exactly one of them, so a by-name lookup that searches them all is
+  // unambiguous (only the unique task entry names are ever looked up; duplicated helper symbols never are).
+  std::vector<JITDylib *> dylibs_;
 
  public:
-  JITModuleCPU(JITSessionCPU *session, JITDylib *dylib) : session_(session), dylib_(dylib) {
+  JITModuleCPU(JITSessionCPU *session, JITDylib *dylib) : session_(session), dylibs_{dylib} {
+  }
+  JITModuleCPU(JITSessionCPU *session, std::vector<JITDylib *> dylibs)
+      : session_(session), dylibs_(std::move(dylibs)) {
   }
 
   void *lookup_function(const std::string &name) override;
@@ -104,6 +112,9 @@ class JITSessionCPU : public JITSession {
   std::vector<llvm::orc::JITDylib *> all_libs_;
   int module_counter_;
   SectionMemoryManager *memory_manager_;
+  // Lazily built host PIC target machine for the per-task object serialize path (add_module_per_task); reused across
+  // all misses in a session.
+  std::unique_ptr<llvm::TargetMachine> pertask_target_machine_;
 
  public:
   JITSessionCPU(QuadrantsLLVMContext *tlctx,
@@ -175,6 +186,55 @@ class JITSessionCPU : public JITSession {
     return new_module_raw_ptr;
   }
 
+  JITModule *add_module_per_task(std::vector<PerConstructArtifact> artifacts, int max_reg) override {
+    QD_ASSERT(max_reg == 0);  // No need to specify max_reg on CPUs
+    std::lock_guard<std::mutex> _(mut_);
+
+    // Cross-process fill site (mirror of runtime/cuda/jit_cuda.cpp): a hit already carries the cached host object in
+    // `code`, used verbatim; a miss compiles the per-task module to a host object and stores it -- object bytes plus
+    // the launch metadata that must travel with it -- under the task's IR key so a later process skips this
+    // compilation. No-ops when the dir is empty (offline cache off).
+    const PerTaskArtifactCache artifact_cache(pertask_artifact_dir_ref());
+
+    // One JITDylib per task (a task's entry symbol lives in exactly one), so per-task objects never collide on a
+    // shared helper / global symbol -- the CPU analog of CUDA's one-CUmodule-per-task, and why CPU needs no relink.
+    std::vector<llvm::orc::JITDylib *> dylibs;
+    dylibs.reserve(artifacts.size());
+    for (auto &art : artifacts) {
+      auto dylib_expect = es_.createJITDylib(fmt::format("pertask_{}", module_counter_));
+      QD_ASSERT(dylib_expect);
+      auto &dylib = dylib_expect.get();
+      dylib.addGenerator(
+          cantFail(llvm::orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(dl_.getGlobalPrefix())));
+
+      std::unique_ptr<llvm::MemoryBuffer> obj;
+      if (!art.code.empty()) {
+        // Hit: the cached bytes are a relocatable host object; load them straight into the object layer.
+        obj = llvm::MemoryBuffer::getMemBufferCopy(llvm::StringRef(art.code.data(), art.code.size()),
+                                                   fmt::format("pertask_{}", module_counter_));
+      } else {
+        QD_ASSERT(art.module);
+        obj = compile_module_to_object(*art.module);
+        if (!art.key.empty()) {
+          PerTaskArtifact rec;
+          rec.tasks = art.tasks;
+          rec.used_tree_ids = art.used_tree_ids;
+          rec.struct_for_tls_sizes = art.struct_for_tls_sizes;
+          rec.code.assign(obj->getBufferStart(), obj->getBufferEnd());
+          artifact_cache.store(art.key, rec);
+        }
+      }
+      cantFail(object_layer_.add(dylib, std::move(obj)));
+      dylibs.push_back(&dylib);
+      module_counter_++;
+    }
+
+    auto new_module = std::make_unique<JITModuleCPU>(this, std::move(dylibs));
+    auto *new_module_raw_ptr = new_module.get();
+    modules.push_back(std::move(new_module));
+    return new_module_raw_ptr;
+  }
+
   void *lookup(const std::string Name) override {
     std::lock_guard<std::mutex> _(mut_);
 #ifdef __APPLE__
@@ -187,21 +247,61 @@ class JITSessionCPU : public JITSession {
     return symbol->getAddress().toPtr<void *>();
   }
 
-  void *lookup_in_module(JITDylib *lib, const std::string Name) {
+  void *lookup_in_modules(const std::vector<JITDylib *> &libs, const std::string Name) {
     std::lock_guard<std::mutex> _(mut_);
 #ifdef __APPLE__
-    auto symbol = es_.lookup({lib}, mangle_(Name));
+    auto symbol = es_.lookup(libs, mangle_(Name));
 #else
-    auto symbol = es_.lookup({lib}, es_.intern(Name));
+    auto symbol = es_.lookup(libs, es_.intern(Name));
 #endif
     if (!symbol)
       QD_ERROR("Function \"{}\" not found", Name);
     return symbol->getAddress().toPtr<void *>();
   }
+
+ private:
+  // Serialize a self-contained per-task module to a host relocatable object -- the "serialize" half of the per-task
+  // disk tier, called on a cache miss. Build the target machine the same way as KernelCodeGenCPU::optimize_module
+  // (host CPU, PIC so the object is loadable by the ORC object layer) so the emitted object matches the module that
+  // optimize_module already produced.
+  std::unique_ptr<llvm::MemoryBuffer> compile_module_to_object(llvm::Module &M) {
+    if (!pertask_target_machine_) {
+      auto expected_jtmb = llvm::orc::JITTargetMachineBuilder::detectHost();
+      if (!expected_jtmb) {
+        QD_ERROR("LLVM TargetMachineBuilder has failed.");
+      }
+      auto triple = expected_jtmb->getTargetTriple();
+      std::string err_str;
+      const llvm::Target *target = llvm::TargetRegistry::lookupTarget(triple.str(), err_str);
+      QD_ERROR_UNLESS(target, err_str);
+      llvm::TargetOptions options;
+      if (config_.fast_math) {
+        options.AllowFPOpFusion = llvm::FPOpFusion::Fast;
+        options.NoInfsFPMath = 1;
+        options.NoNaNsFPMath = 1;
+      } else {
+        options.AllowFPOpFusion = llvm::FPOpFusion::Strict;
+        options.NoInfsFPMath = 0;
+        options.NoNaNsFPMath = 0;
+      }
+      llvm::StringRef mcpu = llvm::sys::getHostCPUName();
+      pertask_target_machine_.reset(target->createTargetMachine(triple, mcpu.str(), "", options, llvm::Reloc::PIC_,
+                                                                llvm::CodeModel::Small,
+                                                                llvm::CodeGenOptLevel::Aggressive));
+      QD_ERROR_UNLESS(pertask_target_machine_.get(), "Could not allocate target machine!");
+    }
+    M.setDataLayout(pertask_target_machine_->createDataLayout());
+    llvm::orc::SimpleCompiler compiler(*pertask_target_machine_);
+    auto obj = compiler(M);
+    if (!obj) {
+      QD_ERROR("Per-task CPU object compilation failed");
+    }
+    return std::move(*obj);
+  }
 };
 
 void *JITModuleCPU::lookup_function(const std::string &name) {
-  return session_->lookup_in_module(dylib_, name);
+  return session_->lookup_in_modules(dylibs_, name);
 }
 
 std::unique_ptr<JITSession> create_llvm_jit_session_cpu(QuadrantsLLVMContext *tlctx,

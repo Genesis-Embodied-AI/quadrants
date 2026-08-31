@@ -1,6 +1,8 @@
 #include "quadrants/runtime/program_impls/llvm/llvm_program.h"
 
 #include "llvm/IR/Module.h"
+#include "llvm/ExecutionEngine/Orc/JITTargetMachineBuilder.h"
+#include "llvm/TargetParser/Host.h"
 
 #include "quadrants/codegen/cpu/codegen_cpu.h"
 #include "quadrants/codegen/llvm/llvm_compiled_data.h"
@@ -43,6 +45,20 @@ LlvmProgramImpl::LlvmProgramImpl(CompileConfig &config_, KernelProfilerBase *pro
       pertask_dir += "_sm_" + std::to_string(CUDAContext::get_instance().get_compute_capability());
     }
 #endif
+    if (arch_is_cpu(config_.arch)) {
+      // Artifacts hold host object code tied to the target machine, so scope the dir by host triple + CPU (as the
+      // CUDA branch scopes by sm); an NFS-shared cache path could otherwise serve an object built for one host to an
+      // incompatible CPU. Matches the target machine built in jit_cpu.cpp / KernelCodeGenCPU::optimize_module.
+      auto jtmb = llvm::orc::JITTargetMachineBuilder::detectHost();
+      std::string tag =
+          (jtmb ? jtmb->getTargetTriple().str() : std::string("unknown")) + "_" + llvm::sys::getHostCPUName().str();
+      for (char &c : tag) {
+        if (c == '/' || c == ':' || c == ' ' || c == '\\') {
+          c = '_';
+        }
+      }
+      pertask_dir += "_cpu_" + tag;
+    }
   }
   pertask_artifact_dir_ref() = pertask_dir;
 }

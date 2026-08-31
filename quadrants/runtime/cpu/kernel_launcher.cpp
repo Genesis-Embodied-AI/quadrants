@@ -339,7 +339,14 @@ KernelLauncher::Handle KernelLauncher::register_llvm_kernel(const LLVM::Compiled
     auto *executor = get_runtime_executor();
 
     auto data = compiled.get_internal_data().compiled_data.clone();
-    auto *jit_module = executor->create_jit_module(std::move(data.module));
+    JITModule *jit_module = nullptr;
+    if (!data.per_construct_artifacts.empty()) {
+      // Per-task path: assemble the kernel from per-task objects (the cross-process artifact cache) instead of the
+      // whole-kernel module. Mirrors runtime/cuda/kernel_launcher.cpp.
+      jit_module = executor->create_jit_module_per_task(std::move(data.per_construct_artifacts));
+    } else {
+      jit_module = executor->create_jit_module(std::move(data.module));
+    }
 
     std::vector<TaskFunc> task_funcs;
     std::vector<int32_t> checkpoint_id_per_task;
