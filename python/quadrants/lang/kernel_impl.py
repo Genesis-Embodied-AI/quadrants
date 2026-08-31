@@ -388,8 +388,8 @@ def data_oriented(cls=None, *, stable_members: bool = False, template_primitives
                 raise type(e)("\n" + str(e)) from None
 
         ret = QuadrantsCallable(fun, _kernel_indirect)
-        # ``QuadrantsCallable.__init__`` ends with ``update_wrapper(self, fun)``, which copies ``fun``'s own
-        # ``wrapper`` over the one just passed to the constructor.
+        # ``QuadrantsCallable.__init__`` ends with ``update_wrapper(self, fun)``, which copies ``fun``'s own ``wrapper``
+        # over the one just passed to the constructor.
         ret.wrapper = _kernel_indirect
         # setattr-after-class doesn't trigger __set_name__; set the name explicitly so QuadrantsCallable.__get__ can
         # cache the BoundQuadrantsCallable on instance.__dict__.
@@ -400,10 +400,10 @@ def data_oriented(cls=None, *, stable_members: bool = False, template_primitives
 
     # Iterate over all the attributes of the class to wrap member kernels in a way to ensure that they will be called
     # through _BoundedDifferentiableMethod. This extra layer of indirection is necessary to transparently forward the
-    # owning instance to the primal function and its adjoint for auto-differentiation gradient computation.
-    # There is a special treatment for properties, as they may actually hide kernels under the hood. In such a case,
-    # the underlying function is extracted, wrapped as any member function, then wrapped again as a new property.
-    # Note that all the other attributes can be left untouched.
+    # owning instance to the primal function and its adjoint for auto-differentiation gradient computation. There is a
+    # special treatment for properties, as they may actually hide kernels under the hood. In such a case, the underlying
+    # function is extracted, wrapped as any member function, then wrapped again as a new property. Note that all the
+    # other attributes can be left untouched.
     for name, attr in cls.__dict__.items():
         attr_type = type(attr)
         is_property = attr_type is property

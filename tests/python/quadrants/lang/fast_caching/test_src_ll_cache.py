@@ -478,8 +478,8 @@ def test_src_ll_cache_needs_grad_distinguishes_args_hash(tmp_path: pathlib.Path)
     expected = np.array([7, 14, 21, 28], dtype=np.float32)
     np.testing.assert_allclose(b1.to_numpy(), expected)
 
-    # Hot run, needs_grad=True: this must miss L2. Were the args_hash to collide with the run above, the launch
-    # would route ``b2`` through ``_QD_ARRAY_WITH_GRAD`` against a slot compiled as plain ``_QD_ARRAY``.
+    # Hot run, needs_grad=True: this must miss L2. Were the args_hash to collide with the run above, the launch would
+    # route ``b2`` through ``_QD_ARRAY_WITH_GRAD`` against a slot compiled as plain ``_QD_ARRAY``.
     qd.reset()
     qd.init(arch=arch, offline_cache_file_path=str(tmp_path), offline_cache=True)
     a2 = qd.ndarray(qd.f32, shape=(N,), needs_grad=True)

@@ -61,14 +61,14 @@ from .python_side_cache import PythonSideCache
 _L1_MARKER = "l1"
 _L2_MARKER = "l2"
 
-# Bumped whenever the persisted L1CacheValue / CacheValue schema changes. Mixed into both L1 and L2 keys so old
-# entries from a prior schema are not mis-read on a Quadrants version where __version_str__ hasn't moved.
-# v2 replaced the single graph_do_while_arg string with a nested level table. v3 added the AST-resolved flat C++
-# arg-ids for qd.graph_do_while conditions and qd.checkpoint(yield_on=...) targets so the launch path can forward them
-# directly without per-launch name matching (necessary for @qd.data_oriented member ndarrays). v4 added the per-slot
+# Bumped whenever the persisted L1CacheValue / CacheValue schema changes. Mixed into both L1 and L2 keys so old entries
+# from a prior schema are not mis-read on a Quadrants version where __version_str__ hasn't moved. v2 replaced the single
+# graph_do_while_arg string with a nested level table. v3 added the AST-resolved flat C++ arg-ids for qd.graph_do_while
+# conditions and qd.checkpoint(yield_on=...) targets so the launch path can forward them directly without per-launch
+# name matching (necessary for @qd.data_oriented member ndarrays). v4 added the per-slot
 # `checkpoint_user_label_enum_qualnames` table so an IntEnum cp_id (e.g. `qd.checkpoint(Stage.SIM, ...)`) round-trips
-# through fast-cache restore as the original IntEnum member rather than the underlying int. v5 made the L1 flat-name
-# set a union over specializations, so a v4 entry can name an artifact whose key omits paths it depends on.
+# through fast-cache restore as the original IntEnum member rather than the underlying int. v5 made the L1 flat-name set
+# a union over specializations, so a v4 entry can name an artifact whose key omits paths it depends on.
 _CACHE_VALUE_SCHEMA_VERSION = "cachevalue-v5-pruning-union"
 
 

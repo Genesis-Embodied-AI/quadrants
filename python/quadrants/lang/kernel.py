@@ -431,8 +431,8 @@ class Kernel(FuncBase):
             # Phase 1: L1 lookup - pruning info only, no args walk yet.
             pruning_paths, cached_graph_do_while_levels = src_hasher.load_pruning_info(self._l1_key)
             if pruning_paths is None:
-                # ``cache_key_generated`` stays False: it means "fastcache produced a valid L2 args hash", and
-                # whether the narrow args walk will succeed isn't known until after the compile.
+                # ``cache_key_generated`` stays False: it means "fastcache produced a valid L2 args hash", and whether
+                # the narrow args walk will succeed isn't known until after the compile.
                 return None
             self._pruning_paths_from_l1 = pruning_paths
 
@@ -441,8 +441,8 @@ class Kernel(FuncBase):
                 self.raise_on_templated_floats, kernel_source_info, args, self.arg_metas, pruning_paths
             )
             if narrow_args_hash is None:
-                # Recognised-but-unsupported tensor-like (Field / MatrixField): leaving ``fast_checksum`` None keeps
-                # any L2 entry from being written for this call.
+                # Recognised-but-unsupported tensor-like (Field / MatrixField): leaving ``fast_checksum`` None keeps any
+                # L2 entry from being written for this call.
                 return None
             self.fast_checksum = src_hasher.make_full_cache_key(self._l1_key, narrow_args_hash)
             self.src_ll_cache_observations.cache_key_generated = True
@@ -593,9 +593,9 @@ class Kernel(FuncBase):
                         ctx.global_context, "struct_ndarray_launch_info", []
                     )
                     # Both folds bring data_oriented member accesses into the kernel's used-flat-names set, which
-                    # dataclass-arg expansion is the only other contributor to. Without them the narrow args hash
-                    # walks nothing for a data_oriented arg, and a change of member dtype or value cannot invalidate
-                    # the cache entry.
+                    # dataclass-arg expansion is the only other contributor to. Without them the narrow args hash walks
+                    # nothing for a data_oriented arg, and a change of member dtype or value cannot invalidate the cache
+                    # entry.
                     pruning.fold_struct_nd_paths(self._struct_ndarray_launch_info_by_key.get(key, []), self.arg_metas)
                     pruning.fold_kernel_arg_chain_paths()
                     # Only record an entry when this key actually lifts primitives, so the dict stays empty for the

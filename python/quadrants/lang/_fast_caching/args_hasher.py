@@ -54,8 +54,8 @@ _NON_TEMPLATE_CHILD_META = ArgMetadata(None, "")
 
 
 # Returned by ``stringify_obj_type`` when a value cannot be safely hashed (unsupported tensor-like type, or an
-# unrecognised type at a kernel-read path). Every container walker has to propagate it upward: fastcache is then off
-# for the whole call and the caller writes the diagnostic.
+# unrecognised type at a kernel-read path). Every container walker has to propagate it upward: fastcache is then off for
+# the whole call and the caller writes the diagnostic.
 class _FailFastcache:
     """Singleton sentinel; identity-compared."""
 
@@ -77,13 +77,13 @@ class FastcacheSkip(enum.Enum):
     WARN = "warn"
 
 
-# Set when the skip is worth warning about, as opposed to a ``Field`` arriving through a ``qd.Tensor`` annotation,
-# which is a normal silent path. Reset at the start of each ``hash_args`` call.
+# Set when the skip is worth warning about, as opposed to a ``Field`` arriving through a ``qd.Tensor`` annotation, which
+# is a normal silent path. Reset at the start of each ``hash_args`` call.
 _should_warn = False
 
 
-# ``type(v).__qualname__`` strings already warned about, so a hot launch loop reports an unrecognised type once
-# instead of thousands of times.
+# ``type(v).__qualname__`` strings already warned about, so a hot launch loop reports an unrecognised type once instead
+# of thousands of times.
 _warned_unknown_types: set[str] = set()
 
 
@@ -158,12 +158,12 @@ def dataclass_to_repr(
 
     Returns ``_FAIL_FASTCACHE`` if any visited subtree holds an unsupported tensor type.
     """
-    # PERF: a frozen dataclass's repr never changes, so cache it on the instance (``dataclasses.fields()`` is slow -
-    # see the _template_mapper_hotpath.py module docstring). ``_DC_REPR_NONE`` caches a failure verdict.
+    # PERF: a frozen dataclass's repr never changes, so cache it on the instance (``dataclasses.fields()`` is slow, see
+    # the _template_mapper_hotpath.py module docstring). ``_DC_REPR_NONE`` caches a failure verdict.
     #
-    # Only unpruned walks are cacheable: both the repr and the failure verdict depend on which fields were visited, so
-    # a kernel with a narrower pruning set must not inherit another kernel's verdict. Final-bearing subtrees are
-    # excluded too - their repr must be recomputed each launch to re-run ``final_scalar_key``'s validation.
+    # Only unpruned walks are cacheable: both the repr and the failure verdict depend on which fields were visited, so a
+    # kernel with a narrower pruning set must not inherit another kernel's verdict. Final-bearing subtrees are excluded
+    # too - their repr must be recomputed each launch to re-run ``final_scalar_key``'s validation.
     is_frozen = type(arg).__hash__ is not None
     final_names = final_field_names(type(arg))
     cacheable = is_frozen and pruning_paths is None and not subtree_has_final_fields(type(arg))
@@ -245,8 +245,8 @@ def stringify_obj_type(
         ``docs/source/user_guide/fastcache.md`` "Pruning-driven argument hashing".
       - ``parent_flat``: flat-name prefix for ``obj``'s children (e.g. ``__qd_self``), used to build those names.
     """
-    # ``Kernel.__call__`` unwraps ``qd.Tensor`` for positional / keyword args, but the walkers below reach struct
-    # fields by raw ``getattr``, so a wrapper stored as a field arrives here un-stripped.
+    # ``Kernel.__call__`` unwraps ``qd.Tensor`` for positional / keyword args, but the walkers below reach struct fields
+    # by raw ``getattr``, so a wrapper stored as a field arrives here un-stripped.
     #
     # PERF-CRITICAL: the ``_any_tensor_constructed`` guard keeps this free for programs that use no ``qd.Tensor``, and
     # the ``type(obj) in ...`` test is a pointer comparison rather than an MRO walk. Don't switch it to isinstance.

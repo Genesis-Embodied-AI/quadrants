@@ -136,8 +136,8 @@ def test_src_hasher_store_validate(monkeypatch: pytest.MonkeyPatch, tmp_path: pa
     mod = temporary_module("child_diff_test_src_hasher_store_validate")
     kernel_info = get_fileinfos([mod.f1.fn])[0]
     fileinfos = get_fileinfos([mod.f1.fn, mod.f2.fn])
-    # L2 key: source+config (L1) + narrow-args-hash. Use an empty narrow-args-hash since the test isn't
-    # exercising args at all - it tests the helper-source-change invalidation logic, which lives in L2.
+    # L2 key: source+config (L1) + narrow-args-hash. Use an empty narrow-args-hash since the test isn't exercising args
+    # at all - it tests the helper-source-change invalidation logic, which lives in L2.
     fast_cache_key = src_hasher.make_full_cache_key(src_hasher.make_source_config_key(kernel_info), narrow_args_hash="")
 
     assert fast_cache_key is not None

@@ -96,8 +96,8 @@ class ASTTransformer(Builder):
         if not pruning.enforcing and not ctx.expanding_dataclass_call_parameters and node.id.startswith("__qd_"):
             ctx.global_context.pruning.mark_used(ctx.func.func_id, node.id)
         # Seed the chain annotation that ``build_Attribute`` extends and records in pruning. Only non-flattened
-        # parameters need it - a data_oriented kernel arg (``self``), or a ``qd.template()`` func param; dataclass
-        # args arrive here already flattened and are handled by ``mark_used`` above.
+        # parameters need it - a data_oriented kernel arg (``self``), or a ``qd.template()`` func param; dataclass args
+        # arrive here already flattened and are handled by ``mark_used`` above.
         if not node.id.startswith("__qd_") and (node.id in ctx.kernel_args or node.id in ctx.fn_param_names):
             node._qd_arg_chain = node.id  # type: ignore[attr-defined]
         else:

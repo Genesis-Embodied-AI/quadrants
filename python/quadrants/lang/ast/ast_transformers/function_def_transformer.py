@@ -186,8 +186,8 @@ class FunctionDefTransformer:
                     )
                 elif isinstance(field.type, type) and getattr(field.type, "_data_oriented", False):
                     # The two patterns don't compose here: dataclass flattening is annotation-driven, while a
-                    # data_oriented container has no per-attribute annotations and needs the value-driven walk that
-                    # only ``qd.template()`` / ``qd.Tensor`` annotations trigger.
+                    # data_oriented container has no per-attribute annotations and needs the value-driven walk that only
+                    # ``qd.template()`` / ``qd.Tensor`` annotations trigger.
                     raise QuadrantsSyntaxError(
                         f"Kernel arg {argument_name!r}: field {field.name!r} has @qd.data_oriented type "
                         f"{field.type.__name__!r}, which cannot be flattened into a typed-dataclass kernel arg. "
@@ -274,8 +274,8 @@ class FunctionDefTransformer:
         used_ids = getattr(pruning, "used_struct_ndarray_ids", None)
         prune = pruning.enforcing and used_ids is not None and getattr(pruning, "pass_0_ran", False)
         # A fastcache hit skips pass 0, so there are no ids to prune by - but the cached flat-name set describes the
-        # same ndarrays, and must be used: registering every reachable ndarray instead would bind the kernel's arg
-        # slots to different ndarrays than the compile that produced the artifact.
+        # same ndarrays, and must be used: registering every reachable ndarray instead would bind the kernel's arg slots
+        # to different ndarrays than the compile that produced the artifact.
         prune_from_flat_names = pruning.enforcing and not getattr(pruning, "pass_0_ran", False)
         kernel_used_flat_names = (
             pruning.used_vars_by_func_id.get(Pruning.KERNEL_FUNC_ID, set()) if prune_from_flat_names else None
@@ -342,8 +342,8 @@ class FunctionDefTransformer:
                 _qd_core.make_external_tensor_expr(element_type, ndim, arg_id_vec, needs_grad, BoundaryMode.UNSAFE),
                 _qd_layout=layout,
             )
-            # Lets ``_promote_ndarray_if_declared`` still mark the ndarray used when an access reaches it through
-            # this proxy rather than the ndarray itself, as happens inside an inlined ``@qd.func`` body.
+            # Lets ``_promote_ndarray_if_declared`` still mark the ndarray used when an access reaches it through this
+            # proxy rather than the ndarray itself, as happens inside an inlined ``@qd.func`` body.
             arr._qd_source_ndarray_id = key
             cache[key] = arr
             launch_info.append((arg_id_vec[0], arg_idx, attr_chain))

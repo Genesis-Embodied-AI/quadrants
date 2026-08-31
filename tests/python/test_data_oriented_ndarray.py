@@ -1,13 +1,12 @@
-"""Tests for ``@qd.data_oriented`` classes whose members are raw ``qd.ndarray`` (not ``qd.field``, not
-``qd.Tensor`` wrappers).
+"""Tests for ``@qd.data_oriented`` classes whose members are raw ``qd.ndarray`` (not ``qd.field``, not ``qd.Tensor``
+wrappers).
 
 The user-guide doc ``docs/source/user_guide/compound_types.md`` claims this pattern is not supported ("can contain
 ndarray? no" for ``@qd.data_oriented``). But the in-tree error message in ``python/quadrants/lang/impl.py`` lists
 ``@qd.data_oriented / frozen-dataclass template`` as a *supported* route, and the ndarray-in-struct infrastructure
 added by ``#561 [Type] Tensor 24`` (2026-04-28) — specifically ``_predeclare_struct_ndarrays`` in
 ``python/quadrants/lang/ast/ast_transformers/function_def_transformer.py`` — explicitly walks both
-``dataclasses.is_dataclass(val)`` and ``hasattr(val, "__dict__")`` containers, the latter being the data_oriented
-case.
+``dataclasses.is_dataclass(val)`` and ``hasattr(val, "__dict__")`` containers, the latter being the data_oriented case.
 
 This file pins what actually works, and documents the gaps. See ``perso_hugh/doc/data_oriented_ndarray.md`` for the
 design analysis.
@@ -169,8 +168,8 @@ def test_data_oriented_nested():
 
 # ---------------------------------------------------------------------------
 # 6. Mutation: same instance, reassign ndarray attribute to a *same-shape* ndarray between calls. The launch-time
-#    stale-cache guard (``_mutable_nd_cached_val`` in kernel.py) is supposed to fold the live ndarray id into
-#    args_hash so the launch context is not served stale. We pin that behaviour here for the data_oriented case.
+#    stale-cache guard (``_mutable_nd_cached_val`` in kernel.py) is supposed to fold the live ndarray id into args_hash
+#    so the launch context is not served stale. We pin that behaviour here for the data_oriented case.
 # ---------------------------------------------------------------------------
 
 
@@ -202,10 +201,10 @@ def test_data_oriented_ndarray_reassign_same_shape():
 
 
 # ---------------------------------------------------------------------------
-# 7. Mutation cross-shape: reassign ndarray attribute to a *different-dtype* ndarray. The template-mapper
-#    specialisation key (in ``_template_mapper_hotpath._extract_arg``) returns ``weakref.ref(arg)`` for
-#    ``is_data_oriented(arg)``; it does NOT descend into ndarray children to compute a dtype/ndim-dependent spec key.
-#    So a reassignment to a different dtype on an unchanged instance id must still re-specialise.
+# 7. Mutation cross-shape: reassign ndarray attribute to a *different-dtype* ndarray. The template-mapper specialisation
+#    key (in ``_template_mapper_hotpath._extract_arg``) returns ``weakref.ref(arg)`` for ``is_data_oriented(arg)``; it
+#    does NOT descend into ndarray children to compute a dtype/ndim-dependent spec key. So a reassignment to a different
+#    dtype on an unchanged instance id must still re-specialise.
 # ---------------------------------------------------------------------------
 
 
@@ -237,8 +236,8 @@ def test_data_oriented_ndarray_reassign_different_dtype():
 
 # ---------------------------------------------------------------------------
 # 8. Distinct instances of same class -> spec-key behaviour. Documents that today each fresh instance triggers a
-#    recompile (because the spec key is ``weakref.ref(arg)`` identity). This is a perf concern, not a correctness
-#    one. We assert correctness here; the recompile count is documented as a perf note.
+#    recompile (because the spec key is ``weakref.ref(arg)`` identity). This is a perf concern, not a correctness one.
+#    We assert correctness here; the recompile count is documented as a perf note.
 # ---------------------------------------------------------------------------
 
 
@@ -268,18 +267,18 @@ def test_data_oriented_distinct_instances():
 
 
 # ---------------------------------------------------------------------------
-# 9. Fastcache cold then warm. Per the fastcache doc (``user_guide/fastcache.md`` line 129),
-#    ``@qd.data_oriented`` objects are supported in the cache key. We don't assert cross-process here (that requires
-#    a fresh interpreter); we assert that ``cache_stored`` becomes True on the first call and
-#    ``cache_key_generated`` is True (i.e. no PARAM_INVALID fallthrough due to the ndarray member).
+# 9. Fastcache cold then warm. Per the fastcache doc (``user_guide/fastcache.md`` line 129), ``@qd.data_oriented``
+#    objects are supported in the cache key. We don't assert cross-process here (that requires a fresh interpreter); we
+#    assert that ``cache_stored`` becomes True on the first call and ``cache_key_generated`` is True (i.e. no
+#    PARAM_INVALID fallthrough due to the ndarray member).
 # ---------------------------------------------------------------------------
 
 
 # ---------------------------------------------------------------------------
 # 9b. Fastcache end-to-end with ``@qd.data_oriented`` holding ndarrays. Pattern adapted from
 #     ``test_cache.test_fastcache``: call ``qd_init_same_arch`` twice with the same cache directory to simulate two
-#     processes, monkeypatch ``launch_kernel`` to capture whether ``compiled_kernel_data`` was loaded from disk. On
-#     the second init the data_oriented + ndarray kernel should be served from the on-disk fastcache.
+#     processes, monkeypatch ``launch_kernel`` to capture whether ``compiled_kernel_data`` was loaded from disk. On the
+#     second init the data_oriented + ndarray kernel should be served from the on-disk fastcache.
 # ---------------------------------------------------------------------------
 
 
@@ -372,8 +371,8 @@ def test_data_oriented_nested_ndarray_fastcache_cross_init(tmp_path, monkeypatch
 
 
 # ---------------------------------------------------------------------------
-# 9d. Fastcache key is dtype-sensitive: same kernel source, different ndarray dtype in the data_oriented member ->
-#     two distinct disk cache entries. Pins the args_hasher's ``[nd-{dtype}-{ndim}{layout}]`` repr.
+# 9d. Fastcache key is dtype-sensitive: same kernel source, different ndarray dtype in the data_oriented member -> two
+#     distinct disk cache entries. Pins the args_hasher's ``[nd-{dtype}-{ndim}{layout}]`` repr.
 # ---------------------------------------------------------------------------
 
 
@@ -421,10 +420,9 @@ def test_data_oriented_ndarray_fastcache_dtype_key_distinct(tmp_path, monkeypatc
 
 
 # ---------------------------------------------------------------------------
-# 9e. Documented fallback: a @qd.data_oriented containing a qd.field disables fastcache for the whole call
-#     (args_hasher returns None for ScalarField). The kernel still runs correctly via non-fastcache compilation. This
-#     test pins the documented fallback so a future "support fields in fastcache" change explicitly chooses to update
-#     this test.
+# 9e. Documented fallback: a @qd.data_oriented containing a qd.field disables fastcache for the whole call (args_hasher
+#     returns None for ScalarField). The kernel still runs correctly via non-fastcache compilation. This test pins the
+#     documented fallback so a future "support fields in fastcache" change explicitly chooses to update this test.
 # ---------------------------------------------------------------------------
 
 
@@ -476,8 +474,8 @@ def test_data_oriented_ndarray_fastcache_eligible():
 
 
 # ---------------------------------------------------------------------------
-# 10. Pure validation: a @qd.pure @qd.kernel taking a data_oriented arg with an ndarray member should compile and
-#     run, mirroring the existing ``test_pure_validation_data_oriented_as_param`` test which only covers ``qd.field``.
+# 10. Pure validation: a @qd.pure @qd.kernel taking a data_oriented arg with an ndarray member should compile and run,
+#     mirroring the existing ``test_pure_validation_data_oriented_as_param`` test which only covers ``qd.field``.
 # ---------------------------------------------------------------------------
 
 
@@ -504,8 +502,8 @@ def test_data_oriented_ndarray_pure():
 
 
 # ---------------------------------------------------------------------------
-# 11. Counter-test: confirm a dataclass-of-NDArray works (sanity check that the existing supported route still
-#     works; if this fails, the test environment itself is broken, not the data_oriented path).
+# 11. Counter-test: confirm a dataclass-of-NDArray works (sanity check that the existing supported route still works; if
+#     this fails, the test environment itself is broken, not the data_oriented path).
 # ---------------------------------------------------------------------------
 
 
@@ -562,8 +560,8 @@ def test_data_oriented_holding_dataclass_with_ndarray():
 
 # ---------------------------------------------------------------------------
 # 13. Frozen dataclass holding a data_oriented holding an ndarray, kernel-arg via ``qd.template()``. Exercises the
-#     dataclass branch of ``_walk_obj`` recursing through a data_oriented child. The outer dataclass has to be frozen:
-#     a non-frozen one is unhashable, and the template-mapper key tuple needs a hashable value.
+#     dataclass branch of ``_walk_obj`` recursing through a data_oriented child. The outer dataclass has to be frozen: a
+#     non-frozen one is unhashable, and the template-mapper key tuple needs a hashable value.
 # ---------------------------------------------------------------------------
 
 
@@ -629,8 +627,8 @@ def test_data_oriented_three_level_nesting():
 
 
 # ---------------------------------------------------------------------------
-# 15. Mutation on a nested ndarray: outer.inner.x reassigned between kernel calls. Verifies the Bug 2 stale-cache
-#     guard fires even when the ndarray lives several attribute hops deep.
+# 15. Mutation on a nested ndarray: outer.inner.x reassigned between kernel calls. Verifies the Bug 2 stale-cache guard
+#     fires even when the ndarray lives several attribute hops deep.
 # ---------------------------------------------------------------------------
 
 
@@ -864,8 +862,8 @@ def test_data_oriented_nested_ndarray_reassign_different_dtype():
 
 # ---------------------------------------------------------------------------
 # 21. Typed-dataclass kernel arg with a ``@qd.data_oriented`` field type - should error clearly pointing the user to
-#     ``qd.template()``. The two patterns are incompatible at the kernel-arg layer: dataclass kernel args are
-#     flattened using annotations, data_oriented containers need a value-driven walk. Pins the helpful error message.
+#     ``qd.template()``. The two patterns are incompatible at the kernel-arg layer: dataclass kernel args are flattened
+#     using annotations, data_oriented containers need a value-driven walk. Pins the helpful error message.
 # ---------------------------------------------------------------------------
 
 
@@ -917,8 +915,8 @@ def test_data_oriented_field_only_no_speckey_change():
 
 
 # ---------------------------------------------------------------------------
-# 22. Robustness: object graphs with Pydantic-style metaclass ``__getattr__`` recursion (Genesis's ``RigidOptions``
-#     / ``SimOptions`` inherit from ``pydantic.BaseModel``, whose metaclass recurses infinitely on a missing class
+# 22. Robustness: object graphs with Pydantic-style metaclass ``__getattr__`` recursion (Genesis's ``RigidOptions`` /
+#     ``SimOptions`` inherit from ``pydantic.BaseModel``, whose metaclass recurses infinitely on a missing class
 #     attribute), and with back-references (``solver.scene.solver``). The walker must not blow the stack on either.
 # ---------------------------------------------------------------------------
 
@@ -1036,8 +1034,8 @@ def test_data_oriented_polymorphic_attribute_set_across_instances():
         for i in range(N):
             s.x[i] = i + 1
 
-    # Forward direction: the first instance has 'extra' and the second doesn't, so a path cached from the first
-    # must not be applied to the second.
+    # Forward direction: the first instance has 'extra' and the second doesn't, so a path cached from the first must not
+    # be applied to the second.
     state_full = PolyState(with_extra=True)
     run(state_full)
     state_lean = PolyState(with_extra=False)
@@ -1058,8 +1056,8 @@ def test_data_oriented_polymorphic_attribute_set_across_instances():
         for i in range(N):
             s.x[i] = s.extra[i] * 10
 
-    # Walk the lean instance first, so that any per-class caching sees the narrow attribute set: ``extra`` would
-    # then be absent from both args_hash and the kernel spec for the instance that has it.
+    # Walk the lean instance first, so that any per-class caching sees the narrow attribute set: ``extra`` would then be
+    # absent from both args_hash and the kernel spec for the instance that has it.
     state_lean2 = PolyState2(with_extra=False)
     run(state_lean2)
     np.testing.assert_array_equal(state_lean2.x.to_numpy(), np.arange(1, N + 1))
@@ -1415,11 +1413,11 @@ def test_data_oriented_nested_primitive_via_qd_func_distinguishes_cache_key(tmp_
 # ---------------------------------------------------------------------------
 # 23. @qd.data_oriented holding a qd.Tensor wrapper around an ndarray.
 #
-# Both ``_build_struct_nd_paths`` and ``_collect_struct_nd_descriptors`` in ``_template_mapper_hotpath.py`` have a
-# ``if type(v) in _TENSOR_WRAPPER_TYPES: v = v._unwrap()`` branch that the rest of the file doesn't exercise (every
-# other test attaches a bare ``qd.ndarray``). This test covers that unwrap path for the ndarray-backed wrapper: the
-# struct-walker should treat ``state.a`` as if it were a bare ndarray (paths cached on the class, shape descriptors
-# collected from the unwrapped impl).
+# Both ``_build_struct_nd_paths`` and ``_collect_struct_nd_descriptors`` in ``_template_mapper_hotpath.py`` have an ``if
+# type(v) in _TENSOR_WRAPPER_TYPES: v = v._unwrap()`` branch that the rest of the file doesn't exercise (every other test
+# attaches a bare ``qd.ndarray``). This test covers that unwrap path for the ndarray-backed wrapper: the struct-walker
+# should treat ``state.a`` as if it were a bare ndarray (paths cached on the class, shape descriptors collected from the
+# unwrapped impl).
 # ---------------------------------------------------------------------------
 
 

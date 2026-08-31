@@ -105,12 +105,12 @@ class Pruning:
         self.used_vars_by_func_id: dict[int, set[str]] = defaultdict(set)
         if kernel_used_parameters is not None:
             self.used_vars_by_func_id[Pruning.KERNEL_FUNC_ID].update(kernel_used_parameters)
-        # One entry per call site (source position), recorded during discovery. Consumed by
-        # propagate_fixpoint() (used-set + chain-path propagation) and filter_call_args() (per-call-site arg pruning).
+        # One entry per call site (source position), recorded during discovery. Consumed by propagate_fixpoint()
+        # (used-set + chain-path propagation) and filter_call_args() (per-call-site arg pruning).
         self.edges_by_call_site: dict[CallSiteKey, CallEdge] = {}
         # ids of struct ndarrays a chain like ``self.x.y`` resolved to on the first pass. On the enforcing pass
-        # ``_predeclare_struct_ndarrays`` registers only these, dropping reachable-but-unused ndarrays from the
-        # kernel's parameter list.
+        # ``_predeclare_struct_ndarrays`` registers only these, dropping reachable-but-unused ndarrays from the kernel's
+        # parameter list.
         self.used_struct_ndarray_ids: set[int] = set()
         # A fastcache hit skips pass 0, leaving ``used_struct_ndarray_ids`` unpopulated rather than empty-because-
         # unused; ``_predeclare_struct_ndarrays`` then has to register every reachable ndarray.

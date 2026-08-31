@@ -107,8 +107,8 @@ def _is_external_array(arg: Any) -> bool:
 
 
 # Fallback for ``__slots__`` classes, which have no ``__dict__`` to hold the per-instance path cache that
-# ``_struct_nd_paths_for`` normally stashes. Per-class caching cannot express an attribute structure that differs
-# per instance, so such classes keep that limitation.
+# ``_struct_nd_paths_for`` normally stashes. Per-class caching cannot express an attribute structure that differs per
+# instance, so such classes keep that limitation.
 _struct_nd_paths_cache: dict[type, list[tuple]] = {}
 
 
