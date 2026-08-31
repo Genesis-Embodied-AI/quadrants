@@ -698,12 +698,8 @@
 <span class="sd">            (~1-2 us/call savings on Genesis-style containers with dozens of ndarray attrs). Reassigning a member on</span>
 <span class="sd">            a ``stable_members`` class is undefined behaviour - the previously-compiled kernel will be reused even if</span>
 <span class="sd">            the new ndarray has different dtype/ndim/layout. May also be set as a class-level attribute</span>
-<span class="sd">            ``_qd_stable_members = True`` (equivalent). See ``docs/source/user_guide/compound_types.md``.</span>
-
-<span class="sd">            Note: this flag is *purely* a launch-time perf hint. It no longer affects fastcache argument hashing - the</span>
-<span class="sd">            fastcache key is derived from pruning info (the set of flat names the kernel actually reads), and</span>
-<span class="sd">            unrecognised types at kernel-read paths fail fastcache loudly with a one-shot ``[UNKNOWN_TYPE]`` +</span>
-<span class="sd">            ``[INVALID_FUNC]`` diagnostic (no qualname fallback). See ``docs/source/user_guide/fastcache.md``.</span>
+<span class="sd">            ``_qd_stable_members = True`` (equivalent). Has no effect on fastcache keys. See</span>
+<span class="sd">            ``docs/source/user_guide/compound_types.md``.</span>
 <span class="sd">        template_primitives (bool): controls how the primitive (``int`` / ``float`` / ``bool``)</span>
 <span class="sd">            members of instances of this class are treated when an instance is passed into a kernel</span>
 <span class="sd">            as a ``qd.template()`` argument (including as the implicit ``self`` of a member kernel).</span>
@@ -722,11 +718,9 @@
         <span class="k">return</span> <span class="k">lambda</span> <span class="n">c</span><span class="p">:</span> <span class="n">data_oriented</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">stable_members</span><span class="o">=</span><span class="n">stable_members</span><span class="p">,</span> <span class="n">template_primitives</span><span class="o">=</span><span class="n">template_primitives</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">make_kernel_indirect</span><span class="p">(</span><span class="n">fun</span><span class="p">,</span> <span class="n">is_property</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">):</span>
-        <span class="c1"># Capture the primal at decoration time so a member-kernel call reaches it through this single closure rather</span>
-        <span class="c1"># than through ``fun``'s generic ``wrapped_classkernel`` -&gt; ``wrapped_func`` pair. The owner check that</span>
-        <span class="c1"># ``wrapped_classkernel`` performs is therefore replicated inline below: an unbound call such as</span>
-        <span class="c1"># ``Klass.step(not_an_instance)`` lands here directly, and must keep naming the class that is missing the</span>
-        <span class="c1"># decorator instead of compiling the kernel against a foreign owner.</span>
+        <span class="c1"># Capture the primal at decoration time so a call skips ``fun``'s ``wrapped_classkernel`` -&gt; ``wrapped_func``</span>
+        <span class="c1"># pair. That pair is also where the owner check lives, hence the copy of it below - an unbound</span>
+        <span class="c1"># ``Klass.step(not_an_instance)`` reaches this closure directly.</span>
         <span class="n">primal</span> <span class="o">=</span> <span class="n">fun</span><span class="o">.</span><span class="n">_primal</span>
 
         <span class="nd">@wraps</span><span class="p">(</span><span class="n">fun</span><span class="p">)</span>
@@ -741,9 +735,8 @@
                 <span class="k">raise</span> <span class="nb">type</span><span class="p">(</span><span class="n">e</span><span class="p">)(</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
 
         <span class="n">ret</span> <span class="o">=</span> <span class="n">QuadrantsCallable</span><span class="p">(</span><span class="n">fun</span><span class="p">,</span> <span class="n">_kernel_indirect</span><span class="p">)</span>
-        <span class="c1"># ``QuadrantsCallable.__init__`` finishes with ``update_wrapper(self, fun)``, which copies ``fun.__dict__``</span>
-        <span class="c1"># over the freshly-set attributes - including ``fun``'s own ``wrapper``. Without re-setting it here every call</span>
-        <span class="c1"># would route back through ``fun``'s wrapper chain and ``_kernel_indirect`` would never run.</span>
+        <span class="c1"># ``QuadrantsCallable.__init__`` ends with ``update_wrapper(self, fun)``, which copies ``fun``'s own</span>
+        <span class="c1"># ``wrapper`` over the one just passed to the constructor.</span>
         <span class="n">ret</span><span class="o">.</span><span class="n">wrapper</span> <span class="o">=</span> <span class="n">_kernel_indirect</span>
         <span class="c1"># setattr-after-class doesn't trigger __set_name__; set the name explicitly so QuadrantsCallable.__get__ can</span>
         <span class="c1"># cache the BoundQuadrantsCallable on instance.__dict__.</span>

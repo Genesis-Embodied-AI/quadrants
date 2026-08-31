@@ -140,12 +140,8 @@ Module Contents
                           (~1-2 us/call savings on Genesis-style containers with dozens of ndarray attrs). Reassigning a member on
                           a ``stable_members`` class is undefined behaviour - the previously-compiled kernel will be reused even if
                           the new ndarray has different dtype/ndim/layout. May also be set as a class-level attribute
-                          ``_qd_stable_members = True`` (equivalent). See ``docs/source/user_guide/compound_types.md``.
-
-                          Note: this flag is *purely* a launch-time perf hint. It no longer affects fastcache argument hashing - the
-                          fastcache key is derived from pruning info (the set of flat names the kernel actually reads), and
-                          unrecognised types at kernel-read paths fail fastcache loudly with a one-shot ``[UNKNOWN_TYPE]`` +
-                          ``[INVALID_FUNC]`` diagnostic (no qualname fallback). See ``docs/source/user_guide/fastcache.md``.
+                          ``_qd_stable_members = True`` (equivalent). Has no effect on fastcache keys. See
+                          ``docs/source/user_guide/compound_types.md``.
    :type stable_members: bool
    :param template_primitives: controls how the primitive (``int`` / ``float`` / ``bool``)
                                members of instances of this class are treated when an instance is passed into a kernel
