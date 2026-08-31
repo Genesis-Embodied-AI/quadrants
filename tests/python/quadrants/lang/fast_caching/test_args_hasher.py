@@ -461,14 +461,10 @@ def test_args_hasher_named_tuple() -> None:
 
 @test_utils.test()
 def test_args_hasher_frozen_dataclass_failure_does_not_poison_narrower_walk() -> None:
-    """Codex r3582132723: a frozen dataclass's cached fastcache failure must not be reused across walks with
-    different pruning sets.
+    """A frozen dataclass's cached fastcache failure must not be reused across walks with different pruning sets.
 
-    Two @qd.kernels share the same frozen dataclass instance. Kernel A reads the unsupported ``qd.field`` member
-    and correctly fails fastcache. Kernel B has a narrower pruning set that excludes the unsupported member and
-    reads only the supported ``qd.ndarray``; it must still be fast-cacheable, i.e. the on-instance failure
-    sentinel from A's walk must not be reused for B's walk (whose narrower path set doesn't reach the offending
-    field).
+    Two kernels share one instance. Kernel A reads the unsupported ``qd.field`` member and fails fastcache; kernel B
+    reads only the ndarray, so it must stay cacheable rather than inherit A's on-instance failure sentinel.
     """
     args_hasher.reset_unknown_type_warn_state()
 

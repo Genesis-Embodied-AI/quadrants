@@ -26,9 +26,7 @@ RET_SUCCESS = 42
 def test_src_hasher_create_cache_key_vary_config() -> None:
     """Source+config key (L1) is stable across re-init with identical config, changes when the config changes.
 
-    Updated from the pre-refactor ``create_cache_key`` API (single-level, args-dependent) to the two-level
-    ``make_source_config_key`` (L1 - source+config only, no args). The L1 key is the right level to test
-    because config changes only affect the L1 layer; L2 adds the args-narrow hash on top.
+    L1 is the level to test: config feeds only into it, and L2 just adds the args-narrow hash on top.
     """
 
     @qd.kernel
@@ -59,8 +57,7 @@ def test_src_hasher_create_cache_key_varies_with_device_caps(monkeypatch) -> Non
     # second physical device. Same source / args / config but different caps must yield a different cache key, so a
     # cache dir shared across devices (or machines) cannot serve an artifact compiled for the wrong capabilities.
     #
-    # Caps are mixed into the source+config key (L1) rather than the args-narrow key (L2): they change codegen but not
-    # argument identity, so L1 is the layer that must distinguish them - and every L2 key derives from an L1 key.
+    # Caps belong to L1, not the args-narrow L2 key: they change codegen without changing argument identity.
     from quadrants.lang._fast_caching import config_hasher
 
     @qd.kernel
@@ -374,8 +371,6 @@ def src_hasher_vary_kernel_func_child(args: list[str]) -> None:
     sys.path.append(args_obj.module_file_path)
     mod = importlib.import_module(args_obj.module_name)
     info, _src = _wrap_inspect.get_source_info_and_src(mod.f1.fn)
-    # Source+config key (L1) - varies with the *kernel source* (the property this test exercises) and is
-    # the same level as the pre-refactor ``create_cache_key`` call site, just without the args-dependent tail.
     cache_key = src_hasher.make_source_config_key(info)
     print(f"CACHE_KEY={cache_key}")
 

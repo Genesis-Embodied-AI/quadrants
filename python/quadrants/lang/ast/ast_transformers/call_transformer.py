@@ -211,14 +211,11 @@ class CallTransformer:
                         args_new.append(arg_node)
                         added_args.append(arg_node)
             elif dataclasses.is_dataclass(val) and not isinstance(val, type):
-                # Dataclass *instance* passed positionally (e.g. ``self.state`` inside a @qd.data_oriented kernel
-                # method). Expand into per-leaf attribute accesses against the same AST node, mirroring the typed-arg
-                # (instance-of-type) path above but emitting ``ast.Attribute`` children rather than ``ast.Name``.
-                # ``added_args`` items must not carry ``.ptr`` (build_stmt populates it downstream); only the
-                # intermediate node used for recursion does.
+                # Dataclass *instance* passed positionally (e.g. ``self.state``): expand to per-leaf ``ast.Attribute``
+                # children, where the typed-arg path above emits ``ast.Name``. Items appended to ``added_args`` must
+                # not carry ``.ptr`` - ``build_stmt`` populates it downstream.
                 dataclass_type = type(val)
-                # For pruning, match the callee's flat name (it may have pruned unused fields). Use the callee's
-                # parameter name at this positional index.
+                # Flat names have to match the callee's, which may have pruned unused fields.
                 callee_param = (
                     callee_arg_names[arg_idx]
                     if (called_needed is not None and callee_arg_names is not None and arg_idx < len(callee_arg_names))
@@ -242,8 +239,7 @@ class CallTransformer:
                     )
                     if dataclasses.is_dataclass(child_val) and not isinstance(child_val, type):
                         child_node.ptr = child_val
-                        # Recurse, threading the renamed scope: the callee's expanded flat name (e.g.
-                        # ``__qd_state__inner``) is the synthetic param name for the nested level.
+                        # The callee's expanded flat name is the synthetic param name at the nested level.
                         nested_callee_param = (
                             create_flat_name(callee_param, field.name) if callee_param is not None else None
                         )
@@ -316,9 +312,8 @@ class CallTransformer:
                         kwargs_new.append(kwarg_node)
                         added_kwargs.append(kwarg_node)
             elif dataclasses.is_dataclass(val) and not isinstance(val, type):
-                # Dataclass *instance* passed as a keyword arg (e.g. ``write(state=self.state)`` inside a
-                # @qd.data_oriented kernel method). Expand into per-leaf keyword args whose values are attribute
-                # accesses against the original value node (e.g. ``__qd_state__x=self.state.x``).
+                # Dataclass *instance* passed as a keyword arg: expand to per-leaf keywords whose values are
+                # attribute accesses on the original node (``__qd_state__x=self.state.x``).
                 dataclass_type = type(val)
                 for field in dataclasses.fields(dataclass_type):
                     child_name = create_flat_name(kwarg.arg, field.name)
@@ -401,12 +396,10 @@ class CallTransformer:
             called_func_id_ = func.wrapper.func_id  # type: ignore
             called_needed = pruning.used_vars_by_func_id[called_func_id_]
         if is_func_base_wrapper:
-            # callee param names (used by the attribute-instance positional-expansion path so it can match the
-            # callee's already-pruned flat names). Drop the implicit ``self`` for bound method calls so positional
-            # call-site indexing aligns with the callee's non-self parameter list - matches the ``self_offset``
-            # handling in ``Pruning.record_after_call``. Without this a call like ``self.write(self.state)`` would
-            # index ``callee_arg_names[0]`` as ``"self"`` and construct ``__qd_self__qd_x`` flat names that miss the
-            # callee's correctly-computed ``__qd_state__qd_x`` pruning set, silently dropping needed fields.
+            # Positional indexing has to line up with the callee's non-self parameter list, hence dropping the
+            # implicit ``self`` here (as ``Pruning.record_after_call`` does with ``self_offset``): otherwise
+            # ``self.write(self.state)`` builds flat names rooted at ``self`` that match nothing in the callee's
+            # pruning set, silently dropping the fields it needs.
             try:
                 callee_arg_names = [m.name for m in func.wrapper.arg_metas]  # type: ignore[attr-defined]
                 if type(func) is BoundQuadrantsCallable:

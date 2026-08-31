@@ -1,17 +1,10 @@
-"""Tests for calling @qd.func that takes a typed-dataclass arg, from a @qd.kernel method of a @qd.data_oriented
-class, passing ``self.dataclass_member`` as the arg.
+"""Tests for calling a @qd.func with a typed-dataclass parameter from a @qd.kernel method of a @qd.data_oriented
+class, passing ``self.dataclass_member`` as the argument.
 
-Genesis's @qd.func helpers declare typed-dataclass parameters (e.g. ``def func(links_state: LinksState, ...):``) and
-are designed to be called from kernels that also take typed-dataclass kernel args (so the dataclass is flattened into
-per-leaf kernel-locals on both sides of the call boundary).
-
-When migrating Genesis modules to @qd.data_oriented, we'd like to call the same @qd.func helpers from a data_oriented
-kernel method, passing ``self.links_state`` as the arg. Today this fails at AST resolution:
-
-    Missing argument '__qd_links_state__qd_cinr_inertial'.
-    Unexpected argument 'links_state'.
-
-These tests pin down the failure modes so we can fix them.
+Genesis's @qd.func helpers declare typed-dataclass parameters (``def func(links_state: LinksState, ...)``), which are
+flattened into per-leaf kernel-locals on both sides of the call boundary. A data_oriented caller has to flatten
+``self.links_state`` into names that match what the callee expects, or resolution fails with "Missing argument
+'__qd_links_state__qd_cinr_inertial' / Unexpected argument 'links_state'".
 """
 
 import dataclasses
@@ -321,11 +314,6 @@ def test_data_oriented_method_qd_func_chain_with_nested_dataclass_member():
 
 
 # ----- bound @qd.func method called positionally with self.dataclass_member -----
-#
-# Regression for the bug flagged in PR #705 codex review r3582132718: the positional dataclass-instance branch of
-# `CallTransformer._expand_Call_dataclass_args` indexed the callee's `arg_metas` (which includes the implicit `self`
-# at index 0 for a bound `@qd.func`) with the raw call-site `arg_idx`. That constructed flat names like
-# `__qd_self__qd_x` for pruning lookup instead of `__qd_state__qd_x`, silently dropping needed fields on the call.
 
 
 @test_utils.test(arch=qd.cpu)

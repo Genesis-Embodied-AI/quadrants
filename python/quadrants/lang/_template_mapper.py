@@ -18,23 +18,19 @@ from ._template_mapper_hotpath import (
     annotation_has_final_subtree,
 )
 
-# Per-class disposition for the args_hash ndarray-id walk in ``TemplateMapper.lookup``: one of ``_SKIP`` (this class
-# never contributes - non-data_oriented, or ``@qd.data_oriented(stable_members=True)``) or ``_PER_INSTANCE`` (delegate
-# to ``_struct_nd_paths_for`` for a per-instance walk). The disposition depends only on type (data_oriented?
-# stable_members?), so caching by class is correct. The *actual* path list is per-instance because @qd.data_oriented
-# classes can have polymorphic attribute structure across instances (Genesis ``DataManager`` is the motivating case).
+# Whether an arg of this class contributes to the args_hash ndarray-id walk in ``TemplateMapper.lookup``. Only the
+# decision is per class; the paths themselves must stay per instance, since a @qd.data_oriented class can have a
+# different attribute structure per instance (Genesis ``DataManager``).
 _arg_disposition: dict[type, object] = {}
 _SKIP = object()
 _PER_INSTANCE = object()
 
 
 def _classify_disposition(arg: Any) -> object:
-    """First-sighting per-class disposition for the args_hash walk. Returns ``_SKIP`` (no per-call walk for this
-    class) or ``_PER_INSTANCE`` (delegate to ``_struct_nd_paths_for`` for a per-instance walk).
+    """Return ``_SKIP`` (no per-call walk for this class) or ``_PER_INSTANCE``.
 
-    ``_qd_stable_members`` here is a *launch-time perf hint only* (see ``@qd.data_oriented(stable_members=...)``).
-    It promises that ndarray members are never reassigned, which lets us skip the per-call walk entirely. It does
-    not affect fastcache key derivation."""
+    ``_qd_stable_members`` promises ndarray members are never reassigned, so the walk can be skipped. It is a
+    launch-time hint only and has no bearing on fastcache keys."""
     if not is_data_oriented(arg):
         return _SKIP
     if type(arg).__dict__.get("_qd_stable_members"):
@@ -111,28 +107,15 @@ class TemplateMapper:
         # branching for primitive types dramatically improve performance of hash computation.
         mapping_cache_tracker: list[ReferenceType | None] | None = None
         args_hash: ArgsHash = tuple([id(arg) for arg in args])
-        # ``@qd.data_oriented`` containers can have their member ndarrays reassigned between calls on the same instance
-        # (``state.x = other_ndarray``). The id(arg) alone does not capture that, so the spec-key cache below would
-        # serve a stale entry and the new ndarray's dtype/ndim would be wrong. Fold the reachable ndarray ids into the
-        # hash for the (small) set of arg positions that need it.
+        # A ``@qd.data_oriented`` container's member ndarrays can be reassigned between calls on the same instance
+        # (``state.x = other_ndarray``), which ``id(arg)`` cannot see, so the spec-key cache would serve an entry
+        # compiled for the old dtype/ndim. Fold the reachable ndarray ids in as well.
         #
-        # The kernel's ``template_slot_locations`` already gives us the subset of arg positions annotated as
-        # ``qd.template()`` - the only positions where a data_oriented container could appear (typed-dataclass args
-        # carry a specific dataclass type by construction and a data_oriented class is never a dataclass). So we only
-        # iterate ``template_slot_locations`` instead of all args (Genesis main kernel_step_1: 4 template positions
-        # of 16 args; Genesis branch step_1/step_2: 4 of 4).
+        # Only ``template_slot_locations`` is iterated: a data_oriented container can only appear at a ``qd.template()``
+        # position (a typed-dataclass arg carries a dataclass type, and data_oriented classes are never dataclasses).
         #
-        # For each candidate, ``_arg_disposition`` caches the per-class decision (skip vs walk-per-instance) and the
-        # actual paths come from ``_struct_nd_paths_for`` (per-instance, stashed on ``arg._qd_nd_paths``). Per-instance
-        # path caching is load-bearing for correctness - @qd.data_oriented classes can have polymorphic attribute
-        # structure across instances (Genesis ``DataManager`` only allocates adjoint-cache members when
-        # ``requires_grad=True``); a per-class cache populated from one instance can't safely be reused for another.
-        #
-        # PERF: The per-instance ``arg.__dict__["_qd_nd_paths"]`` lookup is inlined here to skip the
-        # ``_struct_nd_paths_for`` function-call overhead on the steady-state hit path (measured ~60ns / call at 4
-        # template args on a warm process, ~15% of the loop's total cost). The function is only called on cold miss
-        # (first sighting of an instance, or ``__slots__`` class without ``__dict__``), where it handles the walk
-        # + per-class fallback cache.
+        # PERF: the ``arg.__dict__["_qd_nd_paths"]`` lookup is inlined rather than left to ``_struct_nd_paths_for``,
+        # which costs ~60ns/call at 4 template args - ~15% of this loop. The call remains for the cold-miss cases.
         nd_ids: list = []
         for i in self.template_slot_locations:
             arg = args[i]

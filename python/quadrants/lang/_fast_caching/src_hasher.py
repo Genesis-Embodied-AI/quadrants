@@ -2,8 +2,8 @@
 
 Two-level cache
 ---------------
-The fastcache now exposes pruning information (already produced during compile) as a first-class lookup so the args
-hash can walk *only* paths the kernel reads:
+Pruning information, already produced during compile, is exposed as a first-class lookup so the args hash can walk
+*only* the paths the kernel reads:
 
   - L1 (this module's ``make_source_config_key`` + ``load_pruning_info`` / ``store_pruning_info``): keyed by
     source+config only (no args). Stores ``PruningInfo`` - the set of kernel-accessed flat names (e.g.
@@ -56,10 +56,8 @@ from .fast_caching_types import HashedFunctionSourceInfo
 from .hash_utils import hash_iterable_strings
 from .python_side_cache import PythonSideCache
 
-# Prefix bytes mixed into L1 / L2 keys so they cannot collide even if the underlying inputs happen to hash to the
-# same string. The original single-level cache key (kept for backward-compat reads via ``load`` below) had no such
-# prefix; the new two-level scheme uses ``l1:`` and ``l2:`` markers so old single-level entries from prior Quadrants
-# installs are simply ignored rather than mis-served.
+# Mixed into L1 / L2 keys so the two levels cannot collide, and so single-level entries written by older Quadrants
+# installs are ignored rather than mis-served.
 _L1_MARKER = "l1"
 _L2_MARKER = "l2"
 
@@ -140,16 +138,10 @@ def _resolve_intenum_member(qualname: str | None, fallback: int | None) -> int |
 
 
 def make_source_config_key(kernel_source_info: FunctionSourceInfo) -> str:
-    """Build the L1 cache key: source + config + version, with no dependence on args.
-
-    Used by ``_try_load_fastcache`` before any args walking. The same key drives ``load_pruning_info`` /
-    ``store_pruning_info``; the matching ``make_full_cache_key`` derives the L2 key from this plus the narrow args
-    hash.
-    """
+    """Build the L1 cache key: source + config + version, with no dependence on args."""
     kernel_hash = function_hasher.hash_kernel(kernel_source_info)
     config_hash = config_hasher.hash_compile_config()
-    # Device caps belong in L1 rather than L2: they change codegen but not argument identity, so an entry must not be
-    # reused on a device whose caps differ.
+    # In L1 rather than L2: caps change codegen without changing argument identity.
     device_caps_hash = config_hasher.hash_device_caps()
     return hash_iterable_strings(
         (
@@ -179,10 +171,8 @@ def compute_narrow_args_hash(
     arg_metas: Sequence[ArgMetadata],
     pruning_paths: set[str] | None,
 ) -> str | None:
-    """Compute the args hash narrowed by ``pruning_paths`` (or wide if ``pruning_paths is None``).
-
-    Returns ``None`` if a recognised-but-unsupported tensor-like type forces fastcache off - the caller emits
-    the appropriate user-visible diagnostic via the ``FastcacheSkip.WARN`` branch.
+    """Compute the args hash narrowed by ``pruning_paths`` (or wide if ``pruning_paths is None``), or ``None`` if an
+    unsupported type forces fastcache off for this call.
     """
     args_hash = args_hasher.hash_args(raise_on_templated_floats, args, arg_metas, pruning_paths=pruning_paths)
     if isinstance(args_hash, FastcacheSkip):
@@ -211,9 +201,8 @@ class L1CacheValue(BaseModel):
     entry is ``(cond_arg_name, parent_id, cond_cpp_arg_id)``, indexed by level id (outer before inner); see
     ``CacheValue`` for why the launch path needs the AST-resolved ``cond_cpp_arg_id``.
 
-    ``hashed_function_source_infos`` is the same content-hash list used for L2 validation; an L1 hit is
-    rejected if any helper source has changed since the L1 entry was written, even if the kernel source
-    itself hasn't (kernel_hash only covers the entry point).
+    ``hashed_function_source_infos`` rejects an L1 hit when a helper's source changed, which the key itself cannot
+    catch: ``kernel_hash`` covers only the entry point.
     """
 
     used_py_dataclass_parameters: set[str]
@@ -296,9 +285,6 @@ def persist_l1_and_set_l2_key(
             graph_do_while_levels=graph_do_while_levels,
         )
         fast_checksum = None
-    # If phase 2 didn't run (L1 cold) or returned None (FIELD encountered earlier - but in that case post-compile
-    # narrow hashing would also see the FIELD and produce None, which is fine: we want fast_checksum to stay None
-    # so no L2 entry is stored), compute the narrow args hash now.
     if fast_checksum is None:
         narrow_args_hash = compute_narrow_args_hash(
             raise_on_templated_floats,
@@ -315,11 +301,10 @@ def persist_l1_and_set_l2_key(
 def load_pruning_info(
     source_config_key: str,
 ) -> tuple[set[str], list[tuple[str, int, int]] | None] | tuple[None, None]:
-    """Look up L1 cache. Returns (pruning_paths, graph_do_while_levels) on hit, (None, None) on miss / invalid.
+    """Look up L1 cache. Returns (pruning_paths, graph_do_while_levels) on hit, (None, None) on miss.
 
-    Validates ``hashed_function_source_infos`` against the current on-disk source; if any helper has changed
-    since the entry was written, the entry is invalid and we treat the lookup as a miss so the caller does a
-    cold compile (which will overwrite the stale L1 entry).
+    A changed helper source invalidates the entry, which is reported as a miss so the caller cold-compiles and
+    overwrites it.
     """
     cache = PythonSideCache()
     maybe_value_json = cache.try_load(source_config_key)
@@ -338,8 +323,8 @@ def load_pruning_info(
 class CacheValue(BaseModel):
     """Persisted L2 entry - frontend cache key for the compiled artifact + source-validation metadata.
 
-    The full pruning info is duplicated here for backward-compat with existing on-disk caches; it's the same
-    set that L1 also stores. The L1 set is the source of truth for narrowing the args hash on warm calls.
+    ``used_py_dataclass_parameters`` duplicates what L1 stores, for compatibility with on-disk caches; L1's copy is
+    the one that narrows the args hash on warm calls.
     """
 
     frontend_cache_key: str
@@ -391,14 +376,8 @@ def store(
     - the python side cache contains information we will use to verify that our cache key is valid
         - ie the list of function source infos
 
-    ``fast_cache_key`` is the L2 key from ``make_full_cache_key``. The L1 entry has typically been stored
-    earlier by ``store_pruning_info`` during the same materialize.
-
-    ``checkpoint_user_label_enum_qualnames`` is derived from ``checkpoint_user_labels_by_cp_id`` here (rather than being
-    plumbed through a separate kwarg from ``Kernel.materialize``) so callers never have to think about the parallel
-    column: they pass the live label list (which still holds the original ``IntEnum`` instances at store time, before
-    pydantic's int-coercion strips identity in ``CacheValue.__init__``), and the qualname snapshot is recorded once
-    here for the loader to consume.
+    ``checkpoint_user_label_enum_qualnames`` is derived here rather than passed in, because the labels still hold
+    their original ``IntEnum`` instances at this point - ``CacheValue.__init__`` coerces them to plain ints.
     """
     if not fast_cache_key:
         return
@@ -436,11 +415,7 @@ def _try_load(cache_key: str) -> CacheValue | None:
 def load(cache_key: str) -> CacheValue | None:
     """Look up the L2 cache: a validated ``CacheValue`` for *cache_key*, or None on miss / stale entry.
 
-    Returns the full ``CacheValue`` (rather than a tuple) so callers can pick off the AST-transformer-produced metadata
-    (graph_do_while levels, checkpoint tables) without the loader having to grow a new return slot every time we cache
-    a new piece of AST output.
-
-    Validates helper-source hashes against the live source; an L2 entry is invalidated if any helper changed.
+    A changed helper source invalidates the entry.
     """
     cache_value = _try_load(cache_key)
     if cache_value is None:

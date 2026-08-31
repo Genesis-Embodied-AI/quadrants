@@ -205,11 +205,7 @@ def test_data_oriented_ndarray_reassign_same_shape():
 # 7. Mutation cross-shape: reassign ndarray attribute to a *different-dtype* ndarray. The template-mapper
 #    specialisation key (in ``_template_mapper_hotpath._extract_arg``) returns ``weakref.ref(arg)`` for
 #    ``is_data_oriented(arg)``; it does NOT descend into ndarray children to compute a dtype/ndim-dependent spec key.
-#    So if the data_oriented instance's id is unchanged but its ndarray attribute is reassigned to a different dtype,
-#    we expect either:
-#      - a graceful recompile/raise, or
-#      - silent miscompilation (the bug case - current expected outcome per static analysis).
-#    Mark xfail with strict=False so we record the actual outcome without breaking CI.
+#    So a reassignment to a different dtype on an unchanged instance id must still re-specialise.
 # ---------------------------------------------------------------------------
 
 
@@ -535,7 +531,7 @@ def test_dataclass_ndarray_sanity():
 
 # ---------------------------------------------------------------------------
 # 12. data_oriented holding a (frozen) dataclass that holds an ndarray. Exercises the ``else`` branch of ``_walk_obj``
-#     recursing through a dataclass child - added by the Bug 1 fix.
+#     recursing through a dataclass child.
 # ---------------------------------------------------------------------------
 
 
@@ -566,11 +562,8 @@ def test_data_oriented_holding_dataclass_with_ndarray():
 
 # ---------------------------------------------------------------------------
 # 13. Frozen dataclass holding a data_oriented holding an ndarray, kernel-arg via ``qd.template()``. Exercises the
-#     dataclass branch of ``_walk_obj`` recursing through a data_oriented child - added by the Bug 1 fix. The outer
-#     dataclass must be frozen because (i) non-frozen dataclasses are unhashable in Python (``__hash__ is None``) and
-#     the template-mapper key tuple needs the value to be hashable, and (ii) the typed-dataclass-arg form (``def
-#     run(s: Outer):``) goes through ``_transform_kernel_arg`` which does not currently recurse on data_oriented
-#     field *types* (as opposed to values) - that's a separate follow-up.
+#     dataclass branch of ``_walk_obj`` recursing through a data_oriented child. The outer dataclass has to be frozen:
+#     a non-frozen one is unhashable, and the template-mapper key tuple needs a hashable value.
 # ---------------------------------------------------------------------------
 
 
@@ -924,11 +917,9 @@ def test_data_oriented_field_only_no_speckey_change():
 
 
 # ---------------------------------------------------------------------------
-# 22. Robustness: object graphs with Pydantic-style metaclass ``__getattr__`` recursion, and cyclic attribute
-#     references. Real-world container classes (notably Genesis's ``RigidOptions`` / ``SimOptions``) inherit from
-#     ``pydantic.BaseModel`` whose ``ModelMetaclass.__getattr__`` recurses infinitely on missing class attributes.
-#     Quadrants' walker must not blow the stack when it traverses a ``data_oriented`` arg that contains such an
-#     object, or that contains a back-reference to itself / its parent (e.g. ``solver.scene.solver``).
+# 22. Robustness: object graphs with Pydantic-style metaclass ``__getattr__`` recursion (Genesis's ``RigidOptions``
+#     / ``SimOptions`` inherit from ``pydantic.BaseModel``, whose metaclass recurses infinitely on a missing class
+#     attribute), and with back-references (``solver.scene.solver``). The walker must not blow the stack on either.
 # ---------------------------------------------------------------------------
 
 
@@ -947,7 +938,6 @@ def test_is_data_oriented_safe_on_pydantic_like_metaclass():
     class Pathological(metaclass=RecursingMeta):
         pass
 
-    # Pre-fix this raised RecursionError; with the MRO+__dict__ lookup it just returns False.
     assert is_data_oriented(Pathological()) is False
 
 
@@ -998,7 +988,7 @@ def test_data_oriented_polymorphic_attr_across_instances():
         def __init__(self, x):
             self.x = x
 
-    # First instance: ``self.x`` is an Ndarray. The walker emits path ``('x',)`` and caches it.
+    # ``self.x`` is an Ndarray here, so the walker caches path ``('x',)``.
     x_nd = qd.ndarray(qd.i32, shape=(N,))
     state_a = State(x=x_nd)
 
@@ -1010,9 +1000,7 @@ def test_data_oriented_polymorphic_attr_across_instances():
     run(state_a)
     np.testing.assert_array_equal(x_nd.to_numpy(), np.arange(1, N + 1))
 
-    # Second instance of the SAME class, ``self.x`` is now a ``qd.field`` (MatrixField via Vector.field).
-    # The cached path ``('x',)`` from instance A points to a non-Ndarray on this instance - the descriptor
-    # walk must skip it cleanly rather than crash on ``v.element_type``.
+    # Same class, but ``self.x`` is a field here, so the path cached from instance A points at a non-Ndarray.
     f = qd.Vector.field(2, qd.i32, shape=(N,))
     state_b = State(x=f)
 
@@ -1048,17 +1036,16 @@ def test_data_oriented_polymorphic_attribute_set_across_instances():
         for i in range(N):
             s.x[i] = i + 1
 
-    # Forward direction: first instance has 'extra', second doesn't. Used to AttributeError on the cached
-    # ('extra',) path when running with state_lean.
+    # Forward direction: the first instance has 'extra' and the second doesn't, so a path cached from the first
+    # must not be applied to the second.
     state_full = PolyState(with_extra=True)
     run(state_full)
     state_lean = PolyState(with_extra=False)
     run(state_lean)
     np.testing.assert_array_equal(state_lean.x.to_numpy(), np.arange(1, N + 1))
 
-    # Inverse direction: a different class so per-class cache (if used by __slots__ fallback) starts fresh; first
-    # instance lacks 'extra', second has it. The kernel actually *reads* ``s.extra`` so the inverse-direction
-    # silent miscache (which only manifests when the kernel touches the conditional attr) is exercised end-to-end.
+    # Inverse direction, on a fresh class so that any per-class caching starts empty. The kernel reads ``s.extra``,
+    # which is what makes a miscache observable rather than merely latent.
     @qd.data_oriented
     class PolyState2:
         def __init__(self, with_extra: bool):
@@ -1071,24 +1058,18 @@ def test_data_oriented_polymorphic_attribute_set_across_instances():
         for i in range(N):
             s.x[i] = s.extra[i] * 10
 
-    # Walk the lean instance first (no 'extra'), populating any per-class state with the *narrow* attribute set.
-    # With the old per-class cache, this would lock in paths = [('x',)] for the class - and the next instance's
-    # ``extra`` would be silently absent from args_hash and from the kernel spec, leading to a wrong-shape kernel
-    # or a stale-cache hit when ``extra`` is later reassigned.
+    # Walk the lean instance first, so that any per-class caching sees the narrow attribute set: ``extra`` would
+    # then be absent from both args_hash and the kernel spec for the instance that has it.
     state_lean2 = PolyState2(with_extra=False)
     run(state_lean2)
     np.testing.assert_array_equal(state_lean2.x.to_numpy(), np.arange(1, N + 1))
 
-    # Now the polymorphic-attr-bearing instance. The per-instance walk must include ``('extra',)`` so that
-    # ``state_full2.extra``'s shape/id participates in the spec and the kernel compiles correctly.
     state_full2 = PolyState2(with_extra=True)
     state_full2.extra.from_numpy(np.array([2, 3, 5, 7], dtype=np.int32))
     run_using_extra(state_full2)
     np.testing.assert_array_equal(state_full2.x.to_numpy(), np.array([20, 30, 50, 70], dtype=np.int32))
 
-    # Reassignment-detection check: swap ``state_full2.extra`` to a different ndarray. The per-instance walk caches
-    # the *path list* ([('x',), ('extra',)]) on the instance, but the per-call args_hash still folds in
-    # ``id(getattr(state_full2, 'extra'))`` - so a swap should miss the spec-key cache and re-specialise.
+    # The cached path list is per instance, but the leaf ids are folded in per call, so a swap must re-specialise.
     state_full2.extra = qd.ndarray(qd.i32, shape=(N,))
     state_full2.extra.from_numpy(np.array([11, 13, 17, 19], dtype=np.int32))
     run_using_extra(state_full2)
@@ -1173,8 +1154,8 @@ def test_data_oriented_kernel_unused_opaque_member_does_not_affect_cache(tmp_pat
     run(a)
     run(b)
 
-    # Second process: cold-start, must load from disk. If the uuid had leaked into the cache key, different uuid ->
-    # different L2 key -> no artifact would load.
+    # Cold start: a uuid that had leaked into the cache key would give this process a different L2 key, and nothing
+    # would load.
     qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
     a = State(x=qd.ndarray(qd.i32, shape=(4,)))
     b = State(x=qd.ndarray(qd.i32, shape=(4,)))

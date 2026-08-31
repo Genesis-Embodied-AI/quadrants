@@ -409,23 +409,16 @@ class Kernel(FuncBase):
         self.per_offload_cache_observations = PerOffloadCacheObservations()
 
     def _try_load_fastcache(self, args: tuple[Any, ...], key: "CompiledKernelKeyType") -> set[str] | None:
-        """Two-phase fastcache lookup.
+        """Two-phase fastcache lookup: L1 (source+config, no args) for pruning info, then a narrow args walk over
+        those paths for the L2 key, its entry, and the artifact.
 
-        Phase 1 - L1 lookup keyed by source+config only (no args). Returns the set of kernel-accessed flat
-        names (pruning info). Hit OR miss, this only determines whether we have pruning info for the narrow
-        args walk; it never on its own justifies skipping pass 0 - that requires the C++ artifact to load.
+        Returns non-None - letting ``materialize`` skip pass 0 - only if all of phase 2 succeeds, artifact load
+        included. Pass 0 is what populates pruning info for every called ``@qd.func``, so it can only be skipped when
+        pass 1 runs in ``only_parse_function_def`` mode and never enters a callee body; otherwise the build fails
+        looking up callee variables in an empty used-set ("Name __qd_... is not defined").
 
-        Phase 2 - narrow args walk + L2 lookup + artifact load. Only when *all three* succeed do we return
-        non-None and let ``materialize`` skip pass 0. The reason: pass 0 is what populates pruning info for
-        *every called ``@qd.func``* (not just the kernel itself). Skipping pass 0 is only safe when pass 1
-        runs in ``only_parse_function_def`` mode (i.e. the C++ artifact is already loaded so the AST walker
-        never enters any callee body); otherwise callee variables can't be found in their func's empty
-        ``used_vars_by_func_id`` set and the build fails with "Name __qd_... is not defined".
-
-        Side effects: populates ``self._l1_key`` (always when fastcache is active), ``self._pruning_paths_from_l1``
-        (the L1 pruning info, or None if L1 miss - used by ``materialize`` for L1-store skipping and for
-        post-compile narrow-hash construction), and ``self.fast_checksum`` (the L2 key, when phase 2 computed
-        the narrow args hash). All three are read by the post-compile path in ``_maybe_persist_l1_and_set_l2_key``.
+        Sets ``self._l1_key``, ``self._pruning_paths_from_l1`` and ``self.fast_checksum``, all read after the compile
+        by ``_maybe_persist_l1_and_set_l2_key``.
         """
         self._l1_key = None  # type: ignore[attr-defined]
         self._pruning_paths_from_l1 = None  # type: ignore[attr-defined]
@@ -438,10 +431,8 @@ class Kernel(FuncBase):
             # Phase 1: L1 lookup - pruning info only, no args walk yet.
             pruning_paths, cached_graph_do_while_levels = src_hasher.load_pruning_info(self._l1_key)
             if pruning_paths is None:
-                # Cold L1. ``materialize`` will compile pass 0 + pass 1 to populate pruning info, then we
-                # store L1 + L2 after compile. ``cache_key_generated`` is intentionally NOT flipped to True
-                # here: it tracks "fastcache produced a valid L2 args hash" (the pre-refactor semantic), and
-                # we don't know yet whether the narrow args walk will succeed.
+                # ``cache_key_generated`` stays False: it means "fastcache produced a valid L2 args hash", and
+                # whether the narrow args walk will succeed isn't known until after the compile.
                 return None
             self._pruning_paths_from_l1 = pruning_paths
 
@@ -450,9 +441,8 @@ class Kernel(FuncBase):
                 self.raise_on_templated_floats, kernel_source_info, args, self.arg_metas, pruning_paths
             )
             if narrow_args_hash is None:
-                # Recognised-but-unsupported tensor-like (Field / MatrixField) - fastcache off for this call.
-                # ``self.fast_checksum`` stays None so no L2 entry is written; ``cache_key_generated`` stays
-                # False to match the pre-refactor "Field disables fastcache key generation" contract.
+                # Recognised-but-unsupported tensor-like (Field / MatrixField): leaving ``fast_checksum`` None keeps
+                # any L2 entry from being written for this call.
                 return None
             self.fast_checksum = src_hasher.make_full_cache_key(self._l1_key, narrow_args_hash)
             self.src_ll_cache_observations.cache_key_generated = True
@@ -502,11 +492,9 @@ class Kernel(FuncBase):
                             src_hasher._resolve_intenum_member(qn, lbl) for qn, lbl in zip(qualnames, raw_labels)
                         ]
                     return cache_value.used_py_dataclass_parameters
-            # L2 miss or artifact load failed: report cold so ``materialize`` does pass 0 + pass 1 (needed
-            # to populate per-callee pruning info). ``self.fast_checksum`` is still set so the post-compile
-            # ``src_hasher.store`` will write a fresh L2 entry under the narrow-args key. Seed the gdw level
-            # table from L1's cached levels so the cold-compile path can refer to it before the AST transformer
-            # repopulates it.
+            # L2 miss or artifact load failed: report cold, so ``materialize`` runs pass 0 + pass 1 and populates
+            # per-callee pruning info. ``fast_checksum`` stays set, so a fresh L2 entry is written after the compile.
+            # L1's level table seeds the cold-compile path until the AST transformer repopulates it.
             if cached_graph_do_while_levels and not self.graph_do_while_levels:
                 self.graph_do_while_levels = [
                     GraphDoWhileLevel(cond_arg_name=name, parent_id=parent, cond_cpp_arg_id=cpp_arg_id)
@@ -604,22 +592,11 @@ class Kernel(FuncBase):
                     self._struct_ndarray_launch_info_by_key[key] = getattr(
                         ctx.global_context, "struct_ndarray_launch_info", []
                     )
-                    # Fold data_oriented ndarray attribute chains into the kernel's used-flat-names set so
-                    # ``args_hasher.hash_args`` can narrow data_oriented walks too. ``used_vars_by_func_id`` only
-                    # contains flat names from dataclass-arg expansion in ``extract_struct_locals_from_context``;
-                    # data_oriented args don't go through that expansion, so accesses like ``self.x`` on an ndarray
-                    # member are only tracked via ``struct_ndarray_launch_info``. Without this fold, narrow hashing
-                    # for data_oriented args walks nothing - every (arg_idx, attr_chain) pair gets the same hash
-                    # regardless of dtype, so changing ``state.x``'s dtype no longer invalidates the cache (the
-                    # ``test_data_oriented_ndarray_fastcache_dtype_key_distinct`` pin caught this).
+                    # Both folds bring data_oriented member accesses into the kernel's used-flat-names set, which
+                    # dataclass-arg expansion is the only other contributor to. Without them the narrow args hash
+                    # walks nothing for a data_oriented arg, and a change of member dtype or value cannot invalidate
+                    # the cache entry.
                     pruning.fold_struct_nd_paths(self._struct_ndarray_launch_info_by_key.get(key, []), self.arg_metas)
-                    # Fold non-ndarray kernel-arg-rooted chain paths (primitives, opaque members, nested struct
-                    # paths) collected by ``ASTTransformer.build_Attribute``'s ``_qd_arg_chain`` tracking. Kept
-                    # separate from ``used_vars_by_func_id`` during compile (would otherwise poison ``struct_locals``
-                    # and break codegen) - see the field-level docstring on
-                    # ``Pruning.kernel_arg_chain_paths_by_func_id``. This fold + the existing ``used_vars`` assignment
-                    # to ``used_py_dataclass_parameters_by_key_enforcing`` share the same set by reference, so the
-                    # final fastcache L1 entry sees all kernel-accessed paths.
                     pruning.fold_kernel_arg_chain_paths()
                     # Only record an entry when this key actually lifts primitives, so the dict stays empty for the
                     # overwhelming majority of kernels (none use template_primitives=False). launch_kernel can then
@@ -649,7 +626,6 @@ class Kernel(FuncBase):
                     ]
                 runtime._current_global_context = None
 
-            # Post-compile fastcache bookkeeping. See ``_maybe_persist_l1_and_set_l2_key`` docstring.
             self._maybe_persist_l1_and_set_l2_key(key, py_args)
 
     def _maybe_persist_l1_and_set_l2_key(self, key: "CompiledKernelKeyType", py_args: tuple[Any, ...]) -> None:
@@ -704,21 +680,14 @@ class Kernel(FuncBase):
         # container wrapping a mutable inner container that holds the ndarray (e.g. frozen dataclass -> data_oriented
         # -> ndarray), id(outer) alone does not capture leaf rebinding because the inner container can still reassign
         # ``.x``. So we OR-fold the mutability check across every parent along ``chain`` from the root down to (but
-        # excluding) the leaf attribute. See ``chain_has_mutable_container`` in ``_template_mapper_hotpath`` for the
-        # exact predicate.
+        # excluding) the leaf attribute - see ``chain_has_mutable_container``.
         #
-        # ``_qd_stable_members = True`` on a ``@qd.data_oriented`` class (or ``@qd.data_oriented(stable_members=True)``)
-        # is a launch-time opt-out: the user promises ndarray members are never reassigned on instances of that class,
-        # so we can skip the per-call ``_resolve_struct_ndarray`` walk entirely for args of that type.
+        # ``@qd.data_oriented(stable_members=True)`` opts out of the walk below: the user has promised that ndarray
+        # members are never reassigned. It is a launch-time hint only, with no bearing on fastcache keys.
         if key != self._mutable_nd_cached_key:
             if self._struct_ndarray_launch_info_by_key:
                 struct_nd_info = self._struct_ndarray_launch_info_by_key.get(key)
                 if struct_nd_info:
-                    # Data_oriented containers marked ``_qd_stable_members = True`` (or decorated with
-                    # ``@qd.data_oriented(stable_members=True)``) promise their ndarray members are never reassigned,
-                    # so we exclude them from the per-call ``_resolve_struct_ndarray`` walk that builds ``args_hash``.
-                    # This is a *launch-time perf hint only* and has no fastcache role - fastcache derives its key
-                    # from kernel-pruning info regardless of this flag.
                     self._mutable_nd_cached_val = [
                         (idx, chain)
                         for _, idx, chain in struct_nd_info
