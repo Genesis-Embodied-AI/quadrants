@@ -251,6 +251,46 @@ def test_per_construct_frontend_split_recomputed_read_disjoint_atomic_splits() -
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
+def test_per_construct_frontend_split_alias_guard_falls_back() -> None:
+    # The split clears condition (3) between the recomputed read `a[0]` and the intervening write `b[i]` because they
+    # are ndarray accesses on DIFFERENT args -- disjointness the caller can defeat by binding one buffer to both `a` and
+    # `b`. The launch-time no-alias guard must catch that and run the whole-kernel variant (which snapshots `base`
+    # before the write), so the aliased call gets the correct answer instead of the split's recompute-after-write value.
+    @qd.kernel
+    def kernel_guarded(a: qd.types.ndarray(), b: qd.types.ndarray(), y: qd.types.ndarray()) -> None:
+        base = a[0]
+        for i in range(_N):
+            b[i] = 2.0
+        for i in range(_N):
+            y[i] = base
+
+    # Distinct buffers: the split fires (assuming a and b disjoint) and is correct. This also arms the guard.
+    a = qd.ndarray(qd.f32, shape=(_N,))
+    b = qd.ndarray(qd.f32, shape=(_N,))
+    y = qd.ndarray(qd.f32, shape=(_N,))
+    a.from_numpy(np.full(_N, 7.0, dtype=np.float32))
+    kernel_guarded(a, b, y)
+
+    obs = kernel_guarded._primal.per_offload_cache_observations
+    assert obs.frontend_constructs_total >= 2, obs
+    assert kernel_guarded._primal._split_alias_guard_by_key, "split did not record the cross-arg ndarray assumption"
+    assert not kernel_guarded._primal._compiled_no_split_by_key, "no fallback should be built for a disjoint call"
+    assert np.allclose(y.to_numpy(), 7.0, atol=1e-2), y.to_numpy()
+
+    # Aliased call: `a` and `b` are the SAME buffer, so the split would recompute `base = a[0]` in the y-loop AFTER
+    # `b[i]=2.0` overwrote it and read 2.0. The guard detects the shared allocation and runs the whole-kernel variant,
+    # which captured `base` (7.0) before the write. Correctness -- not just the reset sentinel -- is the real check.
+    shared = qd.ndarray(qd.f32, shape=(_N,))
+    y2 = qd.ndarray(qd.f32, shape=(_N,))
+    shared.from_numpy(np.full(_N, 7.0, dtype=np.float32))
+    kernel_guarded(shared, shared, y2)
+
+    assert kernel_guarded._primal._compiled_no_split_by_key, "guard did not build the whole-kernel fallback variant"
+    assert np.allclose(y2.to_numpy(), 7.0, atol=1e-2), y2.to_numpy()  # 7.0 (whole-kernel), never 2.0 (split miscompile)
+    assert np.allclose(shared.to_numpy(), 2.0, atol=1e-2), shared.to_numpy()
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
 def test_per_construct_frontend_split_fallback_carried_rmw_local() -> None:
     # Two constructs each read-modify-write the same local `s`, and the second also stores it. The second construct
     # depends on the value the first produced, so it is not recomputable per-construct (its slice would drop the first
