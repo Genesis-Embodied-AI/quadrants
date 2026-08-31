@@ -667,7 +667,7 @@
 
 <div class="viewcode-block" id="data_oriented">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_impl/index.html#quadrants.lang.kernel_impl.data_oriented">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">data_oriented</span><span class="p">(</span><span class="bp">cls</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">template_primitives</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">data_oriented</span><span class="p">(</span><span class="bp">cls</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">stable_members</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">template_primitives</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Marks a class as Quadrants compatible.</span>
 
 <span class="sd">    To allow for modularized code, Quadrants provides this decorator so that</span>
@@ -691,7 +691,15 @@
 <span class="sd">        &gt;&gt;&gt; a.inc()</span>
 
 <span class="sd">    Args:</span>
-<span class="sd">        cls (Class): the class to be decorated</span>
+<span class="sd">        cls (Class): the class to be decorated.</span>
+<span class="sd">        stable_members (bool): launch-context perf hint - if ``True``, declares that the class's ndarray-typed members</span>
+<span class="sd">            are allocated once and never reassigned between kernel calls. Quadrants will skip the per-call ndarray-</span>
+<span class="sd">            reference walk that ``Kernel.launch_kernel`` uses to detect ndarray reassignment on mutable containers</span>
+<span class="sd">            (~1-2 us/call savings on Genesis-style containers with dozens of ndarray attrs). Reassigning a member on</span>
+<span class="sd">            a ``stable_members`` class is undefined behaviour - the previously-compiled kernel will be reused even if</span>
+<span class="sd">            the new ndarray has different dtype/ndim/layout. May also be set as a class-level attribute</span>
+<span class="sd">            ``_qd_stable_members = True`` (equivalent). Has no effect on fastcache keys. See</span>
+<span class="sd">            ``docs/source/user_guide/compound_types.md``.</span>
 <span class="sd">        template_primitives (bool): controls how the primitive (``int`` / ``float`` / ``bool``)</span>
 <span class="sd">            members of instances of this class are treated when an instance is passed into a kernel</span>
 <span class="sd">            as a ``qd.template()`` argument (including as the implicit ``self`` of a member kernel).</span>
@@ -704,46 +712,59 @@
 <span class="sd">            ``QuadrantsSyntaxError``), since that context requires a compile-time constant.</span>
 
 <span class="sd">    Returns:</span>
-<span class="sd">        The decorated class.</span>
+<span class="sd">        The decorated class (or, when called with arguments, a decorator).</span>
 <span class="sd">    """</span>
-
-    <span class="k">def</span><span class="w"> </span><span class="nf">decorate</span><span class="p">(</span><span class="bp">cls</span><span class="p">):</span>
-        <span class="k">def</span><span class="w"> </span><span class="nf">make_kernel_indirect</span><span class="p">(</span><span class="n">fun</span><span class="p">,</span> <span class="n">is_property</span><span class="p">):</span>
-            <span class="nd">@wraps</span><span class="p">(</span><span class="n">fun</span><span class="p">)</span>
-            <span class="k">def</span><span class="w"> </span><span class="nf">_kernel_indirect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-                <span class="k">nonlocal</span> <span class="n">fun</span>
-                <span class="n">ret</span> <span class="o">=</span> <span class="n">_BoundedDifferentiableMethod</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fun</span><span class="p">)</span>
-                <span class="n">ret</span><span class="o">.</span><span class="vm">__name__</span> <span class="o">=</span> <span class="n">fun</span><span class="o">.</span><span class="vm">__name__</span>  <span class="c1"># type: ignore</span>
-                <span class="k">return</span> <span class="n">ret</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
-
-            <span class="n">ret</span> <span class="o">=</span> <span class="n">QuadrantsCallable</span><span class="p">(</span><span class="n">fun</span><span class="p">,</span> <span class="n">_kernel_indirect</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">is_property</span><span class="p">:</span>
-                <span class="n">ret</span> <span class="o">=</span> <span class="nb">property</span><span class="p">(</span><span class="n">ret</span><span class="p">)</span>
-            <span class="k">return</span> <span class="n">ret</span>
-
-        <span class="c1"># Iterate over all the attributes of the class to wrap member kernels in a way to ensure that they will be</span>
-        <span class="c1"># called through _BoundedDifferentiableMethod. This extra layer of indirection is necessary to transparently</span>
-        <span class="c1"># forward the owning instance to the primal function and its adjoint for auto-differentiation gradient</span>
-        <span class="c1"># computation. There is a special treatment for properties, as they may actually hide kernels under the hood.</span>
-        <span class="c1"># In such a case, the underlying function is extracted, wrapped as any member function, then wrapped again as a</span>
-        <span class="c1"># new property. Note that all the other attributes can be left untouched.</span>
-        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">attr</span> <span class="ow">in</span> <span class="bp">cls</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-            <span class="n">attr_type</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">attr</span><span class="p">)</span>
-            <span class="n">is_property</span> <span class="o">=</span> <span class="n">attr_type</span> <span class="ow">is</span> <span class="nb">property</span>
-            <span class="n">fun</span> <span class="o">=</span> <span class="n">attr</span><span class="o">.</span><span class="n">fget</span> <span class="k">if</span> <span class="n">is_property</span> <span class="k">else</span> <span class="n">attr</span>
-            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">fun</span><span class="p">,</span> <span class="p">(</span><span class="n">BoundQuadrantsCallable</span><span class="p">,</span> <span class="n">QuadrantsCallable</span><span class="p">)):</span>
-                <span class="k">if</span> <span class="n">fun</span><span class="o">.</span><span class="n">_is_wrapped_kernel</span><span class="p">:</span>
-                    <span class="k">if</span> <span class="n">fun</span><span class="o">.</span><span class="n">_is_classkernel</span> <span class="ow">and</span> <span class="n">attr_type</span> <span class="ow">is</span> <span class="ow">not</span> <span class="nb">staticmethod</span><span class="p">:</span>
-                        <span class="nb">setattr</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">make_kernel_indirect</span><span class="p">(</span><span class="n">fun</span><span class="p">,</span> <span class="n">is_property</span><span class="p">))</span>
-        <span class="bp">cls</span><span class="o">.</span><span class="n">_data_oriented</span> <span class="o">=</span> <span class="kc">True</span>
-        <span class="bp">cls</span><span class="o">.</span><span class="n">_qd_template_primitives</span> <span class="o">=</span> <span class="n">template_primitives</span>
-
-        <span class="k">return</span> <span class="bp">cls</span>
-
-    <span class="c1"># Support both the bare ``@qd.data_oriented`` form and the called ``@qd.data_oriented(...)`` form.</span>
     <span class="k">if</span> <span class="bp">cls</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">decorate</span>
-    <span class="k">return</span> <span class="n">decorate</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span></div>
+        <span class="k">return</span> <span class="k">lambda</span> <span class="n">c</span><span class="p">:</span> <span class="n">data_oriented</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">stable_members</span><span class="o">=</span><span class="n">stable_members</span><span class="p">,</span> <span class="n">template_primitives</span><span class="o">=</span><span class="n">template_primitives</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">make_kernel_indirect</span><span class="p">(</span><span class="n">fun</span><span class="p">,</span> <span class="n">is_property</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">):</span>
+        <span class="c1"># Capture the primal at decoration time so a call skips ``fun``'s ``wrapped_classkernel`` -&gt; ``wrapped_func``</span>
+        <span class="c1"># pair. That pair is also where the owner check lives, hence the copy of it below - an unbound</span>
+        <span class="c1"># ``Klass.step(not_an_instance)`` reaches this closure directly.</span>
+        <span class="n">primal</span> <span class="o">=</span> <span class="n">fun</span><span class="o">.</span><span class="n">_primal</span>
+
+        <span class="nd">@wraps</span><span class="p">(</span><span class="n">fun</span><span class="p">)</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">_kernel_indirect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">"_data_oriented"</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Please decorate class </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> with @qd.data_oriented"</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">primal</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="k">except</span> <span class="p">(</span><span class="n">QuadrantsCompilationError</span><span class="p">,</span> <span class="n">QuadrantsRuntimeError</span><span class="p">)</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">print_full_traceback</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">e</span>
+                <span class="k">raise</span> <span class="nb">type</span><span class="p">(</span><span class="n">e</span><span class="p">)(</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
+
+        <span class="n">ret</span> <span class="o">=</span> <span class="n">QuadrantsCallable</span><span class="p">(</span><span class="n">fun</span><span class="p">,</span> <span class="n">_kernel_indirect</span><span class="p">)</span>
+        <span class="c1"># ``QuadrantsCallable.__init__`` ends with ``update_wrapper(self, fun)``, which copies ``fun``'s own ``wrapper``</span>
+        <span class="c1"># over the one just passed to the constructor.</span>
+        <span class="n">ret</span><span class="o">.</span><span class="n">wrapper</span> <span class="o">=</span> <span class="n">_kernel_indirect</span>
+        <span class="c1"># setattr-after-class doesn't trigger __set_name__; set the name explicitly so QuadrantsCallable.__get__ can</span>
+        <span class="c1"># cache the BoundQuadrantsCallable on instance.__dict__.</span>
+        <span class="n">ret</span><span class="o">.</span><span class="n">_attr_name</span> <span class="o">=</span> <span class="n">attr_name</span>
+        <span class="k">if</span> <span class="n">is_property</span><span class="p">:</span>
+            <span class="n">ret</span> <span class="o">=</span> <span class="nb">property</span><span class="p">(</span><span class="n">ret</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">ret</span>
+
+    <span class="c1"># Iterate over all the attributes of the class to wrap member kernels in a way to ensure that they will be called</span>
+    <span class="c1"># through _BoundedDifferentiableMethod. This extra layer of indirection is necessary to transparently forward the</span>
+    <span class="c1"># owning instance to the primal function and its adjoint for auto-differentiation gradient computation. There is a</span>
+    <span class="c1"># special treatment for properties, as they may actually hide kernels under the hood. In such a case, the underlying</span>
+    <span class="c1"># function is extracted, wrapped as any member function, then wrapped again as a new property. Note that all the</span>
+    <span class="c1"># other attributes can be left untouched.</span>
+    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">attr</span> <span class="ow">in</span> <span class="bp">cls</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="n">attr_type</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">attr</span><span class="p">)</span>
+        <span class="n">is_property</span> <span class="o">=</span> <span class="n">attr_type</span> <span class="ow">is</span> <span class="nb">property</span>
+        <span class="n">fun</span> <span class="o">=</span> <span class="n">attr</span><span class="o">.</span><span class="n">fget</span> <span class="k">if</span> <span class="n">is_property</span> <span class="k">else</span> <span class="n">attr</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">fun</span><span class="p">,</span> <span class="p">(</span><span class="n">BoundQuadrantsCallable</span><span class="p">,</span> <span class="n">QuadrantsCallable</span><span class="p">)):</span>
+            <span class="k">if</span> <span class="n">fun</span><span class="o">.</span><span class="n">_is_wrapped_kernel</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">fun</span><span class="o">.</span><span class="n">_is_classkernel</span> <span class="ow">and</span> <span class="n">attr_type</span> <span class="ow">is</span> <span class="ow">not</span> <span class="nb">staticmethod</span><span class="p">:</span>
+                    <span class="nb">setattr</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">make_kernel_indirect</span><span class="p">(</span><span class="n">fun</span><span class="p">,</span> <span class="n">is_property</span><span class="p">,</span> <span class="n">name</span><span class="p">))</span>
+    <span class="bp">cls</span><span class="o">.</span><span class="n">_data_oriented</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="k">if</span> <span class="n">stable_members</span><span class="p">:</span>
+        <span class="bp">cls</span><span class="o">.</span><span class="n">_qd_stable_members</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="bp">cls</span><span class="o">.</span><span class="n">_qd_template_primitives</span> <span class="o">=</span> <span class="n">template_primitives</span>
+
+    <span class="k">return</span> <span class="bp">cls</span></div>
 
 
 
