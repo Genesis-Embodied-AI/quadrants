@@ -487,9 +487,45 @@ std::unordered_set<Stmt *> compute_construct_needed(
 //       runs in its home segment, so a clone runs the effect twice), a NON-DETERMINISTIC `RandStmt` (resamples /
 //       advances the PRNG per clone), or a VOLATILE load (must be observed exactly once in place).
 //
-//   (3) A field/ndarray load recomputed into a later construct past an intervening effect: if any construct between the
-//       load and the consumer performs a real effect, the recomputed load observes the mutation instead of the
-//       source-order snapshot. Conservative -- field identity is not tracked, so an unrelated store also falls back.
+//   (3) A field/ndarray load recomputed into a later construct past an intervening ALIASING write: if a construct
+//       between the load and the consumer writes memory the load may re-read, the recomputed load observes the mutation
+//       instead of the source-order snapshot. Aliasing is by SNode / ndarray (the shared alias analysis), so an
+//       unrelated field's store does NOT force fallback; a write we cannot pin to one address (structural / external)
+//       does.
+Stmt *write_effect_dest(Stmt *w) {
+  if (auto *st = w->cast<GlobalStoreStmt>())
+    return st->dest;
+  if (auto *at = w->cast<AtomicOpStmt>())
+    return at->dest;
+  // Structural snode ops, list/gc, and external / real-func calls have no single target pointer -> may-alias-all.
+  return nullptr;
+}
+
+// InternalFuncStmt is a runtime intrinsic. Most -- warp/block sync + memory fences, shuffle / ballot / broadcast /
+// elect, thread / invocation index, clocks, register composite-extract -- write NO field/ndarray/structural memory, so
+// they cannot change a recomputed load and are not a recompute hazard (condition 3), even though they report a side
+// effect (to stay un-reordered). The few internal ops that DO write global memory (sparse-matrix insert_triplet,
+// refresh_counter, the test_* allocator probes) are deliberately absent, so they stay may-alias-all. This is an
+// allowlist: any name not listed (a new/unknown internal op) is treated as a writer, costing at most a missed split.
+bool internal_func_is_memory_free(const std::string &name) {
+  static const std::unordered_set<std::string> kMemoryFree = {
+      "composite_extract_0", "composite_extract_1",  "composite_extract_2",  "composite_extract_3",
+      "linear_thread_idx",   "block_thread_idx",      "do_nothing",           "workgroupBarrier",
+      "workgroupMemoryBarrier", "gridMemoryBarrier",  "localInvocationId",    "globalInvocationId",
+      "vkGlobalThreadIdx",   "subgroupBarrier",       "subgroupMemoryBarrier", "subgroupElect",
+      "subgroupBroadcast",   "subgroupShuffle",       "subgroupShuffleDown",  "subgroupShuffleUp",
+      "subgroupBallotU32",   "subgroupBallotU64",     "subgroupInvocationId", "spirv_clock_i64",
+      "cuda_clock_i64",      "block_barrier",         "block_barrier_and_i32", "block_barrier_or_i32",
+      "block_barrier_count_i32", "block_mem_fence",   "grid_mem_fence",       "warp_barrier",
+      "cuda_all_sync_i32",   "cuda_any_sync_i32",     "cuda_uni_sync_i32",    "cuda_ballot_i32",
+      "cuda_shfl_sync_i32",  "cuda_shfl_sync_f32",    "cuda_shfl_up_sync_i32", "cuda_shfl_up_sync_f32",
+      "cuda_shfl_down_sync_i32", "cuda_shfl_down_sync_f32", "cuda_shfl_xor_sync_i32", "cuda_match_any_sync_i32",
+      "cuda_match_all_sync_i32", "cuda_active_mask",  "cuda_fns_u32",         "amdgpu_clock_i64",
+      "cpu_clock_i64",
+  };
+  return kMemoryFree.count(name) > 0;
+}
+
 bool split_is_recompute_safe(Block *block) {
   if (block == nullptr)
     return false;
@@ -524,16 +560,30 @@ bool split_is_recompute_safe(Block *block) {
   std::unordered_map<Stmt *, int> top_index;
   for (int j = 0; j < n; j++)
     top_index[block->statements[j].get()] = j;
-  // Top-level positions performing a real effect (includes sparse-structure ops, not just stores/atomics).
-  std::vector<bool> writes_global(n, false);
-  for (Stmt *w : gather_stmts_incl_containers(block, [](Stmt *s) { return stmt_is_task_effect(s); })) {
+  // Every intervening global write that could change a recomputed field/ndarray load, tagged with its top-level slot
+  // and the pointer it targets (null => a footprint we cannot pin to one address: structural / external -> may-alias-
+  // all). Gather LEAF effects only -- a container (loop / if) reports has_global_side_effect but its real writes are its
+  // leaves -- and drop memory-free runtime intrinsics (barriers, shuffles, thread-index), which have a side effect but
+  // write no addressable memory, so a construct sitting after a barrier still splits.
+  struct GlobalWrite {
+    int pos;
+    Stmt *dest;
+  };
+  std::vector<GlobalWrite> global_writes;
+  for (Stmt *w : gather_stmts_incl_containers(block, [](Stmt *s) {
+         if (!stmt_is_task_effect(s) || s->is_container_statement())
+           return false;
+         if (auto *ifs = s->cast<InternalFuncStmt>())
+           return !internal_func_is_memory_free(ifs->func_name);
+         return true;
+       })) {
     bool inside = false;
     Stmt *owner = top_level_owner(w, block, &inside);
     if (owner == nullptr)
       continue;
     auto it = top_index.find(owner);
     if (it != top_index.end())
-      writes_global[it->second] = true;
+      global_writes.push_back({it->second, write_effect_dest(w)});
   }
   auto segs = segment_top_level(block);
   auto alloca_writers = gather_top_level_alloca_writers(block);
@@ -549,9 +599,13 @@ bool split_is_recompute_safe(Block *block) {
     if (b_lo < 0)
       continue;
     auto needed = compute_construct_needed(block, segs.seg_id, k, alloca_writers);
-    // Scan the slice: (2) reject a non-recomputable producer recomputed from another segment; (3) track the earliest
-    // recomputed global read, checked against intervening effects below.
-    int min_recomputed_read_pos = -1;
+    // Scan the slice: (2) reject a non-recomputable producer recomputed from another segment; (3) collect the global
+    // reads recomputed from an earlier segment, checked against intervening aliasing writes below.
+    struct RecomputedRead {
+      int pos;
+      Stmt *src;
+    };
+    std::vector<RecomputedRead> recomputed_reads;
     for (Stmt *s : needed) {
       bool inside = false;
       Stmt *owner = top_level_owner(s, block, &inside);
@@ -563,15 +617,19 @@ bool split_is_recompute_safe(Block *block) {
       int pos = it->second;
       if (segs.seg_id[pos] != k && (stmt_is_task_effect(s) || s->is<RandStmt>() || stmt_is_volatile_load(s)))
         return false;  // recomputing another segment's effect, PRNG draw, or volatile load would change behavior
-      // Earliest recomputed global read from an earlier segment (reads in k's own segment are not moved).
-      if (stmt_is_global_read(s) && pos < b_lo && (min_recomputed_read_pos < 0 || pos < min_recomputed_read_pos))
-        min_recomputed_read_pos = pos;
+      // Global read recomputed from an earlier segment (reads in k's own segment are not moved).
+      if (stmt_is_global_read(s) && pos < b_lo)
+        recomputed_reads.push_back({pos, s->cast<GlobalLoadStmt>()->src});
     }
-    if (min_recomputed_read_pos < 0)
-      continue;
-    for (int q = min_recomputed_read_pos + 1; q < b_lo; q++)
-      if (writes_global[q])
-        return false;  // an intervening construct mutates global memory the recomputed load would re-read
+    // (3) A recomputed read is unsafe only if a MAY-ALIAS write runs between the read's original slot and this
+    // construct -- recomputing the read there would then observe that write. A write to a provably different address
+    // (different SNode / ndarray, via the shared alias analysis) is harmless, which is what lets a multi-array kernel
+    // split. A write we cannot pin to one address, or a null read pointer, may-aliases everything.
+    for (const RecomputedRead &r : recomputed_reads)
+      for (const GlobalWrite &w : global_writes)
+        if (w.pos > r.pos && w.pos < b_lo)
+          if (w.dest == nullptr || r.src == nullptr || irpass::analysis::maybe_same_address(r.src, w.dest))
+            return false;
   }
   return true;
 }

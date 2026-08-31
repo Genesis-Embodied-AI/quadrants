@@ -194,6 +194,63 @@ def test_per_construct_frontend_split_fallback_field_load_shadowed() -> None:
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
+def test_per_construct_frontend_split_recomputed_read_disjoint_write_splits() -> None:
+    # Mirror of `..._fallback_field_load_shadowed`, but the intervening loop writes a DIFFERENT ndarray (`b`) than the
+    # snapshotted read (`a[0]`). Recomputing the `a[0]` load into the consumer cannot observe a write to `b`, so the
+    # SNode/ndarray-aware recompute-safety check must allow the split -- the old address-agnostic check wrongly forbade
+    # it. This is the case that unblocks multi-array kernels (e.g. the qipc solver).
+    @qd.kernel
+    def kernel_disjoint(a: qd.types.ndarray(), b: qd.types.ndarray(), y: qd.types.ndarray()) -> None:
+        base = a[0]
+        for i in range(_N):
+            b[i] = 2.0
+        for i in range(_N):
+            y[i] = base
+
+    a = qd.ndarray(qd.f32, shape=(_N,))
+    b = qd.ndarray(qd.f32, shape=(_N,))
+    y = qd.ndarray(qd.f32, shape=(_N,))
+    a.from_numpy(np.full(_N, 7.0, dtype=np.float32))
+    kernel_disjoint(a, b, y)
+
+    obs = kernel_disjoint._primal.per_offload_cache_observations
+    # The disjoint write does not alias the recomputed read, so the split fires (it is NOT the -1 fallback sentinel).
+    assert obs.frontend_constructs_total >= 2, obs
+    assert obs.frontend_constructs_recompiled == obs.frontend_constructs_total, obs
+    assert obs.frontend_constructs_cache_hit == 0, obs
+    # `base` is a[0] == 7.0 (a is never written), so every y[i] must be 7.0; b holds the unrelated 2.0.
+    assert np.allclose(y.to_numpy(), 7.0, atol=1e-2), y.to_numpy()
+    assert np.allclose(b.to_numpy(), 2.0, atol=1e-2), b.to_numpy()
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
+def test_per_construct_frontend_split_recomputed_read_disjoint_atomic_splits() -> None:
+    # Same as above but the intervening effect is an ATOMIC to a different ndarray, exercising the atomic `dest` branch
+    # of the write-pointer mapping: an atomic on `b` cannot alias a recomputed read of `a`, so the split still fires.
+    @qd.kernel
+    def kernel_disjoint_atomic(a: qd.types.ndarray(), b: qd.types.ndarray(), y: qd.types.ndarray()) -> None:
+        base = a[0]
+        for i in range(_N):
+            qd.atomic_add(b[i], 1.0)
+        for i in range(_N):
+            y[i] = base
+
+    a = qd.ndarray(qd.f32, shape=(_N,))
+    b = qd.ndarray(qd.f32, shape=(_N,))
+    y = qd.ndarray(qd.f32, shape=(_N,))
+    a.from_numpy(np.full(_N, 7.0, dtype=np.float32))
+    b.from_numpy(np.zeros(_N, dtype=np.float32))
+    kernel_disjoint_atomic(a, b, y)
+
+    obs = kernel_disjoint_atomic._primal.per_offload_cache_observations
+    assert obs.frontend_constructs_total >= 2, obs
+    assert obs.frontend_constructs_recompiled == obs.frontend_constructs_total, obs
+    assert obs.frontend_constructs_cache_hit == 0, obs
+    assert np.allclose(y.to_numpy(), 7.0, atol=1e-2), y.to_numpy()
+    assert np.allclose(b.to_numpy(), 1.0, atol=1e-2), b.to_numpy()
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
 def test_per_construct_frontend_split_fallback_carried_rmw_local() -> None:
     # Two constructs each read-modify-write the same local `s`, and the second also stores it. The second construct
     # depends on the value the first produced, so it is not recomputable per-construct (its slice would drop the first
