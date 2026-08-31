@@ -437,8 +437,12 @@ void export_lang(nb::module_ &m) {
                                         return get_hashed_offline_cache_key_of_device_caps(caps);
                                       });
 
-  auto compiled_kernel_data = nb::class_<CompiledKernelData>(m, "CompiledKernelData")
-                                  .def("_debug_dump_to_string", &CompiledKernelData::debug_dump_to_string);
+  auto compiled_kernel_data =
+      nb::class_<CompiledKernelData>(m, "CompiledKernelData")
+          .def("_debug_dump_to_string", &CompiledKernelData::debug_dump_to_string)
+          // Lets the fastcache restore path arm the launch-time no-alias guard, matching the fresh-compile path (which
+          // reads the same flag off CompileResult).
+          .def("split_assumed_ndarray_disjoint", &CompiledKernelData::split_assumed_ndarray_disjoint);
 
   // nanobind types are not weak-referenceable by default (pybind11 made all bound types so). The Python
   // frontend holds weakrefs to the Program (kernel.py / stream.py), so opt in explicitly.
@@ -532,7 +536,20 @@ void export_lang(nb::module_ &m) {
       .def("fill_uint",
            [](Program *program, Ndarray *ndarray, uint32_t val) { program->fill_ndarray_fast_u32(ndarray, val); })
       .def("get_graphics_device", [](Program *program) { return program->get_graphics_device(); })
-      .def("compile_kernel", &Program::compile_kernel, nb::rv_policy::reference)
+      .def(
+          "compile_kernel",
+          [](Program *program, const CompileConfig &compile_config, const DeviceCapabilityConfig &device_caps,
+             const Kernel &kernel_def, bool disable_split) -> CompileResult {
+            // `disable_split` forces the whole-kernel path via a config copy (distinct offline-cache key). The launch
+            // guard sets it when a call aliases two ndarray params the split assumed disjoint.
+            if (!disable_split)
+              return program->compile_kernel(compile_config, device_caps, kernel_def);
+            CompileConfig cfg = compile_config;
+            cfg.disable_frontend_per_construct_split = true;
+            return program->compile_kernel(cfg, device_caps, kernel_def);
+          },
+          nb::arg("compile_config"), nb::arg("device_caps"), nb::arg("kernel"), nb::arg("disable_split") = false,
+          nb::rv_policy::reference)
       .def("launch_kernel", &Program::launch_kernel)
       .def("get_device_caps", &Program::get_device_caps)
       .def("subgroup_size", &Program::subgroup_size)
@@ -562,7 +579,8 @@ void export_lang(nb::module_ &m) {
       .def_ro("per_construct_recompiled", &CompileResult::per_construct_recompiled)
       .def_ro("per_task_total", &CompileResult::per_task_total)
       .def_ro("per_task_cache_hit", &CompileResult::per_task_cache_hit)
-      .def_ro("per_task_recompiled", &CompileResult::per_task_recompiled);
+      .def_ro("per_task_recompiled", &CompileResult::per_task_recompiled)
+      .def_ro("split_assumed_ndarray_disjoint", &CompileResult::split_assumed_ndarray_disjoint);
 
   nb::class_<Axis>(m, "Axis").def(nb::init<int>());
   nb::class_<SNode>(m, "SNodeCxx")
@@ -642,6 +660,11 @@ void export_lang(nb::module_ &m) {
   // kernel.py); nanobind types are not weak-referenceable by default, so opt in (pybind11 default).
   nb::class_<Ndarray>(m, "NdarrayCxx", nb::is_weak_referenceable())
       .def("device_allocation_ptr", &Ndarray::get_device_allocation_ptr_as_int)
+      // Backing-buffer identity for the launch-time no-alias guard: two ndarrays alias in a compiled kernel iff their
+      // DeviceAllocation matches (the launcher resolves each arg's device pointer from `alloc_id`, not the wrapper
+      // address), so this -- not `device_allocation_ptr` -- is the id to compare across args.
+      .def("device_alloc_id",
+           [](Ndarray *self) -> uint64_t { return (uint64_t)self->get_device_allocation().alloc_id; })
       .def("device_allocation", &Ndarray::get_device_allocation)
       .def("element_size", &Ndarray::get_element_size)
       .def("nelement", &Ndarray::get_nelement)

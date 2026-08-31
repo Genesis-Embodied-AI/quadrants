@@ -105,6 +105,12 @@ class CompiledKernelData {
   virtual Arch arch() const = 0;
   virtual size_t num_tasks() const = 0;
 
+  // The per-construct split fired under a cross-parameter ndarray no-alias assumption; the launch guard must verify it.
+  // Backends without the split (SPIR-V) never set it.
+  virtual bool split_assumed_ndarray_disjoint() const {
+    return false;
+  }
+
   Err load(std::istream &is);
   Err dump(std::ostream &os) const;
 

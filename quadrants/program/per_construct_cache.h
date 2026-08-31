@@ -15,6 +15,11 @@ struct PerConstructCache {
     int total = 0;
     int hit = 0;
     int recompiled = 0;
+    // Frontend split only: the split cleared condition (3) for at least one recomputed ndarray read against an
+    // intervening ndarray write on a DIFFERENT arg, i.e. it relied on cross-parameter ndarray disjointness. That is
+    // unsound if a caller binds the same ndarray to both params, so the launch guard must verify no two ndarray args
+    // alias before using this (split) kernel.
+    bool assumed_ndarray_disjoint = false;
   };
 
   std::mutex mu;

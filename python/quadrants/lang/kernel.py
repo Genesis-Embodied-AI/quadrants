@@ -388,6 +388,11 @@ class Kernel(FuncBase):
 
         self.launch_context_buffer_cache = LaunchContextBufferCache()
         self._struct_ndarray_launch_info_by_key: dict[CompiledKernelKeyType, list] = {}
+        # Launch-time no-alias guard. A key is present (value True) only when its split relied on cross-parameter ndarray
+        # disjointness; those keys check their actual args for aliasing per launch and, on a violation, launch the
+        # whole-kernel variant cached here (compiled with the split disabled). Absent keys skip the check entirely.
+        self._split_alias_guard_by_key: dict[CompiledKernelKeyType, bool] = {}
+        self._compiled_no_split_by_key: dict[CompiledKernelKeyType, Any] = {}
         # Launch info for primitives lifted from ``@qd.data_oriented(template_primitives=False)`` template args (see
         # ``predeclare_struct_primitives``). Maps key -> list of ``(arg_id, template_arg_idx, attr_chain, kind)``.
         self._struct_primitive_launch_info_by_key: dict[CompiledKernelKeyType, list] = {}
@@ -432,6 +437,10 @@ class Kernel(FuncBase):
                 )
                 if self.compiled_kernel_data_by_key[key]:
                     self.src_ll_cache_observations.cache_loaded = True
+                    # A fastcache restore bypasses prog.compile_kernel, so arm the launch-time no-alias guard here too
+                    # when the restored split relied on cross-parameter ndarray disjointness (read off the artifact).
+                    if self.compiled_kernel_data_by_key[key].split_assumed_ndarray_disjoint():
+                        self._split_alias_guard_by_key[key] = True
                     self.used_py_dataclass_parameters_by_key_enforcing[key] = cache_value.used_py_dataclass_parameters
                     # Fast-cache restore skips AST transformation, so rebuild the AST-transformer-produced metadata from
                     # the cache value: nested graph_do_while level table (with the AST-resolved flat C++ arg-id) plus
@@ -727,6 +736,11 @@ class Kernel(FuncBase):
 
                 compile_result: CompileResult = prog.compile_kernel(prog_config, prog_device_cap, t_kernel)
                 compiled_kernel_data = compile_result.compiled_kernel_data
+                # Arm the launch-time no-alias guard for this key iff its split relied on cross-parameter ndarray
+                # disjointness (read from the compiled kernel, so it is set on a cache hit too). Store only True keys so
+                # the per-launch check below stays a single dict lookup for every other kernel.
+                if compile_result.split_assumed_ndarray_disjoint:
+                    self._split_alias_guard_by_key[key] = True
                 if compile_result.cache_hit:
                     self.fe_ll_cache_observations.cache_hit = True
                 self.per_offload_cache_observations = PerOffloadCacheObservations(
@@ -760,6 +774,19 @@ class Kernel(FuncBase):
                 # matches the C++ cache-hit path, which also reports -1 in `KernelCompilationManager::load_or_compile`.
                 self.per_offload_cache_observations = PerOffloadCacheObservations()
             self._last_compiled_kernel_data = compiled_kernel_data
+            # Launch-time no-alias guard: the split may have assumed two ndarray params never alias, which is unsound if
+            # this call binds the same ndarray to both. When that happens, launch the whole-kernel variant (never
+            # recomputes across a write, so always correct) instead. `_last_compiled_kernel_data` above keeps the fast
+            # split as the cached default for the common disjoint call.
+            if self._split_alias_guard_by_key.get(key) and self._launch_has_aliased_ndarrays(key, args):
+                no_split = self._compiled_no_split_by_key.get(key)
+                if no_split is None:
+                    no_split = prog.compile_kernel(
+                        prog.config(), prog.get_device_caps(), t_kernel, disable_split=True
+                    ).compiled_kernel_data
+                    self._compiled_no_split_by_key[key] = no_split
+                compiled_kernel_data = no_split
+                self.per_offload_cache_observations = PerOffloadCacheObservations()
             launch_ctx.use_graph = self.use_graph and _GRAPH_ENABLED
             if self.use_graph and qd_stream is not None:
                 raise RuntimeError(
@@ -821,6 +848,45 @@ class Kernel(FuncBase):
         if ret_type in primitive_types.real_types:
             return launch_ctx.get_struct_ret_float(indices)
         raise QuadrantsRuntimeTypeError(f"Invalid return type on index={indices}")
+
+    def _launch_has_aliased_ndarrays(self, key, args) -> bool:
+        """True if two ndarray parameters of this launch may share one backing device allocation.
+
+        Only called for keys whose split relied on cross-parameter ndarray disjointness (see the launch guard). Two
+        ndarray args alias in the compiled kernel iff their ``DeviceAllocation`` matches -- the launcher derives each
+        arg's device pointer from ``alloc_id``, so that (not the wrapper address) is the identity to compare. An arg
+        whose id cannot be read is treated as a possible alias, so an unrecognized argument shape falls back to the
+        always-correct whole-kernel path rather than risking the split. Covers plain ndarray args and ndarrays reached
+        through ``@qd.data_oriented`` struct members.
+        """
+        seen: set = set()
+
+        def _collides(nd) -> bool:
+            if nd is None:
+                return False
+            arr = getattr(nd, "arr", None)
+            try:
+                ident = arr.device_alloc_id()
+            except Exception:
+                return True
+            if ident in seen:
+                return True
+            seen.add(ident)
+            return False
+
+        for i, meta in enumerate(self.arg_metas):
+            if type(meta.annotation) is ndarray_type.NdarrayType:
+                val = args[i]
+                if type(val) in _TENSOR_WRAPPER_TYPES:
+                    val = val._unwrap()
+                if _collides(val):
+                    return True
+        struct_nd_info = self._struct_ndarray_launch_info_by_key.get(key)
+        if struct_nd_info:
+            for _arg_id, template_arg_idx, attr_chain in struct_nd_info:
+                if _collides(self._resolve_struct_ndarray(args, template_arg_idx, attr_chain)):
+                    return True
+        return False
 
     @staticmethod
     def _resolve_struct_ndarray(args, template_arg_idx, attr_chain):

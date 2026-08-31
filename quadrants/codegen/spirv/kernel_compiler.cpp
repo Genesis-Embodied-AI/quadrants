@@ -1,8 +1,12 @@
 #include "quadrants/codegen/spirv/kernel_compiler.h"
 
+#include <mutex>
+
 #include "quadrants/ir/analysis.h"
 #include "quadrants/codegen/spirv/spirv_codegen.h"
 #include "quadrants/codegen/spirv/compiled_kernel_data.h"
+#include "quadrants/program/program.h"
+#include "quadrants/program/per_construct_cache.h"
 
 namespace quadrants::lang {
 namespace spirv {
@@ -37,6 +41,15 @@ KernelCompiler::CKDPtr KernelCompiler::compile(const CompileConfig &compile_conf
   spirv::CompiledKernelData::InternalData internal_data;
   codegen.run(internal_data.metadata.kernel_attribs, internal_data.src.spirv_src);
   internal_data.metadata.num_snode_trees = config_.compiled_struct_data->size();
+  // Carry the frontend split's no-alias assumption onto the compiled kernel so a cache hit still arms the launch guard
+  // (mirrors the LLVM path in codegen.cpp). Absent entry (whole-kernel compile) leaves the default false.
+  if (kernel_def.program != nullptr) {
+    auto &cc = kernel_def.program->per_construct_cache();
+    std::lock_guard<std::mutex> g(cc.mu);
+    auto it = cc.last_stats.find(kernel_def.get_name());
+    if (it != cc.last_stats.end())
+      internal_data.metadata.split_assumed_ndarray_disjoint = it->second.assumed_ndarray_disjoint;
+  }
   return std::make_unique<spirv::CompiledKernelData>(compile_config.arch, internal_data);
 }
 

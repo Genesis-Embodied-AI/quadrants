@@ -58,6 +58,9 @@ struct CompileResult {
   int per_task_total{-1};
   int per_task_cache_hit{-1};
   int per_task_recompiled{-1};
+  // True when the per-construct split fired AND relied on cross-parameter ndarray disjointness (see PerConstructCache).
+  // The launch guard uses this to decide whether it must check the actual args for aliasing before using this kernel.
+  bool split_assumed_ndarray_disjoint{false};
 };
 
 namespace tests {

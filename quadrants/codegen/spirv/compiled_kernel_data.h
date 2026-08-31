@@ -17,7 +17,10 @@ class CompiledKernelData : public lang::CompiledKernelData {
     struct Metadata {
       QuadrantsKernelAttributes kernel_attribs;
       std::size_t num_snode_trees{0};
-      QD_IO_DEF(kernel_attribs, num_snode_trees);
+      // See LLVMCompiledKernel: the frontend split fired relying on cross-parameter ndarray disjointness, so a
+      // cache-loaded kernel still arms the launch-time no-alias guard.
+      bool split_assumed_ndarray_disjoint{false};
+      QD_IO_DEF(kernel_attribs, num_snode_trees, split_assumed_ndarray_disjoint);
     } metadata;
     // source code
     struct Source {
@@ -32,6 +35,9 @@ class CompiledKernelData : public lang::CompiledKernelData {
   Arch arch() const override;
   size_t num_tasks() const override {
     return data_.metadata.kernel_attribs.tasks_attribs.size();
+  }
+  bool split_assumed_ndarray_disjoint() const override {
+    return data_.metadata.split_assumed_ndarray_disjoint;
   }
   std::unique_ptr<lang::CompiledKernelData> clone() const override;
 

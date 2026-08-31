@@ -526,7 +526,39 @@ bool internal_func_is_memory_free(const std::string &name) {
   return kMemoryFree.count(name) > 0;
 }
 
-bool split_is_recompute_safe(Block *block) {
+// The ndarray (external) access a load/store pointer resolves to, directly or through a MatrixPtr element; nullptr if
+// it isn't one.
+ExternalPtrStmt *as_ndarray_ptr(Stmt *p) {
+  if (p == nullptr)
+    return nullptr;
+  if (auto *e = p->cast<ExternalPtrStmt>())
+    return e;
+  if (auto *mp = p->cast<MatrixPtrStmt>())
+    return mp->origin != nullptr ? mp->origin->cast<ExternalPtrStmt>() : nullptr;
+  return nullptr;
+}
+
+// True when a condition-(3) clearance between these two pointers rests on the caller-defeatable assumption that
+// distinct ndarray params don't alias: both are ndarray accesses on DIFFERENT args (same is_grad). alias_analysis
+// then reports `different` purely by arg id (see its ExternalPtr branch), which a caller violates by binding the same
+// ndarray to both params -- the launch guard must then fall back. Same-arg (index-disjoint) or primal-vs-grad
+// clearances are true disjointness the caller cannot defeat, so they don't count.
+bool clearance_assumes_ndarray_disjoint(Stmt *a, Stmt *b) {
+  ExternalPtrStmt *ea = as_ndarray_ptr(a);
+  ExternalPtrStmt *eb = as_ndarray_ptr(b);
+  if (ea == nullptr || eb == nullptr)
+    return false;
+  auto *arg_a = ea->base_ptr->cast<ArgLoadStmt>();
+  auto *arg_b = eb->base_ptr->cast<ArgLoadStmt>();
+  if (arg_a == nullptr || arg_b == nullptr)
+    return false;
+  return arg_a->arg_id != arg_b->arg_id && ea->is_grad == eb->is_grad;
+}
+
+// `assumed_ndarray_disjoint` is set true iff the split cleared condition (3) only because two ndarray accesses target
+// different args -- disjointness the caller can violate by binding the same ndarray twice. The launch guard verifies it.
+bool split_is_recompute_safe(Block *block, bool &assumed_ndarray_disjoint) {
+  assumed_ndarray_disjoint = false;
   if (block == nullptr)
     return false;
 
@@ -626,10 +658,16 @@ bool split_is_recompute_safe(Block *block) {
     // (different SNode / ndarray, via the shared alias analysis) is harmless, which is what lets a multi-array kernel
     // split. A write we cannot pin to one address, or a null read pointer, may-aliases everything.
     for (const RecomputedRead &r : recomputed_reads)
-      for (const GlobalWrite &w : global_writes)
-        if (w.pos > r.pos && w.pos < b_lo)
-          if (w.dest == nullptr || r.src == nullptr || irpass::analysis::maybe_same_address(r.src, w.dest))
-            return false;
+      for (const GlobalWrite &w : global_writes) {
+        if (w.pos <= r.pos || w.pos >= b_lo)
+          continue;
+        if (w.dest == nullptr || r.src == nullptr || irpass::analysis::maybe_same_address(r.src, w.dest))
+          return false;
+        // Cleared: the read and write are provably different addresses. When that proof is cross-arg ndarray
+        // disjointness, a caller can defeat it by aliasing the two params -- record it so the launch guard falls back.
+        if (clearance_assumes_ndarray_disjoint(r.src, w.dest))
+          assumed_ndarray_disjoint = true;
+      }
   }
   return true;
 }
@@ -667,7 +705,11 @@ SplitCost estimate_split_cost(Block *block) {
 // Correctness for recompute-safe kernels rests on cross-construct global-temp hubs dissolving via recompute and
 // cross-construct memory ordering being preserved by the source-order reassembly. The caller has already restricted
 // this to autodiff_mode==kNone / non-mesh / recompute-safe kernels.
-void split_frontend_per_construct(IRNode *ir, const CompileConfig &config, const Kernel *kernel, bool verbose) {
+void split_frontend_per_construct(IRNode *ir,
+                                  const CompileConfig &config,
+                                  const Kernel *kernel,
+                                  bool verbose,
+                                  bool assumed_ndarray_disjoint) {
   auto *block = ir->cast<Block>();
   QD_ASSERT(block != nullptr);
   const int n = (int)block->statements.size();
@@ -715,7 +757,7 @@ void split_frontend_per_construct(IRNode *ir, const CompileConfig &config, const
     block->insert(std::move(t));
   if (cc != nullptr) {
     std::lock_guard<std::mutex> g(cc->mu);
-    cc->last_stats[kernel->get_name()] = {n_constructs, n_hit, n_recompiled};
+    cc->last_stats[kernel->get_name()] = {n_constructs, n_hit, n_recompiled, assumed_ndarray_disjoint};
   }
 }
 
@@ -737,6 +779,10 @@ bool maybe_split_frontend_per_construct(IRNode *ir,
     const char *v = std::getenv(env.data());
     return v != nullptr && std::string(v) == "1";
   };
+  // The launch-time no-alias guard recompiles with this set when a call binds the same ndarray to two params, so the
+  // whole-kernel path (never recomputes, always correct) runs instead of the split's may-alias recompute.
+  if (config.disable_frontend_per_construct_split)
+    return false;
   // QD_DUMP_CFG forces the whole-kernel path: cfg_optimization dumps the whole-kernel CFG and names files by phase, not
   // construct, so running the split under it would collide every construct's CFG into one filename. The other dump
   // flags (QD_DUMP_IR / QD_DUMP_SIMPLIFY / print_ir) are observation-only -- the split still runs and emits output per
@@ -752,7 +798,8 @@ bool maybe_split_frontend_per_construct(IRNode *ir,
     return false;
   if (block_has_concurrent_region(block))
     return false;  // concurrent constructs share one global-temp buffer; per-construct offload would alias offsets
-  if (!split_is_recompute_safe(block))
+  bool assumed_ndarray_disjoint = false;
+  if (!split_is_recompute_safe(block, assumed_ndarray_disjoint))
     return false;
   // Cost guard: recompiling a large shared prefix once per construct is pure overhead with no reuse tier, so fall back
   // above a ratio cap. QD_SPLIT_MAX_COST_RATIO overrides the cap; QD_SPLIT_STATS logs the per-kernel estimate.
@@ -777,7 +824,7 @@ bool maybe_split_frontend_per_construct(IRNode *ir,
   }
   if (would_fall_back)
     return false;
-  split_frontend_per_construct(ir, config, kernel, verbose);
+  split_frontend_per_construct(ir, config, kernel, verbose, assumed_ndarray_disjoint);
   return true;
 }
 
