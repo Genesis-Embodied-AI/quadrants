@@ -209,6 +209,13 @@ std::unique_ptr<CompiledKernelData> KernelCompilationManager::compile_kernel(con
 std::string KernelCompilationManager::make_kernel_key(const CompileConfig &compile_config,
                                                       const DeviceCapabilityConfig &caps,
                                                       const Kernel &kernel_def) const {
+  // The no-alias fallback compiles the same AST with disable_frontend_per_construct_split set. The per-Kernel key
+  // memoization below assumes one config per kernel, so it would otherwise hand back the split variant's key and hit
+  // the cached split. Compute a fresh (unmemoized) key for the variant; the flag is mixed into the hash so it is
+  // distinct from the split key.
+  if (compile_config.disable_frontend_per_construct_split && kernel_def.ir_is_ast()) {
+    return get_hashed_offline_cache_key(compile_config, caps, (Kernel *)&kernel_def);
+  }
   auto kernel_key = kernel_def.get_cached_kernel_key();
   if (kernel_key.empty()) {
     if (!kernel_def.ir_is_ast()) {
