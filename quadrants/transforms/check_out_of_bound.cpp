@@ -29,11 +29,14 @@ class CheckOutOfBound : public BasicStmtVisitor {
       : kernel_name(kernel_name), clamp_oob_index_(clamp_oob_index) {
   }
 
-  // Return clamp(index, 0, size_minus_one) = min(max(index, 0), size_minus_one), appending the ops to
-  // `stmts`. Used to keep a post-assert AMDGPU access in bounds.
+  // Return clamp(index, 0, size_minus_one) = max(min(index, size_minus_one), 0), appending the ops to
+  // `stmts`. Used to keep a post-assert AMDGPU access in bounds. The lower bound (0) is applied LAST so a
+  // zero-extent dimension (size_minus_one == -1) clamps to 0 -- the base of the >=1-element device buffer
+  // that ndarray storage always reserves -- rather than to -1 (a negative offset that would fault). For
+  // size >= 1 this is the usual clamp into [0, size-1].
   Stmt *clamp_index_to_bounds(VecStatement &stmts, Stmt *index, Stmt *zero, Stmt *size_minus_one) {
-    auto lo = stmts.push_back<BinaryOpStmt>(BinaryOpType::max, index, zero);
-    return stmts.push_back<BinaryOpStmt>(BinaryOpType::min, lo, size_minus_one);
+    auto hi = stmts.push_back<BinaryOpStmt>(BinaryOpType::min, index, size_minus_one);
+    return stmts.push_back<BinaryOpStmt>(BinaryOpType::max, hi, zero);
   }
 
   // Point `ptr`'s operand slot that currently holds `*index_slot` at `clamped` (updates use-def correctly).

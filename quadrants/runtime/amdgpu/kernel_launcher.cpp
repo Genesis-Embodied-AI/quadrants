@@ -22,6 +22,13 @@ namespace {
 // comment in `runtime/cuda/kernel_launcher.cpp`.
 constexpr std::size_t kAdStackMaxConcurrentThreads = 65536;
 
+// Minimal device buffer handed to a zero-extent external array so it still has a valid device pointer.
+// Under debug bounds-checking the AMDGPU in-kernel assert is non-terminating, so an out-of-bounds access
+// clamps its index to 0 and still dereferences the ndarray pointer; a zero-byte / skipped allocation would
+// leave a host or null pointer and fault. One page comfortably covers the clamped index range (bounded by
+// the element footprint) for scalar and typical tensor-element ndarrays.
+constexpr std::size_t kOobGuardBytes = 4096;
+
 // Resolve the adstack thread count this task needs sizing for.
 //
 // For const-bound range_for and non-range_for tasks, codegen has already made `static_num_threads` tight
@@ -524,7 +531,15 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
     const auto &parameter = kv.second;
     if (parameter.is_array) {
       const auto arr_sz = ctx.array_runtime_sizes[arg_id];
-      if (arr_sz == 0)
+      const bool is_host_external =
+          ctx.device_allocation_type[arg_id] == LaunchContextBuilder::DevAllocType::kNone;
+      // A zero-extent external array (numpy/pytorch shape like (0,) or (100, 0, 200)) has no bytes to
+      // stage. We normally skip it, but under debug bounds-checking the AMDGPU assert is non-terminating,
+      // so an out-of-bounds access clamps its index to 0 and still dereferences this pointer -- it must be
+      // a valid device address, not the host/stale pointer left behind by skipping. So for a *host-side*
+      // zero-extent external array we still stage a minimal always-valid buffer below (there is nothing to
+      // copy). Zero-extent device Ndarrays cannot be created, so they keep the original skip.
+      if (arr_sz == 0 && !is_host_external)
         continue;
 
       ArgArrayPtrKey data_ptr_idx{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
@@ -532,13 +547,16 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
       auto data_ptr = ctx.array_ptrs[data_ptr_idx];
       auto grad_ptr = ctx.array_ptrs[grad_ptr_idx];
 
-      if (ctx.device_allocation_type[arg_id] == LaunchContextBuilder::DevAllocType::kNone) {
+      if (is_host_external) {
         // External array. Note: assuming both data & grad are on the same device.
         if (on_amdgpu_device(data_ptr)) {
           device_ptrs[data_ptr_idx] = data_ptr;
           device_ptrs[grad_ptr_idx] = grad_ptr;
         } else {
-          DeviceAllocation devalloc = executor->allocate_memory_on_device(arr_sz, (uint64 *)device_result_buffer);
+          // Pad zero-extent arrays up to a minimal valid buffer; the memcpy still uses the real (possibly
+          // zero) byte count so no out-of-range host bytes are read.
+          const std::size_t alloc_sz = std::max<std::size_t>(arr_sz, kOobGuardBytes);
+          DeviceAllocation devalloc = executor->allocate_memory_on_device(alloc_sz, (uint64 *)device_result_buffer);
           device_ptrs[data_ptr_idx] = executor->get_device_alloc_info_ptr(devalloc);
           transfers[data_ptr_idx] = {data_ptr, devalloc};
 
@@ -546,7 +564,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
                                                                    active_stream);
           if (grad_ptr != nullptr) {
             DeviceAllocation grad_devalloc =
-                executor->allocate_memory_on_device(arr_sz, (uint64 *)device_result_buffer);
+                executor->allocate_memory_on_device(alloc_sz, (uint64 *)device_result_buffer);
             device_ptrs[grad_ptr_idx] = executor->get_device_alloc_info_ptr(grad_devalloc);
             transfers[grad_ptr_idx] = {grad_ptr, grad_devalloc};
 

@@ -1,5 +1,6 @@
 import platform
 
+import numpy as np
 import pytest
 
 import quadrants as qd
@@ -214,6 +215,49 @@ def test_amdgpu_assert_out_of_bound_no_fault():
 
     with pytest.raises(AssertionError):
         oob_ndarray(arr)
+
+
+@test_utils.test(
+    arch=[qd.amdgpu],
+    require=qd.extension.assertion,
+    debug=True,
+    check_out_of_bound=True,
+    gdb_trigger=False,
+)
+def test_amdgpu_assert_out_of_bound_zero_extent_no_fault():
+    # A zero-extent external (numpy) array has no valid element, so clamping the index cannot make an
+    # out-of-bounds access safe on its own. The launcher instead stages a minimal always-valid device
+    # buffer for such arrays (see amdgpu/kernel_launcher.cpp), so the non-terminating assert's continued
+    # execution touches valid memory instead of faulting. Both stores and reads must raise without a GPU
+    # fault, and the context must stay alive afterwards.
+    @qd.kernel
+    def store_empty(a: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        for i in range(4):
+            a[i] = i  # every index is out of bounds for an empty array
+
+    @qd.kernel
+    def read_empty(a: qd.types.ndarray(dtype=qd.i32, ndim=1), out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        for i in range(4):
+            out[0] = a[i]
+
+    empty = np.empty(shape=(0,), dtype=np.int32)
+    sink = np.zeros(1, dtype=np.int32)
+
+    with pytest.raises(AssertionError):
+        store_empty(empty)
+    with pytest.raises(AssertionError):
+        read_empty(empty, sink)
+
+    # Context survives: a normal kernel still runs and produces correct results.
+    ok = np.zeros(4, dtype=np.int32)
+
+    @qd.kernel
+    def add_one(a: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        for i in range(a.shape[0]):
+            a[i] = a[i] + 1
+
+    add_one(ok)
+    assert ok.tolist() == [1, 1, 1, 1]
 
 
 @test_utils.test(arch=get_host_arch_list(), print_full_traceback=False)
