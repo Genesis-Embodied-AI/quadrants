@@ -87,7 +87,6 @@ static std::vector<std::uint8_t> get_offline_cache_key_of_compile_config(const C
   serializer(config.real_matrix_scalarize);
   serializer(config.force_scalarize_matrix);
   serializer(config.half2_vectorization);
-  serializer(config.disable_frontend_per_construct_split);
   serializer.finalize();
 
   return serializer.data;

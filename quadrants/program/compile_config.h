@@ -90,8 +90,8 @@ struct CompileConfig {
 
   // Forces the whole-kernel path (skips maybe_split_frontend_per_construct). Set per-compile by the launch-time
   // no-alias guard: the split may assume distinct ndarray params don't alias, which is unsound when a caller binds the
-  // same ndarray twice, so an aliasing launch recompiles with this on. Part of the offline cache key so the split and
-  // whole-kernel variants never collide.
+  // same ndarray twice, so an aliasing launch recompiles with this on. The two variants get distinct cache keys via a
+  // ".nosplit" suffix in KernelCompilationManager::make_kernel_key (not this field's hash).
   bool disable_frontend_per_construct_split{false};
 
   // Offline cache options
