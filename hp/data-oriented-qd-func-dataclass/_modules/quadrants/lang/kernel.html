@@ -889,8 +889,8 @@
             <span class="c1"># Phase 1: L1 lookup - pruning info only, no args walk yet.</span>
             <span class="n">pruning_paths</span><span class="p">,</span> <span class="n">cached_graph_do_while_levels</span> <span class="o">=</span> <span class="n">src_hasher</span><span class="o">.</span><span class="n">load_pruning_info</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_l1_key</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">pruning_paths</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="c1"># ``cache_key_generated`` stays False: it means "fastcache produced a valid L2 args hash", and</span>
-                <span class="c1"># whether the narrow args walk will succeed isn't known until after the compile.</span>
+                <span class="c1"># ``cache_key_generated`` stays False: it means "fastcache produced a valid L2 args hash", and whether</span>
+                <span class="c1"># the narrow args walk will succeed isn't known until after the compile.</span>
                 <span class="k">return</span> <span class="kc">None</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_pruning_paths_from_l1</span> <span class="o">=</span> <span class="n">pruning_paths</span>
 
@@ -899,8 +899,8 @@
                 <span class="bp">self</span><span class="o">.</span><span class="n">raise_on_templated_floats</span><span class="p">,</span> <span class="n">kernel_source_info</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">,</span> <span class="n">pruning_paths</span>
             <span class="p">)</span>
             <span class="k">if</span> <span class="n">narrow_args_hash</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="c1"># Recognised-but-unsupported tensor-like (Field / MatrixField): leaving ``fast_checksum`` None keeps</span>
-                <span class="c1"># any L2 entry from being written for this call.</span>
+                <span class="c1"># Recognised-but-unsupported tensor-like (Field / MatrixField): leaving ``fast_checksum`` None keeps any</span>
+                <span class="c1"># L2 entry from being written for this call.</span>
                 <span class="k">return</span> <span class="kc">None</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span> <span class="o">=</span> <span class="n">src_hasher</span><span class="o">.</span><span class="n">make_full_cache_key</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_l1_key</span><span class="p">,</span> <span class="n">narrow_args_hash</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_key_generated</span> <span class="o">=</span> <span class="kc">True</span>
@@ -1053,9 +1053,9 @@
                         <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="p">,</span> <span class="s2">"struct_ndarray_launch_info"</span><span class="p">,</span> <span class="p">[]</span>
                     <span class="p">)</span>
                     <span class="c1"># Both folds bring data_oriented member accesses into the kernel's used-flat-names set, which</span>
-                    <span class="c1"># dataclass-arg expansion is the only other contributor to. Without them the narrow args hash</span>
-                    <span class="c1"># walks nothing for a data_oriented arg, and a change of member dtype or value cannot invalidate</span>
-                    <span class="c1"># the cache entry.</span>
+                    <span class="c1"># dataclass-arg expansion is the only other contributor to. Without them the narrow args hash walks</span>
+                    <span class="c1"># nothing for a data_oriented arg, and a change of member dtype or value cannot invalidate the cache</span>
+                    <span class="c1"># entry.</span>
                     <span class="n">pruning</span><span class="o">.</span><span class="n">fold_struct_nd_paths</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_struct_ndarray_launch_info_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="p">[]),</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">)</span>
                     <span class="n">pruning</span><span class="o">.</span><span class="n">fold_kernel_arg_chain_paths</span><span class="p">()</span>
                     <span class="c1"># Only record an entry when this key actually lifts primitives, so the dict stays empty for the</span>

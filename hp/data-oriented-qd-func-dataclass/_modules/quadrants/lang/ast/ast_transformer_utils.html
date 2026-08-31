@@ -824,8 +824,8 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">kernel_args</span><span class="p">:</span> <span class="nb">list</span> <span class="o">=</span> <span class="p">[]</span></div>
 
         <span class="c1"># Bare (non-flattened) parameter names of the ``@qd.func`` being processed, so ``build_Name`` can seed</span>
-        <span class="c1"># ``_qd_arg_chain`` for chains rooted at them. Kept apart from ``kernel_args`` rather than appended to it,</span>
-        <span class="c1"># which would make the "kernel arg is immutable" diagnostic fire for func params.</span>
+        <span class="c1"># ``_qd_arg_chain`` for chains rooted at them. Kept apart from ``kernel_args`` rather than appended to it, which</span>
+        <span class="c1"># would make the "kernel arg is immutable" diagnostic fire for func params.</span>
 <div class="viewcode-block" id="ASTTransformerFuncContext.fn_param_names">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.fn_param_names">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">fn_param_names</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span></div>

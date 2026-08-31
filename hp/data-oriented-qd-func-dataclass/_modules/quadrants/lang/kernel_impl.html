@@ -735,8 +735,8 @@
                 <span class="k">raise</span> <span class="nb">type</span><span class="p">(</span><span class="n">e</span><span class="p">)(</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
 
         <span class="n">ret</span> <span class="o">=</span> <span class="n">QuadrantsCallable</span><span class="p">(</span><span class="n">fun</span><span class="p">,</span> <span class="n">_kernel_indirect</span><span class="p">)</span>
-        <span class="c1"># ``QuadrantsCallable.__init__`` ends with ``update_wrapper(self, fun)``, which copies ``fun``'s own</span>
-        <span class="c1"># ``wrapper`` over the one just passed to the constructor.</span>
+        <span class="c1"># ``QuadrantsCallable.__init__`` ends with ``update_wrapper(self, fun)``, which copies ``fun``'s own ``wrapper``</span>
+        <span class="c1"># over the one just passed to the constructor.</span>
         <span class="n">ret</span><span class="o">.</span><span class="n">wrapper</span> <span class="o">=</span> <span class="n">_kernel_indirect</span>
         <span class="c1"># setattr-after-class doesn't trigger __set_name__; set the name explicitly so QuadrantsCallable.__get__ can</span>
         <span class="c1"># cache the BoundQuadrantsCallable on instance.__dict__.</span>
@@ -747,10 +747,10 @@
 
     <span class="c1"># Iterate over all the attributes of the class to wrap member kernels in a way to ensure that they will be called</span>
     <span class="c1"># through _BoundedDifferentiableMethod. This extra layer of indirection is necessary to transparently forward the</span>
-    <span class="c1"># owning instance to the primal function and its adjoint for auto-differentiation gradient computation.</span>
-    <span class="c1"># There is a special treatment for properties, as they may actually hide kernels under the hood. In such a case,</span>
-    <span class="c1"># the underlying function is extracted, wrapped as any member function, then wrapped again as a new property.</span>
-    <span class="c1"># Note that all the other attributes can be left untouched.</span>
+    <span class="c1"># owning instance to the primal function and its adjoint for auto-differentiation gradient computation. There is a</span>
+    <span class="c1"># special treatment for properties, as they may actually hide kernels under the hood. In such a case, the underlying</span>
+    <span class="c1"># function is extracted, wrapped as any member function, then wrapped again as a new property. Note that all the</span>
+    <span class="c1"># other attributes can be left untouched.</span>
     <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">attr</span> <span class="ow">in</span> <span class="bp">cls</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
         <span class="n">attr_type</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">attr</span><span class="p">)</span>
         <span class="n">is_property</span> <span class="o">=</span> <span class="n">attr_type</span> <span class="ow">is</span> <span class="nb">property</span>

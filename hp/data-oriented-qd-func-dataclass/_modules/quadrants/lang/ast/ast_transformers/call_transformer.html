@@ -547,8 +547,8 @@
                         <span class="n">added_args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">arg_node</span><span class="p">)</span>
             <span class="k">elif</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">is_dataclass</span><span class="p">(</span><span class="n">val</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="nb">type</span><span class="p">):</span>
                 <span class="c1"># Dataclass *instance* passed positionally (e.g. ``self.state``): expand to per-leaf ``ast.Attribute``</span>
-                <span class="c1"># children, where the typed-arg path above emits ``ast.Name``. Items appended to ``added_args`` must</span>
-                <span class="c1"># not carry ``.ptr`` - ``build_stmt`` populates it downstream.</span>
+                <span class="c1"># children, where the typed-arg path above emits ``ast.Name``. Items appended to ``added_args`` must not</span>
+                <span class="c1"># carry ``.ptr`` - ``build_stmt`` populates it downstream.</span>
                 <span class="n">dataclass_type</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
                 <span class="c1"># Flat names have to match the callee's, which may have pruned unused fields.</span>
                 <span class="n">callee_param</span> <span class="o">=</span> <span class="p">(</span>
@@ -647,8 +647,8 @@
                         <span class="n">kwargs_new</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">kwarg_node</span><span class="p">)</span>
                         <span class="n">added_kwargs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">kwarg_node</span><span class="p">)</span>
             <span class="k">elif</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">is_dataclass</span><span class="p">(</span><span class="n">val</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="nb">type</span><span class="p">):</span>
-                <span class="c1"># Dataclass *instance* passed as a keyword arg: expand to per-leaf keywords whose values are</span>
-                <span class="c1"># attribute accesses on the original node (``__qd_state__x=self.state.x``).</span>
+                <span class="c1"># Dataclass *instance* passed as a keyword arg: expand to per-leaf keywords whose values are attribute</span>
+                <span class="c1"># accesses on the original node (``__qd_state__x=self.state.x``).</span>
                 <span class="n">dataclass_type</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
                 <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">fields</span><span class="p">(</span><span class="n">dataclass_type</span><span class="p">):</span>
                     <span class="n">child_name</span> <span class="o">=</span> <span class="n">create_flat_name</span><span class="p">(</span><span class="n">kwarg</span><span class="o">.</span><span class="n">arg</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
@@ -733,10 +733,10 @@
             <span class="n">called_func_id_</span> <span class="o">=</span> <span class="n">func</span><span class="o">.</span><span class="n">wrapper</span><span class="o">.</span><span class="n">func_id</span>  <span class="c1"># type: ignore</span>
             <span class="n">called_needed</span> <span class="o">=</span> <span class="n">pruning</span><span class="o">.</span><span class="n">used_vars_by_func_id</span><span class="p">[</span><span class="n">called_func_id_</span><span class="p">]</span>
         <span class="k">if</span> <span class="n">is_func_base_wrapper</span><span class="p">:</span>
-            <span class="c1"># Positional indexing has to line up with the callee's non-self parameter list, hence dropping the</span>
-            <span class="c1"># implicit ``self`` here (as ``Pruning.record_after_call`` does with ``self_offset``): otherwise</span>
-            <span class="c1"># ``self.write(self.state)`` builds flat names rooted at ``self`` that match nothing in the callee's</span>
-            <span class="c1"># pruning set, silently dropping the fields it needs.</span>
+            <span class="c1"># Positional indexing has to line up with the callee's non-self parameter list, hence dropping the implicit</span>
+            <span class="c1"># ``self`` here (as ``Pruning.record_after_call`` does with ``self_offset``): otherwise</span>
+            <span class="c1"># ``self.write(self.state)`` builds flat names rooted at ``self`` that match nothing in the callee's pruning</span>
+            <span class="c1"># set, silently dropping the fields it needs.</span>
             <span class="k">try</span><span class="p">:</span>
                 <span class="n">callee_arg_names</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">func</span><span class="o">.</span><span class="n">wrapper</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">]</span>  <span class="c1"># type: ignore[attr-defined]</span>
                 <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">func</span><span class="p">)</span> <span class="ow">is</span> <span class="n">BoundQuadrantsCallable</span><span class="p">:</span>
