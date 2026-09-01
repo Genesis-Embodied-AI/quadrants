@@ -576,13 +576,15 @@ ExternalPtrStmt *as_ndarray_ptr(Stmt *p) {
 }
 
 // True when a condition-(3) clearance between these two pointers rests on the caller-defeatable assumption that
-// distinct ndarray params don't alias: both are ndarray accesses on DIFFERENT args (same is_grad). alias_analysis
-// then reports `different` purely by arg id (see its ExternalPtr branch), which a caller violates by binding the same
-// ndarray to both params -- the launch guard must then fall back. Same-arg (index-disjoint) or primal-vs-grad
-// clearances are true disjointness the caller cannot defeat, so they don't count. On a true result, `slot_a`/`slot_b`
-// receive the two args' flat slots (`arg_id[0]`; ndarray arg_ids are single-element) so the guard can check exactly
-// this pair for runtime aliasing rather than every ndarray arg.
-bool clearance_assumes_ndarray_disjoint(Stmt *a, Stmt *b, int &slot_a, int &slot_b) {
+// distinct ndarray params don't alias: both are ndarray accesses on DIFFERENT args. alias_analysis reports them
+// `different` by arg id and/or is_grad, which a caller violates by binding one buffer to both params. Same-arg
+// clearances (index-disjoint, or a param vs its own .grad) are true disjointness the caller cannot defeat -> false.
+// On true, `slot_a`/`slot_b` get the two args' flat slots (`arg_id[0]`; ndarray arg_ids are single-element).
+// `grad_mismatch` is set when the accesses differ in is_grad (e.g. read x.grad, write y, called as kernel(a, a.grad)):
+// that alias is between one arg's GRADIENT buffer and another's PRIMAL buffer, which the launch guard -- comparing
+// primal alloc_ids by slot -- cannot detect, so the caller refuses to split rather than recording an unguardable pair.
+bool clearance_assumes_ndarray_disjoint(Stmt *a, Stmt *b, int &slot_a, int &slot_b, bool &grad_mismatch) {
+  grad_mismatch = false;
   ExternalPtrStmt *ea = as_ndarray_ptr(a);
   ExternalPtrStmt *eb = as_ndarray_ptr(b);
   if (ea == nullptr || eb == nullptr)
@@ -591,10 +593,11 @@ bool clearance_assumes_ndarray_disjoint(Stmt *a, Stmt *b, int &slot_a, int &slot
   auto *arg_b = eb->base_ptr->cast<ArgLoadStmt>();
   if (arg_a == nullptr || arg_b == nullptr || arg_a->arg_id.empty() || arg_b->arg_id.empty())
     return false;
-  if (arg_a->arg_id == arg_b->arg_id || ea->is_grad != eb->is_grad)
+  if (arg_a->arg_id == arg_b->arg_id)
     return false;
   slot_a = arg_a->arg_id[0];
   slot_b = arg_b->arg_id[0];
+  grad_mismatch = ea->is_grad != eb->is_grad;
   return true;
 }
 
@@ -710,11 +713,16 @@ bool split_is_recompute_safe(Block *block, std::vector<int> &assumed_disjoint_pa
         if (w.dest == nullptr || r.src == nullptr || irpass::analysis::maybe_same_address(r.src, w.dest))
           return false;
         // Cleared: the read and write are provably different addresses. When that proof is cross-arg ndarray
-        // disjointness, a caller can defeat it by aliasing the two params -- record the exact slot pair so the launch
-        // guard falls back only if THIS pair aliases.
+        // disjointness a caller can defeat it by aliasing the two params. A same-is_grad pair is checkable by the
+        // launch guard (compare the two args' primal alloc_ids) -- record it. A primal-vs-gradient cross-arg pair is
+        // not (the guard sees only primal alloc_ids), so refuse to split and let the whole-kernel path run instead.
         int slot_a = 0, slot_b = 0;
-        if (clearance_assumes_ndarray_disjoint(r.src, w.dest, slot_a, slot_b))
+        bool grad_mismatch = false;
+        if (clearance_assumes_ndarray_disjoint(r.src, w.dest, slot_a, slot_b, grad_mismatch)) {
+          if (grad_mismatch)
+            return false;
           disjoint_pairs.emplace(std::min(slot_a, slot_b), std::max(slot_a, slot_b));
+        }
       }
   }
   for (const auto &p : disjoint_pairs) {

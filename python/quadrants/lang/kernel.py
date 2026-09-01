@@ -656,41 +656,66 @@ class Kernel(FuncBase):
     def compile_no_split_variant(self, key, t_kernel: KernelCxx, py_args: tuple[Any, ...]) -> CompiledKernelData:
         """Compile the whole-kernel (split-disabled) variant used by the launch-time no-alias guard.
 
-        For a normally-materialized key ``t_kernel`` already carries the lowered body, so it compiles directly. For a
-        fastcache-restored key the body was never built (``_parse_only_keys``), so rebuild one full-body ``KernelCxx``
-        here -- the guard only reaches this on an actual aliased call, so the rebuild cost stays off the common path.
+        A normally-materialized key's ``t_kernel`` already carries the lowered body, so it compiles directly. A
+        fastcache-restored key (``_parse_only_keys``) never built one, so rebuild it here with the SAME two-pass
+        pruning materialize uses for a fresh compile: the non-enforcing discovery pass fills each callee ``@qd.func``'s
+        used set, without which a callee dataclass arg's fields would be pruned and the enforcing build would fail. The
+        cached kernel-root used set alone (materialize's fastcache shortcut) is not enough because it never enters a
+        callee body. Only reached on an actual aliased launch, so this rebuild stays off the common path.
         """
         prog = impl.get_runtime().prog
         kernel = t_kernel
         if key in self._parse_only_keys:
             runtime = impl.get_runtime()
             instance_id, arg_features = self.mapper.lookup(self.raise_on_templated_floats, py_args)
-            used = self.used_py_dataclass_parameters_by_key_enforcing.get(key)
-            pruning = Pruning(kernel_used_parameters=used)
-            if used is not None:
-                pruning.enforce()
+            fallback_name = f"{self.func.__name__}_c{self.kernel_counter}_{instance_id}_nosplit"
+            # The discovery pass rebuilds `graph_do_while_levels` in place (build_While appends as it walks); snapshot
+            # and restore so the fastcache key's own launches, which keep using the restored table, stay untouched.
+            saved_graph_do_while_levels = list(self.graph_do_while_levels)
+            pruning = Pruning(kernel_used_parameters=None)
             with self.runtime.compilation_lock:
-                tree, ctx = self.get_tree_and_ctx(
-                    pass_idx=1,
-                    py_args=py_args,
-                    template_slot_locations=self.template_slot_locations,
-                    arg_features=arg_features,
-                    current_kernel=self,
-                    pruning=pruning,
-                    currently_compiling_materialize_key=key,
-                )
-                runtime._current_global_context = ctx.global_context
-                fallback_name = f"{self.func.__name__}_c{self.kernel_counter}_{instance_id}_nosplit"
-                generator = ASTGenerator(
-                    ctx=ctx,
-                    kernel_name=fallback_name,
-                    current_kernel=self,
-                    only_parse_function_def=False,
-                    tree=tree,
-                    dump_ast=False,
-                )
-                kernel = prog.create_kernel(generator, fallback_name, self.autodiff_mode)
-                runtime._current_global_context = None
+                for _pass in range(0, 2):
+                    if _pass >= 1:
+                        pruning.enforce()
+                    tree, ctx = self.get_tree_and_ctx(
+                        pass_idx=_pass,
+                        py_args=py_args,
+                        template_slot_locations=self.template_slot_locations,
+                        arg_features=arg_features,
+                        current_kernel=self,
+                        pruning=pruning,
+                        currently_compiling_materialize_key=key,
+                    )
+                    runtime._current_global_context = ctx.global_context
+                    built = prog.create_kernel(
+                        ASTGenerator(
+                            ctx=ctx,
+                            kernel_name=fallback_name,
+                            current_kernel=self,
+                            only_parse_function_def=False,
+                            tree=tree,
+                            dump_ast=False,
+                        ),
+                        fallback_name,
+                        self.autodiff_mode,
+                    )
+                    if _pass == 0:
+                        pruning.propagate_fixpoint()
+                        for used_parameters in pruning.used_vars_by_func_id.values():
+                            collapsed: set[str] = set()
+                            for param in used_parameters:
+                                split_param = param.split("__qd_")
+                                for i in range(len(split_param), 1, -1):
+                                    joined = "__qd_".join(split_param[:i])
+                                    if joined in collapsed:
+                                        break
+                                    collapsed.add(joined)
+                            used_parameters.clear()
+                            used_parameters.update(collapsed)
+                    else:
+                        kernel = built
+                    runtime._current_global_context = None
+            self.graph_do_while_levels = saved_graph_do_while_levels
         return prog.compile_kernel(
             prog.config(), prog.get_device_caps(), kernel, disable_split=True
         ).compiled_kernel_data
