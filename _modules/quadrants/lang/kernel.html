@@ -1189,13 +1189,14 @@
                 <span class="p">):</span>
                     <span class="c1"># Optional ndarray + None is specialized away at compile time, so it consumes no runtime arg.</span>
                     <span class="k">continue</span>
-                <span class="c1"># FIXME: This shortcut skips _recursive_set_args() solely when val._qd_all_field is true and the annotation is</span>
-                <span class="c1"># a dataclass, but _recursive_set_args() is where the strict provided_arg_type-is-needed_arg_type check lives.</span>
-                <span class="c1"># As a result, once an instance has _qd_all_field=True, passing it to a kernel parameter annotated with a</span>
-                <span class="c1"># different all-Field dataclass type can be silently accepted instead of raising the previous runtime type error,</span>
-                <span class="c1"># which weakens API/type safety and can route the wrong struct type through launch.</span>
-                <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="s2">"_qd_all_field"</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">needed_</span><span class="p">,</span> <span class="n">_FIELDS</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                    <span class="k">continue</span>
+                <span class="c1"># An all-Field dataclass unwraps to zero launch-context slots, so skip _recursive_set_args(). That also</span>
+                <span class="c1"># skips its provided-is-needed type check, so only shortcut when _qd_all_field is cached True for THIS</span>
+                <span class="c1"># exact annotation (proof the check already ran and passed for it) - hence the per-annotation id() key.</span>
+                <span class="n">_all_field_cache</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="s2">"_qd_all_field"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">_all_field_cache</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">needed_</span><span class="p">,</span> <span class="n">_FIELDS</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">_af_hit</span> <span class="o">=</span> <span class="n">_all_field_cache</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="n">needed_</span><span class="p">))</span>
+                    <span class="k">if</span> <span class="n">_af_hit</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">_af_hit</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">is</span> <span class="n">needed_</span> <span class="ow">and</span> <span class="n">_af_hit</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span>
+                        <span class="k">continue</span>
                 <span class="c1"># `graph_do_while_levels[*].cond_cpp_arg_id` is also populated at AST-build time (see</span>
                 <span class="c1"># `ASTTransformer.build_While` -&gt; `_resolve_ndarray_kernel_arg_id`), so the launch path forwards it</span>
                 <span class="c1"># directly below without per-arg name matching here. This uniformly handles bare parameter conditions</span>
