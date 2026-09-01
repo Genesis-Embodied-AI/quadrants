@@ -144,6 +144,29 @@ Note: assigning a sub-struct to a local variable and then passing it (`t = s.inn
 
 A `dataclasses.dataclass` may be either non-frozen (the default) or frozen (`@dataclass(frozen=True)`). Both work as kernel arguments, but **kernel launch is faster with `frozen=True`** (because it enables some optimizations that would otherwise not be possible). Recommend `frozen=True` unless you specifically need to rebind members after construction. Note that rebinding members after construction contradicts certain best practices; for example, it is typically incompatible with type linters such as pyright and mypy.
 
+### Subclasses
+
+You are able to pass any subclass of the annotated dataclass type. This is especially useful for cases where only a subset of your class is valid in quadrants, as below:
+
+```python
+@dataclass(frozen=True)  # the base need not be frozen for subclassing to work
+class Position:
+    x: qd.types.NDArray[qd.math.vec3, 1]
+
+# A dataclass subclass of a frozen base must itself be frozen (Python forbids inheriting a non-frozen dataclass from a
+# frozen one). A plain, non-dataclass subclass also works and needs no decorator.
+@dataclass(frozen=True)
+class Particle(Position):
+    name: list[str]
+
+@qd.kernel
+def update_positions(pos: Position) -> None:
+    for i in range(pos.x.shape[0]):
+        update_position(pos.x, i)
+```
+
+Note: when the annotated type is frozen, the flattened launch arguments are cached on the instance on first use. Do not rebind a field after the first launch; the kernel would keep using the stale cached value. Frozen dataclasses forbid rebinding by design, so this only affects code that deliberately bypasses that (e.g. `object.__setattr__`, or an `unsafe_hash=True` non-frozen dataclass).
+
 ### Compile-time constant fields: `typing.Final`
 
 By default a primitive dataclass field becomes a **runtime** kernel argument: you can change its value between launches without recompiling, and the kernel reads the fresh value each launch. That also means the value is not known at compile time, so it cannot be used inside [`qd.static(...)`](static.md), as a static loop bound, or to eliminate a branch at compile time.
