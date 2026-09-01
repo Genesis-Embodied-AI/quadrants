@@ -2,6 +2,7 @@
 #include <utility>
 #include <mutex>
 #include <random>
+#include <unordered_map>
 #include <unistd.h>
 
 #include "llvm/ADT/StringRef.h"
@@ -45,36 +46,61 @@ namespace lang {
 
 class JITModuleAMDGPU : public JITModule {
  private:
-  void *module_;
+  // A kernel is one whole-module hipModule or N per-task hipModules. A symbol lives in exactly one; `func_cache_`
+  // memoises lookups so we don't rescan all modules each time.
+  std::vector<void *> modules_;
+  std::unordered_map<std::string, void *> func_cache_;
+  std::mutex func_mu_;
 
  public:
-  explicit JITModuleAMDGPU(void *module) : module_(module) {
+  explicit JITModuleAMDGPU(void *module) : modules_{module} {
+  }
+  explicit JITModuleAMDGPU(std::vector<void *> modules) : modules_(std::move(modules)) {
   }
 
-  // Without this destructor the underlying `hipModule_t` (loaded by `hipModuleLoadData` in `add_module`) is never
-  // released, so every `qd.init` adds another module's worth of GPU code memory (~80 KB measured per init/reset
-  // cycle with a trivial program; more for programs with many user kernels). The leak is monotonic across
-  // `qd.init`/`qd.reset` cycles within a single process. Mirror `hipModuleLoadData` with `hipModuleUnload` here so
-  // the destructor of the owning `unique_ptr` (held by `JITSession::modules`) plugs the leak end-to-end.
+  // Unload each `hipModule_t`; without this they leak GPU code memory across `qd.init`/`qd.reset` cycles.
   ~JITModuleAMDGPU() override {
-    if (module_ != nullptr) {
-      AMDGPUContext::get_instance().make_current();
-      AMDGPUDriver::get_instance().module_unload.call_with_warning(module_);
-      module_ = nullptr;
+    if (modules_.empty()) {
+      return;
     }
+    AMDGPUContext::get_instance().make_current();
+    for (void *m : modules_) {
+      if (m != nullptr) {
+        AMDGPUDriver::get_instance().module_unload.call_with_warning(m);
+      }
+    }
+    modules_.clear();
   }
 
   void *lookup_function(const std::string &name) override {
     AMDGPUContext::get_instance().make_current();
+    {
+      std::lock_guard<std::mutex> g(func_mu_);
+      auto it = func_cache_.find(name);
+      if (it != func_cache_.end()) {
+        return it->second;
+      }
+    }
     void *func = nullptr;
     auto t = Time::get_time();
-    auto err = AMDGPUDriver::get_instance().module_get_function.call_with_warning(&func, module_, name.c_str());
-    if (err) {
+    // The symbol lives in one module; use non-warning `call` so probing the others doesn't spam the log. Only a miss
+    // across all modules is an error.
+    for (void *m : modules_) {
+      void *f = nullptr;
+      if (AMDGPUDriver::get_instance().module_get_function.call(&f, m, name.c_str()) == 0 && f != nullptr) {
+        func = f;
+        break;
+      }
+    }
+    if (func == nullptr) {
       QD_ERROR("Cannot look up function {}", name);
     }
     t = Time::get_time() - t;
     QD_TRACE("AMDGPU module_get_function {} costs {} ms", name, t * 1000);
-    QD_ASSERT(func != nullptr);
+    {
+      std::lock_guard<std::mutex> g(func_mu_);
+      func_cache_[name] = func;
+    }
     return func;
   }
 
@@ -121,6 +147,7 @@ class JITSessionAMDGPU : public JITSession {
   }
 
   JITModule *add_module(std::unique_ptr<llvm::Module> M, int max_reg) override;
+  JITModule *add_module_per_task(std::vector<PerConstructArtifact> artifacts, int max_reg) override;
 
   llvm::DataLayout get_data_layout() override {
     return data_layout;
