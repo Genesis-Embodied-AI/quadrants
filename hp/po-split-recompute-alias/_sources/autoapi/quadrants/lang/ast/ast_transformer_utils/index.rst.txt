@@ -203,6 +203,12 @@ Module Contents
 
 
 
+   .. py:attribute:: dataclass_ndarray_launch_info
+      :type:  list[tuple]
+      :value: []
+
+
+
    .. py:attribute:: struct_primitive_provenance
       :type:  dict[tuple[int, str], tuple]
 

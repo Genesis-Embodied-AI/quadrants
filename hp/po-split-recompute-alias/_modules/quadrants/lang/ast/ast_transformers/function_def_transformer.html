@@ -485,6 +485,18 @@
         <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">kernel_arguments</span><span class="o">.</span><span class="n">decl_scalar_arg</span><span class="p">(</span><span class="n">annotation</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
 
     <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_external_tensor_arg_slot</span><span class="p">(</span><span class="n">obj</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Flat arg-id (`ArgLoadStmt.arg_id[0]`) of a declared ndarray ``AnyArray``, or None if it has no external</span>
+<span class="sd">        tensor ptr. Shared by the launch-guard slot recording for top-level params and typed-dataclass fields."""</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>  <span class="c1"># pylint: disable=C0415</span>
+
+        <span class="n">ptr</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="s2">"ptr"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">ptr</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">ptr</span><span class="o">.</span><span class="n">is_external_tensor_expr</span><span class="p">():</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="n">arg_id</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">get_external_tensor_arg_id</span><span class="p">(</span><span class="n">ptr</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">arg_id</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="k">if</span> <span class="n">arg_id</span> <span class="k">else</span> <span class="kc">None</span>
+
+    <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_transform_kernel_arg</span><span class="p">(</span>
         <span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span>
         <span class="n">argument_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
@@ -492,10 +504,15 @@
         <span class="n">this_arg_features</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
         <span class="n">arg_value</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">positional_index</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">guard_root_index</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">guard_attr_chain</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">(),</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">pruning</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">pruning</span>
         <span class="n">func_id</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">func_id</span>
         <span class="k">if</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">is_dataclass</span><span class="p">(</span><span class="n">argument_type</span><span class="p">):</span>
+            <span class="c1"># Root positional slot of the enclosing top-level dataclass param, threaded down the field recursion so the</span>
+            <span class="c1"># guard can resolve a flattened ndarray field at launch as ``args[root].&lt;attr_chain&gt;``.</span>
+            <span class="n">guard_root_index</span> <span class="o">=</span> <span class="n">guard_root_index</span> <span class="k">if</span> <span class="n">guard_root_index</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">positional_index</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">argument_name</span><span class="p">,</span> <span class="n">argument_type</span><span class="p">)</span>
             <span class="n">final_names</span> <span class="o">=</span> <span class="n">final_field_names</span><span class="p">(</span><span class="n">argument_type</span><span class="p">)</span>
             <span class="k">for</span> <span class="n">field_idx</span><span class="p">,</span> <span class="n">field</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">dataclasses</span><span class="o">.</span><span class="n">fields</span><span class="p">(</span><span class="n">argument_type</span><span class="p">)):</span>
@@ -519,6 +536,8 @@
                         <span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">,</span>
                         <span class="n">this_arg_features</span><span class="p">[</span><span class="n">field_idx</span><span class="p">],</span>
                         <span class="nb">getattr</span><span class="p">(</span><span class="n">arg_value</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">)</span> <span class="k">if</span> <span class="n">arg_value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+                        <span class="n">guard_root_index</span><span class="o">=</span><span class="n">guard_root_index</span><span class="p">,</span>
+                        <span class="n">guard_attr_chain</span><span class="o">=</span><span class="n">guard_attr_chain</span> <span class="o">+</span> <span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">,),</span>
                     <span class="p">)</span>
                 <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="nb">type</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="s2">"_data_oriented"</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
                     <span class="c1"># The two patterns don't compose here: dataclass flattening is annotation-driven, while a</span>
@@ -545,6 +564,16 @@
                         <span class="n">decl_type_func</span><span class="p">,</span> <span class="n">type_args</span> <span class="o">=</span> <span class="n">obj</span>
                         <span class="n">obj</span> <span class="o">=</span> <span class="n">decl_type_func</span><span class="p">(</span><span class="o">*</span><span class="n">type_args</span><span class="p">)</span>
                         <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">flat_name</span><span class="p">,</span> <span class="n">obj</span><span class="p">)</span>
+                    <span class="c1"># Record an external-tensor-backed field's flat slot for the guard, resolvable at launch via the</span>
+                    <span class="c1"># root dataclass arg + attribute chain (`_resolve_struct_ndarray` unwraps `qd.Tensor` wrappers).</span>
+                    <span class="c1"># Non-ndarray fields yield no slot and are skipped. BufferView wraps its buffer, so its top-level</span>
+                    <span class="c1"># object exposes no external-tensor ptr -&gt; unrecorded -&gt; safe fallback.</span>
+                    <span class="k">if</span> <span class="n">guard_root_index</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                        <span class="n">slot</span> <span class="o">=</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_external_tensor_arg_slot</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="n">slot</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                            <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">dataclass_ndarray_launch_info</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                                <span class="p">(</span><span class="n">slot</span><span class="p">,</span> <span class="n">guard_root_index</span><span class="p">,</span> <span class="n">guard_attr_chain</span> <span class="o">+</span> <span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">,))</span>
+                            <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">result</span><span class="p">,</span> <span class="n">obj</span> <span class="o">=</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_decl_and_create_variable</span><span class="p">(</span>
                 <span class="n">ctx</span><span class="p">,</span>
@@ -556,16 +585,13 @@
             <span class="k">if</span> <span class="ow">not</span> <span class="n">result</span><span class="p">:</span>
                 <span class="n">decl_type_func</span><span class="p">,</span> <span class="n">type_args</span> <span class="o">=</span> <span class="n">obj</span>
                 <span class="n">obj</span> <span class="o">=</span> <span class="n">decl_type_func</span><span class="p">(</span><span class="o">*</span><span class="n">type_args</span><span class="p">)</span>
-            <span class="c1"># Record the flat slot of a top-level ndarray param (positional_index set only from the kernel-arg loop, not</span>
-            <span class="c1"># dataclass-field recursion) for the launch-time no-alias guard. `obj` is the AnyArray from decl_ndarray_arg.</span>
-            <span class="k">if</span> <span class="n">positional_index</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">type</span><span class="p">(</span><span class="n">argument_type</span><span class="p">)</span> <span class="ow">is</span> <span class="n">ndarray_type</span><span class="o">.</span><span class="n">NdarrayType</span><span class="p">:</span>
-                <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>  <span class="c1"># pylint: disable=C0415</span>
-
-                <span class="n">ptr</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="s2">"ptr"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">ptr</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">ptr</span><span class="o">.</span><span class="n">is_external_tensor_expr</span><span class="p">():</span>
-                    <span class="n">arg_id</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">get_external_tensor_arg_id</span><span class="p">(</span><span class="n">ptr</span><span class="p">)</span>
-                    <span class="k">if</span> <span class="n">arg_id</span><span class="p">:</span>
-                        <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">explicit_ndarray_launch_info</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="nb">int</span><span class="p">(</span><span class="n">arg_id</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="n">positional_index</span><span class="p">))</span>
+            <span class="c1"># Record the flat slot of any top-level param whose generated object is external-tensor backed -- a plain</span>
+            <span class="c1"># ndarray annotation or an ndarray-backed `qd.Tensor` -- for the launch-time no-alias guard (`_alloc_of`</span>
+            <span class="c1"># unwraps the wrapper). positional_index is set only from the kernel-arg loop, not dataclass recursion.</span>
+            <span class="k">if</span> <span class="n">positional_index</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">slot</span> <span class="o">=</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_external_tensor_arg_slot</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">slot</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">explicit_ndarray_launch_info</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">slot</span><span class="p">,</span> <span class="n">positional_index</span><span class="p">))</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">argument_name</span><span class="p">,</span> <span class="n">obj</span><span class="p">)</span>
 
     <span class="nd">@staticmethod</span>

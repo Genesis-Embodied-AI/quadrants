@@ -614,6 +614,27 @@ my_struct.b[37] 5
 <h3>Frozen vs non-frozen<a class="headerlink" href="#frozen-vs-non-frozen" title="Link to this heading">#</a></h3>
 <p>A <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> may be either non-frozen (the default) or frozen (<code class="docutils literal notranslate"><span class="pre">&#64;dataclass(frozen=True)</span></code>). Both work as kernel arguments, but <strong>kernel launch is faster with <code class="docutils literal notranslate"><span class="pre">frozen=True</span></code></strong> (because it enables some optimizations that would otherwise not be possible). Recommend <code class="docutils literal notranslate"><span class="pre">frozen=True</span></code> unless you specifically need to rebind members after construction. Note that rebinding members after construction contradicts certain best practices; for example, it is typically incompatible with type linters such as pyright and mypy.</p>
 </section>
+<section id="subclasses">
+<h3>Subclasses<a class="headerlink" href="#subclasses" title="Link to this heading">#</a></h3>
+<p>You are able to pass any subclass of the annotated dataclass type. This is especially useful for cases where only a subset of your class is valid in quadrants, as below:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>  <span class="c1"># the base need not be frozen for subclassing to work</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Position</span><span class="p">:</span>
+    <span class="n">x</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">vec3</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span>
+
+<span class="c1"># A dataclass subclass of a frozen base must itself be frozen (Python forbids inheriting a non-frozen dataclass from a</span>
+<span class="c1"># frozen one). A plain, non-dataclass subclass also works and needs no decorator.</span>
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Particle</span><span class="p">(</span><span class="n">Position</span><span class="p">):</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">update_positions</span><span class="p">(</span><span class="n">pos</span><span class="p">:</span> <span class="n">Position</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">pos</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="n">update_position</span><span class="p">(</span><span class="n">pos</span><span class="o">.</span><span class="n">x</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Note: when the annotated type is frozen, the flattened launch arguments are cached on the instance on first use. Do not rebind a field after the first launch; the kernel would keep using the stale cached value. Frozen dataclasses forbid rebinding by design, so this only affects code that deliberately bypasses that (e.g. <code class="docutils literal notranslate"><span class="pre">object.__setattr__</span></code>, or an <code class="docutils literal notranslate"><span class="pre">unsafe_hash=True</span></code> non-frozen dataclass).</p>
+</section>
 <section id="compile-time-constant-fields-typing-final">
 <h3>Compile-time constant fields: <code class="docutils literal notranslate"><span class="pre">typing.Final</span></code><a class="headerlink" href="#compile-time-constant-fields-typing-final" title="Link to this heading">#</a></h3>
 <p>By default a primitive dataclass field becomes a <strong>runtime</strong> kernel argument: you can change its value between launches without recompiling, and the kernel reads the fresh value each launch. That also means the value is not known at compile time, so it cannot be used inside <a class="reference internal" href="static.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">qd.static(...)</span></code></span></a>, as a static loop bound, or to eliminate a branch at compile time.</p>
@@ -997,6 +1018,7 @@ my_struct.b[37] 5
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nesting">Nesting</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#passing-nested-sub-structs-to-a-qd-func">Passing nested sub-structs to a <code class="docutils literal notranslate"><span class="pre">qd.func</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#frozen-vs-non-frozen">Frozen vs non-frozen</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#subclasses">Subclasses</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#compile-time-constant-fields-typing-final">Compile-time constant fields: <code class="docutils literal notranslate"><span class="pre">typing.Final</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#under-the-hood">Under the hood</a></li>
 </ul>

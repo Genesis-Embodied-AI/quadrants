@@ -642,6 +642,14 @@
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerGlobalContext.explicit_ndarray_launch_info">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">explicit_ndarray_launch_info</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span></div>
 
+        <span class="c1"># `(slot, root_positional_arg_index, attr_chain)` for each ndarray FIELD of a typed dataclass param, so the</span>
+        <span class="c1"># guard can resolve the field slot via `_resolve_struct_ndarray` (same shape as `struct_ndarray_launch_info`).</span>
+        <span class="c1"># Kept separate from that list because dataclass fields are already bound at launch by the dataclass-arg walk;</span>
+        <span class="c1"># this record is read only by the guard, never by the arg-setting path.</span>
+<div class="viewcode-block" id="ASTTransformerGlobalContext.dataclass_ndarray_launch_info">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerGlobalContext.dataclass_ndarray_launch_info">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dataclass_ndarray_launch_info</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span></div>
+
         <span class="c1"># Lifted-primitive support for ``@qd.data_oriented(template_primitives=False)``. Mirrors the two ndarray</span>
         <span class="c1"># structures above, plus a provenance map driving the two-pass pruning.</span>
         <span class="c1"># * ``struct_primitive_provenance`` maps ``(id(parent_obj), attr_name)`` to ``(flat_name, arg_idx, attr_chain,</span>
