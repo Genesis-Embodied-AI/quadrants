@@ -668,12 +668,12 @@ def test_per_construct_frontend_split_struct_member_recomputed() -> None:
     assert np.allclose(out2.to_numpy(), _C[0], atol=1.0), out2.to_numpy()
 
 
-# --- Cross-process per-task artifact cache (CUDA + AMDGPU + CPU backend reuse tier) -----------------------------------
+# --- Cross-process per-task artifact cache (CUDA + AMDGPU + CPU) ------------------------------------------------------
 #
 # The per-task artifact cache stores each offloaded task's fully compiled code + launch metadata on disk, keyed by the
 # task's own IR (name-free), so a later process reuses an unchanged task instead of recompiling it. CUDA and AMDGPU fill
 # it with GPU code and CPU (ref 7) with a host object; it is gated on `offline_cache`. Reuse is reported on
-# `PerOffloadCacheObservations.tasks_*` (-1 when the tier did not run).
+# `PerOffloadCacheObservations.tasks_*` (-1 when offline_cache is disabled).
 
 
 @test_utils.test(arch=[qd.cuda, qd.amdgpu], offline_cache=False)
@@ -755,7 +755,7 @@ def test_per_task_artifact_cache_reuses_shared_task_cross_process(arch) -> None:
 
 @test_utils.test(arch=qd.cpu, offline_cache=False)
 def test_per_task_artifact_cache_disabled_without_offline_cache_cpu() -> None:
-    # With offline_cache off the per-task tier never runs, so its counts stay at the -1 sentinel; the frontend split
+    # With offline_cache off the per-task cache never runs, so its counts stay at the -1 sentinel; the frontend split
     # still fires.
     @qd.kernel
     def kernel_two_loops(x: qd.types.ndarray(qd.f32, ndim=1)) -> None:

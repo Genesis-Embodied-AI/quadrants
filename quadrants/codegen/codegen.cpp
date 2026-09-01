@@ -142,7 +142,7 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
   worker.flush();
 
   // Build one artifact per task before the whole-module link consumes `data`. CUDA always takes this path; AMDGPU and
-  // CPU only when the tier is on, since their per-task link/serialize only pays off then.
+  // CPU only when offline_cache is enabled, since their per-task link/serialize only pays off then.
   std::vector<PerConstructArtifact> per_construct_artifacts;
   const bool build_per_construct_artifacts =
       compile_config_.arch == Arch::cuda ||
