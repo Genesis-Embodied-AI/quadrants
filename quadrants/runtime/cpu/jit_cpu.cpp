@@ -200,7 +200,10 @@ class JITSessionCPU : public JITSession {
     std::vector<llvm::orc::JITDylib *> dylibs;
     dylibs.reserve(artifacts.size());
     for (auto &art : artifacts) {
-      auto dylib_expect = es_.createJITDylib(fmt::format("pertask_{}", module_counter_));
+      // Advance the counter up front: the error path below throws mid-iteration and the created dylib lingers in the
+      // session, so reusing this id on a later call would collide on the dylib name (createJITDylib would fail).
+      const int mod_id = module_counter_++;
+      auto dylib_expect = es_.createJITDylib(fmt::format("pertask_{}", mod_id));
       QD_ASSERT(dylib_expect);
       auto &dylib = dylib_expect.get();
       dylib.addGenerator(
@@ -211,7 +214,7 @@ class JITSessionCPU : public JITSession {
       if (from_cache) {
         // Hit: the cached bytes are a relocatable host object; load them straight into the object layer.
         obj = llvm::MemoryBuffer::getMemBufferCopy(llvm::StringRef(art.code.data(), art.code.size()),
-                                                   fmt::format("pertask_{}", module_counter_));
+                                                   fmt::format("pertask_{}", mod_id));
       } else {
         QD_ASSERT(art.module);
         obj = compile_module_to_object(*art.module);
@@ -224,19 +227,19 @@ class JITSessionCPU : public JITSession {
           artifact_cache.store(art.key, rec);
         }
       }
-      // `object_layer_.add` parses the object eagerly, so malformed bytes (e.g. offline-cache corruption on the hit
-      // path) surface here. Don't `cantFail` -- that aborts the whole process on every launch through a corrupt cache.
-      // Drop the offending entry so a later process recompiles and refills it, and raise a catchable error instead
-      // (mirrors the CUDA per-task load, which QD_ERRORs on a bad module rather than terminating the process).
+      // `object_layer_.add` parses the object eagerly, so malformed bytes surface here -- offline-cache corruption on
+      // the hit path, or (defensively) a bad freshly-compiled object we just stored on the miss path. Don't `cantFail`
+      // -- that aborts the whole process on every launch through a corrupt cache. Drop the on-disk entry (either path
+      // may have written one) so a later process recompiles and refills it, and raise a catchable error instead of
+      // terminating (mirrors the CUDA per-task load, which QD_ERRORs on a bad module).
       if (auto err = object_layer_.add(dylib, std::move(obj))) {
-        if (from_cache && !art.key.empty()) {
+        if (!art.key.empty()) {
           artifact_cache.erase(art.key);
         }
         QD_ERROR("Failed to load per-task CPU object into the JIT (offline cache may be corrupt): {}",
                  llvm::toString(std::move(err)));
       }
       dylibs.push_back(&dylib);
-      module_counter_++;
     }
 
     auto new_module = std::make_unique<JITModuleCPU>(this, std::move(dylibs));
