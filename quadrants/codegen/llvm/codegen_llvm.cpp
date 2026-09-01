@@ -13,6 +13,7 @@
 #include "quadrants/ir/transforms.h"
 #include "quadrants/program/adstack_size_expr_eval.h"
 #include "quadrants/program/extension.h"
+#include "quadrants/program/function.h"
 #include "quadrants/runtime/program_impls/llvm/llvm_program.h"
 #include "quadrants/codegen/llvm/struct_llvm.h"
 #include "quadrants/util/file_sequence_writer.h"
@@ -1376,7 +1377,10 @@ llvm::Value *TaskCodeGenLLVM::atomic_op_using_cas(llvm::Value *dest,
 
   {
     int bits = data_type_bits(type);
-    llvm::PointerType *typeIntPtr = llvm::PointerType::getUnqual(*llvm_context);
+    // Preserve dest's addrspace: an AMDGPU addrspace(1) dest cannot be bitcast
+    // to a generic pointer.
+    unsigned dest_as = dest->getType()->isPointerTy() ? dest->getType()->getPointerAddressSpace() : 0;
+    llvm::PointerType *typeIntPtr = llvm::PointerType::get(*llvm_context, dest_as);
     llvm::IntegerType *typeIntTy = get_integer_type(bits);
 
     old_val = builder->CreateLoad(val->getType(), dest);
@@ -1762,7 +1766,9 @@ void TaskCodeGenLLVM::visit(ExternalPtrStmt *stmt) {
       tlctx->get_data_type(TypeFactory::get_instance().get_ndarray_struct_type(arg_type, stmt->ndim, needs_grad));
   auto *gep = builder->CreateGEP(struct_type, llvm_val.at(stmt->base_ptr),
                                  {tlctx->get_constant(0), tlctx->get_constant(int(stmt->is_grad) + 1)});
-  auto *ptr_val = builder->CreateLoad(tlctx->get_data_type(ptr_type), gep);
+  llvm::Value *ptr_val = builder->CreateLoad(tlctx->get_data_type(ptr_type), gep);
+  ptr_val = maybe_tag_amdgpu_global_ptr(ptr_val);
+  unsigned ptr_val_as = ptr_val->getType()->getPointerAddressSpace();
 
   int num_indices = stmt->indices.size();
   std::vector<llvm::Value *> sizes(num_indices);
@@ -1836,11 +1842,11 @@ void TaskCodeGenLLVM::visit(ExternalPtrStmt *stmt) {
     }
 
     auto ret_ptr = builder->CreateGEP(tlctx->get_data_type(arg_type), ptr_val, address_offset);
-    llvm_val[stmt] = builder->CreateBitCast(ret_ptr, llvm::PointerType::get(tlctx->get_data_type(dt), 0));
+    llvm_val[stmt] = builder->CreateBitCast(ret_ptr, llvm::PointerType::get(tlctx->get_data_type(dt), ptr_val_as));
 
   } else {
     auto base_ty = tlctx->get_data_type(dt);
-    auto base = builder->CreateBitCast(ptr_val, llvm::PointerType::get(base_ty, 0));
+    auto base = builder->CreateBitCast(ptr_val, llvm::PointerType::get(base_ty, ptr_val_as));
 
     llvm_val[stmt] = builder->CreateGEP(base_ty, base, linear_index);
   }
@@ -3432,6 +3438,14 @@ void TaskCodeGenLLVM::set_struct_to_buffer(const StructType *struct_type,
   set_struct_to_buffer(buffer, buffer_type, elements, struct_type, current_element, current_index);
 }
 
+llvm::Value *TaskCodeGenLLVM::maybe_tag_amdgpu_global_ptr(llvm::Value *ptr) {
+  if (current_arch() != Arch::amdgpu || ptr == nullptr || !ptr->getType()->isPointerTy() ||
+      ptr->getType()->getPointerAddressSpace() == 1) {
+    return ptr;
+  }
+  return builder->CreateAddrSpaceCast(ptr, llvm::PointerType::get(*llvm_context, 1));
+}
+
 llvm::Value *TaskCodeGenLLVM::get_struct_arg(const std::vector<int> &index, bool create_load) {
   auto *args_ptr = get_args_ptr(current_callable, get_context());
   auto *args_type = current_callable->args_type;
@@ -3446,7 +3460,14 @@ llvm::Value *TaskCodeGenLLVM::get_struct_arg(const std::vector<int> &index, bool
   if (!create_load) {
     return gep;
   }
-  return builder->CreateLoad(tlctx->get_data_type(arg_type), gep);
+  llvm::Value *loaded = builder->CreateLoad(tlctx->get_data_type(arg_type), gep);
+  // Don't tag a Function (@qd.real_func) callee's args: they come from a
+  // caller-local alloca (private memory, e.g. qd.ref params), so tagging them
+  // global would be unsound.
+  if (dynamic_cast<const Function *>(current_callable) == nullptr) {
+    loaded = maybe_tag_amdgpu_global_ptr(loaded);
+  }
+  return loaded;
 }
 
 llvm::Value *TaskCodeGenLLVM::get_args_ptr(const Callable *callable, llvm::Value *context) {
@@ -3459,6 +3480,12 @@ llvm::Value *TaskCodeGenLLVM::get_args_ptr(const Callable *callable, llvm::Value
   args_ptr = builder->CreatePointerCast(args_ptr, llvm::PointerType::get(llvm::PointerType::get(args_type, 0), 0));
   // loading the address of the arg buffer (args_type *)
   args_ptr = builder->CreateLoad(llvm::PointerType::get(args_type, 0), args_ptr);
+  // Only the top-level kernel's arg buffer is device-staged in global memory; a
+  // Function (@qd.real_func) callee's buffer is a caller-local alloca, so don't
+  // tag it.
+  if (dynamic_cast<const Function *>(callable) == nullptr) {
+    args_ptr = maybe_tag_amdgpu_global_ptr(args_ptr);
+  }
   return args_ptr;
 }
 void TaskCodeGenLLVM::set_args_ptr(Callable *callable, llvm::Value *context, llvm::Value *ptr) {
@@ -3474,16 +3501,23 @@ void TaskCodeGenLLVM::set_args_ptr(Callable *callable, llvm::Value *context, llv
 };
 
 LLVMCompiledTask LLVMCompiledTask::clone() const {
-  return {tasks, llvm::CloneModule(*module), used_tree_ids, struct_for_tls_sizes};
+  return {tasks, module ? llvm::CloneModule(*module) : nullptr, used_tree_ids, struct_for_tls_sizes};
 }
 
 LLVMCompiledKernel LLVMCompiledKernel::clone() const {
-  LLVMCompiledKernel result{tasks, llvm::CloneModule(*module)};
-  // The launcher consumes a clone, so the per-task modules must travel with it.
+  // `module` is null for an artifact-backed kernel (every task came from the per-task cache); clone it only if present.
+  LLVMCompiledKernel result{tasks, module ? llvm::CloneModule(*module) : nullptr};
+  result.per_task_artifact_keys = per_task_artifact_keys;
+  // The launcher consumes a clone, so the per-task artifacts must travel with it.
   result.per_construct_artifacts.reserve(per_construct_artifacts.size());
   for (auto &a : per_construct_artifacts) {
     PerConstructArtifact c;
     c.module = a.module ? llvm::CloneModule(*a.module) : nullptr;
+    c.code = a.code;
+    c.key = a.key;
+    c.tasks = a.tasks;
+    c.used_tree_ids = a.used_tree_ids;
+    c.struct_for_tls_sizes = a.struct_for_tls_sizes;
     result.per_construct_artifacts.push_back(std::move(c));
   }
   return result;

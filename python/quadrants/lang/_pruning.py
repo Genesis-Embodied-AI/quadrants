@@ -1,11 +1,31 @@
-from ast import Name, Starred, expr, keyword
+from ast import Attribute, Name, Starred, expr, keyword
 from collections import defaultdict, deque
 from typing import TYPE_CHECKING, Any
 
+from ._dataclass_util import create_flat_name
 from ._exceptions import raise_exception
 from ._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
 from .exception import QuadrantsSyntaxError
 from .func import Func
+from .kernel_arguments import ArgMetadata
+
+
+def _flatten_arg_node(node: expr) -> tuple[str, str] | None:
+    """Flatten an AST arg node into ``(flat_name, root_name_id)``, or ``None`` if it is not a name/attribute chain
+    rooted at a plain Name. Mirrors ``FlattenAttributeNameTransformer._flatten_attribute_name`` on raw call-arg AST.
+
+    The root id is returned because the flat name alone is ambiguous: ``__qd_self__qd_dofs`` is what both the chain
+    ``self.dofs`` and an already-flattened dataclass-arg Name of that name produce."""
+    if isinstance(node, Name):
+        return node.id, node.id
+    if isinstance(node, Attribute):
+        parent = _flatten_arg_node(node.value)
+        if parent is None:
+            return None
+        parent_flat, root_id = parent
+        return create_flat_name(parent_flat, node.attr), root_id
+    return None
+
 
 if TYPE_CHECKING:
     import ast
@@ -35,17 +55,22 @@ class CallEdge:
     positional shift that happens when an upstream caller prunes fields out of a forwarded dataclass,
     which shortens this call's expanded ``node_args`` between the discovery and enforcing passes.
 
+    ``chain_pairs`` holds ``(callee_param_flat_name, caller_arg_flat_name)`` for args rooted at a bare
+    (non-``__qd_``) kernel arg, such as ``f(self)`` or ``f(self.dofs)``. The fixpoint uses them to rewrite a
+    callee-rooted chain path (``__qd_s__qd_x``) into a caller-rooted one (``__qd_self__qd_dofs__qd_x``).
+
     Edges are keyed per call site (source position), not per callee, so two call sites that forward the
     same flat name into different callee slots (swapped-slot forwarding) stay independent.
     """
 
-    __slots__ = ("caller_func_id", "callee_func_id", "pairs", "positional_map")
+    __slots__ = ("caller_func_id", "callee_func_id", "pairs", "positional_map", "chain_pairs")
 
     def __init__(self, caller_func_id: int, callee_func_id: int) -> None:
         self.caller_func_id = caller_func_id
         self.callee_func_id = callee_func_id
         self.pairs: list[tuple[str, str]] = []
         self.positional_map: dict[str, list[str]] = {}
+        self.chain_pairs: list[tuple[str, str]] = []
 
 
 class Pruning:
@@ -80,13 +105,83 @@ class Pruning:
         self.used_vars_by_func_id: dict[int, set[str]] = defaultdict(set)
         if kernel_used_parameters is not None:
             self.used_vars_by_func_id[Pruning.KERNEL_FUNC_ID].update(kernel_used_parameters)
-        # One entry per call site (source position), recorded during discovery. Consumed by
-        # propagate_fixpoint() (used-set propagation) and filter_call_args() (per-call-site arg pruning).
+        # One entry per call site (source position), recorded during discovery. Consumed by propagate_fixpoint()
+        # (used-set + chain-path propagation) and filter_call_args() (per-call-site arg pruning).
         self.edges_by_call_site: dict[CallSiteKey, CallEdge] = {}
+        # ids of struct ndarrays a chain like ``self.x.y`` resolved to on the first pass. On the enforcing pass
+        # ``_predeclare_struct_ndarrays`` registers only these, dropping reachable-but-unused ndarrays from the kernel's
+        # parameter list.
+        self.used_struct_ndarray_ids: set[int] = set()
+        # A fastcache hit skips pass 0, leaving ``used_struct_ndarray_ids`` unpopulated rather than empty-because-
+        # unused; ``_predeclare_struct_ndarrays`` then has to register every reachable ndarray.
+        self.pass_0_ran: bool = False
+        # Kernel-arg-rooted attribute chains used by each func, in flat-name form (``__qd_self__qd_dofs__qd_x``).
+        # Deliberately not in ``used_vars_by_func_id``: that set becomes ``struct_locals`` on the enforcing pass, and
+        # ``FlattenAttributeNameTransformer`` would then rewrite ``s.x`` to a ``Name('__qd_s__qd_x')`` that no scope
+        # defines. ``Pruning.fold_kernel_arg_chain_paths`` merges them in after both passes, for fastcache's benefit.
+        self.kernel_arg_chain_paths_by_func_id: dict[int, set[str]] = defaultdict(set)
 
     def mark_used(self, func_id: int, parameter_flat_name: str) -> None:
         assert not self.enforcing
         self.used_vars_by_func_id[func_id].add(parameter_flat_name)
+
+    def mark_kernel_arg_chain_used(self, func_id: int, chain_flat_name: str) -> None:
+        """Record a kernel-arg-rooted attribute chain (e.g. ``__qd_self__qd_dofs__qd_x``)."""
+        assert not self.enforcing
+        self.kernel_arg_chain_paths_by_func_id[func_id].add(chain_flat_name)
+
+    def fold_struct_nd_paths(
+        self, struct_ndarray_launch_info: list[tuple[Any, int, tuple[str, ...]]], arg_metas: list[ArgMetadata]
+    ) -> None:
+        """Add data_oriented (and dataclass-nested) ndarray attribute chains to the kernel's pruning flat name set,
+        in the same ``__qd_<arg>__qd_<attr>`` form ``FlattenAttributeNameTransformer`` produces for dataclass args.
+
+        ``@qd.data_oriented`` args stay unflattened in the AST, so they never reach ``used_vars_by_func_id`` on their
+        own; ``struct_ndarray_launch_info`` is where their kernel-accessed ndarray members were recorded.
+        """
+        if not struct_ndarray_launch_info:
+            return
+        kernel_used: set[str] = self.used_vars_by_func_id[Pruning.KERNEL_FUNC_ID]
+        for _arg_id_cpp, arg_idx, attr_chain in struct_ndarray_launch_info:
+            if arg_idx < 0 or arg_idx >= len(arg_metas):
+                continue
+            arg_name = arg_metas[arg_idx].name
+            if not arg_name:
+                continue
+            flat = arg_name
+            for attr in attr_chain:
+                flat = create_flat_name(flat, attr)
+                kernel_used.add(flat)
+
+    def fold_kernel_arg_chain_paths(self) -> None:
+        """Merge the kernel's chain-paths set into ``used_vars_by_func_id[KERNEL_FUNC_ID]``.
+
+        Must run after both compile passes - see ``kernel_arg_chain_paths_by_func_id``. Fastcache's L1 entry sees the
+        merged paths because ``used_py_dataclass_parameters_by_key_enforcing[key]`` holds the same set by reference.
+        """
+        kernel_chain_paths = self.kernel_arg_chain_paths_by_func_id.get(Pruning.KERNEL_FUNC_ID)
+        if not kernel_chain_paths:
+            return
+        self.used_vars_by_func_id[Pruning.KERNEL_FUNC_ID].update(kernel_chain_paths)
+
+    @staticmethod
+    def _propagate_chain_paths(
+        callee_chain_paths: set[str],
+        callee_param_name: str,
+        caller_flat: str,
+        chain_paths_to_propagate: set[str],
+    ) -> None:
+        """Rewrite a callee chain path into the caller's rooting: for ``f(self.dofs)`` whose body reads ``s.x``, the
+        callee's ``__qd_s__qd_x`` becomes the caller's ``__qd_self__qd_dofs__qd_x``."""
+        prefix = f"__qd_{callee_param_name}__qd_"
+        for sub in callee_chain_paths:
+            if sub.startswith(prefix):
+                rest = sub[len(prefix) :]
+                if caller_flat.startswith("__qd_"):
+                    new_flat = f"{caller_flat}__qd_{rest}"
+                else:
+                    new_flat = f"__qd_{caller_flat}__qd_{rest}"
+                chain_paths_to_propagate.add(new_flat)
 
     def enforce(self) -> None:
         self.enforcing = True
@@ -135,6 +230,16 @@ class Pruning:
                 edge.pairs.append((caller_arg_name, callee_param_name))
                 if caller_arg_name.startswith("__qd_"):
                     edge.positional_map.setdefault(caller_arg_name, []).append(callee_param_name)
+            # Chain paths for args rooted at a non-flattened kernel arg (``f(self)``, ``f(self.dofs)``), which
+            # ``propagate_fixpoint`` rewrites into caller-rooted form. The gate is on the *root* name, not the flat
+            # string: ``self.dofs`` flattens to ``__qd_self__qd_dofs`` yet its root is the bare arg ``self``.
+            # Already-flattened dataclass refs have a ``__qd_*`` root and are covered by ``edge.pairs`` above.
+            flat = _flatten_arg_node(arg)
+            if flat is not None:
+                caller_flat, root_id = flat
+                if not root_id.startswith("__qd_"):
+                    callee_param_name = callee_func.arg_metas_expanded[arg_id + self_offset].name  # type: ignore
+                    edge.chain_pairs.append((callee_param_name, caller_flat))
         # For keywords we don't need the callee metas (whose ordering need not match ours): the
         # callee's parameter name is available directly from our own keyword node.
         for kwarg in node_keywords:
@@ -142,29 +247,36 @@ class Pruning:
                 caller_arg_name = kwarg.value.id  # type: ignore
                 callee_param_name = kwarg.arg
                 edge.pairs.append((caller_arg_name, callee_param_name))  # type: ignore
+            flat = _flatten_arg_node(kwarg.value)
+            if flat is not None:
+                caller_flat, root_id = flat
+                # ``kwarg.arg`` is ``None`` for ``**kwargs``, which leaves no parameter name to propagate against.
+                if not root_id.startswith("__qd_") and kwarg.arg is not None:
+                    edge.chain_pairs.append((kwarg.arg, caller_flat))
 
         self.edges_by_call_site[self._call_site_key(caller_func_id, callee_func_id, node)] = edge
 
     def propagate_fixpoint(self) -> None:
         """
-        Propagate used-sets from callees up to callers along the recorded call edges, until they stop
-        growing. Run once after the discovery pass, before the enforcing pass.
+        Propagate used-sets and kernel-arg chain paths from callees up to callers along the recorded call
+        edges, until they stop growing. Run once after the discovery pass, before the enforcing pass.
 
-        A caller needs every argument it forwards into a callee parameter that the callee needs. Used-
-        sets only grow and parameters are finite, so this terminates. See the class docstring for why a
-        fixpoint (rather than a single forward copy at record time) is required.
+        A caller needs every argument it forwards into a callee parameter that the callee needs. Both kinds of set
+        only grow, and the chain-path rewrite adds no new suffixes, so this terminates. See the class docstring for
+        why a fixpoint is required rather than a forward copy at record time.
         """
         assert not self.enforcing
         edges_by_callee: dict[int, list[CallEdge]] = defaultdict(list)
         for edge in self.edges_by_call_site.values():
             edges_by_callee[edge.callee_func_id].append(edge)
 
-        worklist: deque[int] = deque(self.used_vars_by_func_id.keys())
+        worklist: deque[int] = deque({*self.used_vars_by_func_id, *self.kernel_arg_chain_paths_by_func_id})
         queued: set[int] = set(worklist)
         while worklist:
             callee_func_id = worklist.popleft()
             queued.discard(callee_func_id)
             callee_used = self.used_vars_by_func_id[callee_func_id]
+            callee_chain_paths = self.kernel_arg_chain_paths_by_func_id.get(callee_func_id)
             for edge in edges_by_callee.get(callee_func_id, ()):
                 caller_used = self.used_vars_by_func_id[edge.caller_func_id]
                 grew = False
@@ -172,6 +284,15 @@ class Pruning:
                     if callee_param in callee_used and caller_arg not in caller_used:
                         caller_used.add(caller_arg)
                         grew = True
+                if callee_chain_paths and edge.chain_pairs:
+                    propagated: set[str] = set()
+                    for callee_param, caller_flat in edge.chain_pairs:
+                        self._propagate_chain_paths(callee_chain_paths, callee_param, caller_flat, propagated)
+                    if propagated:
+                        caller_chain_paths = self.kernel_arg_chain_paths_by_func_id[edge.caller_func_id]
+                        if not propagated <= caller_chain_paths:
+                            caller_chain_paths |= propagated
+                            grew = True
                 if grew and edge.caller_func_id not in queued:
                     worklist.append(edge.caller_func_id)
                     queued.add(edge.caller_func_id)

@@ -102,9 +102,9 @@ _is_cpython = sys.implementation.name == "cpython"
 #    which fields are active and their (name, full_name, type) tuples. Reduces the 43-iteration filter loop to ~10-15
 #    direct entries.
 #
-# 2. **Unwrapped-value cache** (per-instance, stored as ``_qd_dc_unwrapped``): for a frozen dataclass, field values
-#    never change. Cache the unwrapped (post-``_unwrap()``) value for each field on the instance. Eliminates
-#    ``getattr`` + ``type() in _TENSOR_WRAPPER_TYPES`` + ``_unwrap()`` on every launch.
+# 2. **Unwrapped-value cache** (per-instance ``_qd_dc_unwrapped``): for a frozen dataclass, field values never change,
+#    so cache each field's unwrapped (post-``_unwrap()``) value, eliminating ``getattr`` + ``_unwrap()`` per launch.
+#    Keyed by ``id(annotated_type)`` so one instance reused under several ancestor annotations keeps a per-view entry.
 
 _frozen_dc_plans: dict[tuple[int, type, str], tuple[set[str], tuple[tuple[str, str, Any], ...]]] = {}
 
@@ -160,36 +160,52 @@ def _compute_frozen_dc_unwrapped(v: Any, fields_dict: dict) -> dict[str, Any]:
     return unwrapped
 
 
-def _get_frozen_dc_unwrapped(v: Any, fields_dict: dict) -> dict[str, Any]:
+def _get_frozen_dc_unwrapped(v: Any, struct_cls: type, fields_dict: dict) -> dict[str, Any]:
     """field_name -> unwrapped value for a frozen dataclass, cached on the instance.
+
+    Keyed by ``id(struct_cls)`` so a subclass instance reused under several ancestor annotations keeps a distinct entry
+    per view. The stored ``(struct_cls, ...)`` tuple is identity-checked on read, so a recycled ``id`` or a metaclass
+    that makes two ancestors compare/hash equal cannot serve the wrong view.
 
     A ``Final``-bearing subtree is exempt from the cache (and from the ``_qd_all_field`` shortcut): like the
     spec-key/offline-repr/mapper caches it must re-read every launch so ``Final``-value validation re-runs, and an
     ``unsafe_hash=True`` instance may also mutate an *ordinary* field between launches - a stale cache would keep
     sending the first-launch value. (Such a config always has a non-``Field`` scalar leaf, so ``_qd_all_field`` would
     be ``False`` anyway; leaving it unset defaults to ``False``, i.e. the full ``_recursive_set_args`` path.)
+
+    The Final gate uses the annotated ``struct_cls``, not ``type(v)``: only the base's fields reach the kernel, so a
+    subclass's application-only ``Final`` field (e.g. an unbakeable ``Final[list]``) must be ignored, not validated.
     """
-    if subtree_has_final_fields(type(v)):
+    if subtree_has_final_fields(struct_cls):
         return _compute_frozen_dc_unwrapped(v, fields_dict)
-    cached = getattr(v, "_qd_dc_unwrapped", None)
-    if cached is not None:
-        return cached
+    cache = getattr(v, "_qd_dc_unwrapped", None)
+    if cache is not None:
+        hit = cache.get(id(struct_cls))
+        if hit is not None and hit[0] is struct_cls:  # identity guard against a recycled id
+            return hit[1]
     unwrapped = _compute_frozen_dc_unwrapped(v, fields_dict)
-    try:
-        object.__setattr__(v, "_qd_dc_unwrapped", unwrapped)
-    except AttributeError:
-        pass
-    # Cache whether ALL unwrapped values are Fields (zero launch-context slots). This is a property of the instance
-    # alone - independent of which kernel or field-subset is active - so a simple boolean suffices and survives
-    # qd.reset() harmlessly (the boolean remains valid as long as the instance is alive).
-    if getattr(v, "_qd_all_field", None) is None:
+    if cache is None:
+        try:
+            object.__setattr__(v, "_qd_dc_unwrapped", {id(struct_cls): (struct_cls, unwrapped)})
+        except AttributeError:
+            pass
+    else:
+        cache[id(struct_cls)] = (struct_cls, unwrapped)
+    # Cache whether ALL unwrapped values are Fields (zero launch-context slots); this depends on the active field
+    # subset, so it is keyed per annotated type like the unwrapped values above.
+    all_field_cache = getattr(v, "_qd_all_field", None)
+    _af_hit = None if all_field_cache is None else all_field_cache.get(id(struct_cls))
+    if _af_hit is None or _af_hit[0] is not struct_cls:
         from quadrants.lang.field import Field as _Field  # pylint: disable=C0415
 
         _all_field = all(isinstance(fv, _Field) for fv in unwrapped.values())
-        try:
-            object.__setattr__(v, "_qd_all_field", _all_field)
-        except (AttributeError, TypeError):
-            pass
+        if all_field_cache is None:
+            try:
+                object.__setattr__(v, "_qd_all_field", {id(struct_cls): (struct_cls, _all_field)})
+            except (AttributeError, TypeError):
+                pass
+        else:
+            all_field_cache[id(struct_cls)] = (struct_cls, _all_field)
     return unwrapped
 
 
@@ -681,9 +697,13 @@ class FuncBase:
             # See for reference: https://docs.python.org/3/c-api/long.html#c.PyLong_FromLong
             return 1, _is_cpython and -5 <= v <= 256
         needed_arg_fields = getattr(needed_arg_type, _FIELDS, None)
+        # We get the fields from the needed arg type, thus subclasses are allowed
         if needed_arg_fields is not None:
-            if provided_arg_type is not needed_arg_type:
-                raise QuadrantsRuntimeError("needed", needed_arg_type, "!= provided", provided_arg_type)
+            if provided_arg_type is not needed_arg_type and not issubclass(provided_arg_type, needed_arg_type):
+                # PERF: Check immediate case first (`is not needed_arg_type`), fallback to subclass
+                raise QuadrantsRuntimeTypeError(
+                    "needed", needed_arg_type, "cannot be assigned the provided", provided_arg_type
+                )
             # Must agree with the compile-time gate (``_rebinding_is_prevented``): ``__hash__ is not None`` alone
             # disagrees for a ``frozen=True`` class that also hand-sets ``__hash__ = None`` (compile bakes its ``Final``
             # fields, so launch must take the frozen plan too). The ``or`` only runs when ``__hash__ is None``.
@@ -700,7 +720,7 @@ class FuncBase:
                 plan = _get_frozen_dc_plan(
                     used_py_dataclass_parameters, needed_arg_type, py_dataclass_basename, needed_arg_fields
                 )
-                unwrapped = _get_frozen_dc_unwrapped(v, needed_arg_fields)
+                unwrapped = _get_frozen_dc_unwrapped(v, needed_arg_type, needed_arg_fields)
                 for field_name, field_full_name, field_type in plan:
                     field_value = unwrapped[field_name]
                     num_args_, _ = FuncBase._recursive_set_args(
