@@ -197,6 +197,12 @@ Module Contents
 
 
 
+   .. py:attribute:: explicit_ndarray_launch_info
+      :type:  list[tuple]
+      :value: []
+
+
+
    .. py:attribute:: struct_primitive_provenance
       :type:  dict[tuple[int, str], tuple]
 
@@ -335,10 +341,6 @@ Module Contents
       :type:  list
       :value: []
 
-
-
-   .. py:attribute:: fn_param_names
-      :type:  set[str]
 
 
    .. py:attribute:: only_parse_function_def

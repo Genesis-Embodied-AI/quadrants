@@ -778,6 +778,8 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/quadrants/tools/np2ply/index.html#quadrants.tools.np2ply.PLYWriter.comment">comment (quadrants.tools.np2ply.PLYWriter attribute)</a>
 </li>
+      <li><a href="autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.compile_no_split_variant">compile_no_split_variant() (quadrants.lang.kernel.Kernel method)</a>
+</li>
       <li><a href="user_guide/init_options.html#quadrants._lib.core.quadrants_python.CompileConfig">CompileConfig (class in quadrants._lib.core.quadrants_python)</a>
 </li>
       <li><a href="autoapi/quadrants/lang/func/index.html#quadrants.lang.func.Func.compiled">compiled (quadrants.lang.func.Func attribute)</a>
@@ -1068,6 +1070,8 @@
 </li>
       <li><a href="user_guide/init_options.html#quadrants._lib.core.quadrants_python.CompileConfig.experimental_auto_mesh_local">experimental_auto_mesh_local (CompileConfig property)</a>
 </li>
+      <li><a href="autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerGlobalContext.explicit_ndarray_launch_info">explicit_ndarray_launch_info (quadrants.lang.ast.ast_transformer_utils.ASTTransformerGlobalContext attribute)</a>
+</li>
       <li><a href="autoapi/quadrants/tools/np2ply/index.html#quadrants.tools.np2ply.PLYWriter.export">export() (quadrants.tools.np2ply.PLYWriter method)</a>
 </li>
       <li><a href="autoapi/quadrants/tools/np2ply/index.html#quadrants.tools.np2ply.PLYWriter.export_ascii">export_ascii() (quadrants.tools.np2ply.PLYWriter method)</a>
@@ -1150,10 +1154,10 @@
 </li>
       <li><a href="user_guide/init_options.html#quadrants._lib.core.quadrants_python.CompileConfig.flatten_if">flatten_if (CompileConfig property)</a>
 </li>
-      <li><a href="autoapi/quadrants/types/quant/index.html#quadrants.types.quant.float">float() (in module quadrants.types.quant)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/quadrants/types/quant/index.html#quadrants.types.quant.float">float() (in module quadrants.types.quant)</a>
+</li>
       <li><a href="autoapi/quadrants/types/primitive_types/index.html#quadrants.types.primitive_types.float16">float16 (in module quadrants.types.primitive_types)</a>
 </li>
       <li><a href="autoapi/quadrants/types/primitive_types/index.html#quadrants.types.primitive_types.float32">float32 (in module quadrants.types.primitive_types)</a>
@@ -1161,8 +1165,6 @@
       <li><a href="autoapi/quadrants/types/primitive_types/index.html#quadrants.types.primitive_types.float64">float64 (in module quadrants.types.primitive_types)</a>
 </li>
       <li><a href="autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.floor">floor() (in module quadrants.lang.ops)</a>
-</li>
-      <li><a href="autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.fn_param_names">fn_param_names (quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
 </li>
       <li><a href="autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.fns">fns() (in module quadrants.math.mathimpl)</a>
 </li>
@@ -1598,6 +1600,8 @@
 </li>
       <li><a href="autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.launch_context_buffer_cache">launch_context_buffer_cache (quadrants.lang.kernel.Kernel attribute)</a>
 </li>
+      <li><a href="autoapi/quadrants/lang/kernel_split_alias_guard/index.html#quadrants.lang.kernel_split_alias_guard.launch_has_aliased_ndarrays">launch_has_aliased_ndarrays() (in module quadrants.lang.kernel_split_alias_guard)</a>
+</li>
       <li><a href="autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.launch_kernel">launch_kernel() (quadrants.lang.kernel.Kernel method)</a>
 </li>
       <li><a href="autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.launch_observations">launch_observations (quadrants.lang.kernel.Kernel attribute)</a>
@@ -1875,6 +1879,8 @@
         <li><a href="autoapi/quadrants/lang/kernel_checkpoint/index.html#module-quadrants.lang.kernel_checkpoint">quadrants.lang.kernel_checkpoint</a>
 </li>
         <li><a href="autoapi/quadrants/lang/kernel_impl/index.html#module-quadrants.lang.kernel_impl">quadrants.lang.kernel_impl</a>
+</li>
+        <li><a href="autoapi/quadrants/lang/kernel_split_alias_guard/index.html#module-quadrants.lang.kernel_split_alias_guard">quadrants.lang.kernel_split_alias_guard</a>
 </li>
         <li><a href="autoapi/quadrants/lang/matrix/index.html#module-quadrants.lang.matrix">quadrants.lang.matrix</a>
 </li>
@@ -2534,6 +2540,13 @@
 </li>
       </ul></li>
       <li>
+    quadrants.lang.kernel_split_alias_guard
+
+      <ul>
+        <li><a href="autoapi/quadrants/lang/kernel_split_alias_guard/index.html#module-quadrants.lang.kernel_split_alias_guard">module</a>
+</li>
+      </ul></li>
+      <li>
     quadrants.lang.matrix
 
       <ul>
@@ -2575,6 +2588,8 @@
         <li><a href="autoapi/quadrants/lang/ops/index.html#module-quadrants.lang.ops">module</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     quadrants.lang.runtime_ops
 
@@ -2582,8 +2597,6 @@
         <li><a href="autoapi/quadrants/lang/runtime_ops/index.html#module-quadrants.lang.runtime_ops">module</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     quadrants.lang.shell
 
@@ -3082,6 +3095,8 @@
       <li><a href="autoapi/quadrants/lang/simt/reductions/index.html#quadrants.lang.simt.reductions.segmented_reduce_min_tiled">segmented_reduce_min_tiled() (in module quadrants.lang.simt.reductions)</a>
 </li>
       <li><a href="autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.select">select() (in module quadrants.lang.ops)</a>
+</li>
+      <li><a href="autoapi/quadrants/lang/kernel_split_alias_guard/index.html#quadrants.lang.kernel_split_alias_guard.select_launch_variant">select_launch_variant() (in module quadrants.lang.kernel_split_alias_guard)</a>
 </li>
       <li><a href="autoapi/quadrants/lang/mesh/index.html#quadrants.lang.mesh.MeshInstance.set_index_mapping">set_index_mapping() (quadrants.lang.mesh.MeshInstance method)</a>
 </li>

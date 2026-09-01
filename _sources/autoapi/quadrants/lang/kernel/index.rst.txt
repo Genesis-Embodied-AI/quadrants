@@ -204,6 +204,16 @@ Module Contents
    .. py:method:: materialize(key: CompiledKernelKeyType | None, py_args: tuple[Any, ...], arg_features=None)
 
 
+   .. py:method:: compile_no_split_variant(key, t_kernel: quadrants._lib.core.quadrants_python.KernelCxx, py_args: tuple[Any, ...]) -> quadrants._lib.core.quadrants_python.CompiledKernelData
+
+      Compile the whole-kernel (split-disabled) variant used by the launch-time no-alias guard.
+
+      For a normally-materialized key ``t_kernel`` already carries the lowered body, so it compiles directly. For a
+      fastcache-restored key the body was never built (``_parse_only_keys``), so rebuild one full-body ``KernelCxx``
+      here -- the guard only reaches this on an actual aliased call, so the rebuild cost stays off the common path.
+
+
+
    .. py:method:: launch_kernel(key, t_kernel: quadrants._lib.core.quadrants_python.KernelCxx, compiled_kernel_data: quadrants._lib.core.quadrants_python.CompiledKernelData | None, *args, qd_stream=None, _resume_from_checkpoint: int | None = None) -> Any
 
 

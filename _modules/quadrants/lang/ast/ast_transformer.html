@@ -349,7 +349,6 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">exception</span><span class="p">,</span> <span class="n">expr</span><span class="p">,</span> <span class="n">impl</span><span class="p">,</span> <span class="n">matrix</span><span class="p">,</span> <span class="n">mesh</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">ops</span> <span class="k">as</span> <span class="n">qd_ops</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._dataclass_util</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_flat_name</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._ndrange</span><span class="w"> </span><span class="kn">import</span> <span class="n">_Ndrange</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._unpacked</span><span class="w"> </span><span class="kn">import</span> <span class="n">_UnpackedVectorRef</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
@@ -441,13 +440,6 @@
         <span class="n">pruning</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">pruning</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">pruning</span><span class="o">.</span><span class="n">enforcing</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">expanding_dataclass_call_parameters</span> <span class="ow">and</span> <span class="n">node</span><span class="o">.</span><span class="n">id</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"__qd_"</span><span class="p">):</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">pruning</span><span class="o">.</span><span class="n">mark_used</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">func_id</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
-        <span class="c1"># Seed the chain annotation that ``build_Attribute`` extends and records in pruning. Only non-flattened</span>
-        <span class="c1"># parameters need it - a data_oriented kernel arg (``self``), or a ``qd.template()`` func param; dataclass args</span>
-        <span class="c1"># arrive here already flattened and are handled by ``mark_used`` above.</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">node</span><span class="o">.</span><span class="n">id</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"__qd_"</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">id</span> <span class="ow">in</span> <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_args</span> <span class="ow">or</span> <span class="n">node</span><span class="o">.</span><span class="n">id</span> <span class="ow">in</span> <span class="n">ctx</span><span class="o">.</span><span class="n">fn_param_names</span><span class="p">):</span>
-            <span class="n">node</span><span class="o">.</span><span class="n">_qd_arg_chain</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">id</span>  <span class="c1"># type: ignore[attr-defined]</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="n">node</span><span class="o">.</span><span class="n">_qd_arg_chain</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># type: ignore[attr-defined]</span>
         <span class="n">node</span><span class="o">.</span><span class="n">violates_pure</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">violates_pure_reason</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">get_var_by_name</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
         <span class="c1"># Flattened struct fields (``__qd_foo__qd_bar``) injected by ``populate_global_vars_from_dataclass`` are raw</span>
         <span class="c1"># ``Ndarray`` instances.  ``build_Attribute`` already promotes these via ``_promote_ndarray_if_declared`` but</span>
@@ -1128,32 +1120,14 @@
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_promote_ndarray_if_declared</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""If *value* is a bare ``Ndarray`` that was pre-declared as a kernel arg (in ``_predeclare_struct_ndarrays``),</span>
-<span class="sd">        return the ``AnyArray`` proxy from the cache. Otherwise return *value* unchanged.</span>
-
-<span class="sd">        Also records the source ndarray id in ``pruning.used_struct_ndarray_ids`` on the non-enforcing first pass, so</span>
-<span class="sd">        that the enforcing pass can skip ndarrays the kernel never accesses. An already-promoted ``AnyArray`` (tagged</span>
-<span class="sd">        with ``_qd_source_ndarray_id``) counts too: that is how accesses inside an inlined ``@qd.func`` body arrive.</span>
-<span class="sd">        """</span>
+<span class="sd">        return the ``AnyArray`` proxy from the cache. Otherwise return *value* unchanged."""</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._ndarray</span><span class="w"> </span><span class="kn">import</span> <span class="n">Ndarray</span>  <span class="c1"># pylint: disable=C0415</span>
 
-        <span class="n">pruning</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">pruning</span>
-        <span class="c1"># Same gate as ``build_Name``'s mark_used: the callee body's own accesses are what count, not the synthetic</span>
-        <span class="c1"># per-leaf expansion of a ``@qd.func`` call's arguments.</span>
-        <span class="n">should_mark</span> <span class="o">=</span> <span class="ow">not</span> <span class="n">pruning</span><span class="o">.</span><span class="n">enforcing</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">expanding_dataclass_call_parameters</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">Ndarray</span><span class="p">):</span>
-            <span class="n">cache</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">ndarray_to_any_array</span>
-            <span class="n">key</span> <span class="o">=</span> <span class="nb">id</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
-            <span class="n">arr</span> <span class="o">=</span> <span class="n">cache</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">arr</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">should_mark</span><span class="p">:</span>
-                    <span class="n">pruning</span><span class="o">.</span><span class="n">used_struct_ndarray_ids</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
-                <span class="k">return</span> <span class="n">arr</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">Ndarray</span><span class="p">):</span>
             <span class="k">return</span> <span class="n">value</span>
-        <span class="k">if</span> <span class="n">should_mark</span><span class="p">:</span>
-            <span class="n">src_id</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="s2">"_qd_source_ndarray_id"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">src_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">pruning</span><span class="o">.</span><span class="n">used_struct_ndarray_ids</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">src_id</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">value</span>
+        <span class="n">cache</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">ndarray_to_any_array</span>
+        <span class="n">arr</span> <span class="o">=</span> <span class="n">cache</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">arr</span> <span class="k">if</span> <span class="n">arr</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">value</span>
 
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_Attribute">
@@ -1285,19 +1259,6 @@
                             <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
                         <span class="k">else</span><span class="p">:</span>
                             <span class="k">raise</span> <span class="n">exception</span><span class="o">.</span><span class="n">QuadrantsCompilationError</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
-        <span class="c1"># Extend the chain annotation seeded by ``build_Name`` (``self`` -&gt; ``__qd_self__qd_x`` -&gt; ...) and record it.</span>
-        <span class="c1"># Not via ``mark_used``: ``used_vars_by_func_id`` becomes ``struct_locals`` on the enforcing pass, where</span>
-        <span class="c1"># ``FlattenAttributeNameTransformer`` would rewrite ``self.x`` to a ``Name('__qd_self__qd_x')`` that no scope</span>
-        <span class="c1"># defines. ``Pruning.fold_kernel_arg_chain_paths`` merges the two sets once both passes are done.</span>
-        <span class="n">parent_chain</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="s2">"_qd_arg_chain"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">parent_chain</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">flat</span> <span class="o">=</span> <span class="n">create_flat_name</span><span class="p">(</span><span class="n">parent_chain</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">attr</span><span class="p">)</span>
-            <span class="n">node</span><span class="o">.</span><span class="n">_qd_arg_chain</span> <span class="o">=</span> <span class="n">flat</span>  <span class="c1"># type: ignore[attr-defined]</span>
-            <span class="n">pruning</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">pruning</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">pruning</span><span class="o">.</span><span class="n">enforcing</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">expanding_dataclass_call_parameters</span><span class="p">:</span>
-                <span class="n">pruning</span><span class="o">.</span><span class="n">mark_kernel_arg_chain_used</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">func_id</span><span class="p">,</span> <span class="n">flat</span><span class="p">)</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="n">node</span><span class="o">.</span><span class="n">_qd_arg_chain</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># type: ignore[attr-defined]</span>
         <span class="k">return</span> <span class="n">node</span><span class="o">.</span><span class="n">ptr</span></div>
 
 

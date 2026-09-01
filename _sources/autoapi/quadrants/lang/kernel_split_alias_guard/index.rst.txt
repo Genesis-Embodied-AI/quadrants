@@ -1,0 +1,48 @@
+quadrants.lang.kernel_split_alias_guard
+=======================================
+
+.. py:module:: quadrants.lang.kernel_split_alias_guard
+
+.. autoapi-nested-parse::
+
+   Helpers extracted from ``kernel.py`` for the launch-time no-alias guard on the per-construct frontend split.
+
+   The split can clear recompute-safety condition (3) by assuming two ndarray parameters address disjoint buffers --
+   disjointness a caller defeats by binding the same ndarray to both. ``Kernel.launch_kernel`` delegates the per-launch
+   alias check and whole-kernel fallback to the free functions below so the central ``Kernel`` class doesn't accrete this
+   feature. See ``doc/per_offload_cache/split_alias_guard_design.md`` for the full model.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.lang.kernel_split_alias_guard.launch_has_aliased_ndarrays
+   quadrants.lang.kernel_split_alias_guard.select_launch_variant
+
+
+Module Contents
+---------------
+
+.. py:function:: launch_has_aliased_ndarrays(kernel: Any, key: Any, args: tuple) -> bool
+
+   True iff some arg-slot pair the split assumed disjoint actually shares one backing device allocation.
+
+   Only called for keys whose split recorded such pairs (see ``select_launch_variant``). Aliases *outside* the
+   recorded pairs -- e.g. the same buffer bound to a param the split never recomputed-across -- do not fall back,
+   because the split never depended on those args being disjoint. A slot the guard cannot resolve to a readable
+   ``alloc_id`` is treated as a possible alias (conservative: costs the fallback, never correctness).
+
+
+.. py:function:: select_launch_variant(kernel: Any, key: Any, args: tuple, compiled_kernel_data: Any, t_kernel: Any)
+
+   Return the CompiledKernelData to launch, swapping in the whole-kernel variant when this call's actual buffers
+   violate the split's cross-parameter disjointness assumption.
+
+   For a guarded key whose args alias, lazily compile (once) and cache the split-disabled whole-kernel variant -- it
+   never recomputes across a write, so it is correct under aliasing -- and reset the observations to the no-split
+   sentinel. Disjoint calls (the common case) return ``compiled_kernel_data`` unchanged, staying on the fast split.
+
+
