@@ -72,9 +72,8 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
   const int n = (int)offloads.size();
   std::vector<std::unique_ptr<LLVMCompiledTask>> data(n);
 
-  // Cross-process per-task artifact cache: a hit skips a task's entire compilation and carries cached code (PTX on
-  // CUDA, HSACO on AMDGPU) + launch metadata to the launcher. LLVM-GPU backends with a fill site (CUDA, AMDGPU); an
-  // empty dir means offline cache is off (tier disabled).
+  // Cross-process per-task artifact cache: a hit skips a task's compilation and carries cached code plus launch
+  // metadata to the launcher. An empty dir disables the tier.
   const std::string art_dir = pertask_artifact_dir_ref();
   const bool artifact_tier =
       (compile_config_.arch == Arch::cuda || compile_config_.arch == Arch::amdgpu) && !art_dir.empty();
@@ -142,14 +141,10 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
   }
   worker.flush();
 
-  // Build one self-contained artifact per task BEFORE the whole-module link consumes `data`: a hit carries cached code
-  // (null module), a miss builds+optimizes a module for the JIT to compile and store.
+  // Build one self-contained artifact per task before the whole-module link consumes `data`.
   //
-  // CUDA always takes the per-task composite path: its per-task load is cheap (LLVM->PTX + a driver module load, no
-  // external assembler), so there is no whole-module path worth preserving. AMDGPU instead links each task with its
-  // own `ld.lld` process, so the per-task path only pays off when the artifact tier is on (a hit skips the link, a
-  // miss fills the cache). With the tier off (offline_cache disabled), building per-task artifacts would run N
-  // `ld.lld` links for zero caching benefit, so AMDGPU stays on the single whole-module link.
+  // AMDGPU links each task with a separate `ld.lld`, so the per-task path only pays off when the tier is on; with it
+  // off it stays on the single whole-module link. CUDA's per-task load is cheap, so it always takes the per-task path.
   std::vector<PerConstructArtifact> per_construct_artifacts;
   const bool build_per_construct_artifacts =
       compile_config_.arch == Arch::cuda || (compile_config_.arch == Arch::amdgpu && artifact_tier);
@@ -181,9 +176,8 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
     }
   }
 
-  // A cross-process hit leaves a task with no module, so skip the whole-kernel link (the launcher assembles the
-  // backend module -- CUmodule / hipModule -- from the per-task artifacts); still concatenate every task's metadata
-  // into `tasks`, which it runs off.
+  // A cross-process hit leaves a task with no module, so skip the whole-kernel link; the launcher assembles the
+  // backend module from the per-task artifacts. Still concatenate every task's metadata into `tasks`.
   const bool code_only_tasks = std::any_of(data.begin(), data.end(), [](const auto &d) { return d && !d->module; });
   LLVMCompiledKernel llvm_compiled_kernel;
   if (code_only_tasks) {

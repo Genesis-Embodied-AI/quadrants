@@ -32,8 +32,8 @@ LlvmProgramImpl::LlvmProgramImpl(CompileConfig &config_, KernelProfilerBase *pro
     : ProgramImpl(config_), compilation_workers("compile", config_.print_ir ? 1 : config_.num_compile_threads) {
   runtime_exec_ = std::make_unique<LlvmRuntimeExecutor>(config_, profiler, this);
   cache_data_ = std::make_unique<LlvmOfflineCache>();
-  // Resolve the per-task artifact dir once, beside the `.qdc` files, so the probe and the backend JIT fill agree
-  // without re-deriving it. Empty => the tier is off (no offline cache).
+  // Resolve the per-task artifact dir once, beside the `.qdc` files, so the probe and the backend JIT fill agree.
+  // Empty => the tier is off.
   std::string pertask_dir;
   if (config_.offline_cache) {
     pertask_dir = pertask_artifact_dir_for(config_.offline_cache_file_path);
@@ -45,8 +45,7 @@ LlvmProgramImpl::LlvmProgramImpl(CompileConfig &config_, KernelProfilerBase *pro
     }
 #endif
 #if defined(QD_WITH_AMDGPU)
-    // Artifacts hold gfx-target-specific HSACO (a loadable ELF, not portable across mcpu like PTX is across SM), so
-    // scope the dir by the mcpu; a cache path shared across gfx targets must never serve a module for the wrong arch.
+    // HSACO is gfx-target-specific, so scope the dir by mcpu; a shared path must never serve another target's module.
     if (config_.arch == Arch::amdgpu) {
       pertask_dir += "_" + AMDGPUContext::get_instance().get_mcpu();
     }

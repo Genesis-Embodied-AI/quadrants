@@ -46,9 +46,8 @@ namespace lang {
 
 class JITModuleAMDGPU : public JITModule {
  private:
-  // A kernel is either one whole-module hipModule or N self-contained per-task hipModules (per-task path). A task's
-  // entry symbol lives in exactly one of them; `func_cache_` memoises the resolved function so the launcher does not
-  // rescan the N modules on every by-name lookup.
+  // A kernel is one whole-module hipModule or N per-task hipModules. A symbol lives in exactly one; `func_cache_`
+  // memoises lookups so we don't rescan all modules each time.
   std::vector<void *> modules_;
   std::unordered_map<std::string, void *> func_cache_;
   std::mutex func_mu_;
@@ -59,12 +58,7 @@ class JITModuleAMDGPU : public JITModule {
   explicit JITModuleAMDGPU(std::vector<void *> modules) : modules_(std::move(modules)) {
   }
 
-  // Without this destructor the underlying `hipModule_t`s (loaded by `hipModuleLoadData`) are never released, so every
-  // `qd.init` adds another module's worth of GPU code memory (~80 KB measured per init/reset cycle with a trivial
-  // program; more for programs with many user kernels). The leak is monotonic across `qd.init`/`qd.reset` cycles
-  // within a single process. Mirror every `hipModuleLoadData` with a `hipModuleUnload` here so the destructor of the
-  // owning `unique_ptr` (held by `JITSession::modules`) plugs the leak end-to-end for both the whole-module and the
-  // per-task (N-module) paths.
+  // Unload each `hipModule_t`; without this they leak GPU code memory across `qd.init`/`qd.reset` cycles.
   ~JITModuleAMDGPU() override {
     if (modules_.empty()) {
       return;
@@ -89,8 +83,8 @@ class JITModuleAMDGPU : public JITModule {
     }
     void *func = nullptr;
     auto t = Time::get_time();
-    // The symbol lives in exactly one module. Use the non-warning `call` so probing the other modules (which return an
-    // error) does not spam the log; only a miss across *all* modules is an error.
+    // The symbol lives in one module; use non-warning `call` so probing the others doesn't spam the log. Only a miss
+    // across all modules is an error.
     for (void *m : modules_) {
       void *f = nullptr;
       if (AMDGPUDriver::get_instance().module_get_function.call(&f, m, name.c_str()) == 0 && f != nullptr) {

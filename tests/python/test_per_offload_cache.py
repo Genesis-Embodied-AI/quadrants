@@ -671,9 +671,9 @@ def test_per_construct_frontend_split_struct_member_recomputed() -> None:
 # --- Cross-process per-task artifact cache (CUDA + AMDGPU backend reuse tier) -----------------------------------------
 #
 # The per-task artifact cache stores each offloaded task's fully compiled code + launch metadata on disk, keyed by the
-# task's own IR (name-free), so a later process reuses an unchanged task instead of recompiling it. CUDA (PTX) and
-# AMDGPU (HSACO) fill it, and it is gated on `offline_cache`. Reuse is reported on `PerOffloadCacheObservations.tasks_*`
-# (-1 when the tier did not run).
+# task's own IR (name-free), so a later process reuses an unchanged task instead of recompiling it. CUDA and AMDGPU
+# fill it, and it is gated on `offline_cache`. Reuse is reported on `PerOffloadCacheObservations.tasks_*` (-1 when the
+# tier did not run).
 
 
 @test_utils.test(arch=[qd.cuda, qd.amdgpu], offline_cache=False)
@@ -706,8 +706,7 @@ def test_per_task_artifact_cache_reuses_shared_task_cross_process(arch) -> None:
     # the second must load that shared task's artifact from disk -- written when the first ran in the prior "process" --
     # while recompiling only the loop that differs. The per-task key is name-free, so the identical task aliases to one
     # artifact across the two kernels. Uses a re-`init` with the same cache path to emulate a second process, matching
-    # test_offline_cache.py; the artifacts are written at JIT time, so no teardown is needed to flush them. Backend
-    # payload is PTX on CUDA and HSACO on AMDGPU; the tier and these assertions are backend-agnostic.
+    # test_offline_cache.py; the artifacts are written at JIT time, so no teardown is needed to flush them.
     if arch not in test_utils.expected_archs():
         pytest.skip(f"per-task artifact cache backend {arch} not available")
 

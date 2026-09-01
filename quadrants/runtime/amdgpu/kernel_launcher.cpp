@@ -757,9 +757,7 @@ KernelLauncher::Handle KernelLauncher::register_llvm_kernel(const LLVM::Compiled
     auto data = compiled.get_internal_data().compiled_data.clone();
     JITModule *jit_module = nullptr;
     if (!data.per_construct_artifacts.empty()) {
-      // Per-task path: load each per-task task as its own hipModule (composite JITModule) instead of the whole-module
-      // HSACO. This is the fill/hit site -- create_jit_module_per_task compiles-and-stores on a miss or loads cached
-      // HSACO on a hit. Mirror of the CUDA launcher.
+      // Per-task path: build the module from the per-task artifacts instead of the whole-module HSACO.
       jit_module = executor->create_jit_module_per_task(std::move(data.per_construct_artifacts));
     } else {
       jit_module = executor->create_jit_module(std::move(data.module));

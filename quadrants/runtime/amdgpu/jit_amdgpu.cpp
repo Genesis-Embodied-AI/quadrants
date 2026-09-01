@@ -26,15 +26,11 @@ JITModule *JITSessionAMDGPU ::add_module(std::unique_ptr<llvm::Module> M, int ma
 }
 
 JITModule *JITSessionAMDGPU::add_module_per_task(std::vector<PerConstructArtifact> artifacts, int max_reg) {
-  // Per-task path: compile each self-contained task module to its OWN HSACO and load it as a separate hipModule; the
-  // composite JITModuleAMDGPU below resolves tasks by name across the N modules, so there is no device relink (mirror
-  // of the CUDA per-task path). The HSACO link itself is unchanged -- the same in-process object emit + ROCm `ld.lld`
-  // shell-out compile_module_to_hsaco already uses -- it just runs once per task instead of once per kernel.
-  (void)max_reg;  // No link step here (per-task whole-module load), so there is nowhere to apply max-reg.
+  // Compile each task to its own HSACO and load it as a separate hipModule; the composite JITModuleAMDGPU resolves
+  // tasks by name across them, avoiding a device relink.
+  (void)max_reg;  // No link step, so nowhere to apply max-reg.
 
-  // Cross-process fill site: a hit already carries cached HSACO (`code`), loaded verbatim; a miss compiles the module
-  // and the result -- HSACO plus the launch metadata that must travel with it -- is stored under the task's IR key so
-  // a later process skips this compilation entirely. No-ops when the dir is empty (offline cache off).
+  // On a miss, store the compiled HSACO and its launch metadata under the task's IR key so a later process reuses it.
   const PerTaskArtifactCache artifact_cache(pertask_artifact_dir_ref());
   std::vector<std::string> hsacos(artifacts.size());
   for (std::size_t i = 0; i < artifacts.size(); i++) {
@@ -59,8 +55,7 @@ JITModule *JITSessionAMDGPU::add_module_per_task(std::vector<PerConstructArtifac
   mods.reserve(hsacos.size());
   for (auto &hsaco : hsacos) {
     void *amdgpu_module = nullptr;
-    // c_str() hands over the loadable HSACO image; hipModuleLoadData reads the ELF header (not NUL-termination), as
-    // the whole-module path does.
+    // HSACO is a binary ELF; hipModuleLoadData reads its header and ignores NUL-termination, so c_str() is fine.
     AMDGPUDriver::get_instance().module_load_data(&amdgpu_module, hsaco.c_str());
     mods.push_back(amdgpu_module);
   }
@@ -260,9 +255,8 @@ std::string JITSessionAMDGPU::compile_module_to_hsaco(std::unique_ptr<llvm::Modu
 
   std::string hsaco_str = load_hsaco(hsaco_path);
 
-  // Delete the per-compilation object + HSACO temporaries now that the HSACO is in memory. This function is called
-  // once per task on the per-task path, so leaving them (as the whole-module path historically did, one pair per
-  // kernel) would accumulate N files per multi-task kernel under `tmp_dir_` and can exhaust /tmp on large workloads.
+  // Delete the object and HSACO temporaries now that the HSACO is in memory; the per-task path calls this once per
+  // task, so keeping them would accumulate under `tmp_dir_` and exhaust /tmp.
   std::remove(obj_path.c_str());
   std::remove(hsaco_path.c_str());
 
