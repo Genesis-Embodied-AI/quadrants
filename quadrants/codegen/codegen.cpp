@@ -97,11 +97,12 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
       //  - external-func: the body has the so/bc path + name, not its contents, so a stale update keeps the key;
       //  - real-func (FuncCallStmt): the printer emits only the callee name, but codegen inlines its body;
       //  - mem_access_opt (BLS/read-only hints): serialized from an unordered_map, so its order varies by process.
-      bool artifact_eligible = per_task_cache_enabled && offload->as<OffloadedStmt>()->mem_access_opt.get_all().empty();
-      if (artifact_eligible) {
-        irpass::analysis::gather_statements(offload.get(), [&artifact_eligible](Stmt *s) {
+      bool eligible_for_per_task_cache =
+          per_task_cache_enabled && offload->as<OffloadedStmt>()->mem_access_opt.get_all().empty();
+      if (eligible_for_per_task_cache) {
+        irpass::analysis::gather_statements(offload.get(), [&eligible_for_per_task_cache](Stmt *s) {
           if (s->is<AdStackAllocaStmt>() || s->is<ExternalFuncCallStmt>() || s->is<FuncCallStmt>()) {
-            artifact_eligible = false;
+            eligible_for_per_task_cache = false;
           }
           return false;
         });
@@ -110,7 +111,7 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
       // Key on `#index` too: the module bakes the task's kernel-wide index into its symbol names, so two
       // byte-identical tasks at different indices must not alias (they would collide at link).
       std::string cache_key;
-      if (artifact_eligible) {
+      if (eligible_for_per_task_cache) {
         cache_key = get_hashed_per_task_cache_key(compile_config_, pertask_caps, offload->as<OffloadedStmt>(), kernel) +
                     "#" + std::to_string(i);
         // Under kernel profiling, drop the name-free cross-kernel aliasing: the artifact carries OffloadedTask::name,
