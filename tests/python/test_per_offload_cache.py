@@ -672,7 +672,7 @@ def test_per_construct_frontend_split_struct_member_recomputed() -> None:
 #
 # The per-task artifact cache stores each offloaded task's fully compiled code + launch metadata on disk, keyed by the
 # task's own IR (name-free), so a later process reuses an unchanged task instead of recompiling it. CUDA and AMDGPU fill
-# it with GPU code and CPU (ref 7) with a host object; it is gated on `offline_cache`. Reuse is reported on
+# it with GPU code and CPU with a host object; it is gated on `offline_cache`. Reuse is reported on
 # `PerOffloadCacheObservations.tasks_*` (-1 when offline_cache is disabled).
 
 
