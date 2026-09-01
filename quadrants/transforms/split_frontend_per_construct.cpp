@@ -575,6 +575,26 @@ ExternalPtrStmt *as_ndarray_ptr(Stmt *p) {
   return nullptr;
 }
 
+// alias_analysis proves two ndarray accesses `different` by comparing their raw index expressions, but a `kClamp`
+// boundary maps out-of-range indices onto in-bounds ones (e.g. `a[-1]` -> `a[0]`), so distinct indices can hit the
+// same address. Boundary lowering (`handle_external_ptr_boundary`) runs AFTER the split, so here the indices are still
+// clamp-oblivious. When a same-buffer clearance rests on that index disambiguation and either access clamps, the
+// disjointness proof is unsound -> treat as may-alias. Distinct buffers never alias regardless of clamp (cross-arg
+// aliasing is the launch guard's concern), so this stays scoped to same arg + same primal/grad.
+bool clamp_may_defeat_index_disjointness(Stmt *a, Stmt *b) {
+  ExternalPtrStmt *ea = as_ndarray_ptr(a);
+  ExternalPtrStmt *eb = as_ndarray_ptr(b);
+  if (ea == nullptr || eb == nullptr)
+    return false;
+  if (ea->boundary != BoundaryMode::kClamp && eb->boundary != BoundaryMode::kClamp)
+    return false;
+  auto *arg_a = ea->base_ptr->cast<ArgLoadStmt>();
+  auto *arg_b = eb->base_ptr->cast<ArgLoadStmt>();
+  if (arg_a == nullptr || arg_b == nullptr)
+    return false;
+  return arg_a->arg_id == arg_b->arg_id && ea->is_grad == eb->is_grad;
+}
+
 // True when a condition-(3) clearance between these two pointers rests on the caller-defeatable assumption that
 // distinct ndarray params don't alias: both are ndarray accesses on DIFFERENT args. alias_analysis reports them
 // `different` by arg id and/or is_grad, which a caller violates by binding one buffer to both params. Same-arg
@@ -712,6 +732,8 @@ bool split_is_recompute_safe(Block *block, std::vector<int> &assumed_disjoint_pa
           continue;
         if (w.dest == nullptr || r.src == nullptr || irpass::analysis::maybe_same_address(r.src, w.dest))
           return false;
+        if (clamp_may_defeat_index_disjointness(r.src, w.dest))
+          return false;  // clamped boundary can collapse the "different" indices onto one in-bounds address
         // Cleared: the read and write are provably different addresses. When that proof is cross-arg ndarray
         // disjointness a caller can defeat it by aliasing the two params. A same-is_grad pair is checkable by the
         // launch guard (compare the two args' primal alloc_ids) -- record it. A primal-vs-gradient cross-arg pair is

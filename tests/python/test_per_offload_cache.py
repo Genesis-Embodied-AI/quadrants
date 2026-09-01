@@ -363,6 +363,33 @@ def test_per_construct_frontend_split_alias_guard_benign_alias_still_splits() ->
     assert np.allclose(b.to_numpy(), 7.0, atol=1e-2), b.to_numpy()  # b[i] = d[i] = a[i] = 7
 
 
+@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
+def test_per_construct_frontend_split_clamped_boundary_recompute_unsafe() -> None:
+    # alias_analysis proves `a[_N]` and `a[_N - 1]` disjoint by their raw indices (they differ by 1), but with
+    # `boundary="clamp"` the out-of-range `a[_N]` maps onto the last element `a[_N - 1]`, so they are the SAME address.
+    # Boundary lowering runs after the split, so condition (3) would otherwise clear the recomputed read `a[_N]` across
+    # the intervening write `a[_N - 1]=2` and the split would then read 2 instead of the original last element. Clamped
+    # same-buffer accesses must force the whole-kernel path. (Negative literals like `a[-1]` are rejected by the
+    # frontend, so the out-of-bounds-high index is how a compile-time-constant clamp is expressed here.)
+    @qd.kernel
+    def kernel_clamp(a: qd.types.ndarray(boundary="clamp"), y: qd.types.ndarray()) -> None:
+        base = a[_N]  # out of range high -> clamps to a[_N - 1]
+        for i in range(_N):
+            a[_N - 1] = 2.0
+        for i in range(_N):
+            y[i] = base
+
+    a = qd.ndarray(qd.f32, shape=(_N,))
+    y = qd.ndarray(qd.f32, shape=(_N,))
+    a.from_numpy(np.full(_N, 7.0, dtype=np.float32))
+    kernel_clamp(a, y)
+
+    obs = kernel_clamp._primal.per_offload_cache_observations
+    assert obs.frontend_constructs_total == -1, obs  # fell back: clamp defeats the raw-index disjointness proof
+    assert np.allclose(y.to_numpy(), 7.0, atol=1e-2), y.to_numpy()  # 7.0 (base snapshot), never 2.0 (split recompute)
+    assert np.allclose(a.to_numpy()[_N - 1], 2.0, atol=1e-2), a.to_numpy()
+
+
 @test_utils.test(arch=qd.cuda, offline_cache=False)
 def test_per_construct_frontend_split_barrier_between_constructs_splits() -> None:
     # `internal_func_is_memory_free` allowlist regression. A block barrier reports has_global_side_effect (to pin
