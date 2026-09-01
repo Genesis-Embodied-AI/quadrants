@@ -635,6 +635,13 @@
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerGlobalContext.struct_ndarray_launch_info">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">struct_ndarray_launch_info</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span></div>
 
+        <span class="c1"># `(slot, positional_arg_index)` for each explicit top-level ndarray param, where `slot` is its flat arg-id</span>
+        <span class="c1"># (`ArgLoadStmt.arg_id[0]`). The launch-time no-alias guard needs it to map a C++-recorded assumed-disjoint slot</span>
+        <span class="c1"># to this launch's ndarray; struct-member slots come from `struct_ndarray_launch_info` instead.</span>
+<div class="viewcode-block" id="ASTTransformerGlobalContext.explicit_ndarray_launch_info">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerGlobalContext.explicit_ndarray_launch_info">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">explicit_ndarray_launch_info</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span></div>
+
         <span class="c1"># Lifted-primitive support for ``@qd.data_oriented(template_primitives=False)``. Mirrors the two ndarray</span>
         <span class="c1"># structures above, plus a provenance map driving the two-pass pruning.</span>
         <span class="c1"># * ``struct_primitive_provenance`` maps ``(id(parent_obj), attr_name)`` to ``(flat_name, arg_idx, attr_chain,</span>

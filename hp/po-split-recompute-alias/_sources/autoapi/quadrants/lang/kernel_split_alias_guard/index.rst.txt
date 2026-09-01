@@ -28,17 +28,15 @@ Module Contents
 
 .. py:function:: launch_has_aliased_ndarrays(kernel: Any, key: Any, args: tuple) -> bool
 
-   True if two ndarray parameters of this launch may share one backing device allocation.
+   True iff some arg-slot pair the split assumed disjoint actually shares one backing device allocation.
 
-   Only called for keys whose split relied on cross-parameter ndarray disjointness (see ``select_launch_variant``).
-   Two ndarray args alias in the compiled kernel iff their ``DeviceAllocation`` matches -- the launcher derives each
-   arg's device pointer from ``alloc_id``, so that (not the wrapper address) is the identity to compare. An arg whose
-   id cannot be read is treated as a possible alias, so an unrecognized argument shape falls back to the
-   always-correct whole-kernel path rather than risking the split. Covers plain ndarray args and ndarrays reached
-   through ``@qd.data_oriented`` struct members.
+   Only called for keys whose split recorded such pairs (see ``select_launch_variant``). Aliases *outside* the
+   recorded pairs -- e.g. the same buffer bound to a param the split never recomputed-across -- do not fall back,
+   because the split never depended on those args being disjoint. A slot the guard cannot resolve to a readable
+   ``alloc_id`` is treated as a possible alias (conservative: costs the fallback, never correctness).
 
 
-.. py:function:: select_launch_variant(kernel: Any, key: Any, args: tuple, compiled_kernel_data: Any, prog: Any, t_kernel: Any)
+.. py:function:: select_launch_variant(kernel: Any, key: Any, args: tuple, compiled_kernel_data: Any, t_kernel: Any)
 
    Return the CompiledKernelData to launch, swapping in the whole-kernel variant when this call's actual buffers
    violate the split's cross-parameter disjointness assumption.

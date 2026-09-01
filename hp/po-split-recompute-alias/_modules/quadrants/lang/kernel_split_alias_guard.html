@@ -344,59 +344,78 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor_wrapper</span><span class="w"> </span><span class="kn">import</span> <span class="n">_TENSOR_WRAPPER_TYPES</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types</span><span class="w"> </span><span class="kn">import</span> <span class="n">ndarray_type</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">._kernel_types</span><span class="w"> </span><span class="kn">import</span> <span class="n">PerOffloadCacheObservations</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_launch_alloc_id</span><span class="p">(</span><span class="n">nd</span><span class="p">:</span> <span class="n">Any</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Backing ``DeviceAllocation`` identity of a launch ndarray, or ``None`` when it can't be read.</span>
+
+<span class="sd">    The launcher derives each arg's device pointer from ``alloc_id``, so that (not the wrapper address) is the identity</span>
+<span class="sd">    that decides aliasing in the compiled kernel. ``None`` (unrecognized shape / unreadable id) means "cannot verify",</span>
+<span class="sd">    which the caller treats as a possible alias -&gt; whole-kernel fallback (correct, just slower).</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="n">nd</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">nd</span><span class="p">)</span> <span class="ow">in</span> <span class="n">_TENSOR_WRAPPER_TYPES</span><span class="p">:</span>
+        <span class="n">nd</span> <span class="o">=</span> <span class="n">nd</span><span class="o">.</span><span class="n">_unwrap</span><span class="p">()</span>
+    <span class="n">arr</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">nd</span><span class="p">,</span> <span class="s2">"arr"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">arr</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">arr</span><span class="o">.</span><span class="n">device_alloc_id</span><span class="p">()</span>
+    <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+        <span class="k">return</span> <span class="kc">None</span>
 
 
 <div class="viewcode-block" id="launch_has_aliased_ndarrays">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_split_alias_guard/index.html#quadrants.lang.kernel_split_alias_guard.launch_has_aliased_ndarrays">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">launch_has_aliased_ndarrays</span><span class="p">(</span><span class="n">kernel</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">"""True if two ndarray parameters of this launch may share one backing device allocation.</span>
+<span class="w">    </span><span class="sd">"""True iff some arg-slot pair the split assumed disjoint actually shares one backing device allocation.</span>
 
-<span class="sd">    Only called for keys whose split relied on cross-parameter ndarray disjointness (see ``select_launch_variant``).</span>
-<span class="sd">    Two ndarray args alias in the compiled kernel iff their ``DeviceAllocation`` matches -- the launcher derives each</span>
-<span class="sd">    arg's device pointer from ``alloc_id``, so that (not the wrapper address) is the identity to compare. An arg whose</span>
-<span class="sd">    id cannot be read is treated as a possible alias, so an unrecognized argument shape falls back to the</span>
-<span class="sd">    always-correct whole-kernel path rather than risking the split. Covers plain ndarray args and ndarrays reached</span>
-<span class="sd">    through ``@qd.data_oriented`` struct members.</span>
+<span class="sd">    Only called for keys whose split recorded such pairs (see ``select_launch_variant``). Aliases *outside* the</span>
+<span class="sd">    recorded pairs -- e.g. the same buffer bound to a param the split never recomputed-across -- do not fall back,</span>
+<span class="sd">    because the split never depended on those args being disjoint. A slot the guard cannot resolve to a readable</span>
+<span class="sd">    ``alloc_id`` is treated as a possible alias (conservative: costs the fallback, never correctness).</span>
 <span class="sd">    """</span>
-    <span class="n">seen</span><span class="p">:</span> <span class="nb">set</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
-
-    <span class="k">def</span><span class="w"> </span><span class="nf">_collides</span><span class="p">(</span><span class="n">nd</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-        <span class="k">if</span> <span class="n">nd</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">return</span> <span class="kc">False</span>
-        <span class="n">arr</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">nd</span><span class="p">,</span> <span class="s2">"arr"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">arr</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">return</span> <span class="kc">True</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="n">ident</span> <span class="o">=</span> <span class="n">arr</span><span class="o">.</span><span class="n">device_alloc_id</span><span class="p">()</span>
-        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
-            <span class="k">return</span> <span class="kc">True</span>
-        <span class="k">if</span> <span class="n">ident</span> <span class="ow">in</span> <span class="n">seen</span><span class="p">:</span>
-            <span class="k">return</span> <span class="kc">True</span>
-        <span class="n">seen</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">ident</span><span class="p">)</span>
+    <span class="n">pairs</span> <span class="o">=</span> <span class="n">kernel</span><span class="o">.</span><span class="n">_split_alias_guard_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">pairs</span><span class="p">:</span>
         <span class="k">return</span> <span class="kc">False</span>
 
-    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">meta</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">kernel</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">):</span>
-        <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">meta</span><span class="o">.</span><span class="n">annotation</span><span class="p">)</span> <span class="ow">is</span> <span class="n">ndarray_type</span><span class="o">.</span><span class="n">NdarrayType</span><span class="p">:</span>
-            <span class="n">val</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
-            <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">val</span><span class="p">)</span> <span class="ow">in</span> <span class="n">_TENSOR_WRAPPER_TYPES</span><span class="p">:</span>
-                <span class="n">val</span> <span class="o">=</span> <span class="n">val</span><span class="o">.</span><span class="n">_unwrap</span><span class="p">()</span>
-            <span class="k">if</span> <span class="n">_collides</span><span class="p">(</span><span class="n">val</span><span class="p">):</span>
-                <span class="k">return</span> <span class="kc">True</span>
+    <span class="c1"># slot -&gt; device-alloc identity, resolved lazily and only for slots that appear in a recorded pair.</span>
+    <span class="n">slot_to_nd</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">slot</span><span class="p">,</span> <span class="n">positional_index</span> <span class="ow">in</span> <span class="n">kernel</span><span class="o">.</span><span class="n">_explicit_ndarray_slot_info_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]:</span>
+        <span class="n">slot_to_nd</span><span class="p">[</span><span class="n">slot</span><span class="p">]</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="n">positional_index</span><span class="p">]</span>
     <span class="n">struct_nd_info</span> <span class="o">=</span> <span class="n">kernel</span><span class="o">.</span><span class="n">_struct_ndarray_launch_info_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">struct_nd_info</span><span class="p">:</span>
-        <span class="k">for</span> <span class="n">_arg_id</span><span class="p">,</span> <span class="n">template_arg_idx</span><span class="p">,</span> <span class="n">attr_chain</span> <span class="ow">in</span> <span class="n">struct_nd_info</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">_collides</span><span class="p">(</span><span class="n">kernel</span><span class="o">.</span><span class="n">_resolve_struct_ndarray</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">template_arg_idx</span><span class="p">,</span> <span class="n">attr_chain</span><span class="p">)):</span>
-                <span class="k">return</span> <span class="kc">True</span>
+    <span class="n">resolved</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_alloc_of</span><span class="p">(</span><span class="n">slot</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">slot</span> <span class="ow">in</span> <span class="n">resolved</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">resolved</span><span class="p">[</span><span class="n">slot</span><span class="p">]</span>
+        <span class="n">nd</span> <span class="o">=</span> <span class="n">slot_to_nd</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">slot</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">nd</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">struct_nd_info</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">s_slot</span><span class="p">,</span> <span class="n">template_arg_idx</span><span class="p">,</span> <span class="n">attr_chain</span> <span class="ow">in</span> <span class="n">struct_nd_info</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">s_slot</span> <span class="o">==</span> <span class="n">slot</span><span class="p">:</span>
+                    <span class="n">nd</span> <span class="o">=</span> <span class="n">kernel</span><span class="o">.</span><span class="n">_resolve_struct_ndarray</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">template_arg_idx</span><span class="p">,</span> <span class="n">attr_chain</span><span class="p">)</span>
+                    <span class="k">break</span>
+        <span class="n">ident</span> <span class="o">=</span> <span class="n">_launch_alloc_id</span><span class="p">(</span><span class="n">nd</span><span class="p">)</span>
+        <span class="n">resolved</span><span class="p">[</span><span class="n">slot</span><span class="p">]</span> <span class="o">=</span> <span class="n">ident</span>
+        <span class="k">return</span> <span class="n">ident</span>
+
+    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">pairs</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">):</span>
+        <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="n">pairs</span><span class="p">[</span><span class="n">j</span><span class="p">],</span> <span class="n">pairs</span><span class="p">[</span><span class="n">j</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span>
+        <span class="n">ida</span><span class="p">,</span> <span class="n">idb</span> <span class="o">=</span> <span class="n">_alloc_of</span><span class="p">(</span><span class="n">a</span><span class="p">),</span> <span class="n">_alloc_of</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">ida</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">idb</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">if</span> <span class="n">ida</span> <span class="o">==</span> <span class="n">idb</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
     <span class="k">return</span> <span class="kc">False</span></div>
 
 
 
 <div class="viewcode-block" id="select_launch_variant">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_split_alias_guard/index.html#quadrants.lang.kernel_split_alias_guard.select_launch_variant">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">select_launch_variant</span><span class="p">(</span><span class="n">kernel</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">,</span> <span class="n">compiled_kernel_data</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">prog</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">t_kernel</span><span class="p">:</span> <span class="n">Any</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">select_launch_variant</span><span class="p">(</span><span class="n">kernel</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">,</span> <span class="n">compiled_kernel_data</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">t_kernel</span><span class="p">:</span> <span class="n">Any</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Return the CompiledKernelData to launch, swapping in the whole-kernel variant when this call's actual buffers</span>
 <span class="sd">    violate the split's cross-parameter disjointness assumption.</span>
 
@@ -408,9 +427,7 @@
         <span class="k">return</span> <span class="n">compiled_kernel_data</span>
     <span class="n">no_split</span> <span class="o">=</span> <span class="n">kernel</span><span class="o">.</span><span class="n">_compiled_no_split_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">no_split</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">no_split</span> <span class="o">=</span> <span class="n">prog</span><span class="o">.</span><span class="n">compile_kernel</span><span class="p">(</span>
-            <span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">(),</span> <span class="n">prog</span><span class="o">.</span><span class="n">get_device_caps</span><span class="p">(),</span> <span class="n">t_kernel</span><span class="p">,</span> <span class="n">disable_split</span><span class="o">=</span><span class="kc">True</span>
-        <span class="p">)</span><span class="o">.</span><span class="n">compiled_kernel_data</span>
+        <span class="n">no_split</span> <span class="o">=</span> <span class="n">kernel</span><span class="o">.</span><span class="n">compile_no_split_variant</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">t_kernel</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
         <span class="n">kernel</span><span class="o">.</span><span class="n">_compiled_no_split_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">no_split</span>
     <span class="n">kernel</span><span class="o">.</span><span class="n">per_offload_cache_observations</span> <span class="o">=</span> <span class="n">PerOffloadCacheObservations</span><span class="p">()</span>
     <span class="k">return</span> <span class="n">no_split</span></div>
