@@ -208,7 +208,8 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
     cc.last_task_stats[kernel->get_name()] = {n, n_hit.load(), n_recompiled.load()};
   }
   // Carry the frontend split's no-alias assumption onto the compiled kernel so it serializes into the offline cache and
-  // a cross-process cache hit still arms the launch guard. Absent entry (whole-kernel compile) leaves the default false.
+  // a cross-process cache hit still arms the launch guard. Absent entry (whole-kernel compile) leaves the default
+  // false.
   if (prog != nullptr) {
     auto &cc = prog->per_construct_cache();
     std::lock_guard<std::mutex> g(cc.mu);

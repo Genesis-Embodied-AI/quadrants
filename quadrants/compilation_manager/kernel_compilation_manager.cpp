@@ -109,7 +109,7 @@ CompileResult KernelCompilationManager::load_or_compile(const CompileConfig &com
       cc.last_task_stats.erase(tit);
     }
   }
-  return CompileResult{ckd,        cache_hit,  kernel_key, total,          cache_hit_count,
+  return CompileResult{ckd,        cache_hit,  kernel_key, total,           cache_hit_count,
                        recompiled, task_total, task_hit,   task_recompiled, assumed_ndarray_disjoint};
 }
 

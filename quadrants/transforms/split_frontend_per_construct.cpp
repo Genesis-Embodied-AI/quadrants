@@ -509,18 +509,54 @@ Stmt *write_effect_dest(Stmt *w) {
 // allowlist: any name not listed (a new/unknown internal op) is treated as a writer, costing at most a missed split.
 bool internal_func_is_memory_free(const std::string &name) {
   static const std::unordered_set<std::string> kMemoryFree = {
-      "composite_extract_0", "composite_extract_1",  "composite_extract_2",  "composite_extract_3",
-      "linear_thread_idx",   "block_thread_idx",      "do_nothing",           "workgroupBarrier",
-      "workgroupMemoryBarrier", "gridMemoryBarrier",  "localInvocationId",    "globalInvocationId",
-      "vkGlobalThreadIdx",   "subgroupBarrier",       "subgroupMemoryBarrier", "subgroupElect",
-      "subgroupBroadcast",   "subgroupShuffle",       "subgroupShuffleDown",  "subgroupShuffleUp",
-      "subgroupBallotU32",   "subgroupBallotU64",     "subgroupInvocationId", "spirv_clock_i64",
-      "cuda_clock_i64",      "block_barrier",         "block_barrier_and_i32", "block_barrier_or_i32",
-      "block_barrier_count_i32", "block_mem_fence",   "grid_mem_fence",       "warp_barrier",
-      "cuda_all_sync_i32",   "cuda_any_sync_i32",     "cuda_uni_sync_i32",    "cuda_ballot_i32",
-      "cuda_shfl_sync_i32",  "cuda_shfl_sync_f32",    "cuda_shfl_up_sync_i32", "cuda_shfl_up_sync_f32",
-      "cuda_shfl_down_sync_i32", "cuda_shfl_down_sync_f32", "cuda_shfl_xor_sync_i32", "cuda_match_any_sync_i32",
-      "cuda_match_all_sync_i32", "cuda_active_mask",  "cuda_fns_u32",         "amdgpu_clock_i64",
+      "composite_extract_0",
+      "composite_extract_1",
+      "composite_extract_2",
+      "composite_extract_3",
+      "linear_thread_idx",
+      "block_thread_idx",
+      "do_nothing",
+      "workgroupBarrier",
+      "workgroupMemoryBarrier",
+      "gridMemoryBarrier",
+      "localInvocationId",
+      "globalInvocationId",
+      "vkGlobalThreadIdx",
+      "subgroupBarrier",
+      "subgroupMemoryBarrier",
+      "subgroupElect",
+      "subgroupBroadcast",
+      "subgroupShuffle",
+      "subgroupShuffleDown",
+      "subgroupShuffleUp",
+      "subgroupBallotU32",
+      "subgroupBallotU64",
+      "subgroupInvocationId",
+      "spirv_clock_i64",
+      "cuda_clock_i64",
+      "block_barrier",
+      "block_barrier_and_i32",
+      "block_barrier_or_i32",
+      "block_barrier_count_i32",
+      "block_mem_fence",
+      "grid_mem_fence",
+      "warp_barrier",
+      "cuda_all_sync_i32",
+      "cuda_any_sync_i32",
+      "cuda_uni_sync_i32",
+      "cuda_ballot_i32",
+      "cuda_shfl_sync_i32",
+      "cuda_shfl_sync_f32",
+      "cuda_shfl_up_sync_i32",
+      "cuda_shfl_up_sync_f32",
+      "cuda_shfl_down_sync_i32",
+      "cuda_shfl_down_sync_f32",
+      "cuda_shfl_xor_sync_i32",
+      "cuda_match_any_sync_i32",
+      "cuda_match_all_sync_i32",
+      "cuda_active_mask",
+      "cuda_fns_u32",
+      "amdgpu_clock_i64",
       "cpu_clock_i64",
   };
   return kMemoryFree.count(name) > 0;
@@ -556,7 +592,8 @@ bool clearance_assumes_ndarray_disjoint(Stmt *a, Stmt *b) {
 }
 
 // `assumed_ndarray_disjoint` is set true iff the split cleared condition (3) only because two ndarray accesses target
-// different args -- disjointness the caller can violate by binding the same ndarray twice. The launch guard verifies it.
+// different args -- disjointness the caller can violate by binding the same ndarray twice. The launch guard verifies
+// it.
 bool split_is_recompute_safe(Block *block, bool &assumed_ndarray_disjoint) {
   assumed_ndarray_disjoint = false;
   if (block == nullptr)
@@ -594,9 +631,9 @@ bool split_is_recompute_safe(Block *block, bool &assumed_ndarray_disjoint) {
     top_index[block->statements[j].get()] = j;
   // Every intervening global write that could change a recomputed field/ndarray load, tagged with its top-level slot
   // and the pointer it targets (null => a footprint we cannot pin to one address: structural / external -> may-alias-
-  // all). Gather LEAF effects only -- a container (loop / if) reports has_global_side_effect but its real writes are its
-  // leaves -- and drop memory-free runtime intrinsics (barriers, shuffles, thread-index), which have a side effect but
-  // write no addressable memory, so a construct sitting after a barrier still splits.
+  // all). Gather LEAF effects only -- a container (loop / if) reports has_global_side_effect but its real writes are
+  // its leaves -- and drop memory-free runtime intrinsics (barriers, shuffles, thread-index), which have a side effect
+  // but write no addressable memory, so a construct sitting after a barrier still splits.
   struct GlobalWrite {
     int pos;
     Stmt *dest;

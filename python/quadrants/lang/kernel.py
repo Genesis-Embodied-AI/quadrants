@@ -42,6 +42,10 @@ from quadrants.lang import _kernel_impl_dataclass, impl, runtime_ops
 # delegates the resume-cookie validation, label translation, per-launch yield_on= arg-id table build, and GraphStatus
 # construction to those free functions so this hot file doesn't accrete checkpoint-feature-specific blocks.
 from quadrants.lang import kernel_checkpoint as _checkpoint_helpers
+
+# Per-construct split launch-time no-alias guard. See `kernel_split_alias_guard.py`; `Kernel` delegates the per-launch
+# alias check and whole-kernel fallback there so this hot file doesn't accrete that feature's block.
+from quadrants.lang import kernel_split_alias_guard as _split_alias_guard
 from quadrants.lang._fast_caching import src_hasher
 from quadrants.lang._template_mapper_hotpath import chain_has_mutable_container
 from quadrants.lang._wrap_inspect import FunctionSourceInfo, get_source_info_and_src
@@ -775,18 +779,11 @@ class Kernel(FuncBase):
                 self.per_offload_cache_observations = PerOffloadCacheObservations()
             self._last_compiled_kernel_data = compiled_kernel_data
             # Launch-time no-alias guard: the split may have assumed two ndarray params never alias, which is unsound if
-            # this call binds the same ndarray to both. When that happens, launch the whole-kernel variant (never
-            # recomputes across a write, so always correct) instead. `_last_compiled_kernel_data` above keeps the fast
-            # split as the cached default for the common disjoint call.
-            if self._split_alias_guard_by_key.get(key) and self._launch_has_aliased_ndarrays(key, args):
-                no_split = self._compiled_no_split_by_key.get(key)
-                if no_split is None:
-                    no_split = prog.compile_kernel(
-                        prog.config(), prog.get_device_caps(), t_kernel, disable_split=True
-                    ).compiled_kernel_data
-                    self._compiled_no_split_by_key[key] = no_split
-                compiled_kernel_data = no_split
-                self.per_offload_cache_observations = PerOffloadCacheObservations()
+            # this call binds the same ndarray to both; `select_launch_variant` swaps in the whole-kernel variant for
+            # such calls. `_last_compiled_kernel_data` above keeps the fast split as the cached default.
+            compiled_kernel_data = _split_alias_guard.select_launch_variant(
+                self, key, args, compiled_kernel_data, prog, t_kernel
+            )
             launch_ctx.use_graph = self.use_graph and _GRAPH_ENABLED
             if self.use_graph and qd_stream is not None:
                 raise RuntimeError(
@@ -812,6 +809,7 @@ class Kernel(FuncBase):
             stream_handle = qd_stream.handle if qd_stream is not None else 0
             if stream_handle:
                 prog.set_current_cuda_stream(stream_handle)
+            assert compiled_kernel_data is not None
             try:
                 prog.launch_kernel(compiled_kernel_data, launch_ctx)
             finally:
@@ -848,45 +846,6 @@ class Kernel(FuncBase):
         if ret_type in primitive_types.real_types:
             return launch_ctx.get_struct_ret_float(indices)
         raise QuadrantsRuntimeTypeError(f"Invalid return type on index={indices}")
-
-    def _launch_has_aliased_ndarrays(self, key, args) -> bool:
-        """True if two ndarray parameters of this launch may share one backing device allocation.
-
-        Only called for keys whose split relied on cross-parameter ndarray disjointness (see the launch guard). Two
-        ndarray args alias in the compiled kernel iff their ``DeviceAllocation`` matches -- the launcher derives each
-        arg's device pointer from ``alloc_id``, so that (not the wrapper address) is the identity to compare. An arg
-        whose id cannot be read is treated as a possible alias, so an unrecognized argument shape falls back to the
-        always-correct whole-kernel path rather than risking the split. Covers plain ndarray args and ndarrays reached
-        through ``@qd.data_oriented`` struct members.
-        """
-        seen: set = set()
-
-        def _collides(nd) -> bool:
-            if nd is None:
-                return False
-            arr = getattr(nd, "arr", None)
-            try:
-                ident = arr.device_alloc_id()
-            except Exception:
-                return True
-            if ident in seen:
-                return True
-            seen.add(ident)
-            return False
-
-        for i, meta in enumerate(self.arg_metas):
-            if type(meta.annotation) is ndarray_type.NdarrayType:
-                val = args[i]
-                if type(val) in _TENSOR_WRAPPER_TYPES:
-                    val = val._unwrap()
-                if _collides(val):
-                    return True
-        struct_nd_info = self._struct_ndarray_launch_info_by_key.get(key)
-        if struct_nd_info:
-            for _arg_id, template_arg_idx, attr_chain in struct_nd_info:
-                if _collides(self._resolve_struct_ndarray(args, template_arg_idx, attr_chain)):
-                    return True
-        return False
 
     @staticmethod
     def _resolve_struct_ndarray(args, template_arg_idx, attr_chain):
