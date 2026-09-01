@@ -72,8 +72,7 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
   const int n = (int)offloads.size();
   std::vector<std::unique_ptr<LLVMCompiledTask>> data(n);
 
-  // Cross-process per-task artifact cache: a hit skips a task's entire compilation and carries cached backend code +
-  // launch metadata to the launcher. CUDA + AMDGPU + CPU; an empty dir means offline cache is off (tier disabled).
+  // Per-task artifact cache: a hit skips a task's compilation and carries cached code to the launcher. Empty dir = off.
   const std::string art_dir = pertask_artifact_dir_ref();
   const bool artifact_tier = (compile_config_.arch == Arch::cuda || compile_config_.arch == Arch::amdgpu ||
                               arch_is_cpu(compile_config_.arch)) &&
@@ -142,12 +141,8 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
   }
   worker.flush();
 
-  // Build one self-contained artifact per task before the whole-module link consumes `data`: a hit carries cached
-  // backend code (null module), a miss builds+optimizes a module for the JIT to compile and store.
-  //
-  // AMDGPU links each task with a separate `ld.lld`, and CPU serializes each task to a host object, so their per-task
-  // path only pays off when the tier is on; with it off they stay on the single whole-module link. CUDA's per-task
-  // load is cheap, so it always takes the per-task path.
+  // Build one artifact per task before the whole-module link consumes `data`. CUDA always takes this path; AMDGPU and
+  // CPU only when the tier is on, since their per-task link/serialize only pays off then.
   std::vector<PerConstructArtifact> per_construct_artifacts;
   const bool build_per_construct_artifacts =
       compile_config_.arch == Arch::cuda ||
@@ -180,9 +175,8 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
     }
   }
 
-  // A cross-process hit leaves a task with no module, so skip the whole-kernel link; the launcher assembles the
-  // backend module from the per-task artifacts. Still concatenate every task's metadata into `tasks`, which it runs
-  // off.
+  // A cache hit leaves a task with no module, so skip the whole-kernel link and let the launcher assemble from the
+  // per-task artifacts. Still gather every task's metadata into `tasks`.
   const bool code_only_tasks = std::any_of(data.begin(), data.end(), [](const auto &d) { return d && !d->module; });
   LLVMCompiledKernel llvm_compiled_kernel;
   if (code_only_tasks) {

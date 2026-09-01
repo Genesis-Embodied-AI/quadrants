@@ -85,9 +85,8 @@ class PerTaskArtifactCache {
     }
   }
 
-  // Drop a cached record so a later process recompiles and refills it. Used when a backend rejects the payload bytes as
-  // corrupt: try_load only catches framing-level corruption (truncation / bad length header), not a decodable record
-  // whose `code` is a malformed backend object / PTX, which only the backend loader can detect.
+  // Drop a cached record so a later process refills it. try_load rejects framing-level corruption, but a malformed
+  // payload is only detectable by the backend loader.
   void erase(const std::string &ir_key) const {
     if (dir_.empty()) {
       return;

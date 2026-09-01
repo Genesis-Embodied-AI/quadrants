@@ -53,9 +53,8 @@ LlvmProgramImpl::LlvmProgramImpl(CompileConfig &config_, KernelProfilerBase *pro
     }
 #endif
     if (arch_is_cpu(config_.arch)) {
-      // Artifacts hold host object code tied to the target machine, so scope the dir by host triple + CPU (as the
-      // CUDA branch scopes by sm); an NFS-shared cache path could otherwise serve an object built for one host to an
-      // incompatible CPU. Matches the target machine built in jit_cpu.cpp / KernelCodeGenCPU::optimize_module.
+      // Host objects are CPU-specific, so scope the dir by host triple + CPU; a shared path must never serve an object
+      // built for an incompatible CPU.
       auto jtmb = llvm::orc::JITTargetMachineBuilder::detectHost();
       std::string tag =
           (jtmb ? jtmb->getTargetTriple().str() : std::string("unknown")) + "_" + llvm::sys::getHostCPUName().str();

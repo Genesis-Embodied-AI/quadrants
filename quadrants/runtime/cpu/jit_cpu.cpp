@@ -82,9 +82,8 @@ class JITSessionCPU;
 class JITModuleCPU : public JITModule {
  private:
   JITSessionCPU *session_;
-  // The whole-module path resolves in one dylib; the per-task path (add_module_per_task) resolves across N, one per
-  // task. A task's entry symbol lives in exactly one of them, so a by-name lookup that searches them all is
-  // unambiguous (only the unique task entry names are ever looked up; duplicated helper symbols never are).
+  // One dylib on the whole-module path, one per task on the per-task path. Lookups search them all; task entry names
+  // are unique across dylibs.
   std::vector<JITDylib *> dylibs_;
 
  public:
@@ -111,8 +110,7 @@ class JITSessionCPU : public JITSession {
   std::vector<llvm::orc::JITDylib *> all_libs_;
   int module_counter_;
   SectionMemoryManager *memory_manager_;
-  // Lazily built host PIC target machine for the per-task object serialize path (add_module_per_task); reused across
-  // all misses in a session.
+  // Built on first per-task cache miss, reused for the rest of the session.
   std::unique_ptr<llvm::TargetMachine> pertask_target_machine_;
 
  public:
@@ -189,19 +187,13 @@ class JITSessionCPU : public JITSession {
     QD_ASSERT(max_reg == 0);  // No need to specify max_reg on CPUs
     std::lock_guard<std::mutex> _(mut_);
 
-    // Cross-process fill site (mirror of runtime/cuda/jit_cuda.cpp): a hit already carries the cached host object in
-    // `code`, used verbatim; a miss compiles the per-task module to a host object and stores it -- object bytes plus
-    // the launch metadata that must travel with it -- under the task's IR key so a later process skips this
-    // compilation. No-ops when the dir is empty (offline cache off).
     const PerTaskArtifactCache artifact_cache(pertask_artifact_dir_ref());
 
-    // One JITDylib per task (a task's entry symbol lives in exactly one), so per-task objects never collide on a
-    // shared helper / global symbol -- the CPU analog of CUDA's one-CUmodule-per-task, and why CPU needs no relink.
+    // One dylib per task keeps each task's object in its own symbol namespace, so shared helper symbols never collide.
     std::vector<llvm::orc::JITDylib *> dylibs;
     dylibs.reserve(artifacts.size());
     for (auto &art : artifacts) {
-      // Advance the counter up front: the error path below throws mid-iteration and the created dylib lingers in the
-      // session, so reusing this id on a later call would collide on the dylib name (createJITDylib would fail).
+      // Advance up front: an error below throws with the dylib already created, so this id must not be reused.
       const int mod_id = module_counter_++;
       auto dylib_expect = es_.createJITDylib(fmt::format("pertask_{}", mod_id));
       QD_ASSERT(dylib_expect);
@@ -212,7 +204,6 @@ class JITSessionCPU : public JITSession {
       std::unique_ptr<llvm::MemoryBuffer> obj;
       const bool from_cache = !art.code.empty();
       if (from_cache) {
-        // Hit: the cached bytes are a relocatable host object; load them straight into the object layer.
         obj = llvm::MemoryBuffer::getMemBufferCopy(llvm::StringRef(art.code.data(), art.code.size()),
                                                    fmt::format("pertask_{}", mod_id));
       } else {
@@ -227,11 +218,8 @@ class JITSessionCPU : public JITSession {
           artifact_cache.store(art.key, rec);
         }
       }
-      // `object_layer_.add` parses the object eagerly, so malformed bytes surface here -- offline-cache corruption on
-      // the hit path, or (defensively) a bad freshly-compiled object we just stored on the miss path. Don't `cantFail`
-      // -- that aborts the whole process on every launch through a corrupt cache. Drop the on-disk entry (either path
-      // may have written one) so a later process recompiles and refills it, and raise a catchable error instead of
-      // terminating (mirrors the CUDA per-task load, which QD_ERRORs on a bad module).
+      // A corrupt cached object must not abort the process, so don't cantFail. Drop the record so a later run refills
+      // it and raise a catchable error.
       if (auto err = object_layer_.add(dylib, std::move(obj))) {
         if (!art.key.empty()) {
           artifact_cache.erase(art.key);
@@ -239,11 +227,8 @@ class JITSessionCPU : public JITSession {
         QD_ERROR("Failed to load per-task CPU object into the JIT (offline cache may be corrupt): {}",
                  llvm::toString(std::move(err)));
       }
-      // `object_layer_.add` only registers a materialization unit, so it catches parse errors but not a corrupt
-      // relocation / undefined reference, which fails later during linking. That failure would otherwise surface at
-      // launch in lookup_in_modules -- with no key at hand to invalidate the record, poisoning every future process.
-      // Force materialization here (each task's entry symbol resolves in exactly this self-contained dylib) so a
-      // deferred link failure is caught while `art.key` is still available, then erased and raised catchably.
+      // add() links lazily, so link errors (e.g. a corrupt relocation) only surface at lookup, by which point the key
+      // is gone. Force materialization now to catch them while we can still erase the record.
       for (const auto &task : art.tasks) {
 #ifdef __APPLE__
         auto sym = es_.lookup({&dylib}, mangle_(task.name));
@@ -292,21 +277,16 @@ class JITSessionCPU : public JITSession {
   }
 
  private:
-  // Serialize a self-contained per-task module to a host relocatable object -- the "serialize" half of the per-task
-  // disk tier, called on a cache miss. Build the target machine the same way as KernelCodeGenCPU::optimize_module
-  // (host CPU, PIC so the object is loadable by the ORC object layer) so the emitted object matches the module that
-  // optimize_module already produced.
+  // Compile a per-task module to a host object file for the on-disk cache.
   std::unique_ptr<llvm::MemoryBuffer> compile_module_to_object(llvm::Module &M) {
     if (!pertask_target_machine_) {
       auto expected_jtmb = llvm::orc::JITTargetMachineBuilder::detectHost();
       if (!expected_jtmb) {
         QD_ERROR("LLVM TargetMachineBuilder has failed.");
       }
-      // Build the target machine straight from the JTMB so it carries detectHost()'s *explicit* host feature vector,
-      // exactly as the whole-kernel path does via ConcurrentIRCompiler(JTMB). Passing the host CPU name with an empty
-      // feature string instead selects that CPU model's *default* features, which can be a superset of what the
-      // running core actually enables and emits illegal instructions at kernel launch on some hosts. PIC so the
-      // emitted object is loadable by the ORC object layer.
+      // Build from the JTMB so it uses detectHost()'s explicit feature vector. A bare CPU name with empty features
+      // would enable that model's default features, a superset of the running core, and emit illegal instructions.
+      // PIC so the object loads in the object layer.
       auto jtmb = std::move(*expected_jtmb);
       jtmb.setRelocationModel(llvm::Reloc::PIC_);
       jtmb.setCodeModel(llvm::CodeModel::Small);

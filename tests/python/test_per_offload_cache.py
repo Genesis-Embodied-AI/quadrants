@@ -755,8 +755,8 @@ def test_per_task_artifact_cache_reuses_shared_task_cross_process(arch) -> None:
 
 @test_utils.test(arch=qd.cpu, offline_cache=False)
 def test_per_task_artifact_cache_disabled_without_offline_cache_cpu() -> None:
-    # CPU sibling of the disabled-tier assertion above. `offline_cache` is the sole gate for the per-task disk tier, so
-    # with it off the per-task counts stay at the -1 sentinel while the (backend-agnostic) FRONTEND split still fires.
+    # With offline_cache off the per-task tier never runs, so its counts stay at the -1 sentinel; the frontend split
+    # still fires.
     @qd.kernel
     def kernel_two_loops(x: qd.types.ndarray(qd.f32, ndim=1)) -> None:
         for i in x:
@@ -777,10 +777,8 @@ def test_per_task_artifact_cache_disabled_without_offline_cache_cpu() -> None:
 
 
 def test_per_task_artifact_cache_reuses_shared_task_cross_process_cpu() -> None:
-    # CPU sibling of `test_per_task_artifact_cache_reuses_shared_task_cross_process` (ref 7). The per-task disk tier
-    # stores each task's compiled host object + launch metadata, so a fresh process (cold in-memory, warm disk) loads
-    # an unchanged task from disk instead of recompiling it. CPU fills the tier via the ORC object layer
-    # (runtime/cpu/jit_cpu.cpp). Uses a re-`init` with the same cache path to emulate a second process.
+    # A fresh process with a warm disk cache loads an unchanged task instead of recompiling it. Re-init with the same
+    # cache path emulates the second process.
     if qd.cpu not in test_utils.expected_archs():
         pytest.skip("this variant exercises the CPU per-task artifact cache")
 
@@ -802,8 +800,7 @@ def test_per_task_artifact_cache_reuses_shared_task_cross_process_cpu() -> None:
         assert obs1.tasks_total >= 2, obs1
         assert obs1.tasks_cache_hit == 0, obs1
 
-        # Second "process": fresh runtime, same disk. `k_second` is a new kernel (whole-kernel entry misses, codegen
-        # runs), but its first loop matches `k_first`'s, so that task is served from disk.
+        # Second "process": fresh runtime, same disk. k_second's first loop matches k_first's, so that task is a hit.
         qd.init(arch=qd.cpu, offline_cache=True, offline_cache_file_path=cache_dir)
 
         @qd.kernel
