@@ -376,9 +376,9 @@
 <span class="c1"># construction to those free functions so this hot file doesn't accrete checkpoint-feature-specific blocks.</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">kernel_checkpoint</span> <span class="k">as</span> <span class="n">_checkpoint_helpers</span>
 
-<span class="c1"># Per-construct split launch-time no-alias guard. See `kernel_split_alias_guard.py`; `Kernel` delegates the per-launch</span>
+<span class="c1"># Per-construct split launch-time no-alias guard. See `_split_alias_guard.py`; `Kernel` delegates the per-launch</span>
 <span class="c1"># alias check and whole-kernel fallback there so this hot file doesn't accrete that feature's block.</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">kernel_split_alias_guard</span> <span class="k">as</span> <span class="n">_split_alias_guard</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">_split_alias_guard</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._fast_caching</span><span class="w"> </span><span class="kn">import</span> <span class="n">src_hasher</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._template_mapper_hotpath</span><span class="w"> </span><span class="kn">import</span> <span class="n">chain_has_mutable_container</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._wrap_inspect</span><span class="w"> </span><span class="kn">import</span> <span class="n">FunctionSourceInfo</span><span class="p">,</span> <span class="n">get_source_info_and_src</span>
