@@ -186,13 +186,9 @@ class FunctionDefTransformer:
                         getattr(arg_value, field.name) if arg_value is not None else None,
                     )
                 elif isinstance(field.type, type) and getattr(field.type, "_data_oriented", False):
-                    # ``@qd.data_oriented`` field type inside a typed-dataclass kernel arg. The two patterns are
-                    # semantically incompatible at this layer: dataclass kernel-arg recursion uses annotations to
-                    # flatten leaf fields into per-leaf kernel args at compile time, but data_oriented containers don't
-                    # carry per-attribute type annotations — they need a value-driven walk
-                    # (``_predeclare_struct_ndarrays``), which only fires for ``qd.template()`` / ``qd.Tensor``
-                    # annotations. Rather than silently miscompile, raise a clear error pointing users to the
-                    # recommended pattern.
+                    # The two patterns don't compose here: dataclass flattening is annotation-driven, while a
+                    # data_oriented container has no per-attribute annotations and needs the value-driven walk that only
+                    # ``qd.template()`` / ``qd.Tensor`` annotations trigger.
                     raise QuadrantsSyntaxError(
                         f"Kernel arg {argument_name!r}: field {field.name!r} has @qd.data_oriented type "
                         f"{field.type.__name__!r}, which cannot be flattened into a typed-dataclass kernel arg. "
@@ -276,20 +272,31 @@ class FunctionDefTransformer:
         Also stores ``(arg_id, template_arg_idx, attr_chain)`` tuples in
         ``ctx.global_context.struct_ndarray_launch_info`` so the launch path can populate the corresponding slots in the
         launch context.
+
+        Pruning: the enforcing pass registers only the ndarrays the first pass saw accessed
+        (``pruning.used_struct_ndarray_ids``), dropping the rest from the kernel's parameter list. The first pass must
+        register everything, since that is what lets ``build_Attribute`` resolve the accesses that populate the set.
         """
+        from quadrants.lang._pruning import Pruning  # pylint: disable=C0415
         from quadrants.lang.util import cook_dtype  # pylint: disable=C0415
 
         cache = ctx.global_context.ndarray_to_any_array
         launch_info = ctx.global_context.struct_ndarray_launch_info
+        pruning = ctx.global_context.pruning
+        used_ids = getattr(pruning, "used_struct_ndarray_ids", None)
+        prune = pruning.enforcing and used_ids is not None and getattr(pruning, "pass_0_ran", False)
+        # A fastcache hit skips pass 0, so there are no ids to prune by - but the cached flat-name set describes the
+        # same ndarrays, and must be used: registering every reachable ndarray instead would bind the kernel's arg slots
+        # to different ndarrays than the compile that produced the artifact.
+        prune_from_flat_names = pruning.enforcing and not getattr(pruning, "pass_0_ran", False)
+        kernel_used_flat_names = (
+            pruning.used_vars_by_func_id.get(Pruning.KERNEL_FUNC_ID, set()) if prune_from_flat_names else None
+        )
 
-        # ``_seen`` set guards against attribute-graph cycles in user containers (e.g. Genesis ``sim.solver.sim is
-        # sim``). Without it this walker recurses infinitely on the back-edge and blows the Python stack at compile
-        # time. Tracked by ``id(obj)`` to avoid relying on ``__hash__`` for arbitrary user types.
+        # ``seen`` is required, not defensive: Genesis object graphs have cross-references (solver <-> scene <-> sim).
+        # Sharing it across the whole arg is safe because the ndarray set rooted at a node does not depend on the path
+        # taken to reach it.
         def _walk_obj(obj, arg_idx, path, seen):
-            obj_id = id(obj)
-            if obj_id in seen:
-                return
-            seen.add(obj_id)
             if is_dataclass_instance(obj):
                 for field in dataclasses.fields(obj):
                     child = getattr(obj, field.name)
@@ -298,6 +305,10 @@ class FunctionDefTransformer:
                     if isinstance(child, _ndarray.Ndarray):
                         _register_ndarray(child, arg_idx, (*path, field.name))
                     elif is_dataclass_instance(child) or is_data_oriented(child):
+                        child_id = id(child)
+                        if child_id in seen:
+                            continue
+                        seen.add(child_id)
                         _walk_obj(child, arg_idx, (*path, field.name), seen)
             else:
                 for attr_name, attr_val in vars(obj).items():
@@ -306,12 +317,29 @@ class FunctionDefTransformer:
                     if isinstance(attr_val, _ndarray.Ndarray):
                         _register_ndarray(attr_val, arg_idx, (*path, attr_name))
                     elif is_dataclass_instance(attr_val) or is_data_oriented(attr_val):
+                        attr_id = id(attr_val)
+                        if attr_id in seen:
+                            continue
+                        seen.add(attr_id)
                         _walk_obj(attr_val, arg_idx, (*path, attr_name), seen)
 
         def _register_ndarray(nd, arg_idx, attr_chain):
             key = id(nd)
             if key in cache:
                 return
+            if prune and key not in used_ids:
+                return
+            if prune_from_flat_names:
+                if arg_idx < 0 or arg_idx >= len(ctx.func.arg_metas):
+                    return
+                arg_name = ctx.func.arg_metas[arg_idx].name
+                if not arg_name:
+                    return
+                flat = arg_name
+                for attr in attr_chain:
+                    flat = create_flat_name(flat, attr)
+                if flat not in kernel_used_flat_names:
+                    return
             from quadrants._lib import core as _qd_core  # pylint: disable=C0415
 
             element_type = cook_dtype(nd.element_type)
@@ -326,6 +354,9 @@ class FunctionDefTransformer:
                 _qd_core.make_external_tensor_expr(element_type, ndim, arg_id_vec, needs_grad, BoundaryMode.UNSAFE),
                 _qd_layout=layout,
             )
+            # Lets ``_promote_ndarray_if_declared`` still mark the ndarray used when an access reaches it through this
+            # proxy rather than the ndarray itself, as happens inside an inlined ``@qd.func`` body.
+            arr._qd_source_ndarray_id = key
             cache[key] = arr
             launch_info.append((arg_id_vec[0], arg_idx, attr_chain))
 
@@ -342,9 +373,9 @@ class FunctionDefTransformer:
             if isinstance(val, _ndarray.Ndarray):
                 continue
             if is_dataclass_instance(val):
-                _walk_obj(val, i, (), set())
+                _walk_obj(val, i, (), {id(val)})
             elif hasattr(val, "__dict__"):
-                _walk_obj(val, i, (), set())
+                _walk_obj(val, i, (), {id(val)})
 
     @staticmethod
     def _unwrap_tensor(data: Any) -> Any:
@@ -360,6 +391,11 @@ class FunctionDefTransformer:
         argument_type: Any,
         data: Any,
     ) -> None:
+        # Lets ``build_Name`` seed ``_qd_arg_chain`` for chains rooted at this param, so that a member read inside a
+        # ``@qd.func`` (``static_rigid_sim_config.para_level``) reaches the kernel's pruning set - without it the
+        # args-hasher never sees the value and configurations that differ only there collide in the fastcache key.
+        ctx.fn_param_names.add(argument_name)
+
         # A ``Final[T]`` leaf @qd.func arg: ``data`` already carries the resolved Python value, so bind it directly for
         # ``qd.static(cfg.field)``. Before the ``annotations.template`` check (``Final[T]`` is not a ``template``).
         if is_final_annotation(argument_type):

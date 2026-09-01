@@ -11,16 +11,18 @@ from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorWrapper
 from quadrants.types.annotations import Template
 
+from .._dataclass_util import create_flat_name
 from .._final_dataclass_fields import (
     final_field_names,
     final_scalar_key,
     subtree_has_final_fields,
 )
 from .._ndarray import ScalarNdarray
+from .._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
 from ..field import ScalarField
 from ..kernel_arguments import ArgMetadata
 from ..matrix import MatrixField, MatrixNdarray, VectorNdarray
-from ..util import is_data_oriented, wants_runtime_primitives
+from ..util import is_data_oriented, is_dataclass_instance, wants_runtime_primitives
 from .hash_utils import hash_iterable_strings
 
 _FIELD_TYPES = (ScalarField, MatrixField)
@@ -51,6 +53,23 @@ _DC_REPR_NONE = object()
 _NON_TEMPLATE_CHILD_META = ArgMetadata(None, "")
 
 
+# Returned by ``stringify_obj_type`` when a value cannot be safely hashed (unsupported tensor-like type, or an
+# unrecognised type at a kernel-read path). Every container walker has to propagate it upward: fastcache is then off for
+# the whole call and the caller writes the diagnostic.
+class _FailFastcache:
+    """Singleton sentinel; identity-compared."""
+
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+
+_FAIL_FASTCACHE = _FailFastcache()
+
+
 class FastcacheSkip(enum.Enum):
     """Why fastcache does not apply to this call."""
 
@@ -58,9 +77,19 @@ class FastcacheSkip(enum.Enum):
     WARN = "warn"
 
 
-# Set when the fastcache skip is something callers should warn about (as opposed to a Field arriving through a
-# qd.Tensor annotation, which is a normal silent path). Reset at the start of each hash_args call.
+# Set when the skip is worth warning about, as opposed to a ``Field`` arriving through a ``qd.Tensor`` annotation, which
+# is a normal silent path. Reset at the start of each ``hash_args`` call.
 _should_warn = False
+
+
+# ``type(v).__qualname__`` strings already warned about, so a hot launch loop reports an unrecognised type once instead
+# of thousands of times.
+_warned_unknown_types: set[str] = set()
+
+
+def reset_unknown_type_warn_state() -> None:
+    """Clear the once-per-process warned-unknown-types set. Called from test setup / ``qd.init``."""
+    _warned_unknown_types.clear()
 
 
 def _mark_warn_if_not_tensor_annotation(arg_meta: ArgMetadata | None) -> None:
@@ -75,35 +104,97 @@ def _mark_should_warn() -> None:
     _should_warn = True
 
 
-def dataclass_to_repr(raise_on_templated_floats: bool, path: tuple[str, ...], arg: Any) -> str | None:
-    # PERF: For frozen dataclasses, the repr never changes. Cache it on the instance to avoid repeated
-    # ``dataclasses.fields()`` calls (which are slow due to extra runtime checks — see _template_mapper_hotpath.py
-    # module docstring). The cache is stored as ``_qd_dc_repr`` via ``object.__setattr__`` to bypass frozen guards.
-    # A cached ``None`` is stored as the sentinel ``_DC_REPR_NONE`` to distinguish "not yet computed" from
-    # "computed but not fast-cacheable".
+def _fail_unknown_type(obj: object, path: tuple[str, ...]) -> _FailFastcache:
+    """Disable fastcache for the call when an unrecognised type appears at a kernel-read path.
+
+    Neither alternative is safe: a ``__qualname__`` fallback captures type identity only, and so hides a
+    value-affecting change, while skipping the value lets a codegen-affecting one escape the key entirely. See
+    ``docs/source/user_guide/fastcache.md`` "Pruning-driven argument hashing".
+    """
+    t = type(obj)
+    qualname = f"{getattr(t, '__module__', '')}.{getattr(t, '__qualname__', t.__name__)}"
+    if qualname not in _warned_unknown_types:
+        _warned_unknown_types.add(qualname)
+        _logging.warn(
+            f"[FASTCACHE][UNKNOWN_TYPE] Unrecognised type {qualname} reached at kernel-read path {path}. "
+            f"Fastcache is disabled for this call. Add explicit handling for this type to "
+            f"``quadrants/lang/_fast_caching/args_hasher.py::stringify_obj_type``, or refactor the kernel "
+            f"so it does not read this member."
+        )
+    _mark_should_warn()
+    return _FAIL_FASTCACHE
+
+
+def _child_flat(parent_flat: str | None, child_name: str) -> str | None:
+    """Compute the flat name a kernel parameter would have if it pointed at this container's child.
+
+    ``state`` + ``x`` -> ``__qd_state__qd_x``; ``state.dofs`` + ``x`` -> ``__qd_state__qd_dofs__qd_x``. A ``None``
+    ``parent_flat`` means no path info is available, and propagates so the caller walks the child unconditionally.
+    """
+    if parent_flat is None:
+        return None
+    return create_flat_name(parent_flat, child_name)
+
+
+def _is_path_used(pruning_paths: set[str] | None, child_flat: str | None) -> bool:
+    """Return True if a child at ``child_flat`` should be hashed. Unknown (``None``) means hash it.
+
+    Membership of the child alone also decides whether to descend into it: ``Kernel.materialize``'s
+    prefix-expansion step puts every ancestor of a used leaf in the set.
+    """
+    if pruning_paths is None or child_flat is None:
+        return True
+    return child_flat in pruning_paths
+
+
+def dataclass_to_repr(
+    raise_on_templated_floats: bool,
+    path: tuple[str, ...],
+    arg: Any,
+    pruning_paths: set[str] | None = None,
+    parent_flat: str | None = None,
+) -> str | _FailFastcache:
+    """Hash a dataclass instance, descending only into fields listed in ``pruning_paths`` (when given).
+
+    Returns ``_FAIL_FASTCACHE`` if any visited subtree holds an unsupported tensor type.
+    """
+    # PERF: a frozen dataclass's repr never changes, so cache it on the instance (``dataclasses.fields()`` is slow, see
+    # the _template_mapper_hotpath.py module docstring). ``_DC_REPR_NONE`` caches a failure verdict.
+    #
+    # Only unpruned walks are cacheable: both the repr and the failure verdict depend on which fields were visited, so a
+    # kernel with a narrower pruning set must not inherit another kernel's verdict. Final-bearing subtrees are excluded
+    # too - their repr must be recomputed each launch to re-run ``final_scalar_key``'s validation.
     is_frozen = type(arg).__hash__ is not None
-    if is_frozen:
+    final_names = final_field_names(type(arg))
+    cacheable = is_frozen and pruning_paths is None and not subtree_has_final_fields(type(arg))
+    if cacheable:
         cached = getattr(arg, "_qd_dc_repr", None)
         if cached is _DC_REPR_NONE:
-            return None
+            return _FAIL_FASTCACHE
         if cached is not None:
             return cached
-    # A baked ``Final[T]`` field's *value* must be in the offline cache key too, else a kernel baked with one value
-    # loads for a config carrying another. Test: ``test_final_field_value_is_part_of_offline_fastcache_key``.
-    final_names = final_field_names(type(arg))
-    # Never cache a Final-bearing subtree's repr: it must recompute each launch to re-run ``final_scalar_key``'s
-    # validation, so we never store one (the read above then falls through).
-    cacheable = is_frozen and not subtree_has_final_fields(type(arg))
     repr_l = []
     for field in dataclasses.fields(arg):
         child_value = getattr(arg, field.name)
         if field.name in final_names:
-            # Serialize via ``final_scalar_key`` (collision-safe, process-stable) and skip ``stringify_obj_type``: it
-            # has no bare-``str`` case, so a ``Final[str]`` would return None and disable the cache for the whole arg.
+            # ``final_scalar_key`` rather than ``stringify_obj_type``: the latter has no bare-``str`` case, so a
+            # ``Final[str]`` would disable fastcache for the whole arg. Included even when ``pruning_paths`` does not
+            # mention the field - the value is baked into the generated code, so a key that omits it could serve a
+            # kernel baked with a different constant.
             repr_l.append(f"{field.name}: (final) = {final_scalar_key(child_value)}")
             continue
-        _repr = stringify_obj_type(raise_on_templated_floats, path + (field.name,), child_value, arg_meta=None)
-        if _repr is None:
+        child_flat = _child_flat(parent_flat, field.name)
+        if not _is_path_used(pruning_paths, child_flat):
+            continue
+        _repr = stringify_obj_type(
+            raise_on_templated_floats,
+            path + (field.name,),
+            child_value,
+            arg_meta=None,
+            pruning_paths=pruning_paths,
+            parent_flat=child_flat,
+        )
+        if _repr is _FAIL_FASTCACHE:
             if isinstance(child_value, _FIELD_TYPES) and field.type is not _TensorWrapper:
                 _mark_should_warn()
             if cacheable:
@@ -111,7 +202,7 @@ def dataclass_to_repr(raise_on_templated_floats: bool, path: tuple[str, ...], ar
                     object.__setattr__(arg, "_qd_dc_repr", _DC_REPR_NONE)
                 except AttributeError:
                     pass
-            return None
+            return _FAIL_FASTCACHE
         full_repr = f"{field.name}: ({_repr})"
         if field.metadata.get(FIELD_METADATA_CACHE_VALUE, False):
             full_repr += f" = {child_value}"
@@ -133,36 +224,32 @@ def _is_template(arg_meta: ArgMetadata | None) -> bool:
 
 
 def stringify_obj_type(
-    raise_on_templated_floats: bool, path: tuple[str, ...], obj: object, arg_meta: ArgMetadata | None
-) -> str | None:
+    raise_on_templated_floats: bool,
+    path: tuple[str, ...],
+    obj: object,
+    arg_meta: ArgMetadata | None,
+    pruning_paths: set[str] | None = None,
+    parent_flat: str | None = None,
+) -> str | _FailFastcache:
+    """Convert ``obj`` into a deterministic string that contributes to the fastcache key.
+
+    Returns ``_FAIL_FASTCACHE`` for a value that cannot be safely hashed, which callers must propagate upward to
+    disable fastcache for the whole call.
+
+    Parameters:
+      - ``arg_meta``: non-``None`` only for top-level kernel args and for ``@qd.data_oriented`` members. Determines
+        whether primitive values are baked into the cache key (template-position primitives and all primitive members
+        of data-oriented containers).
+      - ``pruning_paths``: kernel-accessed flat names from the L1 cache. When provided, the container walkers descend
+        only into children whose flat name is in the set - a path the kernel cannot read cannot affect codegen. See
+        ``docs/source/user_guide/fastcache.md`` "Pruning-driven argument hashing".
+      - ``parent_flat``: flat-name prefix for ``obj``'s children (e.g. ``__qd_self``), used to build those names.
     """
-    Convert an object into a string representation that only depends on its type.
-
-    String should somehow represent the type of obj. Doesnt have to be hashed, nor does it have
-    to be the actual python type string, just a string that is representative of the type, and won't collide
-    with different (allowed) types. String should be non-empty.
-
-    Note that fields are not included in fast cache.
-
-    arg_meta should only be non-None for the top level arguments and for data oriented objects. It is
-    used currently to determine whether a value is added to the cache key, as well as the name. eg
-    - at the top level, primitive types have their values added to the cache key if their annotation is qd.Template,
-      since they are baked into the kernel
-    - in data oriented objects, the values of all primitive types are added to the cache key, since they are baked
-      into the kernel, and require a kernel recompilation, when they change
-    """
-    # ``qd.Tensor`` wrappers passed as struct fields. The top-level kernel-arg unwrap hook in ``Kernel.__call__`` strips
-    # wrappers off positional / keyword args before the fastcache hasher sees them, but the dataclass / data-oriented
-    # walkers below (``dataclass_to_repr`` and the ``is_data_oriented`` branch) do raw ``getattr`` to fetch struct
-    # fields, so a wrapper stored as a struct field arrives here un-stripped. Without this branch the hasher falls
-    # through to the ``[FASTCACHE][PARAM_INVALID]`` warning and disables the fast path for the whole call. See
-    # ``perso_hugh/doc/quadrants-tensor.md`` §8.14.
-    # ``qd.Tensor`` wrappers: unwrap to the bare impl so the type checks below match. After unwrap, ``_qd_layout`` (if
-    # any) is on the impl.
+    # ``Kernel.__call__`` unwraps ``qd.Tensor`` for positional / keyword args, but the walkers below reach struct fields
+    # by raw ``getattr``, so a wrapper stored as a field arrives here un-stripped.
     #
-    # PERF-CRITICAL: The _any_tensor_constructed guard makes this check zero-cost when no qd.Tensor has been created.
-    # ``type(obj) in _TENSOR_WRAPPER_TYPES`` is used instead of ``isinstance`` because it is a pointer comparison (~10
-    # ns) vs an MRO walk (~100–200 ns). Do not replace with isinstance or remove the guard.
+    # PERF-CRITICAL: the ``_any_tensor_constructed`` guard keeps this free for programs that use no ``qd.Tensor``, and
+    # the ``type(obj) in ...`` test is a pointer comparison rather than an MRO walk. Don't switch it to isinstance.
     if (
         _tensor_wrapper._any_tensor_constructed and type(obj) in _TENSOR_WRAPPER_TYPES
     ):  # pyright: ignore[reportOptionalMemberAccess]
@@ -170,18 +257,24 @@ def stringify_obj_type(
     arg_type = type(obj)
     _layout = getattr(obj, "_qd_layout", None)
     _layout_tag = "" if _layout is None else f"-L{_layout!r}"
+    # The grad tags below are not cosmetic: ``insert_ndarray_param`` bakes grad-presence into the parameter struct
+    # layout, so two ndarrays alike but for ``needs_grad`` must hash distinctly or the artifact is launched against a
+    # slot of the other shape (silent miscomputation or OOB).
     if isinstance(obj, ScalarNdarray):
-        return f"[nd-{obj.dtype}-{len(obj.shape)}{_layout_tag}]"  # type: ignore[arg-type]
+        _grad_tag = "-g" if obj.grad is not None else ""
+        return f"[nd-{obj.dtype}-{len(obj.shape)}{_layout_tag}{_grad_tag}]"  # type: ignore[arg-type]
     if isinstance(obj, VectorNdarray):
-        return f"[ndv-{obj.n}-{obj.dtype}-{len(obj.shape)}{_layout_tag}]"  # type: ignore[arg-type]
+        _grad_tag = "-g" if obj.grad is not None else ""
+        return f"[ndv-{obj.n}-{obj.dtype}-{len(obj.shape)}{_layout_tag}{_grad_tag}]"  # type: ignore[arg-type]
     if isinstance(obj, ScalarField):
         # disabled for now, because we need to think about how to handle field offset
         # etc
         # TODO: think about whether there is a way to include fields
         _mark_warn_if_not_tensor_annotation(arg_meta)
-        return None
+        return _FAIL_FASTCACHE
     if isinstance(obj, MatrixNdarray):
-        return f"[ndm-{obj.m}-{obj.n}-{obj.dtype}-{len(obj.shape)}{_layout_tag}]"  # type: ignore[arg-type]
+        _grad_tag = "-g" if obj.grad is not None else ""
+        return f"[ndm-{obj.m}-{obj.n}-{obj.dtype}-{len(obj.shape)}{_layout_tag}{_grad_tag}]"  # type: ignore[arg-type]
     if isinstance(obj, torch_type):
         return f"[pt-{obj.dtype}-{obj.ndim}]"  # type: ignore
     if isinstance(obj, np.ndarray):
@@ -191,14 +284,15 @@ def stringify_obj_type(
         # etc
         # TODO: think about whether there is a way to include fields
         _mark_warn_if_not_tensor_annotation(arg_meta)
-        return None
-    if dataclasses.is_dataclass(obj):
-        return dataclass_to_repr(raise_on_templated_floats, path, obj)
+        return _FAIL_FASTCACHE
+    if is_dataclass_instance(obj):
+        return dataclass_to_repr(
+            raise_on_templated_floats, path, obj, pruning_paths=pruning_paths, parent_flat=parent_flat
+        )
     if is_data_oriented(obj):
+        # Narrowed by pruning info: a member the kernel cannot read cannot affect codegen, so it stays out of the key.
         child_repr_l = ["da"]
-        _dict = {}
         try:
-            # pyright is ok with this approach
             _asdict = getattr(obj, "_asdict")
             _dict = _asdict()
         except AttributeError:
@@ -208,17 +302,23 @@ def stringify_obj_type(
         # would recompile on every value change, defeating the feature). Decide per object, since the flag is per class.
         child_meta = _NON_TEMPLATE_CHILD_META if wants_runtime_primitives(obj) else ArgMetadata(Template, "")
         for k, v in _dict.items():
-            _child_repr = stringify_obj_type(raise_on_templated_floats, (*path, k), v, child_meta)
-            if _child_repr is None:
-                if _should_warn:
-                    _logging.warn(
-                        f"A kernel that has been marked as eligible for fast cache was passed 1 or more parameters "
-                        f"that are not, in fact, eligible for fast cache: one of the parameters was a "
-                        f"@qd.data_oriented object, and one of its children was not eligible. The data oriented "
-                        f"object was of type {type(obj)} and the child {k}={type(v)} was not eligible. For "
-                        f"information, the path of the value was {path}."
-                    )
-                return None
+            # ``QuadrantsCallable.__get__`` stashes bound callables on ``instance.__dict__``; they are not data.
+            v_type = type(v)
+            if v_type is QuadrantsCallable or v_type is BoundQuadrantsCallable:
+                continue
+            child_flat = _child_flat(parent_flat, k)
+            if not _is_path_used(pruning_paths, child_flat):
+                continue
+            _child_repr = stringify_obj_type(
+                raise_on_templated_floats,
+                (*path, k),
+                v,
+                child_meta,
+                pruning_paths=pruning_paths,
+                parent_flat=child_flat,
+            )
+            if _child_repr is _FAIL_FASTCACHE:
+                return _FAIL_FASTCACHE
             child_repr_l.append(f"{k}: {_child_repr}")
         return ", ".join(child_repr_l)
     if issubclass(arg_type, (numbers.Number, np.number)):
@@ -239,21 +339,22 @@ def stringify_obj_type(
     if obj is None:
         # ``None`` is a singleton, so its type fully determines its value and a constant tag is a complete cache key.
         return "None"
-    _mark_should_warn()
-    # The bit in caps should not be modified without updating corresponding test
-    # The rest of free text can be freely modified
-    # (will probably formalize this in more general doc / contributor guidelines at some point)
-    _logging.warn(
-        f"[FASTCACHE][PARAM_INVALID] Parameter with path {path} and type {arg_type} not allowed by fast cache."
-    )
-    return None
+    return _fail_unknown_type(obj, path)
 
 
 def hash_args(
-    raise_on_templated_floats: bool, args: Sequence[Any], arg_metas: Sequence[ArgMetadata | None]
+    raise_on_templated_floats: bool,
+    args: Sequence[Any],
+    arg_metas: Sequence[ArgMetadata | None],
+    pruning_paths: set[str] | None = None,
 ) -> str | FastcacheSkip:
-    """Return the args hash string, or a HashFailure explaining why hashing failed."""
-    global g_num_calls, g_num_args, g_hashing_time, g_repr_time, g_num_ignored_calls, _should_warn
+    """Return the args hash string, or a ``FastcacheSkip`` explaining why hashing failed.
+
+    ``pruning_paths`` are the kernel-accessed flat names from the L1 cache; children outside the set are skipped, so
+    an opaque-typed member cannot affect the key unless the kernel reads it. A skip is always reported: the caller
+    logs ``[INVALID_FUNC]`` for ``FastcacheSkip.WARN``, and unrecognised types also warn from ``_fail_unknown_type``.
+    """
+    global g_num_calls, g_num_args, g_hashing_time, g_repr_time, g_num_ignored_calls, _should_warn  # pylint: disable=global-statement
     _should_warn = False
     g_num_calls += 1
     g_num_args += len(args)
@@ -264,9 +365,19 @@ def hash_args(
         )
     for i_arg, arg in enumerate(args):
         start = time.time()
-        _hash = stringify_obj_type(raise_on_templated_floats, (str(i_arg),), arg, arg_metas[i_arg])
+        arg_meta = arg_metas[i_arg]
+        # Root flat name carries no ``__qd_`` prefix, matching ``pruning.used_vars_by_func_id``.
+        top_flat = arg_meta.name if arg_meta is not None else None
+        _hash = stringify_obj_type(
+            raise_on_templated_floats,
+            (str(i_arg),),
+            arg,
+            arg_meta,
+            pruning_paths=pruning_paths,
+            parent_flat=top_flat,
+        )
         g_repr_time += time.time() - start
-        if not _hash:
+        if _hash is _FAIL_FASTCACHE:
             g_num_ignored_calls += 1
             return FastcacheSkip.WARN if _should_warn else FastcacheSkip.FIELD_VIA_TENSOR
         hash_l.append(_hash)

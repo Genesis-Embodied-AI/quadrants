@@ -106,41 +106,17 @@ def _is_external_array(arg: Any) -> bool:
     return False
 
 
-# Per-instance ndarray-path cache, stored OFF-instance in a module-level ``id(arg) -> list[paths]`` dict and cleaned
-# up via ``weakref.finalize``. We can't stash it on ``arg.__dict__`` because the fastcache args walker iterates
-# every key in ``__dict__`` and rejects any unsupported type (``list`` isn't whitelisted) — that disabled the L1
-# cache for ~10 Genesis kernels and broke the ``test_static`` / ``test_num_envs`` / ``test_ndarray_no_compile``
-# subprocess tests.
-#
-# Per-instance (not per-class) caching is correctness-load-bearing: ``@qd.data_oriented`` and ``qd.Tensor``
-# containers can have polymorphic attribute structures across instances of the same class — Genesis ``DataManager``
-# only allocates ``*_adjoint_cache`` ndarrays when ``requires_grad=True``, and a ``qd.Tensor`` field can wrap an
-# ``Ndarray`` on one instance and a ``MatrixField`` on another. A per-class cache populated from the first-walked
-# instance reused those paths on a sibling and crashed ``_collect_struct_nd_descriptors`` (reading ``element_type``
-# off a ``MatrixField``) — affecting ~60 Genesis tests under the ndarray backend.
-#
-# ``_struct_nd_paths_cache`` (per-class) remains as a fallback for objects that don't support ``weakref.finalize``
-# (e.g. ``__slots__`` classes without ``__weakref__``). Genesis containers all support weakrefs so the fast path
-# below is what runs in practice.
+# Fallback for ``__slots__`` classes, which have no ``__dict__`` to hold the per-instance path cache that
+# ``_struct_nd_paths_for`` normally stashes. Per-class caching cannot express an attribute structure that differs per
+# instance, so such classes keep that limitation.
 _struct_nd_paths_cache: dict[type, list[tuple]] = {}
-_struct_nd_paths_instance_cache: dict[int, list[tuple]] = {}
 
 
-def _drop_instance_paths(arg_id: int) -> None:
-    _struct_nd_paths_instance_cache.pop(arg_id, None)
-
-
-def _build_struct_nd_paths(obj: Any, prefix: tuple, out: list, _seen: set | None = None) -> None:
-    # Cycle protection: real Genesis containers form attribute graphs with shared references and back-pointers (e.g.
-    # ``sim.rigid_solver.sim is sim``). Without ``_seen`` this recurses infinitely on the back-edge and blows the
-    # Python stack on first launch. Tracked by ``id(obj)`` so we don't accidentally rely on ``__hash__`` for arbitrary
-    # user types — and so primitives like equal-but-distinct dataclass instances are still walked independently.
+def _build_struct_nd_paths(obj: Any, prefix: tuple, out: list, _seen: "set[int] | None" = None) -> None:
+    # ``_seen`` is required, not defensive: Genesis object graphs have cross-references (``solver -> scene -> sim ->
+    # solver``).
     if _seen is None:
-        _seen = set()
-    obj_id = id(obj)
-    if obj_id in _seen:
-        return
-    _seen.add(obj_id)
+        _seen = {id(obj)}
     if is_dataclass_instance(obj):
         children = ((f.name, getattr(obj, f.name)) for f in dataclasses.fields(obj))
     else:
@@ -160,24 +136,30 @@ def _build_struct_nd_paths(obj: Any, prefix: tuple, out: list, _seen: set | None
         if issubclass(v_type, Ndarray):
             out.append(chain)
         elif is_data_oriented(v) or is_dataclass_instance(v):
+            v_id = id(v)
+            if v_id in _seen:
+                continue
+            _seen.add(v_id)
             _build_struct_nd_paths(v, chain, out, _seen)
 
 
 def _struct_nd_paths_for(arg: Any) -> list[tuple]:
-    """Return the cached attribute paths (each a tuple of attr-name strings) at which ``Ndarray`` instances are
-    reachable from ``arg``. First call for an *instance* walks ``arg`` once via ``_build_struct_nd_paths`` and
-    caches the path list in ``_struct_nd_paths_instance_cache`` keyed by ``id(arg)``; ``weakref.finalize`` evicts
-    the entry when ``arg`` is garbage-collected. Subsequent calls are a dict lookup keyed by ``id(arg)``.
+    """Return the attribute paths (tuples of attr names) at which ``Ndarray`` instances are reachable from ``arg``,
+    caching them on the instance itself as ``_qd_nd_paths``.
 
-    Per-instance (not per-class) caching is correctness-load-bearing — see the module-level comment on
-    ``_struct_nd_paths_instance_cache``. Objects that don't support ``weakref.finalize`` (e.g. ``__slots__`` classes
-    without ``__weakref__``) fall back to the legacy per-class cache; Genesis containers all support weakrefs so
-    the per-instance branch is the one that runs in practice.
+    The cache has to be per instance: ``@qd.data_oriented`` classes can have different attribute sets across
+    instances of one class (Genesis ``DataManager`` with vs without ``requires_grad``), and a ``qd.Tensor`` member
+    can swap backends within one instance's lifetime.
+
+    Limitation: an ndarray attribute attached *after* the instance's first kernel call is not tracked until the cache
+    is dropped (``del arg.__dict__['_qd_nd_paths']``).
     """
-    arg_id = id(arg)
-    paths = _struct_nd_paths_instance_cache.get(arg_id)
-    if paths is not None:
-        return paths
+    # ``__dict__[...]`` rather than ``getattr``: some third-party metaclasses (e.g. Pydantic) recurse infinitely on
+    # probe-style ``getattr`` of an unknown name.
+    try:
+        return arg.__dict__["_qd_nd_paths"]
+    except (AttributeError, KeyError):
+        pass
     cls = type(arg)
     paths = _struct_nd_paths_cache.get(cls)
     if paths is not None:
@@ -185,11 +167,10 @@ def _struct_nd_paths_for(arg: Any) -> list[tuple]:
     paths = []
     _build_struct_nd_paths(arg, (), paths)
     try:
-        weakref.finalize(arg, _drop_instance_paths, arg_id)
-    except TypeError:
+        object.__setattr__(arg, "_qd_nd_paths", paths)
+    except AttributeError:
+        # No ``__dict__`` to stash in - degrade to per-class caching.
         _struct_nd_paths_cache[cls] = paths
-    else:
-        _struct_nd_paths_instance_cache[arg_id] = paths
     return paths
 
 
@@ -221,13 +202,9 @@ def _collect_struct_nd_descriptors(arg: Any, out: list) -> None:
     """Emit per-ndarray shape descriptors ``(joined-path, element_type, ndim, needs_grad, layout)`` for every ndarray
     reachable from ``arg``. Used by the template-mapper to refine the spec key for ``@qd.data_oriented`` args holding
     ndarrays — see the data_oriented branch in ``_extract_arg``.
-
-    The path cache is per-instance (see ``_struct_nd_paths_for``) so polymorphic-instance attribute structure is
-    handled correctly. Within a single instance's lifetime, a cached path's leaf may still cease to be an ``Ndarray``
-    (e.g. a ``qd.Tensor`` member swapped from an ``Ndarray``-backed impl to a ``MatrixField``-backed one); when that
-    happens we silently skip the descriptor — the spec key still includes ``weakref(arg)`` so cache discrimination
-    remains correct.
     """
+    # A cached path's leaf can stop being an ``Ndarray`` mid-lifetime (a ``qd.Tensor`` impl swapped for a
+    # ``MatrixField``), hence the skip below rather than reading Ndarray-only accessors off it.
     for chain in _struct_nd_paths_for(arg):
         v = arg
         for a in chain:
@@ -236,6 +213,7 @@ def _collect_struct_nd_descriptors(arg: Any, out: list) -> None:
             v = v._unwrap()
         if not isinstance(v, Ndarray):
             continue
+        # ``shape`` is legitimately ``None`` for an uninitialised ``_physical_shape``.
         shape = v.shape
         if shape is None:
             continue
@@ -317,6 +295,8 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
             #
             # Containers with no ndarrays keep the original short-path (one spec per instance via weakref) so this is
             # a no-op for the existing data_oriented + qd.field workloads (genesis field-backend).
+            if type(arg).__dict__.get("_qd_stable_members"):
+                return weakref.ref(arg)
             nd_descriptors: list = []
             _collect_struct_nd_descriptors(arg, nd_descriptors)
             if nd_descriptors:

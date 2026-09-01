@@ -24,6 +24,11 @@ RET_SUCCESS = 42
 
 @test_utils.test()
 def test_src_hasher_create_cache_key_vary_config() -> None:
+    """Source+config key (L1) is stable across re-init with identical config, changes when the config changes.
+
+    L1 is the level to test: config feeds only into it, and L2 just adds the args-narrow hash on top.
+    """
+
     @qd.kernel
     def f1() -> None:
         pass
@@ -32,15 +37,15 @@ def test_src_hasher_create_cache_key_vary_config() -> None:
     # so we are forcing it to false each initialization for now
     qd_init_same_arch(print_ir_dbg_info=False)
     kernel_info, _src = get_source_info_and_src(f1.fn)
-    cache_key_base = src_hasher.create_cache_key(False, kernel_info, [], [])
+    cache_key_base = src_hasher.make_source_config_key(kernel_info)
 
     qd_init_same_arch(print_ir_dbg_info=False)
     kernel_info, _src = get_source_info_and_src(f1.fn)
-    cache_key_same = src_hasher.create_cache_key(False, kernel_info, [], [])
+    cache_key_same = src_hasher.make_source_config_key(kernel_info)
 
     qd_init_same_arch(print_ir_dbg_info=False, random_seed=123)
     kernel_info, _src = get_source_info_and_src(f1.fn)
-    cache_key_diff = src_hasher.create_cache_key(False, kernel_info, [], [])
+    cache_key_diff = src_hasher.make_source_config_key(kernel_info)
 
     assert cache_key_base == cache_key_same
     assert cache_key_same != cache_key_diff
@@ -51,6 +56,8 @@ def test_src_hasher_create_cache_key_varies_with_device_caps(monkeypatch) -> Non
     # The device-caps fingerprint is plumbed in from config_hasher; stub it so we can exercise the keying without a
     # second physical device. Same source / args / config but different caps must yield a different cache key, so a
     # cache dir shared across devices (or machines) cannot serve an artifact compiled for the wrong capabilities.
+    #
+    # Caps belong to L1, not the args-narrow L2 key: they change codegen without changing argument identity.
     from quadrants.lang._fast_caching import config_hasher
 
     @qd.kernel
@@ -61,11 +68,11 @@ def test_src_hasher_create_cache_key_varies_with_device_caps(monkeypatch) -> Non
     kernel_info, _src = get_source_info_and_src(f1.fn)
 
     monkeypatch.setattr(config_hasher, "hash_device_caps", lambda: "caps-A")
-    key_caps_a = src_hasher.create_cache_key(False, kernel_info, [], [])
-    key_caps_a_again = src_hasher.create_cache_key(False, kernel_info, [], [])
+    key_caps_a = src_hasher.make_source_config_key(kernel_info)
+    key_caps_a_again = src_hasher.make_source_config_key(kernel_info)
 
     monkeypatch.setattr(config_hasher, "hash_device_caps", lambda: "caps-B")
-    key_caps_b = src_hasher.create_cache_key(False, kernel_info, [], [])
+    key_caps_b = src_hasher.make_source_config_key(kernel_info)
 
     assert key_caps_a == key_caps_a_again
     assert key_caps_a != key_caps_b
@@ -129,7 +136,9 @@ def test_src_hasher_store_validate(monkeypatch: pytest.MonkeyPatch, tmp_path: pa
     mod = temporary_module("child_diff_test_src_hasher_store_validate")
     kernel_info = get_fileinfos([mod.f1.fn])[0]
     fileinfos = get_fileinfos([mod.f1.fn, mod.f2.fn])
-    fast_cache_key = src_hasher.create_cache_key(False, kernel_info, [], [])
+    # L2 key: source+config (L1) + narrow-args-hash. Use an empty narrow-args-hash since the test isn't exercising args
+    # at all - it tests the helper-source-change invalidation logic, which lives in L2.
+    fast_cache_key = src_hasher.make_full_cache_key(src_hasher.make_source_config_key(kernel_info), narrow_args_hash="")
 
     assert fast_cache_key is not None
 
@@ -195,7 +204,11 @@ def test_src_hasher_store_validate_round_trips_schema_v3_metadata(
     mod = temporary_module("child_diff_schema_v3")
     info, _src = _wrap_inspect.get_source_info_and_src(mod.f1.fn)
     fileinfos = [info]
-    fast_cache_key = src_hasher.create_cache_key(False, info, [], [])
+    # L2 key (source+config, then the args-narrow tail) - the layer ``store`` / ``load`` operate on.
+    l1_key = src_hasher.make_source_config_key(info)
+    narrow_args_hash = src_hasher.compute_narrow_args_hash(False, info, [], [], None)
+    assert narrow_args_hash is not None
+    fast_cache_key = src_hasher.make_full_cache_key(l1_key, narrow_args_hash)
     assert fast_cache_key is not None
 
     gdw_levels = [("self.outer", -1, 4), ("self.inner", 0, 5)]
@@ -244,7 +257,11 @@ def test_src_hasher_intenum_qualname_round_trip(
     shutil.copy2(test_files_path / "child_diff_base.py", temp_import_path / "child_diff_v4_intenum.py")
     mod = temporary_module("child_diff_v4_intenum")
     info, _src = _wrap_inspect.get_source_info_and_src(mod.f1.fn)
-    fast_cache_key = src_hasher.create_cache_key(False, info, [], [])
+    # L2 key (source+config, then the args-narrow tail) - the layer ``store`` / ``load`` operate on.
+    l1_key = src_hasher.make_source_config_key(info)
+    narrow_args_hash = src_hasher.compute_narrow_args_hash(False, info, [], [], None)
+    assert narrow_args_hash is not None
+    fast_cache_key = src_hasher.make_full_cache_key(l1_key, narrow_args_hash)
     assert fast_cache_key is not None
 
     # Reference the module-level enum below so it has a real importable qualname.
@@ -354,7 +371,7 @@ def src_hasher_vary_kernel_func_child(args: list[str]) -> None:
     sys.path.append(args_obj.module_file_path)
     mod = importlib.import_module(args_obj.module_name)
     info, _src = _wrap_inspect.get_source_info_and_src(mod.f1.fn)
-    cache_key = src_hasher.create_cache_key(False, info, [], [])
+    cache_key = src_hasher.make_source_config_key(info)
     print(f"CACHE_KEY={cache_key}")
 
     print(TEST_RAN)
