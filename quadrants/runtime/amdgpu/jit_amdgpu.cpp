@@ -8,6 +8,7 @@
 
 #include <fstream>
 #include <cstdlib>
+#include <cstdio>
 
 namespace quadrants {
 namespace lang {
@@ -258,6 +259,12 @@ std::string JITSessionAMDGPU::compile_module_to_hsaco(std::unique_ptr<llvm::Modu
                     hsaco_filename));
 
   std::string hsaco_str = load_hsaco(hsaco_path);
+
+  // Delete the per-compilation object + HSACO temporaries now that the HSACO is in memory. This function is called
+  // once per task on the per-task path, so leaving them (as the whole-module path historically did, one pair per
+  // kernel) would accumulate N files per multi-task kernel under `tmp_dir_` and can exhaust /tmp on large workloads.
+  std::remove(obj_path.c_str());
+  std::remove(hsaco_path.c_str());
 
   if (this->config_.print_kernel_llvm_ir_optimized) {
     static FileSequenceWriter writer("quadrants_kernel_amdgpu_llvm_ir_optimized_{:04d}.ll",
