@@ -75,8 +75,8 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
   // Per-task artifact cache: a hit skips a task's compilation and carries cached code to the launcher. Empty dir = off.
   const std::string art_dir = pertask_artifact_dir_ref();
   const bool per_task_cache_enabled = (compile_config_.arch == Arch::cuda || compile_config_.arch == Arch::amdgpu ||
-                              arch_is_cpu(compile_config_.arch)) &&
-                             !art_dir.empty();
+                                       arch_is_cpu(compile_config_.arch)) &&
+                                      !art_dir.empty();
   const PerTaskArtifactCache artifact_cache(art_dir);
   const DeviceCapabilityConfig pertask_caps = prog->get_device_caps();
   std::vector<std::string> pertask_keys(n);
