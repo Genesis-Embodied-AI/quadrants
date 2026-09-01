@@ -229,10 +229,11 @@ class FunctionDefTransformer:
                         decl_type_func, type_args = obj
                         obj = decl_type_func(*type_args)
                         ctx.create_variable(flat_name, obj)
-                    # Record an ndarray field's flat slot for the guard, resolvable at launch via the root dataclass
-                    # arg and the attribute chain. Other field kinds (Tensor/BufferView) stay unrecorded -> the guard
-                    # treats them as possible aliases and falls back, which is safe.
-                    if guard_root_index is not None and isinstance(field.type, ndarray_type.NdarrayType):
+                    # Record an external-tensor-backed field's flat slot for the guard, resolvable at launch via the
+                    # root dataclass arg + attribute chain (`_resolve_struct_ndarray` unwraps `qd.Tensor` wrappers).
+                    # Non-ndarray fields yield no slot and are skipped. BufferView wraps its buffer, so its top-level
+                    # object exposes no external-tensor ptr -> unrecorded -> safe fallback.
+                    if guard_root_index is not None:
                         slot = FunctionDefTransformer._external_tensor_arg_slot(obj)
                         if slot is not None:
                             ctx.global_context.dataclass_ndarray_launch_info.append(
@@ -249,9 +250,10 @@ class FunctionDefTransformer:
             if not result:
                 decl_type_func, type_args = obj
                 obj = decl_type_func(*type_args)
-            # Record the flat slot of a top-level ndarray param (positional_index set only from the kernel-arg loop, not
-            # dataclass-field recursion) for the launch-time no-alias guard. `obj` is the AnyArray from decl_ndarray_arg.
-            if positional_index is not None and type(argument_type) is ndarray_type.NdarrayType:
+            # Record the flat slot of any top-level param whose generated object is external-tensor backed -- a plain
+            # ndarray annotation or an ndarray-backed `qd.Tensor` -- for the launch-time no-alias guard (`_alloc_of`
+            # unwraps the wrapper). positional_index is set only from the kernel-arg loop, not dataclass recursion.
+            if positional_index is not None:
                 slot = FunctionDefTransformer._external_tensor_arg_slot(obj)
                 if slot is not None:
                     ctx.global_context.explicit_ndarray_launch_info.append((slot, positional_index))

@@ -458,6 +458,33 @@ def test_per_construct_frontend_split_alias_guard_dataclass_field_slots() -> Non
     assert np.allclose(y2.to_numpy(), 7.0, atol=1e-2), y2.to_numpy()
 
 
+@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
+def test_per_construct_frontend_split_alias_guard_tensor_arg_slots() -> None:
+    # A top-level param annotated as the public `qd.Tensor` (ndarray-backed) flattens to an external-tensor slot just
+    # like `qd.types.ndarray()`. Recording keys off the generated object's slot, not the annotation type, so the guard
+    # resolves `qd.Tensor` args too; without that a disjoint launch could not verify and always fell back.
+    @qd.kernel
+    def kernel_tensor(a: qd.Tensor, b: qd.Tensor, y: qd.types.ndarray()) -> None:
+        base = a[0]
+        for i in range(_N):
+            b[i] = 2.0
+        for i in range(_N):
+            y[i] = base
+
+    def _t(v):
+        t = qd.tensor(qd.f32, shape=(_N,), backend=qd.Backend.NDARRAY)
+        t.from_numpy(np.full(_N, v, dtype=np.float32))
+        return t
+
+    a, b, y = _t(7.0), _t(0.0), qd.ndarray(qd.f32, shape=(_N,))
+    kernel_tensor(a, b, y)
+    obs = kernel_tensor._primal.per_offload_cache_observations
+    assert obs.frontend_constructs_total >= 2, obs  # split fired and stayed (guard resolved the Tensor slots)
+    assert kernel_tensor._primal._split_alias_guard_by_key, "split did not record the (a, b) tensor assumption"
+    assert not kernel_tensor._primal._compiled_no_split_by_key, "disjoint Tensor args must not build a fallback"
+    assert np.allclose(y.to_numpy(), 7.0, atol=1e-2), y.to_numpy()
+
+
 @test_utils.test(arch=qd.cuda, offline_cache=False)
 def test_per_construct_frontend_split_barrier_between_constructs_splits() -> None:
     # `internal_func_is_memory_free` allowlist regression. A block barrier reports has_global_side_effect (to pin
