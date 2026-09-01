@@ -884,21 +884,49 @@
 
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_try_load_fastcache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">key</span><span class="p">:</span> <span class="s2">"CompiledKernelKeyType"</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">frontend_cache_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="w">        </span><span class="sd">"""Two-phase fastcache lookup: L1 (source+config, no args) for pruning info, then a narrow args walk over</span>
+<span class="sd">        those paths for the L2 key, its entry, and the artifact.</span>
+
+<span class="sd">        Returns non-None - letting ``materialize`` skip pass 0 - only if all of phase 2 succeeds, artifact load</span>
+<span class="sd">        included. Pass 0 is what populates pruning info for every called ``@qd.func``, so it can only be skipped when</span>
+<span class="sd">        pass 1 runs in ``only_parse_function_def`` mode and never enters a callee body; otherwise the build fails</span>
+<span class="sd">        looking up callee variables in an empty used-set ("Name __qd_... is not defined").</span>
+
+<span class="sd">        Sets ``self._l1_key``, ``self._pruning_paths_from_l1`` and ``self.fast_checksum``, all read after the compile</span>
+<span class="sd">        by ``_maybe_persist_l1_and_set_l2_key``.</span>
+<span class="sd">        """</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_l1_key</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># type: ignore[attr-defined]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_pruning_paths_from_l1</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># type: ignore[attr-defined]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">src_ll_cache</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">quadrants_callable</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">quadrants_callable</span><span class="o">.</span><span class="n">is_pure</span><span class="p">:</span>
             <span class="n">kernel_source_info</span><span class="p">,</span> <span class="n">_src</span> <span class="o">=</span> <span class="n">get_source_info_and_src</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="p">)</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span> <span class="o">=</span> <span class="n">src_hasher</span><span class="o">.</span><span class="n">create_cache_key</span><span class="p">(</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">raise_on_templated_floats</span><span class="p">,</span> <span class="n">kernel_source_info</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_kernel_source_info_cached</span> <span class="o">=</span> <span class="n">kernel_source_info</span>  <span class="c1"># reused by materialize / launch_kernel</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_l1_key</span> <span class="o">=</span> <span class="n">src_hasher</span><span class="o">.</span><span class="n">make_source_config_key</span><span class="p">(</span><span class="n">kernel_source_info</span><span class="p">)</span>
+
+            <span class="c1"># Phase 1: L1 lookup - pruning info only, no args walk yet.</span>
+            <span class="n">pruning_paths</span><span class="p">,</span> <span class="n">cached_graph_do_while_levels</span> <span class="o">=</span> <span class="n">src_hasher</span><span class="o">.</span><span class="n">load_pruning_info</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_l1_key</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">pruning_paths</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="c1"># ``cache_key_generated`` stays False: it means "fastcache produced a valid L2 args hash", and whether</span>
+                <span class="c1"># the narrow args walk will succeed isn't known until after the compile.</span>
+                <span class="k">return</span> <span class="kc">None</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_pruning_paths_from_l1</span> <span class="o">=</span> <span class="n">pruning_paths</span>
+
+            <span class="c1"># Phase 2: narrow args hash + L2 lookup.</span>
+            <span class="n">narrow_args_hash</span> <span class="o">=</span> <span class="n">src_hasher</span><span class="o">.</span><span class="n">compute_narrow_args_hash</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">raise_on_templated_floats</span><span class="p">,</span> <span class="n">kernel_source_info</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">,</span> <span class="n">pruning_paths</span>
             <span class="p">)</span>
-            <span class="n">cache_value</span> <span class="o">=</span> <span class="kc">None</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_key_generated</span> <span class="o">=</span> <span class="kc">True</span>
-                <span class="n">cache_value</span> <span class="o">=</span> <span class="n">src_hasher</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">narrow_args_hash</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="c1"># Recognised-but-unsupported tensor-like (Field / MatrixField): leaving ``fast_checksum`` None keeps any</span>
+                <span class="c1"># L2 entry from being written for this call.</span>
+                <span class="k">return</span> <span class="kc">None</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span> <span class="o">=</span> <span class="n">src_hasher</span><span class="o">.</span><span class="n">make_full_cache_key</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_l1_key</span><span class="p">,</span> <span class="n">narrow_args_hash</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_key_generated</span> <span class="o">=</span> <span class="kc">True</span>
+
+            <span class="n">cache_value</span> <span class="o">=</span> <span class="n">src_hasher</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">cache_value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="n">frontend_cache_key</span> <span class="o">=</span> <span class="n">cache_value</span><span class="o">.</span><span class="n">frontend_cache_key</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_validated</span> <span class="o">=</span> <span class="kc">True</span>
                 <span class="n">prog</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span>
-                <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">compiled_kernel_data_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">prog</span><span class="o">.</span><span class="n">load_fast_cache</span><span class="p">(</span>
                     <span class="n">frontend_cache_key</span><span class="p">,</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span>
@@ -917,11 +945,14 @@
                     <span class="c1"># Fast-cache restore skips AST transformation, so rebuild the AST-transformer-produced metadata from</span>
                     <span class="c1"># the cache value: nested graph_do_while level table (with the AST-resolved flat C++ arg-id) plus</span>
                     <span class="c1"># the per-checkpoint yield_on / user-label tables. Mirrors what `function_def_transformer.py` +</span>
-                    <span class="c1"># `checkpoint_transformer.py` + `build_While` would have written.</span>
-                    <span class="k">if</span> <span class="n">cache_value</span><span class="o">.</span><span class="n">graph_do_while_levels</span><span class="p">:</span>
+                    <span class="c1"># `checkpoint_transformer.py` + `build_While` would have written. L1's copy of the level table is</span>
+                    <span class="c1"># deliberately not consulted here: it is shared by every specialization, and a `qd.graph_do_while`</span>
+                    <span class="c1"># inside a `qd.static` branch belongs to only some of them.</span>
+                    <span class="n">_cached_levels</span> <span class="o">=</span> <span class="n">cache_value</span><span class="o">.</span><span class="n">graph_do_while_levels</span>
+                    <span class="k">if</span> <span class="n">_cached_levels</span><span class="p">:</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span> <span class="o">=</span> <span class="p">[</span>
                             <span class="n">GraphDoWhileLevel</span><span class="p">(</span><span class="n">cond_arg_name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">parent_id</span><span class="o">=</span><span class="n">parent</span><span class="p">,</span> <span class="n">cond_cpp_arg_id</span><span class="o">=</span><span class="n">cpp_arg_id</span><span class="p">)</span>
-                            <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">parent</span><span class="p">,</span> <span class="n">cpp_arg_id</span> <span class="ow">in</span> <span class="n">cache_value</span><span class="o">.</span><span class="n">graph_do_while_levels</span>
+                            <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">parent</span><span class="p">,</span> <span class="n">cpp_arg_id</span> <span class="ow">in</span> <span class="n">_cached_levels</span>
                         <span class="p">]</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">cond_arg_name</span>
                     <span class="k">if</span> <span class="n">cache_value</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">:</span>
@@ -942,8 +973,18 @@
                             <span class="n">src_hasher</span><span class="o">.</span><span class="n">_resolve_intenum_member</span><span class="p">(</span><span class="n">qn</span><span class="p">,</span> <span class="n">lbl</span><span class="p">)</span> <span class="k">for</span> <span class="n">qn</span><span class="p">,</span> <span class="n">lbl</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">qualnames</span><span class="p">,</span> <span class="n">raw_labels</span><span class="p">)</span>
                         <span class="p">]</span>
                     <span class="k">return</span> <span class="n">cache_value</span><span class="o">.</span><span class="n">used_py_dataclass_parameters</span>
+            <span class="c1"># L2 miss or artifact load failed: report cold, so ``materialize`` runs pass 0 + pass 1 and populates</span>
+            <span class="c1"># per-callee pruning info. ``fast_checksum`` stays set, so a fresh L2 entry is written after the compile.</span>
+            <span class="c1"># L1's level table seeds the cold-compile path until the AST transformer repopulates it.</span>
+            <span class="k">if</span> <span class="n">cached_graph_do_while_levels</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span> <span class="o">=</span> <span class="p">[</span>
+                    <span class="n">GraphDoWhileLevel</span><span class="p">(</span><span class="n">cond_arg_name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">parent_id</span><span class="o">=</span><span class="n">parent</span><span class="p">,</span> <span class="n">cond_cpp_arg_id</span><span class="o">=</span><span class="n">cpp_arg_id</span><span class="p">)</span>
+                    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">parent</span><span class="p">,</span> <span class="n">cpp_arg_id</span> <span class="ow">in</span> <span class="n">cached_graph_do_while_levels</span>
+                <span class="p">]</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">cond_arg_name</span>
+            <span class="k">return</span> <span class="kc">None</span>
 
-        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">quadrants_callable</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">quadrants_callable</span><span class="o">.</span><span class="n">is_pure</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">print_non_pure</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">quadrants_callable</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">quadrants_callable</span><span class="o">.</span><span class="n">is_pure</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">print_non_pure</span><span class="p">:</span>
             <span class="c1"># The bit in caps should not be modified without updating corresponding test</span>
             <span class="c1"># freetext can be freely modified.</span>
             <span class="c1"># As for why we are using `print` rather than eg logger.info, it is because this is only printed when</span>
@@ -956,7 +997,6 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">materialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="s2">"CompiledKernelKeyType | None"</span><span class="p">,</span> <span class="n">py_args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">arg_features</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="k">if</span> <span class="n">key</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">autodiff_mode</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">materialized_kernels</span><span class="p">:</span>
             <span class="k">return</span>
 
@@ -1000,6 +1040,8 @@
             <span class="n">range_begin</span> <span class="o">=</span> <span class="mi">0</span> <span class="k">if</span> <span class="n">used_py_dataclass_parameters</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="mi">1</span>
             <span class="n">runtime</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span>
             <span class="k">for</span> <span class="n">_pass</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">range_begin</span><span class="p">,</span> <span class="mi">2</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">_pass</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">pruning</span><span class="o">.</span><span class="n">pass_0_ran</span> <span class="o">=</span> <span class="kc">True</span>
                 <span class="k">if</span> <span class="n">_pass</span> <span class="o">&gt;=</span> <span class="mi">1</span><span class="p">:</span>
                     <span class="n">pruning</span><span class="o">.</span><span class="n">enforce</span><span class="p">()</span>
                 <span class="n">tree</span><span class="p">,</span> <span class="n">ctx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_tree_and_ctx</span><span class="p">(</span>
@@ -1039,6 +1081,12 @@
                     <span class="bp">self</span><span class="o">.</span><span class="n">_explicit_ndarray_slot_info_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span>
                         <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="p">,</span> <span class="s2">"explicit_ndarray_launch_info"</span><span class="p">,</span> <span class="p">[]</span>
                     <span class="p">)</span>
+                    <span class="c1"># Both folds bring data_oriented member accesses into the kernel's used-flat-names set, which</span>
+                    <span class="c1"># dataclass-arg expansion is the only other contributor to. Without them the narrow args hash walks</span>
+                    <span class="c1"># nothing for a data_oriented arg, and a change of member dtype or value cannot invalidate the cache</span>
+                    <span class="c1"># entry.</span>
+                    <span class="n">pruning</span><span class="o">.</span><span class="n">fold_struct_nd_paths</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_struct_ndarray_launch_info_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="p">[]),</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">)</span>
+                    <span class="n">pruning</span><span class="o">.</span><span class="n">fold_kernel_arg_chain_paths</span><span class="p">()</span>
                     <span class="c1"># Only record an entry when this key actually lifts primitives, so the dict stays empty for the</span>
                     <span class="c1"># overwhelming majority of kernels (none use template_primitives=False). launch_kernel can then</span>
                     <span class="c1"># skip the whole primitive-binding path with a single empty-dict check instead of paying a</span>
@@ -1065,7 +1113,9 @@
                     <span class="bp">self</span><span class="o">.</span><span class="n">used_py_dataclass_parameters_by_key_enforcing</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">pruning</span><span class="o">.</span><span class="n">used_vars_by_func_id</span><span class="p">[</span>
                         <span class="n">Pruning</span><span class="o">.</span><span class="n">KERNEL_FUNC_ID</span>
                     <span class="p">]</span>
-                <span class="n">runtime</span><span class="o">.</span><span class="n">_current_global_context</span> <span class="o">=</span> <span class="kc">None</span></div>
+                <span class="n">runtime</span><span class="o">.</span><span class="n">_current_global_context</span> <span class="o">=</span> <span class="kc">None</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">_maybe_persist_l1_and_set_l2_key</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">py_args</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="Kernel.compile_no_split_variant">
@@ -1113,6 +1163,28 @@
         <span class="p">)</span><span class="o">.</span><span class="n">compiled_kernel_data</span></div>
 
 
+    <span class="k">def</span><span class="w"> </span><span class="nf">_maybe_persist_l1_and_set_l2_key</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="s2">"CompiledKernelKeyType"</span><span class="p">,</span> <span class="n">py_args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Thin delegate to ``src_hasher.persist_l1_and_set_l2_key``; see that function's docstring for behaviour."""</span>
+        <span class="n">new_fast_checksum</span><span class="p">,</span> <span class="n">generated</span> <span class="o">=</span> <span class="n">src_hasher</span><span class="o">.</span><span class="n">persist_l1_and_set_l2_key</span><span class="p">(</span>
+            <span class="n">l1_key</span><span class="o">=</span><span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">"_l1_key"</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+            <span class="n">kernel_source_info</span><span class="o">=</span><span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">"_kernel_source_info_cached"</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+            <span class="n">used_py_dataclass_parameters</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">used_py_dataclass_parameters_by_key_enforcing</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">),</span>
+            <span class="n">visited_functions</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visited_functions</span><span class="p">,</span>
+            <span class="n">graph_do_while_levels</span><span class="o">=</span><span class="p">[</span>
+                <span class="p">(</span><span class="n">level</span><span class="o">.</span><span class="n">cond_arg_name</span><span class="p">,</span> <span class="n">level</span><span class="o">.</span><span class="n">parent_id</span><span class="p">,</span> <span class="n">level</span><span class="o">.</span><span class="n">cond_cpp_arg_id</span><span class="p">)</span> <span class="k">for</span> <span class="n">level</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span>
+            <span class="p">]</span>
+            <span class="ow">or</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="n">pruning_paths_from_l1</span><span class="o">=</span><span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">"_pruning_paths_from_l1"</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+            <span class="n">fast_checksum</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span><span class="p">,</span>
+            <span class="n">raise_on_templated_floats</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">raise_on_templated_floats</span><span class="p">,</span>
+            <span class="n">py_args</span><span class="o">=</span><span class="n">py_args</span><span class="p">,</span>
+            <span class="n">arg_metas</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="c1"># Assigned even when ``generated`` is False: that is also how a re-keyed L2 entry comes back.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span> <span class="o">=</span> <span class="n">new_fast_checksum</span>
+        <span class="k">if</span> <span class="n">generated</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_key_generated</span> <span class="o">=</span> <span class="kc">True</span>
+
 <div class="viewcode-block" id="Kernel.launch_kernel">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.launch_kernel">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">launch_kernel</span><span class="p">(</span>
@@ -1145,7 +1217,10 @@
         <span class="c1"># container wrapping a mutable inner container that holds the ndarray (e.g. frozen dataclass -&gt; data_oriented</span>
         <span class="c1"># -&gt; ndarray), id(outer) alone does not capture leaf rebinding because the inner container can still reassign</span>
         <span class="c1"># ``.x``. So we OR-fold the mutability check across every parent along ``chain`` from the root down to (but</span>
-        <span class="c1"># excluding) the leaf attribute.</span>
+        <span class="c1"># excluding) the leaf attribute - see ``chain_has_mutable_container``.</span>
+        <span class="c1">#</span>
+        <span class="c1"># ``@qd.data_oriented(stable_members=True)`` opts out of the walk below: the user has promised that ndarray</span>
+        <span class="c1"># members are never reassigned. It is a launch-time hint only, with no bearing on fastcache keys.</span>
         <span class="k">if</span> <span class="n">key</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mutable_nd_cached_key</span><span class="p">:</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_struct_ndarray_launch_info_by_key</span><span class="p">:</span>
                 <span class="n">struct_nd_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_struct_ndarray_launch_info_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
@@ -1153,7 +1228,8 @@
                     <span class="bp">self</span><span class="o">.</span><span class="n">_mutable_nd_cached_val</span> <span class="o">=</span> <span class="p">[</span>
                         <span class="p">(</span><span class="n">idx</span><span class="p">,</span> <span class="n">chain</span><span class="p">)</span>
                         <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">idx</span><span class="p">,</span> <span class="n">chain</span> <span class="ow">in</span> <span class="n">struct_nd_info</span>
-                        <span class="k">if</span> <span class="n">chain_has_mutable_container</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">idx</span><span class="p">,</span> <span class="n">chain</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="ow">not</span> <span class="nb">type</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="n">idx</span><span class="p">])</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"_qd_stable_members"</span><span class="p">)</span>
+                        <span class="ow">and</span> <span class="n">chain_has_mutable_container</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">idx</span><span class="p">,</span> <span class="n">chain</span><span class="p">)</span>
                     <span class="p">]</span>
                 <span class="k">else</span><span class="p">:</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">_mutable_nd_cached_val</span> <span class="o">=</span> <span class="p">[]</span>

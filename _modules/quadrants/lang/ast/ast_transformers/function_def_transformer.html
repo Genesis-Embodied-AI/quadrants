@@ -521,13 +521,9 @@
                         <span class="nb">getattr</span><span class="p">(</span><span class="n">arg_value</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">)</span> <span class="k">if</span> <span class="n">arg_value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
                     <span class="p">)</span>
                 <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="nb">type</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="s2">"_data_oriented"</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
-                    <span class="c1"># ``@qd.data_oriented`` field type inside a typed-dataclass kernel arg. The two patterns are</span>
-                    <span class="c1"># semantically incompatible at this layer: dataclass kernel-arg recursion uses annotations to</span>
-                    <span class="c1"># flatten leaf fields into per-leaf kernel args at compile time, but data_oriented containers don't</span>
-                    <span class="c1"># carry per-attribute type annotations — they need a value-driven walk</span>
-                    <span class="c1"># (``_predeclare_struct_ndarrays``), which only fires for ``qd.template()`` / ``qd.Tensor``</span>
-                    <span class="c1"># annotations. Rather than silently miscompile, raise a clear error pointing users to the</span>
-                    <span class="c1"># recommended pattern.</span>
+                    <span class="c1"># The two patterns don't compose here: dataclass flattening is annotation-driven, while a</span>
+                    <span class="c1"># data_oriented container has no per-attribute annotations and needs the value-driven walk that only</span>
+                    <span class="c1"># ``qd.template()`` / ``qd.Tensor`` annotations trigger.</span>
                     <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
                         <span class="sa">f</span><span class="s2">"Kernel arg </span><span class="si">{</span><span class="n">argument_name</span><span class="si">!r}</span><span class="s2">: field </span><span class="si">{</span><span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="si">!r}</span><span class="s2"> has @qd.data_oriented type "</span>
                         <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="vm">__name__</span><span class="si">!r}</span><span class="s2">, which cannot be flattened into a typed-dataclass kernel arg. "</span>
@@ -611,20 +607,31 @@
 <span class="sd">        Also stores ``(arg_id, template_arg_idx, attr_chain)`` tuples in</span>
 <span class="sd">        ``ctx.global_context.struct_ndarray_launch_info`` so the launch path can populate the corresponding slots in the</span>
 <span class="sd">        launch context.</span>
+
+<span class="sd">        Pruning: the enforcing pass registers only the ndarrays the first pass saw accessed</span>
+<span class="sd">        (``pruning.used_struct_ndarray_ids``), dropping the rest from the kernel's parameter list. The first pass must</span>
+<span class="sd">        register everything, since that is what lets ``build_Attribute`` resolve the accesses that populate the set.</span>
 <span class="sd">        """</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._pruning</span><span class="w"> </span><span class="kn">import</span> <span class="n">Pruning</span>  <span class="c1"># pylint: disable=C0415</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.util</span><span class="w"> </span><span class="kn">import</span> <span class="n">cook_dtype</span>  <span class="c1"># pylint: disable=C0415</span>
 
         <span class="n">cache</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">ndarray_to_any_array</span>
         <span class="n">launch_info</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">struct_ndarray_launch_info</span>
+        <span class="n">pruning</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">pruning</span>
+        <span class="n">used_ids</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">pruning</span><span class="p">,</span> <span class="s2">"used_struct_ndarray_ids"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">prune</span> <span class="o">=</span> <span class="n">pruning</span><span class="o">.</span><span class="n">enforcing</span> <span class="ow">and</span> <span class="n">used_ids</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">pruning</span><span class="p">,</span> <span class="s2">"pass_0_ran"</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+        <span class="c1"># A fastcache hit skips pass 0, so there are no ids to prune by - but the cached flat-name set describes the</span>
+        <span class="c1"># same ndarrays, and must be used: registering every reachable ndarray instead would bind the kernel's arg slots</span>
+        <span class="c1"># to different ndarrays than the compile that produced the artifact.</span>
+        <span class="n">prune_from_flat_names</span> <span class="o">=</span> <span class="n">pruning</span><span class="o">.</span><span class="n">enforcing</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">pruning</span><span class="p">,</span> <span class="s2">"pass_0_ran"</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+        <span class="n">kernel_used_flat_names</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">pruning</span><span class="o">.</span><span class="n">used_vars_by_func_id</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">Pruning</span><span class="o">.</span><span class="n">KERNEL_FUNC_ID</span><span class="p">,</span> <span class="nb">set</span><span class="p">())</span> <span class="k">if</span> <span class="n">prune_from_flat_names</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="p">)</span>
 
-        <span class="c1"># ``_seen`` set guards against attribute-graph cycles in user containers (e.g. Genesis ``sim.solver.sim is</span>
-        <span class="c1"># sim``). Without it this walker recurses infinitely on the back-edge and blows the Python stack at compile</span>
-        <span class="c1"># time. Tracked by ``id(obj)`` to avoid relying on ``__hash__`` for arbitrary user types.</span>
+        <span class="c1"># ``seen`` is required, not defensive: Genesis object graphs have cross-references (solver &lt;-&gt; scene &lt;-&gt; sim).</span>
+        <span class="c1"># Sharing it across the whole arg is safe because the ndarray set rooted at a node does not depend on the path</span>
+        <span class="c1"># taken to reach it.</span>
         <span class="k">def</span><span class="w"> </span><span class="nf">_walk_obj</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">seen</span><span class="p">):</span>
-            <span class="n">obj_id</span> <span class="o">=</span> <span class="nb">id</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">obj_id</span> <span class="ow">in</span> <span class="n">seen</span><span class="p">:</span>
-                <span class="k">return</span>
-            <span class="n">seen</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">obj_id</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">is_dataclass_instance</span><span class="p">(</span><span class="n">obj</span><span class="p">):</span>
                 <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">fields</span><span class="p">(</span><span class="n">obj</span><span class="p">):</span>
                     <span class="n">child</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
@@ -633,6 +640,10 @@
                     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">child</span><span class="p">,</span> <span class="n">_ndarray</span><span class="o">.</span><span class="n">Ndarray</span><span class="p">):</span>
                         <span class="n">_register_ndarray</span><span class="p">(</span><span class="n">child</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="p">(</span><span class="o">*</span><span class="n">path</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
                     <span class="k">elif</span> <span class="n">is_dataclass_instance</span><span class="p">(</span><span class="n">child</span><span class="p">)</span> <span class="ow">or</span> <span class="n">is_data_oriented</span><span class="p">(</span><span class="n">child</span><span class="p">):</span>
+                        <span class="n">child_id</span> <span class="o">=</span> <span class="nb">id</span><span class="p">(</span><span class="n">child</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="n">child_id</span> <span class="ow">in</span> <span class="n">seen</span><span class="p">:</span>
+                            <span class="k">continue</span>
+                        <span class="n">seen</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">child_id</span><span class="p">)</span>
                         <span class="n">_walk_obj</span><span class="p">(</span><span class="n">child</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="p">(</span><span class="o">*</span><span class="n">path</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">),</span> <span class="n">seen</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="k">for</span> <span class="n">attr_name</span><span class="p">,</span> <span class="n">attr_val</span> <span class="ow">in</span> <span class="nb">vars</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
@@ -641,12 +652,29 @@
                     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">attr_val</span><span class="p">,</span> <span class="n">_ndarray</span><span class="o">.</span><span class="n">Ndarray</span><span class="p">):</span>
                         <span class="n">_register_ndarray</span><span class="p">(</span><span class="n">attr_val</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="p">(</span><span class="o">*</span><span class="n">path</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">))</span>
                     <span class="k">elif</span> <span class="n">is_dataclass_instance</span><span class="p">(</span><span class="n">attr_val</span><span class="p">)</span> <span class="ow">or</span> <span class="n">is_data_oriented</span><span class="p">(</span><span class="n">attr_val</span><span class="p">):</span>
+                        <span class="n">attr_id</span> <span class="o">=</span> <span class="nb">id</span><span class="p">(</span><span class="n">attr_val</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="n">attr_id</span> <span class="ow">in</span> <span class="n">seen</span><span class="p">:</span>
+                            <span class="k">continue</span>
+                        <span class="n">seen</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">attr_id</span><span class="p">)</span>
                         <span class="n">_walk_obj</span><span class="p">(</span><span class="n">attr_val</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="p">(</span><span class="o">*</span><span class="n">path</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">),</span> <span class="n">seen</span><span class="p">)</span>
 
         <span class="k">def</span><span class="w"> </span><span class="nf">_register_ndarray</span><span class="p">(</span><span class="n">nd</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="n">attr_chain</span><span class="p">):</span>
             <span class="n">key</span> <span class="o">=</span> <span class="nb">id</span><span class="p">(</span><span class="n">nd</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">cache</span><span class="p">:</span>
                 <span class="k">return</span>
+            <span class="k">if</span> <span class="n">prune</span> <span class="ow">and</span> <span class="n">key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">used_ids</span><span class="p">:</span>
+                <span class="k">return</span>
+            <span class="k">if</span> <span class="n">prune_from_flat_names</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">arg_idx</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">arg_idx</span> <span class="o">&gt;=</span> <span class="nb">len</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">):</span>
+                    <span class="k">return</span>
+                <span class="n">arg_name</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">[</span><span class="n">arg_idx</span><span class="p">]</span><span class="o">.</span><span class="n">name</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">arg_name</span><span class="p">:</span>
+                    <span class="k">return</span>
+                <span class="n">flat</span> <span class="o">=</span> <span class="n">arg_name</span>
+                <span class="k">for</span> <span class="n">attr</span> <span class="ow">in</span> <span class="n">attr_chain</span><span class="p">:</span>
+                    <span class="n">flat</span> <span class="o">=</span> <span class="n">create_flat_name</span><span class="p">(</span><span class="n">flat</span><span class="p">,</span> <span class="n">attr</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">flat</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">kernel_used_flat_names</span><span class="p">:</span>
+                    <span class="k">return</span>
             <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>  <span class="c1"># pylint: disable=C0415</span>
 
             <span class="n">element_type</span> <span class="o">=</span> <span class="n">cook_dtype</span><span class="p">(</span><span class="n">nd</span><span class="o">.</span><span class="n">element_type</span><span class="p">)</span>
@@ -661,6 +689,9 @@
                 <span class="n">_qd_core</span><span class="o">.</span><span class="n">make_external_tensor_expr</span><span class="p">(</span><span class="n">element_type</span><span class="p">,</span> <span class="n">ndim</span><span class="p">,</span> <span class="n">arg_id_vec</span><span class="p">,</span> <span class="n">needs_grad</span><span class="p">,</span> <span class="n">BoundaryMode</span><span class="o">.</span><span class="n">UNSAFE</span><span class="p">),</span>
                 <span class="n">_qd_layout</span><span class="o">=</span><span class="n">layout</span><span class="p">,</span>
             <span class="p">)</span>
+            <span class="c1"># Lets ``_promote_ndarray_if_declared`` still mark the ndarray used when an access reaches it through this</span>
+            <span class="c1"># proxy rather than the ndarray itself, as happens inside an inlined ``@qd.func`` body.</span>
+            <span class="n">arr</span><span class="o">.</span><span class="n">_qd_source_ndarray_id</span> <span class="o">=</span> <span class="n">key</span>
             <span class="n">cache</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">arr</span>
             <span class="n">launch_info</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">arg_id_vec</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="n">attr_chain</span><span class="p">))</span>
 
@@ -677,9 +708,9 @@
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="n">_ndarray</span><span class="o">.</span><span class="n">Ndarray</span><span class="p">):</span>
                 <span class="k">continue</span>
             <span class="k">if</span> <span class="n">is_dataclass_instance</span><span class="p">(</span><span class="n">val</span><span class="p">):</span>
-                <span class="n">_walk_obj</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="p">(),</span> <span class="nb">set</span><span class="p">())</span>
+                <span class="n">_walk_obj</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="p">(),</span> <span class="p">{</span><span class="nb">id</span><span class="p">(</span><span class="n">val</span><span class="p">)})</span>
             <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="s2">"__dict__"</span><span class="p">):</span>
-                <span class="n">_walk_obj</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="p">(),</span> <span class="nb">set</span><span class="p">())</span>
+                <span class="n">_walk_obj</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="p">(),</span> <span class="p">{</span><span class="nb">id</span><span class="p">(</span><span class="n">val</span><span class="p">)})</span>
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_unwrap_tensor</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
@@ -695,6 +726,11 @@
         <span class="n">argument_type</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
         <span class="n">data</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># Lets ``build_Name`` seed ``_qd_arg_chain`` for chains rooted at this param, so that a member read inside a</span>
+        <span class="c1"># ``@qd.func`` (``static_rigid_sim_config.para_level``) reaches the kernel's pruning set - without it the</span>
+        <span class="c1"># args-hasher never sees the value and configurations that differ only there collide in the fastcache key.</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">fn_param_names</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">argument_name</span><span class="p">)</span>
+
         <span class="c1"># A ``Final[T]`` leaf @qd.func arg: ``data`` already carries the resolved Python value, so bind it directly for</span>
         <span class="c1"># ``qd.static(cfg.field)``. Before the ``annotations.template`` check (``Final[T]`` is not a ``template``).</span>
         <span class="k">if</span> <span class="n">is_final_annotation</span><span class="p">(</span><span class="n">argument_type</span><span class="p">):</span>
