@@ -74,7 +74,7 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
 
   // Per-task artifact cache: a hit skips a task's compilation and carries cached code to the launcher. Empty dir = off.
   const std::string art_dir = pertask_artifact_dir_ref();
-  const bool artifact_tier = (compile_config_.arch == Arch::cuda || compile_config_.arch == Arch::amdgpu ||
+  const bool per_task_cache_enabled = (compile_config_.arch == Arch::cuda || compile_config_.arch == Arch::amdgpu ||
                               arch_is_cpu(compile_config_.arch)) &&
                              !art_dir.empty();
   const PerTaskArtifactCache artifact_cache(art_dir);
@@ -97,7 +97,7 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
       //  - external-func: the body has the so/bc path + name, not its contents, so a stale update keeps the key;
       //  - real-func (FuncCallStmt): the printer emits only the callee name, but codegen inlines its body;
       //  - mem_access_opt (BLS/read-only hints): serialized from an unordered_map, so its order varies by process.
-      bool artifact_eligible = artifact_tier && offload->as<OffloadedStmt>()->mem_access_opt.get_all().empty();
+      bool artifact_eligible = per_task_cache_enabled && offload->as<OffloadedStmt>()->mem_access_opt.get_all().empty();
       if (artifact_eligible) {
         irpass::analysis::gather_statements(offload.get(), [&artifact_eligible](Stmt *s) {
           if (s->is<AdStackAllocaStmt>() || s->is<ExternalFuncCallStmt>() || s->is<FuncCallStmt>()) {
@@ -146,7 +146,7 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
   std::vector<PerConstructArtifact> per_construct_artifacts;
   const bool build_per_construct_artifacts =
       compile_config_.arch == Arch::cuda ||
-      ((compile_config_.arch == Arch::amdgpu || arch_is_cpu(compile_config_.arch)) && artifact_tier);
+      ((compile_config_.arch == Arch::amdgpu || arch_is_cpu(compile_config_.arch)) && per_task_cache_enabled);
   if (build_per_construct_artifacts) {
     for (int i = 0; i < n; i++) {
       if (!data[i])
@@ -206,7 +206,7 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
   }
   // Record per-task reuse counts for PerOffloadCacheObservations.tasks_* (read back by the compilation manager). Only
   // when the tier ran, so non-CUDA / cache-off compiles keep the -1 sentinel instead of a misleading 0.
-  if (artifact_tier && prog != nullptr) {
+  if (per_task_cache_enabled && prog != nullptr) {
     auto &cc = prog->per_construct_cache();
     std::lock_guard<std::mutex> g(cc.mu);
     cc.last_task_stats[kernel->get_name()] = {n, n_hit.load(), n_recompiled.load()};
