@@ -302,11 +302,16 @@ class JITSessionCPU : public JITSession {
       if (!expected_jtmb) {
         QD_ERROR("LLVM TargetMachineBuilder has failed.");
       }
-      auto triple = expected_jtmb->getTargetTriple();
-      std::string err_str;
-      const llvm::Target *target = llvm::TargetRegistry::lookupTarget(triple.str(), err_str);
-      QD_ERROR_UNLESS(target, err_str);
-      llvm::TargetOptions options;
+      // Build the target machine straight from the JTMB so it carries detectHost()'s *explicit* host feature vector,
+      // exactly as the whole-kernel path does via ConcurrentIRCompiler(JTMB). Passing the host CPU name with an empty
+      // feature string instead selects that CPU model's *default* features, which can be a superset of what the
+      // running core actually enables and emits illegal instructions at kernel launch on some hosts. PIC so the
+      // emitted object is loadable by the ORC object layer.
+      auto jtmb = std::move(*expected_jtmb);
+      jtmb.setRelocationModel(llvm::Reloc::PIC_);
+      jtmb.setCodeModel(llvm::CodeModel::Small);
+      jtmb.setCodeGenOptLevel(llvm::CodeGenOptLevel::Aggressive);
+      llvm::TargetOptions &options = jtmb.getOptions();
       if (config_.fast_math) {
         options.AllowFPOpFusion = llvm::FPOpFusion::Fast;
         options.NoInfsFPMath = 1;
@@ -316,11 +321,9 @@ class JITSessionCPU : public JITSession {
         options.NoInfsFPMath = 0;
         options.NoNaNsFPMath = 0;
       }
-      llvm::StringRef mcpu = llvm::sys::getHostCPUName();
-      pertask_target_machine_.reset(target->createTargetMachine(triple, mcpu.str(), "", options, llvm::Reloc::PIC_,
-                                                                llvm::CodeModel::Small,
-                                                                llvm::CodeGenOptLevel::Aggressive));
-      QD_ERROR_UNLESS(pertask_target_machine_.get(), "Could not allocate target machine!");
+      auto expected_tm = jtmb.createTargetMachine();
+      QD_ERROR_UNLESS(expected_tm, "Could not allocate target machine!");
+      pertask_target_machine_ = std::move(*expected_tm);
     }
     M.setDataLayout(pertask_target_machine_->createDataLayout());
     llvm::orc::SimpleCompiler compiler(*pertask_target_machine_);
