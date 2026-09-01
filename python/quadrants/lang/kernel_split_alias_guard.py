@@ -11,50 +11,69 @@ from __future__ import annotations
 from typing import Any
 
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
-from quadrants.types import ndarray_type
 
 from ._kernel_types import PerOffloadCacheObservations
 
 
-def launch_has_aliased_ndarrays(kernel: Any, key: Any, args: tuple) -> bool:
-    """True if two ndarray parameters of this launch may share one backing device allocation.
+def _launch_alloc_id(nd: Any):
+    """Backing ``DeviceAllocation`` identity of a launch ndarray, or ``None`` when it can't be read.
 
-    Only called for keys whose split relied on cross-parameter ndarray disjointness (see ``select_launch_variant``).
-    Two ndarray args alias in the compiled kernel iff their ``DeviceAllocation`` matches -- the launcher derives each
-    arg's device pointer from ``alloc_id``, so that (not the wrapper address) is the identity to compare. An arg whose
-    id cannot be read is treated as a possible alias, so an unrecognized argument shape falls back to the
-    always-correct whole-kernel path rather than risking the split. Covers plain ndarray args and ndarrays reached
-    through ``@qd.data_oriented`` struct members.
+    The launcher derives each arg's device pointer from ``alloc_id``, so that (not the wrapper address) is the identity
+    that decides aliasing in the compiled kernel. ``None`` (unrecognized shape / unreadable id) means "cannot verify",
+    which the caller treats as a possible alias -> whole-kernel fallback (correct, just slower).
     """
-    seen: set = set()
+    if nd is None:
+        return None
+    if type(nd) in _TENSOR_WRAPPER_TYPES:
+        nd = nd._unwrap()
+    arr = getattr(nd, "arr", None)
+    if arr is None:
+        return None
+    try:
+        return arr.device_alloc_id()
+    except Exception:  # noqa: BLE001
+        return None
 
-    def _collides(nd) -> bool:
-        if nd is None:
-            return False
-        arr = getattr(nd, "arr", None)
-        if arr is None:
-            return True
-        try:
-            ident = arr.device_alloc_id()
-        except Exception:
-            return True
-        if ident in seen:
-            return True
-        seen.add(ident)
+
+def launch_has_aliased_ndarrays(kernel: Any, key: Any, args: tuple) -> bool:
+    """True iff some arg-slot pair the split assumed disjoint actually shares one backing device allocation.
+
+    Only called for keys whose split recorded such pairs (see ``select_launch_variant``). Aliases *outside* the
+    recorded pairs -- e.g. the same buffer bound to a param the split never recomputed-across -- do not fall back,
+    because the split never depended on those args being disjoint. A slot the guard cannot resolve to a readable
+    ``alloc_id`` is treated as a possible alias (conservative: costs the fallback, never correctness).
+    """
+    pairs = kernel._split_alias_guard_by_key.get(key)
+    if not pairs:
         return False
 
-    for i, meta in enumerate(kernel.arg_metas):
-        if type(meta.annotation) is ndarray_type.NdarrayType:
-            val = args[i]
-            if type(val) in _TENSOR_WRAPPER_TYPES:
-                val = val._unwrap()
-            if _collides(val):
-                return True
+    # slot -> device-alloc identity, resolved lazily and only for slots that appear in a recorded pair.
+    slot_to_nd: dict[int, Any] = {}
+    for slot, positional_index in kernel._explicit_ndarray_slot_info_by_key.get(key) or []:
+        slot_to_nd[slot] = args[positional_index]
     struct_nd_info = kernel._struct_ndarray_launch_info_by_key.get(key)
-    if struct_nd_info:
-        for _arg_id, template_arg_idx, attr_chain in struct_nd_info:
-            if _collides(kernel._resolve_struct_ndarray(args, template_arg_idx, attr_chain)):
-                return True
+    resolved: dict[int, Any] = {}
+
+    def _alloc_of(slot: int):
+        if slot in resolved:
+            return resolved[slot]
+        nd = slot_to_nd.get(slot)
+        if nd is None and struct_nd_info:
+            for s_slot, template_arg_idx, attr_chain in struct_nd_info:
+                if s_slot == slot:
+                    nd = kernel._resolve_struct_ndarray(args, template_arg_idx, attr_chain)
+                    break
+        ident = _launch_alloc_id(nd)
+        resolved[slot] = ident
+        return ident
+
+    for j in range(0, len(pairs) - 1, 2):
+        a, b = pairs[j], pairs[j + 1]
+        ida, idb = _alloc_of(a), _alloc_of(b)
+        if ida is None or idb is None:
+            return True
+        if ida == idb:
+            return True
     return False
 
 

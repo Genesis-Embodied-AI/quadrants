@@ -183,6 +183,10 @@ class ASTTransformerGlobalContext:
         self.pass_idx: int = pass_idx
         self.ndarray_to_any_array: dict[int, Any] = {}
         self.struct_ndarray_launch_info: list[tuple] = []
+        # `(slot, positional_arg_index)` for each explicit top-level ndarray param, where `slot` is its flat arg-id
+        # (`ArgLoadStmt.arg_id[0]`). The launch-time no-alias guard needs it to map a C++-recorded assumed-disjoint slot
+        # to this launch's ndarray; struct-member slots come from `struct_ndarray_launch_info` instead.
+        self.explicit_ndarray_launch_info: list[tuple] = []
         # Lifted-primitive support for ``@qd.data_oriented(template_primitives=False)``. Mirrors the two ndarray
         # structures above, plus a provenance map driving the two-pass pruning.
         # * ``struct_primitive_provenance`` maps ``(id(parent_obj), attr_name)`` to ``(flat_name, arg_idx, attr_chain,

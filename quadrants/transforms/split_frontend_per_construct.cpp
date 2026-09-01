@@ -17,6 +17,7 @@
 #include "quadrants/program/program.h"
 #include "quadrants/program/per_construct_cache.h"
 
+#include <algorithm>
 #include <climits>
 #include <cstdlib>
 #include <filesystem>
@@ -578,24 +579,32 @@ ExternalPtrStmt *as_ndarray_ptr(Stmt *p) {
 // distinct ndarray params don't alias: both are ndarray accesses on DIFFERENT args (same is_grad). alias_analysis
 // then reports `different` purely by arg id (see its ExternalPtr branch), which a caller violates by binding the same
 // ndarray to both params -- the launch guard must then fall back. Same-arg (index-disjoint) or primal-vs-grad
-// clearances are true disjointness the caller cannot defeat, so they don't count.
-bool clearance_assumes_ndarray_disjoint(Stmt *a, Stmt *b) {
+// clearances are true disjointness the caller cannot defeat, so they don't count. On a true result, `slot_a`/`slot_b`
+// receive the two args' flat slots (`arg_id[0]`; ndarray arg_ids are single-element) so the guard can check exactly
+// this pair for runtime aliasing rather than every ndarray arg.
+bool clearance_assumes_ndarray_disjoint(Stmt *a, Stmt *b, int &slot_a, int &slot_b) {
   ExternalPtrStmt *ea = as_ndarray_ptr(a);
   ExternalPtrStmt *eb = as_ndarray_ptr(b);
   if (ea == nullptr || eb == nullptr)
     return false;
   auto *arg_a = ea->base_ptr->cast<ArgLoadStmt>();
   auto *arg_b = eb->base_ptr->cast<ArgLoadStmt>();
-  if (arg_a == nullptr || arg_b == nullptr)
+  if (arg_a == nullptr || arg_b == nullptr || arg_a->arg_id.empty() || arg_b->arg_id.empty())
     return false;
-  return arg_a->arg_id != arg_b->arg_id && ea->is_grad == eb->is_grad;
+  if (arg_a->arg_id == arg_b->arg_id || ea->is_grad != eb->is_grad)
+    return false;
+  slot_a = arg_a->arg_id[0];
+  slot_b = arg_b->arg_id[0];
+  return true;
 }
 
-// `assumed_ndarray_disjoint` is set true iff the split cleared condition (3) only because two ndarray accesses target
-// different args -- disjointness the caller can violate by binding the same ndarray twice. The launch guard verifies
-// it.
-bool split_is_recompute_safe(Block *block, bool &assumed_ndarray_disjoint) {
-  assumed_ndarray_disjoint = false;
+// `assumed_disjoint_pairs` collects, flattened as [a0,b0,a1,b1,...], each unordered slot pair whose disjointness the
+// split relied on to clear condition (3) -- disjointness the caller can violate by binding the same ndarray to both
+// args. The launch guard falls back only when one of THESE pairs actually aliases, so a benign self-alias elsewhere
+// in the kernel does not un-split it.
+bool split_is_recompute_safe(Block *block, std::vector<int> &assumed_disjoint_pairs) {
+  assumed_disjoint_pairs.clear();
+  std::set<std::pair<int, int>> disjoint_pairs;
   if (block == nullptr)
     return false;
 
@@ -701,10 +710,16 @@ bool split_is_recompute_safe(Block *block, bool &assumed_ndarray_disjoint) {
         if (w.dest == nullptr || r.src == nullptr || irpass::analysis::maybe_same_address(r.src, w.dest))
           return false;
         // Cleared: the read and write are provably different addresses. When that proof is cross-arg ndarray
-        // disjointness, a caller can defeat it by aliasing the two params -- record it so the launch guard falls back.
-        if (clearance_assumes_ndarray_disjoint(r.src, w.dest))
-          assumed_ndarray_disjoint = true;
+        // disjointness, a caller can defeat it by aliasing the two params -- record the exact slot pair so the launch
+        // guard falls back only if THIS pair aliases.
+        int slot_a = 0, slot_b = 0;
+        if (clearance_assumes_ndarray_disjoint(r.src, w.dest, slot_a, slot_b))
+          disjoint_pairs.emplace(std::min(slot_a, slot_b), std::max(slot_a, slot_b));
       }
+  }
+  for (const auto &p : disjoint_pairs) {
+    assumed_disjoint_pairs.push_back(p.first);
+    assumed_disjoint_pairs.push_back(p.second);
   }
   return true;
 }
@@ -746,7 +761,7 @@ void split_frontend_per_construct(IRNode *ir,
                                   const CompileConfig &config,
                                   const Kernel *kernel,
                                   bool verbose,
-                                  bool assumed_ndarray_disjoint) {
+                                  const std::vector<int> &assumed_disjoint_pairs) {
   auto *block = ir->cast<Block>();
   QD_ASSERT(block != nullptr);
   const int n = (int)block->statements.size();
@@ -794,7 +809,7 @@ void split_frontend_per_construct(IRNode *ir,
     block->insert(std::move(t));
   if (cc != nullptr) {
     std::lock_guard<std::mutex> g(cc->mu);
-    cc->last_stats[kernel->get_name()] = {n_constructs, n_hit, n_recompiled, assumed_ndarray_disjoint};
+    cc->last_stats[kernel->get_name()] = {n_constructs, n_hit, n_recompiled, assumed_disjoint_pairs};
   }
 }
 
@@ -835,8 +850,8 @@ bool maybe_split_frontend_per_construct(IRNode *ir,
     return false;
   if (block_has_concurrent_region(block))
     return false;  // concurrent constructs share one global-temp buffer; per-construct offload would alias offsets
-  bool assumed_ndarray_disjoint = false;
-  if (!split_is_recompute_safe(block, assumed_ndarray_disjoint))
+  std::vector<int> assumed_disjoint_pairs;
+  if (!split_is_recompute_safe(block, assumed_disjoint_pairs))
     return false;
   // Cost guard: recompiling a large shared prefix once per construct is pure overhead with no reuse tier, so fall back
   // above a ratio cap. QD_SPLIT_MAX_COST_RATIO overrides the cap; QD_SPLIT_STATS logs the per-kernel estimate.
@@ -861,7 +876,7 @@ bool maybe_split_frontend_per_construct(IRNode *ir,
   }
   if (would_fall_back)
     return false;
-  split_frontend_per_construct(ir, config, kernel, verbose, assumed_ndarray_disjoint);
+  split_frontend_per_construct(ir, config, kernel, verbose, assumed_disjoint_pairs);
   return true;
 }
 

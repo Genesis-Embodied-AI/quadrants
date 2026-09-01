@@ -441,8 +441,8 @@ void export_lang(nb::module_ &m) {
       nb::class_<CompiledKernelData>(m, "CompiledKernelData")
           .def("_debug_dump_to_string", &CompiledKernelData::debug_dump_to_string)
           // Lets the fastcache restore path arm the launch-time no-alias guard, matching the fresh-compile path (which
-          // reads the same flag off CompileResult).
-          .def("split_assumed_ndarray_disjoint", &CompiledKernelData::split_assumed_ndarray_disjoint);
+          // reads the same pairs off CompileResult).
+          .def("split_assumed_disjoint_pairs", &CompiledKernelData::split_assumed_disjoint_pairs);
 
   // nanobind types are not weak-referenceable by default (pybind11 made all bound types so). The Python
   // frontend holds weakrefs to the Program (kernel.py / stream.py), so opt in explicitly.
@@ -580,7 +580,7 @@ void export_lang(nb::module_ &m) {
       .def_ro("per_task_total", &CompileResult::per_task_total)
       .def_ro("per_task_cache_hit", &CompileResult::per_task_cache_hit)
       .def_ro("per_task_recompiled", &CompileResult::per_task_recompiled)
-      .def_ro("split_assumed_ndarray_disjoint", &CompileResult::split_assumed_ndarray_disjoint);
+      .def_ro("split_assumed_disjoint_pairs", &CompileResult::split_assumed_disjoint_pairs);
 
   nb::class_<Axis>(m, "Axis").def(nb::init<int>());
   nb::class_<SNode>(m, "SNodeCxx")

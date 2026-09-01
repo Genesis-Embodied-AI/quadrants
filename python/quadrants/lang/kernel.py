@@ -392,10 +392,14 @@ class Kernel(FuncBase):
 
         self.launch_context_buffer_cache = LaunchContextBufferCache()
         self._struct_ndarray_launch_info_by_key: dict[CompiledKernelKeyType, list] = {}
-        # Launch-time no-alias guard. A key is present (value True) only when its split relied on cross-parameter ndarray
-        # disjointness; those keys check their actual args for aliasing per launch and, on a violation, launch the
-        # whole-kernel variant cached here (compiled with the split disabled). Absent keys skip the check entirely.
-        self._split_alias_guard_by_key: dict[CompiledKernelKeyType, bool] = {}
+        # `(slot, positional_index)` per key for explicit top-level ndarray params, so the guard can map a
+        # C++-recorded assumed-disjoint slot to this launch's arg (struct-member slots come from the struct table).
+        self._explicit_ndarray_slot_info_by_key: dict[CompiledKernelKeyType, list] = {}
+        # Launch-time no-alias guard. A key is present only when its split relied on cross-parameter ndarray
+        # disjointness; its value is the flattened list of assumed-disjoint arg-slot pairs. Those keys check whether any
+        # such pair aliases per launch and, on a violation, launch the whole-kernel variant cached here (compiled with
+        # the split disabled). Absent keys skip the check entirely.
+        self._split_alias_guard_by_key: dict[CompiledKernelKeyType, list] = {}
         self._compiled_no_split_by_key: dict[CompiledKernelKeyType, Any] = {}
         # Keys whose materialized `KernelCxx` has only a parsed signature, not a lowered body (a fastcache restore
         # supplies the artifact and skips body IR construction). The no-alias guard's whole-kernel fallback must rebuild
@@ -446,9 +450,11 @@ class Kernel(FuncBase):
                 if self.compiled_kernel_data_by_key[key]:
                     self.src_ll_cache_observations.cache_loaded = True
                     # A fastcache restore bypasses prog.compile_kernel, so arm the launch-time no-alias guard here too
-                    # when the restored split relied on cross-parameter ndarray disjointness (read off the artifact).
-                    if self.compiled_kernel_data_by_key[key].split_assumed_ndarray_disjoint():
-                        self._split_alias_guard_by_key[key] = True
+                    # when the restored split relied on cross-parameter ndarray disjointness (the assumed-disjoint slot
+                    # pairs read off the artifact).
+                    disjoint_pairs = self.compiled_kernel_data_by_key[key].split_assumed_disjoint_pairs()
+                    if disjoint_pairs:
+                        self._split_alias_guard_by_key[key] = list(disjoint_pairs)
                     self.used_py_dataclass_parameters_by_key_enforcing[key] = cache_value.used_py_dataclass_parameters
                     # Fast-cache restore skips AST transformation, so rebuild the AST-transformer-produced metadata from
                     # the cache value: nested graph_do_while level table (with the AST-resolved flat C++ arg-id) plus
@@ -569,6 +575,9 @@ class Kernel(FuncBase):
                         self._parse_only_keys.add(key)
                     self._struct_ndarray_launch_info_by_key[key] = getattr(
                         ctx.global_context, "struct_ndarray_launch_info", []
+                    )
+                    self._explicit_ndarray_slot_info_by_key[key] = getattr(
+                        ctx.global_context, "explicit_ndarray_launch_info", []
                     )
                     # Only record an entry when this key actually lifts primitives, so the dict stays empty for the
                     # overwhelming majority of kernels (none use template_primitives=False). launch_kernel can then
@@ -790,10 +799,10 @@ class Kernel(FuncBase):
                 compile_result: CompileResult = prog.compile_kernel(prog_config, prog_device_cap, t_kernel)
                 compiled_kernel_data = compile_result.compiled_kernel_data
                 # Arm the launch-time no-alias guard for this key iff its split relied on cross-parameter ndarray
-                # disjointness (read from the compiled kernel, so it is set on a cache hit too). Store only True keys so
-                # the per-launch check below stays a single dict lookup for every other kernel.
-                if compile_result.split_assumed_ndarray_disjoint:
-                    self._split_alias_guard_by_key[key] = True
+                # disjointness (the assumed-disjoint slot pairs, read from the compiled kernel so it is set on a cache
+                # hit too). Store only keys with pairs so the per-launch check stays a single dict lookup otherwise.
+                if compile_result.split_assumed_disjoint_pairs:
+                    self._split_alias_guard_by_key[key] = list(compile_result.split_assumed_disjoint_pairs)
                 if compile_result.cache_hit:
                     self.fe_ll_cache_observations.cache_hit = True
                 self.per_offload_cache_observations = PerOffloadCacheObservations(

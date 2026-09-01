@@ -4,6 +4,7 @@
 #include <string>
 #include <memory>
 #include <unordered_map>
+#include <vector>
 
 #include "quadrants/util/offline_cache.h"
 #include "quadrants/codegen/kernel_compiler.h"
@@ -58,9 +59,10 @@ struct CompileResult {
   int per_task_total{-1};
   int per_task_cache_hit{-1};
   int per_task_recompiled{-1};
-  // True when the per-construct split fired AND relied on cross-parameter ndarray disjointness (see PerConstructCache).
-  // The launch guard uses this to decide whether it must check the actual args for aliasing before using this kernel.
-  bool split_assumed_ndarray_disjoint{false};
+  // Flattened arg-slot pairs (see PerConstructCache) whose cross-parameter ndarray disjointness the split relied on.
+  // The launch guard checks whether any of these pairs actually aliases before using this (split) kernel; empty => no
+  // guard needed.
+  std::vector<int> split_assumed_disjoint_pairs;
 };
 
 namespace tests {

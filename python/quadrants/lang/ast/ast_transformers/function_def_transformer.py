@@ -156,6 +156,7 @@ class FunctionDefTransformer:
         argument_type: Any,
         this_arg_features: tuple[Any, ...],
         arg_value: Any = None,
+        positional_index: int | None = None,
     ) -> None:
         pruning = ctx.global_context.pruning
         func_id = ctx.func.func_id
@@ -224,6 +225,16 @@ class FunctionDefTransformer:
             if not result:
                 decl_type_func, type_args = obj
                 obj = decl_type_func(*type_args)
+            # Record the flat slot of a top-level ndarray param (positional_index set only from the kernel-arg loop, not
+            # dataclass-field recursion) for the launch-time no-alias guard. `obj` is the AnyArray from decl_ndarray_arg.
+            if positional_index is not None and type(argument_type) is ndarray_type.NdarrayType:
+                from quadrants._lib import core as _qd_core  # pylint: disable=C0415
+
+                ptr = getattr(obj, "ptr", None)
+                if ptr is not None and ptr.is_external_tensor_expr():
+                    arg_id = _qd_core.get_external_tensor_arg_id(ptr)
+                    if arg_id:
+                        ctx.global_context.explicit_ndarray_launch_info.append((int(arg_id[0]), positional_index))
             ctx.create_variable(argument_name, obj)
 
     @staticmethod
@@ -247,6 +258,7 @@ class FunctionDefTransformer:
                 arg_meta.annotation,
                 ctx.arg_features[i] if ctx.arg_features is not None else (),
                 ctx.py_args[i] if ctx.py_args is not None else None,
+                positional_index=i,
             )
 
         FunctionDefTransformer._predeclare_struct_ndarrays(ctx)

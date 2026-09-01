@@ -291,6 +291,39 @@ def test_per_construct_frontend_split_alias_guard_falls_back() -> None:
     assert np.allclose(shared.to_numpy(), 2.0, atol=1e-2), shared.to_numpy()
 
 
+@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
+def test_per_construct_frontend_split_alias_guard_benign_alias_still_splits() -> None:
+    # The guard falls back only on the SPECIFIC arg pairs the split relied on being disjoint, not on any two args that
+    # happen to share a buffer. Here `d` aliases `a`, but the split never recomputes a read of `d` across a write (it
+    # is read and consumed in one construct), so `d` is in no recorded pair. The only recorded pair is (a, b) -- from
+    # recomputing `a[0]` into the y-loop past the write to `b` -- and a/b are distinct buffers. So the benign a/d alias
+    # must NOT force a whole-kernel fallback: the split stays. This is qipc `_step_kernel`'s `triplet_overflow` self-
+    # alias in miniature (bound to two params, but disjointness was never assumed about it). A one-bit guard would
+    # wrongly fall back here.
+    @qd.kernel
+    def kernel_benign(
+        a: qd.types.ndarray(), b: qd.types.ndarray(), y: qd.types.ndarray(), d: qd.types.ndarray()
+    ) -> None:
+        base = a[0]
+        for i in range(_N):
+            b[i] = d[i]
+        for i in range(_N):
+            y[i] = base
+
+    a = qd.ndarray(qd.f32, shape=(_N,))
+    b = qd.ndarray(qd.f32, shape=(_N,))
+    y = qd.ndarray(qd.f32, shape=(_N,))
+    a.from_numpy(np.full(_N, 7.0, dtype=np.float32))
+    kernel_benign(a, b, y, a)  # d bound to a's buffer: a benign alias outside any relied-on pair
+
+    obs = kernel_benign._primal.per_offload_cache_observations
+    assert obs.frontend_constructs_total >= 2, obs  # the split fired despite the a/d alias
+    assert kernel_benign._primal._split_alias_guard_by_key, "split did not record the (a, b) assumption"
+    assert not kernel_benign._primal._compiled_no_split_by_key, "benign a/d alias must not build a whole-kernel fallback"
+    assert np.allclose(y.to_numpy(), 7.0, atol=1e-2), y.to_numpy()
+    assert np.allclose(b.to_numpy(), 7.0, atol=1e-2), b.to_numpy()  # b[i] = d[i] = a[i] = 7
+
+
 @test_utils.test(arch=qd.cuda, offline_cache=False)
 def test_per_construct_frontend_split_barrier_between_constructs_splits() -> None:
     # `internal_func_is_memory_free` allowlist regression. A block barrier reports has_global_side_effect (to pin
@@ -369,10 +402,10 @@ def test_per_construct_frontend_split_alias_guard_struct_member_path() -> None:
 
 @test_utils.test(arch=[qd.cpu, qd.cuda])
 def test_per_construct_frontend_split_alias_guard_armed_from_fastcache(tmp_path) -> None:
-    # The guard bit rides on the compiled artifact, so a kernel restored from the fastcache in a fresh process (never
-    # freshly compiled here) must still arm the launch-time guard from the serialized `split_assumed_ndarray_disjoint`
-    # flag -- otherwise a cross-process cache hit would silently run the unguarded split under aliasing. Emulates the
-    # second process with `qd_init_same_arch` + a re-created Kernel object (empty guard dict) sharing the cache dir.
+    # The assumed-disjoint pairs ride on the compiled artifact, so a kernel restored from the fastcache in a fresh
+    # process (never freshly compiled here) must still arm the launch-time guard from the serialized
+    # `split_assumed_disjoint_pairs` -- otherwise a cross-process cache hit would silently run the unguarded split under
+    # aliasing. Emulates the second process with `qd_init_same_arch` + a re-created Kernel object (empty guard dict).
     def _make():
         @qd.kernel(fastcache=True)
         def kernel_guarded(a: qd.types.ndarray(), b: qd.types.ndarray(), y: qd.types.ndarray()) -> None:

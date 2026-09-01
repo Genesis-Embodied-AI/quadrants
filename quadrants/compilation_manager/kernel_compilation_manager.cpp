@@ -87,7 +87,7 @@ CompileResult KernelCompilationManager::load_or_compile(const CompileConfig &com
   // On a cache hit no split ran, so the launch guard's arm-flag must come from the serialized artifact. On a fresh
   // compile it comes from last_stats below -- backend-agnostic, so it covers backends whose CompiledKernelData does
   // not carry the flag as well as the first compile of a kernel in a process (before any in-process re-launch).
-  bool assumed_ndarray_disjoint = ckd.split_assumed_ndarray_disjoint();
+  std::vector<int> assumed_disjoint_pairs = ckd.split_assumed_disjoint_pairs();
   if (!cache_hit && kernel_def.program != nullptr) {
     auto &cc = kernel_def.program->per_construct_cache();
     std::lock_guard<std::mutex> g(cc.mu);
@@ -96,7 +96,7 @@ CompileResult KernelCompilationManager::load_or_compile(const CompileConfig &com
       total = it->second.total;
       cache_hit_count = it->second.hit;
       recompiled = it->second.recompiled;
-      assumed_ndarray_disjoint = it->second.assumed_ndarray_disjoint;
+      assumed_disjoint_pairs = it->second.assumed_disjoint_pairs;
       cc.last_stats.erase(it);
     }
     // Per-task artifact-cache counts recorded by the codegen driver (CUDA only). Erased on read like the construct
@@ -110,7 +110,7 @@ CompileResult KernelCompilationManager::load_or_compile(const CompileConfig &com
     }
   }
   return CompileResult{ckd,        cache_hit,  kernel_key, total,           cache_hit_count,
-                       recompiled, task_total, task_hit,   task_recompiled, assumed_ndarray_disjoint};
+                       recompiled, task_total, task_hit,   task_recompiled, assumed_disjoint_pairs};
 }
 
 void KernelCompilationManager::dump() {

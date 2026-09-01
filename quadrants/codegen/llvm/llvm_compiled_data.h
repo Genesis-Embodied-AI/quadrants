@@ -220,9 +220,10 @@ struct LLVMCompiledKernel {
   // The `key` of each `per_construct_artifacts` entry, in order. Unlike the artifacts this IS serialized: it's how an
   // artifact-backed kernel gets a `.qdc` entry, rebuilt from the cache on load via `PerTaskArtifactCache`.
   std::vector<std::string> per_task_artifact_keys;
-  // The per-construct split fired AND relied on cross-parameter ndarray disjointness (see split_is_recompute_safe).
-  // Serialized so a cache-loaded kernel still triggers the launch-time no-alias guard.
-  bool split_assumed_ndarray_disjoint{false};
+  // Flattened [a0,b0,...] arg-slot pairs whose cross-parameter ndarray disjointness the per-construct split relied on
+  // (see split_is_recompute_safe). Serialized so a cache-loaded kernel still arms the launch-time no-alias guard;
+  // empty => the split made no caller-defeatable assumption and needs no guard.
+  std::vector<int> split_assumed_disjoint_pairs;
   LLVMCompiledKernel() = default;
   LLVMCompiledKernel(LLVMCompiledKernel &&) = default;
   LLVMCompiledKernel &operator=(LLVMCompiledKernel &&) = default;
@@ -230,7 +231,7 @@ struct LLVMCompiledKernel {
       : tasks(std::move(tasks)), module(std::move(module)) {
   }
   LLVMCompiledKernel clone() const;
-  QD_IO_DEF(tasks, per_task_artifact_keys, split_assumed_ndarray_disjoint);
+  QD_IO_DEF(tasks, per_task_artifact_keys, split_assumed_disjoint_pairs);
 };
 
 // The exclusive end of the maximal run of stream-parallel tasks starting at `start` that belong to the SAME
