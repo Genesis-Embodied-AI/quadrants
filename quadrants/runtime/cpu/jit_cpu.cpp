@@ -239,6 +239,25 @@ class JITSessionCPU : public JITSession {
         QD_ERROR("Failed to load per-task CPU object into the JIT (offline cache may be corrupt): {}",
                  llvm::toString(std::move(err)));
       }
+      // `object_layer_.add` only registers a materialization unit, so it catches parse errors but not a corrupt
+      // relocation / undefined reference, which fails later during linking. That failure would otherwise surface at
+      // launch in lookup_in_modules -- with no key at hand to invalidate the record, poisoning every future process.
+      // Force materialization here (each task's entry symbol resolves in exactly this self-contained dylib) so a
+      // deferred link failure is caught while `art.key` is still available, then erased and raised catchably.
+      for (const auto &task : art.tasks) {
+#ifdef __APPLE__
+        auto sym = es_.lookup({&dylib}, mangle_(task.name));
+#else
+        auto sym = es_.lookup({&dylib}, es_.intern(task.name));
+#endif
+        if (!sym) {
+          if (!art.key.empty()) {
+            artifact_cache.erase(art.key);
+          }
+          QD_ERROR("Failed to materialize per-task CPU object for \"{}\" (offline cache may be corrupt): {}", task.name,
+                   llvm::toString(sym.takeError()));
+        }
+      }
       dylibs.push_back(&dylib);
     }
 
