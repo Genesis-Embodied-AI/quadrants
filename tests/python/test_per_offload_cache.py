@@ -319,7 +319,9 @@ def test_per_construct_frontend_split_alias_guard_benign_alias_still_splits() ->
     obs = kernel_benign._primal.per_offload_cache_observations
     assert obs.frontend_constructs_total >= 2, obs  # the split fired despite the a/d alias
     assert kernel_benign._primal._split_alias_guard_by_key, "split did not record the (a, b) assumption"
-    assert not kernel_benign._primal._compiled_no_split_by_key, "benign a/d alias must not build a whole-kernel fallback"
+    assert (
+        not kernel_benign._primal._compiled_no_split_by_key
+    ), "benign a/d alias must not build a whole-kernel fallback"
     assert np.allclose(y.to_numpy(), 7.0, atol=1e-2), y.to_numpy()
     assert np.allclose(b.to_numpy(), 7.0, atol=1e-2), b.to_numpy()  # b[i] = d[i] = a[i] = 7
 
