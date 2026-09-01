@@ -293,6 +293,42 @@ def test_per_construct_frontend_split_alias_guard_falls_back() -> None:
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
+def test_per_construct_frontend_split_alias_guard_cleared_on_reset() -> None:
+    # The whole-kernel fallback cache holds CompiledKernelData owned by the current Program, so reset() must drop it
+    # (and the guard state) alongside the other compiled-data caches. Otherwise a re-launch after `qd.reset()` hands the
+    # new Program a fallback the destroyed one built -> invalid backend state. Reusing the SAME kernel across the reset
+    # is the point of the test: a freshly created kernel could never carry the stale entry.
+    @qd.kernel
+    def kernel_guarded(a: qd.types.ndarray(), b: qd.types.ndarray(), y: qd.types.ndarray()) -> None:
+        base = a[0]
+        for i in range(_N):
+            b[i] = 2.0
+        for i in range(_N):
+            y[i] = base
+
+    shared = qd.ndarray(qd.f32, shape=(_N,))
+    y = qd.ndarray(qd.f32, shape=(_N,))
+    shared.from_numpy(np.full(_N, 7.0, dtype=np.float32))
+    kernel_guarded(shared, shared, y)  # aliased a/b arms the guard and builds the fallback
+    assert kernel_guarded._primal._compiled_no_split_by_key, "aliased launch did not build the whole-kernel fallback"
+    assert np.allclose(y.to_numpy(), 7.0, atol=1e-2), y.to_numpy()
+
+    # Re-init the same arch: destroys the Program and, via impl.reset(), resets every registered kernel in place.
+    qd_init_same_arch(offline_cache=False)
+    assert not kernel_guarded._primal._compiled_no_split_by_key, "reset left a fallback owned by the destroyed Program"
+    assert not kernel_guarded._primal._split_alias_guard_by_key, "reset left stale guard state"
+
+    # Reuse the same kernel against the new Program: the fallback rebuilds fresh (no stale-Program launch), and the
+    # aliased call is still correct (7.0 whole-kernel, never 2.0 split miscompile).
+    shared2 = qd.ndarray(qd.f32, shape=(_N,))
+    y2 = qd.ndarray(qd.f32, shape=(_N,))
+    shared2.from_numpy(np.full(_N, 7.0, dtype=np.float32))
+    kernel_guarded(shared2, shared2, y2)
+    assert kernel_guarded._primal._compiled_no_split_by_key, "fallback not rebuilt after reset"
+    assert np.allclose(y2.to_numpy(), 7.0, atol=1e-2), y2.to_numpy()
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
 def test_per_construct_frontend_split_alias_guard_benign_alias_still_splits() -> None:
     # The guard falls back only on the SPECIFIC arg pairs the split relied on being disjoint, not on any two args that
     # happen to share a buffer. Here `d` aliases `a`, but the split never recomputes a read of `d` across a write (it

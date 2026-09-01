@@ -416,6 +416,12 @@ class Kernel(FuncBase):
         self.runtime = impl.get_runtime()
         self.materialized_kernels = {}
         self.compiled_kernel_data_by_key = {}
+        # Launch-time no-alias guard state must drop with the compiled-data caches above: `_compiled_no_split_by_key`
+        # holds CompiledKernelData from the now-destroyed Program, so an aliased launch after `qd.reset()` would run it
+        # against the new Program. All three are re-armed on the next materialize (fresh compile or fastcache restore).
+        self._compiled_no_split_by_key = {}
+        self._split_alias_guard_by_key = {}
+        self._explicit_ndarray_slot_info_by_key = {}
         self._last_compiled_kernel_data = None
         self.src_ll_cache_observations = SrcLlCacheObservations()
         self.fe_ll_cache_observations = FeLlCacheObservations()
