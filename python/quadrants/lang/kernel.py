@@ -391,6 +391,9 @@ class Kernel(FuncBase):
         # `(slot, positional_index)` per key for explicit top-level ndarray params, so the guard can map a
         # C++-recorded assumed-disjoint slot to this launch's arg (struct-member slots come from the struct table).
         self._explicit_ndarray_slot_info_by_key: dict[CompiledKernelKeyType, list] = {}
+        # `(slot, root_positional_index, attr_chain)` per key for ndarray fields of a typed dataclass param, resolved by
+        # the guard through `_resolve_struct_ndarray` (same shape as the struct table, but guard-only).
+        self._dataclass_ndarray_guard_info_by_key: dict[CompiledKernelKeyType, list] = {}
         # Launch-time no-alias guard. A key is present only when its split relied on cross-parameter ndarray
         # disjointness; its value is the flattened list of assumed-disjoint arg-slot pairs. Those keys check whether any
         # such pair aliases per launch and, on a violation, launch the whole-kernel variant cached here (compiled with
@@ -422,6 +425,7 @@ class Kernel(FuncBase):
         self._compiled_no_split_by_key = {}
         self._split_alias_guard_by_key = {}
         self._explicit_ndarray_slot_info_by_key = {}
+        self._dataclass_ndarray_guard_info_by_key = {}
         self._last_compiled_kernel_data = None
         self.src_ll_cache_observations = SrcLlCacheObservations()
         self.fe_ll_cache_observations = FeLlCacheObservations()
@@ -619,6 +623,9 @@ class Kernel(FuncBase):
                         self._parse_only_keys.add(key)
                     self._struct_ndarray_launch_info_by_key[key] = getattr(
                         ctx.global_context, "struct_ndarray_launch_info", []
+                    )
+                    self._dataclass_ndarray_guard_info_by_key[key] = getattr(
+                        ctx.global_context, "dataclass_ndarray_launch_info", []
                     )
                     self._explicit_ndarray_slot_info_by_key[key] = getattr(
                         ctx.global_context, "explicit_ndarray_launch_info", []

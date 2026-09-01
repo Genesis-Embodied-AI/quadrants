@@ -51,7 +51,11 @@ def launch_has_aliased_ndarrays(kernel: Any, key: Any, args: tuple) -> bool:
     slot_to_nd: dict[int, Any] = {}
     for slot, positional_index in kernel._explicit_ndarray_slot_info_by_key.get(key) or []:
         slot_to_nd[slot] = args[positional_index]
-    struct_nd_info = kernel._struct_ndarray_launch_info_by_key.get(key)
+    # Struct-member and typed-dataclass-field slots resolve the same way (root arg index + attribute chain), so the
+    # guard walks both through `_resolve_struct_ndarray`. They're stored in separate tables only because the struct
+    # table also drives launch-arg binding, which dataclass fields do not use.
+    struct_nd_info = list(kernel._struct_ndarray_launch_info_by_key.get(key) or [])
+    struct_nd_info += kernel._dataclass_ndarray_guard_info_by_key.get(key) or []
     resolved: dict[int, Any] = {}
 
     def _alloc_of(slot: int):

@@ -417,6 +417,47 @@ def test_per_construct_frontend_split_cross_arg_grad_pair_unsafe() -> None:
     assert np.allclose(out.to_numpy(), 7.0, atol=1e-2), out.to_numpy()
 
 
+@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
+def test_per_construct_frontend_split_alias_guard_dataclass_field_slots() -> None:
+    # The split can rest on two ndarray FIELDS of a typed dataclass being disjoint. Those fields flatten to their own
+    # arg slots, so the guard must resolve each slot back to its live ndarray via the root dataclass arg + attribute
+    # chain. Without that, the disjoint launch can't be verified and always falls back to whole-kernel, defeating the
+    # split. The `not _compiled_no_split_by_key` assertion on the disjoint launch is what the field-slot recording buys.
+    @dataclasses.dataclass
+    class Pair:
+        fa: qd.types.NDArray[qd.f32, 1]
+        fb: qd.types.NDArray[qd.f32, 1]
+
+    @qd.kernel
+    def kernel_pair(p: Pair, y: qd.types.ndarray()) -> None:
+        base = p.fa[0]
+        for i in range(_N):
+            p.fb[i] = 2.0
+        for i in range(_N):
+            y[i] = base
+
+    def _nd(v):
+        a = qd.ndarray(qd.f32, shape=(_N,))
+        a.from_numpy(np.full(_N, v, dtype=np.float32))
+        return a
+
+    # Disjoint fields: the guard resolves both field slots, sees distinct buffers, and keeps the split.
+    fa, fb, y = _nd(7.0), _nd(0.0), qd.ndarray(qd.f32, shape=(_N,))
+    kernel_pair(Pair(fa, fb), y)
+    obs = kernel_pair._primal.per_offload_cache_observations
+    assert obs.frontend_constructs_total >= 2, obs  # the split fired at compile time
+    assert kernel_pair._primal._split_alias_guard_by_key, "split did not record the (fa, fb) field assumption"
+    assert not kernel_pair._primal._compiled_no_split_by_key, "disjoint fields must not build a whole-kernel fallback"
+    assert np.allclose(y.to_numpy(), 7.0, atol=1e-2), y.to_numpy()
+
+    # Aliased fields: one buffer bound to both fa and fb. The guard resolves both to a single alloc_id and falls back to
+    # the whole-kernel variant, which snapshots base before the write (7.0), not the split's post-write recompute (2.0).
+    shared, y2 = _nd(7.0), qd.ndarray(qd.f32, shape=(_N,))
+    kernel_pair(Pair(shared, shared), y2)
+    assert kernel_pair._primal._compiled_no_split_by_key, "aliased fields did not trigger the whole-kernel fallback"
+    assert np.allclose(y2.to_numpy(), 7.0, atol=1e-2), y2.to_numpy()
+
+
 @test_utils.test(arch=qd.cuda, offline_cache=False)
 def test_per_construct_frontend_split_barrier_between_constructs_splits() -> None:
     # `internal_func_is_memory_free` allowlist regression. A block barrier reports has_global_side_effect (to pin

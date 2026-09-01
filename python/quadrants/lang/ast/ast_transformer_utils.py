@@ -187,6 +187,11 @@ class ASTTransformerGlobalContext:
         # (`ArgLoadStmt.arg_id[0]`). The launch-time no-alias guard needs it to map a C++-recorded assumed-disjoint slot
         # to this launch's ndarray; struct-member slots come from `struct_ndarray_launch_info` instead.
         self.explicit_ndarray_launch_info: list[tuple] = []
+        # `(slot, root_positional_arg_index, attr_chain)` for each ndarray FIELD of a typed dataclass param, so the
+        # guard can resolve the field slot via `_resolve_struct_ndarray` (same shape as `struct_ndarray_launch_info`).
+        # Kept separate from that list because dataclass fields are already bound at launch by the dataclass-arg walk;
+        # this record is read only by the guard, never by the arg-setting path.
+        self.dataclass_ndarray_launch_info: list[tuple] = []
         # Lifted-primitive support for ``@qd.data_oriented(template_primitives=False)``. Mirrors the two ndarray
         # structures above, plus a provenance map driving the two-pass pruning.
         # * ``struct_primitive_provenance`` maps ``(id(parent_obj), attr_name)`` to ``(flat_name, arg_idx, attr_chain,
