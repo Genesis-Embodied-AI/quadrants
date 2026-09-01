@@ -142,10 +142,18 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
   }
   worker.flush();
 
-  // Build one self-contained artifact per task BEFORE the whole-module link consumes `data`: a hit carries cached PTX
+  // Build one self-contained artifact per task BEFORE the whole-module link consumes `data`: a hit carries cached code
   // (null module), a miss builds+optimizes a module for the JIT to compile and store.
+  //
+  // CUDA always takes the per-task composite path: its per-task load is cheap (LLVM->PTX + a driver module load, no
+  // external assembler), so there is no whole-module path worth preserving. AMDGPU instead links each task with its
+  // own `ld.lld` process, so the per-task path only pays off when the artifact tier is on (a hit skips the link, a
+  // miss fills the cache). With the tier off (offline_cache disabled), building per-task artifacts would run N
+  // `ld.lld` links for zero caching benefit, so AMDGPU stays on the single whole-module link.
   std::vector<PerConstructArtifact> per_construct_artifacts;
-  if (compile_config_.arch == Arch::cuda || compile_config_.arch == Arch::amdgpu) {
+  const bool build_per_construct_artifacts =
+      compile_config_.arch == Arch::cuda || (compile_config_.arch == Arch::amdgpu && artifact_tier);
+  if (build_per_construct_artifacts) {
     for (int i = 0; i < n; i++) {
       if (!data[i])
         continue;
