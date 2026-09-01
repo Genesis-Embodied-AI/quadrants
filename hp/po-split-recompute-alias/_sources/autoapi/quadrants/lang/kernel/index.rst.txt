@@ -208,9 +208,12 @@ Module Contents
 
       Compile the whole-kernel (split-disabled) variant used by the launch-time no-alias guard.
 
-      For a normally-materialized key ``t_kernel`` already carries the lowered body, so it compiles directly. For a
-      fastcache-restored key the body was never built (``_parse_only_keys``), so rebuild one full-body ``KernelCxx``
-      here -- the guard only reaches this on an actual aliased call, so the rebuild cost stays off the common path.
+      A normally-materialized key's ``t_kernel`` already carries the lowered body, so it compiles directly. A
+      fastcache-restored key (``_parse_only_keys``) never built one, so rebuild it here with the SAME two-pass
+      pruning materialize uses for a fresh compile: the non-enforcing discovery pass fills each callee ``@qd.func``'s
+      used set, without which a callee dataclass arg's fields would be pruned and the enforcing build would fail. The
+      cached kernel-root used set alone (materialize's fastcache shortcut) is not enough because it never enters a
+      callee body. Only reached on an actual aliased launch, so this rebuild stays off the common path.
 
 
 

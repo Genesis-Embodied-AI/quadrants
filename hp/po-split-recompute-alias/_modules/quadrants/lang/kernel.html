@@ -873,6 +873,12 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">materialized_kernels</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">compiled_kernel_data_by_key</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="c1"># Launch-time no-alias guard state must drop with the compiled-data caches above: `_compiled_no_split_by_key`</span>
+        <span class="c1"># holds CompiledKernelData from the now-destroyed Program, so an aliased launch after `qd.reset()` would run it</span>
+        <span class="c1"># against the new Program. All three are re-armed on the next materialize (fresh compile or fastcache restore).</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_compiled_no_split_by_key</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_split_alias_guard_by_key</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_explicit_ndarray_slot_info_by_key</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_last_compiled_kernel_data</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span> <span class="o">=</span> <span class="n">SrcLlCacheObservations</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">fe_ll_cache_observations</span> <span class="o">=</span> <span class="n">FeLlCacheObservations</span><span class="p">()</span>
@@ -1119,41 +1125,66 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">compile_no_split_variant</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">t_kernel</span><span class="p">:</span> <span class="n">KernelCxx</span><span class="p">,</span> <span class="n">py_args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">CompiledKernelData</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""Compile the whole-kernel (split-disabled) variant used by the launch-time no-alias guard.</span>
 
-<span class="sd">        For a normally-materialized key ``t_kernel`` already carries the lowered body, so it compiles directly. For a</span>
-<span class="sd">        fastcache-restored key the body was never built (``_parse_only_keys``), so rebuild one full-body ``KernelCxx``</span>
-<span class="sd">        here -- the guard only reaches this on an actual aliased call, so the rebuild cost stays off the common path.</span>
+<span class="sd">        A normally-materialized key's ``t_kernel`` already carries the lowered body, so it compiles directly. A</span>
+<span class="sd">        fastcache-restored key (``_parse_only_keys``) never built one, so rebuild it here with the SAME two-pass</span>
+<span class="sd">        pruning materialize uses for a fresh compile: the non-enforcing discovery pass fills each callee ``@qd.func``'s</span>
+<span class="sd">        used set, without which a callee dataclass arg's fields would be pruned and the enforcing build would fail. The</span>
+<span class="sd">        cached kernel-root used set alone (materialize's fastcache shortcut) is not enough because it never enters a</span>
+<span class="sd">        callee body. Only reached on an actual aliased launch, so this rebuild stays off the common path.</span>
 <span class="sd">        """</span>
         <span class="n">prog</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span>
         <span class="n">kernel</span> <span class="o">=</span> <span class="n">t_kernel</span>
         <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_only_keys</span><span class="p">:</span>
             <span class="n">runtime</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span>
             <span class="n">instance_id</span><span class="p">,</span> <span class="n">arg_features</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mapper</span><span class="o">.</span><span class="n">lookup</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">raise_on_templated_floats</span><span class="p">,</span> <span class="n">py_args</span><span class="p">)</span>
-            <span class="n">used</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">used_py_dataclass_parameters_by_key_enforcing</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
-            <span class="n">pruning</span> <span class="o">=</span> <span class="n">Pruning</span><span class="p">(</span><span class="n">kernel_used_parameters</span><span class="o">=</span><span class="n">used</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">used</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">pruning</span><span class="o">.</span><span class="n">enforce</span><span class="p">()</span>
+            <span class="n">fallback_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">_c</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">kernel_counter</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">instance_id</span><span class="si">}</span><span class="s2">_nosplit"</span>
+            <span class="c1"># The discovery pass rebuilds `graph_do_while_levels` in place (build_While appends as it walks); snapshot</span>
+            <span class="c1"># and restore so the fastcache key's own launches, which keep using the restored table, stay untouched.</span>
+            <span class="n">saved_graph_do_while_levels</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span><span class="p">)</span>
+            <span class="n">pruning</span> <span class="o">=</span> <span class="n">Pruning</span><span class="p">(</span><span class="n">kernel_used_parameters</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
             <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">compilation_lock</span><span class="p">:</span>
-                <span class="n">tree</span><span class="p">,</span> <span class="n">ctx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_tree_and_ctx</span><span class="p">(</span>
-                    <span class="n">pass_idx</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
-                    <span class="n">py_args</span><span class="o">=</span><span class="n">py_args</span><span class="p">,</span>
-                    <span class="n">template_slot_locations</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">template_slot_locations</span><span class="p">,</span>
-                    <span class="n">arg_features</span><span class="o">=</span><span class="n">arg_features</span><span class="p">,</span>
-                    <span class="n">current_kernel</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span>
-                    <span class="n">pruning</span><span class="o">=</span><span class="n">pruning</span><span class="p">,</span>
-                    <span class="n">currently_compiling_materialize_key</span><span class="o">=</span><span class="n">key</span><span class="p">,</span>
-                <span class="p">)</span>
-                <span class="n">runtime</span><span class="o">.</span><span class="n">_current_global_context</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span>
-                <span class="n">fallback_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">_c</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">kernel_counter</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">instance_id</span><span class="si">}</span><span class="s2">_nosplit"</span>
-                <span class="n">generator</span> <span class="o">=</span> <span class="n">ASTGenerator</span><span class="p">(</span>
-                    <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">,</span>
-                    <span class="n">kernel_name</span><span class="o">=</span><span class="n">fallback_name</span><span class="p">,</span>
-                    <span class="n">current_kernel</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span>
-                    <span class="n">only_parse_function_def</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-                    <span class="n">tree</span><span class="o">=</span><span class="n">tree</span><span class="p">,</span>
-                    <span class="n">dump_ast</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-                <span class="p">)</span>
-                <span class="n">kernel</span> <span class="o">=</span> <span class="n">prog</span><span class="o">.</span><span class="n">create_kernel</span><span class="p">(</span><span class="n">generator</span><span class="p">,</span> <span class="n">fallback_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">autodiff_mode</span><span class="p">)</span>
-                <span class="n">runtime</span><span class="o">.</span><span class="n">_current_global_context</span> <span class="o">=</span> <span class="kc">None</span>
+                <span class="k">for</span> <span class="n">_pass</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="n">_pass</span> <span class="o">&gt;=</span> <span class="mi">1</span><span class="p">:</span>
+                        <span class="n">pruning</span><span class="o">.</span><span class="n">enforce</span><span class="p">()</span>
+                    <span class="n">tree</span><span class="p">,</span> <span class="n">ctx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_tree_and_ctx</span><span class="p">(</span>
+                        <span class="n">pass_idx</span><span class="o">=</span><span class="n">_pass</span><span class="p">,</span>
+                        <span class="n">py_args</span><span class="o">=</span><span class="n">py_args</span><span class="p">,</span>
+                        <span class="n">template_slot_locations</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">template_slot_locations</span><span class="p">,</span>
+                        <span class="n">arg_features</span><span class="o">=</span><span class="n">arg_features</span><span class="p">,</span>
+                        <span class="n">current_kernel</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span>
+                        <span class="n">pruning</span><span class="o">=</span><span class="n">pruning</span><span class="p">,</span>
+                        <span class="n">currently_compiling_materialize_key</span><span class="o">=</span><span class="n">key</span><span class="p">,</span>
+                    <span class="p">)</span>
+                    <span class="n">runtime</span><span class="o">.</span><span class="n">_current_global_context</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span>
+                    <span class="n">built</span> <span class="o">=</span> <span class="n">prog</span><span class="o">.</span><span class="n">create_kernel</span><span class="p">(</span>
+                        <span class="n">ASTGenerator</span><span class="p">(</span>
+                            <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">,</span>
+                            <span class="n">kernel_name</span><span class="o">=</span><span class="n">fallback_name</span><span class="p">,</span>
+                            <span class="n">current_kernel</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span>
+                            <span class="n">only_parse_function_def</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                            <span class="n">tree</span><span class="o">=</span><span class="n">tree</span><span class="p">,</span>
+                            <span class="n">dump_ast</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                        <span class="p">),</span>
+                        <span class="n">fallback_name</span><span class="p">,</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">autodiff_mode</span><span class="p">,</span>
+                    <span class="p">)</span>
+                    <span class="k">if</span> <span class="n">_pass</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                        <span class="n">pruning</span><span class="o">.</span><span class="n">propagate_fixpoint</span><span class="p">()</span>
+                        <span class="k">for</span> <span class="n">used_parameters</span> <span class="ow">in</span> <span class="n">pruning</span><span class="o">.</span><span class="n">used_vars_by_func_id</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+                            <span class="n">collapsed</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+                            <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">used_parameters</span><span class="p">:</span>
+                                <span class="n">split_param</span> <span class="o">=</span> <span class="n">param</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">"__qd_"</span><span class="p">)</span>
+                                <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">split_param</span><span class="p">),</span> <span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">):</span>
+                                    <span class="n">joined</span> <span class="o">=</span> <span class="s2">"__qd_"</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">split_param</span><span class="p">[:</span><span class="n">i</span><span class="p">])</span>
+                                    <span class="k">if</span> <span class="n">joined</span> <span class="ow">in</span> <span class="n">collapsed</span><span class="p">:</span>
+                                        <span class="k">break</span>
+                                    <span class="n">collapsed</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">joined</span><span class="p">)</span>
+                            <span class="n">used_parameters</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+                            <span class="n">used_parameters</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">collapsed</span><span class="p">)</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">kernel</span> <span class="o">=</span> <span class="n">built</span>
+                    <span class="n">runtime</span><span class="o">.</span><span class="n">_current_global_context</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span> <span class="o">=</span> <span class="n">saved_graph_do_while_levels</span>
         <span class="k">return</span> <span class="n">prog</span><span class="o">.</span><span class="n">compile_kernel</span><span class="p">(</span>
             <span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">(),</span> <span class="n">prog</span><span class="o">.</span><span class="n">get_device_caps</span><span class="p">(),</span> <span class="n">kernel</span><span class="p">,</span> <span class="n">disable_split</span><span class="o">=</span><span class="kc">True</span>
         <span class="p">)</span><span class="o">.</span><span class="n">compiled_kernel_data</span></div>
