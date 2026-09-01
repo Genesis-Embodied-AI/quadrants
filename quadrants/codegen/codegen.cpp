@@ -181,7 +181,8 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
   }
 
   // A cross-process hit leaves a task with no module, so skip the whole-kernel link; the launcher assembles the
-  // backend module from the per-task artifacts. Still concatenate every task's metadata into `tasks`, which it runs off.
+  // backend module from the per-task artifacts. Still concatenate every task's metadata into `tasks`, which it runs
+  // off.
   const bool code_only_tasks = std::any_of(data.begin(), data.end(), [](const auto &d) { return d && !d->module; });
   LLVMCompiledKernel llvm_compiled_kernel;
   if (code_only_tasks) {
