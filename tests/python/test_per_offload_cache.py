@@ -390,6 +390,33 @@ def test_per_construct_frontend_split_clamped_boundary_recompute_unsafe() -> Non
     assert np.allclose(a.to_numpy()[_N - 1], 2.0, atol=1e-2), a.to_numpy()
 
 
+@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
+def test_per_construct_frontend_split_cross_arg_grad_pair_unsafe() -> None:
+    # Recompute a read of `x.grad` past a write to `y.grad` on two DISTINCT args. alias_analysis calls them different by
+    # arg id, so condition (3) clears -- but both accesses are GRADIENT buffers, and the launch guard resolves a slot
+    # only to its arg's PRIMAL alloc_id, so it cannot see two args' gradient companions sharing one allocation.
+    # Recording that pair would be unguardable, so the split must refuse it and run whole-kernel (constructs == -1).
+    # (Distinct grad buffers make this call numerically fine either way; the point is the split DECISION, not a value.)
+    @qd.kernel
+    def kernel_grad(x: qd.types.ndarray(), y: qd.types.ndarray(), out: qd.types.ndarray()) -> None:
+        base = x.grad[0]
+        for i in range(_N):
+            y.grad[i] = 2.0
+        for i in range(_N):
+            out[i] = base
+
+    x = qd.ndarray(qd.f32, shape=(_N,), needs_grad=True)
+    y = qd.ndarray(qd.f32, shape=(_N,), needs_grad=True)
+    out = qd.ndarray(qd.f32, shape=(_N,))
+    x.grad.from_numpy(np.full(_N, 7.0, dtype=np.float32))
+    kernel_grad(x, y, out)
+
+    obs = kernel_grad._primal.per_offload_cache_observations
+    assert obs.frontend_constructs_total == -1, obs  # refused: a gradient-buffer pair is not launch-guardable
+    assert not kernel_grad._primal._split_alias_guard_by_key, "an unguardable gradient pair must not be recorded"
+    assert np.allclose(out.to_numpy(), 7.0, atol=1e-2), out.to_numpy()
+
+
 @test_utils.test(arch=qd.cuda, offline_cache=False)
 def test_per_construct_frontend_split_barrier_between_constructs_splits() -> None:
     # `internal_func_is_memory_free` allowlist regression. A block barrier reports has_global_side_effect (to pin

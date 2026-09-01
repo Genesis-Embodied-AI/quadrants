@@ -600,11 +600,12 @@ bool clamp_may_defeat_index_disjointness(Stmt *a, Stmt *b) {
 // `different` by arg id and/or is_grad, which a caller violates by binding one buffer to both params. Same-arg
 // clearances (index-disjoint, or a param vs its own .grad) are true disjointness the caller cannot defeat -> false.
 // On true, `slot_a`/`slot_b` get the two args' flat slots (`arg_id[0]`; ndarray arg_ids are single-element).
-// `grad_mismatch` is set when the accesses differ in is_grad (e.g. read x.grad, write y, called as kernel(a, a.grad)):
-// that alias is between one arg's GRADIENT buffer and another's PRIMAL buffer, which the launch guard -- comparing
-// primal alloc_ids by slot -- cannot detect, so the caller refuses to split rather than recording an unguardable pair.
-bool clearance_assumes_ndarray_disjoint(Stmt *a, Stmt *b, int &slot_a, int &slot_b, bool &grad_mismatch) {
-  grad_mismatch = false;
+// `involves_grad` is set when either access is through a `.grad` buffer. The launch guard resolves a slot to its arg's
+// PRIMAL alloc_id only, so it cannot see gradient buffers: a pair where either side is a gradient access (one arg's
+// grad vs another's primal, or two args' grads sharing one allocation) is unguardable, and the caller refuses to split
+// rather than recording it. Only primal-vs-primal cross-arg pairs are guardable.
+bool clearance_assumes_ndarray_disjoint(Stmt *a, Stmt *b, int &slot_a, int &slot_b, bool &involves_grad) {
+  involves_grad = false;
   ExternalPtrStmt *ea = as_ndarray_ptr(a);
   ExternalPtrStmt *eb = as_ndarray_ptr(b);
   if (ea == nullptr || eb == nullptr)
@@ -617,7 +618,7 @@ bool clearance_assumes_ndarray_disjoint(Stmt *a, Stmt *b, int &slot_a, int &slot
     return false;
   slot_a = arg_a->arg_id[0];
   slot_b = arg_b->arg_id[0];
-  grad_mismatch = ea->is_grad != eb->is_grad;
+  involves_grad = ea->is_grad || eb->is_grad;
   return true;
 }
 
@@ -735,13 +736,13 @@ bool split_is_recompute_safe(Block *block, std::vector<int> &assumed_disjoint_pa
         if (clamp_may_defeat_index_disjointness(r.src, w.dest))
           return false;  // clamped boundary can collapse the "different" indices onto one in-bounds address
         // Cleared: the read and write are provably different addresses. When that proof is cross-arg ndarray
-        // disjointness a caller can defeat it by aliasing the two params. A same-is_grad pair is checkable by the
-        // launch guard (compare the two args' primal alloc_ids) -- record it. A primal-vs-gradient cross-arg pair is
+        // disjointness a caller can defeat it by aliasing the two params. A primal-vs-primal pair is checkable by the
+        // launch guard (compare the two args' primal alloc_ids) -- record it. Any pair touching a gradient buffer is
         // not (the guard sees only primal alloc_ids), so refuse to split and let the whole-kernel path run instead.
         int slot_a = 0, slot_b = 0;
-        bool grad_mismatch = false;
-        if (clearance_assumes_ndarray_disjoint(r.src, w.dest, slot_a, slot_b, grad_mismatch)) {
-          if (grad_mismatch)
+        bool involves_grad = false;
+        if (clearance_assumes_ndarray_disjoint(r.src, w.dest, slot_a, slot_b, involves_grad)) {
+          if (involves_grad)
             return false;
           disjoint_pairs.emplace(std::min(slot_a, slot_b), std::max(slot_a, slot_b));
         }
