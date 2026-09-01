@@ -1,12 +1,14 @@
 #include "quadrants/runtime/amdgpu/jit_amdgpu.h"
 #include "quadrants/runtime/llvm/llvm_context.h"
 #include "quadrants/runtime/llvm/llvm_context_pass.h"
+#include "quadrants/codegen/llvm/per_task_artifact_cache.h"
 
 #include "llvm/IR/Module.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 
 #include <fstream>
 #include <cstdlib>
+#include <cstdio>
 
 namespace quadrants {
 namespace lang {
@@ -21,6 +23,44 @@ JITModule *JITSessionAMDGPU ::add_module(std::unique_ptr<llvm::Module> M, int ma
   QD_TRACE("AMDGPU load data from module time : {}ms", (Time::get_time() - t) * 1000);
   modules.push_back(std::make_unique<JITModuleAMDGPU>(amdgpu_module));
   return modules.back().get();
+}
+
+JITModule *JITSessionAMDGPU::add_module_per_task(std::vector<PerConstructArtifact> artifacts, int max_reg) {
+  // Compile each task to its own HSACO and load it as a separate hipModule; the composite JITModuleAMDGPU resolves
+  // tasks by name across them, avoiding a device relink.
+  (void)max_reg;  // No link step, so nowhere to apply max-reg.
+
+  // On a miss, store the compiled HSACO and its launch metadata under the task's IR key so a later process reuses it.
+  const PerTaskArtifactCache artifact_cache(pertask_artifact_dir_ref());
+  std::vector<std::string> hsacos(artifacts.size());
+  for (std::size_t i = 0; i < artifacts.size(); i++) {
+    if (!artifacts[i].code.empty()) {
+      hsacos[i].assign(artifacts[i].code.begin(), artifacts[i].code.end());
+      continue;
+    }
+    std::string hsaco = compile_module_to_hsaco(artifacts[i].module);
+    if (!artifacts[i].key.empty()) {
+      PerTaskArtifact rec;
+      rec.tasks = artifacts[i].tasks;
+      rec.used_tree_ids = artifacts[i].used_tree_ids;
+      rec.struct_for_tls_sizes = artifacts[i].struct_for_tls_sizes;
+      rec.code.assign(hsaco.begin(), hsaco.end());
+      artifact_cache.store(artifacts[i].key, rec);
+    }
+    hsacos[i] = std::move(hsaco);
+  }
+
+  AMDGPUContext::get_instance().make_current();
+  std::vector<void *> mods;
+  mods.reserve(hsacos.size());
+  for (auto &hsaco : hsacos) {
+    void *amdgpu_module = nullptr;
+    // HSACO is a binary ELF; hipModuleLoadData reads its header and ignores NUL-termination, so c_str() is fine.
+    AMDGPUDriver::get_instance().module_load_data(&amdgpu_module, hsaco.c_str());
+    mods.push_back(amdgpu_module);
+  }
+  this->modules.push_back(std::make_unique<JITModuleAMDGPU>(std::move(mods)));
+  return this->modules.back().get();
 }
 
 std::string JITSessionAMDGPU::compile_module_to_hsaco(std::unique_ptr<llvm::Module> &llvm_module) {
@@ -214,6 +254,11 @@ std::string JITSessionAMDGPU::compile_module_to_hsaco(std::unique_ptr<llvm::Modu
                     hsaco_filename));
 
   std::string hsaco_str = load_hsaco(hsaco_path);
+
+  // Delete the object and HSACO temporaries now that the HSACO is in memory; the per-task path calls this once per
+  // task, so keeping them would accumulate under `tmp_dir_` and exhaust /tmp.
+  std::remove(obj_path.c_str());
+  std::remove(hsaco_path.c_str());
 
   if (this->config_.print_kernel_llvm_ir_optimized) {
     static FileSequenceWriter writer("quadrants_kernel_amdgpu_llvm_ir_optimized_{:04d}.ll",

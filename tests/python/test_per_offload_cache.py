@@ -987,15 +987,15 @@ def test_per_construct_frontend_split_struct_member_recomputed() -> None:
     assert np.allclose(out2.to_numpy(), _C[0], atol=1.0), out2.to_numpy()
 
 
-# --- Cross-process per-task artifact cache (CUDA-only backend reuse tier) ---------------------------------------------
+# --- Cross-process per-task artifact cache (CUDA + AMDGPU backend reuse tier) -----------------------------------------
 #
 # The per-task artifact cache stores each offloaded task's fully compiled code + launch metadata on disk, keyed by the
-# task's own IR (name-free), so a later process reuses an unchanged task instead of recompiling it. Only CUDA fills it,
-# and it is gated on `offline_cache`. Reuse is reported on `PerOffloadCacheObservations.tasks_*` (-1 when the tier did
-# not run).
+# task's own IR (name-free), so a later process reuses an unchanged task instead of recompiling it. CUDA and AMDGPU
+# fill it, and it is gated on `offline_cache`. Reuse is reported on `PerOffloadCacheObservations.tasks_*` (-1 when the
+# tier did not run).
 
 
-@test_utils.test(arch=qd.cuda, offline_cache=False)
+@test_utils.test(arch=[qd.cuda, qd.amdgpu], offline_cache=False)
 def test_per_task_artifact_cache_disabled_without_offline_cache() -> None:
     # `offline_cache` is the sole gate for the per-task disk tier; with it off the tier never runs, so the per-task
     # counts stay at the -1 sentinel. The FRONTEND split is independent of the flag and still fires -- asserting both
@@ -1019,18 +1019,19 @@ def test_per_task_artifact_cache_disabled_without_offline_cache() -> None:
     assert np.allclose(arr.to_numpy(), np.arange(_N) * 2.0 + 1.0 - 3.0), arr.to_numpy()
 
 
-def test_per_task_artifact_cache_reuses_shared_task_cross_process() -> None:
+@pytest.mark.parametrize("arch", [qd.cuda, qd.amdgpu])
+def test_per_task_artifact_cache_reuses_shared_task_cross_process(arch) -> None:
     # Two DIFFERENT kernels sharing a byte-identical first loop. A fresh runtime (cold in-memory, warm disk) compiling
     # the second must load that shared task's artifact from disk -- written when the first ran in the prior "process" --
     # while recompiling only the loop that differs. The per-task key is name-free, so the identical task aliases to one
     # artifact across the two kernels. Uses a re-`init` with the same cache path to emulate a second process, matching
     # test_offline_cache.py; the artifacts are written at JIT time, so no teardown is needed to flush them.
-    if qd.cuda not in test_utils.expected_archs():
-        pytest.skip("per-task artifact cache is CUDA-only")
+    if arch not in test_utils.expected_archs():
+        pytest.skip(f"per-task artifact cache backend {arch} not available")
 
     cache_dir = tempfile.mkdtemp()
     try:
-        qd.init(arch=qd.cuda, offline_cache=True, offline_cache_file_path=cache_dir)
+        qd.init(arch=arch, offline_cache=True, offline_cache_file_path=cache_dir)
 
         @qd.kernel
         def k_first(x: qd.types.ndarray(qd.f32, ndim=1)) -> None:
@@ -1048,7 +1049,7 @@ def test_per_task_artifact_cache_reuses_shared_task_cross_process() -> None:
 
         # Second "process": fresh runtime, same disk. `k_second` is a new kernel (whole-kernel entry misses, codegen
         # runs), but its first loop matches `k_first`'s, so that task is served from disk.
-        qd.init(arch=qd.cuda, offline_cache=True, offline_cache_file_path=cache_dir)
+        qd.init(arch=arch, offline_cache=True, offline_cache_file_path=cache_dir)
 
         @qd.kernel
         def k_second(x: qd.types.ndarray(qd.f32, ndim=1)) -> None:
