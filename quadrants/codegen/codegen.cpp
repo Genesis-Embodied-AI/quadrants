@@ -72,10 +72,12 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
   const int n = (int)offloads.size();
   std::vector<std::unique_ptr<LLVMCompiledTask>> data(n);
 
-  // Cross-process per-task artifact cache: a hit skips a task's entire compilation and carries cached PTX + launch
-  // metadata to the launcher. CUDA-only; an empty dir means offline cache is off (tier disabled).
+  // Cross-process per-task artifact cache: a hit skips a task's entire compilation and carries cached code (PTX on
+  // CUDA, HSACO on AMDGPU) + launch metadata to the launcher. LLVM-GPU backends with a fill site (CUDA, AMDGPU); an
+  // empty dir means offline cache is off (tier disabled).
   const std::string art_dir = pertask_artifact_dir_ref();
-  const bool artifact_tier = compile_config_.arch == Arch::cuda && !art_dir.empty();
+  const bool artifact_tier =
+      (compile_config_.arch == Arch::cuda || compile_config_.arch == Arch::amdgpu) && !art_dir.empty();
   const PerTaskArtifactCache artifact_cache(art_dir);
   const DeviceCapabilityConfig pertask_caps = prog->get_device_caps();
   std::vector<std::string> pertask_keys(n);
@@ -143,7 +145,7 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
   // Build one self-contained artifact per task BEFORE the whole-module link consumes `data`: a hit carries cached PTX
   // (null module), a miss builds+optimizes a module for the JIT to compile and store.
   std::vector<PerConstructArtifact> per_construct_artifacts;
-  if (compile_config_.arch == Arch::cuda) {
+  if (compile_config_.arch == Arch::cuda || compile_config_.arch == Arch::amdgpu) {
     for (int i = 0; i < n; i++) {
       if (!data[i])
         continue;
@@ -172,7 +174,8 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
   }
 
   // A cross-process hit leaves a task with no module, so skip the whole-kernel link (the launcher assembles the
-  // CUmodule from the per-task artifacts); still concatenate every task's metadata into `tasks`, which it runs off.
+  // backend module -- CUmodule / hipModule -- from the per-task artifacts); still concatenate every task's metadata
+  // into `tasks`, which it runs off.
   const bool code_only_tasks = std::any_of(data.begin(), data.end(), [](const auto &d) { return d && !d->module; });
   LLVMCompiledKernel llvm_compiled_kernel;
   if (code_only_tasks) {
