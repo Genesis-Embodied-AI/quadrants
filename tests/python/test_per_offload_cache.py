@@ -318,12 +318,13 @@ def test_per_construct_frontend_split_barrier_between_constructs_splits() -> Non
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
-def test_per_construct_frontend_split_alias_guard_struct_member_falls_back() -> None:
-    # Same guard as `..._alias_guard_falls_back`, but the aliasing ndarrays reach the kernel through
-    # `@qd.data_oriented` struct members instead of top-level params. Exercises the guard's struct path
-    # (`_struct_ndarray_launch_info_by_key` + `_resolve_struct_ndarray`): members `a` and `b` are distinct predeclared
-    # args, so the split assumes them disjoint; binding the same ndarray to both must be caught at launch and routed to
-    # the whole-kernel variant.
+def test_per_construct_frontend_split_alias_guard_struct_member_path() -> None:
+    # ndarrays reaching the kernel through `@qd.data_oriented` struct members. Exercises the guard's struct branch
+    # (`_struct_ndarray_launch_info_by_key` + `_resolve_struct_ndarray`) on the disjoint launch, and pins where the
+    # aliasing check happens for struct members: `_predeclare_struct_ndarrays` dedups members by `id()`, so binding one
+    # ndarray to two members collapses them to a single predeclared arg under a distinct specialization key. The split
+    # then sees one arg (no cross-member disjointness to assume) and stays correct WITHOUT a launch-time fallback --
+    # aliasing is resolved at compile time here, unlike the top-level-param case.
     @qd.data_oriented
     class State:
         def __init__(self, a, b, y):
@@ -339,7 +340,8 @@ def test_per_construct_frontend_split_alias_guard_struct_member_falls_back() -> 
         for i in range(_N):
             s.y[i] = base
 
-    # Distinct members: the split fires (a, b assumed disjoint) and arms the guard with the struct launch info.
+    # Distinct members: a, b, y are three predeclared args, so the split assumes them disjoint and arms the guard. The
+    # launch runs the guard's struct branch (resolving each member), finds no collision, and stays on the split.
     a = qd.ndarray(qd.f32, shape=(_N,))
     b = qd.ndarray(qd.f32, shape=(_N,))
     y = qd.ndarray(qd.f32, shape=(_N,))
@@ -349,18 +351,20 @@ def test_per_construct_frontend_split_alias_guard_struct_member_falls_back() -> 
     obs = step._primal.per_offload_cache_observations
     assert obs.frontend_constructs_total >= 2, obs
     assert step._primal._split_alias_guard_by_key, "split did not record the cross-member ndarray assumption"
+    assert step._primal._struct_ndarray_launch_info_by_key, "struct ndarray launch info was not recorded"
     assert not step._primal._compiled_no_split_by_key, "no fallback should be built for a disjoint call"
     assert np.allclose(y.to_numpy(), 7.0, atol=1e-2), y.to_numpy()
 
-    # Aliased members: `a` and `b` are the SAME buffer, so the split would read the already-overwritten value. The
-    # guard must resolve both struct members to the shared allocation and run the whole-kernel variant.
+    # Aliased members: the same buffer bound to `a` and `b`. `_predeclare_struct_ndarrays` collapses them to one arg
+    # under a fresh specialization key, so the split never assumes them disjoint and the result is correct with no
+    # launch-time whole-kernel fallback.
     shared = qd.ndarray(qd.f32, shape=(_N,))
     y2 = qd.ndarray(qd.f32, shape=(_N,))
     shared.from_numpy(np.full(_N, 7.0, dtype=np.float32))
     step(State(shared, shared, y2))
 
-    assert step._primal._compiled_no_split_by_key, "guard did not fall back for aliased struct members"
-    assert np.allclose(y2.to_numpy(), 7.0, atol=1e-2), y2.to_numpy()  # whole-kernel: 7.0, never the 2.0 miscompile
+    assert not step._primal._compiled_no_split_by_key, "struct-member aliasing is handled statically, not by fallback"
+    assert np.allclose(y2.to_numpy(), 7.0, atol=1e-2), y2.to_numpy()  # 7.0 via compile-time dedup, never 2.0
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda])

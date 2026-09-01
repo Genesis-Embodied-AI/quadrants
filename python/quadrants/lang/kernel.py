@@ -397,6 +397,10 @@ class Kernel(FuncBase):
         # whole-kernel variant cached here (compiled with the split disabled). Absent keys skip the check entirely.
         self._split_alias_guard_by_key: dict[CompiledKernelKeyType, bool] = {}
         self._compiled_no_split_by_key: dict[CompiledKernelKeyType, Any] = {}
+        # Keys whose materialized `KernelCxx` has only a parsed signature, not a lowered body (a fastcache restore
+        # supplies the artifact and skips body IR construction). The no-alias guard's whole-kernel fallback must rebuild
+        # a full body for these before it can recompile.
+        self._parse_only_keys: set[CompiledKernelKeyType] = set()
         # Launch info for primitives lifted from ``@qd.data_oriented(template_primitives=False)`` template args (see
         # ``predeclare_struct_primitives``). Maps key -> list of ``(arg_id, template_arg_idx, attr_chain, kind)``.
         self._struct_primitive_launch_info_by_key: dict[CompiledKernelKeyType, list] = {}
@@ -546,11 +550,12 @@ class Kernel(FuncBase):
                 if self.autodiff_mode != _NONE:
                     KernelSimplicityASTChecker(self.func).visit(tree)
 
+                only_parse_function_def = self.compiled_kernel_data_by_key.get(key) is not None
                 quadrants_ast_generator = ASTGenerator(
                     ctx=ctx,
                     kernel_name=kernel_name,
                     current_kernel=self,
-                    only_parse_function_def=self.compiled_kernel_data_by_key.get(key) is not None,
+                    only_parse_function_def=only_parse_function_def,
                     tree=tree,
                     dump_ast=os.environ.get("QD_DUMP_AST", "") == "1" and _pass == 1,
                 )
@@ -560,6 +565,8 @@ class Kernel(FuncBase):
                 if _pass == 1:
                     assert key not in self.materialized_kernels
                     self.materialized_kernels[key] = quadrants_kernel
+                    if only_parse_function_def:
+                        self._parse_only_keys.add(key)
                     self._struct_ndarray_launch_info_by_key[key] = getattr(
                         ctx.global_context, "struct_ndarray_launch_info", []
                     )
@@ -590,6 +597,48 @@ class Kernel(FuncBase):
                         Pruning.KERNEL_FUNC_ID
                     ]
                 runtime._current_global_context = None
+
+    def compile_no_split_variant(self, key, t_kernel: KernelCxx, py_args: tuple[Any, ...]) -> CompiledKernelData:
+        """Compile the whole-kernel (split-disabled) variant used by the launch-time no-alias guard.
+
+        For a normally-materialized key ``t_kernel`` already carries the lowered body, so it compiles directly. For a
+        fastcache-restored key the body was never built (``_parse_only_keys``), so rebuild one full-body ``KernelCxx``
+        here -- the guard only reaches this on an actual aliased call, so the rebuild cost stays off the common path.
+        """
+        prog = impl.get_runtime().prog
+        kernel = t_kernel
+        if key in self._parse_only_keys:
+            runtime = impl.get_runtime()
+            instance_id, arg_features = self.mapper.lookup(self.raise_on_templated_floats, py_args)
+            used = self.used_py_dataclass_parameters_by_key_enforcing.get(key)
+            pruning = Pruning(kernel_used_parameters=used)
+            if used is not None:
+                pruning.enforce()
+            with self.runtime.compilation_lock:
+                tree, ctx = self.get_tree_and_ctx(
+                    pass_idx=1,
+                    py_args=py_args,
+                    template_slot_locations=self.template_slot_locations,
+                    arg_features=arg_features,
+                    current_kernel=self,
+                    pruning=pruning,
+                    currently_compiling_materialize_key=key,
+                )
+                runtime._current_global_context = ctx.global_context
+                fallback_name = f"{self.func.__name__}_c{self.kernel_counter}_{instance_id}_nosplit"
+                generator = ASTGenerator(
+                    ctx=ctx,
+                    kernel_name=fallback_name,
+                    current_kernel=self,
+                    only_parse_function_def=False,
+                    tree=tree,
+                    dump_ast=False,
+                )
+                kernel = prog.create_kernel(generator, fallback_name, self.autodiff_mode)
+                runtime._current_global_context = None
+        return prog.compile_kernel(
+            prog.config(), prog.get_device_caps(), kernel, disable_split=True
+        ).compiled_kernel_data
 
     def launch_kernel(
         self,
@@ -782,7 +831,7 @@ class Kernel(FuncBase):
             # this call binds the same ndarray to both; `select_launch_variant` swaps in the whole-kernel variant for
             # such calls. `_last_compiled_kernel_data` above keeps the fast split as the cached default.
             compiled_kernel_data = _split_alias_guard.select_launch_variant(
-                self, key, args, compiled_kernel_data, prog, t_kernel
+                self, key, args, compiled_kernel_data, t_kernel
             )
             launch_ctx.use_graph = self.use_graph and _GRAPH_ENABLED
             if self.use_graph and qd_stream is not None:

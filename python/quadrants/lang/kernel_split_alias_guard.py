@@ -58,7 +58,7 @@ def launch_has_aliased_ndarrays(kernel: Any, key: Any, args: tuple) -> bool:
     return False
 
 
-def select_launch_variant(kernel: Any, key: Any, args: tuple, compiled_kernel_data: Any, prog: Any, t_kernel: Any):
+def select_launch_variant(kernel: Any, key: Any, args: tuple, compiled_kernel_data: Any, t_kernel: Any):
     """Return the CompiledKernelData to launch, swapping in the whole-kernel variant when this call's actual buffers
     violate the split's cross-parameter disjointness assumption.
 
@@ -70,9 +70,7 @@ def select_launch_variant(kernel: Any, key: Any, args: tuple, compiled_kernel_da
         return compiled_kernel_data
     no_split = kernel._compiled_no_split_by_key.get(key)
     if no_split is None:
-        no_split = prog.compile_kernel(
-            prog.config(), prog.get_device_caps(), t_kernel, disable_split=True
-        ).compiled_kernel_data
+        no_split = kernel.compile_no_split_variant(key, t_kernel, args)
         kernel._compiled_no_split_by_key[key] = no_split
     kernel.per_offload_cache_observations = PerOffloadCacheObservations()
     return no_split
