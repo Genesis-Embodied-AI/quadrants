@@ -207,7 +207,8 @@ class JITSessionCPU : public JITSession {
           cantFail(llvm::orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(dl_.getGlobalPrefix())));
 
       std::unique_ptr<llvm::MemoryBuffer> obj;
-      if (!art.code.empty()) {
+      const bool from_cache = !art.code.empty();
+      if (from_cache) {
         // Hit: the cached bytes are a relocatable host object; load them straight into the object layer.
         obj = llvm::MemoryBuffer::getMemBufferCopy(llvm::StringRef(art.code.data(), art.code.size()),
                                                    fmt::format("pertask_{}", module_counter_));
@@ -223,7 +224,17 @@ class JITSessionCPU : public JITSession {
           artifact_cache.store(art.key, rec);
         }
       }
-      cantFail(object_layer_.add(dylib, std::move(obj)));
+      // `object_layer_.add` parses the object eagerly, so malformed bytes (e.g. offline-cache corruption on the hit
+      // path) surface here. Don't `cantFail` -- that aborts the whole process on every launch through a corrupt cache.
+      // Drop the offending entry so a later process recompiles and refills it, and raise a catchable error instead
+      // (mirrors the CUDA per-task load, which QD_ERRORs on a bad module rather than terminating the process).
+      if (auto err = object_layer_.add(dylib, std::move(obj))) {
+        if (from_cache && !art.key.empty()) {
+          artifact_cache.erase(art.key);
+        }
+        QD_ERROR("Failed to load per-task CPU object into the JIT (offline cache may be corrupt): {}",
+                 llvm::toString(std::move(err)));
+      }
       dylibs.push_back(&dylib);
       module_counter_++;
     }
