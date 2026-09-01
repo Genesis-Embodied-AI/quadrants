@@ -13,7 +13,7 @@ Setting `offline_cache=False` is intended to emulate cold-start, i.e. a fresh Py
 When `offline_cache=True`, compilation artifacts persist on disk under `offline_cache_file_path` (default `~/.cache/quadrants/qdcache`), so a later Python process reuses them instead of recompiling. Setting `offline_cache=False` (or `QD_OFFLINE_CACHE=0`) forces a cold start: Quadrants recompiles kernels and neither reads nor writes its own on-disk cache. (On CUDA the driver keeps its own separate cache of compiled GPU code at `~/.nv/ComputeCache` that this flag does not disable; `offline_cache=False` only stops that cache from serving results across runs. Set `CUDA_CACHE_DISABLE=1` to turn it off entirely.)
 
 The flag gates two disk tiers, not just the whole-kernel one:
-- On CUDA it also enables a **per-task artifact cache**: a kernel is compiled as several *tasks* (roughly one per parallel loop), so editing one task reuses the *other* tasks' compiled code across processes instead of recompiling the whole kernel.
+- On CUDA and AMDGPU it also enables a **per-task artifact cache**: a kernel is compiled as several *tasks* (roughly one per parallel loop), so editing one task reuses the *other* tasks' compiled code across processes instead of recompiling the whole kernel.
 - There is no eviction policy for these per-task artifacts yet, so this cache grows over time; wipe `offline_cache_file_path` occasionally if it gets large.
 
 The separate source-level cache used by [fastcache](./fastcache.md) kernels is controlled by `src_ll_cache` (on by default), not by `offline_cache`; with `offline_cache=False` it still writes its own bookkeeping files to disk, so set `src_ll_cache=False` as well to stop that too.

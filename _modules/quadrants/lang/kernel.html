@@ -375,10 +375,6 @@
 <span class="c1"># delegates the resume-cookie validation, label translation, per-launch yield_on= arg-id table build, and GraphStatus</span>
 <span class="c1"># construction to those free functions so this hot file doesn't accrete checkpoint-feature-specific blocks.</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">kernel_checkpoint</span> <span class="k">as</span> <span class="n">_checkpoint_helpers</span>
-
-<span class="c1"># Per-construct split launch-time no-alias guard. See `_split_alias_guard.py`; `Kernel` delegates the per-launch</span>
-<span class="c1"># alias check and whole-kernel fallback there so this hot file doesn't accrete that feature's block.</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">_split_alias_guard</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._fast_caching</span><span class="w"> </span><span class="kn">import</span> <span class="n">src_hasher</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._template_mapper_hotpath</span><span class="w"> </span><span class="kn">import</span> <span class="n">chain_has_mutable_container</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._wrap_inspect</span><span class="w"> </span><span class="kn">import</span> <span class="n">FunctionSourceInfo</span><span class="p">,</span> <span class="n">get_source_info_and_src</span>
@@ -844,19 +840,6 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">launch_context_buffer_cache</span> <span class="o">=</span> <span class="n">LaunchContextBufferCache</span><span class="p">()</span></div>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">_struct_ndarray_launch_info_by_key</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">CompiledKernelKeyType</span><span class="p">,</span> <span class="nb">list</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
-        <span class="c1"># `(slot, positional_index)` per key for explicit top-level ndarray params, so the guard can map a</span>
-        <span class="c1"># C++-recorded assumed-disjoint slot to this launch's arg (struct-member slots come from the struct table).</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_explicit_ndarray_slot_info_by_key</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">CompiledKernelKeyType</span><span class="p">,</span> <span class="nb">list</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
-        <span class="c1"># Launch-time no-alias guard. A key is present only when its split relied on cross-parameter ndarray</span>
-        <span class="c1"># disjointness; its value is the flattened list of assumed-disjoint arg-slot pairs. Those keys check whether any</span>
-        <span class="c1"># such pair aliases per launch and, on a violation, launch the whole-kernel variant cached here (compiled with</span>
-        <span class="c1"># the split disabled). Absent keys skip the check entirely.</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_split_alias_guard_by_key</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">CompiledKernelKeyType</span><span class="p">,</span> <span class="nb">list</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_compiled_no_split_by_key</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">CompiledKernelKeyType</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
-        <span class="c1"># Keys whose materialized `KernelCxx` has only a parsed signature, not a lowered body (a fastcache restore</span>
-        <span class="c1"># supplies the artifact and skips body IR construction). The no-alias guard's whole-kernel fallback must rebuild</span>
-        <span class="c1"># a full body for these before it can recompile.</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_parse_only_keys</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="n">CompiledKernelKeyType</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
         <span class="c1"># Launch info for primitives lifted from ``@qd.data_oriented(template_primitives=False)`` template args (see</span>
         <span class="c1"># ``predeclare_struct_primitives``). Maps key -&gt; list of ``(arg_id, template_arg_idx, attr_chain, kind)``.</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_struct_primitive_launch_info_by_key</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">CompiledKernelKeyType</span><span class="p">,</span> <span class="nb">list</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
@@ -935,12 +918,6 @@
                 <span class="p">)</span>
                 <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">compiled_kernel_data_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]:</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_loaded</span> <span class="o">=</span> <span class="kc">True</span>
-                    <span class="c1"># A fastcache restore bypasses prog.compile_kernel, so arm the launch-time no-alias guard here too</span>
-                    <span class="c1"># when the restored split relied on cross-parameter ndarray disjointness (the assumed-disjoint slot</span>
-                    <span class="c1"># pairs read off the artifact).</span>
-                    <span class="n">disjoint_pairs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">compiled_kernel_data_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span><span class="o">.</span><span class="n">split_assumed_disjoint_pairs</span><span class="p">()</span>
-                    <span class="k">if</span> <span class="n">disjoint_pairs</span><span class="p">:</span>
-                        <span class="bp">self</span><span class="o">.</span><span class="n">_split_alias_guard_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">disjoint_pairs</span><span class="p">)</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">used_py_dataclass_parameters_by_key_enforcing</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">cache_value</span><span class="o">.</span><span class="n">used_py_dataclass_parameters</span>
                     <span class="c1"># Fast-cache restore skips AST transformation, so rebuild the AST-transformer-produced metadata from</span>
                     <span class="c1"># the cache value: nested graph_do_while level table (with the AST-resolved flat C++ arg-id) plus</span>
@@ -1058,12 +1035,11 @@
                 <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">autodiff_mode</span> <span class="o">!=</span> <span class="n">_NONE</span><span class="p">:</span>
                     <span class="n">KernelSimplicityASTChecker</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="p">)</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">tree</span><span class="p">)</span>
 
-                <span class="n">only_parse_function_def</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">compiled_kernel_data_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
                 <span class="n">quadrants_ast_generator</span> <span class="o">=</span> <span class="n">ASTGenerator</span><span class="p">(</span>
                     <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">,</span>
                     <span class="n">kernel_name</span><span class="o">=</span><span class="n">kernel_name</span><span class="p">,</span>
                     <span class="n">current_kernel</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span>
-                    <span class="n">only_parse_function_def</span><span class="o">=</span><span class="n">only_parse_function_def</span><span class="p">,</span>
+                    <span class="n">only_parse_function_def</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">compiled_kernel_data_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span>
                     <span class="n">tree</span><span class="o">=</span><span class="n">tree</span><span class="p">,</span>
                     <span class="n">dump_ast</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"QD_DUMP_AST"</span><span class="p">,</span> <span class="s2">""</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"1"</span> <span class="ow">and</span> <span class="n">_pass</span> <span class="o">==</span> <span class="mi">1</span><span class="p">,</span>
                 <span class="p">)</span>
@@ -1073,13 +1049,8 @@
                 <span class="k">if</span> <span class="n">_pass</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
                     <span class="k">assert</span> <span class="n">key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">materialized_kernels</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">materialized_kernels</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">quadrants_kernel</span>
-                    <span class="k">if</span> <span class="n">only_parse_function_def</span><span class="p">:</span>
-                        <span class="bp">self</span><span class="o">.</span><span class="n">_parse_only_keys</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">_struct_ndarray_launch_info_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span>
                         <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="p">,</span> <span class="s2">"struct_ndarray_launch_info"</span><span class="p">,</span> <span class="p">[]</span>
-                    <span class="p">)</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">_explicit_ndarray_slot_info_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span>
-                        <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="p">,</span> <span class="s2">"explicit_ndarray_launch_info"</span><span class="p">,</span> <span class="p">[]</span>
                     <span class="p">)</span>
                     <span class="c1"># Both folds bring data_oriented member accesses into the kernel's used-flat-names set, which</span>
                     <span class="c1"># dataclass-arg expansion is the only other contributor to. Without them the narrow args hash walks</span>
@@ -1116,51 +1087,6 @@
                 <span class="n">runtime</span><span class="o">.</span><span class="n">_current_global_context</span> <span class="o">=</span> <span class="kc">None</span>
 
             <span class="bp">self</span><span class="o">.</span><span class="n">_maybe_persist_l1_and_set_l2_key</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">py_args</span><span class="p">)</span></div>
-
-
-<div class="viewcode-block" id="Kernel.compile_no_split_variant">
-<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.compile_no_split_variant">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">compile_no_split_variant</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">t_kernel</span><span class="p">:</span> <span class="n">KernelCxx</span><span class="p">,</span> <span class="n">py_args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">CompiledKernelData</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">"""Compile the whole-kernel (split-disabled) variant used by the launch-time no-alias guard.</span>
-
-<span class="sd">        For a normally-materialized key ``t_kernel`` already carries the lowered body, so it compiles directly. For a</span>
-<span class="sd">        fastcache-restored key the body was never built (``_parse_only_keys``), so rebuild one full-body ``KernelCxx``</span>
-<span class="sd">        here -- the guard only reaches this on an actual aliased call, so the rebuild cost stays off the common path.</span>
-<span class="sd">        """</span>
-        <span class="n">prog</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span>
-        <span class="n">kernel</span> <span class="o">=</span> <span class="n">t_kernel</span>
-        <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_only_keys</span><span class="p">:</span>
-            <span class="n">runtime</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span>
-            <span class="n">instance_id</span><span class="p">,</span> <span class="n">arg_features</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mapper</span><span class="o">.</span><span class="n">lookup</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">raise_on_templated_floats</span><span class="p">,</span> <span class="n">py_args</span><span class="p">)</span>
-            <span class="n">used</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">used_py_dataclass_parameters_by_key_enforcing</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
-            <span class="n">pruning</span> <span class="o">=</span> <span class="n">Pruning</span><span class="p">(</span><span class="n">kernel_used_parameters</span><span class="o">=</span><span class="n">used</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">used</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">pruning</span><span class="o">.</span><span class="n">enforce</span><span class="p">()</span>
-            <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">compilation_lock</span><span class="p">:</span>
-                <span class="n">tree</span><span class="p">,</span> <span class="n">ctx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_tree_and_ctx</span><span class="p">(</span>
-                    <span class="n">pass_idx</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
-                    <span class="n">py_args</span><span class="o">=</span><span class="n">py_args</span><span class="p">,</span>
-                    <span class="n">template_slot_locations</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">template_slot_locations</span><span class="p">,</span>
-                    <span class="n">arg_features</span><span class="o">=</span><span class="n">arg_features</span><span class="p">,</span>
-                    <span class="n">current_kernel</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span>
-                    <span class="n">pruning</span><span class="o">=</span><span class="n">pruning</span><span class="p">,</span>
-                    <span class="n">currently_compiling_materialize_key</span><span class="o">=</span><span class="n">key</span><span class="p">,</span>
-                <span class="p">)</span>
-                <span class="n">runtime</span><span class="o">.</span><span class="n">_current_global_context</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span>
-                <span class="n">fallback_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">_c</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">kernel_counter</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">instance_id</span><span class="si">}</span><span class="s2">_nosplit"</span>
-                <span class="n">generator</span> <span class="o">=</span> <span class="n">ASTGenerator</span><span class="p">(</span>
-                    <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">,</span>
-                    <span class="n">kernel_name</span><span class="o">=</span><span class="n">fallback_name</span><span class="p">,</span>
-                    <span class="n">current_kernel</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span>
-                    <span class="n">only_parse_function_def</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-                    <span class="n">tree</span><span class="o">=</span><span class="n">tree</span><span class="p">,</span>
-                    <span class="n">dump_ast</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-                <span class="p">)</span>
-                <span class="n">kernel</span> <span class="o">=</span> <span class="n">prog</span><span class="o">.</span><span class="n">create_kernel</span><span class="p">(</span><span class="n">generator</span><span class="p">,</span> <span class="n">fallback_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">autodiff_mode</span><span class="p">)</span>
-                <span class="n">runtime</span><span class="o">.</span><span class="n">_current_global_context</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="k">return</span> <span class="n">prog</span><span class="o">.</span><span class="n">compile_kernel</span><span class="p">(</span>
-            <span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">(),</span> <span class="n">prog</span><span class="o">.</span><span class="n">get_device_caps</span><span class="p">(),</span> <span class="n">kernel</span><span class="p">,</span> <span class="n">disable_split</span><span class="o">=</span><span class="kc">True</span>
-        <span class="p">)</span><span class="o">.</span><span class="n">compiled_kernel_data</span></div>
 
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_maybe_persist_l1_and_set_l2_key</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="s2">"CompiledKernelKeyType"</span><span class="p">,</span> <span class="n">py_args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -1340,11 +1266,6 @@
 
                 <span class="n">compile_result</span><span class="p">:</span> <span class="n">CompileResult</span> <span class="o">=</span> <span class="n">prog</span><span class="o">.</span><span class="n">compile_kernel</span><span class="p">(</span><span class="n">prog_config</span><span class="p">,</span> <span class="n">prog_device_cap</span><span class="p">,</span> <span class="n">t_kernel</span><span class="p">)</span>
                 <span class="n">compiled_kernel_data</span> <span class="o">=</span> <span class="n">compile_result</span><span class="o">.</span><span class="n">compiled_kernel_data</span>
-                <span class="c1"># Arm the launch-time no-alias guard for this key iff its split relied on cross-parameter ndarray</span>
-                <span class="c1"># disjointness (the assumed-disjoint slot pairs, read from the compiled kernel so it is set on a cache</span>
-                <span class="c1"># hit too). Store only keys with pairs so the per-launch check stays a single dict lookup otherwise.</span>
-                <span class="k">if</span> <span class="n">compile_result</span><span class="o">.</span><span class="n">split_assumed_disjoint_pairs</span><span class="p">:</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">_split_alias_guard_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">compile_result</span><span class="o">.</span><span class="n">split_assumed_disjoint_pairs</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">compile_result</span><span class="o">.</span><span class="n">cache_hit</span><span class="p">:</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">fe_ll_cache_observations</span><span class="o">.</span><span class="n">cache_hit</span> <span class="o">=</span> <span class="kc">True</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">per_offload_cache_observations</span> <span class="o">=</span> <span class="n">PerOffloadCacheObservations</span><span class="p">(</span>
@@ -1378,12 +1299,6 @@
                 <span class="c1"># matches the C++ cache-hit path, which also reports -1 in `KernelCompilationManager::load_or_compile`.</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">per_offload_cache_observations</span> <span class="o">=</span> <span class="n">PerOffloadCacheObservations</span><span class="p">()</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_last_compiled_kernel_data</span> <span class="o">=</span> <span class="n">compiled_kernel_data</span>
-            <span class="c1"># Launch-time no-alias guard: the split may have assumed two ndarray params never alias, which is unsound if</span>
-            <span class="c1"># this call binds the same ndarray to both; `select_launch_variant` swaps in the whole-kernel variant for</span>
-            <span class="c1"># such calls. `_last_compiled_kernel_data` above keeps the fast split as the cached default.</span>
-            <span class="n">compiled_kernel_data</span> <span class="o">=</span> <span class="n">_split_alias_guard</span><span class="o">.</span><span class="n">select_launch_variant</span><span class="p">(</span>
-                <span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">compiled_kernel_data</span><span class="p">,</span> <span class="n">t_kernel</span>
-            <span class="p">)</span>
             <span class="n">launch_ctx</span><span class="o">.</span><span class="n">use_graph</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_graph</span> <span class="ow">and</span> <span class="n">_GRAPH_ENABLED</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_graph</span> <span class="ow">and</span> <span class="n">qd_stream</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
@@ -1409,7 +1324,6 @@
             <span class="n">stream_handle</span> <span class="o">=</span> <span class="n">qd_stream</span><span class="o">.</span><span class="n">handle</span> <span class="k">if</span> <span class="n">qd_stream</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="mi">0</span>
             <span class="k">if</span> <span class="n">stream_handle</span><span class="p">:</span>
                 <span class="n">prog</span><span class="o">.</span><span class="n">set_current_cuda_stream</span><span class="p">(</span><span class="n">stream_handle</span><span class="p">)</span>
-            <span class="k">assert</span> <span class="n">compiled_kernel_data</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
             <span class="k">try</span><span class="p">:</span>
                 <span class="n">prog</span><span class="o">.</span><span class="n">launch_kernel</span><span class="p">(</span><span class="n">compiled_kernel_data</span><span class="p">,</span> <span class="n">launch_ctx</span><span class="p">)</span>
             <span class="k">finally</span><span class="p">:</span>
