@@ -78,7 +78,7 @@ This shares the same fix as the previous case; see [Advanced: making these cases
 
 ### Possibly-aliasing gradient arguments
 
-`a` and `b` are different parameters, so the split would treat their buffers as disjoint and reuse that assumption while recomputing. But one access is a gradient buffer, and a caller can make `a` and `b` (or a primal and a gradient) share memory, which cannot be verified even at launch, so Quadrants refuses to split.
+`a` and `b` are different parameters, so the split would treat their buffers as disjoint and reuse that assumption while recomputing. But one access is a gradient buffer, and a caller can make `a` and `b` (or a value buffer and its own `.grad` buffer) share memory, which cannot be verified even at launch, so Quadrants refuses to split.
 
 ```python
 @qd.kernel
