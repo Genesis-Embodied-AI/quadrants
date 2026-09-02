@@ -418,6 +418,33 @@ def test_per_construct_frontend_split_cross_arg_grad_pair_unsafe() -> None:
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
+def test_per_construct_frontend_split_same_arg_primal_grad_recompute_unsafe() -> None:
+    # Recompute a PRIMAL read of `a[0]` past a write to `a.grad` on the SAME arg. alias_analysis calls them different by
+    # is_grad alone, so condition (3) would clear -- but a caller can bind the grad companion onto the primal buffer
+    # (`a.grad = a`), making them one address, and the launch guard resolves a slot to its arg's PRIMAL alloc_id only,
+    # so it cannot see the grad companion. This same-arg primal/grad pair is unguardable, so the split must refuse it
+    # and run whole-kernel (constructs == -1). (Distinct primal/grad buffers make this call numerically fine either
+    # way; the point is the split DECISION, not a value.)
+    @qd.kernel
+    def kernel_grad(a: qd.types.ndarray(), out: qd.types.ndarray()) -> None:
+        base = a[0]
+        for i in range(_N):
+            a.grad[i] = 2.0
+        for i in range(_N):
+            out[i] = base
+
+    a = qd.ndarray(qd.f32, shape=(_N,), needs_grad=True)
+    out = qd.ndarray(qd.f32, shape=(_N,))
+    a.from_numpy(np.full(_N, 7.0, dtype=np.float32))
+    kernel_grad(a, out)
+
+    obs = kernel_grad._primal.per_offload_cache_observations
+    assert obs.frontend_constructs_total == -1, obs  # refused: same-arg primal/grad is not launch-guardable
+    assert not kernel_grad._primal._split_alias_guard_by_key, "a same-arg primal/grad pair must not be recorded"
+    assert np.allclose(out.to_numpy(), 7.0, atol=1e-2), out.to_numpy()
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
 def test_per_construct_frontend_split_alias_guard_dataclass_field_slots() -> None:
     # The split can rest on two ndarray FIELDS of a typed dataclass being disjoint. Those fields flatten to their own
     # arg slots, so the guard must resolve each slot back to its live ndarray via the root dataclass arg + attribute

@@ -595,10 +595,30 @@ bool clamp_may_defeat_index_disjointness(Stmt *a, Stmt *b) {
   return arg_a->arg_id == arg_b->arg_id && ea->is_grad == eb->is_grad;
 }
 
+// alias_analysis proves a param's primal and its own `.grad` companion `different` purely by their `is_grad` flag, but a
+// caller can bind them to one buffer (`a.grad = a` / `a._set_grad(a)`), so an otherwise-cleared same-arg primal/grad
+// pair then hits one address. Like clamp this disjointness is caller-defeatable, and it is unguardable (the launch
+// guard resolves a slot to its PRIMAL alloc_id only, so it cannot see the grad companion) -> treat as may-alias and
+// refuse. Scoped to same arg; distinct args are the cross-arg guard's concern (`clearance_assumes_ndarray_disjoint`).
+bool grad_companion_may_alias(Stmt *a, Stmt *b) {
+  ExternalPtrStmt *ea = as_ndarray_ptr(a);
+  ExternalPtrStmt *eb = as_ndarray_ptr(b);
+  if (ea == nullptr || eb == nullptr)
+    return false;
+  if (ea->is_grad == eb->is_grad)
+    return false;
+  auto *arg_a = ea->base_ptr->cast<ArgLoadStmt>();
+  auto *arg_b = eb->base_ptr->cast<ArgLoadStmt>();
+  if (arg_a == nullptr || arg_b == nullptr)
+    return false;
+  return arg_a->arg_id == arg_b->arg_id;
+}
+
 // True when a condition-(3) clearance between these two pointers rests on the caller-defeatable assumption that
 // distinct ndarray params don't alias: both are ndarray accesses on DIFFERENT args. alias_analysis reports them
 // `different` by arg id and/or is_grad, which a caller violates by binding one buffer to both params. Same-arg
-// clearances (index-disjoint, or a param vs its own .grad) are true disjointness the caller cannot defeat -> false.
+// index-disjoint clearances are true disjointness the caller cannot defeat -> false (a same-arg primal-vs-grad pair,
+// which a caller CAN defeat via `a.grad = a`, is rejected earlier by `grad_companion_may_alias`).
 // On true, `slot_a`/`slot_b` get the two args' flat slots (`arg_id[0]`; ndarray arg_ids are single-element).
 // `involves_grad` is set when either access is through a `.grad` buffer. The launch guard resolves a slot to its arg's
 // PRIMAL alloc_id only, so it cannot see gradient buffers: a pair where either side is a gradient access (one arg's
@@ -735,6 +755,8 @@ bool split_is_recompute_safe(Block *block, std::vector<int> &assumed_disjoint_pa
           return false;
         if (clamp_may_defeat_index_disjointness(r.src, w.dest))
           return false;  // clamped boundary can collapse the "different" indices onto one in-bounds address
+        if (grad_companion_may_alias(r.src, w.dest))
+          return false;  // a param's primal and its own .grad can share a buffer (a.grad = a); unguardable
         // Cleared: the read and write are provably different addresses. When that proof is cross-arg ndarray
         // disjointness a caller can defeat it by aliasing the two params. A primal-vs-primal pair is checkable by the
         // launch guard (compare the two args' primal alloc_ids) -- record it. Any pair touching a gradient buffer is
