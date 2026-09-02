@@ -92,6 +92,8 @@ def grad_snapshot(a: qd.types.ndarray(dtype=qd.f32, ndim=1, needs_grad=True),
         out[i] = g
 ```
 
+Like the earlier fallbacks, this one is fixable, but it's a fair amount of work for a fairly narrow case (a non-autodiff kernel that manually reads two `.grad` buffers as plain arrays; true autodiff kernels are already excluded from the split).
+
 ## Inspecting the split
 
 See [Inspecting the split](optimization_passes.md#inspecting-the-split) for the `per_offload_cache_observations` attribute. `frontend_constructs_total == -1` means the split did not run for that compile: either it took a fallback above, or the kernel was served from the [offline cache](init_options.md#offline_cache) or [fastcache](fastcache.md), so no compilation happened at all.
