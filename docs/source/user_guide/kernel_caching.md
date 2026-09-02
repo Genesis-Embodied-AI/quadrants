@@ -27,7 +27,7 @@ Some fallbacks are decided once, at compile time (the kernel never uses the spli
 | A value carried between constructs | A local one construct builds up and another reads cannot be recomputed in isolation. |
 | A snapshot read a later construct would re-read after an intervening write | Isolating it would read the overwritten value. Includes `boundary="clamp"` accesses, where an out-of-range index can collapse onto a written element. |
 | Cross-argument gradient disjointness | Whether two gradient buffers alias cannot be checked at launch, so the split is refused. |
-| Certain specialized kernels | For example task barriers or side-effecting constructs. |
+| Certain specialized kernels | For example side-effecting constructs, or a construct that must wait for all earlier tasks to finish before it runs. |
 
 **Runtime fallback** (a per-launch decision for a split kernel):
 
@@ -40,4 +40,4 @@ A runtime fallback emits a one-time `[PER_OFFLOAD][FALLBACK]` warning naming the
 
 ## Inspecting the split
 
-See [Inspecting the split](optimization_passes.md#inspecting-the-split) for the `per_offload_cache_observations` attribute. `frontend_constructs_total == -1` means the split did not run for that compile: either it took a fallback above, or the kernel was served from the [offline cache](init_options.md#offline_cache) or [fastcache](fastcache.md), so no frontend ran at all.
+See [Inspecting the split](optimization_passes.md#inspecting-the-split) for the `per_offload_cache_observations` attribute. `frontend_constructs_total == -1` means the split did not run for that compile: either it took a fallback above, or the kernel was served from the [offline cache](init_options.md#offline_cache) or [fastcache](fastcache.md), so no compilation happened at all.
