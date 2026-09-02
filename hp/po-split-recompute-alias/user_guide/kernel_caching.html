@@ -528,7 +528,7 @@
         <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">total</span>
 </pre></div>
 </div>
-<p>To support this, the split would need to let one construct hand the value to the next through a small buffer that persists between them, instead of rebuilding each construct from the kernel’s arguments alone. That buffer becomes a shared interface the cache has to track (its type and layout) so that editing one construct can’t silently break the other. It’s a real amount of machinery for an uncommon case, so today Quadrants takes the simpler, always-correct route and caches the whole kernel.</p>
+<p>Supporting a split for cases like this is possible but involved; see <a class="reference internal" href="#advanced-making-these-cases-splittable">Advanced: making these cases splittable</a>.</p>
 </section>
 <section id="re-reading-overwritten-data">
 <h3>Re-reading overwritten data<a class="headerlink" href="#re-reading-overwritten-data" title="Link to this heading">#</a></h3>
@@ -542,11 +542,11 @@
         <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">first</span>
 </pre></div>
 </div>
-<p>The fix is the same persisted-buffer idea as above: capture the snapshot before the overwrite and store it for the second loop, instead of rebuilding it from the arguments (where it would re-read the overwritten <code class="docutils literal notranslate"><span class="pre">a</span></code>). Same trade-off, so Quadrants caches the whole kernel.</p>
+<p>This shares the same fix as the previous case; see <a class="reference internal" href="#advanced-making-these-cases-splittable">Advanced: making these cases splittable</a>.</p>
 </section>
 <section id="possibly-aliasing-gradient-arguments">
 <h3>Possibly-aliasing gradient arguments<a class="headerlink" href="#possibly-aliasing-gradient-arguments" title="Link to this heading">#</a></h3>
-<p><code class="docutils literal notranslate"><span class="pre">a</span></code> and <code class="docutils literal notranslate"><span class="pre">b</span></code> are different parameters, so the split would treat their buffers as disjoint and reuse that assumption while recomputing. But one access is a gradient buffer, and a caller can make <code class="docutils literal notranslate"><span class="pre">a</span></code> and <code class="docutils literal notranslate"><span class="pre">b</span></code> (or a primal and a gradient) share memory, which cannot be verified even at launch, so Quadrants refuses to split.</p>
+<p><code class="docutils literal notranslate"><span class="pre">a</span></code> and <code class="docutils literal notranslate"><span class="pre">b</span></code> are different parameters, so the split would treat their buffers as disjoint and reuse that assumption while recomputing. But one access is a gradient buffer, and a caller can make <code class="docutils literal notranslate"><span class="pre">a</span></code> and <code class="docutils literal notranslate"><span class="pre">b</span></code> (or a value buffer and its own <code class="docutils literal notranslate"><span class="pre">.grad</span></code> buffer) share memory, which cannot be verified even at launch, so Quadrants refuses to split.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">grad_snapshot</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">needs_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
                   <span class="n">b</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">needs_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
@@ -558,8 +558,15 @@
         <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">g</span>
 </pre></div>
 </div>
-<p>Like the earlier fallbacks, this one is fixable, but it’s a fair amount of work for a fairly narrow case (a non-autodiff kernel that manually reads two <code class="docutils literal notranslate"><span class="pre">.grad</span></code> buffers as plain arrays; true autodiff kernels are already excluded from the split). That’s why today it just refuses to split rather than assuming disjointness it can’t verify.</p>
+<p>This one is fixable too, though for a narrower case; see <a class="reference internal" href="#advanced-making-these-cases-splittable">Advanced: making these cases splittable</a>.</p>
 </section>
+</section>
+<section id="advanced-making-these-cases-splittable">
+<h2>Advanced: making these cases splittable<a class="headerlink" href="#advanced-making-these-cases-splittable" title="Link to this heading">#</a></h2>
+<p>This section is internal background for the curious; you never need it to use Quadrants.</p>
+<p>To support <a class="reference internal" href="#a-value-carried-between-constructs">a value carried between constructs</a>, the split would need to let one construct hand the value to the next through a small buffer that persists between them, instead of rebuilding each construct from the kernel’s arguments alone. That buffer becomes a shared interface the cache has to track (its type and layout) so that editing one construct can’t silently break the other. It’s a real amount of machinery for an uncommon case, so today Quadrants takes the simpler, always-correct route and caches the whole kernel.</p>
+<p>The same persisted-buffer idea covers <a class="reference internal" href="#re-reading-overwritten-data">re-reading overwritten data</a>: capture the snapshot before the overwrite and store it for the second loop, instead of rebuilding it from the arguments (where it would re-read the overwritten <code class="docutils literal notranslate"><span class="pre">a</span></code>).</p>
+<p><a class="reference internal" href="#possibly-aliasing-gradient-arguments">Possibly-aliasing gradient arguments</a> is fixable too, but for a fairly narrow case (a non-autodiff kernel that manually reads two <code class="docutils literal notranslate"><span class="pre">.grad</span></code> buffers as plain arrays; true autodiff kernels are already excluded from the split). Today it refuses to split rather than assuming disjointness it can’t verify.</p>
 </section>
 <section id="inspecting-the-split">
 <h2>Inspecting the split<a class="headerlink" href="#inspecting-the-split" title="Link to this heading">#</a></h2>
@@ -622,6 +629,7 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#possibly-aliasing-gradient-arguments">Possibly-aliasing gradient arguments</a></li>
 </ul>
 </li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#advanced-making-these-cases-splittable">Advanced: making these cases splittable</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#inspecting-the-split">Inspecting the split</a></li>
 </ul>
   </nav></div>
