@@ -848,7 +848,7 @@ void split_frontend_per_construct(IRNode *ir,
   auto alloca_writers = gather_top_level_alloca_writers(block);
 
   // Program-scoped stats (total / hit / recompiled per kernel), read back by the compilation manager to stay
-  // backend-agnostic. `hit` stays 0 until a reuse tier lands.
+  // backend-agnostic. `hit` stays 0 until cross-process construct reuse lands.
   PerConstructCache *cc = (kernel->program != nullptr) ? &kernel->program->per_construct_cache() : nullptr;
 
   std::vector<std::unique_ptr<Stmt>> tasks;
@@ -935,22 +935,22 @@ bool maybe_split_frontend_per_construct(IRNode *ir,
     return note("mesh kernel");
   if (block_has_concurrent_region(block))
     return note("kernel has a concurrent region");  // concurrent constructs share one global-temp buffer
-  // Reuse-tier gate: the split only pays off when a per-task REUSE tier can serve the constructs; without one it is
-  // bounded (see the cost cap below) but pure frontend overhead, so keep the whole-kernel path. The sole such tier is
-  // the per-task artifact cache, active for CUDA/AMDGPU with the offline cache on -- its dir
-  // (`pertask_artifact_dir_ref` in llvm_program.cpp) is nonempty exactly then, which is what `artifact_tier` in
-  // codegen.cpp keys on. Gating on `offline_cache` instead of that process-global dir avoids coupling this transform to
-  // the LLVM codegen header; the two are equivalent by construction. QD_SPLIT_FORCE=1 overrides the gate so tests can
-  // exercise the backend-agnostic split logic on CPU (and power users can opt in).
-  const bool reuse_tier_active = (config.arch == Arch::cuda || config.arch == Arch::amdgpu) && config.offline_cache;
-  if (!reuse_tier_active && !env_is_enabled("QD_SPLIT_FORCE"))
-    return note("no per-task cache to reuse on this backend");
+  // Artifact-cache gate: the split only pays off when the per-task artifact cache can serve the constructs; without it
+  // the split is bounded (see the cost cap below) but pure frontend overhead, so keep the whole-kernel path. That cache
+  // is active for CUDA/AMDGPU with the offline cache on -- its dir (`pertask_artifact_dir_ref` in llvm_program.cpp) is
+  // nonempty exactly then, which is what `artifact_cache_on` in codegen.cpp keys on. Gating on `offline_cache` instead
+  // of that process-global dir avoids coupling this transform to the LLVM codegen header; the two are equivalent by
+  // construction. QD_SPLIT_FORCE=1 overrides the gate so tests can exercise the backend-agnostic split logic on CPU
+  // (and power users can opt in).
+  const bool artifact_cache_active = (config.arch == Arch::cuda || config.arch == Arch::amdgpu) && config.offline_cache;
+  if (!artifact_cache_active && !env_is_enabled("QD_SPLIT_FORCE"))
+    return note("no per-task artifact cache to reuse on this backend");
   std::vector<int> assumed_disjoint_pairs;
   const char *unsafe_reason = "recompute-unsafe";
   if (!split_is_recompute_safe(block, assumed_disjoint_pairs, &unsafe_reason))
     return note(unsafe_reason);
-  // Cost guard: recompiling a large shared prefix once per construct is pure overhead with no reuse tier, so fall back
-  // above a ratio cap. QD_SPLIT_MAX_COST_RATIO overrides the cap; QD_SPLIT_STATS logs the per-kernel estimate.
+  // Cost guard: recompiling a large shared prefix once per construct is pure overhead with nothing to reuse it, so fall
+  // back above a ratio cap. QD_SPLIT_MAX_COST_RATIO overrides the cap; QD_SPLIT_STATS logs the per-kernel estimate.
   SplitCost cost = estimate_split_cost(block);
   double max_ratio = 4.0;
   if (const char *r = std::getenv("QD_SPLIT_MAX_COST_RATIO"))

@@ -4,7 +4,7 @@
 once over the whole kernel, isolating each construct by its backward slice (see
 `transforms/split_frontend_per_construct.cpp` for the split and the recompute-safety fallback conditions).
 
-These tests assert the split's structure and correctness (there is no reuse tier yet):
+These tests assert the split's structure and correctness (no cross-process construct reuse yet):
  - the split fires for recompute-safe kernels, with `frontend_constructs_recompiled == frontend_constructs_total` and
    `frontend_constructs_cache_hit == 0`;
  - non-recompute-safe kernels fall back to the whole-kernel path (`frontend_constructs_total == -1`);
@@ -49,10 +49,10 @@ _C = (61001.0, 61002.0, 61003.0, 61004.0)
 
 @pytest.fixture(autouse=True)
 def _force_per_construct_split(monkeypatch):
-    # In production the split only runs when a per-task reuse tier is active (CUDA/AMDGPU + offline cache). Nearly every
-    # test here exercises the backend-agnostic split logic on CPU and with offline_cache=False, so force the split on;
-    # QD_SPLIT_FORCE bypasses only the reuse-tier gate, never the correctness gates. The gate itself is covered by
-    # test_per_construct_frontend_split_gated_off_without_reuse_tier, which clears this.
+    # In production the split only runs when the per-task artifact cache is active (CUDA/AMDGPU + offline cache). Nearly
+    # every test here exercises the backend-agnostic split logic on CPU and with offline_cache=False, so force the split
+    # on; QD_SPLIT_FORCE bypasses only the artifact-cache gate, never the correctness gates. The gate itself is covered
+    # by test_per_construct_frontend_split_gated_off_without_artifact_cache, which clears this.
     monkeypatch.setenv("QD_SPLIT_FORCE", "1")
 
 
@@ -75,7 +75,7 @@ def test_per_construct_frontend_split_enumerates_all_constructs() -> None:
     kernel_a(arr)
 
     obs = kernel_a._primal.per_offload_cache_observations
-    # Four independent loops enumerate as four constructs; with no reuse tier every one is recompiled, none a hit.
+    # Four independent loops enumerate as four constructs; with no artifact cache every one is recompiled, none a hit.
     assert obs.frontend_constructs_total == 4, obs
     assert obs.frontend_constructs_recompiled == obs.frontend_constructs_total, obs
     assert obs.frontend_constructs_cache_hit == 0, obs
@@ -83,11 +83,12 @@ def test_per_construct_frontend_split_enumerates_all_constructs() -> None:
 
 
 @test_utils.test(arch=[qd.cpu], offline_cache=False)
-def test_per_construct_frontend_split_gated_off_without_reuse_tier(monkeypatch) -> None:
-    # Production reuse-tier gate: the split only runs when a per-task reuse tier can serve the constructs (CUDA/AMDGPU +
-    # offline cache). On CPU there is no such tier, so a split-eligible kernel must stay on the whole-kernel path. This
-    # clears the module fixture's QD_SPLIT_FORCE to expose the real default; the same 2-loop kernel splits into two
-    # constructs in the other tests (where force is set), so a -1 sentinel here is attributable to the gate alone.
+def test_per_construct_frontend_split_gated_off_without_artifact_cache(monkeypatch) -> None:
+    # Production artifact-cache gate: the split only runs when the per-task artifact cache can serve the constructs
+    # (CUDA/AMDGPU + offline cache). On CPU there is no such cache, so a split-eligible kernel must stay on the
+    # whole-kernel path. This clears the module fixture's QD_SPLIT_FORCE to expose the real default; the same 2-loop
+    # kernel splits into two constructs in the other tests (where force is set), so a -1 sentinel here is attributable
+    # to the gate alone.
     monkeypatch.delenv("QD_SPLIT_FORCE", raising=False)
 
     @qd.kernel
@@ -101,7 +102,7 @@ def test_per_construct_frontend_split_gated_off_without_reuse_tier(monkeypatch) 
     kernel_two_loops(arr)
 
     obs = kernel_two_loops._primal.per_offload_cache_observations
-    assert obs.frontend_constructs_total == -1, obs  # gated off: no per-task reuse tier on CPU
+    assert obs.frontend_constructs_total == -1, obs  # gated off: no per-task artifact cache on CPU
     assert np.allclose(arr.to_numpy(), _C[0] + _C[1], atol=1.0), arr.to_numpy()
 
 
@@ -1288,19 +1289,19 @@ def test_per_construct_frontend_split_struct_member_recomputed() -> None:
     assert np.allclose(out2.to_numpy(), _C[0], atol=1.0), out2.to_numpy()
 
 
-# --- Cross-process per-task artifact cache (CUDA + AMDGPU backend reuse tier) -----------------------------------------
+# --- Cross-process per-task artifact cache (CUDA + AMDGPU backend reuse) ----------------------------------------------
 #
 # The per-task artifact cache stores each offloaded task's fully compiled code + launch metadata on disk, keyed by the
 # task's own IR (name-free), so a later process reuses an unchanged task instead of recompiling it. CUDA and AMDGPU
 # fill it, and it is gated on `offline_cache`. Reuse is reported on `PerOffloadCacheObservations.tasks_*` (-1 when the
-# tier did not run).
+# artifact cache did not run).
 
 
 @test_utils.test(arch=[qd.cuda, qd.amdgpu], offline_cache=False)
 def test_per_task_artifact_cache_disabled_without_offline_cache() -> None:
-    # `offline_cache` is the sole gate for the per-task disk tier; with it off the tier never runs, so the per-task
-    # counts stay at the -1 sentinel. The FRONTEND split is independent of the flag and still fires -- asserting both
-    # shows the flag gates only the disk tier, not the split.
+    # `offline_cache` is the sole gate for the per-task artifact cache; with it off the cache never runs, so the
+    # per-task counts stay at the -1 sentinel. The FRONTEND split is independent of the flag and still fires --
+    # asserting both shows the flag gates only the artifact cache, not the split.
     @qd.kernel
     def kernel_two_loops(x: qd.types.ndarray(qd.f32, ndim=1)) -> None:
         for i in x:
