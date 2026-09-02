@@ -726,13 +726,14 @@ class Kernel(FuncBase):
                 ):
                     # Optional ndarray + None is specialized away at compile time, so it consumes no runtime arg.
                     continue
-                # FIXME: This shortcut skips _recursive_set_args() solely when val._qd_all_field is true and the annotation is
-                # a dataclass, but _recursive_set_args() is where the strict provided_arg_type-is-needed_arg_type check lives.
-                # As a result, once an instance has _qd_all_field=True, passing it to a kernel parameter annotated with a
-                # different all-Field dataclass type can be silently accepted instead of raising the previous runtime type error,
-                # which weakens API/type safety and can route the wrong struct type through launch.
-                if getattr(val, "_qd_all_field", False) and getattr(needed_, _FIELDS, None) is not None:
-                    continue
+                # An all-Field dataclass unwraps to zero launch-context slots, so skip _recursive_set_args(). That also
+                # skips its provided-is-needed type check, so only shortcut when _qd_all_field is cached True for THIS
+                # exact annotation (proof the check already ran and passed for it) - hence the per-annotation id() key.
+                _all_field_cache = getattr(val, "_qd_all_field", None)
+                if _all_field_cache is not None and getattr(needed_, _FIELDS, None) is not None:
+                    _af_hit = _all_field_cache.get(id(needed_))
+                    if _af_hit is not None and _af_hit[0] is needed_ and _af_hit[1]:
+                        continue
                 # `graph_do_while_levels[*].cond_cpp_arg_id` is also populated at AST-build time (see
                 # `ASTTransformer.build_While` -> `_resolve_ndarray_kernel_arg_id`), so the launch path forwards it
                 # directly below without per-arg name matching here. This uniformly handles bare parameter conditions

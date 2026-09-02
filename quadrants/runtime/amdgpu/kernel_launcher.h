@@ -27,6 +27,13 @@ class KernelLauncher : public LLVM::KernelLauncher {
     std::size_t arg_buffer_capacity{0};
     void *runtime_context_dev_ptr{nullptr};
 
+    // Skip-redundant-H2D cache for the per-launch `RuntimeContext` upload (default-stream path only): cache the
+    // last-uploaded bytes plus the device address they went to, and skip the HtoD when both still match (the struct
+    // is almost always byte-identical across repeated same-handle launches). Bytes, not a `RuntimeContext`, to keep
+    // its definition out of this header.
+    std::vector<uint8_t> cached_runtime_context;
+    void *cached_runtime_context_ptr{nullptr};
+
     // GPU-side `qd.checkpoint` gating state, allocated lazily on the first launch of a checkpoint-bearing kernel that
     // lands on this Handle (i.e. graph_do_while + checkpoint kernels that fall through the graph fast path). Mirrors
     // the per-CachedGraph state in `GraphManager`: `checkpoint_resume_point_dev_ptr` and

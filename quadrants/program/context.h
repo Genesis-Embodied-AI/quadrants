@@ -17,7 +17,7 @@ struct RuntimeContext {
 
   LLVMRuntime *runtime{nullptr};
 
-  int32_t cpu_thread_id;
+  int32_t cpu_thread_id{0};
 
   // We move the pointer of result buffer from LLVMRuntime to RuntimeContext
   // because each real function need a place to store its result, but

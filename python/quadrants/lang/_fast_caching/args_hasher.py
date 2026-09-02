@@ -151,6 +151,7 @@ def dataclass_to_repr(
     raise_on_templated_floats: bool,
     path: tuple[str, ...],
     arg: Any,
+    annotated_type: type | None = None,
     pruning_paths: set[str] | None = None,
     parent_flat: str | None = None,
 ) -> str | _FailFastcache:
@@ -161,12 +162,17 @@ def dataclass_to_repr(
     # PERF: a frozen dataclass's repr never changes, so cache it on the instance (``dataclasses.fields()`` is slow, see
     # the _template_mapper_hotpath.py module docstring). ``_DC_REPR_NONE`` caches a failure verdict.
     #
-    # Only unpruned walks are cacheable: both the repr and the failure verdict depend on which fields were visited, so a
-    # kernel with a narrower pruning set must not inherit another kernel's verdict. Final-bearing subtrees are excluded
-    # too - their repr must be recomputed each launch to re-run ``final_scalar_key``'s validation.
+    # Hash the *declared* type's fields (``annotated_type``, when given) rather than the runtime subclass's, so a
+    # subclass carrying extra app-only fields still fast-caches on the base's field set. Only the runtime type's own
+    # unpruned view is cacheable: the repr/verdict depend on the visited (pruning) set and the active field set, so a
+    # narrower pruning set - or a subclass passed under a different base - must not inherit another view's verdict.
+    # Final-bearing subtrees are excluded too (their repr recomputes each launch to re-run ``final_scalar_key``).
+    field_source = annotated_type if annotated_type is not None else type(arg)
     is_frozen = type(arg).__hash__ is not None
-    final_names = final_field_names(type(arg))
-    cacheable = is_frozen and pruning_paths is None and not subtree_has_final_fields(type(arg))
+    final_names = final_field_names(field_source)
+    cacheable = (
+        is_frozen and field_source is type(arg) and pruning_paths is None and not subtree_has_final_fields(field_source)
+    )
     if cacheable:
         cached = getattr(arg, "_qd_dc_repr", None)
         if cached is _DC_REPR_NONE:
@@ -174,7 +180,7 @@ def dataclass_to_repr(
         if cached is not None:
             return cached
     repr_l = []
-    for field in dataclasses.fields(arg):
+    for field in dataclasses.fields(field_source):
         child_value = getattr(arg, field.name)
         if field.name in final_names:
             # ``final_scalar_key`` rather than ``stringify_obj_type``: the latter has no bare-``str`` case, so a
@@ -286,8 +292,15 @@ def stringify_obj_type(
         _mark_warn_if_not_tensor_annotation(arg_meta)
         return _FAIL_FASTCACHE
     if is_dataclass_instance(obj):
+        # Pass the declared dataclass type so an annotated subclass hashes via the base's fields. Nested / data_oriented
+        # children have no dataclass annotation here (arg_meta is None or Template), so they fall back to runtime type.
+        annotated_type = None
+        if arg_meta is not None:
+            ann = arg_meta.annotation
+            if isinstance(ann, type) and dataclasses.is_dataclass(ann) and isinstance(obj, ann):
+                annotated_type = ann
         return dataclass_to_repr(
-            raise_on_templated_floats, path, obj, pruning_paths=pruning_paths, parent_flat=parent_flat
+            raise_on_templated_floats, path, obj, annotated_type, pruning_paths=pruning_paths, parent_flat=parent_flat
         )
     if is_data_oriented(obj):
         # Narrowed by pruning info: a member the kernel cannot read cannot affect codegen, so it stays out of the key.

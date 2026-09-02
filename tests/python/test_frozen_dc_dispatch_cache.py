@@ -181,9 +181,157 @@ def test_frozen_dc_unwrapped_cache_populated():
     assert not hasattr(state, "_qd_dc_unwrapped")
     noop(state)
     assert hasattr(state, "_qd_dc_unwrapped")
-    cached = state._qd_dc_unwrapped
+    cache = state._qd_dc_unwrapped
+    assert id(State) in cache
+    retained_ty, cached = cache[id(State)]
+    assert retained_ty is State
     assert "a" in cached
     assert cached["a"] is a
+
+
+# ---------------------------------------------------------------------------
+# Template-key cache: verify _qd_spec_key is cached per annotated type (covariant reuse).
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_frozen_dc_template_key_cache_populated():
+    """The template key should depend on the way we use it"""
+
+    @dataclasses.dataclass(frozen=True)
+    class Base1:
+        x1: qd.types.NDArray[qd.i32, 1]
+
+    @dataclasses.dataclass(frozen=True)
+    class Base2:
+        x2: qd.types.NDArray[qd.f32, 2]
+
+    @dataclasses.dataclass(frozen=True)
+    class Sub(Base1, Base2):
+        pass
+
+    @qd.kernel
+    def use1(dat: Base1):
+        for i in range(4):
+            dat.x1[i] = 1
+
+    @qd.kernel
+    def use2(dat: Base2):
+        for i, j in qd.ndrange(2, 2):
+            dat.x2[i, j] = 2.0
+
+    sub = Sub(x1=qd.ndarray(qd.i32, shape=(4,)), x2=qd.ndarray(qd.f32, shape=(2, 2)))
+
+    assert not hasattr(sub, "_qd_spec_key")
+    use1(sub)
+    assert id(Base1) in sub._qd_spec_key
+    use2(sub)
+    assert id(Base1) in sub._qd_spec_key and id(Base2) in sub._qd_spec_key
+    assert sub._qd_spec_key[id(Base1)][0] is Base1 and sub._qd_spec_key[id(Base2)][0] is Base2
+
+    # Distinct field sets (i32/1D vs f32/2D) must yield distinct keys, i.e. neither annotation reused the other's.
+    assert sub._qd_spec_key[id(Base1)][1] != sub._qd_spec_key[id(Base2)][1]
+
+
+# ---------------------------------------------------------------------------
+# all-Field cache: the _recursive_set_args shortcut must be keyed per annotated type.
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_frozen_dc_all_field_cache_per_annotated_type():
+    """We should have different all field caches depending on the ways that a subclass is used"""
+
+    @dataclasses.dataclass(frozen=True)
+    class Base1:
+        a: qd.Template
+
+    @dataclasses.dataclass(frozen=True)
+    class Base2:
+        b: qd.Template
+
+    @dataclasses.dataclass(frozen=True)
+    class Sub(Base1, Base2):
+        pass
+
+    @qd.kernel
+    def use1(dat: Base1):
+        for i in range(4):
+            dat.a[i] = 1
+
+    @qd.kernel
+    def use2(dat: Base2):
+        for i in range(4):
+            dat.b[i] = 2
+
+    a = qd.field(qd.i32, shape=(4,))
+    b = qd.field(qd.i32, shape=(4,))
+    sub = Sub(a=a, b=b)
+
+    use1(sub)
+    assert sub._qd_all_field == {id(Base1): (Base1, True)}
+    use2(sub)
+    # Second annotation gets its own entry rather than reusing Base1's shortcut verdict.
+    assert sub._qd_all_field == {id(Base1): (Base1, True), id(Base2): (Base2, True)}
+
+    np.testing.assert_array_equal(a.to_numpy(), [1, 1, 1, 1])
+    np.testing.assert_array_equal(b.to_numpy(), [2, 2, 2, 2])
+
+
+# ---------------------------------------------------------------------------
+# Identity keying: the per-annotation caches must not conflate two metaclass-equal ancestors.
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_frozen_dc_caches_identity_keyed_against_metaclass_eq():
+    """Two distinct ancestor dataclasses whose metaclass makes them compare *and* hash equal must not collide in the
+    per-annotation caches: a class-keyed dict would serve one ancestor's cached view for the other, but ``id()`` keying
+    with an ``is`` guard keeps them separate. Exercised on ``_get_frozen_dc_unwrapped`` (``_qd_dc_unwrapped`` and
+    ``_qd_all_field``); ``_qd_spec_key`` uses identical keying."""
+    from quadrants.lang._func_base import _get_frozen_dc_unwrapped
+
+    class EqMeta(type):
+        # Hostile spoof: make distinct classes compare and hash equal, which a class-keyed dict would conflate.
+        def __eq__(cls, other):
+            return isinstance(other, EqMeta)
+
+        def __hash__(cls):
+            return 0
+
+    @dataclasses.dataclass(frozen=True)
+    class Base1(metaclass=EqMeta):
+        x1: qd.types.NDArray[qd.i32, 1]
+
+    @dataclasses.dataclass(frozen=True)
+    class Base2(metaclass=EqMeta):
+        x2: qd.types.NDArray[qd.i32, 1]
+
+    assert Base1 == Base2 and hash(Base1) == hash(Base2) and Base1 is not Base2  # the spoof is in effect
+
+    @dataclasses.dataclass(frozen=True)
+    class Sub(Base1, Base2):
+        pass
+
+    sub = Sub(x1=qd.ndarray(qd.i32, shape=(2,)), x2=qd.ndarray(qd.i32, shape=(3,)))
+    b1_fields = getattr(Base1, "__dataclass_fields__")
+    b2_fields = getattr(Base2, "__dataclass_fields__")
+
+    u1 = _get_frozen_dc_unwrapped(sub, Base1, b1_fields)
+    u2 = _get_frozen_dc_unwrapped(sub, Base2, b2_fields)
+    assert set(u1) == {"x1"} and set(u2) == {"x2"}  # each ancestor view sees only its own field
+
+    unwrapped_cache = sub._qd_dc_unwrapped
+    all_field_cache = sub._qd_all_field
+    # Separate identity-keyed entries despite ``Base1 == Base2``; a class-keyed dict would hold a single merged entry.
+    assert id(Base1) in unwrapped_cache and id(Base2) in unwrapped_cache
+    assert unwrapped_cache[id(Base1)][0] is Base1 and unwrapped_cache[id(Base2)][0] is Base2
+    assert id(Base1) in all_field_cache and id(Base2) in all_field_cache
+    assert all_field_cache[id(Base1)][0] is Base1 and all_field_cache[id(Base2)][0] is Base2
+
+    # The read path honours the identity guard: the Base2 lookup returns Base2's view, not Base1's cached one.
+    assert _get_frozen_dc_unwrapped(sub, Base2, b2_fields) is u2
+    assert set(_get_frozen_dc_unwrapped(sub, Base1, b1_fields)) == {"x1"}
 
 
 # ---------------------------------------------------------------------------
