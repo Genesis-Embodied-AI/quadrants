@@ -27,7 +27,7 @@ Some fallbacks are decided once, at compile time (the kernel never uses the spli
 | [A construct re-reads array data an earlier construct overwrote](#re-reading-overwritten-data) | Compiling it in isolation would observe the new value instead of the original. This includes clamped indexing (`boundary="clamp"`), where an out-of-range index can land on an element that was written. |
 | [Two array arguments where safety would depend on them not sharing memory, and one is a gradient](#possibly-aliasing-gradient-arguments) | Whether two gradient buffers overlap cannot be verified even at launch, so Quadrants refuses to split rather than risk a wrong result. |
 | A side effect, random draw, or volatile read would be repeated | Recomputing it inside another construct would change what the kernel does. |
-| Mesh (`qd.mesh`) kernels | Mesh iteration is not expressed as independent top-level constructs. |
+| Kernels that iterate over an unstructured mesh | Mesh iteration is not expressed as independent top-level constructs. |
 | A region explicitly scheduled to run concurrently | Concurrent constructs share one scratch buffer, so isolating them would corrupt it. |
 | A diagnostic mode is enabled ([line coverage](kernel_coverage.md), or a compiler debug dump, see [optimization passes](optimization_passes.md)) | These need the whole-kernel form to keep their diagnostics meaningful. |
 
