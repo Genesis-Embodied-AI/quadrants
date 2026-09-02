@@ -615,6 +615,24 @@ bool grad_companion_may_alias(Stmt *a, Stmt *b) {
   return arg_a->arg_id == arg_b->arg_id;
 }
 
+// alias_analysis compares a whole-element ndarray read (`base = a[i]`, a bare ExternalPtrStmt) against a component
+// write to the same element (`a[j][c] = ...`, a MatrixPtrStmt over an ExternalPtrStmt) as `different`, because only the
+// component side carries a matrix origin. But a whole-element read covers every component, so it observes such a write
+// whenever the two element addresses may coincide. Normalize both to their external origins and re-check: same-arg,
+// possibly-same-index -> may-alias. Matrix-vs-matrix and external-vs-external pairs are already precise from the raw
+// maybe_same_address check; cross-arg mixed pairs come back `different` here and stay the launch guard's concern.
+bool whole_element_read_may_overlap_component_write(Stmt *a, Stmt *b) {
+  const bool mixed = (a != nullptr && a->is<ExternalPtrStmt>() && b != nullptr && b->is<MatrixPtrStmt>()) ||
+                     (a != nullptr && a->is<MatrixPtrStmt>() && b != nullptr && b->is<ExternalPtrStmt>());
+  if (!mixed)
+    return false;
+  ExternalPtrStmt *ea = as_ndarray_ptr(a);
+  ExternalPtrStmt *eb = as_ndarray_ptr(b);
+  if (ea == nullptr || eb == nullptr)
+    return true;  // a matrix ptr with a non-external origin: cannot prove the element addresses disjoint
+  return irpass::analysis::maybe_same_address(ea, eb);
+}
+
 // True when a condition-(3) clearance between these two pointers rests on the caller-defeatable assumption that
 // distinct ndarray params don't alias: both are ndarray accesses on DIFFERENT args. alias_analysis reports them
 // `different` by arg id and/or is_grad, which a caller violates by binding one buffer to both params. Same-arg
@@ -759,6 +777,8 @@ bool split_is_recompute_safe(Block *block, std::vector<int> &assumed_disjoint_pa
           continue;
         if (w.dest == nullptr || r.src == nullptr || irpass::analysis::maybe_same_address(r.src, w.dest))
           return fail("a construct re-reads memory a later-ordered write may change");
+        if (whole_element_read_may_overlap_component_write(r.src, w.dest))
+          return fail("a whole-element read may overlap a component write to the same ndarray element");
         if (clamp_may_defeat_index_disjointness(r.src, w.dest))
           return fail("a clamped (boundary=\"clamp\") access may collapse onto an overwritten element");
         if (grad_companion_may_alias(r.src, w.dest))

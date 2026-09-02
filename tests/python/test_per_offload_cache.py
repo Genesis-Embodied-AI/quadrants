@@ -787,6 +787,33 @@ def test_per_construct_frontend_split_alias_guard_fastcache_fallback_predeclares
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
+def test_per_construct_frontend_split_whole_element_vs_component_recompute_unsafe() -> None:
+    # A whole-element snapshot `base = a[0]` lowers to a bare ExternalPtrStmt; a component write `a[i][0] = 2` lowers to
+    # a MatrixPtrStmt over the same external buffer. alias_analysis compares that mixed pair as different, so without
+    # normalizing the matrix pointer to its external origin the split recomputes `base` after the write loop and reads
+    # the mutated value. The split must fall back (constructs == -1) and keep the snapshot correct.
+    vec2 = qd.types.vector(2, qd.f32)
+
+    @qd.kernel
+    def whole_vs_component(a: qd.types.NDArray[vec2, 1], out: qd.types.ndarray()) -> None:
+        base = a[0]  # whole-element read, recomputed into construct 2
+        for i in range(a.shape[0]):  # construct 1: component write to the same buffer
+            a[i][0] = 2.0
+        for i in range(out.shape[0]):  # construct 2: reuse the snapshot
+            out[i] = base[0]
+
+    a = qd.Vector.ndarray(2, qd.f32, shape=(_N,))
+    out = qd.ndarray(qd.f32, shape=(_N,))
+    a.from_numpy(np.full((_N, 2), 7.0, dtype=np.float32))
+    whole_vs_component(a, out)
+
+    obs = whole_vs_component._primal.per_offload_cache_observations
+    assert obs.frontend_constructs_total == -1, obs  # fell back: whole-element read may see the component write
+    # base[0] snapshots 7.0 before the write loop; the miscompile would recompute it as 2.0.
+    assert np.allclose(out.to_numpy(), 7.0, atol=1e-2), out.to_numpy()
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
 def test_per_construct_frontend_split_fallback_carried_rmw_local() -> None:
     # Two constructs each read-modify-write the same local `s`, and the second also stores it. The second construct
     # depends on the value the first produced, so it is not recomputable per-construct (its slice would drop the first
