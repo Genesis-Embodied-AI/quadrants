@@ -74,6 +74,8 @@ def stale_snapshot(a: qd.types.NDArray[qd.f32, 1], out: qd.types.NDArray[qd.f32,
         out[i] = first
 ```
 
+The fix is the same persisted-buffer idea as above: capture the snapshot before the overwrite and store it for the second loop, instead of rebuilding it from the arguments (where it would re-read the overwritten `a`). Same trade-off, so Quadrants caches the whole kernel.
+
 ### Possibly-aliasing gradient arguments
 
 `a` and `b` are different parameters, so the split would treat their buffers as disjoint and reuse that assumption while recomputing. But one access is a gradient buffer, and a caller can make `a` and `b` (or a primal and a gradient) share memory, which cannot be verified even at launch, so Quadrants refuses to split.
