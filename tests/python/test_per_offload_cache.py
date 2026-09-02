@@ -743,7 +743,9 @@ def test_per_construct_frontend_split_alias_guard_fastcache_fallback_predeclares
 
     def _make():
         @qd.kernel(fastcache=True)
-        def kernel_biased(a: qd.types.ndarray(), b: qd.types.ndarray(), y: qd.types.ndarray(), s: qd.template()) -> None:
+        def kernel_biased(
+            a: qd.types.ndarray(), b: qd.types.ndarray(), y: qd.types.ndarray(), s: qd.template()
+        ) -> None:
             base = a[0]
             for i in range(_N):
                 b[i] = 2.0
