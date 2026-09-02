@@ -142,6 +142,10 @@ def compile_no_split_variant(kernel: Any, key: Any, t_kernel: Any, py_args: tupl
         pruning = Pruning(kernel_used_parameters=None)
         with kernel.runtime.compilation_lock:
             for _pass in range(0, 2):
+                if _pass == 0:
+                    # This rebuild really runs the discovery pass, so struct-ndarray predeclaration must prune by the
+                    # ids pass 0 collected, not fall through to the fastcache flat-name branch. See Kernel.materialize.
+                    pruning.pass_0_ran = True
                 if _pass >= 1:
                     pruning.enforce()
                 tree, ctx = kernel.get_tree_and_ctx(

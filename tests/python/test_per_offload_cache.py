@@ -729,6 +729,61 @@ def test_per_construct_frontend_split_alias_guard_fastcache_fallback_prunes_call
     assert np.allclose(y3.to_numpy(), 8.0, atol=1e-2), y3.to_numpy()
 
 
+@test_utils.test(arch=[qd.cpu, qd.cuda])
+def test_per_construct_frontend_split_alias_guard_fastcache_fallback_predeclares_struct(tmp_path) -> None:
+    # The whole-kernel fallback rebuild for a fastcache-restored key runs a real discovery pass, so it must set
+    # `pass_0_ran`. Otherwise `_predeclare_struct_ndarrays` takes its fastcache flat-name branch instead of pruning by
+    # the ids pass 0 just collected, drops the struct ndarray, and the rebuild fails ("Ndarray ... not registered as a
+    # kernel parameter"). Needs a fastcache restore + an aliased top-level pair (forces the fallback) + an ndarray
+    # reached through a `@qd.data_oriented`/`qd.template()` arg (the struct predeclare branch the callee test skips).
+    @qd.data_oriented
+    class Bias:
+        def __init__(self, vals):
+            self.vals = vals
+
+    def _make():
+        @qd.kernel(fastcache=True)
+        def kernel_biased(a: qd.types.ndarray(), b: qd.types.ndarray(), y: qd.types.ndarray(), s: qd.template()) -> None:
+            base = a[0]
+            for i in range(_N):
+                b[i] = 2.0
+            for i in range(_N):
+                y[i] = base + s.vals[i]
+
+        return kernel_biased
+
+    def _bufs():
+        a = qd.ndarray(qd.f32, shape=(_N,))
+        b = qd.ndarray(qd.f32, shape=(_N,))
+        y = qd.ndarray(qd.f32, shape=(_N,))
+        vals = qd.ndarray(qd.f32, shape=(_N,))
+        a.from_numpy(np.full(_N, 7.0, dtype=np.float32))
+        vals.from_numpy(np.full(_N, 1.0, dtype=np.float32))
+        return a, b, y, Bias(vals)
+
+    # Process 1: fresh compile arms the guard and persists the artifact.
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    k1 = _make()
+    k1(*_bufs())
+
+    # Process 2: restore from fastcache, then an aliased launch forces the whole-kernel fallback rebuild.
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    k2 = _make()
+    a2, b2, y2, bias2 = _bufs()
+    k2(a2, b2, y2, bias2)
+    assert k2._primal.src_ll_cache_observations.cache_loaded, "expected a fastcache restore, not a fresh compile"
+
+    shared = qd.ndarray(qd.f32, shape=(_N,))
+    y3 = qd.ndarray(qd.f32, shape=(_N,))
+    vals = qd.ndarray(qd.f32, shape=(_N,))
+    shared.from_numpy(np.full(_N, 7.0, dtype=np.float32))
+    vals.from_numpy(np.full(_N, 1.0, dtype=np.float32))
+    k2(shared, shared, y3, Bias(vals))  # aliased a/b -> fallback rebuild must predeclare s.vals, not prune it
+    assert k2._primal._compiled_no_split_by_key, "aliased launch did not build the whole-kernel fallback"
+    # base snapshots 7.0 (whole-kernel), so y = 7.0 + 1.0; the split miscompile would give 2.0 + 1.0.
+    assert np.allclose(y3.to_numpy(), 8.0, atol=1e-2), y3.to_numpy()
+
+
 @test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
 def test_per_construct_frontend_split_fallback_carried_rmw_local() -> None:
     # Two constructs each read-modify-write the same local `s`, and the second also stores it. The second construct
