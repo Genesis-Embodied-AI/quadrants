@@ -29,6 +29,10 @@
 #include "quadrants/codegen/llvm/compiled_kernel_data.h"
 #include "quadrants/codegen/llvm/per_task_artifact_cache.h"
 
+#include "picosha2.h"
+
+#include <algorithm>
+
 namespace quadrants::lang {
 LlvmProgramImpl::LlvmProgramImpl(CompileConfig &config_, KernelProfilerBase *profiler)
     : ProgramImpl(config_), compilation_workers("compile", config_.print_ir ? 1 : config_.num_compile_threads) {
@@ -53,11 +57,24 @@ LlvmProgramImpl::LlvmProgramImpl(CompileConfig &config_, KernelProfilerBase *pro
     }
 #endif
     if (arch_is_cpu(config_.arch)) {
-      // Host objects are CPU-specific, so scope the dir by host triple + CPU; a shared path must never serve an object
-      // built for an incompatible CPU.
+      // compile_module_to_object() builds host objects from detectHost()'s triple, CPU name and feature vector, so the
+      // dir is scoped by all three. Matching triple + CPU but different enabled features (e.g. a feature-masked VM)
+      // must not share a path, or a loaded object could use an instruction the running core lacks.
       auto jtmb = llvm::orc::JITTargetMachineBuilder::detectHost();
       std::string tag =
           (jtmb ? jtmb->getTargetTriple().str() : std::string("unknown")) + "_" + llvm::sys::getHostCPUName().str();
+      if (jtmb) {
+        // Sort so the hash is independent of detectHost()'s feature order; the full vector is too long for a path.
+        std::vector<std::string> features = jtmb->getFeatures().getFeatures();
+        std::sort(features.begin(), features.end());
+        std::string joined;
+        for (const auto &f : features) {
+          joined += f + ",";
+        }
+        std::string feat_hex;
+        picosha2::hash256_hex_string(joined, feat_hex);
+        tag += "_" + feat_hex.substr(0, 16);
+      }
       for (char &c : tag) {
         if (c == '/' || c == ':' || c == ' ' || c == '\\') {
           c = '_';
