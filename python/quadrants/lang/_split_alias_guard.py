@@ -93,7 +93,94 @@ def select_launch_variant(kernel: Any, key: Any, args: tuple, compiled_kernel_da
         return compiled_kernel_data
     no_split = kernel._compiled_no_split_by_key.get(key)
     if no_split is None:
-        no_split = kernel.compile_no_split_variant(key, t_kernel, args)
+        _warn_split_fallback(kernel)
+        no_split = compile_no_split_variant(kernel, key, t_kernel, args)
         kernel._compiled_no_split_by_key[key] = no_split
     kernel.per_offload_cache_observations = PerOffloadCacheObservations()
     return no_split
+
+
+def _warn_split_fallback(kernel: Any) -> None:
+    """One-shot-per-specialization notice that a launch left the per-construct split cache for whole-kernel
+    compilation. Fired only when the fallback variant is first built, so it never spams the hot launch path;
+    suppressible through the standard logging level (`is_logging_effective("warn")`)."""
+    from quadrants.lang.util import warning  # pylint: disable=C0415
+
+    name = getattr(getattr(kernel, "func", None), "__name__", "<kernel>")
+    warning(
+        f"[PER_OFFLOAD][FALLBACK] Kernel '{name}': launch arguments alias, or their buffers could not be verified as "
+        "disjoint (e.g. a raw NumPy/torch array passed directly), so this call uses whole-kernel compilation instead "
+        "of the per-construct split cache. Results are correct, but an edit then recompiles the whole kernel rather "
+        "than reusing the unchanged offloads. See docs/source/user_guide/kernel_caching.md.",
+        print_stack=False,
+    )
+
+
+def compile_no_split_variant(kernel: Any, key: Any, t_kernel: Any, py_args: tuple[Any, ...]):
+    """Compile the whole-kernel (split-disabled) variant used by the launch-time no-alias guard.
+
+    A normally-materialized key's ``t_kernel`` already carries the lowered body, so it compiles directly. A
+    fastcache-restored key (``_parse_only_keys``) never built one, so rebuild it here with the SAME two-pass pruning
+    ``Kernel.materialize`` uses for a fresh compile: the non-enforcing discovery pass fills each callee ``@qd.func``'s
+    used set, without which a callee dataclass arg's fields would be pruned and the enforcing build would fail. The
+    cached kernel-root used set alone (materialize's fastcache shortcut) is not enough because it never enters a callee
+    body. Only reached on an actual aliased launch, so this rebuild stays off the common path.
+    """
+    from quadrants.lang import impl  # pylint: disable=C0415
+    from quadrants.lang._pruning import Pruning  # pylint: disable=C0415
+    from quadrants.lang.kernel import ASTGenerator  # pylint: disable=C0415
+
+    prog = impl.get_runtime().prog
+    compiled = t_kernel
+    if key in kernel._parse_only_keys:
+        runtime = impl.get_runtime()
+        instance_id, arg_features = kernel.mapper.lookup(kernel.raise_on_templated_floats, py_args)
+        fallback_name = f"{kernel.func.__name__}_c{kernel.kernel_counter}_{instance_id}_nosplit"
+        # The discovery pass rebuilds `graph_do_while_levels` in place (build_While appends as it walks); snapshot and
+        # restore so the fastcache key's own launches, which keep using the restored table, stay untouched.
+        saved_graph_do_while_levels = list(kernel.graph_do_while_levels)
+        pruning = Pruning(kernel_used_parameters=None)
+        with kernel.runtime.compilation_lock:
+            for _pass in range(0, 2):
+                if _pass >= 1:
+                    pruning.enforce()
+                tree, ctx = kernel.get_tree_and_ctx(
+                    pass_idx=_pass,
+                    py_args=py_args,
+                    template_slot_locations=kernel.template_slot_locations,
+                    arg_features=arg_features,
+                    current_kernel=kernel,
+                    pruning=pruning,
+                    currently_compiling_materialize_key=key,
+                )
+                runtime._current_global_context = ctx.global_context
+                built = prog.create_kernel(
+                    ASTGenerator(
+                        ctx=ctx,
+                        kernel_name=fallback_name,
+                        current_kernel=kernel,
+                        only_parse_function_def=False,
+                        tree=tree,
+                        dump_ast=False,
+                    ),
+                    fallback_name,
+                    kernel.autodiff_mode,
+                )
+                if _pass == 0:
+                    pruning.propagate_fixpoint()
+                    for used_parameters in pruning.used_vars_by_func_id.values():
+                        collapsed: set[str] = set()
+                        for param in used_parameters:
+                            split_param = param.split("__qd_")
+                            for i in range(len(split_param), 1, -1):
+                                joined = "__qd_".join(split_param[:i])
+                                if joined in collapsed:
+                                    break
+                                collapsed.add(joined)
+                        used_parameters.clear()
+                        used_parameters.update(collapsed)
+                else:
+                    compiled = built
+                runtime._current_global_context = None
+        kernel.graph_do_while_levels = saved_graph_do_while_levels
+    return prog.compile_kernel(prog.config(), prog.get_device_caps(), compiled, disable_split=True).compiled_kernel_data
