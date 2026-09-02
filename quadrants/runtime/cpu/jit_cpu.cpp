@@ -284,23 +284,14 @@ class JITSessionCPU : public JITSession {
       if (!expected_jtmb) {
         QD_ERROR("LLVM TargetMachineBuilder has failed.");
       }
-      // Build from the JTMB so it uses detectHost()'s explicit feature vector. A bare CPU name with empty features
-      // would enable that model's default features, a superset of the running core, and emit illegal instructions.
-      // PIC so the object loads in the object layer.
+      // detectHost() carries the running core's explicit feature vector, matching the whole-module JIT compiler; a bare
+      // CPU name with empty features would enable that model's default superset and emit illegal instructions.
+      //
+      // Large code model: each per-task object gets its own SectionMemoryManager, so under memory pressure RTDyld can
+      // place a task's .text and .rodata more than 2GB apart, overflowing the small model's 32-bit RIP-relative refs
+      // and reading constants from garbage at launch. 64-bit addressing makes the section distance irrelevant.
       auto jtmb = std::move(*expected_jtmb);
-      jtmb.setRelocationModel(llvm::Reloc::PIC_);
-      jtmb.setCodeModel(llvm::CodeModel::Small);
-      jtmb.setCodeGenOptLevel(llvm::CodeGenOptLevel::Aggressive);
-      llvm::TargetOptions &options = jtmb.getOptions();
-      if (config_.fast_math) {
-        options.AllowFPOpFusion = llvm::FPOpFusion::Fast;
-        options.NoInfsFPMath = 1;
-        options.NoNaNsFPMath = 1;
-      } else {
-        options.AllowFPOpFusion = llvm::FPOpFusion::Strict;
-        options.NoInfsFPMath = 0;
-        options.NoNaNsFPMath = 0;
-      }
+      jtmb.setCodeModel(llvm::CodeModel::Large);
       auto expected_tm = jtmb.createTargetMachine();
       QD_ERROR_UNLESS(expected_tm, "Could not allocate target machine!");
       pertask_target_machine_ = std::move(*expected_tm);
