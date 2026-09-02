@@ -151,12 +151,15 @@ class FunctionDefTransformer:
 
     @staticmethod
     def _external_tensor_arg_slot(obj: Any) -> int | None:
-        """Flat arg-id (`ArgLoadStmt.arg_id[0]`) of a declared ndarray ``AnyArray``, or None if it has no external
-        tensor ptr. Shared by the launch-guard slot recording for top-level params and typed-dataclass fields."""
+        """Flat arg-id (`ArgLoadStmt.arg_id[0]`) of a declared ndarray ``AnyArray``, or None if `obj` is not an external
+        tensor. Shared by the launch-guard slot recording for top-level params and typed-dataclass fields. Called for
+        every arg, so it must tolerate non-ndarray objects: a field/template arg's `ptr` is an `SNodeCxx` (no
+        `is_external_tensor_expr`), scalars have no external ptr at all."""
         from quadrants._lib import core as _qd_core  # pylint: disable=C0415
 
         ptr = getattr(obj, "ptr", None)
-        if ptr is None or not ptr.is_external_tensor_expr():
+        is_external = getattr(ptr, "is_external_tensor_expr", None)
+        if not callable(is_external) or not is_external():
             return None
         arg_id = _qd_core.get_external_tensor_arg_id(ptr)
         return int(arg_id[0]) if arg_id else None
