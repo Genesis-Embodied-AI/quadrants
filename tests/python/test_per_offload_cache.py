@@ -47,6 +47,15 @@ _N = 8
 _C = (61001.0, 61002.0, 61003.0, 61004.0)
 
 
+@pytest.fixture(autouse=True)
+def _force_per_construct_split(monkeypatch):
+    # In production the split only runs when a per-task reuse tier is active (CUDA/AMDGPU + offline cache). Nearly every
+    # test here exercises the backend-agnostic split logic on CPU and with offline_cache=False, so force the split on;
+    # QD_SPLIT_FORCE bypasses only the reuse-tier gate, never the correctness gates. The gate itself is covered by
+    # test_per_construct_frontend_split_gated_off_without_reuse_tier, which clears this.
+    monkeypatch.setenv("QD_SPLIT_FORCE", "1")
+
+
 @test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
 def test_per_construct_frontend_split_enumerates_all_constructs() -> None:
     # Four independent top-level loops => four task-emitting constructs. The kernel is recompute-safe, so the split
@@ -71,6 +80,29 @@ def test_per_construct_frontend_split_enumerates_all_constructs() -> None:
     assert obs.frontend_constructs_recompiled == obs.frontend_constructs_total, obs
     assert obs.frontend_constructs_cache_hit == 0, obs
     assert np.allclose(arr.to_numpy(), sum(_C), atol=1.0), arr.to_numpy()
+
+
+@test_utils.test(arch=[qd.cpu], offline_cache=False)
+def test_per_construct_frontend_split_gated_off_without_reuse_tier(monkeypatch) -> None:
+    # Production reuse-tier gate: the split only runs when a per-task reuse tier can serve the constructs (CUDA/AMDGPU +
+    # offline cache). On CPU there is no such tier, so a split-eligible kernel must stay on the whole-kernel path. This
+    # clears the module fixture's QD_SPLIT_FORCE to expose the real default; the same 2-loop kernel splits into two
+    # constructs in the other tests (where force is set), so a -1 sentinel here is attributable to the gate alone.
+    monkeypatch.delenv("QD_SPLIT_FORCE", raising=False)
+
+    @qd.kernel
+    def kernel_two_loops(x: qd.types.ndarray()) -> None:
+        for i in range(_N):
+            x[i] += _C[0]
+        for i in range(_N):
+            x[i] += _C[1]
+
+    arr = qd.ndarray(qd.f32, shape=(_N,))
+    kernel_two_loops(arr)
+
+    obs = kernel_two_loops._primal.per_offload_cache_observations
+    assert obs.frontend_constructs_total == -1, obs  # gated off: no per-task reuse tier on CPU
+    assert np.allclose(arr.to_numpy(), _C[0] + _C[1], atol=1.0), arr.to_numpy()
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)

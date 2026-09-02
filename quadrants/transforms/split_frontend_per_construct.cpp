@@ -903,6 +903,17 @@ bool maybe_split_frontend_per_construct(IRNode *ir,
     return false;
   if (block_has_concurrent_region(block))
     return false;  // concurrent constructs share one global-temp buffer; per-construct offload would alias offsets
+  // Reuse-tier gate: the split only pays off when a per-task REUSE tier can serve the constructs; without one it is
+  // bounded (see the cost cap below) but pure frontend overhead, so keep the whole-kernel path. The sole such tier is
+  // the per-task artifact cache, active for CUDA/AMDGPU with the offline cache on -- its dir (`pertask_artifact_dir_ref`
+  // in llvm_program.cpp) is nonempty exactly then, which is what `artifact_tier` in codegen.cpp keys on. Gating on
+  // `offline_cache` instead of that process-global dir avoids coupling this transform to the LLVM codegen header; the
+  // two are equivalent by construction. QD_SPLIT_FORCE=1 overrides the gate so tests can exercise the backend-agnostic
+  // split logic on CPU (and power users can opt in).
+  const bool reuse_tier_active =
+      (config.arch == Arch::cuda || config.arch == Arch::amdgpu) && config.offline_cache;
+  if (!reuse_tier_active && !env_is_enabled("QD_SPLIT_FORCE"))
+    return false;
   std::vector<int> assumed_disjoint_pairs;
   if (!split_is_recompute_safe(block, assumed_disjoint_pairs))
     return false;

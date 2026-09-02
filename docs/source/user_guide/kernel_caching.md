@@ -3,7 +3,7 @@
 Quadrants caches compiled kernels so that re-running an unchanged kernel does not recompile it. There are two granularities at which this caching happens. Both produce identical results; they differ only in how much has to be recompiled after you edit a kernel.
 
 - **Whole-kernel caching.** The whole `@qd.kernel` is compiled and cached as a single unit. Editing any part of the kernel invalidates that entry, so the entire kernel recompiles.
-- **Per-offload caching** *(default)*. The kernel is split into its top-level constructs (independent top-level loops or serial runs) and each is compiled in isolation, so the compiled result is cached per offloaded task. Editing one construct recompiles only that construct; the others are reused.
+- **Per-offload caching** *(default on CUDA/AMD GPUs)*. The kernel is split into its top-level constructs (independent top-level loops or serial runs) and each is compiled in isolation, so the compiled result is cached per offloaded task. Editing one construct recompiles only that construct; the others are reused.
 
 ## Which is better
 
@@ -12,7 +12,7 @@ Quadrants caches compiled kernels so that re-running an unchanged kernel does no
 | Per-offload | Fast incremental recompiles. Editing one task in a large kernel (for example a big [`qd.graph.do_while`](graph.md) loop) reuses the other tasks' compiled code instead of recompiling the whole kernel. This is the win for large kernels you iterate on. |
 | Whole-kernel | Simplest and universal. It is always correct and is the only option for kernels the split cannot compile construct-by-construct equivalently. |
 
-Per-offload caching is **on by default**. Quadrants falls back to the whole-kernel path automatically and transparently whenever the split would not be equivalent, or cannot be verified as safe for a given launch. You never choose between them and the results are identical either way; the only observable difference is compile time.
+Per-offload caching is **on by default on CUDA and AMD GPUs** with the [offline cache](init_options.md#offline_cache) enabled (itself the default), because that is where the per-task reuse tier lives. On other backends (CPU, Metal, Vulkan), or with the offline cache disabled, there is nowhere to reuse per-construct results, so Quadrants uses whole-kernel caching. Beyond that, Quadrants falls back to the whole-kernel path automatically and transparently whenever the split would not be equivalent, or cannot be verified as safe for a given launch. You never choose between them and the results are identical either way; the only observable difference is compile time.
 
 ## When it falls back to whole-kernel
 
@@ -22,6 +22,7 @@ Some fallbacks are decided once, at compile time (the kernel never uses the spli
 
 | Condition | Reason |
 |---|---|
+| No per-task reuse tier: CPU/Metal/Vulkan, or the offline cache disabled | There is nowhere to reuse per-construct results, so splitting would only add compile time. |
 | [Autodiff](autodiff.md) (gradient) kernels | Gradient computation is not construct-isolatable. |
 | A value carried between constructs | A local one construct builds up and another reads cannot be recomputed in isolation. |
 | A snapshot read a later construct would re-read after an intervening write | Isolating it would read the overwritten value. Includes `boundary="clamp"` accesses, where an out-of-range index can collapse onto a written element. |
