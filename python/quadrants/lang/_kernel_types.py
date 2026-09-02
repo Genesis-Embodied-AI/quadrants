@@ -28,19 +28,27 @@ class FeLlCacheObservations:
 
 @dataclass
 class PerOffloadCacheObservations:
-    """Per-construct FRONTEND compilation cache stats for one kernel compile.
+    """Per-construct FRONTEND and per-task BACKEND compilation cache stats for one kernel compile.
 
     ``frontend_constructs_*`` count the per-construct FRONTEND cache (reuse of the simplify / merge_global_ptrs /
     offload output per top-level construct) and are ``-1`` when the per-construct frontend split did not run for this
-    compile (the whole-kernel path took it, e.g. autodiff or mesh). Counts (not wall time) so the behavior can be
-    asserted deterministically in tests. This PR (the frontend split) ships no reuse tier, so when the split runs
-    ``frontend_constructs_recompiled == frontend_constructs_total`` and ``frontend_constructs_cache_hit == 0``; the
-    per-task reuse counts are added by the cross-process cache PR.
+    compile (the whole-kernel path took it, e.g. autodiff or mesh). The frontend split itself ships no reuse tier, so
+    when it runs ``frontend_constructs_recompiled == frontend_constructs_total`` and ``frontend_constructs_cache_hit ==
+    0``.
+
+    ``tasks_*`` count the cross-process per-task artifact cache (reuse of a fully-compiled offloaded task -- its
+    backend code plus launch metadata) and are ``-1`` when that tier did not run (non-CUDA, or ``offline_cache=False``).
+    A construct expands to one or more tasks, so ``tasks_*`` is a finer-grained view than the per-construct counts.
+
+    Counts (not wall time) so the behavior can be asserted deterministically in tests.
     """
 
     frontend_constructs_total: int = -1
     frontend_constructs_cache_hit: int = -1
     frontend_constructs_recompiled: int = -1
+    tasks_total: int = -1
+    tasks_cache_hit: int = -1
+    tasks_recompiled: int = -1
 
 
 @dataclass

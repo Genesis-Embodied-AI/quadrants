@@ -38,7 +38,9 @@ struct CacheCleanerUtils<CacheData> {
 
   // To remove other files except cache files and offline cache metadta files
   static void remove_other_files(const CacheCleanerConfig &config) {
-    // Do nothing
+    // Deliberately does NOT touch the per-task artifact dir. Upgrades stay correct via version-keying (fresh keys, so
+    // a stale artifact is never reused), and a wipe here would be harmful: it runs before dump(), so it could delete
+    // artifacts this process just wrote and references from a fresh `.qdc`. Reclaim: eviction follow-up.
   }
 
   // To check if a file is cache file
@@ -81,6 +83,7 @@ CompileResult KernelCompilationManager::load_or_compile(const CompileConfig &com
   // disk-restored entry and staying consistent across cache tiers. Consume the entry so a later whole-kernel recompile
   // of the same name cannot read a stale split result.
   int total = -1, cache_hit_count = -1, recompiled = -1;
+  int task_total = -1, task_hit = -1, task_recompiled = -1;
   if (!cache_hit && kernel_def.program != nullptr) {
     auto &cc = kernel_def.program->per_construct_cache();
     std::lock_guard<std::mutex> g(cc.mu);
@@ -91,8 +94,18 @@ CompileResult KernelCompilationManager::load_or_compile(const CompileConfig &com
       recompiled = it->second.recompiled;
       cc.last_stats.erase(it);
     }
+    // Per-task artifact-cache counts recorded by the codegen driver (CUDA only). Erased on read like the construct
+    // counts, so a later recompile of the same name can't read a stale probe result.
+    auto tit = cc.last_task_stats.find(kernel_def.get_name());
+    if (tit != cc.last_task_stats.end()) {
+      task_total = tit->second.total;
+      task_hit = tit->second.hit;
+      task_recompiled = tit->second.recompiled;
+      cc.last_task_stats.erase(tit);
+    }
   }
-  return CompileResult{ckd, cache_hit, kernel_key, total, cache_hit_count, recompiled};
+  return CompileResult{ckd,        cache_hit,  kernel_key, total,          cache_hit_count,
+                       recompiled, task_total, task_hit,   task_recompiled};
 }
 
 void KernelCompilationManager::dump() {

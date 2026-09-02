@@ -272,6 +272,10 @@ class ASTTransformerFuncContext:
         self.visited_funcdef = False
         self.is_real_function = is_real_function
         self.kernel_args: list = []
+        # Bare (non-flattened) parameter names of the ``@qd.func`` being processed, so ``build_Name`` can seed
+        # ``_qd_arg_chain`` for chains rooted at them. Kept apart from ``kernel_args`` rather than appended to it, which
+        # would make the "kernel arg is immutable" diagnostic fire for func params.
+        self.fn_param_names: set[str] = set()
         self.only_parse_function_def: bool = False
         self.autodiff_mode = autodiff_mode
         self.loop_depth: int = 0

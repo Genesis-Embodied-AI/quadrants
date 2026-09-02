@@ -18,26 +18,24 @@ from ._template_mapper_hotpath import (
     annotation_has_final_subtree,
 )
 
-# Per-``type(arg)`` precomputed dispatch for the args_hash ndarray-id walk in ``TemplateMapper.lookup``. Each entry
-# is either the cached attribute path list (when the class is data_oriented and actually holds ndarrays) or ``None``
-# (when the per-call walk is a no-op — covers the common case of typed-dataclass args, non-data_oriented composite
-# args, primitives, and data_oriented classes with no ndarray members). One dict lookup per template-slot arg per
-# call, ~30 ns, replacing the previous unconditional ``is_data_oriented(arg)`` + ``type(arg).__dict__.get`` chain
-# that cost ~15% FPS on small-step CPU benches (anymal_zero CPU bs=0). Missing-key (``KeyError``) signals first
-# sighting and triggers ``_classify_for_args_hash``; cached ``None`` short-circuits the walk for known-no-op types.
-_arg_nd_paths_or_none: "dict[type, list[tuple] | None]" = {}
+# Whether an arg of this class contributes to the args_hash ndarray-id walk in ``TemplateMapper.lookup``. Only the
+# decision is per class; the paths themselves must stay per instance, since a @qd.data_oriented class can have a
+# different attribute structure per instance (Genesis ``DataManager``).
+_arg_disposition: dict[type, object] = {}
+_SKIP = object()
+_PER_INSTANCE = object()
 
 
-def _classify_for_args_hash(arg: Any) -> "list[tuple] | None":
-    """First-sighting classification for ``type(arg)`` in the args_hash walk. Returns the path list to walk (when the
-    arg is a data_oriented container that actually contains ndarrays), or ``None`` to skip subsequent per-call work
-    for this type."""
+def _classify_disposition(arg: Any) -> object:
+    """Return ``_SKIP`` (no per-call walk for this class) or ``_PER_INSTANCE``.
+
+    ``_qd_stable_members`` promises ndarray members are never reassigned, so the walk can be skipped. It is a
+    launch-time hint only and has no bearing on fastcache keys."""
     if not is_data_oriented(arg):
-        return None
-    paths = _struct_nd_paths_for(arg)
-    if not paths:
-        return None
-    return paths
+        return _SKIP
+    if type(arg).__dict__.get("_qd_stable_members"):
+        return _SKIP
+    return _PER_INSTANCE
 
 
 Key: TypeAlias = tuple[Any, ...]
@@ -109,30 +107,30 @@ class TemplateMapper:
         # branching for primitive types dramatically improve performance of hash computation.
         mapping_cache_tracker: list[ReferenceType | None] | None = None
         args_hash: ArgsHash = tuple([id(arg) for arg in args])
-        # ``@qd.data_oriented`` containers can have their member ndarrays reassigned between calls on the same instance
-        # (``state.x = other_ndarray``). The id(arg) alone does not capture that, so the spec-key cache below would
-        # serve a stale entry and the new ndarray's dtype/ndim would be wrong. Fold the reachable ndarray ids into the
-        # hash for the (small) set of arg positions that need it.
+        # A ``@qd.data_oriented`` container's member ndarrays can be reassigned between calls on the same instance
+        # (``state.x = other_ndarray``), which ``id(arg)`` cannot see, so the spec-key cache would serve an entry
+        # compiled for the old dtype/ndim. Fold the reachable ndarray ids in as well.
         #
-        # ``template_slot_locations`` already gives us the subset of arg positions annotated as ``qd.template()`` —
-        # the only positions where a data_oriented container could appear (typed-dataclass args carry a specific
-        # dataclass type by construction and a data_oriented class is never a dataclass). Iterating just those
-        # positions instead of all args trims the per-call work proportionally (Genesis main ``kernel_step_1``: 4
-        # template positions of 16 args).
+        # Only ``template_slot_locations`` is iterated: a data_oriented container can only appear at a ``qd.template()``
+        # position (a typed-dataclass arg carries a dataclass type, and data_oriented classes are never dataclasses).
         #
-        # Per-``type(arg)`` cache (``_arg_nd_paths_or_none``) maps each seen type to either the path list to walk or
-        # ``None`` to skip — one ``dict.get`` per candidate per call after warmup, replacing the previous unconditional
-        # ``is_data_oriented`` + ``__dict__.get`` chain that cost ~15% FPS on small-step CPU benches.
+        # PERF: the ``arg.__dict__["_qd_nd_paths"]`` lookup is inlined rather than left to ``_struct_nd_paths_for``,
+        # which costs ~60ns/call at 4 template args - ~15% of this loop. The call remains for the cold-miss cases.
         nd_ids: list = []
         for i in self.template_slot_locations:
             arg = args[i]
             cls = type(arg)
+            disposition = _arg_disposition.get(cls)
+            if disposition is None:
+                disposition = _classify_disposition(arg)
+                _arg_disposition[cls] = disposition
+            if disposition is _SKIP:
+                continue
             try:
-                paths = _arg_nd_paths_or_none[cls]
-            except KeyError:
-                paths = _classify_for_args_hash(arg)
-                _arg_nd_paths_or_none[cls] = paths
-            if paths is None:
+                paths = arg.__dict__["_qd_nd_paths"]
+            except (AttributeError, KeyError):
+                paths = _struct_nd_paths_for(arg)
+            if not paths:
                 continue
             for chain in paths:
                 v = arg

@@ -573,6 +573,18 @@ void TaskCodeGenLLVM::visit(BinaryOpStmt *stmt) {
     }
   } else if (op == BinaryOpType::div) {
     if (is_real(stmt->ret_type.get_element_type())) {
+      // Under fast_math the builder carries `afn` (ApproxFunc). On AMDGPU that makes fdiv lower to an approximate
+      // v_rcp_f32 (~2.5 ULP), so exact cases like 180.0/180.0 return 0.99999994 and silently break floor(a/b) and the
+      // `a - floor(a/b)*b` modulo expansion (quadrants#749). Clear `afn` so the divide stays correctly rounded, but
+      // only on AMDGPU: on NVPTX `afn` selects a faster approximate divide, and clearing it forces the slower
+      // correctly-rounded path (measured ~10-20% regression on division-heavy CUDA kernels). CPU is unaffected either
+      // way, so leave the other backends untouched.
+      llvm::IRBuilderBase::FastMathFlagGuard fmf_guard(*builder);
+      if (compile_config.arch == Arch::amdgpu) {
+        auto fmf = builder->getFastMathFlags();
+        fmf.setApproxFunc(false);
+        builder->setFastMathFlags(fmf);
+      }
       llvm_val[stmt] = builder->CreateFDiv(llvm_val[stmt->lhs], llvm_val[stmt->rhs]);
     } else if (is_signed(stmt->ret_type.get_element_type())) {
       llvm_val[stmt] = builder->CreateSDiv(llvm_val[stmt->lhs], llvm_val[stmt->rhs]);
@@ -3489,16 +3501,23 @@ void TaskCodeGenLLVM::set_args_ptr(Callable *callable, llvm::Value *context, llv
 };
 
 LLVMCompiledTask LLVMCompiledTask::clone() const {
-  return {tasks, llvm::CloneModule(*module), used_tree_ids, struct_for_tls_sizes};
+  return {tasks, module ? llvm::CloneModule(*module) : nullptr, used_tree_ids, struct_for_tls_sizes};
 }
 
 LLVMCompiledKernel LLVMCompiledKernel::clone() const {
-  LLVMCompiledKernel result{tasks, llvm::CloneModule(*module)};
-  // The launcher consumes a clone, so the per-task modules must travel with it.
+  // `module` is null for an artifact-backed kernel (every task came from the per-task cache); clone it only if present.
+  LLVMCompiledKernel result{tasks, module ? llvm::CloneModule(*module) : nullptr};
+  result.per_task_artifact_keys = per_task_artifact_keys;
+  // The launcher consumes a clone, so the per-task artifacts must travel with it.
   result.per_construct_artifacts.reserve(per_construct_artifacts.size());
   for (auto &a : per_construct_artifacts) {
     PerConstructArtifact c;
     c.module = a.module ? llvm::CloneModule(*a.module) : nullptr;
+    c.code = a.code;
+    c.key = a.key;
+    c.tasks = a.tasks;
+    c.used_tree_ids = a.used_tree_ids;
+    c.struct_for_tls_sizes = a.struct_for_tls_sizes;
     result.per_construct_artifacts.push_back(std::move(c));
   }
   return result;

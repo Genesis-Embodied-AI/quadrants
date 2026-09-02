@@ -1,7 +1,7 @@
 """Tests for the _qd_all_field kernel launch shortcut.
 
-Verifies that the per-instance ``_qd_all_field`` boolean (which allows kernel.py to skip ``_recursive_set_args``
-entirely for all-Field frozen dataclass structs) does not cause incorrect behavior in edge cases:
+Verifies that the per-instance ``_qd_all_field`` cache (which lets kernel.py skip ``_recursive_set_args`` entirely for
+all-Field frozen dataclass structs) does not cause incorrect behavior in edge cases:
 
 - Struct mixing Field tensors with scalar (float/int) fields
 - Struct mixing Field tensors with Ndarray tensors
@@ -20,6 +20,13 @@ import numpy as np
 import quadrants as qd
 
 from tests import test_utils
+
+
+def _cached_all_field(obj, annotated):
+    """Read the ``_qd_all_field`` verdict for ``annotated`` (identity-guarded), or None if absent."""
+    entry = getattr(obj, "_qd_all_field", {}).get(id(annotated))
+    return entry[1] if entry is not None and entry[0] is annotated else None
+
 
 # ---------------------------------------------------------------------------
 # All-Field struct with qd.Tensor: shortcut should fire, kernel must work.
@@ -82,7 +89,7 @@ def test_ndarray_struct_not_skipped():
     np.testing.assert_array_equal(a.to_numpy(), [42, 42, 42, 42])
 
     # Verify the flag is False (not set or explicitly False)
-    assert not getattr(state, "_qd_all_field", False)
+    assert not _cached_all_field(state, State)
 
     fill(state, 99)
     np.testing.assert_array_equal(a.to_numpy(), [99, 99, 99, 99])
@@ -151,7 +158,7 @@ def test_mixed_field_and_ndarray_not_skipped():
     np.testing.assert_array_equal(out.to_numpy(), [11, 22, 33, 44])
 
     # Verify flag is False
-    assert not getattr(state, "_qd_all_field", False)
+    assert not _cached_all_field(state, State)
 
 
 # ---------------------------------------------------------------------------
@@ -248,7 +255,7 @@ def test_tensor_wrapping_ndarray_not_skipped():
     fill(state)
     np.testing.assert_array_equal(nd.to_numpy(), [55, 55, 55, 55])
 
-    assert not getattr(state, "_qd_all_field", False)
+    assert not _cached_all_field(state, State)
 
     # Second call
     nd.fill(0)
@@ -347,9 +354,9 @@ def test_all_field_struct_wrong_annotation_raises():
     x = qd.field(qd.i32, shape=(4,))
     state = State(x=qd.Tensor(x))
 
-    # First call caches _qd_all_field=True
+    # First call caches _qd_all_field[State]=True
     correct_kernel(state)
-    assert getattr(state, "_qd_all_field", False) is True
+    assert _cached_all_field(state, State) is True
 
     # Passing the struct to a kernel expecting a float must raise, not silently skip
     import pytest
@@ -380,7 +387,7 @@ def test_all_field_struct_passed_as_ndarray_param_raises():
     state = State(x=qd.Tensor(x))
 
     correct_kernel(state)
-    assert getattr(state, "_qd_all_field", False) is True
+    assert _cached_all_field(state, State) is True
 
     import pytest
 
