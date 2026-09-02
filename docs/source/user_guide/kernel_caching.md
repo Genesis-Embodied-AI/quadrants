@@ -22,13 +22,14 @@ Some fallbacks are decided once, at compile time (the kernel never uses the spli
 
 | Condition | What it means |
 |---|---|
-| The backend has no per-task cache to reuse | You are on CPU, Metal, or Vulkan, or the [offline cache](init_options.md#offline_cache) is off. There is nothing to reuse the per-construct pieces against, so splitting would only add compile time. |
 | [Autodiff](autodiff.md) (gradient) kernels | The backward pass links the constructs together, so they cannot be compiled one at a time. |
-| One construct produces a value a later construct consumes | For instance a running total built up in one top-level loop and read by the next. The later construct cannot be rebuilt on its own without redoing the earlier one. |
-| A construct re-reads array data an earlier construct overwrote | Compiling it in isolation would observe the new value instead of the original. This includes clamped indexing (`boundary="clamp"`), where an out-of-range index can land on an element that was written. |
+| [One construct produces a value a later construct consumes](#a-value-carried-between-constructs) | The later construct cannot be rebuilt on its own without redoing the earlier one. |
+| [A construct re-reads array data an earlier construct overwrote](#re-reading-overwritten-data) | Compiling it in isolation would observe the new value instead of the original. This includes clamped indexing (`boundary="clamp"`), where an out-of-range index can land on an element that was written. |
+| [Two array arguments where safety would depend on them not sharing memory, and one is a gradient](#possibly-aliasing-gradient-arguments) | Whether two gradient buffers overlap cannot be verified even at launch, so Quadrants refuses to split rather than risk a wrong result. |
 | A side effect, random draw, or volatile read would be repeated | Recomputing it inside another construct would change what the kernel does. |
-| Safety would hinge on two array arguments not sharing memory, and one of them is a gradient | Whether two gradient buffers overlap cannot be verified even at launch, so Quadrants refuses to split rather than risk a wrong result. |
-| Specialized kernels: iterating an unstructured mesh (`qd.mesh`), containing a region explicitly scheduled to run concurrently, or compiled with a diagnostic mode enabled ([line coverage](kernel_coverage.md), or a compiler debug dump, see [optimization passes](optimization_passes.md)) | These forms must stay whole-kernel to remain correct or to keep their diagnostics meaningful. |
+| Mesh (`qd.mesh`) kernels | Mesh iteration is not expressed as independent top-level constructs. |
+| A region explicitly scheduled to run concurrently | Concurrent constructs share one scratch buffer, so isolating them would corrupt it. |
+| A diagnostic mode is enabled ([line coverage](kernel_coverage.md), or a compiler debug dump, see [optimization passes](optimization_passes.md)) | These need the whole-kernel form to keep their diagnostics meaningful. |
 
 **Runtime fallback** (a per-launch decision for a split kernel):
 
@@ -38,6 +39,54 @@ Some fallbacks are decided once, at compile time (the kernel never uses the spli
 | A parameter's backing buffer cannot be read to confirm disjointness | For example a raw NumPy array or PyTorch tensor passed directly. The call conservatively uses the whole-kernel variant. Passing `qd.ndarray` / `qd.Tensor` objects avoids this. |
 
 Each compile-time fallback logs a one-line `debug`-level message naming the kernel and the condition, so raising Quadrants' log level to `debug` tells you why a given kernel stayed whole-kernel. A runtime fallback instead emits a one-time `[PER_OFFLOAD][FALLBACK]` warning naming the kernel (at the standard `warn` level, so it is on by default and suppressible through the logging level).
+
+## Compile-time fallback examples
+
+Each kernel below trips one of the compile-time fallbacks above and stays whole-kernel. You can confirm it with [`per_offload_cache_observations`](optimization_passes.md#inspecting-the-split) (`frontend_constructs_total` is `-1`) or by reading the `debug`-level log line.
+
+### A value carried between constructs
+
+The first loop accumulates `total`; the second loop reads it. The second loop cannot be compiled on its own without also redoing the first.
+
+```python
+@qd.kernel
+def running_total(x: qd.types.NDArray[qd.f32, 1], out: qd.types.NDArray[qd.f32, 1]):
+    total = 0.0
+    for i in range(x.shape[0]):    # construct 1: build up a running total
+        total += x[i]
+    for i in range(out.shape[0]):  # construct 2: reuse it
+        out[i] = total
+```
+
+### Re-reading overwritten data
+
+`first` snapshots `a[0]`, then the first loop overwrites `a`. Recomputing that snapshot inside the second loop would read the overwritten value instead of the original.
+
+```python
+@qd.kernel
+def stale_snapshot(a: qd.types.NDArray[qd.f32, 1], out: qd.types.NDArray[qd.f32, 1]):
+    first = a[0]                   # snapshot a[0]
+    for i in range(a.shape[0]):    # construct 1: overwrite a
+        a[i] = 0.0
+    for i in range(out.shape[0]):  # construct 2: reuse the snapshot
+        out[i] = first
+```
+
+### Possibly-aliasing gradient arguments
+
+`a` and `b` are different parameters, so the split would treat their buffers as disjoint and reuse that assumption while recomputing. But one access is a gradient buffer, and a caller can make `a` and `b` (or a primal and a gradient) share memory, which cannot be verified even at launch, so Quadrants refuses to split.
+
+```python
+@qd.kernel
+def grad_snapshot(a: qd.types.ndarray(dtype=qd.f32, ndim=1, needs_grad=True),
+                  b: qd.types.ndarray(dtype=qd.f32, ndim=1, needs_grad=True),
+                  out: qd.types.ndarray(dtype=qd.f32, ndim=1)):
+    g = a.grad[0]                  # snapshot a's gradient
+    for i in range(b.shape[0]):    # construct 1: write b's gradient (a different argument)
+        b.grad[i] = 0.0
+    for i in range(out.shape[0]):  # construct 2: reuse the snapshot
+        out[i] = g
+```
 
 ## Inspecting the split
 
