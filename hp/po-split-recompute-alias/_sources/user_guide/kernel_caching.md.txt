@@ -9,7 +9,7 @@ Quadrants caches compiled kernels so that re-running an unchanged kernel does no
 
 | | Advantage |
 |---|---|
-| Per-offload | Fast incremental recompiles. Editing one task in a large kernel (for example a big `graph_do_while`) reuses the other tasks' compiled code instead of recompiling the whole kernel. This is the win for large kernels you iterate on. |
+| Per-offload | Fast incremental recompiles. Editing one task in a large kernel (for example a big [`qd.graph.do_while`](graph.md) loop) reuses the other tasks' compiled code instead of recompiling the whole kernel. This is the win for large kernels you iterate on. |
 | Whole-kernel | Simplest and universal. It is always correct and is the only option for kernels the split cannot compile construct-by-construct equivalently. |
 
 Per-offload caching is **on by default**. Quadrants falls back to the whole-kernel path automatically and transparently whenever the split would not be equivalent, or cannot be verified as safe for a given launch. You never choose between them and the results are identical either way; the only observable difference is compile time.

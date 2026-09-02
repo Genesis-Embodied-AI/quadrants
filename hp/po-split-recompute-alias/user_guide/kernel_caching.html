@@ -446,7 +446,7 @@
 </thead>
 <tbody>
 <tr class="row-even"><td><p>Per-offload</p></td>
-<td><p>Fast incremental recompiles. Editing one task in a large kernel (for example a big <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code>) reuses the other tasks’ compiled code instead of recompiling the whole kernel. This is the win for large kernels you iterate on.</p></td>
+<td><p>Fast incremental recompiles. Editing one task in a large kernel (for example a big <a class="reference internal" href="graph.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code></span></a> loop) reuses the other tasks’ compiled code instead of recompiling the whole kernel. This is the win for large kernels you iterate on.</p></td>
 </tr>
 <tr class="row-odd"><td><p>Whole-kernel</p></td>
 <td><p>Simplest and universal. It is always correct and is the only option for kernels the split cannot compile construct-by-construct equivalently.</p></td>
