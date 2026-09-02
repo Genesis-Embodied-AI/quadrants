@@ -434,7 +434,7 @@
 <p>Quadrants caches compiled kernels so that re-running an unchanged kernel does not recompile it. There are two granularities at which this caching happens. Both produce identical results; they differ only in how much has to be recompiled after you edit a kernel.</p>
 <ul class="simple">
 <li><p><strong>Whole-kernel caching.</strong> The whole <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> is compiled and cached as a single unit. Editing any part of the kernel invalidates that entry, so the entire kernel recompiles.</p></li>
-<li><p><strong>Per-offload caching</strong> <em>(default)</em>. The kernel is split into its top-level constructs (independent top-level loops or serial runs) and each is compiled in isolation, so the compiled result is cached per offloaded task. Editing one construct recompiles only that construct; the others are reused.</p></li>
+<li><p><strong>Per-offload caching</strong> <em>(default on CUDA/AMD GPUs)</em>. The kernel is split into its top-level constructs (independent top-level loops or serial runs) and each is compiled in isolation, so the compiled result is cached per offloaded task. Editing one construct recompiles only that construct; the others are reused.</p></li>
 </ul>
 <section id="which-is-better">
 <h2>Which is better<a class="headerlink" href="#which-is-better" title="Link to this heading">#</a></h2>
@@ -454,7 +454,7 @@
 </tbody>
 </table>
 </div>
-<p>Per-offload caching is <strong>on by default</strong>. Quadrants falls back to the whole-kernel path automatically and transparently whenever the split would not be equivalent, or cannot be verified as safe for a given launch. You never choose between them and the results are identical either way; the only observable difference is compile time.</p>
+<p>Per-offload caching is <strong>on by default on CUDA and AMD GPUs</strong> with the <a class="reference internal" href="init_options.html#offline-cache"><span class="std std-ref">offline cache</span></a> enabled (itself the default), because that is where the per-task reuse tier lives. On other backends (CPU, Metal, Vulkan), or with the offline cache disabled, there is nowhere to reuse per-construct results, so Quadrants uses whole-kernel caching. Beyond that, Quadrants falls back to the whole-kernel path automatically and transparently whenever the split would not be equivalent, or cannot be verified as safe for a given launch. You never choose between them and the results are identical either way; the only observable difference is compile time.</p>
 </section>
 <section id="when-it-falls-back-to-whole-kernel">
 <h2>When it falls back to whole-kernel<a class="headerlink" href="#when-it-falls-back-to-whole-kernel" title="Link to this heading">#</a></h2>
@@ -467,19 +467,22 @@
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p><a class="reference internal" href="autodiff.html"><span class="std std-doc">Autodiff</span></a> (gradient) kernels</p></td>
+<tr class="row-even"><td><p>No per-task reuse tier: CPU/Metal/Vulkan, or the offline cache disabled</p></td>
+<td><p>There is nowhere to reuse per-construct results, so splitting would only add compile time.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="autodiff.html"><span class="std std-doc">Autodiff</span></a> (gradient) kernels</p></td>
 <td><p>Gradient computation is not construct-isolatable.</p></td>
 </tr>
-<tr class="row-odd"><td><p>A value carried between constructs</p></td>
+<tr class="row-even"><td><p>A value carried between constructs</p></td>
 <td><p>A local one construct builds up and another reads cannot be recomputed in isolation.</p></td>
 </tr>
-<tr class="row-even"><td><p>A snapshot read a later construct would re-read after an intervening write</p></td>
+<tr class="row-odd"><td><p>A snapshot read a later construct would re-read after an intervening write</p></td>
 <td><p>Isolating it would read the overwritten value. Includes <code class="docutils literal notranslate"><span class="pre">boundary=&quot;clamp&quot;</span></code> accesses, where an out-of-range index can collapse onto a written element.</p></td>
 </tr>
-<tr class="row-odd"><td><p>Cross-argument gradient disjointness</p></td>
+<tr class="row-even"><td><p>Cross-argument gradient disjointness</p></td>
 <td><p>Whether two gradient buffers alias cannot be checked at launch, so the split is refused.</p></td>
 </tr>
-<tr class="row-even"><td><p>Certain specialized kernels</p></td>
+<tr class="row-odd"><td><p>Certain specialized kernels</p></td>
 <td><p>For example task barriers or side-effecting constructs.</p></td>
 </tr>
 </tbody>
