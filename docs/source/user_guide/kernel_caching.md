@@ -58,7 +58,7 @@ def running_total(x: qd.types.NDArray[qd.f32, 1], out: qd.types.NDArray[qd.f32, 
         out[i] = total
 ```
 
-To support this, the split would need to let one construct hand the value to the next through a small buffer that persists between them, instead of rebuilding each construct from the kernel's arguments alone. That buffer becomes a shared interface the cache has to track (its type and layout) so that editing one construct can't silently break the other. It's a real amount of machinery for an uncommon case, so today Quadrants takes the simpler, always-correct route and caches the whole kernel.
+Supporting a split for cases like this is possible but involved; see [Advanced: making these cases splittable](#advanced-making-these-cases-splittable).
 
 ### Re-reading overwritten data
 
@@ -74,7 +74,7 @@ def stale_snapshot(a: qd.types.NDArray[qd.f32, 1], out: qd.types.NDArray[qd.f32,
         out[i] = first
 ```
 
-The fix is the same persisted-buffer idea as above: capture the snapshot before the overwrite and store it for the second loop, instead of rebuilding it from the arguments (where it would re-read the overwritten `a`). Same trade-off, so Quadrants caches the whole kernel.
+This shares the same fix as the previous case; see [Advanced: making these cases splittable](#advanced-making-these-cases-splittable).
 
 ### Possibly-aliasing gradient arguments
 
@@ -92,7 +92,17 @@ def grad_snapshot(a: qd.types.ndarray(dtype=qd.f32, ndim=1, needs_grad=True),
         out[i] = g
 ```
 
-Like the earlier fallbacks, this one is fixable, but it's a fair amount of work for a fairly narrow case (a non-autodiff kernel that manually reads two `.grad` buffers as plain arrays; true autodiff kernels are already excluded from the split). That's why today it just refuses to split rather than assuming disjointness it can't verify.
+This one is fixable too, though for a narrower case; see [Advanced: making these cases splittable](#advanced-making-these-cases-splittable).
+
+## Advanced: making these cases splittable
+
+This section is internal background for the curious; you never need it to use Quadrants.
+
+To support [a value carried between constructs](#a-value-carried-between-constructs), the split would need to let one construct hand the value to the next through a small buffer that persists between them, instead of rebuilding each construct from the kernel's arguments alone. That buffer becomes a shared interface the cache has to track (its type and layout) so that editing one construct can't silently break the other. It's a real amount of machinery for an uncommon case, so today Quadrants takes the simpler, always-correct route and caches the whole kernel.
+
+The same persisted-buffer idea covers [re-reading overwritten data](#re-reading-overwritten-data): capture the snapshot before the overwrite and store it for the second loop, instead of rebuilding it from the arguments (where it would re-read the overwritten `a`).
+
+[Possibly-aliasing gradient arguments](#possibly-aliasing-gradient-arguments) is fixable too, but for a fairly narrow case (a non-autodiff kernel that manually reads two `.grad` buffers as plain arrays; true autodiff kernels are already excluded from the split). Today it refuses to split rather than assuming disjointness it can't verify.
 
 ## Inspecting the split
 
