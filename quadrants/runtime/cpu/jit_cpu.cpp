@@ -227,8 +227,8 @@ class JITSessionCPU : public JITSession {
         QD_ERROR("Failed to load per-task CPU object into the JIT (offline cache may be corrupt): {}",
                  llvm::toString(std::move(err)));
       }
-      // add() links lazily, so link errors (e.g. a corrupt relocation) only surface at lookup, by which point the key
-      // is gone. Force materialization now to catch them while we can still erase the record.
+      // add() links lazily, so link errors only surface at lookup, by which point the key is gone. Force
+      // materialization now to catch them while we can still erase the record.
       for (const auto &task : art.tasks) {
 #ifdef __APPLE__
         auto sym = es_.lookup({&dylib}, mangle_(task.name));
@@ -284,13 +284,10 @@ class JITSessionCPU : public JITSession {
       if (!expected_jtmb) {
         QD_ERROR("LLVM TargetMachineBuilder has failed.");
       }
-      // detectHost() carries the running core's explicit feature vector, matching the whole-module JIT compiler; a bare
-      // CPU name with empty features would enable that model's default superset and emit illegal instructions.
+      // Use detectHost()'s explicit features; a bare CPU name would enable features the running core may lack.
       auto jtmb = std::move(*expected_jtmb);
-      // Large code model on x86 only: each per-task object gets its own SectionMemoryManager, so under memory pressure
-      // RTDyld can place a task's .text and .rodata more than 2GB apart, overflowing x86's 32-bit RIP-relative refs and
-      // reading constants from garbage at launch; 64-bit addressing makes the distance irrelevant. Other targets keep
-      // the default model -- AArch64 already reaches +/-4GB and its Mach-O backend rejects the large model here.
+      // On x86 RTDyld can place a per-task object's .text and .rodata over 2GB apart, past the reach of 32-bit
+      // RIP-relative refs; the large code model's 64-bit addressing avoids that.
       if (jtmb.getTargetTriple().isX86()) {
         jtmb.setCodeModel(llvm::CodeModel::Large);
       }

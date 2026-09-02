@@ -57,14 +57,13 @@ LlvmProgramImpl::LlvmProgramImpl(CompileConfig &config_, KernelProfilerBase *pro
     }
 #endif
     if (arch_is_cpu(config_.arch)) {
-      // compile_module_to_object() builds host objects from detectHost()'s triple, CPU name and feature vector, so the
-      // dir is scoped by all three. Matching triple + CPU but different enabled features (e.g. a feature-masked VM)
-      // must not share a path, or a loaded object could use an instruction the running core lacks.
+      // Host objects match detectHost()'s triple, CPU and features, so a cache path shared between hosts is scoped by
+      // all three.
       auto jtmb = llvm::orc::JITTargetMachineBuilder::detectHost();
       std::string tag =
           (jtmb ? jtmb->getTargetTriple().str() : std::string("unknown")) + "_" + llvm::sys::getHostCPUName().str();
       if (jtmb) {
-        // Sort so the hash is independent of detectHost()'s feature order; the full vector is too long for a path.
+        // Sort so the hash ignores feature order; the full vector is too long to use directly.
         std::vector<std::string> features = jtmb->getFeatures().getFeatures();
         std::sort(features.begin(), features.end());
         std::string joined;
