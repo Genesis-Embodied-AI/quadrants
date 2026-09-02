@@ -46,7 +46,7 @@ Each kernel below trips one of the compile-time fallbacks above and stays whole-
 
 ### A value carried between constructs
 
-The first loop accumulates `total`; the second loop reads it. The second loop cannot be compiled on its own without also redoing the first.
+The first loop accumulates `total`; the second loop reads it. Because `total` exists only once the first loop has run, the split cannot compile the second loop on its own.
 
 ```python
 @qd.kernel
@@ -57,6 +57,8 @@ def running_total(x: qd.types.NDArray[qd.f32, 1], out: qd.types.NDArray[qd.f32, 
     for i in range(out.shape[0]):  # construct 2: reuse it
         out[i] = total
 ```
+
+To support this, the split would need to let one construct hand the value to the next through a small buffer that persists between them, instead of rebuilding each construct from the kernel's arguments alone. That buffer becomes a shared interface the cache has to track (its type and layout) so that editing one construct can't silently break the other. It's a real amount of machinery for an uncommon case, so today Quadrants takes the simpler, always-correct route and caches the whole kernel.
 
 ### Re-reading overwritten data
 
