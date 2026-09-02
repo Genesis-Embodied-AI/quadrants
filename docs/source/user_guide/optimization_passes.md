@@ -95,7 +95,7 @@ Once the kernel has been split into offloaded tasks, both CSE and the CFG optimi
 
 ## Under the hood: per-construct frontend compilation
 
-This section is for the curious; you never have to think about it to write kernels - the behavior below is transparent, and on by default wherever a per-task cache can reuse the result (CUDA/AMD GPUs with the offline cache). For the user-facing view of what this buys you and when it falls back, see [Kernel caching](kernel_caching.md).
+This section is for the curious; you never have to think about it to write kernels - the behavior below is transparent, and on by default for CUDA/AMD GPUs when offline cache is enabled. For the user-facing view of what this buys you and when it falls back, see [Kernel caching](kernel_caching.md).
 
 The frontend stages above - the passes that turn your high-level kernel into offloaded tasks - can run either once over the whole kernel or, for eligible kernels, separately for each **top-level construct** (each independent top-level loop or serial run in your kernel). Compiling each construct in isolation produces the same offloaded tasks and the same results as the whole-kernel path, so the split is transparent.
 
