@@ -92,7 +92,7 @@ def grad_snapshot(a: qd.types.ndarray(dtype=qd.f32, ndim=1, needs_grad=True),
         out[i] = g
 ```
 
-Like the earlier fallbacks, this one is fixable, but it's a fair amount of work for a fairly narrow case (a non-autodiff kernel that manually reads two `.grad` buffers as plain arrays; true autodiff kernels are already excluded from the split).
+Like the earlier fallbacks, this one is fixable, but it's a fair amount of work for a fairly narrow case (a non-autodiff kernel that manually reads two `.grad` buffers as plain arrays; true autodiff kernels are already excluded from the split). That's why today it just refuses to split rather than assuming disjointness it can't verify.
 
 ## Inspecting the split
 
