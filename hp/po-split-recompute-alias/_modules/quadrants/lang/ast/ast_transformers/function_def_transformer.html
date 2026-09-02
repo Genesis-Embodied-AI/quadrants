@@ -486,12 +486,15 @@
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_external_tensor_arg_slot</span><span class="p">(</span><span class="n">obj</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">"""Flat arg-id (`ArgLoadStmt.arg_id[0]`) of a declared ndarray ``AnyArray``, or None if it has no external</span>
-<span class="sd">        tensor ptr. Shared by the launch-guard slot recording for top-level params and typed-dataclass fields."""</span>
+<span class="w">        </span><span class="sd">"""Flat arg-id (`ArgLoadStmt.arg_id[0]`) of a declared ndarray ``AnyArray``, or None if `obj` is not an external</span>
+<span class="sd">        tensor. Shared by the launch-guard slot recording for top-level params and typed-dataclass fields. Called for</span>
+<span class="sd">        every arg, so it must tolerate non-ndarray objects: a field/template arg's `ptr` is an `SNodeCxx` (no</span>
+<span class="sd">        `is_external_tensor_expr`), scalars have no external ptr at all."""</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>  <span class="c1"># pylint: disable=C0415</span>
 
         <span class="n">ptr</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="s2">"ptr"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">ptr</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">ptr</span><span class="o">.</span><span class="n">is_external_tensor_expr</span><span class="p">():</span>
+        <span class="n">is_external</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">ptr</span><span class="p">,</span> <span class="s2">"is_external_tensor_expr"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">callable</span><span class="p">(</span><span class="n">is_external</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">is_external</span><span class="p">():</span>
             <span class="k">return</span> <span class="kc">None</span>
         <span class="n">arg_id</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">get_external_tensor_arg_id</span><span class="p">(</span><span class="n">ptr</span><span class="p">)</span>
         <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">arg_id</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="k">if</span> <span class="n">arg_id</span> <span class="k">else</span> <span class="kc">None</span>
