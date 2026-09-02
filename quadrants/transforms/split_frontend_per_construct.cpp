@@ -595,8 +595,8 @@ bool clamp_may_defeat_index_disjointness(Stmt *a, Stmt *b) {
   return arg_a->arg_id == arg_b->arg_id && ea->is_grad == eb->is_grad;
 }
 
-// alias_analysis proves a param's primal and its own `.grad` companion `different` purely by their `is_grad` flag, but a
-// caller can bind them to one buffer (`a.grad = a` / `a._set_grad(a)`), so an otherwise-cleared same-arg primal/grad
+// alias_analysis proves a param's primal and its own `.grad` companion `different` purely by their `is_grad` flag, but
+// a caller can bind them to one buffer (`a.grad = a` / `a._set_grad(a)`), so an otherwise-cleared same-arg primal/grad
 // pair then hits one address. Like clamp this disjointness is caller-defeatable, and it is unguardable (the launch
 // guard resolves a slot to its PRIMAL alloc_id only, so it cannot see the grad companion) -> treat as may-alias and
 // refuse. Scoped to same arg; distinct args are the cross-arg guard's concern (`clearance_assumes_ndarray_disjoint`).
@@ -905,13 +905,12 @@ bool maybe_split_frontend_per_construct(IRNode *ir,
     return false;  // concurrent constructs share one global-temp buffer; per-construct offload would alias offsets
   // Reuse-tier gate: the split only pays off when a per-task REUSE tier can serve the constructs; without one it is
   // bounded (see the cost cap below) but pure frontend overhead, so keep the whole-kernel path. The sole such tier is
-  // the per-task artifact cache, active for CUDA/AMDGPU with the offline cache on -- its dir (`pertask_artifact_dir_ref`
-  // in llvm_program.cpp) is nonempty exactly then, which is what `artifact_tier` in codegen.cpp keys on. Gating on
-  // `offline_cache` instead of that process-global dir avoids coupling this transform to the LLVM codegen header; the
-  // two are equivalent by construction. QD_SPLIT_FORCE=1 overrides the gate so tests can exercise the backend-agnostic
-  // split logic on CPU (and power users can opt in).
-  const bool reuse_tier_active =
-      (config.arch == Arch::cuda || config.arch == Arch::amdgpu) && config.offline_cache;
+  // the per-task artifact cache, active for CUDA/AMDGPU with the offline cache on -- its dir
+  // (`pertask_artifact_dir_ref` in llvm_program.cpp) is nonempty exactly then, which is what `artifact_tier` in
+  // codegen.cpp keys on. Gating on `offline_cache` instead of that process-global dir avoids coupling this transform to
+  // the LLVM codegen header; the two are equivalent by construction. QD_SPLIT_FORCE=1 overrides the gate so tests can
+  // exercise the backend-agnostic split logic on CPU (and power users can opt in).
+  const bool reuse_tier_active = (config.arch == Arch::cuda || config.arch == Arch::amdgpu) && config.offline_cache;
   if (!reuse_tier_active && !env_is_enabled("QD_SPLIT_FORCE"))
     return false;
   std::vector<int> assumed_disjoint_pairs;
