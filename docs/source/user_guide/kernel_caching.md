@@ -18,16 +18,17 @@ Per-offload caching is **on by default on CUDA and AMD GPUs** with the [offline 
 
 Some fallbacks are decided once, at compile time (the kernel never uses the split). Others are decided per launch (the kernel is split, but a particular call runs the whole-kernel variant instead).
 
-**Compile-time fallback** (this kernel stays whole-kernel):
+**Compile-time fallback** (this kernel is never split; it always uses whole-kernel caching):
 
-| Condition | Reason |
+| Condition | What it means |
 |---|---|
-| No per-task reuse tier: CPU/Metal/Vulkan, or the offline cache disabled | There is nowhere to reuse per-construct results, so splitting would only add compile time. |
-| [Autodiff](autodiff.md) (gradient) kernels | Gradient computation is not construct-isolatable. |
-| A value carried between constructs | A local one construct builds up and another reads cannot be recomputed in isolation. |
-| A snapshot read a later construct would re-read after an intervening write | Isolating it would read the overwritten value. Includes `boundary="clamp"` accesses, where an out-of-range index can collapse onto a written element. |
-| Cross-argument gradient disjointness | Whether two gradient buffers alias cannot be checked at launch, so the split is refused. |
-| Certain specialized kernels | For example side-effecting constructs, or a construct that must wait for all earlier tasks to finish before it runs. |
+| The backend has no per-task cache to reuse | You are on CPU, Metal, or Vulkan, or the [offline cache](init_options.md#offline_cache) is off. There is nothing to reuse the per-construct pieces against, so splitting would only add compile time. |
+| [Autodiff](autodiff.md) (gradient) kernels | The backward pass links the constructs together, so they cannot be compiled one at a time. |
+| One construct produces a value a later construct consumes | For instance a running total built up in one top-level loop and read by the next. The later construct cannot be rebuilt on its own without redoing the earlier one. |
+| A construct re-reads array data an earlier construct overwrote | Compiling it in isolation would observe the new value instead of the original. This includes clamped indexing (`boundary="clamp"`), where an out-of-range index can land on an element that was written. |
+| A side effect, random draw, or volatile read would be repeated | Recomputing it inside another construct would change what the kernel does. |
+| Safety would hinge on two array arguments not sharing memory, and one of them is a gradient | Whether two gradient buffers overlap cannot be verified even at launch, so Quadrants refuses to split rather than risk a wrong result. |
+| Specialized kernels: iterating an unstructured mesh (`qd.mesh`), containing a region explicitly scheduled to run concurrently, or compiled with a diagnostic mode enabled ([line coverage](kernel_coverage.md), or a compiler debug dump, see [optimization passes](optimization_passes.md)) | These forms must stay whole-kernel to remain correct or to keep their diagnostics meaningful. |
 
 **Runtime fallback** (a per-launch decision for a split kernel):
 
@@ -36,7 +37,7 @@ Some fallbacks are decided once, at compile time (the kernel never uses the spli
 | Two parameters the split assumed disjoint are bound to the same buffer | Recomputing a read across the aliased write could change the result, so the call uses the whole-kernel variant. |
 | A parameter's backing buffer cannot be read to confirm disjointness | For example a raw NumPy array or PyTorch tensor passed directly. The call conservatively uses the whole-kernel variant. Passing `qd.ndarray` / `qd.Tensor` objects avoids this. |
 
-A runtime fallback emits a one-time `[PER_OFFLOAD][FALLBACK]` warning naming the kernel. It is suppressible through the logging level (it uses the standard `warn` level).
+Each compile-time fallback logs a one-line `debug`-level message naming the kernel and the condition, so raising Quadrants' log level to `debug` tells you why a given kernel stayed whole-kernel. A runtime fallback instead emits a one-time `[PER_OFFLOAD][FALLBACK]` warning naming the kernel (at the standard `warn` level, so it is on by default and suppressible through the logging level).
 
 ## Inspecting the split
 

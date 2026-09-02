@@ -16,6 +16,7 @@
 #include "quadrants/program/kernel.h"
 #include "quadrants/program/program.h"
 #include "quadrants/program/per_construct_cache.h"
+#include "quadrants/common/logging.h"
 
 #include <algorithm>
 #include <climits>
@@ -646,11 +647,16 @@ bool clearance_assumes_ndarray_disjoint(Stmt *a, Stmt *b, int &slot_a, int &slot
 // split relied on to clear condition (3) -- disjointness the caller can violate by binding the same ndarray to both
 // args. The launch guard falls back only when one of THESE pairs actually aliases, so a benign self-alias elsewhere
 // in the kernel does not un-split it.
-bool split_is_recompute_safe(Block *block, std::vector<int> &assumed_disjoint_pairs) {
+bool split_is_recompute_safe(Block *block, std::vector<int> &assumed_disjoint_pairs, const char **reason) {
   assumed_disjoint_pairs.clear();
   std::set<std::pair<int, int>> disjoint_pairs;
-  if (block == nullptr)
+  auto fail = [&](const char *why) {
+    if (reason != nullptr)
+      *reason = why;
     return false;
+  };
+  if (block == nullptr)
+    return fail("null block");
 
   // (1) Loop-carried locals: reject a loop-written local shared across more than one construct.
   auto accesses = irpass::analysis::gather_statements(
@@ -674,7 +680,7 @@ bool split_is_recompute_safe(Block *block, std::vector<int> &assumed_disjoint_pa
     if (rit != read_owners.end())
       owners.insert(rit->second.begin(), rit->second.end());  // ... plus every construct that reads it
     if (owners.size() > 1)
-      return false;  // a loop-produced local is shared across constructs -> not recomputable
+      return fail("a value carried between constructs");  // loop-produced local shared across constructs
   }
 
   // (2) + (3): both need each construct's backward slice and the top-level positions of global writes.
@@ -738,7 +744,7 @@ bool split_is_recompute_safe(Block *block, std::vector<int> &assumed_disjoint_pa
         continue;
       int pos = it->second;
       if (segs.seg_id[pos] != k && (stmt_is_task_effect(s) || s->is<RandStmt>() || stmt_is_volatile_load(s)))
-        return false;  // recomputing another segment's effect, PRNG draw, or volatile load would change behavior
+        return fail("a side-effect, PRNG draw, or volatile load would be recomputed");
       // Global read recomputed from an earlier segment (reads in k's own segment are not moved).
       if (stmt_is_global_read(s) && pos < b_lo)
         recomputed_reads.push_back({pos, s->cast<GlobalLoadStmt>()->src});
@@ -752,11 +758,11 @@ bool split_is_recompute_safe(Block *block, std::vector<int> &assumed_disjoint_pa
         if (w.pos <= r.pos || w.pos >= b_lo)
           continue;
         if (w.dest == nullptr || r.src == nullptr || irpass::analysis::maybe_same_address(r.src, w.dest))
-          return false;
+          return fail("a construct re-reads memory a later-ordered write may change");
         if (clamp_may_defeat_index_disjointness(r.src, w.dest))
-          return false;  // clamped boundary can collapse the "different" indices onto one in-bounds address
+          return fail("a clamped (boundary=\"clamp\") access may collapse onto an overwritten element");
         if (grad_companion_may_alias(r.src, w.dest))
-          return false;  // a param's primal and its own .grad can share a buffer (a.grad = a); unguardable
+          return fail("a parameter's primal and its own .grad may share a buffer");  // a.grad = a; unguardable
         // Cleared: the read and write are provably different addresses. When that proof is cross-arg ndarray
         // disjointness a caller can defeat it by aliasing the two params. A primal-vs-primal pair is checkable by the
         // launch guard (compare the two args' primal alloc_ids) -- record it. Any pair touching a gradient buffer is
@@ -765,7 +771,7 @@ bool split_is_recompute_safe(Block *block, std::vector<int> &assumed_disjoint_pa
         bool involves_grad = false;
         if (clearance_assumes_ndarray_disjoint(r.src, w.dest, slot_a, slot_b, involves_grad)) {
           if (involves_grad)
-            return false;
+            return fail("cross-argument gradient disjointness (uncheckable until launch)");
           disjoint_pairs.emplace(std::min(slot_a, slot_b), std::max(slot_a, slot_b));
         }
       }
@@ -875,8 +881,14 @@ bool maybe_split_frontend_per_construct(IRNode *ir,
                                         const Kernel *kernel,
                                         bool verbose,
                                         AutodiffMode autodiff_mode) {
-  if (autodiff_mode != AutodiffMode::kNone)
+  // Each compile-time fallback logs why this kernel is not split, at debug level (raise the log level to see it); the
+  // runtime per-launch fallback warns separately from Python. See docs/source/user_guide/kernel_caching.md.
+  auto note = [&](const char *why) {
+    QD_DEBUG("[per-construct split] kernel '{}' stays whole-kernel: {}", kernel->get_name(), why);
     return false;
+  };
+  if (autodiff_mode != AutodiffMode::kNone)
+    return note("autodiff (gradient) kernel");
   auto *block = ir->cast<Block>();
   if (block == nullptr)
     return false;
@@ -887,22 +899,22 @@ bool maybe_split_frontend_per_construct(IRNode *ir,
   // The launch-time no-alias guard recompiles with this set when a call binds the same ndarray to two params, so the
   // whole-kernel path (never recomputes, always correct) runs instead of the split's may-alias recompute.
   if (config.disable_frontend_per_construct_split)
-    return false;
+    return note("launch-time alias guard active (whole-kernel variant)");
   // QD_DUMP_CFG forces the whole-kernel path: cfg_optimization dumps the whole-kernel CFG and names files by phase, not
   // construct, so running the split under it would collide every construct's CFG into one filename. The other dump
   // flags (QD_DUMP_IR / QD_DUMP_SIMPLIFY / print_ir) are observation-only -- the split still runs and emits output per
   // construct. See docs/source/user_guide/optimization_passes.md.
   if (env_is_enabled(DUMP_CFG_ENV))
-    return false;
+    return note("QD_DUMP_CFG debug dump mode");
   // QD_KERNEL_COVERAGE inserts per-line probe stores that add global-write constructs and, in graph/checkpoint kernels,
   // land between a yield gate and its loop; per-construct reassembly would move them and corrupt the coverage signal
   // and yield/resume behavior. It is a measurement mode, so keep it transparent by falling back.
   if (env_is_enabled("QD_KERNEL_COVERAGE"))
-    return false;
+    return note("QD_KERNEL_COVERAGE measurement mode");
   if (block_has_mesh_for(block))
-    return false;
+    return note("mesh kernel");
   if (block_has_concurrent_region(block))
-    return false;  // concurrent constructs share one global-temp buffer; per-construct offload would alias offsets
+    return note("kernel has a concurrent region");  // concurrent constructs share one global-temp buffer
   // Reuse-tier gate: the split only pays off when a per-task REUSE tier can serve the constructs; without one it is
   // bounded (see the cost cap below) but pure frontend overhead, so keep the whole-kernel path. The sole such tier is
   // the per-task artifact cache, active for CUDA/AMDGPU with the offline cache on -- its dir
@@ -912,10 +924,11 @@ bool maybe_split_frontend_per_construct(IRNode *ir,
   // exercise the backend-agnostic split logic on CPU (and power users can opt in).
   const bool reuse_tier_active = (config.arch == Arch::cuda || config.arch == Arch::amdgpu) && config.offline_cache;
   if (!reuse_tier_active && !env_is_enabled("QD_SPLIT_FORCE"))
-    return false;
+    return note("no per-task cache to reuse on this backend");
   std::vector<int> assumed_disjoint_pairs;
-  if (!split_is_recompute_safe(block, assumed_disjoint_pairs))
-    return false;
+  const char *unsafe_reason = "recompute-unsafe";
+  if (!split_is_recompute_safe(block, assumed_disjoint_pairs, &unsafe_reason))
+    return note(unsafe_reason);
   // Cost guard: recompiling a large shared prefix once per construct is pure overhead with no reuse tier, so fall back
   // above a ratio cap. QD_SPLIT_MAX_COST_RATIO overrides the cap; QD_SPLIT_STATS logs the per-kernel estimate.
   SplitCost cost = estimate_split_cost(block);
@@ -938,7 +951,7 @@ bool maybe_split_frontend_per_construct(IRNode *ir,
     }
   }
   if (would_fall_back)
-    return false;
+    return note("split would recompile a large shared prefix (cost cap exceeded)");
   split_frontend_per_construct(ir, config, kernel, verbose, assumed_disjoint_pairs);
   return true;
 }
