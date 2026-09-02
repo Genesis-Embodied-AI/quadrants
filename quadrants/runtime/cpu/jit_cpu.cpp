@@ -286,12 +286,14 @@ class JITSessionCPU : public JITSession {
       }
       // detectHost() carries the running core's explicit feature vector, matching the whole-module JIT compiler; a bare
       // CPU name with empty features would enable that model's default superset and emit illegal instructions.
-      //
-      // Large code model: each per-task object gets its own SectionMemoryManager, so under memory pressure RTDyld can
-      // place a task's .text and .rodata more than 2GB apart, overflowing the small model's 32-bit RIP-relative refs
-      // and reading constants from garbage at launch. 64-bit addressing makes the section distance irrelevant.
       auto jtmb = std::move(*expected_jtmb);
-      jtmb.setCodeModel(llvm::CodeModel::Large);
+      // Large code model on x86 only: each per-task object gets its own SectionMemoryManager, so under memory pressure
+      // RTDyld can place a task's .text and .rodata more than 2GB apart, overflowing x86's 32-bit RIP-relative refs and
+      // reading constants from garbage at launch; 64-bit addressing makes the distance irrelevant. Other targets keep
+      // the default model -- AArch64 already reaches +/-4GB and its Mach-O backend rejects the large model here.
+      if (jtmb.getTargetTriple().isX86()) {
+        jtmb.setCodeModel(llvm::CodeModel::Large);
+      }
       auto expected_tm = jtmb.createTargetMachine();
       QD_ERROR_UNLESS(expected_tm, "Could not allocate target machine!");
       pertask_target_machine_ = std::move(*expected_tm);
