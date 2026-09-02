@@ -402,13 +402,19 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         # setting-independent, but the ``Final[float]`` guard below is not, and an early return would also skip the
         # recursion that runs it on nested frozen dataclasses. A Final-bearing subtree is never served either - the
         # write below refuses to store one, so this read falls through and re-runs validation each launch.
+        #
+        # Keyed by ``id(annotation)`` so a subclass extracted against different ancestor annotations caches a separate
+        # key per view; the stored annotation is identity-checked on read, so a metaclass-equal ancestor or a recycled
+        # ``id`` cannot return the wrong key.
         if is_frozen and not raise_on_templated_floats:
             try:
                 # Instance-level (not class-level): instances of one class may differ in memory layout. The reserved
                 # ``_qd_`` prefix avoids collision with a user field named ``_key``. Absent under ``slots=True``.
-                return arg._qd_spec_key
+                _key_hit = arg._qd_spec_key.get(id(annotation))
             except AttributeError:
-                pass
+                _key_hit = None
+            if _key_hit is not None and _key_hit[0] is annotation:
+                return _key_hit[1]
         # ``Final[T]`` fields drive the key by *value*; other fields keep the recursive ``_extract_arg``. PERF: with no
         # Final fields (the common case) we take the original comprehension verbatim.
         final_names = final_field_names(annotation)
@@ -460,10 +466,17 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         # never store one (making the read above fall through).
         if is_frozen and not subtree_has_final_fields(annotation):
             try:
-                object.__setattr__(arg, "_qd_spec_key", key)
+                _key_map = arg._qd_spec_key
             except AttributeError:
-                # Impossible to store _qd_spec_key at instance-level if 'slots=True'. It is recomputed each time.
-                pass
+                _key_map = None
+            if _key_map is None:
+                try:
+                    object.__setattr__(arg, "_qd_spec_key", {id(annotation): (annotation, key)})
+                except AttributeError:
+                    # Impossible to store _qd_spec_key at instance-level if 'slots=True'. It is recomputed each time.
+                    pass
+            else:
+                _key_map[id(annotation)] = (annotation, key)
         return key
     if annotation_type is sparse_matrix_builder:
         return arg.dtype
