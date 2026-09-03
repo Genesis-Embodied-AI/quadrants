@@ -305,6 +305,10 @@ class LlvmRuntimeExecutor {
   int64_t *adstack_overflow_task_id_host_ptr_{nullptr};
   void *adstack_overflow_task_id_dev_ptr_{nullptr};
 
+  // AMDGPU debug-only: pinned host mirror of in-kernel assert state (`AmdgpuAssertErrorState` in
+  // llvm_runtime.h). Allocated in materialize_runtime when config_.debug && arch==amdgpu.
+  void *assert_error_state_host_ptr_{nullptr};
+
   std::unique_ptr<ThreadPool> thread_pool_{nullptr};
   std::shared_ptr<Device> device_{nullptr};
 

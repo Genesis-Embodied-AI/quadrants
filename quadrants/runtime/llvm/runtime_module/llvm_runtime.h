@@ -103,6 +103,26 @@ struct PreallocatedMemoryChunk {
   std::size_t preallocated_size = 0;
 };
 
+// AMDGPU debug-only pinned assert mirror. Host allocates via hipHostMalloc(Coherent); device publishes
+// here before `__builtin_trap()` so the host can format QuadrantsAssertionError after the HIP context dies.
+// See `LLVMRuntime::assert_error_state_dev_ptr`.
+struct AmdgpuAssertErrorState {
+  i64 error_code;
+  char error_message_template[quadrants_error_message_max_length];
+  uint64 error_message_arguments[quadrants_error_message_max_num_arguments];
+};
+
+// Keep in exact layout sync with `AmdgpuAssertErrorStateHostView` in llvm_runtime_executor.cpp, which is hand-mirrored
+// (the host TU cannot include this device-runtime header). Both structs are pinned to this canonical layout expressed
+// via the shared constants, so neither can drift without breaking its own static_assert.
+static_assert(offsetof(AmdgpuAssertErrorState, error_code) == 0, "AmdgpuAssertErrorState layout drift");
+static_assert(offsetof(AmdgpuAssertErrorState, error_message_template) == sizeof(i64), "AmdgpuAssertErrorState layout drift");
+static_assert(offsetof(AmdgpuAssertErrorState, error_message_arguments) == sizeof(i64) + quadrants_error_message_max_length,
+              "AmdgpuAssertErrorState layout drift");
+static_assert(sizeof(AmdgpuAssertErrorState) ==
+                  sizeof(i64) + quadrants_error_message_max_length + quadrants_error_message_max_num_arguments * sizeof(uint64),
+              "AmdgpuAssertErrorState layout drift");
+
 struct LLVMRuntime {
   PreallocatedMemoryChunk runtime_objects_chunk;
   PreallocatedMemoryChunk runtime_memory_chunk;
@@ -143,6 +163,7 @@ struct LLVMRuntime {
   uint64 error_message_arguments[quadrants_error_message_max_num_arguments];
   i32 error_message_lock = 0;
   i64 error_code = 0;
+
   // Dedicated overflow signal. Pointer to a 64-bit slot in pinned host memory (CUDA `cuMemAllocHost_v2`,
   // HIP `hipHostMalloc`; CPU plain malloc; on this struct stored as the device-mapped address obtained via
   // `cuMemHostGetDevicePointer` / HIP equivalent). The kernel-side `stack_push` writes via a system-wide
@@ -225,6 +246,13 @@ struct LLVMRuntime {
   i32 num_rand_states;
 
   i64 total_requested_memory;
+
+  // AMDGPU debug-only: device-mapped pointer to pinned `AmdgpuAssertErrorState` (see struct doc above).
+  // nullptr on non-AMDGPU / non-debug; nullptr-guarded in `quadrants_assert_format`. Appended at the end of
+  // the struct on purpose: the default-on offline cache keys on the numeric Quadrants version (not the runtime
+  // layout), so inserting a field mid-struct would shift every following field's offset and let an old cached
+  // kernel misread them. Keeping new fields at the tail preserves existing offsets for cached kernels.
+  AmdgpuAssertErrorState *assert_error_state_dev_ptr = nullptr;
 
   template <typename T>
   void set_result(std::size_t i, T t) {
