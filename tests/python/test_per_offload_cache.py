@@ -816,18 +816,14 @@ def test_per_construct_frontend_split_whole_element_vs_component_recompute_unsaf
 
 @test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
 def test_per_construct_frontend_split_whole_element_vs_non_ndarray_component_ok() -> None:
-    # Companion to the test above: the intervening component write targets a *field* `f[i][0]` -- a MatrixPtrStmt whose
-    # origin is a GlobalPtrStmt, not an ndarray -- so it lives in a different memory space than the ndarray read `s[0]`
-    # and cannot alias it. alias_analysis already reports the pair different; the whole-element/component guard must
-    # defer to that and let the split fire, rather than rejecting every mixed ExternalPtr/MatrixPtr pair. The same
-    # blind spot (a MatrixPtr over a local alloca) disabled the split for qipc's giant `_step_kernel`, so this is the
-    # regression guard for that fix.
+    # A field write cannot alias an ndarray read, so the split must fire. This guards the fix for qipc's `_step_kernel`,
+    # where a mixed ndarray-read / matrix-ptr-write pair with a non-ndarray write wrongly forced the whole-kernel path.
     f = qd.Vector.field(2, qd.f32, shape=(_N,))
 
     @qd.kernel
     def whole_vs_field_component(s: qd.types.ndarray(), out: qd.types.ndarray()) -> None:
-        base = s[0]  # whole-element ndarray read, recomputed into construct 2
-        for i in range(_N):  # construct 1: component write to a field (a different memory space than the ndarray)
+        base = s[0]  # recomputed into construct 2
+        for i in range(_N):  # construct 1: component write to a field
             f[i][0] = 2.0
         for i in range(out.shape[0]):  # construct 2: reuse the snapshot
             out[i] = base
@@ -839,7 +835,7 @@ def test_per_construct_frontend_split_whole_element_vs_non_ndarray_component_ok(
 
     obs = whole_vs_field_component._primal.per_offload_cache_observations
     assert obs.frontend_constructs_total >= 2, obs  # split fires: a field write cannot alias the ndarray read
-    assert np.allclose(out.to_numpy(), 7.0, atol=1e-2), out.to_numpy()  # base = s[0] = 7.0
+    assert np.allclose(out.to_numpy(), 7.0, atol=1e-2), out.to_numpy()
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
