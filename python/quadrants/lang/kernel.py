@@ -36,7 +36,7 @@ from quadrants._lib.core.quadrants_python import (
 )
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorClass
-from quadrants.lang import _kernel_impl_dataclass, impl, runtime_ops
+from quadrants.lang import _kernel_impl_dataclass, _split_alias_guard, impl, runtime_ops
 
 # `qd.checkpoint` pause / resume model helpers. See `kernel_checkpoint.py` for the full extracted surface; `Kernel`
 # delegates the resume-cookie validation, label translation, per-launch yield_on= arg-id table build, and GraphStatus
@@ -388,6 +388,22 @@ class Kernel(FuncBase):
 
         self.launch_context_buffer_cache = LaunchContextBufferCache()
         self._struct_ndarray_launch_info_by_key: dict[CompiledKernelKeyType, list] = {}
+        # `(slot, positional_index)` per key for explicit top-level ndarray params, so the guard can map a
+        # C++-recorded assumed-disjoint slot to this launch's arg (struct-member slots come from the struct table).
+        self._explicit_ndarray_slot_info_by_key: dict[CompiledKernelKeyType, list] = {}
+        # `(slot, root_positional_index, attr_chain)` per key for ndarray fields of a typed dataclass param, resolved by
+        # the guard through `_resolve_struct_ndarray` (same shape as the struct table, but guard-only).
+        self._dataclass_ndarray_guard_info_by_key: dict[CompiledKernelKeyType, list] = {}
+        # Launch-time no-alias guard. A key is present only when its split relied on cross-parameter ndarray
+        # disjointness; its value is the flattened list of assumed-disjoint arg-slot pairs. Those keys check whether any
+        # such pair aliases per launch and, on a violation, launch the whole-kernel variant cached here (compiled with
+        # the split disabled). Absent keys skip the check entirely.
+        self._split_alias_guard_by_key: dict[CompiledKernelKeyType, list] = {}
+        self._compiled_no_split_by_key: dict[CompiledKernelKeyType, Any] = {}
+        # Keys whose materialized `KernelCxx` has only a parsed signature, not a lowered body (a fastcache restore
+        # supplies the artifact and skips body IR construction). The no-alias guard's whole-kernel fallback must rebuild
+        # a full body for these before it can recompile.
+        self._parse_only_keys: set[CompiledKernelKeyType] = set()
         # Launch info for primitives lifted from ``@qd.data_oriented(template_primitives=False)`` template args (see
         # ``predeclare_struct_primitives``). Maps key -> list of ``(arg_id, template_arg_idx, attr_chain, kind)``.
         self._struct_primitive_launch_info_by_key: dict[CompiledKernelKeyType, list] = {}
@@ -403,6 +419,13 @@ class Kernel(FuncBase):
         self.runtime = impl.get_runtime()
         self.materialized_kernels = {}
         self.compiled_kernel_data_by_key = {}
+        # Launch-time no-alias guard state must drop with the compiled-data caches above: `_compiled_no_split_by_key`
+        # holds CompiledKernelData from the now-destroyed Program, so an aliased launch after `qd.reset()` would run it
+        # against the new Program. All three are re-armed on the next materialize (fresh compile or fastcache restore).
+        self._compiled_no_split_by_key = {}
+        self._split_alias_guard_by_key = {}
+        self._explicit_ndarray_slot_info_by_key = {}
+        self._dataclass_ndarray_guard_info_by_key = {}
         self._last_compiled_kernel_data = None
         self.src_ll_cache_observations = SrcLlCacheObservations()
         self.fe_ll_cache_observations = FeLlCacheObservations()
@@ -460,6 +483,12 @@ class Kernel(FuncBase):
                 )
                 if self.compiled_kernel_data_by_key[key]:
                     self.src_ll_cache_observations.cache_loaded = True
+                    # A fastcache restore bypasses prog.compile_kernel, so arm the launch-time no-alias guard here too
+                    # when the restored split relied on cross-parameter ndarray disjointness (the assumed-disjoint slot
+                    # pairs read off the artifact).
+                    disjoint_pairs = self.compiled_kernel_data_by_key[key].split_assumed_disjoint_pairs()
+                    if disjoint_pairs:
+                        self._split_alias_guard_by_key[key] = list(disjoint_pairs)
                     self.used_py_dataclass_parameters_by_key_enforcing[key] = cache_value.used_py_dataclass_parameters
                     # Fast-cache restore skips AST transformation, so rebuild the AST-transformer-produced metadata from
                     # the cache value: nested graph_do_while level table (with the AST-resolved flat C++ arg-id) plus
@@ -575,11 +604,12 @@ class Kernel(FuncBase):
                 if self.autodiff_mode != _NONE:
                     KernelSimplicityASTChecker(self.func).visit(tree)
 
+                only_parse_function_def = self.compiled_kernel_data_by_key.get(key) is not None
                 quadrants_ast_generator = ASTGenerator(
                     ctx=ctx,
                     kernel_name=kernel_name,
                     current_kernel=self,
-                    only_parse_function_def=self.compiled_kernel_data_by_key.get(key) is not None,
+                    only_parse_function_def=only_parse_function_def,
                     tree=tree,
                     dump_ast=os.environ.get("QD_DUMP_AST", "") == "1" and _pass == 1,
                 )
@@ -589,8 +619,16 @@ class Kernel(FuncBase):
                 if _pass == 1:
                     assert key not in self.materialized_kernels
                     self.materialized_kernels[key] = quadrants_kernel
+                    if only_parse_function_def:
+                        self._parse_only_keys.add(key)
                     self._struct_ndarray_launch_info_by_key[key] = getattr(
                         ctx.global_context, "struct_ndarray_launch_info", []
+                    )
+                    self._dataclass_ndarray_guard_info_by_key[key] = getattr(
+                        ctx.global_context, "dataclass_ndarray_launch_info", []
+                    )
+                    self._explicit_ndarray_slot_info_by_key[key] = getattr(
+                        ctx.global_context, "explicit_ndarray_launch_info", []
                     )
                     # Both folds bring data_oriented member accesses into the kernel's used-flat-names set, which
                     # dataclass-arg expansion is the only other contributor to. Without them the narrow args hash walks
@@ -804,6 +842,11 @@ class Kernel(FuncBase):
 
                 compile_result: CompileResult = prog.compile_kernel(prog_config, prog_device_cap, t_kernel)
                 compiled_kernel_data = compile_result.compiled_kernel_data
+                # Arm the launch-time no-alias guard for this key iff its split relied on cross-parameter ndarray
+                # disjointness (the assumed-disjoint slot pairs, read from the compiled kernel so it is set on a cache
+                # hit too). Store only keys with pairs so the per-launch check stays a single dict lookup otherwise.
+                if compile_result.split_assumed_disjoint_pairs:
+                    self._split_alias_guard_by_key[key] = list(compile_result.split_assumed_disjoint_pairs)
                 if compile_result.cache_hit:
                     self.fe_ll_cache_observations.cache_hit = True
                 self.per_offload_cache_observations = PerOffloadCacheObservations(
@@ -837,6 +880,12 @@ class Kernel(FuncBase):
                 # matches the C++ cache-hit path, which also reports -1 in `KernelCompilationManager::load_or_compile`.
                 self.per_offload_cache_observations = PerOffloadCacheObservations()
             self._last_compiled_kernel_data = compiled_kernel_data
+            # Launch-time no-alias guard: the split may have assumed two ndarray params never alias, which is unsound if
+            # this call binds the same ndarray to both; `select_launch_variant` swaps in the whole-kernel variant for
+            # such calls. `_last_compiled_kernel_data` above keeps the fast split as the cached default.
+            compiled_kernel_data = _split_alias_guard.select_launch_variant(
+                self, key, args, compiled_kernel_data, t_kernel
+            )
             launch_ctx.use_graph = self.use_graph and _GRAPH_ENABLED
             if self.use_graph and qd_stream is not None:
                 raise RuntimeError(
@@ -862,6 +911,7 @@ class Kernel(FuncBase):
             stream_handle = qd_stream.handle if qd_stream is not None else 0
             if stream_handle:
                 prog.set_current_cuda_stream(stream_handle)
+            assert compiled_kernel_data is not None
             try:
                 prog.launch_kernel(compiled_kernel_data, launch_ctx)
             finally:

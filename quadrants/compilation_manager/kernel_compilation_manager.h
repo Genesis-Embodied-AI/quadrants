@@ -4,6 +4,7 @@
 #include <string>
 #include <memory>
 #include <unordered_map>
+#include <vector>
 
 #include "quadrants/util/offline_cache.h"
 #include "quadrants/codegen/kernel_compiler.h"
@@ -54,10 +55,15 @@ struct CompileResult {
   int per_construct_cache_hit{-1};
   int per_construct_recompiled{-1};
   // Per-task BACKEND cache stats: how many offloaded tasks were served from the cross-process artifact cache vs
-  // recompiled (a finer-grained view than the construct counts). `-1` => the tier did not run (non-CUDA, or cache off).
+  // recompiled (a finer-grained view than the construct counts). `-1` => the artifact cache did not run (non-CUDA, or
+  // cache off).
   int per_task_total{-1};
   int per_task_cache_hit{-1};
   int per_task_recompiled{-1};
+  // Flattened arg-slot pairs (see PerConstructCache) whose cross-parameter ndarray disjointness the split relied on.
+  // The launch guard checks whether any of these pairs actually aliases before using this (split) kernel; empty => no
+  // guard needed.
+  std::vector<int> split_assumed_disjoint_pairs;
 };
 
 namespace tests {

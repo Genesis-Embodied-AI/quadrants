@@ -16,7 +16,9 @@
 #include "quadrants/program/kernel.h"
 #include "quadrants/program/program.h"
 #include "quadrants/program/per_construct_cache.h"
+#include "quadrants/common/logging.h"
 
+#include <algorithm>
 #include <climits>
 #include <cstdlib>
 #include <filesystem>
@@ -487,12 +489,192 @@ std::unordered_set<Stmt *> compute_construct_needed(
 //       runs in its home segment, so a clone runs the effect twice), a NON-DETERMINISTIC `RandStmt` (resamples /
 //       advances the PRNG per clone), or a VOLATILE load (must be observed exactly once in place).
 //
-//   (3) A field/ndarray load recomputed into a later construct past an intervening effect: if any construct between the
-//       load and the consumer performs a real effect, the recomputed load observes the mutation instead of the
-//       source-order snapshot. Conservative -- field identity is not tracked, so an unrelated store also falls back.
-bool split_is_recompute_safe(Block *block) {
-  if (block == nullptr)
+//   (3) A field/ndarray load recomputed into a later construct past an intervening ALIASING write: if a construct
+//       between the load and the consumer writes memory the load may re-read, the recomputed load observes the mutation
+//       instead of the source-order snapshot. Aliasing is by SNode / ndarray (the shared alias analysis), so an
+//       unrelated field's store does NOT force fallback; a write we cannot pin to one address (structural / external)
+//       does.
+Stmt *write_effect_dest(Stmt *w) {
+  if (auto *st = w->cast<GlobalStoreStmt>())
+    return st->dest;
+  if (auto *at = w->cast<AtomicOpStmt>())
+    return at->dest;
+  // Structural snode ops, list/gc, and external / real-func calls have no single target pointer -> may-alias-all.
+  return nullptr;
+}
+
+// InternalFuncStmt is a runtime intrinsic. Most -- warp/block sync + memory fences, shuffle / ballot / broadcast /
+// elect, thread / invocation index, clocks, register composite-extract -- write NO field/ndarray/structural memory, so
+// they cannot change a recomputed load and are not a recompute hazard (condition 3), even though they report a side
+// effect (to stay un-reordered). The few internal ops that DO write global memory (sparse-matrix insert_triplet,
+// refresh_counter, the test_* allocator probes) are deliberately absent, so they stay may-alias-all. This is an
+// allowlist: any name not listed (a new/unknown internal op) is treated as a writer, costing at most a missed split.
+bool internal_func_is_memory_free(const std::string &name) {
+  static const std::unordered_set<std::string> kMemoryFree = {
+      "composite_extract_0",
+      "composite_extract_1",
+      "composite_extract_2",
+      "composite_extract_3",
+      "linear_thread_idx",
+      "block_thread_idx",
+      "do_nothing",
+      "workgroupBarrier",
+      "workgroupMemoryBarrier",
+      "gridMemoryBarrier",
+      "localInvocationId",
+      "globalInvocationId",
+      "vkGlobalThreadIdx",
+      "subgroupBarrier",
+      "subgroupMemoryBarrier",
+      "subgroupElect",
+      "subgroupBroadcast",
+      "subgroupShuffle",
+      "subgroupShuffleDown",
+      "subgroupShuffleUp",
+      "subgroupBallotU32",
+      "subgroupBallotU64",
+      "subgroupInvocationId",
+      "spirv_clock_i64",
+      "cuda_clock_i64",
+      "block_barrier",
+      "block_barrier_and_i32",
+      "block_barrier_or_i32",
+      "block_barrier_count_i32",
+      "block_mem_fence",
+      "grid_mem_fence",
+      "warp_barrier",
+      "cuda_all_sync_i32",
+      "cuda_any_sync_i32",
+      "cuda_uni_sync_i32",
+      "cuda_ballot_i32",
+      "cuda_shfl_sync_i32",
+      "cuda_shfl_sync_f32",
+      "cuda_shfl_up_sync_i32",
+      "cuda_shfl_up_sync_f32",
+      "cuda_shfl_down_sync_i32",
+      "cuda_shfl_down_sync_f32",
+      "cuda_shfl_xor_sync_i32",
+      "cuda_match_any_sync_i32",
+      "cuda_match_all_sync_i32",
+      "cuda_active_mask",
+      "cuda_fns_u32",
+      "amdgpu_clock_i64",
+      "cpu_clock_i64",
+  };
+  return kMemoryFree.count(name) > 0;
+}
+
+// The ndarray (external) access a load/store pointer resolves to, directly or through a MatrixPtr element; nullptr if
+// it isn't one.
+ExternalPtrStmt *as_ndarray_ptr(Stmt *p) {
+  if (p == nullptr)
+    return nullptr;
+  if (auto *e = p->cast<ExternalPtrStmt>())
+    return e;
+  if (auto *mp = p->cast<MatrixPtrStmt>())
+    return mp->origin != nullptr ? mp->origin->cast<ExternalPtrStmt>() : nullptr;
+  return nullptr;
+}
+
+// alias_analysis proves two ndarray accesses `different` by comparing their raw index expressions, but a `kClamp`
+// boundary maps out-of-range indices onto in-bounds ones (e.g. `a[-1]` -> `a[0]`), so distinct indices can hit the
+// same address. Boundary lowering (`handle_external_ptr_boundary`) runs AFTER the split, so here the indices are still
+// clamp-oblivious. When a same-buffer clearance rests on that index disambiguation and either access clamps, the
+// disjointness proof is unsound -> treat as may-alias. Distinct buffers never alias regardless of clamp (cross-arg
+// aliasing is the launch guard's concern), so this stays scoped to same arg + same primal/grad.
+bool clamp_may_defeat_index_disjointness(Stmt *a, Stmt *b) {
+  ExternalPtrStmt *ea = as_ndarray_ptr(a);
+  ExternalPtrStmt *eb = as_ndarray_ptr(b);
+  if (ea == nullptr || eb == nullptr)
     return false;
+  if (ea->boundary != BoundaryMode::kClamp && eb->boundary != BoundaryMode::kClamp)
+    return false;
+  auto *arg_a = ea->base_ptr->cast<ArgLoadStmt>();
+  auto *arg_b = eb->base_ptr->cast<ArgLoadStmt>();
+  if (arg_a == nullptr || arg_b == nullptr)
+    return false;
+  return arg_a->arg_id == arg_b->arg_id && ea->is_grad == eb->is_grad;
+}
+
+// alias_analysis proves a param's primal and its own `.grad` companion `different` purely by their `is_grad` flag, but
+// a caller can bind them to one buffer (`a.grad = a` / `a._set_grad(a)`), so an otherwise-cleared same-arg primal/grad
+// pair then hits one address. Like clamp this disjointness is caller-defeatable, and it is unguardable (the launch
+// guard resolves a slot to its PRIMAL alloc_id only, so it cannot see the grad companion) -> treat as may-alias and
+// refuse. Scoped to same arg; distinct args are the cross-arg guard's concern (`clearance_assumes_ndarray_disjoint`).
+bool grad_companion_may_alias(Stmt *a, Stmt *b) {
+  ExternalPtrStmt *ea = as_ndarray_ptr(a);
+  ExternalPtrStmt *eb = as_ndarray_ptr(b);
+  if (ea == nullptr || eb == nullptr)
+    return false;
+  if (ea->is_grad == eb->is_grad)
+    return false;
+  auto *arg_a = ea->base_ptr->cast<ArgLoadStmt>();
+  auto *arg_b = eb->base_ptr->cast<ArgLoadStmt>();
+  if (arg_a == nullptr || arg_b == nullptr)
+    return false;
+  return arg_a->arg_id == arg_b->arg_id;
+}
+
+// alias_analysis compares a whole-element ndarray read (`base = a[i]`, a bare ExternalPtrStmt) against a component
+// write to the same element (`a[j][c] = ...`, a MatrixPtrStmt over an ExternalPtrStmt) as `different`, because only the
+// component side carries a matrix origin. But a whole-element read covers every component, so it observes such a write
+// whenever the two element addresses may coincide. Normalize both to their external origins and re-check: same-arg,
+// possibly-same-index -> may-alias. Matrix-vs-matrix and external-vs-external pairs are already precise from the raw
+// maybe_same_address check; cross-arg mixed pairs come back `different` here and stay the launch guard's concern.
+bool whole_element_read_may_overlap_component_write(Stmt *a, Stmt *b) {
+  const bool mixed = (a != nullptr && a->is<ExternalPtrStmt>() && b != nullptr && b->is<MatrixPtrStmt>()) ||
+                     (a != nullptr && a->is<MatrixPtrStmt>() && b != nullptr && b->is<ExternalPtrStmt>());
+  if (!mixed)
+    return false;
+  ExternalPtrStmt *ea = as_ndarray_ptr(a);
+  ExternalPtrStmt *eb = as_ndarray_ptr(b);
+  if (ea == nullptr || eb == nullptr)
+    return true;  // a matrix ptr with a non-external origin: cannot prove the element addresses disjoint
+  return irpass::analysis::maybe_same_address(ea, eb);
+}
+
+// True when a condition-(3) clearance between these two pointers rests on the caller-defeatable assumption that
+// distinct ndarray params don't alias: both are ndarray accesses on DIFFERENT args. alias_analysis reports them
+// `different` by arg id and/or is_grad, which a caller violates by binding one buffer to both params. Same-arg
+// index-disjoint clearances are true disjointness the caller cannot defeat -> false (a same-arg primal-vs-grad pair,
+// which a caller CAN defeat via `a.grad = a`, is rejected earlier by `grad_companion_may_alias`).
+// On true, `slot_a`/`slot_b` get the two args' flat slots (`arg_id[0]`; ndarray arg_ids are single-element).
+// `involves_grad` is set when either access is through a `.grad` buffer. The launch guard resolves a slot to its arg's
+// PRIMAL alloc_id only, so it cannot see gradient buffers: a pair where either side is a gradient access (one arg's
+// grad vs another's primal, or two args' grads sharing one allocation) is unguardable, and the caller refuses to split
+// rather than recording it. Only primal-vs-primal cross-arg pairs are guardable.
+bool clearance_assumes_ndarray_disjoint(Stmt *a, Stmt *b, int &slot_a, int &slot_b, bool &involves_grad) {
+  involves_grad = false;
+  ExternalPtrStmt *ea = as_ndarray_ptr(a);
+  ExternalPtrStmt *eb = as_ndarray_ptr(b);
+  if (ea == nullptr || eb == nullptr)
+    return false;
+  auto *arg_a = ea->base_ptr->cast<ArgLoadStmt>();
+  auto *arg_b = eb->base_ptr->cast<ArgLoadStmt>();
+  if (arg_a == nullptr || arg_b == nullptr || arg_a->arg_id.empty() || arg_b->arg_id.empty())
+    return false;
+  if (arg_a->arg_id == arg_b->arg_id)
+    return false;
+  slot_a = arg_a->arg_id[0];
+  slot_b = arg_b->arg_id[0];
+  involves_grad = ea->is_grad || eb->is_grad;
+  return true;
+}
+
+// `assumed_disjoint_pairs` collects, flattened as [a0,b0,a1,b1,...], each unordered slot pair whose disjointness the
+// split relied on to clear condition (3) -- disjointness the caller can violate by binding the same ndarray to both
+// args. The launch guard falls back only when one of THESE pairs actually aliases, so a benign self-alias elsewhere
+// in the kernel does not un-split it.
+bool split_is_recompute_safe(Block *block, std::vector<int> &assumed_disjoint_pairs, const char **reason) {
+  assumed_disjoint_pairs.clear();
+  std::set<std::pair<int, int>> disjoint_pairs;
+  auto fail = [&](const char *why) {
+    if (reason != nullptr)
+      *reason = why;
+    return false;
+  };
+  if (block == nullptr)
+    return fail("null block");
 
   // (1) Loop-carried locals: reject a loop-written local shared across more than one construct.
   auto accesses = irpass::analysis::gather_statements(
@@ -516,7 +698,7 @@ bool split_is_recompute_safe(Block *block) {
     if (rit != read_owners.end())
       owners.insert(rit->second.begin(), rit->second.end());  // ... plus every construct that reads it
     if (owners.size() > 1)
-      return false;  // a loop-produced local is shared across constructs -> not recomputable
+      return fail("a value carried between constructs");  // loop-produced local shared across constructs
   }
 
   // (2) + (3): both need each construct's backward slice and the top-level positions of global writes.
@@ -524,16 +706,30 @@ bool split_is_recompute_safe(Block *block) {
   std::unordered_map<Stmt *, int> top_index;
   for (int j = 0; j < n; j++)
     top_index[block->statements[j].get()] = j;
-  // Top-level positions performing a real effect (includes sparse-structure ops, not just stores/atomics).
-  std::vector<bool> writes_global(n, false);
-  for (Stmt *w : gather_stmts_incl_containers(block, [](Stmt *s) { return stmt_is_task_effect(s); })) {
+  // Every intervening global write that could change a recomputed field/ndarray load, tagged with its top-level slot
+  // and the pointer it targets (null => a footprint we cannot pin to one address: structural / external -> may-alias-
+  // all). Gather LEAF effects only -- a container (loop / if) reports has_global_side_effect but its real writes are
+  // its leaves -- and drop memory-free runtime intrinsics (barriers, shuffles, thread-index), which have a side effect
+  // but write no addressable memory, so a construct sitting after a barrier still splits.
+  struct GlobalWrite {
+    int pos;
+    Stmt *dest;
+  };
+  std::vector<GlobalWrite> global_writes;
+  for (Stmt *w : gather_stmts_incl_containers(block, [](Stmt *s) {
+         if (!stmt_is_task_effect(s) || s->is_container_statement())
+           return false;
+         if (auto *ifs = s->cast<InternalFuncStmt>())
+           return !internal_func_is_memory_free(ifs->func_name);
+         return true;
+       })) {
     bool inside = false;
     Stmt *owner = top_level_owner(w, block, &inside);
     if (owner == nullptr)
       continue;
     auto it = top_index.find(owner);
     if (it != top_index.end())
-      writes_global[it->second] = true;
+      global_writes.push_back({it->second, write_effect_dest(w)});
   }
   auto segs = segment_top_level(block);
   auto alloca_writers = gather_top_level_alloca_writers(block);
@@ -549,9 +745,13 @@ bool split_is_recompute_safe(Block *block) {
     if (b_lo < 0)
       continue;
     auto needed = compute_construct_needed(block, segs.seg_id, k, alloca_writers);
-    // Scan the slice: (2) reject a non-recomputable producer recomputed from another segment; (3) track the earliest
-    // recomputed global read, checked against intervening effects below.
-    int min_recomputed_read_pos = -1;
+    // Scan the slice: (2) reject a non-recomputable producer recomputed from another segment; (3) collect the global
+    // reads recomputed from an earlier segment, checked against intervening aliasing writes below.
+    struct RecomputedRead {
+      int pos;
+      Stmt *src;
+    };
+    std::vector<RecomputedRead> recomputed_reads;
     for (Stmt *s : needed) {
       bool inside = false;
       Stmt *owner = top_level_owner(s, block, &inside);
@@ -562,16 +762,43 @@ bool split_is_recompute_safe(Block *block) {
         continue;
       int pos = it->second;
       if (segs.seg_id[pos] != k && (stmt_is_task_effect(s) || s->is<RandStmt>() || stmt_is_volatile_load(s)))
-        return false;  // recomputing another segment's effect, PRNG draw, or volatile load would change behavior
-      // Earliest recomputed global read from an earlier segment (reads in k's own segment are not moved).
-      if (stmt_is_global_read(s) && pos < b_lo && (min_recomputed_read_pos < 0 || pos < min_recomputed_read_pos))
-        min_recomputed_read_pos = pos;
+        return fail("a side-effect, PRNG draw, or volatile load would be recomputed");
+      // Global read recomputed from an earlier segment (reads in k's own segment are not moved).
+      if (stmt_is_global_read(s) && pos < b_lo)
+        recomputed_reads.push_back({pos, s->cast<GlobalLoadStmt>()->src});
     }
-    if (min_recomputed_read_pos < 0)
-      continue;
-    for (int q = min_recomputed_read_pos + 1; q < b_lo; q++)
-      if (writes_global[q])
-        return false;  // an intervening construct mutates global memory the recomputed load would re-read
+    // (3) A recomputed read is unsafe only if a MAY-ALIAS write runs between the read's original slot and this
+    // construct -- recomputing the read there would then observe that write. A write to a provably different address
+    // (different SNode / ndarray, via the shared alias analysis) is harmless, which is what lets a multi-array kernel
+    // split. A write we cannot pin to one address, or a null read pointer, may-aliases everything.
+    for (const RecomputedRead &r : recomputed_reads)
+      for (const GlobalWrite &w : global_writes) {
+        if (w.pos <= r.pos || w.pos >= b_lo)
+          continue;
+        if (w.dest == nullptr || r.src == nullptr || irpass::analysis::maybe_same_address(r.src, w.dest))
+          return fail("a construct re-reads memory a later-ordered write may change");
+        if (whole_element_read_may_overlap_component_write(r.src, w.dest))
+          return fail("a whole-element read may overlap a component write to the same ndarray element");
+        if (clamp_may_defeat_index_disjointness(r.src, w.dest))
+          return fail("a clamped (boundary=\"clamp\") access may collapse onto an overwritten element");
+        if (grad_companion_may_alias(r.src, w.dest))
+          return fail("a parameter's primal and its own .grad may share a buffer");  // a.grad = a; unguardable
+        // Cleared: the read and write are provably different addresses. When that proof is cross-arg ndarray
+        // disjointness a caller can defeat it by aliasing the two params. A primal-vs-primal pair is checkable by the
+        // launch guard (compare the two args' primal alloc_ids) -- record it. Any pair touching a gradient buffer is
+        // not (the guard sees only primal alloc_ids), so refuse to split and let the whole-kernel path run instead.
+        int slot_a = 0, slot_b = 0;
+        bool involves_grad = false;
+        if (clearance_assumes_ndarray_disjoint(r.src, w.dest, slot_a, slot_b, involves_grad)) {
+          if (involves_grad)
+            return fail("cross-argument gradient disjointness (uncheckable until launch)");
+          disjoint_pairs.emplace(std::min(slot_a, slot_b), std::max(slot_a, slot_b));
+        }
+      }
+  }
+  for (const auto &p : disjoint_pairs) {
+    assumed_disjoint_pairs.push_back(p.first);
+    assumed_disjoint_pairs.push_back(p.second);
   }
   return true;
 }
@@ -609,7 +836,11 @@ SplitCost estimate_split_cost(Block *block) {
 // Correctness for recompute-safe kernels rests on cross-construct global-temp hubs dissolving via recompute and
 // cross-construct memory ordering being preserved by the source-order reassembly. The caller has already restricted
 // this to autodiff_mode==kNone / non-mesh / recompute-safe kernels.
-void split_frontend_per_construct(IRNode *ir, const CompileConfig &config, const Kernel *kernel, bool verbose) {
+void split_frontend_per_construct(IRNode *ir,
+                                  const CompileConfig &config,
+                                  const Kernel *kernel,
+                                  bool verbose,
+                                  const std::vector<int> &assumed_disjoint_pairs) {
   auto *block = ir->cast<Block>();
   QD_ASSERT(block != nullptr);
   const int n = (int)block->statements.size();
@@ -617,7 +848,7 @@ void split_frontend_per_construct(IRNode *ir, const CompileConfig &config, const
   auto alloca_writers = gather_top_level_alloca_writers(block);
 
   // Program-scoped stats (total / hit / recompiled per kernel), read back by the compilation manager to stay
-  // backend-agnostic. `hit` stays 0 until a reuse tier lands.
+  // backend-agnostic. `hit` stays 0 until cross-process construct reuse lands.
   PerConstructCache *cc = (kernel->program != nullptr) ? &kernel->program->per_construct_cache() : nullptr;
 
   std::vector<std::unique_ptr<Stmt>> tasks;
@@ -657,7 +888,7 @@ void split_frontend_per_construct(IRNode *ir, const CompileConfig &config, const
     block->insert(std::move(t));
   if (cc != nullptr) {
     std::lock_guard<std::mutex> g(cc->mu);
-    cc->last_stats[kernel->get_name()] = {n_constructs, n_hit, n_recompiled};
+    cc->last_stats[kernel->get_name()] = {n_constructs, n_hit, n_recompiled, assumed_disjoint_pairs};
   }
 }
 
@@ -670,8 +901,14 @@ bool maybe_split_frontend_per_construct(IRNode *ir,
                                         const Kernel *kernel,
                                         bool verbose,
                                         AutodiffMode autodiff_mode) {
-  if (autodiff_mode != AutodiffMode::kNone)
+  // Each compile-time fallback logs why this kernel is not split, at debug level (raise the log level to see it); the
+  // runtime per-launch fallback warns separately from Python. See docs/source/user_guide/kernel_caching.md.
+  auto note = [&](const char *why) {
+    QD_DEBUG("[per-construct split] kernel '{}' stays whole-kernel: {}", kernel->get_name(), why);
     return false;
+  };
+  if (autodiff_mode != AutodiffMode::kNone)
+    return note("autodiff (gradient) kernel");
   auto *block = ir->cast<Block>();
   if (block == nullptr)
     return false;
@@ -679,25 +916,41 @@ bool maybe_split_frontend_per_construct(IRNode *ir,
     const char *v = std::getenv(env.data());
     return v != nullptr && std::string(v) == "1";
   };
+  // The launch-time no-alias guard recompiles with this set when a call binds the same ndarray to two params, so the
+  // whole-kernel path (never recomputes, always correct) runs instead of the split's may-alias recompute.
+  if (config.disable_frontend_per_construct_split)
+    return note("launch-time alias guard active (whole-kernel variant)");
   // QD_DUMP_CFG forces the whole-kernel path: cfg_optimization dumps the whole-kernel CFG and names files by phase, not
   // construct, so running the split under it would collide every construct's CFG into one filename. The other dump
   // flags (QD_DUMP_IR / QD_DUMP_SIMPLIFY / print_ir) are observation-only -- the split still runs and emits output per
   // construct. See docs/source/user_guide/optimization_passes.md.
   if (env_is_enabled(DUMP_CFG_ENV))
-    return false;
+    return note("QD_DUMP_CFG debug dump mode");
   // QD_KERNEL_COVERAGE inserts per-line probe stores that add global-write constructs and, in graph/checkpoint kernels,
   // land between a yield gate and its loop; per-construct reassembly would move them and corrupt the coverage signal
   // and yield/resume behavior. It is a measurement mode, so keep it transparent by falling back.
   if (env_is_enabled("QD_KERNEL_COVERAGE"))
-    return false;
+    return note("QD_KERNEL_COVERAGE measurement mode");
   if (block_has_mesh_for(block))
-    return false;
+    return note("mesh kernel");
   if (block_has_concurrent_region(block))
-    return false;  // concurrent constructs share one global-temp buffer; per-construct offload would alias offsets
-  if (!split_is_recompute_safe(block))
-    return false;
-  // Cost guard: recompiling a large shared prefix once per construct is pure overhead with no reuse tier, so fall back
-  // above a ratio cap. QD_SPLIT_MAX_COST_RATIO overrides the cap; QD_SPLIT_STATS logs the per-kernel estimate.
+    return note("kernel has a concurrent region");  // concurrent constructs share one global-temp buffer
+  // Artifact-cache gate: the split only pays off when the per-task artifact cache can serve the constructs; without it
+  // the split is bounded (see the cost cap below) but pure frontend overhead, so keep the whole-kernel path. That cache
+  // is active for CUDA/AMDGPU with the offline cache on -- its dir (`pertask_artifact_dir_ref` in llvm_program.cpp) is
+  // nonempty exactly then, which is what `artifact_cache_on` in codegen.cpp keys on. Gating on `offline_cache` instead
+  // of that process-global dir avoids coupling this transform to the LLVM codegen header; the two are equivalent by
+  // construction. QD_SPLIT_FORCE=1 overrides the gate so tests can exercise the backend-agnostic split logic on CPU
+  // (and power users can opt in).
+  const bool artifact_cache_active = (config.arch == Arch::cuda || config.arch == Arch::amdgpu) && config.offline_cache;
+  if (!artifact_cache_active && !env_is_enabled("QD_SPLIT_FORCE"))
+    return note("no per-task artifact cache to reuse on this backend");
+  std::vector<int> assumed_disjoint_pairs;
+  const char *unsafe_reason = "recompute-unsafe";
+  if (!split_is_recompute_safe(block, assumed_disjoint_pairs, &unsafe_reason))
+    return note(unsafe_reason);
+  // Cost guard: recompiling a large shared prefix once per construct is pure overhead with nothing to reuse it, so fall
+  // back above a ratio cap. QD_SPLIT_MAX_COST_RATIO overrides the cap; QD_SPLIT_STATS logs the per-kernel estimate.
   SplitCost cost = estimate_split_cost(block);
   double max_ratio = 4.0;
   if (const char *r = std::getenv("QD_SPLIT_MAX_COST_RATIO"))
@@ -718,8 +971,8 @@ bool maybe_split_frontend_per_construct(IRNode *ir,
     }
   }
   if (would_fall_back)
-    return false;
-  split_frontend_per_construct(ir, config, kernel, verbose);
+    return note("split would recompile a large shared prefix (cost cap exceeded)");
+  split_frontend_per_construct(ir, config, kernel, verbose, assumed_disjoint_pairs);
   return true;
 }
 

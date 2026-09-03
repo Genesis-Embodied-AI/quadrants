@@ -3508,6 +3508,7 @@ LLVMCompiledKernel LLVMCompiledKernel::clone() const {
   // `module` is null for an artifact-backed kernel (every task came from the per-task cache); clone it only if present.
   LLVMCompiledKernel result{tasks, module ? llvm::CloneModule(*module) : nullptr};
   result.per_task_artifact_keys = per_task_artifact_keys;
+  result.split_assumed_disjoint_pairs = split_assumed_disjoint_pairs;
   // The launcher consumes a clone, so the per-task artifacts must travel with it.
   result.per_construct_artifacts.reserve(per_construct_artifacts.size());
   for (auto &a : per_construct_artifacts) {

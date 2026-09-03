@@ -84,6 +84,10 @@ CompileResult KernelCompilationManager::load_or_compile(const CompileConfig &com
   // of the same name cannot read a stale split result.
   int total = -1, cache_hit_count = -1, recompiled = -1;
   int task_total = -1, task_hit = -1, task_recompiled = -1;
+  // On a cache hit no split ran, so the launch guard's arm-flag must come from the serialized artifact. On a fresh
+  // compile it comes from last_stats below -- backend-agnostic, so it covers backends whose CompiledKernelData does
+  // not carry the flag as well as the first compile of a kernel in a process (before any in-process re-launch).
+  std::vector<int> assumed_disjoint_pairs = ckd.split_assumed_disjoint_pairs();
   if (!cache_hit && kernel_def.program != nullptr) {
     auto &cc = kernel_def.program->per_construct_cache();
     std::lock_guard<std::mutex> g(cc.mu);
@@ -92,6 +96,7 @@ CompileResult KernelCompilationManager::load_or_compile(const CompileConfig &com
       total = it->second.total;
       cache_hit_count = it->second.hit;
       recompiled = it->second.recompiled;
+      assumed_disjoint_pairs = it->second.assumed_disjoint_pairs;
       cc.last_stats.erase(it);
     }
     // Per-task artifact-cache counts recorded by the codegen driver (CUDA only). Erased on read like the construct
@@ -104,8 +109,8 @@ CompileResult KernelCompilationManager::load_or_compile(const CompileConfig &com
       cc.last_task_stats.erase(tit);
     }
   }
-  return CompileResult{ckd,        cache_hit,  kernel_key, total,          cache_hit_count,
-                       recompiled, task_total, task_hit,   task_recompiled};
+  return CompileResult{ckd,        cache_hit,  kernel_key, total,           cache_hit_count,
+                       recompiled, task_total, task_hit,   task_recompiled, assumed_disjoint_pairs};
 }
 
 void KernelCompilationManager::dump() {
@@ -214,6 +219,11 @@ std::string KernelCompilationManager::make_kernel_key(const CompileConfig &compi
 
     kernel_def.set_kernel_key_for_cache(kernel_key);
   }
+  // The no-alias fallback compiles the same AST with the split disabled and so needs a key distinct from the split's.
+  // Derive it from the memoized base instead of re-hashing: get_hashed_offline_cache_key re-serializes kernel->ir,
+  // which is safe only on the first (pre-compile) call and crashes if run again after the kernel has been compiled.
+  if (compile_config.disable_frontend_per_construct_split)
+    return kernel_key + ".nosplit";
   return kernel_key;
 }
 

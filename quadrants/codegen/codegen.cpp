@@ -206,11 +206,21 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
     }
   }
   // Record per-task reuse counts for PerOffloadCacheObservations.tasks_* (read back by the compilation manager). Only
-  // when the tier ran, so non-CUDA / cache-off compiles keep the -1 sentinel instead of a misleading 0.
+  // when the per-task cache ran, so a compile with it off keeps the -1 sentinel instead of a misleading 0.
   if (per_task_cache_enabled && prog != nullptr) {
     auto &cc = prog->per_construct_cache();
     std::lock_guard<std::mutex> g(cc.mu);
     cc.last_task_stats[kernel->get_name()] = {n, n_hit.load(), n_recompiled.load()};
+  }
+  // Carry the frontend split's no-alias assumption onto the compiled kernel so it serializes into the offline cache and
+  // a cross-process cache hit still arms the launch guard. Absent entry (whole-kernel compile) leaves the default
+  // empty.
+  if (prog != nullptr) {
+    auto &cc = prog->per_construct_cache();
+    std::lock_guard<std::mutex> g(cc.mu);
+    auto it = cc.last_stats.find(kernel->get_name());
+    if (it != cc.last_stats.end())
+      llvm_compiled_kernel.split_assumed_disjoint_pairs = it->second.assumed_disjoint_pairs;
   }
   return llvm_compiled_kernel;
 }

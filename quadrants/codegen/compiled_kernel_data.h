@@ -5,6 +5,7 @@
 #include <optional>
 #include <algorithm>
 #include <stdexcept>
+#include <vector>
 
 #include "quadrants/rhi/arch.h"
 
@@ -104,6 +105,12 @@ class CompiledKernelData {
 
   virtual Arch arch() const = 0;
   virtual size_t num_tasks() const = 0;
+
+  // Flattened arg-slot pairs whose cross-parameter ndarray disjointness the per-construct split relied on; the launch
+  // guard falls back if one aliases. Empty when the split made no such assumption (or the backend has no split).
+  virtual std::vector<int> split_assumed_disjoint_pairs() const {
+    return {};
+  }
 
   Err load(std::istream &is);
   Err dump(std::ostream &os) const;

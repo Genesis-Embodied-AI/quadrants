@@ -47,6 +47,9 @@ class CompiledKernelData : public lang::CompiledKernelData {
   size_t num_tasks() const override {
     return data_.compiled_data.tasks.size();
   }
+  std::vector<int> split_assumed_disjoint_pairs() const override {
+    return data_.compiled_data.split_assumed_disjoint_pairs;
+  }
   std::unique_ptr<lang::CompiledKernelData> clone() const override;
 
   Err check() const override;

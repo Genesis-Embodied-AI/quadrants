@@ -88,6 +88,12 @@ struct CompileConfig {
   bool experimental_auto_mesh_local{false};
   int auto_mesh_local_default_occupacy{4};
 
+  // Forces the whole-kernel path (skips maybe_split_frontend_per_construct). Set per-compile by the launch-time
+  // no-alias guard: the split may assume distinct ndarray params don't alias, which is unsound when a caller binds the
+  // same ndarray twice, so an aliasing launch recompiles with this on. The two variants get distinct cache keys via a
+  // ".nosplit" suffix in KernelCompilationManager::make_kernel_key (not this field's hash).
+  bool disable_frontend_per_construct_split{false};
+
   // Offline cache options
   bool offline_cache{false};
   std::string offline_cache_file_path{get_repo_dir() + "qdcache"};
