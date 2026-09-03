@@ -197,6 +197,18 @@ Module Contents
 
 
 
+   .. py:attribute:: explicit_ndarray_launch_info
+      :type:  list[tuple]
+      :value: []
+
+
+
+   .. py:attribute:: dataclass_ndarray_launch_info
+      :type:  list[tuple]
+      :value: []
+
+
+
    .. py:attribute:: struct_primitive_provenance
       :type:  dict[tuple[int, str], tuple]
 
