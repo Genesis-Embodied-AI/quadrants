@@ -72,11 +72,11 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
   const int n = (int)offloads.size();
   std::vector<std::unique_ptr<LLVMCompiledTask>> data(n);
 
-  // Cross-process per-task artifact cache: a hit skips a task's compilation and carries cached code plus launch
-  // metadata to the launcher. An empty dir disables the cache.
+  // Per-task artifact cache: a hit skips a task's compilation and carries cached code to the launcher. Empty dir = off.
   const std::string art_dir = pertask_artifact_dir_ref();
-  const bool artifact_cache_on =
-      (compile_config_.arch == Arch::cuda || compile_config_.arch == Arch::amdgpu) && !art_dir.empty();
+  const bool per_task_cache_enabled = (compile_config_.arch == Arch::cuda || compile_config_.arch == Arch::amdgpu ||
+                                       arch_is_cpu(compile_config_.arch)) &&
+                                      !art_dir.empty();
   const PerTaskArtifactCache artifact_cache(art_dir);
   const DeviceCapabilityConfig pertask_caps = prog->get_device_caps();
   std::vector<std::string> pertask_keys(n);
@@ -97,11 +97,12 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
       //  - external-func: the body has the so/bc path + name, not its contents, so a stale update keeps the key;
       //  - real-func (FuncCallStmt): the printer emits only the callee name, but codegen inlines its body;
       //  - mem_access_opt (BLS/read-only hints): serialized from an unordered_map, so its order varies by process.
-      bool artifact_eligible = artifact_cache_on && offload->as<OffloadedStmt>()->mem_access_opt.get_all().empty();
-      if (artifact_eligible) {
-        irpass::analysis::gather_statements(offload.get(), [&artifact_eligible](Stmt *s) {
+      bool eligible_for_per_task_cache =
+          per_task_cache_enabled && offload->as<OffloadedStmt>()->mem_access_opt.get_all().empty();
+      if (eligible_for_per_task_cache) {
+        irpass::analysis::gather_statements(offload.get(), [&eligible_for_per_task_cache](Stmt *s) {
           if (s->is<AdStackAllocaStmt>() || s->is<ExternalFuncCallStmt>() || s->is<FuncCallStmt>()) {
-            artifact_eligible = false;
+            eligible_for_per_task_cache = false;
           }
           return false;
         });
@@ -110,7 +111,7 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
       // Key on `#index` too: the module bakes the task's kernel-wide index into its symbol names, so two
       // byte-identical tasks at different indices must not alias (they would collide at link).
       std::string cache_key;
-      if (artifact_eligible) {
+      if (eligible_for_per_task_cache) {
         cache_key = get_hashed_per_task_cache_key(compile_config_, pertask_caps, offload->as<OffloadedStmt>(), kernel) +
                     "#" + std::to_string(i);
         // Under kernel profiling, drop the name-free cross-kernel aliasing: the artifact carries OffloadedTask::name,
@@ -141,13 +142,12 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
   }
   worker.flush();
 
-  // Build one self-contained artifact per task before the whole-module link consumes `data`.
-  //
-  // AMDGPU links each task with a separate `ld.lld`, so the per-task path only pays off when the cache is on; with it
-  // off it stays on the single whole-module link. CUDA's per-task load is cheap, so it always takes the per-task path.
+  // Build one artifact per task before the whole-module link consumes `data`. CUDA always takes this path; AMDGPU and
+  // CPU only when offline_cache is enabled, since their per-task link/serialize only pays off then.
   std::vector<PerConstructArtifact> per_construct_artifacts;
   const bool build_per_construct_artifacts =
-      compile_config_.arch == Arch::cuda || (compile_config_.arch == Arch::amdgpu && artifact_cache_on);
+      compile_config_.arch == Arch::cuda ||
+      ((compile_config_.arch == Arch::amdgpu || arch_is_cpu(compile_config_.arch)) && per_task_cache_enabled);
   if (build_per_construct_artifacts) {
     for (int i = 0; i < n; i++) {
       if (!data[i])
@@ -176,8 +176,8 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
     }
   }
 
-  // A cross-process hit leaves a task with no module, so skip the whole-kernel link; the launcher assembles the
-  // backend module from the per-task artifacts. Still concatenate every task's metadata into `tasks`.
+  // A cache hit leaves a task with no module, so skip the whole-kernel link and let the launcher assemble from the
+  // per-task artifacts. Still gather every task's metadata into `tasks`.
   const bool code_only_tasks = std::any_of(data.begin(), data.end(), [](const auto &d) { return d && !d->module; });
   LLVMCompiledKernel llvm_compiled_kernel;
   if (code_only_tasks) {
@@ -206,8 +206,8 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
     }
   }
   // Record per-task reuse counts for PerOffloadCacheObservations.tasks_* (read back by the compilation manager). Only
-  // when the artifact cache ran, so non-CUDA / cache-off compiles keep the -1 sentinel instead of a misleading 0.
-  if (artifact_cache_on && prog != nullptr) {
+  // when the per-task cache ran, so a compile with it off keeps the -1 sentinel instead of a misleading 0.
+  if (per_task_cache_enabled && prog != nullptr) {
     auto &cc = prog->per_construct_cache();
     std::lock_guard<std::mutex> g(cc.mu);
     cc.last_task_stats[kernel->get_name()] = {n, n_hit.load(), n_recompiled.load()};

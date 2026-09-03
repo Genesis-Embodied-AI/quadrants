@@ -85,6 +85,16 @@ class PerTaskArtifactCache {
     }
   }
 
+  // Drop a cached record so a later process refills it. try_load rejects framing-level corruption, but a malformed
+  // payload is only detectable by the backend loader.
+  void erase(const std::string &ir_key) const {
+    if (dir_.empty()) {
+      return;
+    }
+    std::error_code ec;
+    std::filesystem::remove(path_for(ir_key), ec);
+  }
+
  private:
   // The IR key is a hex digest plus a `#<index>` suffix; '#' is legal but shell-awkward, so map it (and '/') to '_'.
   // The `.qdb` extension is mandatory -- the binary serializer refuses any other suffix.

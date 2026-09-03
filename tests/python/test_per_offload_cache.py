@@ -1289,12 +1289,12 @@ def test_per_construct_frontend_split_struct_member_recomputed() -> None:
     assert np.allclose(out2.to_numpy(), _C[0], atol=1.0), out2.to_numpy()
 
 
-# --- Cross-process per-task artifact cache (CUDA + AMDGPU backend reuse) ----------------------------------------------
+# --- Cross-process per-task artifact cache (CUDA + AMDGPU + CPU) ------------------------------------------------------
 #
 # The per-task artifact cache stores each offloaded task's fully compiled code + launch metadata on disk, keyed by the
-# task's own IR (name-free), so a later process reuses an unchanged task instead of recompiling it. CUDA and AMDGPU
-# fill it, and it is gated on `offline_cache`. Reuse is reported on `PerOffloadCacheObservations.tasks_*` (-1 when the
-# artifact cache did not run).
+# task's own IR (name-free), so a later process reuses an unchanged task instead of recompiling it. CUDA and AMDGPU fill
+# it with GPU code and CPU with a host object; it is gated on `offline_cache`. Reuse is reported on
+# `PerOffloadCacheObservations.tasks_*` (-1 when offline_cache is disabled).
 
 
 @test_utils.test(arch=[qd.cuda, qd.amdgpu], offline_cache=False)
@@ -1352,6 +1352,77 @@ def test_per_task_artifact_cache_reuses_shared_task_cross_process(arch) -> None:
         # Second "process": fresh runtime, same disk. `k_second` is a new kernel (whole-kernel entry misses, codegen
         # runs), but its first loop matches `k_first`'s, so that task is served from disk.
         qd.init(arch=arch, offline_cache=True, offline_cache_file_path=cache_dir)
+
+        @qd.kernel
+        def k_second(x: qd.types.ndarray(qd.f32, ndim=1)) -> None:
+            for i in x:
+                x[i] = x[i] * 2.0 + 1.0
+            for i in x:
+                x[i] = x[i] + 7.0
+
+        b = qd.ndarray(qd.f32, shape=(_N,))
+        b.from_numpy(np.arange(_N, dtype=np.float32))
+        k_second(b)
+        obs2 = k_second._primal.per_offload_cache_observations
+        assert obs2.tasks_cache_hit > 0, obs2
+        assert obs2.tasks_recompiled >= 1, obs2
+        assert obs2.tasks_cache_hit + obs2.tasks_recompiled == obs2.tasks_total, obs2
+
+        assert np.allclose(b.to_numpy(), np.arange(_N) * 2.0 + 1.0 + 7.0), b.to_numpy()
+    finally:
+        qd.reset()
+        shutil.rmtree(cache_dir, ignore_errors=True)
+
+
+@test_utils.test(arch=qd.cpu, offline_cache=False)
+def test_per_task_artifact_cache_disabled_without_offline_cache_cpu() -> None:
+    # With offline_cache off the per-task cache never runs, so its counts stay at the -1 sentinel; the frontend split
+    # still fires.
+    @qd.kernel
+    def kernel_two_loops(x: qd.types.ndarray(qd.f32, ndim=1)) -> None:
+        for i in x:
+            x[i] = x[i] * 2.0 + 1.0
+        for i in x:
+            x[i] = x[i] - 3.0
+
+    arr = qd.ndarray(qd.f32, shape=(_N,))
+    arr.from_numpy(np.arange(_N, dtype=np.float32))
+    kernel_two_loops(arr)
+
+    obs = kernel_two_loops._primal.per_offload_cache_observations
+    assert obs.frontend_constructs_total == 2, obs
+    assert obs.tasks_total == -1, obs
+    assert obs.tasks_cache_hit == -1, obs
+    assert obs.tasks_recompiled == -1, obs
+    assert np.allclose(arr.to_numpy(), np.arange(_N) * 2.0 + 1.0 - 3.0), arr.to_numpy()
+
+
+def test_per_task_artifact_cache_reuses_shared_task_cross_process_cpu() -> None:
+    # A fresh process with a warm disk cache loads an unchanged task instead of recompiling it. Re-init with the same
+    # cache path emulates the second process.
+    if qd.cpu not in test_utils.expected_archs():
+        pytest.skip("this variant exercises the CPU per-task artifact cache")
+
+    cache_dir = tempfile.mkdtemp()
+    try:
+        qd.init(arch=qd.cpu, offline_cache=True, offline_cache_file_path=cache_dir)
+
+        @qd.kernel
+        def k_first(x: qd.types.ndarray(qd.f32, ndim=1)) -> None:
+            for i in x:
+                x[i] = x[i] * 2.0 + 1.0
+            for i in x:
+                x[i] = x[i] - 3.0
+
+        a = qd.ndarray(qd.f32, shape=(_N,))
+        a.from_numpy(np.arange(_N, dtype=np.float32))
+        k_first(a)
+        obs1 = k_first._primal.per_offload_cache_observations
+        assert obs1.tasks_total >= 2, obs1
+        assert obs1.tasks_cache_hit == 0, obs1
+
+        # Second "process": fresh runtime, same disk. k_second's first loop matches k_first's, so that task is a hit.
+        qd.init(arch=qd.cpu, offline_cache=True, offline_cache_file_path=cache_dir)
 
         @qd.kernel
         def k_second(x: qd.types.ndarray(qd.f32, ndim=1)) -> None:

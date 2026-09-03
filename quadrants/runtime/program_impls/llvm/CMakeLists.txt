@@ -11,6 +11,7 @@ target_include_directories(llvm_program_impl
     ${PROJECT_SOURCE_DIR}
     ${PROJECT_SOURCE_DIR}/external/eigen
     ${PROJECT_SOURCE_DIR}/external/spdlog/include
+    ${PROJECT_SOURCE_DIR}/external/PicoSHA2
     ${LLVM_INCLUDE_DIRS}
   )
 

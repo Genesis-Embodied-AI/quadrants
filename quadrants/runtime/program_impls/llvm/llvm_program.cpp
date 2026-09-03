@@ -1,6 +1,8 @@
 #include "quadrants/runtime/program_impls/llvm/llvm_program.h"
 
 #include "llvm/IR/Module.h"
+#include "llvm/ExecutionEngine/Orc/JITTargetMachineBuilder.h"
+#include "llvm/TargetParser/Host.h"
 
 #include "quadrants/codegen/cpu/codegen_cpu.h"
 #include "quadrants/codegen/llvm/llvm_compiled_data.h"
@@ -27,6 +29,10 @@
 #include "quadrants/codegen/llvm/compiled_kernel_data.h"
 #include "quadrants/codegen/llvm/per_task_artifact_cache.h"
 
+#include "picosha2.h"
+
+#include <algorithm>
+
 namespace quadrants::lang {
 LlvmProgramImpl::LlvmProgramImpl(CompileConfig &config_, KernelProfilerBase *profiler)
     : ProgramImpl(config_), compilation_workers("compile", config_.print_ir ? 1 : config_.num_compile_threads) {
@@ -50,6 +56,31 @@ LlvmProgramImpl::LlvmProgramImpl(CompileConfig &config_, KernelProfilerBase *pro
       pertask_dir += "_" + AMDGPUContext::get_instance().get_mcpu();
     }
 #endif
+    if (arch_is_cpu(config_.arch)) {
+      // Host objects match detectHost()'s triple, CPU and features, so a cache path shared between hosts is scoped by
+      // all three.
+      auto jtmb = llvm::orc::JITTargetMachineBuilder::detectHost();
+      std::string tag =
+          (jtmb ? jtmb->getTargetTriple().str() : std::string("unknown")) + "_" + llvm::sys::getHostCPUName().str();
+      if (jtmb) {
+        // Sort so the hash ignores feature order; the full vector is too long to use directly.
+        std::vector<std::string> features = jtmb->getFeatures().getFeatures();
+        std::sort(features.begin(), features.end());
+        std::string joined;
+        for (const auto &f : features) {
+          joined += f + ",";
+        }
+        std::string feat_hex;
+        picosha2::hash256_hex_string(joined, feat_hex);
+        tag += "_" + feat_hex.substr(0, 16);
+      }
+      for (char &c : tag) {
+        if (c == '/' || c == ':' || c == ' ' || c == '\\') {
+          c = '_';
+        }
+      }
+      pertask_dir += "_cpu_" + tag;
+    }
   }
   pertask_artifact_dir_ref() = pertask_dir;
 }
