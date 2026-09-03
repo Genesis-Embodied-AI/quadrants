@@ -815,6 +815,34 @@ def test_per_construct_frontend_split_whole_element_vs_component_recompute_unsaf
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
+def test_per_construct_frontend_split_whole_element_vs_non_ndarray_component_ok() -> None:
+    # Companion to the test above: the intervening component write targets a *field* `f[i][0]` -- a MatrixPtrStmt whose
+    # origin is a GlobalPtrStmt, not an ndarray -- so it lives in a different memory space than the ndarray read `s[0]`
+    # and cannot alias it. alias_analysis already reports the pair different; the whole-element/component guard must
+    # defer to that and let the split fire, rather than rejecting every mixed ExternalPtr/MatrixPtr pair. The same
+    # blind spot (a MatrixPtr over a local alloca) disabled the split for qipc's giant `_step_kernel`, so this is the
+    # regression guard for that fix.
+    f = qd.Vector.field(2, qd.f32, shape=(_N,))
+
+    @qd.kernel
+    def whole_vs_field_component(s: qd.types.ndarray(), out: qd.types.ndarray()) -> None:
+        base = s[0]  # whole-element ndarray read, recomputed into construct 2
+        for i in range(_N):  # construct 1: component write to a field (a different memory space than the ndarray)
+            f[i][0] = 2.0
+        for i in range(out.shape[0]):  # construct 2: reuse the snapshot
+            out[i] = base
+
+    s = qd.ndarray(qd.f32, shape=(_N,))
+    out = qd.ndarray(qd.f32, shape=(_N,))
+    s.from_numpy(np.arange(_N, dtype=np.float32) + 7.0)
+    whole_vs_field_component(s, out)
+
+    obs = whole_vs_field_component._primal.per_offload_cache_observations
+    assert obs.frontend_constructs_total >= 2, obs  # split fires: a field write cannot alias the ndarray read
+    assert np.allclose(out.to_numpy(), 7.0, atol=1e-2), out.to_numpy()  # base = s[0] = 7.0
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
 def test_per_construct_frontend_split_fallback_carried_rmw_local() -> None:
     # Two constructs each read-modify-write the same local `s`, and the second also stores it. The second construct
     # depends on the value the first produced, so it is not recomputable per-construct (its slice would drop the first

@@ -566,13 +566,19 @@ bool internal_func_is_memory_free(const std::string &name) {
 
 // The ndarray (external) access a load/store pointer resolves to, directly or through a MatrixPtr element; nullptr if
 // it isn't one.
+// The ndarray external pointer this pointer ultimately indexes into, following the matrix-ptr chain (a component
+// access `a[i][c]` is a MatrixPtrStmt over the element's ExternalPtrStmt; higher-rank elements nest further). Null when
+// the base is not an ndarray -- a local alloca, a global temp, or a field -- which lives in a different memory space.
 ExternalPtrStmt *as_ndarray_ptr(Stmt *p) {
-  if (p == nullptr)
+  while (p != nullptr) {
+    if (auto *e = p->cast<ExternalPtrStmt>())
+      return e;
+    if (auto *mp = p->cast<MatrixPtrStmt>()) {
+      p = mp->origin;
+      continue;
+    }
     return nullptr;
-  if (auto *e = p->cast<ExternalPtrStmt>())
-    return e;
-  if (auto *mp = p->cast<MatrixPtrStmt>())
-    return mp->origin != nullptr ? mp->origin->cast<ExternalPtrStmt>() : nullptr;
+  }
   return nullptr;
 }
 
@@ -628,8 +634,12 @@ bool whole_element_read_may_overlap_component_write(Stmt *a, Stmt *b) {
     return false;
   ExternalPtrStmt *ea = as_ndarray_ptr(a);
   ExternalPtrStmt *eb = as_ndarray_ptr(b);
+  // Only override alias_analysis when both sides are ndarray-backed. A matrix ptr over a non-ndarray (a local alloca, a
+  // global temp, or a field) is a different memory space than the ndarray read, and alias_analysis already reported the
+  // pair `different` (checked before this helper runs), so that verdict is authoritative -- this is not the mixed
+  // whole-element/component ndarray blind spot this helper exists to close.
   if (ea == nullptr || eb == nullptr)
-    return true;  // a matrix ptr with a non-external origin: cannot prove the element addresses disjoint
+    return false;
   return irpass::analysis::maybe_same_address(ea, eb);
 }
 
