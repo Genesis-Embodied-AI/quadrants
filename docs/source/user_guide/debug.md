@@ -57,6 +57,8 @@ Assertions support constant strings and f-strings for the error message.
 
 Note: `assert` is compiled into the kernel but only checked at runtime when `debug=True`. On Linux ARM64, assertions are not currently supported.
 
+Note: a failed assertion is reported at the next synchronization point (kernel completion, a field/ndarray read, or `qd.sync()`), which raises `QuadrantsAssertionError`, rather than at the exact failing statement. On the AMDGPU backend the faulting GPU thread continues to the end of the kernel before the host raises (this keeps all threads reaching shared barriers together and avoids a hang), so statements after a failed assertion in the same kernel may still execute. Do not rely on `assert` to halt a kernel mid-execution; use it to detect and report invalid states.
+
 ## Performance impact
 
 Debug mode adds runtime checks to every field access and assertion, which can significantly slow down kernel execution. It is intended for development and debugging, not production use.
