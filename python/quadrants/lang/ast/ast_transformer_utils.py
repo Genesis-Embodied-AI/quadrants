@@ -35,7 +35,7 @@ class Builder:
             if method is None:
                 error_msg = f'Unsupported node "{node.__class__.__name__}"'
                 raise QuadrantsSyntaxError(error_msg)
-            info = ctx.get_pos_info(node) if isinstance(node, (ast.stmt, ast.expr)) else ""
+            info = ctx.memoized_get_pos_info(node) if isinstance(node, (ast.stmt, ast.expr)) else ""
             with impl.get_runtime().src_info_guard(info):
                 res = method(ctx, node)
                 if not hasattr(node, "violates_pure"):
@@ -52,7 +52,7 @@ class Builder:
             ctx.raised = True
             e = handle_exception_from_cpp(e)
             if not isinstance(e, QuadrantsCompilationError):
-                msg = ctx.get_pos_info(node) + traceback.format_exc()
+                msg = ctx.memoized_get_pos_info(node) + traceback.format_exc()
                 raise QuadrantsCompilationError(msg) from None
             msg = f"""quadrants stack trace:
 ===
@@ -60,7 +60,7 @@ class Builder:
 ===
 
 Your code:
-{ctx.get_pos_info(node)}{e}
+{ctx.memoized_get_pos_info(node)}{e}
 """
             raise type(e)(msg) from None
 
@@ -414,17 +414,9 @@ class ASTTransformerFuncContext:
         except AttributeError:
             raise QuadrantsNameError(f'Name "{name}" is not defined')
 
-    def get_pos_info(self, node: ast.AST) -> str:
-        # Runs for every stmt/expr node of every transform (see ASTTransformerBase.__call__), and the TextWrapper
-        # formatting below dominates the Python side of a kernel build. The same function is transformed once per
-        # inlined call site -- tens of times over -- and each transform re-formats the identical positions, so
-        # memoise on the function rather than on this context, which exists for a single transform.
-        #
-        # The cache lives on the FuncBase because that is what fixes everything the result depends on beyond the
-        # node: `file`, `src`, `indent`, `lineno_offset` and the function name all derive from it and are identical
-        # across its transforms. Scoping it there also keeps it bounded by the function's lifetime and correct
-        # across a module reload, which hands out new FuncBase objects and so a new cache.
+    def memoized_get_pos_info(self, node: ast.AST) -> str:
         key = (node.lineno, node.col_offset, node.end_lineno, node.end_col_offset, node.__class__.__name__)
+        # self.func is persistent, whereas context is ephemeral
         cached = self.func.pos_info_cache.get(key)
         if cached is not None:
             return cached
@@ -433,6 +425,11 @@ class ASTTransformerFuncContext:
         return msg
 
     def _build_pos_info(self, node: ast.AST) -> str:
+        """
+        Returns a formatted string: a source-location snippet for node, consisting of a location header, the relevant
+        source line(s), and a caret (^) underline marking the exact columns the node spans — the same shape as a
+        Python traceback frame.
+        """
         msg = f'File "{self.file}", line {node.lineno + self.lineno_offset}, in {self.func.func.__name__}:\n'
         col_offset = self.indent + node.col_offset
         end_col_offset = self.indent + node.end_col_offset
