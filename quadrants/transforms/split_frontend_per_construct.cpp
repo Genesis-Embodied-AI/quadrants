@@ -564,15 +564,17 @@ bool internal_func_is_memory_free(const std::string &name) {
   return kMemoryFree.count(name) > 0;
 }
 
-// The ndarray (external) access a load/store pointer resolves to, directly or through a MatrixPtr element; nullptr if
-// it isn't one.
+// The ndarray access a pointer resolves to, following the MatrixPtr chain. Null when the base is not an ndarray.
 ExternalPtrStmt *as_ndarray_ptr(Stmt *p) {
-  if (p == nullptr)
+  while (p != nullptr) {
+    if (auto *e = p->cast<ExternalPtrStmt>())
+      return e;
+    if (auto *mp = p->cast<MatrixPtrStmt>()) {
+      p = mp->origin;
+      continue;
+    }
     return nullptr;
-  if (auto *e = p->cast<ExternalPtrStmt>())
-    return e;
-  if (auto *mp = p->cast<MatrixPtrStmt>())
-    return mp->origin != nullptr ? mp->origin->cast<ExternalPtrStmt>() : nullptr;
+  }
   return nullptr;
 }
 
@@ -615,12 +617,9 @@ bool grad_companion_may_alias(Stmt *a, Stmt *b) {
   return arg_a->arg_id == arg_b->arg_id;
 }
 
-// alias_analysis compares a whole-element ndarray read (`base = a[i]`, a bare ExternalPtrStmt) against a component
-// write to the same element (`a[j][c] = ...`, a MatrixPtrStmt over an ExternalPtrStmt) as `different`, because only the
-// component side carries a matrix origin. But a whole-element read covers every component, so it observes such a write
-// whenever the two element addresses may coincide. Normalize both to their external origins and re-check: same-arg,
-// possibly-same-index -> may-alias. Matrix-vs-matrix and external-vs-external pairs are already precise from the raw
-// maybe_same_address check; cross-arg mixed pairs come back `different` here and stay the launch guard's concern.
+// alias_analysis calls a whole-element ndarray read `a[i]` and a component write `a[j][c]` `different`, because only
+// the write carries a matrix origin. But a whole-element read covers every component, so it can observe such a write
+// when the element indices may coincide. Normalize both to their ndarray origins and re-check.
 bool whole_element_read_may_overlap_component_write(Stmt *a, Stmt *b) {
   const bool mixed = (a != nullptr && a->is<ExternalPtrStmt>() && b != nullptr && b->is<MatrixPtrStmt>()) ||
                      (a != nullptr && a->is<MatrixPtrStmt>() && b != nullptr && b->is<ExternalPtrStmt>());
@@ -628,8 +627,9 @@ bool whole_element_read_may_overlap_component_write(Stmt *a, Stmt *b) {
     return false;
   ExternalPtrStmt *ea = as_ndarray_ptr(a);
   ExternalPtrStmt *eb = as_ndarray_ptr(b);
+  // A non-ndarray pointer cannot alias an ndarray, so defer to alias_analysis instead of assuming overlap.
   if (ea == nullptr || eb == nullptr)
-    return true;  // a matrix ptr with a non-external origin: cannot prove the element addresses disjoint
+    return false;
   return irpass::analysis::maybe_same_address(ea, eb);
 }
 
