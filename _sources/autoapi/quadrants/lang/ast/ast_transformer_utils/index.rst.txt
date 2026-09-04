@@ -438,7 +438,7 @@ Module Contents
    .. py:method:: get_var_by_name(name: str) -> tuple[bool, Any, str | None]
 
 
-   .. py:method:: get_pos_info(node: ast.AST) -> str
+   .. py:method:: memoized_get_pos_info(node: ast.AST) -> str
 
 
 .. py:function:: get_decorator(ctx: ASTTransformerFuncContext, node) -> str
