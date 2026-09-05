@@ -195,6 +195,19 @@ std::string get_hashed_offline_cache_key(const CompileConfig &config,
   hasher.process(kernel_rets_string.begin(), kernel_rets_string.end());
   hasher.process(kernel_body_string.begin(), kernel_body_string.end());
   hasher.process(autodiff_mode.begin(), autodiff_mode.end());
+  // AMDGPU runtime-codegen revision. This key hashes only kernel IR + config + caps, and the
+  // cache-manager gate compares just QD_VERSION; but the LLVM runtime module (runtime.cpp) is
+  // linked into and serialized with every cached kernel. When AMDGPU runtime codegen that is baked
+  // into cached kernels changes without a QD_VERSION bump, stale entries must be invalidated. PR
+  // #871 switched the in-kernel assert path from S_ENDPGM (kills only the faulting wavefront, so
+  // peers deadlock at s_barrier) to __builtin_trap() + pinned host state; a kernel cached by an
+  // earlier build at the same version would otherwise keep S_ENDPGM and still hang. Bump this tag
+  // on future AMDGPU runtime ABI/codegen changes. Scoped to AMDGPU so other backends' caches, whose
+  // baked runtime code is unaffected here, are not needlessly invalidated.
+  if (config.arch == Arch::amdgpu) {
+    const std::string amdgpu_runtime_revision = "amdgpu-runtime-rev:trap-assert-1";
+    hasher.process(amdgpu_runtime_revision.begin(), amdgpu_runtime_revision.end());
+  }
   hasher.finish();
 
   auto res = picosha2::get_hash_hex_string(hasher);

@@ -1,11 +1,14 @@
 #include "quadrants/runtime/llvm/llvm_runtime_executor.h"
 #include "quadrants/program/adstack_size_expr_eval.h"
 
+#include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <string>
 #include <vector>
 
 #include "quadrants/ir/stmt_op_types.h"
@@ -32,6 +35,10 @@
 #include "quadrants/rhi/amdgpu/amdgpu_context.h"
 #endif
 
+#include "quadrants/common/exceptions.h"
+#include "quadrants/inc/constants.h"
+#include "quadrants/util/str.h"
+
 namespace quadrants::lang {
 namespace {
 void assert_failed_host(const char *msg) {
@@ -41,6 +48,54 @@ void assert_failed_host(const char *msg) {
 void *host_allocate_aligned(HostMemoryPool *memory_pool, std::size_t size, std::size_t alignment) {
   return memory_pool->allocate(size, alignment);
 }
+
+#if defined(QD_WITH_AMDGPU)
+// Layout-compatible with `AmdgpuAssertErrorState` in llvm_runtime.h (must stay in sync). The host TU cannot include
+// the device-runtime header, so both structs are pinned to the same canonical layout via the shared constants below;
+// a change to either that is not mirrored breaks one of these static_asserts.
+struct AmdgpuAssertErrorStateHostView {
+  int64_t error_code;
+  char error_message_template[quadrants_error_message_max_length];
+  uint64_t error_message_arguments[quadrants_error_message_max_num_arguments];
+};
+
+static_assert(offsetof(AmdgpuAssertErrorStateHostView, error_code) == 0, "AmdgpuAssertErrorStateHostView layout drift");
+static_assert(offsetof(AmdgpuAssertErrorStateHostView, error_message_template) == sizeof(int64_t),
+              "AmdgpuAssertErrorStateHostView layout drift");
+static_assert(offsetof(AmdgpuAssertErrorStateHostView, error_message_arguments) ==
+                  sizeof(int64_t) + quadrants_error_message_max_length,
+              "AmdgpuAssertErrorStateHostView layout drift");
+static_assert(sizeof(AmdgpuAssertErrorStateHostView) ==
+                  sizeof(int64_t) + quadrants_error_message_max_length +
+                      quadrants_error_message_max_num_arguments * sizeof(uint64_t),
+              "AmdgpuAssertErrorStateHostView layout drift");
+
+// Host pointer published for the AMDGPU launch-failure hook (see amdgpu_driver.h). Only set while a
+// debug+amdgpu LlvmRuntimeExecutor owns a live pinned assert-error state.
+AmdgpuAssertErrorStateHostView *g_amdgpu_assert_error_state_host = nullptr;
+
+void amdgpu_launch_failure_assert_hook() {
+  auto *st = g_amdgpu_assert_error_state_host;
+  if (st == nullptr) {
+    return;
+  }
+  std::atomic_thread_fence(std::memory_order_acquire);
+  const int64_t code = __atomic_load_n(&st->error_code, __ATOMIC_SEQ_CST);
+  if (code != 1) {
+    return;
+  }
+  // Consume so Program teardown / subsequent HIP calls on the dead context do not re-throw.
+  __atomic_store_n(&st->error_code, (int64_t)0, __ATOMIC_SEQ_CST);
+  amdgpu_mark_device_assert_surfaced();
+  // Context is dead after the trap; format solely from the pinned buffer (no device retrieval).
+  std::string error_message_template(st->error_message_template);
+  const auto error_message_formatted =
+      format_error_message(error_message_template, [st](int argument_id) -> uint64 {
+        return st->error_message_arguments[argument_id];
+      });
+  throw QuadrantsAssertionError(error_message_formatted);
+}
+#endif
 
 }  // namespace
 
@@ -495,6 +550,15 @@ uint64_t *LlvmRuntimeExecutor::get_device_alloc_info_ptr(const DeviceAllocation 
 
 void LlvmRuntimeExecutor::finalize() {
   profiler_ = nullptr;
+#if defined(QD_WITH_AMDGPU)
+  // Entering teardown: from here the driver may issue calls on a HIP context that a prior
+  // in-kernel assert left dead. Allow those launch failures to be swallowed (see
+  // AMDGPUFunction::operator()) so destructors do not std::terminate(); outside teardown a
+  // post-assert launch failure is still surfaced as a hard error.
+  if (config_.arch == Arch::amdgpu) {
+    amdgpu_set_device_in_teardown(true);
+  }
+#endif
   // Release the host-owned adstack heap before the device teardown below so its `DeviceAllocationGuard` destructor
   // runs while the RHI device is still valid. The destructor drops the allocation back to the driver memory pool
   // (or to the host allocator on CPU); deferring past `llvm_device()->clear()` would leak it.
@@ -591,6 +655,18 @@ void LlvmRuntimeExecutor::finalize() {
     adstack_overflow_task_id_host_ptr_ = nullptr;
     adstack_overflow_task_id_dev_ptr_ = nullptr;
   }
+#if defined(QD_WITH_AMDGPU)
+  if (assert_error_state_host_ptr_ != nullptr) {
+    if (g_amdgpu_assert_error_state_host == assert_error_state_host_ptr_) {
+      g_amdgpu_assert_error_state_host = nullptr;
+      set_amdgpu_launch_failure_hook(nullptr);
+    }
+    if (config_.arch == Arch::amdgpu) {
+      AMDGPUDriver::get_instance().mem_free_host(assert_error_state_host_ptr_);
+    }
+    assert_error_state_host_ptr_ = nullptr;
+  }
+#endif
   if (config_.arch == Arch::cuda || config_.arch == Arch::amdgpu) {
     preallocated_runtime_objects_allocs_.reset();
     preallocated_runtime_memory_allocs_.reset();
@@ -634,6 +710,17 @@ void LlvmRuntimeExecutor::finalize() {
     }
 #endif
   }
+#if defined(QD_WITH_AMDGPU)
+  // Teardown complete: close the launch-failure suppression window opened in pre_finalize() /
+  // the top of finalize() so it cannot leak into a subsequent qd.init() in the same process. All
+  // teardown synchronize()/free calls above have already run under the open window, so from here a
+  // launch failure on a dead context is surfaced as a hard error again instead of being silently
+  // swallowed. materialize_runtime() also clears this on the next init; clearing here additionally
+  // covers the gap between finalize() and that next init (e.g. driver calls during re-init).
+  if (config_.arch == Arch::amdgpu) {
+    amdgpu_set_device_in_teardown(false);
+  }
+#endif
   finalized_ = true;
 }
 
@@ -885,6 +972,33 @@ void LlvmRuntimeExecutor::materialize_runtime(KernelProfilerBase *profiler, uint
     adstack_overflow_task_id_dev_ptr_ = host_slot;
     runtime_jit->call<void *, void *>("runtime_set_adstack_overflow_task_id_dev_ptr", llvm_runtime_,
                                       adstack_overflow_task_id_dev_ptr_);
+  }
+
+  // AMDGPU assert: allocate pinned coherent host memory for assert state so the host can format
+  // QuadrantsAssertionError after `__builtin_trap()` kills the dispatch (HIP context dead; device
+  // retrieval kernels cannot run). Installed unconditionally on AMDGPU, not just in debug /
+  // check_out_of_bound: quadrants_assert_format -> __builtin_trap is also reached by *internal*
+  // runtime assertions (e.g. "Out of pre-allocated memory" in allocate_from_reserved_memory, or the
+  // ListManager bounds checks) that fire regardless of debug or check_out_of_bound. Without the
+  // pinned state + hook those would trap into an untranslatable generic launch failure on a dead
+  // context instead of surfacing the real error message.
+  if (config_.arch == Arch::amdgpu) {
+#if defined(QD_WITH_AMDGPU)
+    void *host_slot = nullptr;
+    AMDGPUDriver::get_instance().mem_alloc_host(&host_slot, sizeof(AmdgpuAssertErrorStateHostView),
+                                                HIP_HOST_MALLOC_COHERENT);
+    QD_ASSERT(host_slot != nullptr);
+    std::memset(host_slot, 0, sizeof(AmdgpuAssertErrorStateHostView));
+    assert_error_state_host_ptr_ = host_slot;
+    g_amdgpu_assert_error_state_host = static_cast<AmdgpuAssertErrorStateHostView *>(host_slot);
+    amdgpu_reset_device_assert_surfaced_flag();
+    amdgpu_set_device_in_teardown(false);
+    set_amdgpu_launch_failure_hook(amdgpu_launch_failure_assert_hook);
+    // UVA: host pointer is also a valid device pointer on GFX9+.
+    runtime_jit->call<void *, void *>("runtime_set_assert_error_state_dev_ptr", llvm_runtime_, host_slot);
+#else
+    QD_NOT_IMPLEMENTED;
+#endif
   }
 }
 
