@@ -21,7 +21,7 @@ from .._ndarray import ScalarNdarray
 from .._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
 from ..field import ScalarField
 from ..kernel_arguments import ArgMetadata
-from ..matrix import MatrixField, MatrixNdarray, VectorNdarray
+from ..matrix import Matrix, MatrixField, MatrixNdarray, MatrixType, VectorNdarray
 from ..util import is_data_oriented, is_dataclass_instance, wants_runtime_primitives
 from .hash_utils import hash_iterable_strings
 
@@ -196,7 +196,7 @@ def dataclass_to_repr(
             raise_on_templated_floats,
             path + (field.name,),
             child_value,
-            arg_meta=None,
+            arg_meta=ArgMetadata(field.type, field.name) if isinstance(field.type, MatrixType) else None,
             pruning_paths=pruning_paths,
             parent_flat=child_flat,
         )
@@ -291,6 +291,12 @@ def stringify_obj_type(
         # TODO: think about whether there is a way to include fields
         _mark_warn_if_not_tensor_annotation(arg_meta)
         return _FAIL_FASTCACHE
+    if isinstance(obj, Matrix):
+        if obj.is_host_access or arg_meta is None or not isinstance(arg_meta.annotation, MatrixType):
+            _mark_should_warn()
+            return _FAIL_FASTCACHE
+        ann = arg_meta.annotation
+        return f"[mat-{ann.ndim}-{ann.n}-{ann.m}-{ann.dtype}]"
     if is_dataclass_instance(obj):
         # Pass the declared dataclass type so an annotated subclass hashes via the base's fields. Nested / data_oriented
         # children have no dataclass annotation here (arg_meta is None or Template), so they fall back to runtime type.

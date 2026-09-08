@@ -752,6 +752,46 @@ def test_src_ll_cache_dupe_kernels(tmp_path: pathlib.Path) -> None:
     assert a[0] == 222
 
 
+class MatrixAliasDtypeArgs(pydantic.BaseModel):
+    arch: str
+    offline_cache_file_path: str
+    dtype: str
+
+
+def src_ll_cache_matrix_alias_dtype_child(args: list[str]) -> None:
+    args_obj = MatrixAliasDtypeArgs.model_validate_json(args[0])
+    qd.init(
+        arch=getattr(qd, args_obj.arch), offline_cache=True, offline_cache_file_path=args_obj.offline_cache_file_path
+    )
+    vec3 = qd.types.vector(3, getattr(qd, args_obj.dtype))
+
+    @qd.kernel(fastcache=True)
+    def k1(v: vec3, output: qd.types.NDArray[qd.f32, 1]) -> None:
+        output[0] = v[0] + v[1] + v[2]
+
+    output = qd.ndarray(qd.f32, (1,))
+    k1(qd.Vector([1, 2, 3]), output)
+    assert output[0] == 6
+    print(TEST_RAN)
+    sys.exit(RET_SUCCESS)
+
+
+@test_utils.test()
+def test_src_ll_cache_matrix_alias_dtype(tmp_path: pathlib.Path) -> None:
+    """The same kernel source with a vector annotation whose dtype differs between processes must not share an
+    artifact."""
+    arch = qd.lang.impl.current_cfg().arch.name
+    for dtype in ["i32", "f32"]:
+        args = MatrixAliasDtypeArgs(arch=arch, offline_cache_file_path=str(tmp_path), dtype=dtype)
+        proc = subprocess.run(
+            [sys.executable, __file__, src_ll_cache_matrix_alias_dtype_child.__name__, args.model_dump_json()],
+            capture_output=True,
+            text=True,
+            env={**os.environ, "PYTHONPATH": "."},
+        )
+        assert proc.returncode == RET_SUCCESS and TEST_RAN in proc.stdout, proc.stdout + proc.stderr
+
+
 # The following lines are critical for subprocess-using tests to work. If they are missing, the tests will
 # incorrectly pass, without doing anything.
 if __name__ == "__main__":
