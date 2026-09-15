@@ -1,0 +1,110 @@
+name: Genesis
+
+# Genesis is the main consumer of Quadrants, and its test suite and benchmarks exercise the compiler far beyond what
+# the tests of this repository cover. This workflow runs the CI of Genesis itself, called as a reusable workflow, on
+# the default branch of Genesis installed with the wheel built from the revision under test: the minimal set of
+# Genesis unit tests, every Genesis benchmark, and the comparison of those benchmarks against the history of the
+# default branch of Genesis, which comments on the pull request in case of regression.
+#
+# The wheel is the one built by the "Manylinux wheel build" workflow, hence 'workflow_run', which starts once that
+# workflow completes and can download its artifacts. In exchange, this file is always taken from the default branch,
+# and the outcome has to be published as a check on the commit under test to show up on it at all.
+on:
+  workflow_run:
+    workflows: ["Manylinux wheel build"]
+    types: [completed]
+
+# Pull requests come from forks, whose branch names collide across contributors, so the repository they live in is
+# part of what tells two runs apart.
+concurrency:
+  group: >-
+    ${{ github.workflow }}-${{ github.event.workflow_run.head_repository.full_name }}
+    ${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: true
+
+jobs:
+  tests-and-benchmarks:
+    name: genesis-tests_and_benchmarks
+
+    # Only a pull request is worth checking, Genesis being validated before a change lands rather than after.
+    # 'completed' is the one terminal activity type of 'workflow_run', fired for every conclusion, so the conclusion
+    # is read here: a wheel workflow that failed or was cancelled by a newer revision built nothing worth testing.
+    if: >
+      github.event.workflow_run.event == 'pull_request' &&
+      contains(fromJSON('["success", "neutral"]'), github.event.workflow_run.conclusion)
+
+    permissions:
+      contents: read
+      # To download the wheel from the triggering run.
+      actions: read
+      # To check the pull request behind the triggering run.
+      pull-requests: read
+
+    # The CI of Genesis runs on the runners of the Genesis repository, made available to this one through their
+    # runner group, and routes every call to the one runner labelled for them, where the calls of every repository
+    # queue in order while the other runner stays available to the Genesis CI.
+    uses: Genesis-Embodied-AI/genesis-world/.github/workflows/production.yml@main
+    with:
+      quadrants_run_id: ${{ github.event.workflow_run.id }}
+      # Only the minimal set of tests Genesis requires to pass on any environment, in the dynamic array mode alone:
+      # the full matrix belongs to the CI of Genesis.
+      unit_tests_markexpr: required and not slow
+      unit_tests_modes: '["1"]'
+    secrets: inherit
+
+  # A 'workflow_run' job is not attached to the pull request that started it, so its outcome is published as a check
+  # on the commit under test. This is what makes it appear among the checks of that pull request, and therefore what
+  # allows requiring it before merging.
+  publish-check:
+    name: genesis-publish_check
+
+    needs: tests-and-benchmarks
+    if: always() && needs.tests-and-benchmarks.result != 'skipped'
+    runs-on: ubuntu-latest
+
+    permissions:
+      checks: write
+
+    steps:
+      - name: Publish PR check
+        uses: actions/github-script@v8
+        env:
+          CHECK_NAME: Genesis Unit Tests & Benchmarks
+          RESULT: ${{ needs.tests-and-benchmarks.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          script: |
+            const isSuccess = process.env.RESULT === 'success';
+            await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              head_sha: context.payload.workflow_run.head_sha,
+              name: process.env.CHECK_NAME,
+              status: 'completed',
+              conclusion: isSuccess ? 'success' : 'failure',
+              details_url: process.env.RUN_URL,
+              output: {
+                title: process.env.CHECK_NAME,
+                summary: isSuccess
+                  ? 'The Genesis unit tests and benchmarks pass with the wheel under test.'
+                  : `The Genesis unit tests or benchmarks fail with the wheel under test (${process.env.RESULT}).`,
+                text: `**[Full log](${process.env.RUN_URL})**`
+              }
+            });
+
+  # The comparison is the one the CI of Genesis runs on its own pull requests, down to the tolerances, the baseline
+  # being the history of the default branch of Genesis with the release of Quadrants it pins.
+  benchmark-comparison:
+    name: genesis-benchmark_comparison
+
+    needs: tests-and-benchmarks
+
+    permissions:
+      contents: read
+      # To download the benchmark results of this very run.
+      actions: read
+      checks: write
+      pull-requests: write
+
+    uses: Genesis-Embodied-AI/genesis-world/.github/workflows/alarm.yml@main
+    secrets: inherit
