@@ -972,12 +972,12 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
     val = ir_->cast(dst_type, ir_->eq(operand_val, zero));
   } else if (stmt->op_type == UnaryOpType::neg) {
     operand_val = ir_->cast(dst_type, operand_val);
-    if (is_integral(dst_dt)) {
-      if (is_signed(dst_dt)) {
-        val = ir_->make_value(spv::OpSNegate, dst_type, operand_val);
-      } else {
-        QD_NOT_IMPLEMENTED
-      }
+    if (dst_dt->is_primitive(PrimitiveTypeID::u1)) {
+      // u1 maps to the SPIR-V Boolean type, which OpSNegate does not accept.
+      val = operand_val;  // Negation modulo 2 is the identity.
+    } else if (is_integral(dst_dt)) {
+      // Two's complement for unsigned integers.
+      val = ir_->make_value(spv::OpSNegate, dst_type, operand_val);
     } else if (is_real(dst_dt)) {
       val = ir_->make_value(spv::OpFNegate, dst_type, operand_val);
     } else {
