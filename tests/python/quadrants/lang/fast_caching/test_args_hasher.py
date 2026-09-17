@@ -492,3 +492,37 @@ def test_args_hasher_frozen_dataclass_failure_does_not_poison_narrower_walk() ->
     # And unpruned walks are unaffected: no ``pruning_paths`` -> walk everything -> fail (same as A).
     h_none = args_hasher.hash_args(False, [state], [arg_meta])
     assert isinstance(h_none, FastcacheSkip), f"unpruned walk should fail fastcache; got {h_none!r}"
+
+
+@test_utils.test()
+def test_args_hasher_matrix_declared_type() -> None:
+    """A host-side Vector / Matrix value keys on the declared type (dtype, dimensionality, shape), not its entries."""
+    seen = set()
+    for dtype in [qd.i32, qd.i64, qd.f32, qd.f64]:
+        for n in [2, 3]:
+            for annotation in (qd.types.vector(n, dtype), qd.types.matrix(1, n, dtype), qd.types.matrix(n, 1, dtype)):
+                shape = (n,) if annotation.ndim == 1 else (annotation.n, annotation.m)
+                for it, fill in enumerate((1, 2.5)):
+                    arg = qd.Matrix(np.full(shape, fill)) if annotation.ndim == 2 else qd.Vector(np.full(shape, fill))
+                    hash = args_hasher.hash_args(False, [arg], [ArgMetadata(annotation, "v")])
+                    assert not isinstance(hash, FastcacheSkip)
+                    if it == 0:
+                        assert hash not in seen
+                        seen.add(hash)
+                    else:
+                        assert hash in seen
+                    # Without the declared type the entries are baked into the kernel, so the value is not cacheable.
+                    for arg_meta in (None, ArgMetadata(qd.Template, "v")):
+                        assert isinstance(args_hasher.hash_args(False, [arg], [arg_meta]), FastcacheSkip)
+
+
+@test_utils.test()
+def test_args_hasher_matrix_dataclass_field() -> None:
+    """A Vector dataclass field hashes via the field's declared type."""
+
+    @dataclasses.dataclass
+    class Params:
+        v: qd.types.vector(3, qd.f32)
+
+    hash = args_hasher.hash_args(False, [Params(qd.Vector([1, 2, 3]))], [ArgMetadata(Params, "p")])
+    assert not isinstance(hash, FastcacheSkip)
