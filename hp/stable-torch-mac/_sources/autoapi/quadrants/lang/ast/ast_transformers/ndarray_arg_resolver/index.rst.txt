@@ -1,0 +1,51 @@
+quadrants.lang.ast.ast_transformers.ndarray_arg_resolver
+========================================================
+
+.. py:module:: quadrants.lang.ast.ast_transformers.ndarray_arg_resolver
+
+.. autoapi-nested-parse::
+
+   Resolve an ndarray-referencing AST expression to its flat C++ kernel arg-id at AST-build time.
+
+   Lives alongside ``checkpoint_transformer.py`` / ``call_transformer.py`` so the central ``ast_transformer.py`` file
+   doesn't have to grow per-feature. Both ``qd.checkpoint(yield_on=...)`` (via
+   ``CheckpointTransformer.build_checkpoint_with``) and ``qd.graph_do_while(...)`` (via ``ASTTransformer.build_While``)
+   share this helper: each form takes a control-flag / counter ndarray argument that may be a bare kernel parameter
+   (e.g. ``flag``), a ``@qd.data_oriented`` member ndarray (e.g. ``self.flag``), or a ``@dataclasses.dataclass``
+   parameter member (e.g. ``params.flag``). All three flatten to the same ``ExternalTensorExpression`` after AST build,
+   so resolving the arg-id here -- once, at kernel build time -- means the runtime launch path can forward it directly
+   with no per-launch name matching (which was the original ``_checkpoint_helpers`` approach and is incompatible with
+   member-ndarray flattening, since the flattened name is synthesised).
+
+   See ``docs/source/user_guide/graph.md`` for the user-facing surface and ``perso_hugh/doc/qipc/reentrant.md`` for the
+   design.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.lang.ast.ast_transformers.ndarray_arg_resolver.resolve_ndarray_kernel_arg_id
+
+
+Module Contents
+---------------
+
+.. py:function:: resolve_ndarray_kernel_arg_id(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, kernel, node: ast.expr, usage: str) -> tuple[str, int]
+
+   Resolve ``node`` to ``(label, flat_cpp_arg_id)`` at AST-build time.
+
+   Shared between ``qd.checkpoint(yield_on=...)`` and ``qd.graph_do_while(...)`` to turn the control-flag argument into
+   the flat C++ arg-id the runtime matches against. ``node`` is an ``ast.Name`` (a bare kernel parameter, e.g.
+   ``flag``) or an ``ast.Attribute`` chain (e.g. ``self.flag`` for a ``@qd.data_oriented`` owner, or ``params.flag``
+   where ``params`` is a ``@dataclasses.dataclass`` kernel parameter). We build the expression through the normal AST
+   machinery and read the arg-id off the resulting external-tensor expression -- this unifies the bare-param and
+   member-ndarray cases, since both flatten to a real ndarray kernel argument carrying its arg-id on the
+   ``ExternalTensorExpression``.
+
+   ``usage`` is the call form (e.g. ``"qd.checkpoint(yield_on=...)"``) used in the error message. Raises
+   ``QuadrantsSyntaxError`` if the expression does not resolve to an ndarray kernel argument.
+
+
