@@ -47,7 +47,7 @@ FrontendAssignStmt::FrontendAssignStmt(const Expr &lhs, const Expr &rhs, const D
 }
 
 FrontendIfStmt::FrontendIfStmt(const FrontendIfStmt &o)
-    : Stmt(o.dbg_info),
+    : Stmt(o),
       condition(o.condition),
       true_statements(o.true_statements->clone()),
       false_statements(o.false_statements->clone()) {
@@ -96,7 +96,7 @@ FrontendForStmt::FrontendForStmt(const Expr &loop_var,
 }
 
 FrontendForStmt::FrontendForStmt(const FrontendForStmt &o)
-    : Stmt(o.dbg_info),
+    : Stmt(o),
       snode(o.snode),
       external_tensor(o.external_tensor),
       mesh(o.mesh),
@@ -154,8 +154,7 @@ void FrontendForStmt::add_loop_var(const Expr &loop_var) {
 FrontendFuncDefStmt::FrontendFuncDefStmt(const FrontendFuncDefStmt &o) : funcid(o.funcid), body(o.body->clone()) {
 }
 
-FrontendWhileStmt::FrontendWhileStmt(const FrontendWhileStmt &o)
-    : Stmt(o.dbg_info), cond(o.cond), body(o.body->clone()) {
+FrontendWhileStmt::FrontendWhileStmt(const FrontendWhileStmt &o) : Stmt(o), cond(o.cond), body(o.body->clone()) {
 }
 
 void ArgLoadExpression::type_check(const CompileConfig *) {

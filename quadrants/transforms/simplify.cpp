@@ -86,6 +86,13 @@ class BasicBlockSimplify : public IRVisitor {
         auto &bstmt_data = *bstmt;
         if (typeid(bstmt_data) == typeid(*stmt)) {
           auto bstmt_ = bstmt->as<GlobalLoadStmt>();
+          // Graph do-while bodies are flattened into this block before offloading. Loads in different graph
+          // loops (or outside a loop) do not share an execution frequency: a later store in the body can reach
+          // this load through the graph backedge, which the linear intervening-store scan below cannot see.
+          // Keep each region's load so its range bounds are recomputed on every graph iteration.
+          if (stmt->region_tag.graph_do_while_level_id != bstmt_->region_tag.graph_do_while_level_id) {
+            continue;
+          }
           bool same = stmt->src == bstmt_->src;
           if (same) {
             // no store to the var?
