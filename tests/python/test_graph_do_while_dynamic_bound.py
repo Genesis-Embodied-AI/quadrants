@@ -7,7 +7,7 @@ import quadrants as qd
 from tests import test_utils
 
 
-@test_utils.test(arch=qd.cuda, offline_cache=False, advanced_optimization=True)
+@test_utils.test(offline_cache=False, advanced_optimization=True)
 def test_graph_do_while_dynamic_bound():
     @qd.kernel(graph=True)
     def k(
@@ -35,7 +35,7 @@ def test_graph_do_while_dynamic_bound():
     assert int(out.to_numpy()) == 1, "The second graph iteration must reload n after the first writes n=1"
 
 
-@test_utils.test(arch=qd.cuda, offline_cache=False, advanced_optimization=True)
+@test_utils.test(offline_cache=False, advanced_optimization=True)
 def test_graph_do_while_nested_dynamic_bound():
     @qd.kernel(graph=True)
     def k(
@@ -73,7 +73,7 @@ def test_graph_do_while_nested_dynamic_bound():
     assert int(out.to_numpy()) == 626
 
 
-@test_utils.test(arch=qd.cuda, offline_cache=False, advanced_optimization=True)
+@test_utils.test(offline_cache=False, advanced_optimization=True)
 def test_graph_do_while_sibling_dynamic_bound():
     @qd.kernel(graph=True)
     def k(
