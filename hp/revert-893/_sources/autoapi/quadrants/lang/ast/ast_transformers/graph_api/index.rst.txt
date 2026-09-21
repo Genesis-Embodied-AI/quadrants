@@ -1,0 +1,51 @@
+quadrants.lang.ast.ast_transformers.graph_api
+=============================================
+
+.. py:module:: quadrants.lang.ast.ast_transformers.graph_api
+
+.. autoapi-nested-parse::
+
+   Shared syntactic recognition of the graph-structuring kernel constructs, covering both the canonical
+   ``qd.graph.<name>`` namespace spelling and the deprecated flat ``qd.graph_<name>`` spelling.
+
+   These constructs (``do_while``, ``parallel_context``, ``parallel``) are lowered at compile time and never actually
+   called, so the AST transformers recognize them purely by their source spelling. Matching both spellings lives here in
+   one place so the several detection sites (``ast_transformer.py``, ``graph_parallel_transformer.py``,
+   ``function_def_transformer.py``) stay in sync. Using the deprecated flat spelling emits a ``DeprecationWarning`` at
+   compile time (see ``warn_if_deprecated``), which is the only place a warning can fire: the flat functions are recognized
+   by the AST transformer and never executed inside a kernel.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.lang.ast.ast_transformers.graph_api.is_deprecated_spelling
+   quadrants.lang.ast.ast_transformers.graph_api.matches
+   quadrants.lang.ast.ast_transformers.graph_api.warn_if_deprecated
+
+
+Module Contents
+---------------
+
+.. py:function:: is_deprecated_spelling(func: ast.expr, name: str) -> bool
+
+   True if *func* uses the deprecated flat ``qd.graph_<name>`` spelling (attribute ``x.graph_<name>`` or bare name
+   ``graph_<name>``).
+
+
+.. py:function:: matches(func: ast.expr, name: str) -> bool
+
+   True if *func* refers to the construct *name*, in either the canonical ``qd.graph.<name>`` spelling or the
+   deprecated flat ``qd.graph_<name>`` spelling. ``name`` is one of ``do_while`` / ``parallel_context`` / ``parallel``.
+
+
+.. py:function:: warn_if_deprecated(func: ast.expr, name: str) -> None
+
+   If *func* uses the deprecated flat ``qd.graph_<name>`` spelling, emit a ``DeprecationWarning`` pointing at the
+   canonical ``qd.graph.<name>`` spelling. Called once from each construct's lowering entry point so the warning fires
+   per use-site (deduplicated to once per message by the ``filterwarnings('once', ...)`` set up in ``lang/misc.py``).
+
+
