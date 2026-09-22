@@ -4,6 +4,7 @@
 #include "quadrants/ir/analysis.h"
 #include "quadrants/ir/visitors.h"
 #include "quadrants/program/program.h"
+#include "quadrants/experimental/conservative_top_level_gtmp.h"
 
 #include <set>
 #include <unordered_map>
@@ -481,6 +482,7 @@ class IdentifyValuesUsedInOtherOffloads : public BasicStmtVisitor {
                              const std::unordered_map<Stmt *, Stmt *> &stmt_to_offloaded,
                              OffloadedRanges *offloaded_ranges) {
     IdentifyValuesUsedInOtherOffloads pass(config, stmt_to_offloaded, offloaded_ranges);
+    pass.global_offset_ = experimental::reserved_gtmp_bytes(root);
     root->accept(&pass);
     return pass.local_to_global_;
   }

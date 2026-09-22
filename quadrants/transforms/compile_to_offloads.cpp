@@ -9,6 +9,7 @@
 #include "quadrants/program/kernel.h"
 #include "quadrants/util/lang_util.h"
 #include "quadrants/codegen/ir_dump.h"
+#include "quadrants/experimental/conservative_top_level_gtmp.h"
 #include <fstream>
 
 namespace quadrants::lang {
@@ -74,6 +75,9 @@ void compile_to_offloads(IRNode *ir,
 
   irpass::type_check(ir, config);
   irpass::analysis::verify_if_debug(ir, config);
+
+  experimental::snapshot_top_level_scalars(ir);
+  irpass::type_check(ir, config);
 
   // TODO: strictly enforce bit vectorization for x86 cpu and CUDA now
   //       create a separate CompileConfig flag for the new pass
