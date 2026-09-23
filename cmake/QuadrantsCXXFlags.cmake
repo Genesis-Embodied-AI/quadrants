@@ -21,7 +21,6 @@ endif ()
 
 # Do not enable lto for APPLE since it made linking extremely slow.
 if (WIN32)
-    # Append to (never overwrite) the per-config flags: they carry the optimization level (/O2, -O3) and /DNDEBUG.
     if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
         set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -flto=thin")
         set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -flto=thin")
