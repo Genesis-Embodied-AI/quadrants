@@ -3,6 +3,8 @@
 #pragma once
 
 #include <atomic>
+#include <cstdint>
+#include <typeinfo>
 #include <unordered_set>
 #include <unordered_map>
 #include <variant>
@@ -241,30 +243,57 @@ class IRNode {
 
   template <typename T>
   bool is() const {
-    return dynamic_cast<const T *>(this) != nullptr;
+    return cached_cast<T>() != nullptr;
   }
 
   template <typename T>
   T *as() {
-    QD_ASSERT(is<T>());
-    return dynamic_cast<T *>(this);
+    auto *p = const_cast<T *>(cached_cast<T>());
+    QD_ASSERT(p != nullptr);
+    return p;
   }
 
   template <typename T>
   const T *as() const {
-    QD_ASSERT(is<T>());
-    return dynamic_cast<const T *>(this);
+    auto *p = cached_cast<T>();
+    QD_ASSERT(p != nullptr);
+    return p;
   }
 
   template <typename T>
   T *cast() {
-    return dynamic_cast<T *>(this);
+    return const_cast<T *>(cached_cast<T>());
   }
 
   template <typename T>
   const T *cast() const {
-    return dynamic_cast<const T *>(this);
+    return cached_cast<T>();
   }
+
+ private:
+  // dynamic_cast<T> keyed on the most-derived type of *this: for a given complete type the offset of the T subobject
+  // (or the failure of the cast) is fixed, so it is computed once per (type, T) and then reused.
+  template <typename T>
+  const T *cached_cast() const {
+    struct Entry {
+      const std::type_info *type;
+      std::ptrdiff_t offset;
+    };
+    constexpr std::ptrdiff_t kFail = PTRDIFF_MIN;
+    static thread_local Entry cache[64];
+    const std::type_info *ti = &typeid(*this);
+    Entry &e = cache[(reinterpret_cast<std::uintptr_t>(ti) >> 4) & 63];
+    if (e.type != ti) {
+      const T *p = dynamic_cast<const T *>(this);
+      e.type = ti;
+      e.offset = p ? reinterpret_cast<const char *>(p) - reinterpret_cast<const char *>(this) : kFail;
+    }
+    if (e.offset == kFail)
+      return nullptr;
+    return reinterpret_cast<const T *>(reinterpret_cast<const char *>(this) + e.offset);
+  }
+
+ public:
 
   std::unique_ptr<IRNode> clone();
 };
