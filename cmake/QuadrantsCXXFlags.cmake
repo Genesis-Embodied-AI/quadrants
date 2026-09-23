@@ -30,8 +30,7 @@ if (WIN32)
         if (QD_WITH_LTO)
             set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} /GL")
             set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /GL")
-            # FIXME: Preserve per-config linker flags without retaining /INCREMENTAL,
-            # which is incompatible with /LTCG.
+            # FIXME: Preserve per-config linker flags without retaining /INCREMENTAL, which is incompatible with /LTCG.
             set(CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO "${CMAKE_EXE_LINKER_FLAGS} /LTCG")
             set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS} /LTCG")
         endif()
