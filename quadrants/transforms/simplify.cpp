@@ -301,7 +301,8 @@ class BasicBlockSimplify : public IRVisitor {
   }
 
   void visit(IfStmt *if_stmt) override {
-    auto flatten = [&](stmt_vector &clause, bool true_branch) {
+    auto flatten = [&](Block *clause_block, bool true_branch) {
+      const auto &clause = clause_block->statements;
       bool plain_clause = true;  // no global store, no container
 
       // Here we try to move statements outside the clause;
@@ -330,13 +331,14 @@ class BasicBlockSimplify : public IRVisitor {
         }
       }
       if (plain_clause) {
-        for (int i = 0; i < (int)clause.size(); i++) {
-          if (is_global_write(clause[i].get())) {
+        auto owned_clause = clause_block->extract_statements();
+        for (int i = 0; i < (int)owned_clause.size(); i++) {
+          if (is_global_write(owned_clause[i].get())) {
             // do nothing. Keep the statement.
             continue;
           }
-          if (clause[i]->is<LocalStoreStmt>()) {
-            auto store = clause[i]->as<LocalStoreStmt>();
+          if (owned_clause[i]->is<LocalStoreStmt>()) {
+            auto store = owned_clause[i]->as<LocalStoreStmt>();
             auto load = Stmt::make<LocalLoadStmt>(store->dest);
             modifier.type_check(load.get(), config);
             auto select =
@@ -346,32 +348,32 @@ class BasicBlockSimplify : public IRVisitor {
             store->val = select.get();
             modifier.insert_before(if_stmt, std::move(load));
             modifier.insert_before(if_stmt, std::move(select));
-            modifier.insert_before(if_stmt, std::move(clause[i]));
+            modifier.insert_before(if_stmt, std::move(owned_clause[i]));
           } else {
-            modifier.insert_before(if_stmt, std::move(clause[i]));
+            modifier.insert_before(if_stmt, std::move(owned_clause[i]));
           }
         }
         auto clean_clause = stmt_vector();
         bool reduced = false;
-        for (auto &&stmt : clause) {
+        for (auto &&stmt : owned_clause) {
           if (stmt != nullptr) {
             clean_clause.push_back(std::move(stmt));
           } else {
             reduced = true;
           }
         }
-        clause = std::move(clean_clause);
+        clause_block->insert(VecStatement(std::move(clean_clause)));
         return reduced;
       }
       return false;
     };
 
     if (config.flatten_if) {
-      if (if_stmt->true_statements && flatten(if_stmt->true_statements->statements, true)) {
+      if (if_stmt->true_statements && flatten(if_stmt->true_statements.get(), true)) {
         modifier.mark_as_modified();
         return;
       }
-      if (if_stmt->false_statements && flatten(if_stmt->false_statements->statements, false)) {
+      if (if_stmt->false_statements && flatten(if_stmt->false_statements.get(), false)) {
         modifier.mark_as_modified();
         return;
       }
@@ -410,7 +412,7 @@ class BasicBlockSimplify : public IRVisitor {
               return;
             }
             if (clause2 != nullptr)
-              clause1->insert(VecStatement(std::move(clause2->statements)), 0);
+              clause1->insert(VecStatement(clause2->extract_statements()), 0);
           };
           concatenate(bstmt->true_statements, if_stmt->true_statements);
           concatenate(bstmt->false_statements, if_stmt->false_statements);

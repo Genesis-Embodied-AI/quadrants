@@ -71,7 +71,7 @@ class DemoteOperations : public BasicStmtVisitor {
     auto final_result = transform_pow_op_impl(builder, lhs, rhs);
 
     stmt->replace_usages_with(final_result);
-    modifier.insert_before(stmt, VecStatement(std::move(builder.extract_ir()->statements)));
+    modifier.insert_before(stmt, VecStatement(builder.extract_ir()->extract_statements()));
     modifier.erase(stmt);
   }
 
@@ -114,7 +114,7 @@ class DemoteOperations : public BasicStmtVisitor {
       IRBuilder builder;
       auto cur_result = transform_pow_op_impl(builder, cur_lhs, cur_rhs);
 
-      modifier.insert_before(stmt, VecStatement(std::move(builder.extract_ir()->statements)));
+      modifier.insert_before(stmt, VecStatement(builder.extract_ir()->extract_statements()));
       ret_stmts.push_back(cur_result);
     }
     auto new_matrix = Stmt::make<MatrixInitStmt>(ret_stmts);
