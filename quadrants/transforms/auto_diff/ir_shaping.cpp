@@ -527,16 +527,17 @@ class ReverseOuterLoops : public BasicStmtVisitor {
       must_hoist.erase(block->statements[fi].get());
     }
 
+    auto statements = block->extract_statements();
     std::vector<std::unique_ptr<Stmt>> new_stmts;
     new_stmts.reserve(n);
     // Stmts strictly before `first_for` keep their original slot.
     for (int i = 0; i < first_for; ++i) {
-      new_stmts.push_back(std::move(block->statements[i]));
+      new_stmts.push_back(std::move(statements[i]));
     }
     // Hoisted non-loop stmts slot in here, in their original relative order.
     for (int i = first_for; i < n; ++i) {
-      if (must_hoist.count(block->statements[i].get()) != 0) {
-        new_stmts.push_back(std::move(block->statements[i]));
+      if (must_hoist.count(statements[i].get()) != 0) {
+        new_stmts.push_back(std::move(statements[i]));
       }
     }
     // Remainder (for-loops and non-hoisted non-loops) in original order, with for-loops swapped pairwise inside this
@@ -544,7 +545,7 @@ class ReverseOuterLoops : public BasicStmtVisitor {
     std::vector<std::unique_ptr<Stmt>> suffix;
     std::vector<int> suffix_for_positions;
     for (int i = first_for; i < n; ++i) {
-      auto &sp = block->statements[i];
+      auto &sp = statements[i];
       if (!sp) {
         continue;
       }
@@ -562,10 +563,7 @@ class ReverseOuterLoops : public BasicStmtVisitor {
     }
 
     QD_ASSERT((int)new_stmts.size() == n);
-    block->statements.clear();
-    for (auto &s : new_stmts) {
-      block->statements.push_back(std::move(s));
-    }
+    block->insert(VecStatement(std::move(new_stmts)));
   }
 
   void visit(StructForStmt *stmt) override {

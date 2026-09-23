@@ -410,7 +410,7 @@ class BasicBlockSimplify : public IRVisitor {
               return;
             }
             if (clause2 != nullptr)
-              clause1->insert(VecStatement(std::move(clause2->statements)), 0);
+              clause1->insert(VecStatement(clause2->extract_statements()), 0);
           };
           concatenate(bstmt->true_statements, if_stmt->true_statements);
           concatenate(bstmt->false_statements, if_stmt->false_statements);
