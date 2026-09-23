@@ -528,7 +528,7 @@ class ReverseOuterLoops : public BasicStmtVisitor {
     }
 
     auto statements = block->extract_statements();
-    std::vector<std::unique_ptr<Stmt>> new_stmts;
+    stmt_vector new_stmts;
     new_stmts.reserve(n);
     // Stmts strictly before `first_for` keep their original slot.
     for (int i = 0; i < first_for; ++i) {

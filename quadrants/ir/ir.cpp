@@ -279,8 +279,8 @@ void Block::check_statement_list_mutation() const {
 
 stmt_vector Block::extract_statements() {
   check_statement_list_mutation();
-  stmt_vector result;
-  result.swap(statements_);
+  auto result = std::move(statements_);
+  statements_.clear();
   return result;
 }
 
@@ -298,13 +298,13 @@ void Block::erase(Stmt *stmt) {
 
 void Block::erase_range(stmt_vector::const_iterator begin, stmt_vector::const_iterator end) {
   check_statement_list_mutation();
-  auto mutable_begin = statements_.begin() + (begin - statements_.cbegin());
-  auto mutable_end = statements_.begin() + (end - statements_.cbegin());
+  auto mutable_begin = statements_.begin() + (begin - statements.begin());
+  auto mutable_end = statements_.begin() + (end - statements.begin());
   for (auto iter = mutable_begin; iter != mutable_end; iter++) {
     (*iter)->erased = true;
     trash_bin.push_back(std::move(*iter));
   }
-  statements_.erase(begin, end);
+  statements_.erase(mutable_begin, mutable_end);
 }
 
 void Block::erase(std::unordered_set<Stmt *> stmts) {
@@ -349,7 +349,7 @@ Stmt *Block::insert_at(std::unique_ptr<Stmt> &&stmt, stmt_vector::const_iterator
   check_statement_list_mutation();
   auto stmt_ptr = stmt.get();
   stmt->parent = this;
-  statements_.insert(location, std::move(stmt));
+  statements_.insert(statements_.begin() + (location - statements.begin()), std::move(stmt));
   return stmt_ptr;
 }
 
@@ -367,7 +367,8 @@ Stmt *Block::insert_at(VecStatement &&stmt, stmt_vector::const_iterator location
   for (auto &s : stmt.stmts) {
     s->parent = this;
   }
-  statements_.insert(location, std::make_move_iterator(stmt.stmts.begin()), std::make_move_iterator(stmt.stmts.end()));
+  statements_.insert(statements_.begin() + (location - statements.begin()), std::make_move_iterator(stmt.stmts.begin()),
+                     std::make_move_iterator(stmt.stmts.end()));
   return stmt_ptr;
 }
 
@@ -425,7 +426,7 @@ void Block::insert_after(Stmt *old_statement, VecStatement &&new_statements) {
 
 void Block::replace_with(Stmt *old_statement, VecStatement &&new_statements, bool replace_usages) {
   check_statement_list_mutation();
-  auto iter = statements_.begin() + (find(old_statement) - statements_.cbegin());
+  auto iter = statements_.begin() + (find(old_statement) - statements.begin());
   QD_ASSERT(iter != statements_.end());
   if (replace_usages && !new_statements.stmts.empty())
     old_statement->replace_usages_with(new_statements.back().get());
