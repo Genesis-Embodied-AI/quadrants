@@ -11,6 +11,7 @@ BasicStmtVisitor::BasicStmtVisitor() {
 void BasicStmtVisitor::visit(Block *stmt_list) {
   std::vector<Stmt *> statements;
   // Make a copy in case the pass modifies the block itself
+  statements.reserve(stmt_list->statements.size());
   for (auto &stmt : stmt_list->statements)
     statements.push_back(stmt.get());
   for (auto &stmt : statements)
