@@ -1,7 +1,9 @@
 import dataclasses
 import enum
+import functools
 import numbers
 import time
+from collections.abc import Container
 from typing import Any, Sequence
 
 import numpy as np
@@ -51,6 +53,10 @@ _DC_REPR_NONE = object()
 # scalar args rather than baked into the kernel) and non-Tensor (so a stray ``qd.field`` child still triggers the
 # warn-and-disable path, exactly as for a normal data_oriented object).
 _NON_TEMPLATE_CHILD_META = ArgMetadata(None, "")
+
+# arg_meta for the value of a kernel-read property: the kernel can only consume it at compile time (e.g.
+# ``qd.static(cfg.n_rows)``), so a primitive result is baked into the key even on a ``template_primitives=False`` object.
+_PROPERTY_VALUE_META = ArgMetadata(Template, "")
 
 
 # Returned by ``stringify_obj_type`` when a value cannot be safely hashed (unsupported tensor-like type, or an
@@ -145,6 +151,71 @@ def _is_path_used(pruning_paths: set[str] | None, child_flat: str | None) -> boo
     if pruning_paths is None or child_flat is None:
         return True
     return child_flat in pruning_paths
+
+
+def _read_property_names(
+    obj: object, instance_names: Container[str], parent_flat: str | None, pruning_paths: set[str] | None
+) -> list[str]:
+    """Names of the properties of ``obj`` that the kernel reads, sorted for a deterministic key.
+
+    Pruning records a read of ``cfg.n_rows`` by name, but when ``n_rows`` is a property the members it reads are read by
+    plain Python outside the kernel AST, so they never reach ``pruning_paths``; and the property itself is absent from
+    the instance members the walkers iterate. Its value therefore has to be hashed explicitly, or two objects that
+    differ only in a member the property derives from share a key. With ``pruning_paths is None`` every member is already
+    hashed, and so is everything a property can derive from them.
+    """
+    if pruning_paths is None or parent_flat is None:
+        return []
+    names: set[str] = set()
+    for klass in type(obj).__mro__:
+        for name, attr in klass.__dict__.items():
+            if (
+                isinstance(attr, (property, functools.cached_property))
+                and name not in instance_names
+                and create_flat_name(parent_flat, name) in pruning_paths
+            ):
+                names.add(name)
+    return sorted(names)
+
+
+def _stringify_read_properties(
+    raise_on_templated_floats: bool,
+    path: tuple[str, ...],
+    obj: object,
+    instance_names: Container[str],
+    pruning_paths: set[str] | None,
+    parent_flat: str | None,
+) -> list[str] | _FailFastcache:
+    """Key entries for the kernel-read properties of ``obj`` (see ``_read_property_names``).
+
+    A property whose value cannot be hashed, or whose getter raises, fails fastcache for the call, exactly like a
+    kernel-read member of an unrecognised type.
+    """
+    repr_l = []
+    for name in _read_property_names(obj, instance_names, parent_flat, pruning_paths):
+        child_path = path + (name,)
+        try:
+            value = getattr(obj, name)
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            _logging.warn(
+                f"[FASTCACHE][PROPERTY_RAISED] Property at kernel-read path {child_path} raised {e!r} while computing "
+                f"the fastcache key. Fastcache is disabled for this call."
+            )
+            _mark_should_warn()
+            return _FAIL_FASTCACHE
+        _repr = stringify_obj_type(
+            raise_on_templated_floats,
+            child_path,
+            value,
+            _PROPERTY_VALUE_META,
+            pruning_paths=pruning_paths,
+            parent_flat=create_flat_name(parent_flat, name),
+        )
+        if _repr is _FAIL_FASTCACHE:
+            return _FAIL_FASTCACHE
+        # ``@`` keeps a property entry distinct from a same-named member entry.
+        repr_l.append(f"@{name}: {_repr}")
+    return repr_l
 
 
 def dataclass_to_repr(
@@ -333,6 +404,12 @@ def stringify_obj_type(
             if _child_repr is _FAIL_FASTCACHE:
                 return _FAIL_FASTCACHE
             child_repr_l.append(f"{k}: {_child_repr}")
+        property_repr_l = _stringify_read_properties(
+            raise_on_templated_floats, path, obj, _dict, pruning_paths, parent_flat
+        )
+        if property_repr_l is _FAIL_FASTCACHE:
+            return _FAIL_FASTCACHE
+        child_repr_l.extend(property_repr_l)
         return ", ".join(child_repr_l)
     if issubclass(arg_type, (numbers.Number, np.number)):
         if _is_template(arg_meta):

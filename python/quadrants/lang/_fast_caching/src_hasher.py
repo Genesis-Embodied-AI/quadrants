@@ -68,8 +68,9 @@ _L2_MARKER = "l2"
 # name matching (necessary for @qd.data_oriented member ndarrays). v4 added the per-slot
 # `checkpoint_user_label_enum_qualnames` table so an IntEnum cp_id (e.g. `qd.checkpoint(Stage.SIM, ...)`) round-trips
 # through fast-cache restore as the original IntEnum member rather than the underlying int. v5 made the L1 flat-name set
-# a union over specializations, so a v4 entry can name an artifact whose key omits paths it depends on.
-_CACHE_VALUE_SCHEMA_VERSION = "cachevalue-v5-pruning-union"
+# a union over specializations, so a v4 entry can name an artifact whose key omits paths it depends on. v6 hashes the
+# values of kernel-read ``@qd.data_oriented`` properties, so a v5 L2 key can omit a member a property derives from.
+_CACHE_VALUE_SCHEMA_VERSION = "cachevalue-v6-property-values"
 
 
 def _intenum_member_qualname(value: Any) -> str | None:

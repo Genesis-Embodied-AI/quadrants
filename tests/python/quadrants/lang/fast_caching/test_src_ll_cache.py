@@ -607,6 +607,97 @@ def test_src_ll_cache_pruning_union_across_static_branches(tmp_path: pathlib.Pat
     np.testing.assert_array_equal(y_values, np.full(N, 2, dtype=np.int32))
 
 
+@test_utils.test()
+def test_src_ll_cache_data_oriented_property_value_in_key(tmp_path: pathlib.Path) -> None:
+    """Pin: a member a kernel reads only through a ``@property`` of a ``@qd.data_oriented`` template arg keys the
+    fastcache via the property's value.
+
+    Pruning records the read of ``cfg.n_rows``, but the property's read of ``cfg.flag`` is plain Python outside the
+    kernel, so ``flag`` never enters the pruning set; and ``n_rows`` is not an instance member, so the walker never hashed
+    it either. A process with ``flag=True`` was then served the artifact compiled for ``flag=False`` (``1`` instead of
+    ``3``). Genesis hit this through ``RigidSimStaticConfig.rows_per_contact``.
+    """
+    import numpy as np  # local import keeps the test module's top-level deps unchanged
+
+    arch = getattr(qd, qd.lang.impl.current_cfg().arch.name)
+    N = 4
+
+    @qd.data_oriented
+    class Config:
+        def __init__(self, flag: bool) -> None:
+            self.flag = flag
+
+        @property
+        def n_rows(self) -> int:
+            return 3 if self.flag else 1
+
+    @qd.pure
+    @qd.kernel
+    def fill_n_rows(cfg: qd.template(), out: qd.types.ndarray()) -> None:
+        for i in range(N):
+            out[i] = qd.static(cfg.n_rows)
+
+    def run(flag: bool):
+        qd.reset()
+        qd.init(arch=arch, offline_cache_file_path=str(tmp_path), offline_cache=True)
+        out = qd.ndarray(qd.i32, shape=(N,))
+        fill_n_rows(Config(flag), out)
+        return fill_n_rows._primal.src_ll_cache_observations.cache_loaded, out.to_numpy()
+
+    loaded, values = run(False)
+    assert not loaded
+    np.testing.assert_array_equal(values, np.full(N, 1, dtype=np.int32))
+
+    loaded, values = run(True)
+    assert not loaded, (
+        "fastcache hit after a change of cfg.flag, which cfg.n_rows derives from - the L2 key omits the property's "
+        "value, so the artifact compiled for n_rows=1 is being served for n_rows=3"
+    )
+    np.testing.assert_array_equal(values, np.full(N, 3, dtype=np.int32))
+
+    for flag, expected in ((True, 3), (False, 1)):
+        loaded, values = run(flag)
+        assert loaded, f"expected a fastcache hit for flag={flag}, whose artifact is already cached"
+        np.testing.assert_array_equal(values, np.full(N, expected, dtype=np.int32))
+
+
+@test_utils.test()
+def test_src_ll_cache_data_oriented_unhashable_property_disables_fastcache(tmp_path: pathlib.Path) -> None:
+    """A kernel-read property whose value fastcache cannot hash disables fastcache for the call rather than being left
+    out of the key, like any other kernel-read value of an unrecognised type."""
+    import numpy as np  # local import keeps the test module's top-level deps unchanged
+
+    arch = getattr(qd, qd.lang.impl.current_cfg().arch.name)
+    N = 4
+
+    @qd.data_oriented
+    class Config:
+        def __init__(self, n: int) -> None:
+            self.n = n
+
+        @property
+        def dims(self) -> tuple[int, int]:
+            return (self.n, 2 * self.n)
+
+    @qd.pure
+    @qd.kernel
+    def fill_dims(cfg: qd.template(), out: qd.types.ndarray()) -> None:
+        for i in range(N):
+            out[i] = qd.static(cfg.dims[1])
+
+    def run(n: int):
+        qd.reset()
+        qd.init(arch=arch, offline_cache_file_path=str(tmp_path), offline_cache=True)
+        out = qd.ndarray(qd.i32, shape=(N,))
+        fill_dims(Config(n), out)
+        return fill_dims._primal.src_ll_cache_observations.cache_loaded, out.to_numpy()
+
+    for n in (1, 2, 2):
+        loaded, values = run(n)
+        assert not loaded, "a tuple-valued property cannot be hashed, so fastcache must stay off"
+        np.testing.assert_array_equal(values, np.full(N, 2 * n, dtype=np.int32))
+
+
 class ModifySubFuncKernelArgs(pydantic.BaseModel):
     arch: str
     offline_cache_file_path: str
