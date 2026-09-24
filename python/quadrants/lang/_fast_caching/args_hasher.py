@@ -209,7 +209,7 @@ def _stringify_read_properties(
             value,
             _PROPERTY_VALUE_META,
             pruning_paths=pruning_paths,
-            parent_flat=create_flat_name(parent_flat, name),
+            parent_flat=_child_flat(parent_flat, name),
         )
         if _repr is _FAIL_FASTCACHE:
             return _FAIL_FASTCACHE
@@ -407,7 +407,7 @@ def stringify_obj_type(
         property_repr_l = _stringify_read_properties(
             raise_on_templated_floats, path, obj, _dict, pruning_paths, parent_flat
         )
-        if property_repr_l is _FAIL_FASTCACHE:
+        if isinstance(property_repr_l, _FailFastcache):
             return _FAIL_FASTCACHE
         child_repr_l.extend(property_repr_l)
         return ", ".join(child_repr_l)

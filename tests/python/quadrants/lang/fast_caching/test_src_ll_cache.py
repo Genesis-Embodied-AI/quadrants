@@ -634,8 +634,9 @@ def test_src_ll_cache_data_oriented_property_value_in_key(tmp_path: pathlib.Path
     @qd.pure
     @qd.kernel
     def fill_n_rows(cfg: qd.template(), out: qd.types.ndarray()) -> None:
+        n_rows = qd.static(cfg.n_rows)
         for i in range(N):
-            out[i] = qd.static(cfg.n_rows)
+            out[i] = n_rows
 
     def run(flag: bool):
         qd.reset()
@@ -682,8 +683,9 @@ def test_src_ll_cache_data_oriented_unhashable_property_disables_fastcache(tmp_p
     @qd.pure
     @qd.kernel
     def fill_dims(cfg: qd.template(), out: qd.types.ndarray()) -> None:
+        dim = qd.static(cfg.dims[1])
         for i in range(N):
-            out[i] = qd.static(cfg.dims[1])
+            out[i] = dim
 
     def run(n: int):
         qd.reset()
