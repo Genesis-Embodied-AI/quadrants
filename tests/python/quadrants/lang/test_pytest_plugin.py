@@ -49,6 +49,7 @@ def test_pytest_autoload_does_not_import_runtime(tmp_path):
         (True, None, False, "1", "0"),
         (True, None, True, "1", "1"),
         (True, "0", True, "0", None),
+        (True, "1", False, "1", "0"),
         (True, "1", True, "1", "1"),
     ],
 )
