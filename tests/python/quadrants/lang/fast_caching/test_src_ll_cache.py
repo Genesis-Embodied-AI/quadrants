@@ -602,10 +602,14 @@ def test_src_ll_cache_pruning_union_across_static_branches(tmp_path: pathlib.Pat
     np.testing.assert_array_equal(y_values, np.full(N, 2, dtype=np.int32))
 
 
+@pytest.mark.parametrize("template_primitives", [True, False])
+@pytest.mark.parametrize("fastcache", [True, False])
 @test_utils.test()
-def test_src_ll_cache_data_oriented_property_value_in_key(tmp_path: pathlib.Path) -> None:
+def test_src_ll_cache_data_oriented_property_value_in_key(
+    tmp_path: pathlib.Path, fastcache: bool, template_primitives: bool
+) -> None:
     """Pin: a member a kernel reads only through a ``@property`` of a ``@qd.data_oriented`` template arg keys the
-    fastcache via the property's value.
+    fastcache via the property's value, and results match with fastcache off.
 
     Pruning records the read of ``cfg.n_rows``, but the property's read of ``cfg.flag`` is plain Python outside the
     kernel, so ``flag`` never enters the pruning set; and ``n_rows`` is not an instance member, so the walker never
@@ -615,7 +619,7 @@ def test_src_ll_cache_data_oriented_property_value_in_key(tmp_path: pathlib.Path
     arch = getattr(qd, qd.lang.impl.current_cfg().arch.name)
     N = 4
 
-    @qd.data_oriented
+    @qd.data_oriented(template_primitives=template_primitives)
     class Config:
         def __init__(self, flag: bool) -> None:
             self.flag = flag
@@ -624,7 +628,7 @@ def test_src_ll_cache_data_oriented_property_value_in_key(tmp_path: pathlib.Path
         def n_rows(self) -> int:
             return 3 if self.flag else 1
 
-    @qd.kernel(fastcache=True)
+    @qd.kernel(fastcache=fastcache)
     def fill_n_rows(cfg: qd.template(), out: qd.types.ndarray()) -> None:
         n_rows = qd.static(cfg.n_rows)
         for i in range(N):
@@ -637,31 +641,26 @@ def test_src_ll_cache_data_oriented_property_value_in_key(tmp_path: pathlib.Path
         fill_n_rows(Config(flag), out)
         return fill_n_rows._primal.src_ll_cache_observations.cache_loaded, out.to_numpy()
 
-    loaded, values = run(False)
-    assert not loaded
-    np.testing.assert_array_equal(values, np.full(N, 1, dtype=np.int32))
-
-    loaded, values = run(True)
-    assert not loaded, (
-        "fastcache hit after a change of cfg.flag, which cfg.n_rows derives from - the L2 key omits the property's "
-        "value, so the artifact compiled for n_rows=1 is being served for n_rows=3"
-    )
-    np.testing.assert_array_equal(values, np.full(N, 3, dtype=np.int32))
-
-    for flag, expected in ((True, 3), (False, 1)):
+    # (flag, expected value, whether the artifact is already cached): the second run changes only cfg.flag, so a hit
+    # there would mean the key omits the property's value.
+    for flag, expected, cached in ((False, 1, False), (True, 3, False), (True, 3, True), (False, 1, True)):
         loaded, values = run(flag)
-        assert loaded, f"expected a fastcache hit for flag={flag}, whose artifact is already cached"
         np.testing.assert_array_equal(values, np.full(N, expected, dtype=np.int32))
+        assert loaded == (fastcache and cached), f"flag={flag}: cache_loaded={loaded}"
 
 
+@pytest.mark.parametrize("template_primitives", [True, False])
+@pytest.mark.parametrize("fastcache", [True, False])
 @test_utils.test()
-def test_src_ll_cache_data_oriented_unhashable_property_disables_fastcache(tmp_path: pathlib.Path) -> None:
+def test_src_ll_cache_data_oriented_unhashable_property_disables_fastcache(
+    tmp_path: pathlib.Path, fastcache: bool, template_primitives: bool
+) -> None:
     """A kernel-read property whose value fastcache cannot hash disables fastcache for the call rather than being left
     out of the key, like any other kernel-read value of an unrecognised type."""
     arch = getattr(qd, qd.lang.impl.current_cfg().arch.name)
     N = 4
 
-    @qd.data_oriented
+    @qd.data_oriented(template_primitives=template_primitives)
     class Config:
         def __init__(self, n: int) -> None:
             self.n = n
@@ -670,7 +669,7 @@ def test_src_ll_cache_data_oriented_unhashable_property_disables_fastcache(tmp_p
         def dims(self) -> tuple[int, int]:
             return (self.n, 2 * self.n)
 
-    @qd.kernel(fastcache=True)
+    @qd.kernel(fastcache=fastcache)
     def fill_dims(cfg: qd.template(), out: qd.types.ndarray()) -> None:
         dim = qd.static(cfg.dims[1])
         for i in range(N):
@@ -689,14 +688,18 @@ def test_src_ll_cache_data_oriented_unhashable_property_disables_fastcache(tmp_p
         np.testing.assert_array_equal(values, np.full(N, 2 * n, dtype=np.int32))
 
 
+@pytest.mark.parametrize("template_primitives", [True, False])
+@pytest.mark.parametrize("fastcache", [True, False])
 @test_utils.test(arch=qd.cpu)
 @pytest.mark.skipif(sys.platform.startswith("win"), reason="Windows stderr not working with capfd")
-def test_src_ll_cache_data_oriented_cached_property_disables_fastcache(tmp_path: pathlib.Path, capfd) -> None:
+def test_src_ll_cache_data_oriented_cached_property_disables_fastcache(
+    tmp_path: pathlib.Path, capfd, fastcache: bool, template_primitives: bool
+) -> None:
     """A kernel-read ``functools.cached_property`` disables fastcache for the call, with a warning: once read it is
     stored as a member, so the same object would give different keys before and after its first read."""
     N = 4
 
-    @qd.data_oriented
+    @qd.data_oriented(template_primitives=template_primitives)
     class Config:
         def __init__(self, n: int) -> None:
             self.n = n
@@ -705,7 +708,7 @@ def test_src_ll_cache_data_oriented_cached_property_disables_fastcache(tmp_path:
         def twice_n(self) -> int:
             return 2 * self.n
 
-    @qd.kernel(fastcache=True)
+    @qd.kernel(fastcache=fastcache)
     def fill_twice_n(cfg: qd.template(), out: qd.types.ndarray()) -> None:
         twice_n = qd.static(cfg.twice_n)
         for i in range(N):
@@ -723,8 +726,7 @@ def test_src_ll_cache_data_oriented_cached_property_disables_fastcache(tmp_path:
         assert not loaded, "a kernel-read cached_property must keep fastcache off"
         np.testing.assert_array_equal(values, np.full(N, 2 * n, dtype=np.int32))
     _out, err = capfd.readouterr()
-    assert "[FASTCACHE][CACHED_PROPERTY]" in err
-    assert "twice_n" in err
+    assert ("[FASTCACHE][CACHED_PROPERTY]" in err) == fastcache
 
 
 class ModifySubFuncKernelArgs(pydantic.BaseModel):
