@@ -70,6 +70,7 @@ def test_kernel_coverage_configuration(monkeypatch, has_cov, opt_in, branch, exp
         pluginmanager=SimpleNamespace(hasplugin=lambda name: has_cov if name == "_cov" else False),
         option=SimpleNamespace(cov_branch=branch),
     )
+    # Call the startup hook directly with this test configuration to set the kernel coverage environment variables.
     quadrants_pytest.pytest_configure(config)
     assert os.environ.get("QD_KERNEL_COVERAGE") == expected_coverage
     assert os.environ.get("_QD_KCOV_ARC") == expected_arc
