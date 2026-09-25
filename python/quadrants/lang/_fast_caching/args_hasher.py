@@ -218,8 +218,7 @@ def _stringify_used_properties(
         )
         if _repr is _FAIL_FASTCACHE:
             return _FAIL_FASTCACHE
-        # ``@`` keeps a property entry distinct from a same-named member entry.
-        repr_l.append(f"@{name}: {_repr}")
+        repr_l.append(f"{name}: {_repr}")
     return repr_l
 
 
