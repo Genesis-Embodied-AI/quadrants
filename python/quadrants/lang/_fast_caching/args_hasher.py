@@ -154,19 +154,16 @@ def _get_used_properties(
 ) -> list[str]:
     """Names of the properties of ``obj`` that the kernel reads, sorted for a deterministic key.
 
-    Empty when ``pruning_paths`` is None: every member is then hashed, which covers anything a property derives from.
     Names in ``instance_names`` are skipped, since the member walk already hashed them (e.g. a computed
     ``cached_property``).
     """
-    if pruning_paths is None or parent_flat is None:
-        return []
     names: set[str] = set()
     for klass in type(obj).__mro__:
         for name, attr in klass.__dict__.items():
             if (
                 isinstance(attr, (property, functools.cached_property))
                 and name not in instance_names
-                and create_flat_name(parent_flat, name) in pruning_paths
+                and _is_path_used(pruning_paths, _child_flat(parent_flat, name))
             ):
                 names.add(name)
     return sorted(names)
