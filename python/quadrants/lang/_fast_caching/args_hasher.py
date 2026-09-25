@@ -149,7 +149,7 @@ def _is_path_used(pruning_paths: set[str] | None, child_flat: str | None) -> boo
     return child_flat in pruning_paths
 
 
-def _read_property_names(
+def _get_used_properties(
     obj: object, instance_names: Container[str], parent_flat: str | None, pruning_paths: set[str] | None
 ) -> list[str]:
     """Names of the properties of ``obj`` that the kernel reads, sorted for a deterministic key.
@@ -180,13 +180,13 @@ def _stringify_read_properties(
     pruning_paths: set[str] | None,
     parent_flat: str | None,
 ) -> list[str] | _FailFastcache:
-    """Key entries for the kernel-read properties of ``obj`` (see ``_read_property_names``).
+    """Key entries for the kernel-read properties of ``obj`` (see ``_get_used_properties``).
 
     A property whose value cannot be hashed, or whose getter raises, fails fastcache for the call, exactly like a
     kernel-read member of an unrecognised type.
     """
     repr_l = []
-    for name in _read_property_names(obj, instance_names, parent_flat, pruning_paths):
+    for name in _get_used_properties(obj, instance_names, parent_flat, pruning_paths):
         child_path = path + (name,)
         try:
             value = getattr(obj, name)
