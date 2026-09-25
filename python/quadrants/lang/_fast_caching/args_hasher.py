@@ -190,7 +190,7 @@ def _stringify_used_properties(
     pruning_paths: set[str] | None,
     parent_flat: str | None,
 ) -> list[str] | _FailFastcache:
-    """Key entries for the kernel-read properties of ``obj`` (see ``_get_used_properties``)."""
+    """Represents names and values of used properties as a string."""
     names = _get_used_properties(path, obj, parent_flat, pruning_paths)
     if isinstance(names, _FailFastcache):
         return _FAIL_FASTCACHE
