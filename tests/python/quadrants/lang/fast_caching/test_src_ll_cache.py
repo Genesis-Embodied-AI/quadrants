@@ -613,9 +613,9 @@ def test_src_ll_cache_data_oriented_property_value_in_key(tmp_path: pathlib.Path
     fastcache via the property's value.
 
     Pruning records the read of ``cfg.n_rows``, but the property's read of ``cfg.flag`` is plain Python outside the
-    kernel, so ``flag`` never enters the pruning set; and ``n_rows`` is not an instance member, so the walker never hashed
-    it either. A process with ``flag=True`` was then served the artifact compiled for ``flag=False`` (``1`` instead of
-    ``3``). Genesis hit this through ``RigidSimStaticConfig.rows_per_contact``.
+    kernel, so ``flag`` never enters the pruning set; and ``n_rows`` is not an instance member, so the walker never
+    hashed it either. A process with ``flag=True`` was then served the artifact compiled for ``flag=False`` (``1``
+    instead of ``3``). Genesis hit this through ``RigidSimStaticConfig.rows_per_contact``.
     """
     import numpy as np  # local import keeps the test module's top-level deps unchanged
 
