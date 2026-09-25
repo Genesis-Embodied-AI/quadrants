@@ -692,7 +692,21 @@ def test_src_ll_cache_data_oriented_unhashable_property_disables_fastcache(
         assert ("[FASTCACHE][UNKNOWN_TYPE]" in err) == fastcache
 
 
-@pytest.mark.parametrize("template_primitives", [True, False])
+@pytest.mark.parametrize(
+    "template_primitives",
+    [
+        True,
+        pytest.param(
+            False,
+            marks=pytest.mark.xfail(
+                strict=True,
+                raises=qd.QuadrantsSyntaxError,
+                reason="with template_primitives=False, a computed cached_property sits in __dict__ and is lifted to a "
+                "runtime arg, which qd.static() rejects - with or without fastcache",
+            ),
+        ),
+    ],
+)
 @pytest.mark.parametrize("fastcache", [True, False])
 @test_utils.test(arch=qd.cpu)
 def test_src_ll_cache_data_oriented_cached_property_disables_fastcache(
