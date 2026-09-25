@@ -610,11 +610,6 @@ def test_src_ll_cache_data_oriented_property_value_in_key(
 ) -> None:
     """Pin: a member a kernel reads only through a ``@property`` of a ``@qd.data_oriented`` template arg keys the
     fastcache via the property's value, and results match with fastcache off.
-
-    Pruning records the read of ``cfg.n_rows``, but the property's read of ``cfg.flag`` is plain Python outside the
-    kernel, so ``flag`` never enters the pruning set; and ``n_rows`` is not an instance member, so the walker never
-    hashed it either. A process with ``flag=True`` was then served the artifact compiled for ``flag=False`` (``1``
-    instead of ``3``). Genesis hit this through ``RigidSimStaticConfig.rows_per_contact``.
     """
     arch = getattr(qd, qd.lang.impl.current_cfg().arch.name)
     N = 4
