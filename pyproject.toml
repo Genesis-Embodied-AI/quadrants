@@ -98,7 +98,7 @@ test = [
 ]
 
 [project.entry-points.pytest11]
-quadrants = "quadrants.pytest_plugin"
+quadrants = "quadrants_pytest"
 
 [project.urls]
 Homepage = "https://github.com/Genesis-Embodied-AI/quadrants"
@@ -119,10 +119,10 @@ build-backend = "scikit_build_core.build"
 minimum-version = "build-system.requires"
 # Persistent build dir keyed by wheel tag -> fast incremental rebuilds (esp. editable).
 build-dir = "build/{wheel_tag}"
-# Pure-Python sources live under python/quadrants; the final path element (quadrants)
-# is the importable package. The compiled core, runtime .bc and assets are added by
+# Pure-Python packages live under python/; each final path element is the importable
+# package name. The compiled core, runtime .bc and assets are added by
 # CMake install() rules under the same quadrants/ tree, so wheel + editable co-locate.
-wheel.packages = ["python/quadrants"]
+wheel.packages = ["python/quadrants", "python/quadrants_pytest"]
 # redirect editable: compiled artifacts installed to site-packages, Python served live
 # from the source tree.
 editable.mode = "redirect"
