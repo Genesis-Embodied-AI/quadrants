@@ -54,9 +54,6 @@ _DC_REPR_NONE = object()
 # warn-and-disable path, exactly as for a normal data_oriented object).
 _NON_TEMPLATE_CHILD_META = ArgMetadata(None, "")
 
-# Properties are always baked into the kernel, even with ``template_primitives=False``, so their value is in the key.
-_PROPERTY_VALUE_META = ArgMetadata(Template, "")
-
 
 # Returned by ``stringify_obj_type`` when a value cannot be safely hashed (unsupported tensor-like type, or an
 # unrecognised type at a kernel-read path). Every container walker has to propagate it upward: fastcache is then off for
@@ -160,8 +157,8 @@ def _read_property_names(
     Pruning records a read of ``cfg.n_rows`` by name, but when ``n_rows`` is a property the members it reads are read by
     plain Python outside the kernel AST, so they never reach ``pruning_paths``; and the property itself is absent from
     the instance members the walkers iterate. Its value therefore has to be hashed explicitly, or two objects that
-    differ only in a member the property derives from share a key. With ``pruning_paths is None`` every member is already
-    hashed, and so is everything a property can derive from them.
+    differ only in a member the property derives from share a key. With ``pruning_paths is None`` every member is
+    already hashed, and so is everything a property can derive from them.
     """
     if pruning_paths is None or parent_flat is None:
         return []
@@ -202,11 +199,13 @@ def _stringify_read_properties(
             )
             _mark_should_warn()
             return _FAIL_FASTCACHE
+        # Properties are always baked into the kernel, even with ``template_primitives=False``, so their value is in the
+        # key.
         _repr = stringify_obj_type(
             raise_on_templated_floats,
             child_path,
             value,
-            _PROPERTY_VALUE_META,
+            ArgMetadata(Template, ""),
             pruning_paths=pruning_paths,
             parent_flat=_child_flat(parent_flat, name),
         )
