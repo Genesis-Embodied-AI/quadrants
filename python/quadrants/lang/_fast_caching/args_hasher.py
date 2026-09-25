@@ -158,8 +158,8 @@ def _get_used_properties(
     """``(name, descriptor)`` of each property of ``obj`` the kernel reads, sorted by name so the key is stable."""
     seen: set[str] = set()
     used = []
-    for klass in type(obj).__mro__:
-        for name, attr in klass.__dict__.items():
+    for class_ in type(obj).__mro__:
+        for name, attr in class_.__dict__.items():
             # The first definition along the MRO is the one ``getattr`` resolves, so a subclass override wins.
             if name in seen:
                 continue
