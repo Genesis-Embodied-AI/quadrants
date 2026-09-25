@@ -2,6 +2,7 @@ import os
 import subprocess
 import sys
 from types import SimpleNamespace
+from unittest import mock
 
 import pytest
 
@@ -59,18 +60,21 @@ def test_pytest_autoload_does_not_import_runtime(tmp_path):
         (True, "1", True, "1", "1"),
     ],
 )
-def test_kernel_coverage_configuration(monkeypatch, has_cov, opt_in, branch, expected_coverage, expected_arc):
+def test_kernel_coverage_configuration(has_cov, opt_in, branch, expected_coverage, expected_arc):
     import quadrants_pytest
 
-    monkeypatch.delenv("QD_KERNEL_COVERAGE", raising=False)
-    monkeypatch.delenv("_QD_KCOV_ARC", raising=False)
-    if opt_in is not None:
-        monkeypatch.setenv("QD_KERNEL_COVERAGE", opt_in)
-    config = SimpleNamespace(
-        pluginmanager=SimpleNamespace(hasplugin=lambda name: has_cov if name == "_cov" else False),
-        option=SimpleNamespace(cov_branch=branch),
-    )
-    # Call the startup hook directly with this test configuration to set the kernel coverage environment variables.
-    quadrants_pytest.pytest_configure(config)
-    assert os.environ.get("QD_KERNEL_COVERAGE") == expected_coverage
-    assert os.environ.get("_QD_KCOV_ARC") == expected_arc
+    # patch.dict restores os.environ on exit, including variables the hook creates. Otherwise QD_KERNEL_COVERAGE=1 leaks
+    # into later tests on this xdist worker and compiles their kernels with coverage probes.
+    with mock.patch.dict(os.environ):
+        os.environ.pop("QD_KERNEL_COVERAGE", None)
+        os.environ.pop("_QD_KCOV_ARC", None)
+        if opt_in is not None:
+            os.environ["QD_KERNEL_COVERAGE"] = opt_in
+        config = SimpleNamespace(
+            pluginmanager=SimpleNamespace(hasplugin=lambda name: has_cov if name == "_cov" else False),
+            option=SimpleNamespace(cov_branch=branch),
+        )
+        # Call the startup hook directly with this test configuration to set the kernel coverage environment variables.
+        quadrants_pytest.pytest_configure(config)
+        assert os.environ.get("QD_KERNEL_COVERAGE") == expected_coverage
+        assert os.environ.get("_QD_KCOV_ARC") == expected_arc
