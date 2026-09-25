@@ -15,6 +15,7 @@ import quadrants as qd
 _KERNEL_COVERAGE = os.environ.get("QD_KERNEL_COVERAGE") == "1"
 import quadrants.lang
 from quadrants._test_tools import qd_init_same_arch
+from quadrants.lang._fast_caching import args_hasher
 from quadrants.lang._kernel_types import SrcLlCacheObservations
 
 from tests import test_utils
@@ -650,6 +651,8 @@ def test_src_ll_cache_data_oriented_unhashable_property_disables_fastcache(
 ) -> None:
     """A kernel-read property whose value fastcache cannot hash disables fastcache for the call rather than being left
     out of the key, like any other kernel-read value of an unrecognised type."""
+    # The warning is once per process, so an earlier test on this worker may already have printed it.
+    args_hasher.reset_unknown_type_warn_state()
     arch = getattr(qd, qd.lang.impl.current_cfg().arch.name)
 
     @qd.data_oriented(template_primitives=template_primitives)
@@ -705,6 +708,9 @@ def test_src_ll_cache_data_oriented_cached_property_disables_fastcache(
 ) -> None:
     """A kernel-read ``functools.cached_property`` disables fastcache for the call, with a warning: once read it is
     stored as a member, so the same object would give different keys before and after its first read."""
+    # The warning is once per process, so an earlier test on this worker may already have printed it.
+    args_hasher.reset_unknown_type_warn_state()
+
     @qd.data_oriented(template_primitives=template_primitives)
     class Config:
         def __init__(self, n: int) -> None:

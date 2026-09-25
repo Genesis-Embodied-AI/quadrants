@@ -92,7 +92,7 @@ _warned_cached_properties: set[str] = set()
 
 
 def reset_unknown_type_warn_state() -> None:
-    """Clear the once-per-process warned sets. Called from test setup / ``qd.init``."""
+    """Clear the once-per-process warned sets, so tests can check the warnings."""
     _warned_unknown_types.clear()
     _warned_cached_properties.clear()
 
