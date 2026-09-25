@@ -155,12 +155,7 @@ def _is_path_used(pruning_paths: set[str] | None, child_flat: str | None) -> boo
 def _get_used_properties(
     path: tuple[str, ...], obj: object, parent_flat: str | None, pruning_paths: set[str] | None
 ) -> list[str] | _FailFastcache:
-    """Names of the properties of ``obj`` the kernel reads, sorted so the key is stable.
-
-    Fails fastcache for the call if the kernel reads a ``functools.cached_property``: once read it is stored in
-    ``obj.__dict__`` and hashed as a member, so the same object would give different keys before and after its first
-    read.
-    """
+    """Names of the properties of ``obj`` the kernel reads, sorted so the key is stable."""
     seen: set[str] = set()
     used = []
     for class_ in type(obj).__mro__:
