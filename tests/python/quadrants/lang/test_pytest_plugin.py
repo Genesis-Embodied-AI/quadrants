@@ -29,6 +29,8 @@ def test_pytest_autoload_does_not_import_runtime(tmp_path):
     (tmp_path / "conftest.py").write_text(
         "import sys\n"
         "def pytest_sessionstart(session):\n"
+        "    # Check that pytest registered the plugin named quadrants, not that the package was imported.\n"
+        "    # This prevents the test from passing merely because plugin loading was disabled.\n"
         "    assert session.config.pluginmanager.hasplugin('quadrants')\n"
         "    assert 'quadrants' not in sys.modules\n"
         "    assert 'torch' not in sys.modules\n"
