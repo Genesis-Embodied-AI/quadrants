@@ -653,7 +653,7 @@ def test_src_ll_cache_data_oriented_property_value_in_key(
 @pytest.mark.parametrize("fastcache", [True, False])
 @test_utils.test()
 def test_src_ll_cache_data_oriented_unhashable_property_disables_fastcache(
-    tmp_path: pathlib.Path, fastcache: bool, template_primitives: bool
+    tmp_path: pathlib.Path, capfd, fastcache: bool, template_primitives: bool
 ) -> None:
     """A kernel-read property whose value fastcache cannot hash disables fastcache for the call rather than being left
     out of the key, like any other kernel-read value of an unrecognised type."""
@@ -686,12 +686,15 @@ def test_src_ll_cache_data_oriented_unhashable_property_disables_fastcache(
         loaded, values = run(n)
         assert not loaded, "a tuple-valued property cannot be hashed, so fastcache must stay off"
         np.testing.assert_array_equal(values, np.full(N, 2 * n, dtype=np.int32))
+    # capfd does not capture stderr on Windows.
+    if not sys.platform.startswith("win"):
+        _out, err = capfd.readouterr()
+        assert ("[FASTCACHE][UNKNOWN_TYPE]" in err) == fastcache
 
 
 @pytest.mark.parametrize("template_primitives", [True, False])
 @pytest.mark.parametrize("fastcache", [True, False])
 @test_utils.test(arch=qd.cpu)
-@pytest.mark.skipif(sys.platform.startswith("win"), reason="Windows stderr not working with capfd")
 def test_src_ll_cache_data_oriented_cached_property_disables_fastcache(
     tmp_path: pathlib.Path, capfd, fastcache: bool, template_primitives: bool
 ) -> None:
@@ -725,8 +728,10 @@ def test_src_ll_cache_data_oriented_cached_property_disables_fastcache(
         loaded, values = run(n)
         assert not loaded, "a kernel-read cached_property must keep fastcache off"
         np.testing.assert_array_equal(values, np.full(N, 2 * n, dtype=np.int32))
-    _out, err = capfd.readouterr()
-    assert ("[FASTCACHE][CACHED_PROPERTY]" in err) == fastcache
+    # capfd does not capture stderr on Windows.
+    if not sys.platform.startswith("win"):
+        _out, err = capfd.readouterr()
+        assert ("[FASTCACHE][CACHED_PROPERTY]" in err) == fastcache
 
 
 class ModifySubFuncKernelArgs(pydantic.BaseModel):
