@@ -700,6 +700,49 @@ def test_src_ll_cache_data_oriented_unhashable_property_disables_fastcache(tmp_p
         np.testing.assert_array_equal(values, np.full(N, 2 * n, dtype=np.int32))
 
 
+@test_utils.test(arch=qd.cpu)
+@pytest.mark.skipif(sys.platform.startswith("win"), reason="Windows stderr not working with capfd")
+def test_src_ll_cache_data_oriented_cached_property_disables_fastcache(tmp_path: pathlib.Path, capfd) -> None:
+    """A kernel-read ``functools.cached_property`` disables fastcache for the call, with a warning: once read it is
+    stored as a member, so the same object would give different keys before and after its first read."""
+    import functools
+
+    import numpy as np  # local import keeps the test module's top-level deps unchanged
+
+    N = 4
+
+    @qd.data_oriented
+    class Config:
+        def __init__(self, n: int) -> None:
+            self.n = n
+
+        @functools.cached_property
+        def twice_n(self) -> int:
+            return 2 * self.n
+
+    @qd.pure
+    @qd.kernel
+    def fill_twice_n(cfg: qd.template(), out: qd.types.ndarray()) -> None:
+        twice_n = qd.static(cfg.twice_n)
+        for i in range(N):
+            out[i] = twice_n
+
+    def run(n: int):
+        qd.reset()
+        qd.init(arch=qd.cpu, offline_cache_file_path=str(tmp_path), offline_cache=True)
+        out = qd.ndarray(qd.i32, shape=(N,))
+        fill_twice_n(Config(n), out)
+        return fill_twice_n._primal.src_ll_cache_observations.cache_loaded, out.to_numpy()
+
+    for n in (1, 2, 2):
+        loaded, values = run(n)
+        assert not loaded, "a kernel-read cached_property must keep fastcache off"
+        np.testing.assert_array_equal(values, np.full(N, 2 * n, dtype=np.int32))
+    _out, err = capfd.readouterr()
+    assert "[FASTCACHE][CACHED_PROPERTY]" in err
+    assert "twice_n" in err
+
+
 class ModifySubFuncKernelArgs(pydantic.BaseModel):
     arch: str
     offline_cache_file_path: str

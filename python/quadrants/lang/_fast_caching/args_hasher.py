@@ -3,7 +3,6 @@ import enum
 import functools
 import numbers
 import time
-from collections.abc import Container
 from typing import Any, Sequence
 
 import numpy as np
@@ -88,10 +87,14 @@ _should_warn = False
 # of thousands of times.
 _warned_unknown_types: set[str] = set()
 
+# ``module.Class.name`` of kernel-read ``cached_property`` attributes already warned about, for the same reason.
+_warned_cached_properties: set[str] = set()
+
 
 def reset_unknown_type_warn_state() -> None:
-    """Clear the once-per-process warned-unknown-types set. Called from test setup / ``qd.init``."""
+    """Clear the once-per-process warned sets. Called from test setup / ``qd.init``."""
     _warned_unknown_types.clear()
+    _warned_cached_properties.clear()
 
 
 def _mark_warn_if_not_tensor_annotation(arg_meta: ArgMetadata | None) -> None:
@@ -150,41 +153,53 @@ def _is_path_used(pruning_paths: set[str] | None, child_flat: str | None) -> boo
 
 
 def _get_used_properties(
-    obj: object, instance_names: Container[str], parent_flat: str | None, pruning_paths: set[str] | None
-) -> list[str]:
-    """Names of the properties of ``obj`` that the kernel reads, sorted for a deterministic key.
-
-    Names in ``instance_names`` are skipped, since the member walk already hashed them (e.g. a computed
-    ``cached_property``).
-    """
-    names: set[str] = set()
+    obj: object, parent_flat: str | None, pruning_paths: set[str] | None
+) -> list[tuple[str, property | functools.cached_property]]:
+    """``(name, descriptor)`` of each property of ``obj`` the kernel reads, sorted by name so the key is stable."""
+    seen: set[str] = set()
+    used = []
     for klass in type(obj).__mro__:
         for name, attr in klass.__dict__.items():
-            if (
-                isinstance(attr, (property, functools.cached_property))
-                and name not in instance_names
-                and _is_path_used(pruning_paths, _child_flat(parent_flat, name))
+            # The first definition along the MRO is the one ``getattr`` resolves, so a subclass override wins.
+            if name in seen:
+                continue
+            seen.add(name)
+            if isinstance(attr, (property, functools.cached_property)) and _is_path_used(
+                pruning_paths, _child_flat(parent_flat, name)
             ):
-                names.add(name)
-    return sorted(names)
+                used.append((name, attr))
+    return sorted(used, key=lambda name_attr: name_attr[0])
 
 
 def _stringify_read_properties(
     raise_on_templated_floats: bool,
     path: tuple[str, ...],
     obj: object,
-    instance_names: Container[str],
     pruning_paths: set[str] | None,
     parent_flat: str | None,
 ) -> list[str] | _FailFastcache:
     """Key entries for the kernel-read properties of ``obj`` (see ``_get_used_properties``).
 
     A property whose value cannot be hashed, or whose getter raises, fails fastcache for the call, exactly like a
-    kernel-read member of an unrecognised type.
+    kernel-read member of an unrecognised type. So does any ``functools.cached_property``: once read it is stored in
+    ``obj.__dict__`` and hashed as a member, so the same object would give different keys before and after its first
+    read.
     """
     repr_l = []
-    for name in _get_used_properties(obj, instance_names, parent_flat, pruning_paths):
+    for name, attr in _get_used_properties(obj, parent_flat, pruning_paths):
         child_path = path + (name,)
+        if isinstance(attr, functools.cached_property):
+            t = type(obj)
+            qualname = f"{t.__module__}.{t.__qualname__}.{name}"
+            if qualname not in _warned_cached_properties:
+                _warned_cached_properties.add(qualname)
+                _logging.warn(
+                    f"[FASTCACHE][CACHED_PROPERTY] Kernel reads functools.cached_property {qualname} at path "
+                    f"{child_path}, which fastcache does not support. Fastcache is disabled for this call. Use "
+                    f"@property instead."
+                )
+            _mark_should_warn()
+            return _FAIL_FASTCACHE
         try:
             value = getattr(obj, name)
         except Exception as e:  # pylint: disable=broad-exception-caught
@@ -397,9 +412,7 @@ def stringify_obj_type(
             if _child_repr is _FAIL_FASTCACHE:
                 return _FAIL_FASTCACHE
             child_repr_l.append(f"{k}: {_child_repr}")
-        property_repr_l = _stringify_read_properties(
-            raise_on_templated_floats, path, obj, _dict, pruning_paths, parent_flat
-        )
+        property_repr_l = _stringify_read_properties(raise_on_templated_floats, path, obj, pruning_paths, parent_flat)
         if isinstance(property_repr_l, _FailFastcache):
             return _FAIL_FASTCACHE
         child_repr_l.extend(property_repr_l)
