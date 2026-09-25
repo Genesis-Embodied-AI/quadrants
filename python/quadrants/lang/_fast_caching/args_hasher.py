@@ -153,9 +153,14 @@ def _is_path_used(pruning_paths: set[str] | None, child_flat: str | None) -> boo
 
 
 def _get_used_properties(
-    obj: object, parent_flat: str | None, pruning_paths: set[str] | None
-) -> list[tuple[str, property | functools.cached_property]]:
-    """``(name, descriptor)`` of each property of ``obj`` the kernel reads, sorted by name so the key is stable."""
+    path: tuple[str, ...], obj: object, parent_flat: str | None, pruning_paths: set[str] | None
+) -> list[str] | _FailFastcache:
+    """Names of the properties of ``obj`` the kernel reads, sorted so the key is stable.
+
+    Fails fastcache for the call if the kernel reads a ``functools.cached_property``: once read it is stored in
+    ``obj.__dict__`` and hashed as a member, so the same object would give different keys before and after its first
+    read.
+    """
     seen: set[str] = set()
     used = []
     for class_ in type(obj).__mro__:
@@ -164,11 +169,23 @@ def _get_used_properties(
             if name in seen:
                 continue
             seen.add(name)
-            if isinstance(attr, (property, functools.cached_property)) and _is_path_used(
-                pruning_paths, _child_flat(parent_flat, name)
-            ):
-                used.append((name, attr))
-    return sorted(used, key=lambda name_attr: name_attr[0])
+            if not isinstance(attr, (property, functools.cached_property)):
+                continue
+            if not _is_path_used(pruning_paths, _child_flat(parent_flat, name)):
+                continue
+            if isinstance(attr, functools.cached_property):
+                qualname = f"{type(obj).__module__}.{type(obj).__qualname__}.{name}"
+                if qualname not in _warned_cached_properties:
+                    _warned_cached_properties.add(qualname)
+                    _logging.warn(
+                        f"[FASTCACHE][CACHED_PROPERTY] Kernel reads functools.cached_property {qualname} at path "
+                        f"{path + (name,)}, which fastcache does not support. Fastcache is disabled for this call. "
+                        f"Use @property instead."
+                    )
+                _mark_should_warn()
+                return _FAIL_FASTCACHE
+            used.append(name)
+    return sorted(used)
 
 
 def _stringify_read_properties(
@@ -181,25 +198,14 @@ def _stringify_read_properties(
     """Key entries for the kernel-read properties of ``obj`` (see ``_get_used_properties``).
 
     A property whose value cannot be hashed, or whose getter raises, fails fastcache for the call, exactly like a
-    kernel-read member of an unrecognised type. So does any ``functools.cached_property``: once read it is stored in
-    ``obj.__dict__`` and hashed as a member, so the same object would give different keys before and after its first
-    read.
+    kernel-read member of an unrecognised type.
     """
+    names = _get_used_properties(path, obj, parent_flat, pruning_paths)
+    if isinstance(names, _FailFastcache):
+        return _FAIL_FASTCACHE
     repr_l = []
-    for name, attr in _get_used_properties(obj, parent_flat, pruning_paths):
+    for name in names:
         child_path = path + (name,)
-        if isinstance(attr, functools.cached_property):
-            t = type(obj)
-            qualname = f"{t.__module__}.{t.__qualname__}.{name}"
-            if qualname not in _warned_cached_properties:
-                _warned_cached_properties.add(qualname)
-                _logging.warn(
-                    f"[FASTCACHE][CACHED_PROPERTY] Kernel reads functools.cached_property {qualname} at path "
-                    f"{child_path}, which fastcache does not support. Fastcache is disabled for this call. Use "
-                    f"@property instead."
-                )
-            _mark_should_warn()
-            return _FAIL_FASTCACHE
         try:
             value = getattr(obj, name)
         except Exception as e:  # pylint: disable=broad-exception-caught
