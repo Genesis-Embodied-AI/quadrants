@@ -14,6 +14,7 @@ def test_entry_point_does_not_import_runtime(tmp_path):
             sys.executable,
             "-c",
             "from importlib.metadata import entry_points; import sys; "
+            # entry_points(group='pytest11') lists installed pytest plugin registrations.
             "plugin = next(ep for ep in entry_points(group='pytest11') if ep.name == 'quadrants'); "
             "plugin.load(); "
             "assert 'quadrants' not in sys.modules; assert 'torch' not in sys.modules",
