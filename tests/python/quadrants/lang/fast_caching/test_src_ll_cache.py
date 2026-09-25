@@ -1,9 +1,12 @@
+import dataclasses
+import functools
 import importlib
 import os
 import pathlib
 import subprocess
 import sys
 
+import numpy as np
 import pydantic
 import pytest
 
@@ -448,10 +451,6 @@ def test_src_ll_cache_needs_grad_distinguishes_args_hash(tmp_path: pathlib.Path)
     This is the Genesis ``kernel_init_link_fields`` shape at minimum size - a frozen dataclass of two ndarrays, a
     kernel that writes the second - run across two ``qd.init`` cycles sharing a cache directory.
     """
-    import dataclasses
-
-    import numpy as np
-
     arch = getattr(qd, qd.lang.impl.current_cfg().arch.name)
     N = 4
 
@@ -504,8 +503,6 @@ def test_src_ll_cache_hit_predeclare_struct_ndarrays_pruned(tmp_path: pathlib.Pa
     Registering every reachable ndarray instead scrambles the arg-slot bindings, and the write lands in ``state.a``
     (first in insertion order) rather than ``state.b``. Both the cold and hot paths run here via ``qd.reset()``.
     """
-    import numpy as np  # local import keeps the test module's top-level deps unchanged
-
     arch = getattr(qd, qd.lang.impl.current_cfg().arch.name)
     N = 4
 
@@ -556,8 +553,6 @@ def test_src_ll_cache_pruning_union_across_static_branches(tmp_path: pathlib.Pat
 
     Run 4 pins the other side: growing the union must converge, not recompile on every launch.
     """
-    import numpy as np  # local import keeps the test module's top-level deps unchanged
-
     arch = getattr(qd, qd.lang.impl.current_cfg().arch.name)
     N = 4
 
@@ -617,8 +612,6 @@ def test_src_ll_cache_data_oriented_property_value_in_key(tmp_path: pathlib.Path
     hashed it either. A process with ``flag=True`` was then served the artifact compiled for ``flag=False`` (``1``
     instead of ``3``). Genesis hit this through ``RigidSimStaticConfig.rows_per_contact``.
     """
-    import numpy as np  # local import keeps the test module's top-level deps unchanged
-
     arch = getattr(qd, qd.lang.impl.current_cfg().arch.name)
     N = 4
 
@@ -666,8 +659,6 @@ def test_src_ll_cache_data_oriented_property_value_in_key(tmp_path: pathlib.Path
 def test_src_ll_cache_data_oriented_unhashable_property_disables_fastcache(tmp_path: pathlib.Path) -> None:
     """A kernel-read property whose value fastcache cannot hash disables fastcache for the call rather than being left
     out of the key, like any other kernel-read value of an unrecognised type."""
-    import numpy as np  # local import keeps the test module's top-level deps unchanged
-
     arch = getattr(qd, qd.lang.impl.current_cfg().arch.name)
     N = 4
 
@@ -705,10 +696,6 @@ def test_src_ll_cache_data_oriented_unhashable_property_disables_fastcache(tmp_p
 def test_src_ll_cache_data_oriented_cached_property_disables_fastcache(tmp_path: pathlib.Path, capfd) -> None:
     """A kernel-read ``functools.cached_property`` disables fastcache for the call, with a warning: once read it is
     stored as a member, so the same object would give different keys before and after its first read."""
-    import functools
-
-    import numpy as np  # local import keeps the test module's top-level deps unchanged
-
     N = 4
 
     @qd.data_oriented
