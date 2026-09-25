@@ -54,8 +54,7 @@ _DC_REPR_NONE = object()
 # warn-and-disable path, exactly as for a normal data_oriented object).
 _NON_TEMPLATE_CHILD_META = ArgMetadata(None, "")
 
-# arg_meta for the value of a kernel-read property: the kernel can only consume it at compile time (e.g.
-# ``qd.static(cfg.n_rows)``), so a primitive result is baked into the key even on a ``template_primitives=False`` object.
+# Properties are always baked into the kernel, even with ``template_primitives=False``, so their value is in the key.
 _PROPERTY_VALUE_META = ArgMetadata(Template, "")
 
 
