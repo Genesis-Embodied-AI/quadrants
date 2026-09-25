@@ -190,11 +190,7 @@ def _stringify_used_properties(
     pruning_paths: set[str] | None,
     parent_flat: str | None,
 ) -> list[str] | _FailFastcache:
-    """Key entries for the kernel-read properties of ``obj`` (see ``_get_used_properties``).
-
-    A property whose value cannot be hashed, or whose getter raises, fails fastcache for the call, exactly like a
-    kernel-read member of an unrecognised type.
-    """
+    """Key entries for the kernel-read properties of ``obj`` (see ``_get_used_properties``)."""
     names = _get_used_properties(path, obj, parent_flat, pruning_paths)
     if isinstance(names, _FailFastcache):
         return _FAIL_FASTCACHE
