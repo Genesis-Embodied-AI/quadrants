@@ -87,7 +87,7 @@ _should_warn = False
 # of thousands of times.
 _warned_unknown_types: set[str] = set()
 
-# ``module.Class.name`` of kernel-read ``cached_property`` attributes already warned about, for the same reason.
+# ``module.Class.name`` of kernel-read ``cached_property`` attributes already warned about.
 _warned_cached_properties: set[str] = set()
 
 
