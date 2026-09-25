@@ -612,7 +612,6 @@ def test_src_ll_cache_data_oriented_property_value_in_key(
     fastcache via the property's value, and results match with fastcache off.
     """
     arch = getattr(qd, qd.lang.impl.current_cfg().arch.name)
-    N = 4
 
     @qd.data_oriented(template_primitives=template_primitives)
     class Config:
@@ -626,21 +625,20 @@ def test_src_ll_cache_data_oriented_property_value_in_key(
     @qd.kernel(fastcache=fastcache)
     def fill_n_rows(cfg: qd.template(), out: qd.types.ndarray()) -> None:
         n_rows = qd.static(cfg.n_rows)
-        for i in range(N):
-            out[i] = n_rows
+        out[0] = n_rows
 
     def run(flag: bool):
         qd.reset()
         qd.init(arch=arch, offline_cache_file_path=str(tmp_path), offline_cache=True)
-        out = qd.ndarray(qd.i32, shape=(N,))
+        out = qd.ndarray(qd.i32, shape=(1,))
         fill_n_rows(Config(flag), out)
-        return fill_n_rows._primal.src_ll_cache_observations.cache_loaded, out.to_numpy()
+        return fill_n_rows._primal.src_ll_cache_observations.cache_loaded, int(out.to_numpy()[0])
 
     # (flag, expected value, whether the artifact is already cached): the second run changes only cfg.flag, so a hit
     # there would mean the key omits the property's value.
     for flag, expected, cached in ((False, 1, False), (True, 3, False), (True, 3, True), (False, 1, True)):
-        loaded, values = run(flag)
-        np.testing.assert_array_equal(values, np.full(N, expected, dtype=np.int32))
+        loaded, value = run(flag)
+        assert value == expected
         assert loaded == (fastcache and cached), f"flag={flag}: cache_loaded={loaded}"
 
 
@@ -653,7 +651,6 @@ def test_src_ll_cache_data_oriented_unhashable_property_disables_fastcache(
     """A kernel-read property whose value fastcache cannot hash disables fastcache for the call rather than being left
     out of the key, like any other kernel-read value of an unrecognised type."""
     arch = getattr(qd, qd.lang.impl.current_cfg().arch.name)
-    N = 4
 
     @qd.data_oriented(template_primitives=template_primitives)
     class Config:
@@ -667,20 +664,19 @@ def test_src_ll_cache_data_oriented_unhashable_property_disables_fastcache(
     @qd.kernel(fastcache=fastcache)
     def fill_dims(cfg: qd.template(), out: qd.types.ndarray()) -> None:
         dim = qd.static(cfg.dims[1])
-        for i in range(N):
-            out[i] = dim
+        out[0] = dim
 
     def run(n: int):
         qd.reset()
         qd.init(arch=arch, offline_cache_file_path=str(tmp_path), offline_cache=True)
-        out = qd.ndarray(qd.i32, shape=(N,))
+        out = qd.ndarray(qd.i32, shape=(1,))
         fill_dims(Config(n), out)
-        return fill_dims._primal.src_ll_cache_observations.cache_loaded, out.to_numpy()
+        return fill_dims._primal.src_ll_cache_observations.cache_loaded, int(out.to_numpy()[0])
 
     for n in (1, 2, 2):
-        loaded, values = run(n)
+        loaded, value = run(n)
         assert not loaded, "a tuple-valued property cannot be hashed, so fastcache must stay off"
-        np.testing.assert_array_equal(values, np.full(N, 2 * n, dtype=np.int32))
+        assert value == 2 * n
     # capfd does not capture stderr on Windows.
     if not sys.platform.startswith("win"):
         _out, err = capfd.readouterr()
@@ -709,8 +705,6 @@ def test_src_ll_cache_data_oriented_cached_property_disables_fastcache(
 ) -> None:
     """A kernel-read ``functools.cached_property`` disables fastcache for the call, with a warning: once read it is
     stored as a member, so the same object would give different keys before and after its first read."""
-    N = 4
-
     @qd.data_oriented(template_primitives=template_primitives)
     class Config:
         def __init__(self, n: int) -> None:
@@ -723,20 +717,19 @@ def test_src_ll_cache_data_oriented_cached_property_disables_fastcache(
     @qd.kernel(fastcache=fastcache)
     def fill_twice_n(cfg: qd.template(), out: qd.types.ndarray()) -> None:
         twice_n = qd.static(cfg.twice_n)
-        for i in range(N):
-            out[i] = twice_n
+        out[0] = twice_n
 
     def run(n: int):
         qd.reset()
         qd.init(arch=qd.cpu, offline_cache_file_path=str(tmp_path), offline_cache=True)
-        out = qd.ndarray(qd.i32, shape=(N,))
+        out = qd.ndarray(qd.i32, shape=(1,))
         fill_twice_n(Config(n), out)
-        return fill_twice_n._primal.src_ll_cache_observations.cache_loaded, out.to_numpy()
+        return fill_twice_n._primal.src_ll_cache_observations.cache_loaded, int(out.to_numpy()[0])
 
     for n in (1, 2, 2):
-        loaded, values = run(n)
+        loaded, value = run(n)
         assert not loaded, "a kernel-read cached_property must keep fastcache off"
-        np.testing.assert_array_equal(values, np.full(N, 2 * n, dtype=np.int32))
+        assert value == 2 * n
     # capfd does not capture stderr on Windows.
     if not sys.platform.startswith("win"):
         _out, err = capfd.readouterr()
