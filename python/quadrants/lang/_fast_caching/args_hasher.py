@@ -154,11 +154,9 @@ def _read_property_names(
 ) -> list[str]:
     """Names of the properties of ``obj`` that the kernel reads, sorted for a deterministic key.
 
-    Pruning records a read of ``cfg.n_rows`` by name, but when ``n_rows`` is a property the members it reads are read by
-    plain Python outside the kernel AST, so they never reach ``pruning_paths``; and the property itself is absent from
-    the instance members the walkers iterate. Its value therefore has to be hashed explicitly, or two objects that
-    differ only in a member the property derives from share a key. With ``pruning_paths is None`` every member is
-    already hashed, and so is everything a property can derive from them.
+    Empty when ``pruning_paths`` is None: every member is then hashed, which covers anything a property derives from.
+    Names in ``instance_names`` are skipped, since the member walk already hashed them (e.g. a computed
+    ``cached_property``).
     """
     if pruning_paths is None or parent_flat is None:
         return []
