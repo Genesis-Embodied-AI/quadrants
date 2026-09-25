@@ -42,6 +42,12 @@ def test_pytest_autoload_does_not_import_runtime(tmp_path):
     subprocess.run([sys.executable, "-m", "pytest", "-q"], cwd=tmp_path, env=env, check=True)
 
 
+# Each case specifies:
+# has_cov: whether pytest-cov's internal _cov plugin is registered.
+# opt_in: initial QD_KERNEL_COVERAGE value (None means unset; "0" disables; "1" enables).
+# branch: whether pytest-cov requests branch coverage via --cov-branch.
+# expected_coverage: QD_KERNEL_COVERAGE value after the hook (None means unset).
+# expected_arc: _QD_KCOV_ARC value after the hook ("1" for branch data, "0" for line data, None for unset).
 @pytest.mark.parametrize(
     "has_cov, opt_in, branch, expected_coverage, expected_arc",
     [
