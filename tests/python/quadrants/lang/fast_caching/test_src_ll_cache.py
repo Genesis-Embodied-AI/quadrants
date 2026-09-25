@@ -676,6 +676,7 @@ def test_src_ll_cache_data_oriented_unhashable_property_disables_fastcache(
         fill_dims(Config(n), out)
         return fill_dims._primal.src_ll_cache_observations.cache_loaded, int(out.to_numpy()[0])
 
+    # A new value, then the same value again: the repeat would be a cache hit if fastcache were on.
     for n in (1, 2, 2):
         loaded, value = run(n)
         assert not loaded, "a tuple-valued property cannot be hashed, so fastcache must stay off"
@@ -732,6 +733,7 @@ def test_src_ll_cache_data_oriented_cached_property_disables_fastcache(
         fill_twice_n(Config(n), out)
         return fill_twice_n._primal.src_ll_cache_observations.cache_loaded, int(out.to_numpy()[0])
 
+    # A new value, then the same value again: the repeat would be a cache hit if fastcache were on.
     for n in (1, 2, 2):
         loaded, value = run(n)
         assert not loaded, "a kernel-read cached_property must keep fastcache off"
