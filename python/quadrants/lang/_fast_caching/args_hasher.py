@@ -183,7 +183,7 @@ def _get_used_properties(
     return sorted(used)
 
 
-def _stringify_read_properties(
+def _stringify_used_properties(
     raise_on_templated_floats: bool,
     path: tuple[str, ...],
     obj: object,
@@ -413,7 +413,7 @@ def stringify_obj_type(
             if _child_repr is _FAIL_FASTCACHE:
                 return _FAIL_FASTCACHE
             child_repr_l.append(f"{k}: {_child_repr}")
-        property_repr_l = _stringify_read_properties(raise_on_templated_floats, path, obj, pruning_paths, parent_flat)
+        property_repr_l = _stringify_used_properties(raise_on_templated_floats, path, obj, pruning_paths, parent_flat)
         if isinstance(property_repr_l, _FailFastcache):
             return _FAIL_FASTCACHE
         child_repr_l.extend(property_repr_l)
