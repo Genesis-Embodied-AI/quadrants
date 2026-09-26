@@ -60,6 +60,12 @@ struct CompileConfig {
   int saturating_grid_dim;
   int max_block_dim;
   int cpu_max_num_threads;
+  // Minimum number of iterations per chunk when a CPU range-for is split across the thread pool by
+  // `make_cpu_multithreaded_range_for`. The chunk size is `max(ceil((end - begin) / cpu_max_num_threads),
+  // cpu_min_range_for_block)`. The floor exists to keep chunks large enough to amortize scheduling overhead and stay
+  // vectorizable for cheap bodies (memcpy, vecadd); for heavy bodies (e.g. one whole sim step per iteration) a large
+  // floor prevents short loops from using all threads, so lower it. Must be >= 1 (validated in `fit()`).
+  int cpu_min_range_for_block;
   int random_seed;
 
   // Debugging options:
