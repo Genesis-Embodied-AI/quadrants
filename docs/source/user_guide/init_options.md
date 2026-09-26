@@ -21,6 +21,22 @@ When to set it to `False`:
 
 For normal use, leave it at `True`; the caches are the main reason a repeated run starts up quickly.
 
+## CPU loop scheduling
+
+### `cpu_min_range_for_block`
+
+Minimum number of iterations per chunk when a parallel CPU `range()` loop is split across the thread pool. Default `512`; must be a positive integer. The chunk size is `max(ceil(number_of_iterations / cpu_max_num_threads), cpu_min_range_for_block)`, so the default keeps chunks at least 512 iterations wide. That floor exists because for cheap loop bodies (a copy, one add per element) a small chunk only adds scheduling overhead and loses vectorization; it is counterproductive for expensive bodies, where a single iteration is a whole simulation step of one environment.
+
+The floor is why a CPU `range()` of at most 512 iterations runs entirely on one thread whatever `cpu_max_num_threads` is: a loop of `n` iterations uses at most `ceil(n / cpu_min_range_for_block)` threads. Lower it (for example to `1`) when each iteration is expensive and the loop is too short to fill the cores at the default floor:
+
+```python
+qd.init(arch=qd.cpu, cpu_max_num_threads=12, cpu_min_range_for_block=1)
+```
+
+With 200 iterations and 12 threads, the default runs all the work in one chunk on one thread; a floor of `1` instead gives 12 chunks of up to 17 iterations that the thread pool runs concurrently. A floor of `1` does not force one iteration per chunk: the chunk size is still `ceil(n / cpu_max_num_threads)` whenever that exceeds the floor. Keep the default for cheap loop bodies unless measurements favor a smaller minimum.
+
+This option only takes effect with `make_cpu_multithreading_loop=True` (the default) and does not change GPU loops or their `block_dim`. It does not parallelize explicitly serialized loops (`qd.loop_config(serialize=True)` or `parallelize=1`). Because it changes the generated code, changing it creates separate CPU offline-cache entries.
+
 ## Compile-time tuning
 
 ### `cfg_optimization`
