@@ -134,6 +134,8 @@ When any of these change, the resulting key is different, so a new compilation o
 
    "The kernel" here means every version of it that has been compiled: if `qd.static(...)` makes one version read `state.x` and another read `state.y`, then both members count as read for both versions, because a single cache entry describes which members the kernel source touches. A member that no version reads is still ignored entirely.
 
+   A `@property` of a `@qd.data_oriented` object that the kernel reads, e.g. `qd.static(cfg.n_rows)`, is keyed on its *value*. If its value has an unrecognised type, or its getter raises, fastcache is disabled for the call, as for any other read of an unrecognised type. A `functools.cached_property` read by the kernel is not supported: fastcache is disabled for the call, with a `[FASTCACHE][CACHED_PROPERTY]` warning. Use `@property` instead.
+
 2. **Unrecognised types at variables the kernel reads or writes must not be silently dropped or hashed by type-name.** If the value of such a variable has a type fastcache doesn't explicitly handle (Pydantic models, UUIDs, third-party tensor wrappers, ...), fastcache is disabled for the call with a one-shot `[FASTCACHE][UNKNOWN_TYPE]` warning identifying the offending type plus an `[INVALID_FUNC]` log line confirming the cache is off.
 
 ## Advanced
