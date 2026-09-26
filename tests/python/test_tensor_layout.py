@@ -6,6 +6,7 @@ NotImplementedError until the AST rewrite lands in an earlier change.
 
 import itertools
 
+import numpy as np
 import pytest
 
 import quadrants as qd
@@ -196,33 +197,53 @@ def test_layout_with_needs_grad_allocates_grad(backend):
 
 
 # ----------------------------------------------------------------------------
-# Compound dtype (vector / matrix) + layout= must be rejected
+# Compound dtype (vector / matrix) + layout= permutes the shape axes, the element axes staying innermost
 # ----------------------------------------------------------------------------
 
 
-def test_layout_rejected_for_vector_dtype():
-    """qd.tensor() with a compound vector dtype must reject layout=."""
-    qd.init(arch=qd.x64)
-    vec3 = qd.types.vector(3, qd.f32)
-    with pytest.raises(TypeError, match="layout.*not supported.*compound"):
-        qd.tensor(vec3, shape=(4,), layout=(0,))
+def _make_compound(kind, backend, layout):
+    shape = (4, 5)
+    kwargs = {} if layout is None else {"layout": layout}
+    if kind == "tensor_vec":
+        return qd.tensor(qd.types.vector(3, qd.f32), shape=shape, backend=backend, **kwargs)
+    if kind == "vector_tensor":
+        return qd.Vector.tensor(3, qd.f32, shape=shape, backend=backend, **kwargs)
+    if kind == "tensor_mat":
+        return qd.tensor(qd.types.matrix(2, 3, qd.f32), shape=shape, backend=backend, **kwargs)
+    return qd.Matrix.tensor(2, 3, qd.f32, shape=shape, backend=backend, **kwargs)
 
 
-def test_layout_rejected_for_matrix_dtype():
-    """qd.tensor() with a compound matrix dtype must reject layout=."""
-    qd.init(arch=qd.x64)
-    mat2x2 = qd.types.matrix(2, 2, qd.f32)
-    with pytest.raises(TypeError, match="layout.*not supported.*compound"):
-        qd.tensor(mat2x2, shape=(4,), layout=(0,))
-
-
+@pytest.mark.parametrize("kind", ["tensor_vec", "vector_tensor", "tensor_mat", "matrix_tensor"])
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
-def test_layout_rejected_for_vector_dtype_both_backends(backend):
-    """layout= rejection applies to both field and ndarray backends."""
+def test_compound_layout_matches_default(kind, backend):
     qd.init(arch=qd.x64)
-    vec3 = qd.types.vector(3, qd.f32)
-    with pytest.raises(TypeError, match="layout.*not supported.*compound"):
-        qd.tensor(vec3, shape=(5,), backend=backend, layout=(0,))
+    is_matrix = kind in ("tensor_mat", "matrix_tensor")
+
+    @qd.kernel
+    def fill(x: qd.Tensor):
+        for i, j in qd.ndrange(4, 5):
+            if qd.static(is_matrix):
+                x[i, j] = qd.Matrix([[i, j, 1], [2, i * 10 + j, 3]])
+            else:
+                x[i, j] = qd.Vector([i, j, i * 10 + j])
+
+    @qd.func
+    def add_one(I, field: qd.Tensor):
+        field[I] = field[I] + 1.0
+
+    @qd.kernel
+    def add_one_by_list(x: qd.Tensor):
+        for i, j in qd.ndrange(4, 5):
+            add_one([i, j], x)
+
+    laid_out, reference = _make_compound(kind, backend, (1, 0)), _make_compound(kind, backend, None)
+    assert tuple(laid_out.shape) == (4, 5)
+    for tensor in (laid_out, reference):
+        fill(tensor)
+        add_one_by_list(tensor)
+    np.testing.assert_array_equal(laid_out.to_numpy(), reference.to_numpy())
+    laid_out.from_numpy(reference.to_numpy() * 2.0)
+    np.testing.assert_array_equal(laid_out.to_numpy(), reference.to_numpy() * 2.0)
 
 
 def test_vector_dtype_without_layout_still_works():
