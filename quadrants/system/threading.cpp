@@ -6,9 +6,14 @@
 #include "quadrants/system/threading.h"
 
 #include <algorithm>
+#include <chrono>
 #include <condition_variable>
 #include <thread>
 #include <vector>
+
+#if defined(_MSC_VER)
+#include <intrin.h>
+#endif
 
 namespace quadrants {
 
@@ -26,109 +31,116 @@ bool test_threading() {
   return true;
 }
 
-ThreadPool::ThreadPool(int max_num_threads) : max_num_threads(max_num_threads) {
-  exiting = false;
-  started = false;
-  running_threads = 0;
-  timestamp = 1;
-  last_finished = 0;
-  task_head = 0;
-  task_tail = 0;
-  thread_counter = 0;
-  threads.resize((std::size_t)max_num_threads);
-  for (int i = 0; i < max_num_threads; i++) {
-    threads[i] = std::thread([this] { this->target(); });
+namespace {
+
+constexpr int kLaunchWorkersBits = 16;
+constexpr uint64 kLaunchWorkersMask = (uint64(1) << kLaunchWorkersBits) - 1;
+// How long an idle worker spins on the launch counter before it sleeps. It covers the host-side gap between two
+// kernel launches, and bounds the time an idle pool keeps its cores busy.
+constexpr auto kSpinDuration = std::chrono::microseconds(200);
+
+inline void cpu_relax() {
+#if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+  _mm_pause();
+#elif defined(_MSC_VER) && defined(_M_ARM64)
+  __yield();
+#elif defined(__x86_64__) || defined(__i386__)
+  __builtin_ia32_pause();
+#elif defined(__aarch64__) || defined(__arm__)
+  asm volatile("yield" ::: "memory");
+#else
+  std::this_thread::yield();
+#endif
+}
+
+}  // namespace
+
+ThreadPool::ThreadPool(int max_num_threads) : max_num_threads_(std::max(max_num_threads, 1)) {
+  QD_ASSERT(max_num_threads_ <= int(kLaunchWorkersMask));
+  workers_.reserve(max_num_threads_ - 1);
+  for (int i = 0; i < max_num_threads_ - 1; i++) {
+    workers_.emplace_back([this, i] { this->target(i); });
+  }
+}
+
+void ThreadPool::work(int thread_id) {
+  while (true) {
+    int task_id = task_head_.fetch_add(1, std::memory_order_relaxed);
+    if (task_id >= task_tail_)
+      break;
+    func_(range_for_task_context_, thread_id, task_id);
   }
 }
 
 void ThreadPool::run(int splits, int desired_num_threads, void *range_for_task_context, RangeForTaskFunc *func) {
-  {
-    std::lock_guard _(mutex);
-    this->range_for_task_context = range_for_task_context;
-    this->func = func;
-    this->desired_num_threads = std::min(desired_num_threads, max_num_threads);
-    QD_ASSERT(this->desired_num_threads > 0);
-    // QD_P(this->desired_num_threads);
-    started = false;
-    task_head = 0;
-    task_tail = splits;
-    timestamp++;
-    QD_ASSERT(timestamp < (1LL << 62));  // avoid overflowing here
+  QD_ASSERT(desired_num_threads > 0);
+  int n_threads = std::min({desired_num_threads, max_num_threads_, splits});
+  range_for_task_context_ = range_for_task_context;
+  func_ = func;
+  task_tail_ = splits;
+  task_head_.store(0, std::memory_order_relaxed);
+  if (n_threads <= 1) {
+    work(max_num_threads_ - 1);
+    return;
   }
 
-  // wake up all slaves
-  slave_cv.notify_all();
-  {
-    std::unique_lock<std::mutex> lock(mutex);
-    // TODO: the workers may have finished before master waiting on master_cv
-    master_cv.wait(lock, [this] { return started && running_threads == 0; });
+  int n_workers = n_threads - 1;
+  n_running_workers_.store(n_workers, std::memory_order_relaxed);
+  uint64 launch = launch_.load(std::memory_order_relaxed);
+  launch_.store(((launch >> kLaunchWorkersBits) + 1) << kLaunchWorkersBits | uint64(n_workers));
+  // A worker registers as sleeping under the mutex before it checks the launch counter a last time, so either it sees
+  // the new launch or it is registered here and woken.
+  if (n_sleeping_workers_.load() > 0) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    worker_cv_.notify_all();
   }
-  QD_ASSERT(task_head >= task_tail);
+
+  work(max_num_threads_ - 1);
+  while (n_running_workers_.load(std::memory_order_acquire) > 0) {
+    cpu_relax();
+  }
 }
 
-void ThreadPool::target() {
-  uint64 last_timestamp = 0;
-  int thread_id;
-  {
-    std::lock_guard<std::mutex> lock(mutex);
-    thread_id = thread_counter++;
-  }
+void ThreadPool::target(int thread_id) {
+  uint64 last_launch = 0;
   while (true) {
-    {
-      std::unique_lock<std::mutex> lock(mutex);
-      slave_cv.wait(lock, [this, last_timestamp, thread_id] {
-        return (timestamp > last_timestamp && thread_id < desired_num_threads) || this->exiting;
-      });
-      last_timestamp = timestamp;
-      if (exiting) {
-        break;
-      } else {
-        if (last_finished >= last_timestamp) {
-          continue;
-          // This could happen when part of the desired threads wake up and
-          // finish all the task, and then this thread wake up finding nothing
-          // to do. Should skip this task directly.
-        } else {
-          started = true;
-          running_threads++;
-        }
+    uint64 launch = launch_.load(std::memory_order_acquire);
+    auto spin_start = std::chrono::steady_clock::now();
+    int n_spins = 0;
+    while (launch == last_launch && !exiting_.load(std::memory_order_relaxed)) {
+      cpu_relax();
+      // Reading the clock costs more than a pause, so it is only read every few spins
+      if (++n_spins % 64 == 0 && std::chrono::steady_clock::now() - spin_start > kSpinDuration) {
+        std::unique_lock<std::mutex> lock(mutex_);
+        n_sleeping_workers_.fetch_add(1);
+        worker_cv_.wait(lock, [this, last_launch] {
+          return launch_.load() != last_launch || exiting_.load(std::memory_order_relaxed);
+        });
+        n_sleeping_workers_.fetch_sub(1);
+        spin_start = std::chrono::steady_clock::now();
       }
+      launch = launch_.load(std::memory_order_acquire);
     }
-
-    while (true) {
-      // For a single parallel task
-      int task_id;
-      {
-        task_id = task_head.fetch_add(1, std::memory_order_relaxed);
-        if (task_id >= task_tail)
-          break;
-      }
-
-      func(this->range_for_task_context, thread_id, task_id);
+    if (exiting_.load(std::memory_order_relaxed))
+      break;
+    last_launch = launch;
+    // The caller waits for every worker of a launch before it starts the next one, so a worker taking part cannot miss
+    // its launch, and one left out of it has nothing to do
+    if (thread_id < int(launch & kLaunchWorkersMask)) {
+      work(thread_id);
+      n_running_workers_.fetch_sub(1, std::memory_order_release);
     }
-
-    bool all_finished = false;
-    {
-      std::lock_guard<std::mutex> lock(mutex);
-      running_threads--;
-      if (running_threads == 0) {
-        all_finished = true;
-        last_finished = last_timestamp;
-      }
-    }
-    if (all_finished)
-      master_cv.notify_one();
   }
 }
 
 ThreadPool::~ThreadPool() {
   {
-    std::lock_guard<std::mutex> lg(mutex);
-    exiting = true;
+    std::lock_guard<std::mutex> lock(mutex_);
+    exiting_.store(true);
   }
-  slave_cv.notify_all();
-  for (auto &th : threads)
-    th.join();
+  worker_cv_.notify_all();
+  for (auto &worker : workers_)
+    worker.join();
 }
 
 }  // namespace quadrants
