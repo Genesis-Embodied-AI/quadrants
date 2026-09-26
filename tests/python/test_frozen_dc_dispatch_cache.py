@@ -317,8 +317,8 @@ def test_frozen_dc_caches_identity_keyed_against_metaclass_eq():
     b1_fields = getattr(Base1, "__dataclass_fields__")
     b2_fields = getattr(Base2, "__dataclass_fields__")
 
-    u1 = _get_frozen_dc_unwrapped(sub, Base1, b1_fields)
-    u2 = _get_frozen_dc_unwrapped(sub, Base2, b2_fields)
+    u1 = _get_frozen_dc_unwrapped(sub, Base1, b1_fields, False)
+    u2 = _get_frozen_dc_unwrapped(sub, Base2, b2_fields, False)
     assert set(u1) == {"x1"} and set(u2) == {"x2"}  # each ancestor view sees only its own field
 
     unwrapped_cache = sub._qd_dc_unwrapped
@@ -330,8 +330,8 @@ def test_frozen_dc_caches_identity_keyed_against_metaclass_eq():
     assert all_field_cache[id(Base1)][0] is Base1 and all_field_cache[id(Base2)][0] is Base2
 
     # The read path honours the identity guard: the Base2 lookup returns Base2's view, not Base1's cached one.
-    assert _get_frozen_dc_unwrapped(sub, Base2, b2_fields) is u2
-    assert set(_get_frozen_dc_unwrapped(sub, Base1, b1_fields)) == {"x1"}
+    assert _get_frozen_dc_unwrapped(sub, Base2, b2_fields, False) is u2
+    assert set(_get_frozen_dc_unwrapped(sub, Base1, b1_fields, False)) == {"x1"}
 
 
 # ---------------------------------------------------------------------------
@@ -397,7 +397,7 @@ def test_frozen_dc_plan_id_reuse_guard():
     flat_x = create_flat_name("S", "x")
 
     params_a = {flat_x, "__qd_S__qd_y"}
-    plan_a = _get_frozen_dc_plan(params_a, S, "S", fields_dict)
+    plan_a, _ = _get_frozen_dc_plan(params_a, S, "S", fields_dict)
     assert len(plan_a) == 1
     assert plan_a[0][0] == "x"
     assert plan_a[0][1] == flat_x
@@ -407,7 +407,7 @@ def test_frozen_dc_plan_id_reuse_guard():
 
     params_b = {"__qd_S__qd_z"}
     if id(params_b) == saved_id:
-        plan_b = _get_frozen_dc_plan(params_b, S, "S", fields_dict)
+        plan_b, _ = _get_frozen_dc_plan(params_b, S, "S", fields_dict)
         assert plan_b == (), (
             f"id() reuse guard failed: got plan {plan_b!r} from a stale cache entry "
             f"instead of empty tuple for params_b={params_b!r}"

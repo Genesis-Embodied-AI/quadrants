@@ -79,7 +79,7 @@ _TENSOR_T_NDARRAY_LAUNCH_ANNOTATION = ndarray_type.NdarrayType()
 from ._kernel_types import KernelBatchedArgType
 from ._optional_annotation import split_optional
 from ._template_mapper import TemplateMapper
-from ._template_mapper_hotpath import _is_external_array
+from ._template_mapper_hotpath import _is_external_array, _is_external_array_by_type
 
 MAX_ARG_NUM = 512
 
@@ -106,7 +106,7 @@ _is_cpython = sys.implementation.name == "cpython"
 #    so cache each field's unwrapped (post-``_unwrap()``) value, eliminating ``getattr`` + ``_unwrap()`` per launch.
 #    Keyed by ``id(annotated_type)`` so one instance reused under several ancestor annotations keeps a per-view entry.
 
-_frozen_dc_plans: dict[tuple[int, type, str], tuple[set[str], tuple[tuple[str, str, Any], ...]]] = {}
+_frozen_dc_plans: dict[tuple[int, type, str], tuple[set[str], tuple[tuple[str, str, Any], ...], bool]] = {}
 
 _frozen_dc_plans_hook_registered = False
 
@@ -120,7 +120,8 @@ def _ensure_frozen_dc_plans_reset_hook():
 
 def _get_frozen_dc_plan(
     used_params: set[str], struct_cls: type, basename: str, fields_dict: dict
-) -> tuple[tuple[str, str, Any], ...]:
+) -> tuple[tuple[tuple[str, str, Any], ...], bool]:
+    """``(plan, has_final)``: the active fields to walk, and whether the subtree has ``Final`` fields."""
     _ensure_frozen_dc_plans_reset_hook()
     key = (id(used_params), struct_cls, basename)
     entry = _frozen_dc_plans.get(key)
@@ -128,7 +129,7 @@ def _get_frozen_dc_plan(
     # address. mimalloc (default in CPython 3.13+) makes this significantly more likely. Validate with an identity
     # check so a stale plan from a different kernel specialization is never returned.
     if entry is not None and entry[0] is used_params:
-        return entry[1]
+        return entry[1], entry[2]
     # ``Final[T]`` fields are baked constants with no runtime arg slot, so exclude them from the plan to keep the arg
     # count consistent.
     final_names = final_field_names(struct_cls)
@@ -143,8 +144,9 @@ def _get_frozen_dc_plan(
             continue
         entries.append((field.name, full_name, field.type))
     plan = tuple(entries)
-    _frozen_dc_plans[key] = (used_params, plan)
-    return plan
+    has_final = subtree_has_final_fields(struct_cls)
+    _frozen_dc_plans[key] = (used_params, plan, has_final)
+    return plan, has_final
 
 
 def _compute_frozen_dc_unwrapped(v: Any, fields_dict: dict) -> dict[str, Any]:
@@ -160,7 +162,7 @@ def _compute_frozen_dc_unwrapped(v: Any, fields_dict: dict) -> dict[str, Any]:
     return unwrapped
 
 
-def _get_frozen_dc_unwrapped(v: Any, struct_cls: type, fields_dict: dict) -> dict[str, Any]:
+def _get_frozen_dc_unwrapped(v: Any, struct_cls: type, fields_dict: dict, has_final: bool) -> dict[str, Any]:
     """field_name -> unwrapped value for a frozen dataclass, cached on the instance.
 
     Keyed by ``id(struct_cls)`` so a subclass instance reused under several ancestor annotations keeps a distinct entry
@@ -175,8 +177,9 @@ def _get_frozen_dc_unwrapped(v: Any, struct_cls: type, fields_dict: dict) -> dic
 
     The Final gate uses the annotated ``struct_cls``, not ``type(v)``: only the base's fields reach the kernel, so a
     subclass's application-only ``Final`` field (e.g. an unbakeable ``Final[list]``) must be ignored, not validated.
+    ``has_final`` is ``subtree_has_final_fields(struct_cls)``, precomputed in the plan (see ``_get_frozen_dc_plan``).
     """
-    if subtree_has_final_fields(struct_cls):
+    if has_final:
         return _compute_frozen_dc_unwrapped(v, fields_dict)
     cache = getattr(v, "_qd_dc_unwrapped", None)
     if cache is not None:
@@ -669,7 +672,13 @@ class FuncBase:
         if needed_arg_type is _TensorClass:
             if type(v) in _TENSOR_WRAPPER_TYPES:
                 v = v._unwrap()
-            if isinstance(v, Ndarray) or _is_external_array(v):
+            # PERF: inline the per-type cache lookup; this runs for every field member of a field-backend struct.
+            is_array = isinstance(v, Ndarray)
+            if not is_array:
+                is_array = _is_external_array_by_type.get(type(v))
+                if is_array is None:
+                    is_array = _is_external_array(v)
+            if is_array:
                 needed_arg_type = cast(Type, _TENSOR_T_NDARRAY_LAUNCH_ANNOTATION)
                 needed_arg_type_id = id(needed_arg_type)
                 needed_arg_basetype = type(needed_arg_type)
@@ -717,10 +726,10 @@ class FuncBase:
                 # kernel) and the per-instance unwrapped-value cache (which eliminates getattr + _unwrap per field).
                 # Together these reduce per-launch cost from O(all_fields) with getattr/unwrap to O(active_fields) with
                 # direct dict lookups. See module-level comment on ``_frozen_dc_plans``.
-                plan = _get_frozen_dc_plan(
+                plan, has_final = _get_frozen_dc_plan(
                     used_py_dataclass_parameters, needed_arg_type, py_dataclass_basename, needed_arg_fields
                 )
-                unwrapped = _get_frozen_dc_unwrapped(v, needed_arg_type, needed_arg_fields)
+                unwrapped = _get_frozen_dc_unwrapped(v, needed_arg_type, needed_arg_fields, has_final)
                 for field_name, field_full_name, field_type in plan:
                     field_value = unwrapped[field_name]
                     num_args_, _ = FuncBase._recursive_set_args(
@@ -739,7 +748,7 @@ class FuncBase:
                 # A Final-bearing subtree must not cache its launch context (``args_hash`` keys on ``id(arg)``, so a
                 # cached buffer would resend the first-launch values): re-read every launch so a mutated ordinary field
                 # supplies its new value and ``final_scalar_key`` re-validates. Matches ``args_hasher``'s repr gate.
-                return idx, not subtree_has_final_fields(needed_arg_type)
+                return idx, not has_final
             # Non-frozen dataclass: original path. No ``Final`` handling - ``final_field_names`` rejects ``Final`` on a
             # non-frozen class, so such a class already failed during template mapping.
             is_launch_ctx_cacheable = False
