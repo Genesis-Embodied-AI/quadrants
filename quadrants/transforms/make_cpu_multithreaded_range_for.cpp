@@ -1,5 +1,3 @@
-#include <algorithm>
-
 #include "quadrants/ir/ir.h"
 #include "quadrants/ir/statements.h"
 #include "quadrants/ir/transforms.h"
@@ -67,10 +65,10 @@ class MakeCPUMultithreadedRangeFor : public BasicStmtVisitor {
 
     auto offloaded_body = std::make_unique<Block>();
     auto one = offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(PrimitiveType::i32, 1)));
-    // Minimum chunk size, from `cpu_min_range_for_block` (default 512). Clamp to >= 1 so a stray non-positive
-    // config value can never emit an empty/negative chunk stride.
-    auto minimal_block_range = offloaded_body->insert(Stmt::make_typed<ConstStmt>(
-        TypedConstant(PrimitiveType::i32, std::max(config_.cpu_min_range_for_block, 1))));
+    // Minimum chunk size, from `cpu_min_range_for_block` (default 512). Validated to be >= 1 in
+    // `CompileConfig::fit()`, so it can never emit an empty/negative chunk stride here.
+    auto minimal_block_range = offloaded_body->insert(
+        Stmt::make_typed<ConstStmt>(TypedConstant(PrimitiveType::i32, config_.cpu_min_range_for_block)));
     auto num_threads = offloaded_body->insert(
         Stmt::make_typed<ConstStmt>(TypedConstant(PrimitiveType::i32, config_.cpu_max_num_threads)));
     auto thread_index = offloaded_body->insert(Stmt::make_typed<LoopIndexStmt>(offloaded, 0));

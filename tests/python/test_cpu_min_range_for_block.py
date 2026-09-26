@@ -1,3 +1,5 @@
+import pytest
+
 import quadrants as qd
 
 from tests import test_utils
@@ -62,3 +64,12 @@ def test_odd_block_floor_is_correct():
     got = sorted(s[i] for i in range(n))
     assert got == list(range(n))
     assert counter[None] == n
+
+
+# A chunk floor < 1 would emit an empty/negative inner-loop stride, so it is rejected at qd.init.
+@test_utils.test(arch=qd.cpu)
+def test_min_range_for_block_below_one_raises():
+    for bad in (0, -1, -512):
+        with pytest.raises(RuntimeError, match="cpu_min_range_for_block"):
+            qd.init(arch=qd.cpu, cpu_min_range_for_block=bad)
+    qd.init(arch=qd.cpu)  # restore a valid state for teardown

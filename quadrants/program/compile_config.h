@@ -64,7 +64,7 @@ struct CompileConfig {
   // `make_cpu_multithreaded_range_for`. The chunk size is `max(ceil((end - begin) / cpu_max_num_threads),
   // cpu_min_range_for_block)`. The floor exists to keep chunks large enough to amortize scheduling overhead and stay
   // vectorizable for cheap bodies (memcpy, vecadd); for heavy bodies (e.g. one whole sim step per iteration) a large
-  // floor prevents short loops from using all threads, so lower it. Values < 1 are treated as 1.
+  // floor prevents short loops from using all threads, so lower it. Must be >= 1 (validated in `fit()`).
   int cpu_min_range_for_block;
   int random_seed;
 
