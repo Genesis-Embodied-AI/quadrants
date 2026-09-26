@@ -233,6 +233,11 @@ void export_lang(nb::module_ &m) {
       .def_rw("cpu_max_num_threads", &CompileConfig::cpu_max_num_threads,
               "Maximum number of CPU threads used to run kernels (the runtime thread pool and CPU parallel-for loops). "
               "Compilation threads are governed separately by num_compile_threads.")
+      .def_rw("cpu_min_range_for_block", &CompileConfig::cpu_min_range_for_block,
+              "Minimum number of iterations a CPU thread takes from a parallel range-for loop. A loop of n "
+              "iterations runs on at most ceil(n / cpu_min_range_for_block) threads. The default suits cheap loop "
+              "bodies, which a finer split only slows down. Loops with few but expensive iterations need a smaller "
+              "value to use every thread.")
       .def_rw("random_seed", &CompileConfig::random_seed, "Seed for Quadrants' random-number generation.")
       .def_rw("demote_dense_struct_fors", &CompileConfig::demote_dense_struct_fors,
               "Lower dense struct-for loops to ordinary range-for loops. Forced on for the Vulkan/Metal (SPIR-V) "

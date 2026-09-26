@@ -55,6 +55,7 @@ static std::vector<std::uint8_t> get_offline_cache_key_of_compile_config(const C
   if (arch_is_cpu(config.arch)) {
     serializer(config.default_cpu_block_dim);
     serializer(config.cpu_max_num_threads);
+    serializer(config.cpu_min_range_for_block);
   } else if (arch_is_gpu(config.arch)) {
     serializer(config.default_gpu_block_dim);
     serializer(config.saturating_grid_dim);
