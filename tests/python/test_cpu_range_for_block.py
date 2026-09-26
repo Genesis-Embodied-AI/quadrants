@@ -64,10 +64,10 @@ def test_cpu_range_for_block_serial_execution(serialize):
     assert recurrence() == expected
 
 
-@pytest.mark.parametrize("minimum", [0, -1])
+@pytest.mark.parametrize("minimum", [0, -1, -512])
 @test_utils.test(arch=qd.cpu)
 def test_cpu_range_for_block_invalid(minimum):
-    with pytest.raises(RuntimeError, match="cpu_min_range_for_block must be positive"):
+    with pytest.raises(RuntimeError, match=rf"cpu_min_range_for_block must be >= 1, but got {minimum}\."):
         qd.init(arch=qd.cpu, cpu_min_range_for_block=minimum)
 
 

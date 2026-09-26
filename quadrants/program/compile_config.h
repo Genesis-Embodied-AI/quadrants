@@ -60,6 +60,10 @@ struct CompileConfig {
   int saturating_grid_dim;
   int max_block_dim;
   int cpu_max_num_threads;
+  // Minimum iterations per CPU range-for chunk. The chunk size is
+  // max(ceil((end - begin) / cpu_max_num_threads), cpu_min_range_for_block).
+  // Larger chunks help vectorize cheap loop bodies; lower the floor for short loops with expensive iterations.
+  // Must be >= 1 (validated in fit()). Only used when make_cpu_multithreading_loop is enabled.
   int cpu_min_range_for_block;
   int random_seed;
 
