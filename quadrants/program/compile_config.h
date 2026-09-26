@@ -60,6 +60,7 @@ struct CompileConfig {
   int saturating_grid_dim;
   int max_block_dim;
   int cpu_max_num_threads;
+  int cpu_min_range_for_block;
   int random_seed;
 
   // Debugging options:
