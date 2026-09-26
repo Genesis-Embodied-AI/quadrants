@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include "quadrants/ir/ir.h"
 #include "quadrants/ir/statements.h"
 #include "quadrants/ir/transforms.h"
@@ -38,7 +40,8 @@ using TaskType = OffloadedStmt::TaskType;
  *
  * This pass is only applied to range-for loops that are offloaded to
  * CPUs. The number of threads is determined by the config option
- * "cpu_max_num_threads".
+ * "cpu_max_num_threads", and the minimum chunk size (the inner serial
+ * loop length floor) by "cpu_min_range_for_block" (default 512).
  *
  * The effect is that more invarants in the inner most can be identified and
  * moved outside, so that LLVM has more chance to vectorize the innermost
@@ -64,8 +67,10 @@ class MakeCPUMultithreadedRangeFor : public BasicStmtVisitor {
 
     auto offloaded_body = std::make_unique<Block>();
     auto one = offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(PrimitiveType::i32, 1)));
-    auto minimal_block_range =
-        offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(PrimitiveType::i32, 512)));
+    // Minimum chunk size, from `cpu_min_range_for_block` (default 512). Clamp to >= 1 so a stray non-positive
+    // config value can never emit an empty/negative chunk stride.
+    auto minimal_block_range = offloaded_body->insert(Stmt::make_typed<ConstStmt>(
+        TypedConstant(PrimitiveType::i32, std::max(config_.cpu_min_range_for_block, 1))));
     auto num_threads = offloaded_body->insert(
         Stmt::make_typed<ConstStmt>(TypedConstant(PrimitiveType::i32, config_.cpu_max_num_threads)));
     auto thread_index = offloaded_body->insert(Stmt::make_typed<LoopIndexStmt>(offloaded, 0));
