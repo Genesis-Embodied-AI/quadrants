@@ -98,8 +98,8 @@ _np_ndarray = np.ndarray
 
 
 # PERF: ``type(arg)`` -> whether it is a numpy array or torch tensor. The launch path asks this for every non-ndarray
-# struct member (e.g. every field of a field-backend struct), so recomputing it each launch is costly. The answer depends
-# only on the class, and a torch tensor type cannot exist before torch is imported, so a cached False never goes stale.
+# struct member (e.g. every field of a field-backend struct), so recomputing it per launch is costly. It depends only on
+# the class, and a torch tensor type cannot exist before torch is imported, so a cached False stays valid.
 _is_external_array_by_type: dict[type, bool] = {}
 
 
