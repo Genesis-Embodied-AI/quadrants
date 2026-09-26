@@ -59,7 +59,8 @@ CompileConfig::CompileConfig() {
 }
 
 void CompileConfig::fit() {
-  QD_ERROR_IF(cpu_min_range_for_block < 1, "cpu_min_range_for_block must be >= 1, but got {}.", cpu_min_range_for_block);
+  QD_ERROR_IF(cpu_min_range_for_block < 1, "cpu_min_range_for_block must be >= 1, but got {}.",
+              cpu_min_range_for_block);
   if (debug) {
     // TODO: allow users to run in debug mode without out-of-bound checks
     check_out_of_bound = true;
