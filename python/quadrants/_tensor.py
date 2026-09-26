@@ -105,8 +105,7 @@ def _coerce_backend(backend):
 # ``offset=`` for field offset indexing, ``order=`` for SoA layouts) should call ``qd.field`` / ``qd.ndarray`` directly
 # — they have explicitly opted out of the unified tensor API.
 #
-# ``layout=`` permutes the shape axes only. The element axes of the Vector/Matrix factories stay innermost, and those
-# factories take it on the field backend alone.
+# ``layout=`` permutes the shape axes only. The element axes of the Vector/Matrix factories stay innermost.
 _SCALAR_ACCEPTED_KWARGS = frozenset({"backend", "needs_grad", "layout"})
 _VEC_MAT_ACCEPTED_KWARGS = frozenset({"backend", "needs_grad", "layout"})
 
@@ -195,15 +194,6 @@ def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
         raise TypeError(
             f"qd.tensor() allocates a new tensor; to wrap an existing {type(dtype).__name__}, use qd.wrap(impl) instead"
         )
-    if layout is not None:
-        from quadrants.lang.matrix import (
-            MatrixType,  # pylint: disable=import-outside-toplevel
-        )
-
-        if isinstance(dtype, MatrixType) and _coerce_backend(backend) is not Backend.FIELD:
-            raise NotImplementedError(
-                "layout= with a compound dtype (vector/matrix) is only supported with backend=qd.Backend.FIELD"
-            )
     _validate_kwargs(kwargs, factory_name="qd.tensor", accepted=_SCALAR_ACCEPTED_KWARGS)
     backend = _coerce_backend(backend)
     forwarded = {k: v for k, v in kwargs.items() if k != "backend"}
@@ -239,18 +229,16 @@ def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
     raise AssertionError(f"unhandled Backend member: {backend!r}")
 
 
-def _compound_layout_kwargs(forwarded, shape, backend, factory_name):
-    """Translate the ``layout=`` of a Vector/Matrix factory into the ``order=`` of the field it allocates."""
+def _compound_layout(forwarded, shape):
+    """Pop the ``layout=`` of a Vector/Matrix factory, returning it normalised with the canonical shape tuple.
+
+    The layout is ``None`` when omitted or the identity permutation.
+    """
     layout = forwarded.pop("layout", None)
-    if layout is None:
-        return forwarded
-    if backend is not Backend.FIELD:
-        raise NotImplementedError(f"{factory_name}(..., layout=...) is only supported with backend=qd.Backend.FIELD")
     shape_t = (shape,) if isinstance(shape, int) else tuple(shape)
-    order = _layout_to_order(layout, len(shape_t))
-    if order is not None:
-        forwarded["order"] = order
-    return forwarded
+    if layout is None or _layout_to_order(layout, len(shape_t)) is None:
+        return None, shape_t
+    return tuple(layout), shape_t
 
 
 def _tensor_vec(n, dtype, shape, *, backend=Backend.NDARRAY, **kwargs):
@@ -258,20 +246,26 @@ def _tensor_vec(n, dtype, shape, *, backend=Backend.NDARRAY, **kwargs):
 
     Dispatcher over ``qd.Vector.field`` and ``qd.Vector.ndarray`` selected by the ``backend=`` keyword. Not part of
     the public API — call ``qd.Vector.tensor(...)`` instead. Hard-validates kwargs against ``_VEC_MAT_ACCEPTED_KWARGS``.
-    ``layout=`` permutes the shape axes, the vector axis staying innermost, on the field backend only.
+    ``layout=`` permutes the shape axes, the vector axis staying innermost.
     """
     _validate_kwargs(kwargs, factory_name="qd.Vector.tensor", accepted=_VEC_MAT_ACCEPTED_KWARGS)
     backend = _coerce_backend(backend)
     forwarded = {k: v for k, v in kwargs.items() if k != "backend"}
-    forwarded = _compound_layout_kwargs(forwarded, shape, backend, "qd.Vector.tensor")
+    layout, shape_t = _compound_layout(forwarded, shape)
     # pylint: disable-next=import-outside-toplevel  # late import to break circular dependency
     from quadrants._tensor_wrapper import VectorTensor
     from quadrants.lang.matrix import Vector
 
     if backend is Backend.FIELD:
+        if layout is not None:
+            forwarded["order"] = _layout_to_order(layout, len(shape_t))
         return VectorTensor(Vector.field(n, dtype, shape, **forwarded))
     if backend is Backend.NDARRAY:
-        return VectorTensor(Vector.ndarray(n, dtype, shape, **forwarded))
+        if layout is None:
+            return VectorTensor(Vector.ndarray(n, dtype, shape, **forwarded))
+        arr = Vector.ndarray(n, dtype, tuple(shape_t[axis] for axis in layout), **forwarded)
+        _with_layout(arr, layout)
+        return VectorTensor(arr)
     raise AssertionError(f"unhandled Backend member: {backend!r}")
 
 
@@ -280,18 +274,24 @@ def _tensor_mat(n, m, dtype, shape, *, backend=Backend.NDARRAY, **kwargs):
 
     Dispatcher over ``qd.Matrix.field`` and ``qd.Matrix.ndarray`` selected by the ``backend=`` keyword. Not part of
     the public API — call ``qd.Matrix.tensor(...)`` instead. Hard-validates kwargs against ``_VEC_MAT_ACCEPTED_KWARGS``.
-    ``layout=`` permutes the shape axes, the matrix axes staying innermost, on the field backend only.
+    ``layout=`` permutes the shape axes, the matrix axes staying innermost.
     """
     _validate_kwargs(kwargs, factory_name="qd.Matrix.tensor", accepted=_VEC_MAT_ACCEPTED_KWARGS)
     backend = _coerce_backend(backend)
     forwarded = {k: v for k, v in kwargs.items() if k != "backend"}
-    forwarded = _compound_layout_kwargs(forwarded, shape, backend, "qd.Matrix.tensor")
+    layout, shape_t = _compound_layout(forwarded, shape)
     # pylint: disable-next=import-outside-toplevel  # late import to break circular dependency
     from quadrants._tensor_wrapper import MatrixTensor
     from quadrants.lang.matrix import Matrix
 
     if backend is Backend.FIELD:
+        if layout is not None:
+            forwarded["order"] = _layout_to_order(layout, len(shape_t))
         return MatrixTensor(Matrix.field(n, m, dtype, shape, **forwarded))
     if backend is Backend.NDARRAY:
-        return MatrixTensor(Matrix.ndarray(n, m, dtype, shape, **forwarded))
+        if layout is None:
+            return MatrixTensor(Matrix.ndarray(n, m, dtype, shape, **forwarded))
+        arr = Matrix.ndarray(n, m, dtype, tuple(shape_t[axis] for axis in layout), **forwarded)
+        _with_layout(arr, layout)
+        return MatrixTensor(arr)
     raise AssertionError(f"unhandled Backend member: {backend!r}")

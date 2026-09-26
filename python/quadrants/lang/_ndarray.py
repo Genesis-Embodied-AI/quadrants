@@ -108,7 +108,9 @@ class Ndarray:
         layout = getattr(self, "_qd_layout", None)
         if _is_identity_layout(layout):
             return impl.get_runtime().prog.ndarray_to_dlpack(self, self.arr, versioned=versioned)
-        return impl.get_runtime().prog.ndarray_to_dlpack(self, self.arr, list(layout), versioned=versioned)
+        # The layout permutes the shape axes, and the element axes of a vector / matrix ndarray stay innermost
+        full_layout = [*layout, *range(len(layout), len(self.arr.total_shape()))]
+        return impl.get_runtime().prog.ndarray_to_dlpack(self, self.arr, full_layout, versioned=versioned)
 
     def _reset(self):
         """
@@ -228,14 +230,20 @@ class Ndarray:
         impl.get_runtime().sync()
         return arr
 
+    def _canonical_total_shape(self):
+        """Canonical shape followed by the element axes, the shape of the external array a vector / matrix ndarray
+        exchanges with numpy and torch."""
+        total_shape = tuple(self.arr.total_shape())
+        return (*self.shape, *total_shape[len(self._physical_shape) :])
+
     @python_scope
     def _ndarray_matrix_to_numpy(self, as_vector):
         """Converts matrix ndarray to a numpy array.
 
         Returns:
-            numpy.ndarray: The result numpy array.
+            numpy.ndarray: The result numpy array, in canonical axis order.
         """
-        arr = np.zeros(shape=self.arr.total_shape(), dtype=to_numpy_type(self.dtype))
+        arr = np.zeros(shape=self._canonical_total_shape(), dtype=to_numpy_type(self.dtype))
         from quadrants._kernels import (  # pylint: disable=C0415
             ndarray_matrix_to_ext_arr,  # pylint: disable=C0415
         )
@@ -282,7 +290,7 @@ class Ndarray:
 
         from quadrants.lang.util import to_pytorch_type  # pylint: disable=C0415
 
-        out = torch.zeros(size=tuple(self.arr.total_shape()), dtype=to_pytorch_type(self.dtype), device=device)
+        out = torch.zeros(size=self._canonical_total_shape(), dtype=to_pytorch_type(self.dtype), device=device)
         from quadrants._kernels import (  # pylint: disable=C0415
             ndarray_matrix_to_ext_arr,  # pylint: disable=C0415
         )
@@ -298,9 +306,9 @@ class Ndarray:
         """Mirror of ``_ndarray_matrix_from_numpy`` that ingests a torch tensor. ``.contiguous()`` is forced so the
         bridge kernel sees a tightly-packed external array."""
         contig = arr.contiguous()
-        if tuple(self.arr.total_shape()) != tuple(contig.shape):
+        if self._canonical_total_shape() != tuple(contig.shape):
             raise ValueError(
-                f"Mismatch shape: {tuple(self.arr.total_shape())} expected, but {tuple(contig.shape)} provided"
+                f"Mismatch shape: {self._canonical_total_shape()} expected, but {tuple(contig.shape)} provided"
             )
         from quadrants._kernels import (  # pylint: disable=C0415
             ext_arr_to_ndarray_matrix,  # pylint: disable=C0415
@@ -319,9 +327,9 @@ class Ndarray:
         """
         if not isinstance(arr, np.ndarray):
             raise TypeError(f"{np.ndarray} expected, but {type(arr)} provided")
-        if tuple(self.arr.total_shape()) != tuple(arr.shape):
+        if self._canonical_total_shape() != tuple(arr.shape):
             raise ValueError(
-                f"Mismatch shape: {tuple(self.arr.total_shape())} expected, but {tuple(arr.shape)} provided"
+                f"Mismatch shape: {self._canonical_total_shape()} expected, but {tuple(arr.shape)} provided"
             )
         if not arr.flags.c_contiguous:
             arr = np.ascontiguousarray(arr)
