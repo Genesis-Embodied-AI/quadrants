@@ -79,7 +79,7 @@ _TENSOR_T_NDARRAY_LAUNCH_ANNOTATION = ndarray_type.NdarrayType()
 from ._kernel_types import KernelBatchedArgType
 from ._optional_annotation import split_optional
 from ._template_mapper import TemplateMapper
-from ._template_mapper_hotpath import _is_external_array, _is_external_array_by_type
+from ._template_mapper_hotpath import _is_external_array
 
 MAX_ARG_NUM = 512
 
@@ -107,6 +107,10 @@ _is_cpython = sys.implementation.name == "cpython"
 #    Keyed by ``id(annotated_type)`` so one instance reused under several ancestor annotations keeps a per-view entry.
 
 _frozen_dc_plans: dict[tuple[int, type, str], tuple[set[str], tuple[tuple[str, str, Any], ...], bool]] = {}
+
+# ``type(v)`` -> whether a value at a ``qd.Tensor`` slot is launched as an array (a quadrants ndarray or a numpy / torch
+# array), rather than being a field or template. Both checks depend only on the class, so the answer is cached per type.
+_is_launch_array_by_type: dict[type, bool] = {}
 
 _frozen_dc_plans_hook_registered = False
 
@@ -672,12 +676,13 @@ class FuncBase:
         if needed_arg_type is _TensorClass:
             if type(v) in _TENSOR_WRAPPER_TYPES:
                 v = v._unwrap()
-            # PERF: inline the per-type cache lookup; this runs for every field member of a field-backend struct.
-            is_array = isinstance(v, Ndarray)
-            if not is_array:
-                is_array = _is_external_array_by_type.get(type(v))
-                if is_array is None:
-                    is_array = _is_external_array(v)
+            # PERF: one dict lookup per value type. This runs for every struct member (every field, for a field-backend
+            # struct), so a function call or two isinstance checks per member add up.
+            v_type = type(v)
+            is_array = _is_launch_array_by_type.get(v_type)
+            if is_array is None:
+                is_array = isinstance(v, Ndarray) or _is_external_array(v)
+                _is_launch_array_by_type[v_type] = is_array
             if is_array:
                 needed_arg_type = cast(Type, _TENSOR_T_NDARRAY_LAUNCH_ANNOTATION)
                 needed_arg_type_id = id(needed_arg_type)
