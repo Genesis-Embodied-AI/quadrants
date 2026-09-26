@@ -34,8 +34,8 @@ jobs:
       pull-requests: read
 
     # The CI of Genesis runs on the runners of the Genesis repository, made available to this one through their
-    # runner group, and routes every call to the one runner labelled for them, where the calls of every repository
-    # queue in order while the other runner stays available to the Genesis CI.
+    # runner group. The calls of all the repositories other than Genesis share a single one of these runners, taking it
+    # in turn, oldest first, which requires the secrets passed on below.
     uses: Genesis-Embodied-AI/genesis-world/.github/workflows/production.yml@main
     with:
       quadrants_run_id: ${{ github.event.workflow_run.id }}
