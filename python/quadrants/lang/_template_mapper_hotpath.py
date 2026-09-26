@@ -97,13 +97,23 @@ _primitive_types = {int, float, bool, type(None)}
 _np_ndarray = np.ndarray
 
 
+# PERF: ``type(arg)`` -> whether it is a numpy array or torch tensor. The launch path asks this for every non-ndarray
+# struct member (e.g. every field of a field-backend struct), so recomputing it each launch is costly. The answer depends
+# only on the class, and a torch tensor type cannot exist before torch is imported, so a cached False never goes stale.
+_is_external_array_by_type: dict[type, bool] = {}
+
+
 def _is_external_array(arg: Any) -> bool:
-    if isinstance(arg, _np_ndarray):
-        return True
-    torch = sys.modules.get("torch")
-    if torch is not None:
-        return isinstance(arg, torch.Tensor)
-    return False
+    arg_type = type(arg)
+    cached = _is_external_array_by_type.get(arg_type)
+    if cached is not None:
+        return cached
+    result = isinstance(arg, _np_ndarray)
+    if not result:
+        torch = sys.modules.get("torch")
+        result = torch is not None and isinstance(arg, torch.Tensor)
+    _is_external_array_by_type[arg_type] = result
+    return result
 
 
 # Fallback for ``__slots__`` classes, which have no ``__dict__`` to hold the per-instance path cache that
