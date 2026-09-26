@@ -21,6 +21,29 @@ When to set it to `False`:
 
 For normal use, leave it at `True`; the caches are the main reason a repeated run starts up quickly.
 
+## CPU loop scheduling
+
+### `cpu_min_range_for_block`
+
+Minimum number of iterations per chunk of a parallel CPU `range()` loop. Default `512`; must be a positive integer.
+Lower it when each iteration does substantial work, such as simulating an entire environment, and the loop has too
+few iterations to occupy the CPU cores with the default minimum. For example:
+
+```python
+qd.init(arch=qd.cpu, cpu_max_num_threads=12, cpu_min_range_for_block=1)
+```
+
+With 200 iterations, the default puts all useful work in one chunk. Setting the minimum to `1` instead allows
+12 chunks of up to 17 iterations each. It does not force one iteration per chunk: the chunk size is the larger of
+`ceil(number_of_iterations / cpu_max_num_threads)` and `cpu_min_range_for_block`. The final chunk may be smaller.
+The thread pool can execute these chunks concurrently, subject to the loop's `parallelize` limit.
+
+Keep the default for cheap loop bodies unless measurements favor a smaller minimum. This setting does not enable
+parallel execution for explicitly serialized loops, and does not affect GPU loops or their `block_dim` setting.
+It only applies with `make_cpu_multithreading_loop=True` (the default). When that option is `False`, the CPU runtime
+uses the loop's block size, whose default is `default_cpu_block_dim`, instead of this chunking rule.
+Changing `cpu_min_range_for_block` creates separate CPU kernel cache entries.
+
 ## Compile-time tuning
 
 ### `cfg_optimization`

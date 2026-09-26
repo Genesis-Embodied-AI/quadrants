@@ -1,6 +1,7 @@
 #include "compile_config.h"
 
 #include <thread>
+#include "quadrants/common/logging.h"
 #include "quadrants/rhi/arch.h"
 #include "quadrants/util/offline_cache.h"
 
@@ -42,6 +43,7 @@ CompileConfig::CompileConfig() {
   saturating_grid_dim = 0;
   max_block_dim = 0;
   cpu_max_num_threads = std::thread::hardware_concurrency();
+  cpu_min_range_for_block = 512;
   random_seed = 0;
 
   // LLVM backend options:
@@ -57,6 +59,8 @@ CompileConfig::CompileConfig() {
 }
 
 void CompileConfig::fit() {
+  QD_ERROR_IF(cpu_min_range_for_block < 1, "cpu_min_range_for_block must be >= 1, but got {}.",
+              cpu_min_range_for_block);
   if (debug) {
     // TODO: allow users to run in debug mode without out-of-bound checks
     check_out_of_bound = true;

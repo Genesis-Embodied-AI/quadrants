@@ -34,11 +34,12 @@ using TaskType = OffloadedStmt::TaskType;
  *       for i in range(block_begin, block_end):
  *           a[i] = i
  *
- * where 8 is the number of threads available on the CPU.
+ * where 8 is the number of threads available on the CPU and cpu_min_range_for_block is set to 1.
  *
  * This pass is only applied to range-for loops that are offloaded to
  * CPUs. The number of threads is determined by the config option
- * "cpu_max_num_threads".
+ * "cpu_max_num_threads", and the minimum chunk size by
+ * "cpu_min_range_for_block" (default 512).
  *
  * The effect is that more invarants in the inner most can be identified and
  * moved outside, so that LLVM has more chance to vectorize the innermost
@@ -64,8 +65,8 @@ class MakeCPUMultithreadedRangeFor : public BasicStmtVisitor {
 
     auto offloaded_body = std::make_unique<Block>();
     auto one = offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(PrimitiveType::i32, 1)));
-    auto minimal_block_range =
-        offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(PrimitiveType::i32, 512)));
+    auto minimal_block_range = offloaded_body->insert(
+        Stmt::make_typed<ConstStmt>(TypedConstant(PrimitiveType::i32, config_.cpu_min_range_for_block)));
     auto num_threads = offloaded_body->insert(
         Stmt::make_typed<ConstStmt>(TypedConstant(PrimitiveType::i32, config_.cpu_max_num_threads)));
     auto thread_index = offloaded_body->insert(Stmt::make_typed<LoopIndexStmt>(offloaded, 0));

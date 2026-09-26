@@ -53,6 +53,7 @@ init_args = {
     "gdb_trigger": [False, TF],
     "advanced_optimization": [True, TF],
     "debug": [False, TF],
+    "cpu_min_range_for_block": [512, [1, 16, 512]],
     "print_ir": [False, TF],
     "fast_math": [True, TF],
     "flatten_if": [False, TF],
