@@ -1,14 +1,7 @@
 name: Genesis
 
 # Genesis is the main consumer of Quadrants, and its test suite and benchmarks exercise the compiler far beyond what
-# the tests of this repository cover. This workflow runs the CI of Genesis itself, called as a reusable workflow, on
-# the default branch of Genesis installed with the wheel built from the revision under test: the minimal set of
-# Genesis unit tests, every Genesis benchmark, and the comparison of those benchmarks against the history of the
-# default branch of Genesis, which comments on the pull request in case of regression.
-#
-# The wheel is the one built by the "Manylinux wheel build" workflow, hence 'workflow_run', which starts once that
-# workflow completes and can download its artifacts. In exchange, this file is always taken from the default branch,
-# and the outcome has to be published as a check on the commit under test to show up on it at all.
+# the tests of this repository cover. This workflow runs the CI of Genesis itself, called as a reusable workflow.
 on:
   workflow_run:
     workflows: ["Manylinux wheel build"]
