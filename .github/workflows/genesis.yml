@@ -64,21 +64,25 @@ jobs:
         env:
           CHECK_NAME: Genesis Unit Tests & Benchmarks
           RESULT: ${{ needs.tests-and-benchmarks.result }}
+          IS_SKIPPED: ${{ needs.tests-and-benchmarks.outputs.is_skipped }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           script: |
             const isSuccess = process.env.RESULT === 'success';
+            const isSkipped = isSuccess && process.env.IS_SKIPPED === 'true';
             await github.rest.checks.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
               head_sha: context.payload.workflow_run.head_sha,
               name: process.env.CHECK_NAME,
               status: 'completed',
-              conclusion: isSuccess ? 'success' : 'failure',
+              conclusion: isSkipped ? 'skipped' : isSuccess ? 'success' : 'failure',
               details_url: process.env.RUN_URL,
               output: {
                 title: process.env.CHECK_NAME,
-                summary: isSuccess
+                summary: isSkipped
+                  ? 'The pull request was closed before its wheel was built, so the wheel is left untested.'
+                  : isSuccess
                   ? 'The Genesis unit tests and benchmarks pass with the wheel under test.'
                   : `The Genesis unit tests or benchmarks fail with the wheel under test (${process.env.RESULT}).`,
                 text: `**[Full log](${process.env.RUN_URL})**`
@@ -91,6 +95,8 @@ jobs:
     name: genesis-benchmark_comparison
 
     needs: tests-and-benchmarks
+    # A closed pull request leaves no benchmark results to compare.
+    if: needs.tests-and-benchmarks.outputs.is_skipped != 'true'
 
     permissions:
       contents: read
