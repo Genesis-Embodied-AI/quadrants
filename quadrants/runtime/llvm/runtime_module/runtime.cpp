@@ -646,18 +646,14 @@ void quadrants_assert_format(LLVMRuntime *runtime, u1 test, const char *format, 
   // Kill this CUDA thread.
   asm("exit;");
 #elif ARCH_amdgpu
-  asm("S_ENDPGM");
-  // TODO: properly kill this CPU thread here, considering the containing
-  // ThreadPool structure.
-
-  // std::terminate();
-
-  // Note that std::terminate() will throw an signal 6
-  // (Aborted), which will be caught by Quadrants's signal handler. The assert
-  // failure message will NOT be properly printed since Quadrants exits after
-  // receiving that signal. It is better than nothing when debugging the
-  // runtime, since otherwise the whole program may crash if the kernel
-  // continues after assertion failure.
+  // Do NOT terminate the wavefront here. Killing only the faulting wave (the old `S_ENDPGM`) deadlocks
+  // any peer waves parked on `s_barrier`, hanging the host; killing the whole dispatch (`__builtin_trap`)
+  // escalates to an uncatchable HSA exception (SIGABRT) on some AMD architectures (e.g. RDNA / gfx1011),
+  // taking down the process instead of raising. Instead, the error is already recorded above; let this
+  // wave run to the kernel's natural end so it still reaches every barrier alongside its peers. The host
+  // surfaces QuadrantsAssertionError through the normal post-sync error check (the HIP context stays
+  // alive), and the AMDGPU out-of-bounds index clamp (see check_out_of_bound.cpp) prevents the continued
+  // execution from performing the offending access after a failed bounds check.
 #endif
 }
 
