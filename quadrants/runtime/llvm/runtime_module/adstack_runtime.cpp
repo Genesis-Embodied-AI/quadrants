@@ -787,6 +787,7 @@ void adstack_runtime_zero_init(LLVMRuntime *runtime) {
   runtime->adstack_bound_row_capacities_capacity = 0;
   runtime->adstack_overflow_flag_dev_ptr = nullptr;
   runtime->adstack_overflow_task_id_dev_ptr = nullptr;
+  runtime->assert_error_state_dev_ptr = nullptr;
 }
 
 extern "C" {  // local stack operations

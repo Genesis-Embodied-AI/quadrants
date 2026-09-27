@@ -717,6 +717,28 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       patch_fence("block_mem_fence", "workgroup");
       patch_fence("grid_mem_fence", "agent");
 
+      // System-scope fence for the AMDGPU in-kernel assert path: publish pinned assert state to the
+      // host before `__builtin_trap()`. Default LLVM syncscope is system (includes host memory).
+      {
+        auto func = module->getFunction("amdgpu_system_mem_fence");
+        if (func) {
+          func->deleteBody();
+          auto bb = llvm::BasicBlock::Create(*ctx, "entry", func);
+          IRBuilder<> builder(*ctx);
+          builder.SetInsertPoint(bb);
+          builder.CreateFence(llvm::AtomicOrdering::SequentiallyConsistent);
+          builder.CreateRetVoid();
+          QuadrantsLLVMContext::mark_inline(func);
+        } else {
+          // If the symbol name ever drifts, the runtime.cpp fallback (a host-atomic stub) is a no-op on device,
+          // which would silently break the publish-before-trap ordering the in-kernel assert path depends on.
+          // Warn loudly rather than fail so non-debug builds (which never trap) still run.
+          QD_WARN(
+              "amdgpu_system_mem_fence not found while patching the AMDGPU runtime module; the in-kernel assert "
+              "publish-before-trap fence will be a device no-op. QuadrantsAssertionError may not surface correctly.");
+        }
+      }
+
       link_module_with_amdgpu_libdevice(module);
       patch_amdgpu_kernel_dim("block_dim", llvm::ConstantInt::get(llvm::Type::getInt32Ty(*ctx), 0));
       patch_amdgpu_kernel_dim("grid_dim", llvm::ConstantInt::get(llvm::Type::getInt32Ty(*ctx), 0));

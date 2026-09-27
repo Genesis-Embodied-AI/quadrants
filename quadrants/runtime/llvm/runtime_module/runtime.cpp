@@ -590,6 +590,20 @@ void runtime_retrieve_error_message_argument(LLVMRuntime *runtime, int argument_
   runtime->set_result(quadrants_result_buffer_error_id, runtime->error_message_arguments[argument_id]);
 }
 
+// Publish the device-mapped address of the pinned AmdgpuAssertErrorState allocated by the host in
+// materialize_runtime (debug + AMDGPU only). `runtime_`-prefixed so it survives AMDGPU eliminate-unused.
+extern "C" void runtime_set_assert_error_state_dev_ptr(LLVMRuntime *runtime, void *dev_ptr) {
+  runtime->assert_error_state_dev_ptr = (AmdgpuAssertErrorState *)dev_ptr;
+}
+
+#if ARCH_amdgpu
+// Stub patched in llvm_context.cpp to an LLVM system-scope fence. Host-clang cannot emit AMDGCN fence
+// builtins when compiling runtime.cpp to bitcode; the JIT retarget replaces this body.
+void amdgpu_system_mem_fence() {
+  __atomic_thread_fence(__ATOMIC_SEQ_CST);
+}
+#endif
+
 void runtime_ListManager_get_num_active_chunks(LLVMRuntime *runtime, ListManager *list_manager) {
   runtime->set_result(quadrants_result_buffer_runtime_query_id, list_manager->get_num_active_chunks());
 }
@@ -631,14 +645,37 @@ void quadrants_assert_format(LLVMRuntime *runtime, u1 test, const char *format, 
   if (!runtime->error_code) {
     locked_task(&runtime->error_message_lock, [&] {
       if (!runtime->error_code) {
-        runtime->error_code = 1;  // Assertion failure
-
         memset(runtime->error_message_template, 0, quadrants_error_message_max_length);
         memcpy(runtime->error_message_template, format,
                std::min(quadrants_strlen(format), quadrants_error_message_max_length - 1));
         for (int i = 0; i < num_arguments; i++) {
           runtime->error_message_arguments[i] = arguments[i];
         }
+#if ARCH_amdgpu
+        // Mirror into pinned host-mapped memory before trapping. Host reads this after
+        // hipErrorLaunchFailure; device retrieval kernels cannot run once the context is dead.
+        if (runtime->assert_error_state_dev_ptr) {
+          auto *st = runtime->assert_error_state_dev_ptr;
+          memset(st->error_message_template, 0, quadrants_error_message_max_length);
+          memcpy(st->error_message_template, runtime->error_message_template, quadrants_error_message_max_length);
+          for (int i = 0; i < quadrants_error_message_max_num_arguments; i++) {
+            st->error_message_arguments[i] = runtime->error_message_arguments[i];
+          }
+          amdgpu_system_mem_fence();
+          // Publish error_code last so a host that observes 1 also sees the message bytes.
+          __atomic_store_n(&st->error_code, (i64)1, __ATOMIC_SEQ_CST);
+        }
+        // Fence before flipping the device-side gate so any peer wave that later observes
+        // error_code == 1 is guaranteed to also see the published pinned payload above.
+        amdgpu_system_mem_fence();
+#endif
+        // Set the device-side gate last, after the pinned state is fully published. A peer wave that
+        // observes error_code == 1 skips this block and traps the whole dispatch; if the gate were set
+        // first (as before), that peer could trap while this wave is still copying, leaving the host to
+        // read an unpublished pinned buffer (error_code == 0) and surface a generic launch failure
+        // instead of QuadrantsAssertionError. Waves that still observe 0 block on error_message_lock
+        // until publication completes.
+        runtime->error_code = 1;  // Assertion failure
       }
     });
   }
@@ -646,18 +683,12 @@ void quadrants_assert_format(LLVMRuntime *runtime, u1 test, const char *format, 
   // Kill this CUDA thread.
   asm("exit;");
 #elif ARCH_amdgpu
-  asm("S_ENDPGM");
-  // TODO: properly kill this CPU thread here, considering the containing
-  // ThreadPool structure.
-
-  // std::terminate();
-
-  // Note that std::terminate() will throw an signal 6
-  // (Aborted), which will be caught by Quadrants's signal handler. The assert
-  // failure message will NOT be properly printed since Quadrants exits after
-  // receiving that signal. It is better than nothing when debugging the
-  // runtime, since otherwise the whole program may crash if the kernel
-  // continues after assertion failure.
+  // Trap the whole dispatch so peer wavefronts waiting on s_barrier do not hang the host
+  // (the previous `S_ENDPGM` only killed the faulting wavefront). After the trap the HIP
+  // context is dead (`hipErrorLaunchFailure` on subsequent calls) - an accepted debug-mode
+  // limitation; the host surfaces QuadrantsAssertionError from the pinned state above.
+  amdgpu_system_mem_fence();
+  __builtin_trap();
 #endif
 }
 
