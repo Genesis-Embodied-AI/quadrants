@@ -64,12 +64,18 @@ class MakeCPUMultithreadedRangeFor : public BasicStmtVisitor {
     }
 
     auto offloaded_body = std::make_unique<Block>();
-    auto one = offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(PrimitiveType::i32, 1)));
-    auto minimal_block_range = offloaded_body->insert(
-        Stmt::make_typed<ConstStmt>(TypedConstant(PrimitiveType::i32, config_.cpu_min_range_for_block)));
-    auto num_threads = offloaded_body->insert(
-        Stmt::make_typed<ConstStmt>(TypedConstant(PrimitiveType::i32, config_.cpu_max_num_threads)));
-    auto thread_index = offloaded_body->insert(Stmt::make_typed<LoopIndexStmt>(offloaded, 0));
+    auto cast = [&](Stmt *value, DataType type) -> Stmt * {
+      auto stmt = Stmt::make_typed<UnaryOpStmt>(UnaryOpType::cast_value, value);
+      stmt->cast_type = type;
+      return offloaded_body->insert(std::move(stmt));
+    };
+    // Scheduling offsets can exceed i32 even when the original loop bounds fit in i32.
+    auto one = offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(int64(1))));
+    auto minimal_block_range =
+        offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(int64(config_.cpu_min_range_for_block))));
+    auto num_threads =
+        offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(int64(config_.cpu_max_num_threads))));
+    auto thread_index = cast(offloaded_body->insert(Stmt::make_typed<LoopIndexStmt>(offloaded, 0)), PrimitiveType::i64);
 
     // Retrieve range-for bounds.
     Stmt *begin_stmt;
@@ -88,6 +94,9 @@ class MakeCPUMultithreadedRangeFor : public BasicStmtVisitor {
       end_stmt = offloaded_body->insert(Stmt::make<GlobalTemporaryStmt>(offloaded->end_offset, PrimitiveType::i32));
       end_stmt = offloaded_body->insert(Stmt::make<GlobalLoadStmt>(end_stmt));
     }
+
+    begin_stmt = cast(begin_stmt, PrimitiveType::i64);
+    end_stmt = cast(end_stmt, PrimitiveType::i64);
 
     // Inner serial block range is
     // max(((end - begin) + (num_threads - 1)) / num_threads,
@@ -112,6 +121,12 @@ class MakeCPUMultithreadedRangeFor : public BasicStmtVisitor {
     auto block_end =
         offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(BinaryOpType::add, block_begin, block_range));
     block_end = offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(BinaryOpType::min, end_stmt, block_end));
+
+    // Clamp unused chunks to the original end before converting back to i32. Otherwise a large minimum or bounds
+    // near INT32_MAX could wrap an unused chunk's start and turn it into a huge or overlapping range.
+    block_begin = offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(BinaryOpType::min, end_stmt, block_begin));
+    block_begin = cast(block_begin, PrimitiveType::i32);
+    block_end = cast(block_end, PrimitiveType::i32);
 
     // Create the serial inner loop.
     auto inner_loop = offloaded_body->insert(

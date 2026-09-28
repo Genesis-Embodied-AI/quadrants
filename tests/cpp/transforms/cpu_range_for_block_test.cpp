@@ -1,6 +1,7 @@
 #include "gtest/gtest.h"
 
 #include <algorithm>
+#include <limits>
 
 #include "quadrants/ir/statements.h"
 #include "quadrants/ir/transforms.h"
@@ -10,7 +11,7 @@ namespace quadrants::lang {
 
 // Inspect the generated chunk width, rather than relying on timing or on how many workers the OS wakes up.
 TEST(CPURangeForBlock, ChunkWidth) {
-  for (int minimum : {1, 16, 512, 2048}) {
+  for (int minimum : {1, 16, 512, 2048, 1 << 30, std::numeric_limits<int32>::max()}) {
     CompileConfig config;
     config.cpu_max_num_threads = 12;
     config.cpu_min_range_for_block = minimum;
@@ -27,7 +28,9 @@ TEST(CPURangeForBlock, ChunkWidth) {
     irpass::constant_fold(&root);
 
     auto *inner = offloaded->body->statements.back()->as<RangeForStmt>();
-    auto *end_min = inner->end->as<BinaryOpStmt>();
+    auto *end_cast = inner->end->as<UnaryOpStmt>();
+    ASSERT_EQ(end_cast->cast_type, PrimitiveType::i32);
+    auto *end_min = end_cast->operand->as<BinaryOpStmt>();
     ASSERT_EQ(end_min->op_type, BinaryOpType::min);
     auto *end_add = end_min->lhs->cast<BinaryOpStmt>();
     if (!end_add) {
@@ -36,6 +39,7 @@ TEST(CPURangeForBlock, ChunkWidth) {
     ASSERT_NE(end_add, nullptr);
     ASSERT_EQ(end_add->op_type, BinaryOpType::add);
     auto *width = end_add->rhs->as<ConstStmt>();
+    EXPECT_EQ(width->ret_type, PrimitiveType::i64);
     EXPECT_EQ(width->val.val_int(), std::max(17, minimum));
     EXPECT_EQ(offloaded->end_value, 12);
     EXPECT_EQ(offloaded->block_dim, 1);

@@ -99,3 +99,33 @@ def test_cpu_range_for_block_offline_cache(tmp_path):
     assert default_files < small_files
     assert run(512) == small_files
     assert run(1) == small_files
+
+
+@pytest.mark.parametrize("minimum", [512, 1 << 30, (1 << 31) - 1])
+@test_utils.test(arch=qd.cpu)
+def test_cpu_range_for_block_overflow(minimum):
+    qd.init(arch=qd.cpu, cpu_max_num_threads=4, cpu_min_range_for_block=minimum, debug=True)
+    out = qd.field(qd.i32, shape=16)
+
+    @qd.kernel
+    def dynamic(begin: qd.i32, end: qd.i32):
+        for i in range(begin, end):
+            # Fail promptly if an unused chunk wraps around to a negative start.
+            assert i >= begin and i < end
+            out[i - begin] += 1
+
+    @qd.kernel
+    def constant(begin: qd.template(), end: qd.template()):
+        for i in range(begin, end):
+            assert i >= begin and i < end
+            out[i - begin] += 1
+
+    max_i32 = (1 << 31) - 1
+    min_i32 = -(1 << 31)
+    for begin, end in [(0, 7), (1, 1), (max_i32 - 7, max_i32), (min_i32, min_i32 + 7), (max_i32, min_i32)]:
+        expected = np.zeros(16, dtype=np.int32)
+        expected[: max(0, end - begin)] = 1
+        for kernel in (dynamic, constant):
+            out.fill(0)
+            kernel(begin, end)
+            np.testing.assert_array_equal(out.to_numpy(), expected)
