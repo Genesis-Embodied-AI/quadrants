@@ -42,12 +42,6 @@ for block_index in range(12):
 
 Block 0 runs original iteration indices 0 through 999. Block 1 runs indices 1,000 through 1,999. This continues through block 11, which runs indices 11,000 through 11,999. Each task executes its inner loop sequentially, while different tasks can run in parallel.
 
-To choose the block size, Quadrants divides the iteration count by the worker count and rounds up to an integer. It then takes the larger of that value and 512. The final nonempty block can be shorter. Blocks whose start would lie beyond the original range are empty.
-
-For example, with 12 workers and 200 iterations, the default block size is 512. All 200 iterations fit in the first block. The other eleven blocks are empty, so only one worker performs useful work. With 12 workers and 12,000 iterations, the default block size is 1,000. All twelve blocks contain useful work.
-
-The inner loop and its work are compiled together. This lets the compiler move calculations that do not change between iterations outside the loop. It also gives the compiler an opportunity to use vector instructions, which process several values in one CPU instruction.
-
 ### The two CPU scheduling modes
 
 Both modes run loop iterations in parallel. They differ in where the loop over original iterations runs and how those iterations are grouped into tasks.
@@ -87,6 +81,14 @@ for task_start in range(0, 200, 32):
 The runtime creates seven tasks: six cover 32 iterations each, and the last covers eight.
 
 In this mode, the task count is the iteration count divided by the task size, rounded up. It is independent of the worker count. For example, 1,000 iterations with a task size of 32 create 32 tasks, which a pool of four workers can process.
+
+### Default block sizing and optimization
+
+To choose the block size, Quadrants divides the iteration count by the worker count and rounds up to an integer. It then takes the larger of that value and 512. The final nonempty block can be shorter. Blocks whose start would lie beyond the original range are empty.
+
+For example, with 12 workers and 200 iterations, the default block size is 512. All 200 iterations fit in the first block. The other eleven blocks are empty, so only one worker performs useful work. With 12 workers and 12,000 iterations, the default block size is 1,000. All twelve blocks contain useful work.
+
+The inner loop and its work are compiled together. This lets the compiler move calculations that do not change between iterations outside the loop. It also gives the compiler an opportunity to use vector instructions, which process several values in one CPU instruction.
 
 ### CPU scheduling parameters
 
