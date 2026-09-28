@@ -16,7 +16,7 @@ The number of tasks can differ from the number of workers. When there are more t
 
 ### Default CPU scheduling
 
-`cpu_max_num_threads` sets the number of CPU worker threads in the thread pool. By default, Quadrants uses the hardware concurrency reported by the system, typically the number of logical CPUs. A logical CPU is a hardware execution slot that the operating system can schedule a thread on. A particular loop may use fewer workers. This setting controls execution threads; `num_compile_threads` separately controls threads used to compile kernels.
+`cpu_max_num_threads` sets the number of CPU worker threads in the thread pool. By default, Quadrants uses the system-reported number of logical cores. A particular loop may use fewer workers. This setting controls execution threads; `num_compile_threads` separately controls threads used to compile kernels.
 
 For CPU `range()` loops, Quadrants normally groups consecutive iterations into blocks. A block is the range of original iterations processed by one generated inner loop. The setting `cpu_min_block_size` sets the minimum block size. Its default is 512, and its value must be at least 1.
 
