@@ -16,7 +16,7 @@ The number of tasks can differ from the number of workers. When there are more t
 
 ### Default CPU scheduling
 
-The setting `cpu_max_num_threads` limits the number of CPU workers. By default, Quadrants uses the number of available CPU cores. This setting controls execution threads; `num_compile_threads` separately controls threads used to compile kernels.
+`cpu_max_num_threads` sets the number of CPU worker threads in the thread pool. By default, Quadrants uses the hardware concurrency reported by the system, typically the number of logical CPUs. A logical CPU is a hardware execution slot that the operating system can schedule a thread on. A particular loop may use fewer workers. This setting controls execution threads; `num_compile_threads` separately controls threads used to compile kernels.
 
 For CPU `range()` loops, Quadrants normally groups consecutive iterations into blocks. A block is the range of original iterations processed by one generated inner loop. The setting `cpu_min_block_size` sets the minimum block size. Its default is 512, and its value must be at least 1.
 
@@ -89,7 +89,7 @@ The setting `cpu_min_block_size` has no effect when `make_cpu_multithreading_loo
 
 | Setting | True: with the `make_cpu_multithreaded_range_for` transform | False: without the `make_cpu_multithreaded_range_for` transform |
 | --- | --- | --- |
-| `cpu_max_num_threads` | Limits workers and determines the number of generated blocks. | Limits workers; task count depends on loop length and block size. |
+| `cpu_max_num_threads` | Sets the thread-pool size and determines the number of generated blocks. | Sets the thread-pool size; task count depends on loop length and block size. |
 | `cpu_min_block_size` | Sets the minimum number of original iterations in a generated block. | Unused. |
 | `default_cpu_block_dim` | Overridden for the transformed outer loop: its `block_dim` is set to 1. | Supplies the number of original iterations per task when no loop-specific block size is set. |
 
