@@ -64,18 +64,11 @@ class MakeCPUMultithreadedRangeFor : public BasicStmtVisitor {
     }
 
     auto offloaded_body = std::make_unique<Block>();
-    auto cast = [&](Stmt *value, DataType type) -> Stmt * {
-      auto stmt = Stmt::make_typed<UnaryOpStmt>(UnaryOpType::cast_value, value);
-      stmt->cast_type = type;
-      return offloaded_body->insert(std::move(stmt));
-    };
-    // Scheduling offsets can exceed i32 even when the original loop bounds fit in i32.
-    auto one = offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(int64(1))));
-    auto minimal_block_range =
-        offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(int64(config_.cpu_min_block_size))));
-    auto num_threads =
-        offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(int64(config_.cpu_max_num_threads))));
-    auto thread_index = cast(offloaded_body->insert(Stmt::make_typed<LoopIndexStmt>(offloaded, 0)), PrimitiveType::i64);
+    auto one = offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(1)));
+    auto cpu_min_block_size =
+        offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(config_.cpu_min_block_size)));
+    auto num_threads = offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(config_.cpu_max_num_threads)));
+    auto thread_index = offloaded_body->insert(Stmt::make_typed<LoopIndexStmt>(offloaded, 0));
 
     // Retrieve range-for bounds.
     Stmt *begin_stmt;
@@ -95,38 +88,15 @@ class MakeCPUMultithreadedRangeFor : public BasicStmtVisitor {
       end_stmt = offloaded_body->insert(Stmt::make<GlobalLoadStmt>(end_stmt));
     }
 
-    begin_stmt = cast(begin_stmt, PrimitiveType::i64);
-    end_stmt = cast(end_stmt, PrimitiveType::i64);
-
-    // Inner serial block range is
-    // max(((end - begin) + (num_threads - 1)) / num_threads,
-    // minimal_block_range)
-    auto total_range = offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(BinaryOpType::sub, end_stmt, begin_stmt));
-    auto saturated_total_range = offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(
-        BinaryOpType::sub,
-        offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(BinaryOpType::add, total_range, num_threads)), one));
-    auto block_range = offloaded_body->insert(
-        Stmt::make_typed<BinaryOpStmt>(BinaryOpType::floordiv, saturated_total_range, num_threads));
-    block_range =
-        offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(BinaryOpType::max, block_range, minimal_block_range));
-
-    // Inner loop begins at
-    // begin + block_range * thread_id
-    auto block_begin =
-        offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(BinaryOpType::mul, block_range, thread_index));
-    block_begin = offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(BinaryOpType::add, begin_stmt, block_begin));
-
-    // Inner loop ends at
-    // min(block_begin + block_range), end))
-    auto block_end =
-        offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(BinaryOpType::add, block_begin, block_range));
-    block_end = offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(BinaryOpType::min, end_stmt, block_end));
-
-    // Clamp unused chunks to the original end before converting back to i32. Otherwise a large minimum or bounds
-    // near INT32_MAX could wrap an unused chunk's start and turn it into a huge or overlapping range.
-    block_begin = offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(BinaryOpType::min, end_stmt, block_begin));
-    block_begin = cast(block_begin, PrimitiveType::i32);
-    block_end = cast(block_end, PrimitiveType::i32);
+    auto next_index = offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(BinaryOpType::add, thread_index, one));
+    auto boundary = [&](Stmt *index) {
+      return offloaded_body->insert(Stmt::make_typed<InternalFuncStmt>(
+          "cpu_range_for_block_boundary",
+          std::vector<Stmt *>{begin_stmt, end_stmt, num_threads, cpu_min_block_size, index}, PrimitiveType::i32,
+          /*with_runtime_context=*/false));
+    };
+    auto block_begin = boundary(thread_index);
+    auto block_end = boundary(next_index);
 
     // Create the serial inner loop.
     auto inner_loop = offloaded_body->insert(
