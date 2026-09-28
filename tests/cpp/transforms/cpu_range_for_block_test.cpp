@@ -61,10 +61,10 @@ TEST(CPURangeForBlock, CallsBoundaryHelper) {
     }
     auto *index = inner->begin->as<InternalFuncStmt>()->args[4]->as<LoopIndexStmt>();
     EXPECT_EQ(index->loop, offloaded);
-    auto *next_index = inner->end->as<InternalFuncStmt>()->args[4]->as<BinaryOpStmt>();
-    EXPECT_EQ(next_index->op_type, BinaryOpType::add);
-    EXPECT_EQ(next_index->lhs, index);
-    EXPECT_EQ(next_index->rhs->as<ConstStmt>()->val.val_int(), 1);
+    auto *next_block_index = inner->end->as<InternalFuncStmt>()->args[4]->as<BinaryOpStmt>();
+    EXPECT_EQ(next_block_index->op_type, BinaryOpType::add);
+    EXPECT_EQ(next_block_index->lhs, index);
+    EXPECT_EQ(next_block_index->rhs->as<ConstStmt>()->val.val_int(), 1);
     EXPECT_TRUE(inner->strictly_serialized);
     EXPECT_EQ(offloaded->end_value, 12);
     EXPECT_EQ(offloaded->block_dim, 1);

@@ -88,7 +88,7 @@ class MakeCPUMultithreadedRangeFor : public BasicStmtVisitor {
       end_stmt = offloaded_body->insert(Stmt::make<GlobalLoadStmt>(end_stmt));
     }
 
-    auto next_index = offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(BinaryOpType::add, block_index, one));
+    auto next_block_index = offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(BinaryOpType::add, block_index, one));
     auto boundary = [&](Stmt *index) {
       return offloaded_body->insert(Stmt::make_typed<InternalFuncStmt>(
           "cpu_range_for_block_boundary",
@@ -96,7 +96,7 @@ class MakeCPUMultithreadedRangeFor : public BasicStmtVisitor {
           /*with_runtime_context=*/false));
     };
     auto block_begin = boundary(block_index);
-    auto block_end = boundary(next_index);
+    auto block_end = boundary(next_block_index);
 
     // Create the serial inner loop.
     auto inner_loop = offloaded_body->insert(
