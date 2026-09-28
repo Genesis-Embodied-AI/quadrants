@@ -1,6 +1,7 @@
 #include "quadrants/ir/ir.h"
 
 #include <numeric>
+#include <stdexcept>
 #include <thread>
 #include <unordered_map>
 
@@ -184,15 +185,6 @@ void Stmt::replace_with(VecStatement &&new_statements, bool replace_usages) {
   parent->replace_with(this, std::move(new_statements), replace_usages);
 }
 
-void Stmt::replace_operand_with(Stmt *old_stmt, Stmt *new_stmt) {
-  int n_op = num_operands();
-  for (int i = 0; i < n_op; i++) {
-    if (operand(i) == old_stmt) {
-      *operands[i] = new_stmt;
-    }
-  }
-}
-
 std::string Stmt::type_hint() const {
   if (ret_type->is_primitive(PrimitiveTypeID::unknown))
     return "";
@@ -279,29 +271,48 @@ int Stmt::locate_operand(Stmt **stmt) {
   return -1;
 }
 
+void Block::check_statement_list_mutation() const {
+  if (statement_list_lock_depth_ != 0) {
+    throw std::logic_error("Cannot mutate a block's statement list during an operand-only traversal");
+  }
+}
+
+stmt_vector Block::extract_statements() {
+  check_statement_list_mutation();
+  auto result = std::move(statements_);
+  statements_.clear();
+  return result;
+}
+
 void Block::erase(int location) {
+  check_statement_list_mutation();
   auto iter = locate(location);
   erase_range(iter, std::next(iter));
 }
 
 void Block::erase(Stmt *stmt) {
+  check_statement_list_mutation();
   auto iter = find(stmt);
   erase_range(iter, std::next(iter));
 }
 
-void Block::erase_range(stmt_vector::iterator begin, stmt_vector::iterator end) {
-  for (auto iter = begin; iter != end; iter++) {
+void Block::erase_range(stmt_vector::const_iterator begin, stmt_vector::const_iterator end) {
+  check_statement_list_mutation();
+  auto mutable_begin = statements_.begin() + (begin - statements.begin());
+  auto mutable_end = statements_.begin() + (end - statements.begin());
+  for (auto iter = mutable_begin; iter != mutable_end; iter++) {
     (*iter)->erased = true;
     trash_bin.push_back(std::move(*iter));
   }
-  statements.erase(begin, end);
+  statements_.erase(mutable_begin, mutable_end);
 }
 
 void Block::erase(std::unordered_set<Stmt *> stmts) {
+  check_statement_list_mutation();
   stmt_vector clean_stmts;
-  clean_stmts.reserve(statements.size());
+  clean_stmts.reserve(statements_.size());
   // We dont have access to erase_if in C++17
-  for (pStmt &stmt : statements) {
+  for (pStmt &stmt : statements_) {
     if (stmts.find(stmt.get()) != stmts.end()) {
       stmt->erased = true;
       trash_bin.push_back(std::move(stmt));
@@ -309,18 +320,20 @@ void Block::erase(std::unordered_set<Stmt *> stmts) {
       clean_stmts.push_back(std::move(stmt));
     }
   }
-  statements = std::move(clean_stmts);
+  statements_ = std::move(clean_stmts);
 }
 
 std::unique_ptr<Stmt> Block::extract(int location) {
-  auto stmt = std::move(statements[location]);
-  statements.erase(statements.begin() + location);
+  check_statement_list_mutation();
+  auto stmt = std::move(statements_[location]);
+  statements_.erase(statements_.begin() + location);
   return stmt;
 }
 
 std::unique_ptr<Stmt> Block::extract(Stmt *stmt) {
-  for (int i = 0; i < (int)statements.size(); i++) {
-    if (statements[i].get() == stmt) {
+  check_statement_list_mutation();
+  for (int i = 0; i < (int)statements_.size(); i++) {
+    if (statements_[i].get() == stmt) {
       return extract(i);
     }
   }
@@ -328,21 +341,25 @@ std::unique_ptr<Stmt> Block::extract(Stmt *stmt) {
 }
 
 Stmt *Block::insert(std::unique_ptr<Stmt> &&stmt, int location) {
+  check_statement_list_mutation();
   return insert_at(std::move(stmt), locate(location));
 }
 
-Stmt *Block::insert_at(std::unique_ptr<Stmt> &&stmt, stmt_vector::iterator location) {
+Stmt *Block::insert_at(std::unique_ptr<Stmt> &&stmt, stmt_vector::const_iterator location) {
+  check_statement_list_mutation();
   auto stmt_ptr = stmt.get();
   stmt->parent = this;
-  statements.insert(location, std::move(stmt));
+  statements_.insert(statements_.begin() + (location - statements.begin()), std::move(stmt));
   return stmt_ptr;
 }
 
 Stmt *Block::insert(VecStatement &&stmt, int location) {
+  check_statement_list_mutation();
   return insert_at(std::move(stmt), locate(location));
 }
 
-Stmt *Block::insert_at(VecStatement &&stmt, stmt_vector::iterator location) {
+Stmt *Block::insert_at(VecStatement &&stmt, stmt_vector::const_iterator location) {
+  check_statement_list_mutation();
   Stmt *stmt_ptr = nullptr;
   if (stmt.size()) {
     stmt_ptr = stmt.back().get();
@@ -350,17 +367,20 @@ Stmt *Block::insert_at(VecStatement &&stmt, stmt_vector::iterator location) {
   for (auto &s : stmt.stmts) {
     s->parent = this;
   }
-  statements.insert(location, std::make_move_iterator(stmt.stmts.begin()), std::make_move_iterator(stmt.stmts.end()));
+  statements_.insert(statements_.begin() + (location - statements.begin()), std::make_move_iterator(stmt.stmts.begin()),
+                     std::make_move_iterator(stmt.stmts.end()));
   return stmt_ptr;
 }
 
 void Block::replace_statements_in_range(int start, int end, VecStatement &&stmts) {
+  check_statement_list_mutation();
   QD_ASSERT(start <= end);
   erase_range(locate(start), locate(end));
   insert(std::move(stmts), start);
 }
 
 void Block::replace_with(Stmt *old_statement, std::unique_ptr<Stmt> &&new_statement, bool replace_usages) {
+  check_statement_list_mutation();
   VecStatement vec;
   vec.push_back(std::move(new_statement));
   replace_with(old_statement, std::move(vec), replace_usages);
@@ -380,13 +400,15 @@ Stmt *Block::lookup_var(const Identifier &ident) const {
 }
 
 void Block::set_statements(VecStatement &&stmts) {
-  statements.clear();
+  check_statement_list_mutation();
+  statements_.clear();
   for (int i = 0; i < (int)stmts.size(); i++) {
     insert(std::move(stmts[i]), i);
   }
 }
 
 void Block::insert_before(Stmt *old_statement, VecStatement &&new_statements) {
+  check_statement_list_mutation();
   // Inherit the anchor stmt's graph region, see Stmt::insert_before_me for the rationale.
   for (auto &s : new_statements.stmts) {
     s->region_tag = old_statement->region_tag;
@@ -395,6 +417,7 @@ void Block::insert_before(Stmt *old_statement, VecStatement &&new_statements) {
 }
 
 void Block::insert_after(Stmt *old_statement, VecStatement &&new_statements) {
+  check_statement_list_mutation();
   for (auto &s : new_statements.stmts) {
     s->region_tag = old_statement->region_tag;
   }
@@ -402,8 +425,9 @@ void Block::insert_after(Stmt *old_statement, VecStatement &&new_statements) {
 }
 
 void Block::replace_with(Stmt *old_statement, VecStatement &&new_statements, bool replace_usages) {
-  auto iter = find(old_statement);
-  QD_ASSERT(iter != statements.end());
+  check_statement_list_mutation();
+  auto iter = statements_.begin() + (find(old_statement) - statements.begin());
+  QD_ASSERT(iter != statements_.end());
   if (replace_usages && !new_statements.stmts.empty())
     old_statement->replace_usages_with(new_statements.back().get());
   // Inherit the replaced stmt's graph region (same rationale as insert_before / insert_after).
@@ -416,7 +440,7 @@ void Block::replace_with(Stmt *old_statement, VecStatement &&new_statements, boo
     *iter = std::move(new_statements[0]);
     (*iter)->parent = this;
   } else {
-    iter = statements.erase(iter);
+    iter = statements_.erase(iter);
     insert_at(std::move(new_statements), iter);
   }
 }
@@ -450,7 +474,7 @@ IRNode *Block::get_parent() const {
 }
 
 bool Block::has_container_statements() {
-  for (auto &s : statements) {
+  for (auto &s : statements_) {
     if (s->is_container_statement())
       return true;
   }
@@ -458,30 +482,30 @@ bool Block::has_container_statements() {
 }
 
 int Block::locate(Stmt *stmt) {
-  for (int i = 0; i < (int)statements.size(); i++) {
-    if (statements[i].get() == stmt) {
+  for (int i = 0; i < (int)statements_.size(); i++) {
+    if (statements_[i].get() == stmt) {
       return i;
     }
   }
   return -1;
 }
 
-stmt_vector::iterator Block::locate(int location) {
+stmt_vector::const_iterator Block::locate(int location) {
   if (location == -1)
-    return statements.end();
-  return statements.begin() + location;
+    return statements_.end();
+  return statements_.begin() + location;
 }
 
-stmt_vector::iterator Block::find(Stmt *stmt) {
-  return std::find_if(statements.begin(), statements.end(), [stmt](const pStmt &x) { return x.get() == stmt; });
+stmt_vector::const_iterator Block::find(Stmt *stmt) {
+  return std::find_if(statements_.begin(), statements_.end(), [stmt](const pStmt &x) { return x.get() == stmt; });
 }
 
 std::unique_ptr<Block> Block::clone() const {
   auto new_block = std::make_unique<Block>();
   new_block->parent_ = parent_;
   new_block->stop_gradients = stop_gradients;
-  new_block->statements.reserve(size());
-  for (auto &stmt : statements)
+  new_block->statements_.reserve(size());
+  for (auto &stmt : statements_)
     new_block->insert(stmt->clone());
   return new_block;
 }

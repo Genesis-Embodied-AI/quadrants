@@ -38,6 +38,7 @@ class StatementUsageReplace : public IRVisitor {
   }
 
   void visit(Block *stmt_list) override {
+    const auto guard = stmt_list->lock_statements();
     for (auto &stmt : stmt_list->statements) {
       stmt->accept(this);
     }
@@ -75,6 +76,7 @@ class StatementUsageReplace : public IRVisitor {
 
     // statements outside old_stmt->parent: bottom-up
     while (current_block != nullptr) {
+      const auto guard = current_block->lock_statements();
       for (auto &stmt : current_block->statements) {
         stmt->replace_operand_with(old_stmt, new_stmt);
       }

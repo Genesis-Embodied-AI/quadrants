@@ -23,9 +23,8 @@ class ReplaceAndMarkUndone : public BasicStmtVisitor {
   Stmt *const new_stmt_;
 
   void mark_and_replace(Stmt *stmt) {
-    if (stmt->has_operand(old_stmt_)) {
+    if (stmt->replace_operand_with(old_stmt_, new_stmt_)) {
       visited_->erase(stmt->instance_id);
-      stmt->replace_operand_with(old_stmt_, new_stmt_);
     }
   }
 
@@ -46,6 +45,15 @@ class ReplaceAndMarkUndone : public BasicStmtVisitor {
     mark_and_replace(stmt);
   }
 
+  void visit(Block *block) override {
+    // This walker changes operands only. The guard rejects structural mutation
+    // before it can invalidate an iterator, so no statement-list copy is needed.
+    const auto guard = block->lock_statements();
+    for (auto &stmt : block->statements) {
+      stmt->accept(this);
+    }
+  }
+
   static void run(std::unordered_set<int> *visited, Stmt *old_stmt, Stmt *new_stmt) {
     ReplaceAndMarkUndone walker(visited, old_stmt, new_stmt);
     if (old_stmt->parent == nullptr) {
@@ -55,10 +63,10 @@ class ReplaceAndMarkUndone : public BasicStmtVisitor {
     old_stmt->parent->accept(&walker);
     auto current_block = old_stmt->parent->parent_block();
     while (current_block != nullptr) {
+      const auto guard = current_block->lock_statements();
       for (auto &stmt : current_block->statements) {
-        if (stmt->has_operand(old_stmt)) {
+        if (stmt->replace_operand_with(old_stmt, new_stmt)) {
           visited->erase(stmt->instance_id);
-          stmt->replace_operand_with(old_stmt, new_stmt);
         }
       }
       current_block = current_block->parent_block();

@@ -577,7 +577,18 @@ class Stmt : public IRNode {
 
   void replace_usages_with(Stmt *new_stmt);
   void replace_with(VecStatement &&new_statements, bool replace_usages = true);
-  virtual void replace_operand_with(Stmt *old_stmt, Stmt *new_stmt);
+  // All operand rewrites use the registered operand slots. A subclass must not
+  // add replacement side effects that an operand-only traversal could bypass.
+  virtual bool replace_operand_with(Stmt *old_stmt, Stmt *new_stmt) final {
+    bool replaced = false;
+    for (auto *slot : operands) {
+      if (*slot == old_stmt) {
+        *slot = new_stmt;
+        replaced = true;
+      }
+    }
+    return replaced;
+  }
 
   IRNode *get_parent() const override;
   virtual Callable *get_callable() const;
@@ -624,9 +635,43 @@ class Stmt : public IRNode {
 };
 
 class Block : public IRNode {
+ private:
+  stmt_vector statements_;
+  int statement_list_lock_depth_{0};
+
+  void check_statement_list_mutation() const;
+
  public:
+  // Prevent ownership changes through aliases, iterators, or operator[]. Reads
+  // and operand updates remain available; structural writes go through Block.
+  const stmt_vector &statements{statements_};
   std::variant<Stmt *, Callable *> parent_;
-  stmt_vector statements;
+
+  class StatementListGuard {
+   public:
+    explicit StatementListGuard(Block &block) : block_(block) {
+      ++block_.statement_list_lock_depth_;
+    }
+    ~StatementListGuard() {
+      --block_.statement_list_lock_depth_;
+    }
+    StatementListGuard(const StatementListGuard &) = delete;
+    StatementListGuard &operator=(const StatementListGuard &) = delete;
+
+   private:
+    Block &block_;
+  };
+
+  [[nodiscard]] StatementListGuard lock_statements() {
+    return StatementListGuard(*this);
+  }
+
+  // The read-only view and active guards must always refer to this block.
+  Block(const Block &) = delete;
+  Block &operator=(const Block &) = delete;
+  Block(Block &&) = delete;
+  Block &operator=(Block &&) = delete;
+
   stmt_vector trash_bin;
   std::vector<SNode *> stop_gradients;
 
@@ -650,22 +695,23 @@ class Block : public IRNode {
 
   bool has_container_statements();
   int locate(Stmt *stmt);
-  stmt_vector::iterator locate(int location);
-  stmt_vector::iterator find(Stmt *stmt);
+  stmt_vector::const_iterator locate(int location);
+  stmt_vector::const_iterator find(Stmt *stmt);
   void erase(int location);
   void erase(Stmt *stmt);
-  void erase_range(stmt_vector::iterator begin, stmt_vector::iterator end);
+  void erase_range(stmt_vector::const_iterator begin, stmt_vector::const_iterator end);
   void erase(std::unordered_set<Stmt *> stmts);
   std::unique_ptr<Stmt> extract(int location);
   std::unique_ptr<Stmt> extract(Stmt *stmt);
+  stmt_vector extract_statements();
 
   // Returns stmt.get()
   Stmt *insert(std::unique_ptr<Stmt> &&stmt, int location = -1);
-  Stmt *insert_at(std::unique_ptr<Stmt> &&stmt, stmt_vector::iterator location);
+  Stmt *insert_at(std::unique_ptr<Stmt> &&stmt, stmt_vector::const_iterator location);
 
   // Returns stmt.back().get() or nullptr if stmt is empty
   Stmt *insert(VecStatement &&stmt, int location = -1);
-  Stmt *insert_at(VecStatement &&stmt, stmt_vector::iterator location);
+  Stmt *insert_at(VecStatement &&stmt, stmt_vector::const_iterator location);
 
   void replace_statements_in_range(int start, int end, VecStatement &&stmts);
   void set_statements(VecStatement &&stmts);
@@ -682,9 +728,10 @@ class Block : public IRNode {
 
   template <typename T, typename... Args>
   Stmt *push_back(Args &&...args) {
+    check_statement_list_mutation();
     auto stmt = std::make_unique<T>(std::forward<Args>(args)...);
     stmt->parent = this;
-    statements.emplace_back(std::move(stmt));
+    statements_.emplace_back(std::move(stmt));
     return back();
   }
 
@@ -692,7 +739,7 @@ class Block : public IRNode {
     return statements.size();
   }
 
-  pStmt &operator[](int i) {
+  const pStmt &operator[](int i) const {
     return statements[i];
   }
 
