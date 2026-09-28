@@ -10,7 +10,7 @@ Note that adding a non-static `if` over the top of a for-loop will lead to the f
 
 ## CPU parallelization
 
-On the CPU, a parallel top-level loop runs on a thread pool, a group of reusable worker threads. A worker is a CPU thread that executes assigned work. The runtime, the part of Quadrants that manages execution, divides the loop into scheduled tasks. A scheduled task is a group of work assigned to one worker. The worker executes that task's iterations sequentially. Other workers can execute other tasks in parallel.
+On the CPU, a parallel top-level loop runs on a thread pool, a group of reusable worker threads. A worker is a CPU thread that executes assigned work. The runtime, the part of Quadrants that manages execution, partitions the loop iterations across scheduled tasks. A scheduled task is a group of work assigned to one worker. The worker executes that task's iterations sequentially. Other workers can execute other tasks in parallel.
 
 The number of tasks can differ from the number of workers. When there are more tasks than workers, workers take more tasks as they finish. A task is not permanently associated with a particular worker.
 
