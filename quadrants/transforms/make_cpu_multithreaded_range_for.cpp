@@ -68,7 +68,7 @@ class MakeCPUMultithreadedRangeFor : public BasicStmtVisitor {
     auto cpu_min_block_size =
         offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(config_.cpu_min_block_size)));
     auto num_threads = offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(config_.cpu_max_num_threads)));
-    auto thread_index = offloaded_body->insert(Stmt::make_typed<LoopIndexStmt>(offloaded, 0));
+    auto block_index = offloaded_body->insert(Stmt::make_typed<LoopIndexStmt>(offloaded, 0));
 
     // Retrieve range-for bounds.
     Stmt *begin_stmt;
@@ -88,14 +88,14 @@ class MakeCPUMultithreadedRangeFor : public BasicStmtVisitor {
       end_stmt = offloaded_body->insert(Stmt::make<GlobalLoadStmt>(end_stmt));
     }
 
-    auto next_index = offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(BinaryOpType::add, thread_index, one));
+    auto next_index = offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(BinaryOpType::add, block_index, one));
     auto boundary = [&](Stmt *index) {
       return offloaded_body->insert(Stmt::make_typed<InternalFuncStmt>(
           "cpu_range_for_block_boundary",
           std::vector<Stmt *>{begin_stmt, end_stmt, num_threads, cpu_min_block_size, index}, PrimitiveType::i32,
           /*with_runtime_context=*/false));
     };
-    auto block_begin = boundary(thread_index);
+    auto block_begin = boundary(block_index);
     auto block_end = boundary(next_index);
 
     // Create the serial inner loop.
