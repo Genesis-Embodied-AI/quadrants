@@ -46,7 +46,11 @@ Block 0 runs original iteration indices 0 through 999. Block 1 runs indices 1,00
 
 Setting `make_cpu_multithreading_loop=False` in `qd.init(...)` changes how iterations are divided among tasks. The default mode creates one block per configured worker, with one task per block. With `False`, Quadrants groups the iterations into fixed-size groups, 32 by default. The number of tasks is independent of the number of workers.
 
-Use the default mode when iterations have similar costs and the blocks provide enough parallel work. Try `False` when iteration costs vary substantially: more, smaller tasks let workers take additional work as they finish. Smaller tasks also require more scheduling operations, so compare execution times for your loop before choosing.
+With `True`, the number of tasks equals the configured worker count. Their block size depends on the iteration count, worker count, and minimum block size. For long loops, this groups many iterations into each task and keeps the number of scheduling operations small. If one task takes much longer than the others, its worker must finish that task's remaining iterations while the other workers may be idle.
+
+With `False`, the task size stays fixed and the task count grows with the iteration count. When there are more tasks than workers, a worker that finishes one task can take another. This lets workers share an expensive region of the loop when that region spans several tasks. More tasks also require more scheduling operations.
+
+Use the default mode when iterations have similar costs and the blocks provide enough parallel work. Try `False` when iteration costs vary substantially. Compare execution times for your loop before choosing.
 
 Select the mode with `qd.init(arch=qd.cpu, make_cpu_multithreading_loop=True)` or `qd.init(arch=qd.cpu, make_cpu_multithreading_loop=False)`. Omitting the argument selects `True`.
 
