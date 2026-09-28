@@ -16,7 +16,7 @@ The number of tasks can differ from the number of workers. When there are more t
 
 ### Default CPU scheduling
 
-By default, Quadrants creates one worker thread per system-reported logical core. A particular loop may use fewer workers.
+By default, Quadrants creates one worker thread per system-reported logical core.
 
 For a CPU `range()` loop, the compiler groups consecutive iterations into blocks. A block is a range of original iterations processed by one generated inner loop. The compiler creates one block per worker and schedules each block as a separate task.
 
@@ -72,7 +72,7 @@ Pass these parameters to `qd.init(...)` to change how CPU loops are compiled and
 
 #### cpu_max_num_threads
 
-`cpu_max_num_threads` sets the number of CPU worker threads in the thread pool. Its default is the system-reported number of logical cores. A particular loop may use fewer workers.
+`cpu_max_num_threads` sets the number of CPU worker threads in the thread pool. Its default is the system-reported number of logical cores.
 
 With default scheduling, this value also determines the number of generated blocks. It is not capped to the number of logical cores. If it exceeds that count, the operating system shares CPU time among the worker threads.
 
