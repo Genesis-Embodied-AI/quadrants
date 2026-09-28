@@ -14,7 +14,7 @@ def test_cpu_range_for_block_bounds(cpu_min_block_size, threads):
     out = qd.field(qd.i32, shape=1100)
 
     @qd.kernel
-    def dynamic(begin: qd.i32, end: qd.i32) -> qd.i32:
+    def k_dynamic_range(begin: qd.i32, end: qd.i32) -> qd.i32:
         total = 0
         for i in range(begin, end):
             out[i + 20] += 1
@@ -23,14 +23,14 @@ def test_cpu_range_for_block_bounds(cpu_min_block_size, threads):
 
     for begin, end in [(-7, -7), (9, 3), (-7, -6), (-7, 6), (0, 200), (0, 512), (3, 516), (3, 1028)]:
         out.fill(0)
-        assert dynamic(begin, end) == sum(range(begin, end))
+        assert k_dynamic_range(begin, end) == sum(range(begin, end))
         expected = np.zeros(1100, dtype=np.int32)
         if end > begin:
             expected[begin + 20 : end + 20] = 1
         np.testing.assert_array_equal(out.to_numpy(), expected)
 
     @qd.kernel
-    def constant() -> qd.i32:
+    def k_constant_range() -> qd.i32:
         total = 0
         for i in range(200):
             out[i + 20] += 1
@@ -38,7 +38,7 @@ def test_cpu_range_for_block_bounds(cpu_min_block_size, threads):
         return total
 
     out.fill(0)
-    assert constant() == sum(range(200))
+    assert k_constant_range() == sum(range(200))
     expected = np.zeros(1100, dtype=np.int32)
     expected[20:220] = 1
     np.testing.assert_array_equal(out.to_numpy(), expected)
