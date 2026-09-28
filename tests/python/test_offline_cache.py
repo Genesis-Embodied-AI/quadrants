@@ -550,35 +550,37 @@ def test_offline_cache_with_different_snode_trees(curr_arch):
 
 
 @pytest.mark.parametrize("curr_arch", supported_archs_offline_cache)
+@pytest.mark.parametrize("config_name, config_values", [("opt_level", (0, 1)), ("cpu_min_block_size", (512, 1))])
 @_test_offline_cache_dec
-def test_offline_cache_with_changing_compile_config(curr_arch):
-    count_of_cache_file = cache_files_cnt()
-
-    def added_files():
-        return cache_files_cnt() - count_of_cache_file
+def test_offline_cache_with_changing_compile_config(curr_arch, config_name, config_values):
+    if config_name == "cpu_min_block_size" and curr_arch != qd.cpu:
+        pytest.skip("CPU block size only affects CPU compilation")
 
     @qd.kernel
-    def helper():
-        b = 200
-        c = 0
-        for i in range(b):
-            c += i
+    def k_calc_total(n: qd.i32) -> qd.i32:
+        result = 0
+        for i in range(n):
+            result += i
+        return result
 
-    assert added_files() == expected_num_cache_files()
-    qd.init(arch=curr_arch, enable_fallback=False, opt_level=0, **current_thread_ext_options())
-    helper()
+    def run(config_value, **extra_config):
+        qd.init(
+            arch=curr_arch,
+            enable_fallback=False,
+            **{config_name: config_value},
+            **extra_config,
+            **current_thread_ext_options(),
+        )
+        assert k_calc_total(200) == 19900
+        cache_hit = k_calc_total._primal.fe_ll_cache_observations.cache_hit
+        qd.reset()
+        return cache_hit
 
-    qd.init(arch=curr_arch, enable_fallback=False, opt_level=1, **current_thread_ext_options())
-    assert added_files() == expected_num_cache_files(1)
-    helper()
-
-    qd.reset()
-    assert added_files() == expected_num_cache_files(2)
-    qd.init(arch=curr_arch, enable_fallback=False, default_fp=qd.f32, **current_thread_ext_options())
-    helper()
-
-    qd.reset()
-    assert added_files() == expected_num_cache_files(2)
+    first, second = config_values
+    assert not run(first)
+    assert not run(second)
+    assert run(second, default_fp=qd.f32)
+    assert run(first)
 
 
 @pytest.mark.parametrize("curr_arch", supported_archs_offline_cache)

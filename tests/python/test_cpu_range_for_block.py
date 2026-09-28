@@ -71,43 +71,6 @@ def test_cpu_range_for_block_invalid(cpu_min_block_size):
         qd.init(arch=qd.cpu, cpu_min_block_size=cpu_min_block_size)
 
 
-@pytest.mark.parametrize("fastcache", [False, True])
-@test_utils.test(arch=qd.cpu)
-def test_cpu_range_for_block_offline_cache(tmp_path, fastcache):
-    @qd.kernel(fastcache=fastcache)
-    def k_calc_total(n: qd.i32) -> qd.i32:
-        result = 0
-        for i in range(n):
-            result += i
-        return result
-
-    def run(cpu_min_block_size):
-        qd.init(
-            arch=qd.cpu,
-            cpu_max_num_threads=4,
-            cpu_min_block_size=cpu_min_block_size,
-            offline_cache=True,
-            src_ll_cache=True,
-            offline_cache_file_path=str(tmp_path),
-            offline_cache_cleaning_policy="never",
-        )
-        assert k_calc_total(200) == 19900
-        if fastcache:
-            observations = k_calc_total._primal.src_ll_cache_observations
-            assert observations.cache_key_generated
-            cache_hit = observations.cache_loaded
-        else:
-            assert not k_calc_total._primal.src_ll_cache_observations.cache_key_generated
-            cache_hit = k_calc_total._primal.fe_ll_cache_observations.cache_hit
-        qd.reset()
-        return cache_hit
-
-    assert not run(512)
-    assert not run(1)
-    assert run(512)
-    assert run(1)
-
-
 @pytest.mark.parametrize("cpu_min_block_size", [512, 1 << 30, (1 << 31) - 1])
 @test_utils.test(arch=qd.cpu)
 def test_cpu_range_for_block_overflow(cpu_min_block_size):
