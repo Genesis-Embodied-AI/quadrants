@@ -802,8 +802,8 @@
 <span class="sd">            https://github.com/Genesis-Embodied-AI/quadrants/blob/master/quadrants/program/compile_config.h.</span>
 
 <span class="sd">            * ``cpu_max_num_threads`` (int): Sets the number of threads used by the CPU thread pool.</span>
-<span class="sd">            * ``cpu_min_range_for_block`` (int): Positive minimum CPU range-for chunk size (default 512). Lower it for</span>
-<span class="sd">              small loops with expensive iterations. Only used when ``make_cpu_multithreading_loop=True``.</span>
+<span class="sd">            * ``cpu_min_block_size`` (int): Minimum CPU range-for block size (default: 512, must be &gt;= 1).</span>
+<span class="sd">              Reduce it for small loops with expensive iterations. Only used when ``make_cpu_multithreading_loop=True``.</span>
 <span class="sd">            * ``debug`` (bool): Enables the debug mode, under which Quadrants does a few more things like boundary checks.</span>
 <span class="sd">            * ``print_ir`` (bool): Prints the CHI IR of the Quadrants kernels.</span>
 <span class="sd">            *``offline_cache`` (bool): Enables offline cache of the compiled kernels. Default to True. When this is enabled Quadrants will cache compiled kernel on your local disk to accelerate future calls.</span>
