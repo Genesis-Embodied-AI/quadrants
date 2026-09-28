@@ -5,7 +5,8 @@
 
 namespace quadrants::lang {
 
-// Boundary indices run from 0 through num_threads. Adjacent boundaries delimit one worker's block.
+// Block indices run from 0 to num_threads - 1. Boundary indices run from 0 to num_threads, because each block needs
+// a start and an end.
 inline int32_t cpu_range_for_boundary(int32_t begin,
                                       int32_t end,
                                       int32_t num_threads,
