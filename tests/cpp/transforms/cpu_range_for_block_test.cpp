@@ -15,7 +15,7 @@ TEST(CPURangeForBlock, BlockBoundaries) {
     // 200 iterations on 12 workers need blocks of 17, unless the configured minimum is larger.
     const int64_t expected_width = std::max(17, cpu_min_block_size);
     for (int boundary_index = 0; boundary_index <= 12; ++boundary_index) {
-      EXPECT_EQ(get_block_start_index(0, 200, 12, cpu_min_block_size, boundary_index),
+      EXPECT_EQ(get_cpu_block_start_index(0, 200, 12, cpu_min_block_size, boundary_index),
                 std::min<int64_t>(200, expected_width * boundary_index));
     }
   }
@@ -26,8 +26,8 @@ TEST(CPURangeForBlock, FullSignedRange) {
   const int32 end = std::numeric_limits<int32>::max();
   const int32 expected[] = {begin, -(1 << 30), 0, 1 << 30, end};
   for (int boundary_index = 0; boundary_index <= 4; ++boundary_index) {
-    EXPECT_EQ(get_block_start_index(begin, end, 4, 1, boundary_index), expected[boundary_index]);
-    EXPECT_EQ(get_block_start_index(end, begin, 4, 1, boundary_index), begin);
+    EXPECT_EQ(get_cpu_block_start_index(begin, end, 4, 1, boundary_index), expected[boundary_index]);
+    EXPECT_EQ(get_cpu_block_start_index(end, begin, 4, 1, boundary_index), begin);
   }
 }
 
@@ -50,7 +50,7 @@ TEST(CPURangeForBlock, CallsBoundaryHelper) {
     auto *inner = offloaded->body->statements.back()->as<RangeForStmt>();
     for (auto *bound : {inner->begin, inner->end}) {
       auto *call = bound->as<InternalFuncStmt>();
-      EXPECT_EQ(call->func_name, "get_block_start_index");
+      EXPECT_EQ(call->func_name, "get_cpu_block_start_index");
       EXPECT_FALSE(call->with_runtime_context);
       EXPECT_EQ(call->ret_type, PrimitiveType::i32);
       ASSERT_EQ(call->args.size(), 5);
