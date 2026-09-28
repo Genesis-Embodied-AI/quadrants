@@ -64,7 +64,7 @@ class MakeCPUMultithreadedRangeFor : public BasicStmtVisitor {
     }
 
     auto offloaded_body = std::make_unique<Block>();
-    auto one = offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(1)));
+    auto one = offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(PrimitiveType::i32, 1)));
     auto cpu_min_block_size =
         offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(config_.cpu_min_block_size)));
     auto num_threads = offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(config_.cpu_max_num_threads)));
