@@ -1704,8 +1704,13 @@ void parallel_struct_for(RuntimeContext *context,
 #endif
 }
 
-i32 get_cpu_block_start_index(i32 begin, i32 end, i32 num_threads, i32 cpu_min_block_size, i32 boundary_index) {
-  return quadrants::lang::get_cpu_block_start_index(begin, end, num_threads, cpu_min_block_size, boundary_index);
+i32 get_cpu_block_start_index(i32 range_begin,
+                              i32 range_end,
+                              i32 num_threads,
+                              i32 cpu_min_block_size,
+                              i32 boundary_index) {
+  return quadrants::lang::get_cpu_block_start_index(range_begin, range_end, num_threads, cpu_min_block_size,
+                                                    boundary_index);
 }
 
 using range_for_xlogue = void (*)(RuntimeContext *, /*TLS*/ char *tls_base);
