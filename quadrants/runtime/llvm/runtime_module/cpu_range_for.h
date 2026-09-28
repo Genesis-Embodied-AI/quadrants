@@ -7,11 +7,11 @@ namespace quadrants::lang {
 
 // Block indices run from 0 to num_threads - 1. Boundary indices run from 0 to num_threads, because each block needs
 // a start and an end.
-inline int32_t cpu_range_for_boundary(int32_t begin,
-                                      int32_t end,
-                                      int32_t num_threads,
-                                      int32_t cpu_min_block_size,
-                                      int32_t boundary_index) {
+inline int32_t get_block_start_index(int32_t begin,
+                                     int32_t end,
+                                     int32_t num_threads,
+                                     int32_t cpu_min_block_size,
+                                     int32_t boundary_index) {
   // Widen before subtracting or multiplying: valid i32 bounds can produce offsets that exceed i32.
   const int64_t count = std::max<int64_t>(0, int64_t(end) - begin);
   const int64_t block_size = std::max<int64_t>((count + num_threads - 1) / num_threads, cpu_min_block_size);
