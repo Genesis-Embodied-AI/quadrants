@@ -737,16 +737,16 @@ bool GraphManager::try_launch(int launch_id,
   // yield-check at the end of its IF body, which exits every enclosing WHILE loop. Combined example:
   //
   //   Top-level graph
-  //     └── Conditional while node (outer, repeats while outer flag != 0)
-  //           └── Outer body graph
-  //                 ├── Gate kernel for cp 0   (sets handle_0 from cp_id >= *resume_point)
-  //                 ├── IF conditional node (handle_0)
-  //                 │     └── Body: direct cp_id=0 tasks
-  //                 │           ├── init kernel (re-arm inner handle = 1)
-  //                 │           ├── Conditional while node (inner, repeats while inner flag != 0)
-  //                 │           │     └── Inner body graph: work kernels + inner condition kernel
-  //                 │           └── yield-check (if cp 0 has yield_on=)
-  //                 └── Outer condition kernel (cond-with-yield when the kernel has yielding cps)
+  //     `-- Conditional while node (outer, repeats while outer flag != 0)
+  //           `-- Outer body graph
+  //                 |-- Gate kernel for cp 0   (sets handle_0 from cp_id >= *resume_point)
+  //                 |-- IF conditional node (handle_0)
+  //                 |     `-- Body: direct cp_id=0 tasks
+  //                 |           |-- init kernel (re-arm inner handle = 1)
+  //                 |           |-- Conditional while node (inner, repeats while inner flag != 0)
+  //                 |           |     `-- Inner body graph: work kernels + inner condition kernel
+  //                 |           `-- yield-check (if cp 0 has yield_on=)
+  //                 `-- Outer condition kernel (cond-with-yield when the kernel has yielding cps)
   //
   // The recursive builder (build_level) places direct/checkpoint/child/condition nodes from the
   // per-task level + checkpoint tags. The non-nested / no-checkpoint cases are special cases of it.
