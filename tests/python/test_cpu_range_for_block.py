@@ -10,7 +10,7 @@ from tests import test_utils
 @pytest.mark.parametrize("threads", [1, 4])
 @test_utils.test(arch=qd.cpu)
 def test_cpu_range_for_block_bounds(minimum, threads):
-    qd.init(arch=qd.cpu, cpu_max_num_threads=threads, cpu_min_range_for_block=minimum)
+    qd.init(arch=qd.cpu, cpu_max_num_threads=threads, cpu_min_block_size=minimum)
     out = qd.field(qd.i32, shape=1100)
 
     @qd.kernel
@@ -45,7 +45,7 @@ def test_cpu_range_for_block_bounds(minimum, threads):
 
 
 @pytest.mark.parametrize("serialize", [False, True])
-@test_utils.test(arch=qd.cpu, cpu_max_num_threads=4, cpu_min_range_for_block=1)
+@test_utils.test(arch=qd.cpu, cpu_max_num_threads=4, cpu_min_block_size=1)
 def test_cpu_range_for_block_serial_execution(serialize):
     @qd.kernel
     def recurrence() -> qd.i32:
@@ -67,8 +67,8 @@ def test_cpu_range_for_block_serial_execution(serialize):
 @pytest.mark.parametrize("minimum", [0, -1, -512])
 @test_utils.test(arch=qd.cpu)
 def test_cpu_range_for_block_invalid(minimum):
-    with pytest.raises(RuntimeError, match=rf"cpu_min_range_for_block must be >= 1, but got {minimum}\."):
-        qd.init(arch=qd.cpu, cpu_min_range_for_block=minimum)
+    with pytest.raises(RuntimeError, match=rf"cpu_min_block_size must be >= 1, but got {minimum}\."):
+        qd.init(arch=qd.cpu, cpu_min_block_size=minimum)
 
 
 @test_utils.test(arch=qd.cpu)
@@ -84,7 +84,7 @@ def test_cpu_range_for_block_offline_cache(tmp_path):
         qd.init(
             arch=qd.cpu,
             cpu_max_num_threads=4,
-            cpu_min_range_for_block=minimum,
+            cpu_min_block_size=minimum,
             offline_cache=True,
             offline_cache_file_path=str(tmp_path),
             offline_cache_cleaning_policy="never",
@@ -104,7 +104,7 @@ def test_cpu_range_for_block_offline_cache(tmp_path):
 @pytest.mark.parametrize("minimum", [512, 1 << 30, (1 << 31) - 1])
 @test_utils.test(arch=qd.cpu)
 def test_cpu_range_for_block_overflow(minimum):
-    qd.init(arch=qd.cpu, cpu_max_num_threads=4, cpu_min_range_for_block=minimum, debug=True)
+    qd.init(arch=qd.cpu, cpu_max_num_threads=4, cpu_min_block_size=minimum, debug=True)
     out = qd.field(qd.i32, shape=16)
 
     @qd.kernel

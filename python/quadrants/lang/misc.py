@@ -386,7 +386,7 @@ def init(
             https://github.com/Genesis-Embodied-AI/quadrants/blob/master/quadrants/program/compile_config.h.
 
             * ``cpu_max_num_threads`` (int): Sets the number of threads used by the CPU thread pool.
-            * ``cpu_min_range_for_block`` (int): Minimum CPU range-for block size (default: 512, must be >= 1).
+            * ``cpu_min_block_size`` (int): Minimum CPU range-for block size (default: 512, must be >= 1).
               Reduce it for small loops with expensive iterations. Only used when ``make_cpu_multithreading_loop=True``.
             * ``debug`` (bool): Enables the debug mode, under which Quadrants does a few more things like boundary checks.
             * ``print_ir`` (bool): Prints the CHI IR of the Quadrants kernels.

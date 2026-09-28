@@ -14,7 +14,7 @@ TEST(CPURangeForBlock, ChunkWidth) {
   for (int minimum : {1, 16, 512, 2048, 1 << 30, std::numeric_limits<int32>::max()}) {
     CompileConfig config;
     config.cpu_max_num_threads = 12;
-    config.cpu_min_range_for_block = minimum;
+    config.cpu_min_block_size = minimum;
     Block root;
     auto *offloaded =
         root.insert(std::make_unique<OffloadedStmt>(OffloadedStmt::TaskType::range_for, config.arch, nullptr))

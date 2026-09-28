@@ -233,9 +233,9 @@ void export_lang(nb::module_ &m) {
       .def_rw("cpu_max_num_threads", &CompileConfig::cpu_max_num_threads,
               "Maximum number of CPU threads used to run kernels (the runtime thread pool and CPU parallel-for loops). "
               "Compilation threads are governed separately by num_compile_threads.")
-      .def_rw("cpu_min_range_for_block", &CompileConfig::cpu_min_range_for_block,
+      .def_rw("cpu_min_block_size", &CompileConfig::cpu_min_block_size,
               "Minimum iterations per CPU range-for block (must be >= 1, default 512). Block size is "
-              "max(ceil((end - begin) / cpu_max_num_threads), cpu_min_range_for_block). Larger blocks help vectorize "
+              "max(ceil((end - begin) / cpu_max_num_threads), cpu_min_block_size). Larger blocks help vectorize "
               "cheap loop bodies; reduce the minimum for short loops with expensive iterations. Only used when "
               "make_cpu_multithreading_loop is enabled; the final block may be smaller. Does not affect GPU loops.")
       .def_rw("random_seed", &CompileConfig::random_seed, "Seed for Quadrants' random-number generation.")

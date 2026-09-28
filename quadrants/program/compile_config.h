@@ -62,11 +62,11 @@ struct CompileConfig {
   int cpu_max_num_threads;
   // Minimum iterations per CPU range-for chunk. The chunk size is
   //
-  //   max(ceil((end - begin) / cpu_max_num_threads), cpu_min_range_for_block).
+  //   max(ceil((end - begin) / cpu_max_num_threads), cpu_min_block_size).
   //
   // Larger chunks help vectorize cheap loop bodies; reduce the floor for short loops with expensive iterations.
   // Must be >= 1 (validated in fit()). Only used when make_cpu_multithreading_loop is enabled.
-  int cpu_min_range_for_block;
+  int cpu_min_block_size;
   int random_seed;
 
   // Debugging options:

@@ -25,14 +25,14 @@ For normal use, leave it at `True`; the caches are the main reason a repeated ru
 
 CPU `range()` loops divide their iterations into blocks. A block is a consecutive group of iterations executed by one CPU thread. When a loop has too few iterations to occupy the CPU cores and each iteration does substantial work, smaller blocks can help.
 
-Two settings work together here: `cpu_max_num_threads` sets the maximum number of CPU threads used to run kernels, and `cpu_min_range_for_block` sets the minimum number of iterations per block. For full definitions, defaults, and constraints, see [All options](#all-options) below.
+Two settings work together here: `cpu_max_num_threads` sets the maximum number of CPU threads used to run kernels, and `cpu_min_block_size` sets the minimum number of iterations per block. For full definitions, defaults, and constraints, see [All options](#all-options) below.
 
 Larger blocks can help the compiler use vector instructions, which process several values in one CPU instruction. Short blocks may leave too few iterations to use those instructions efficiently. For cheap loop bodies, that loss can outweigh the benefit of spreading work across more threads.
 
 For example, this configuration allows up to 12 threads and sets the minimum block size to 1:
 
 ```python
-qd.init(arch=qd.cpu, cpu_max_num_threads=12, cpu_min_range_for_block=1)
+qd.init(arch=qd.cpu, cpu_max_num_threads=12, cpu_min_block_size=1)
 ```
 
 With 200 iterations and 12 threads configured, the default minimum of 512 puts all useful work in one block. Reducing the minimum to 1 allows 12 blocks: eleven of 17 iterations and one of 13. It does not force one iteration per block.
