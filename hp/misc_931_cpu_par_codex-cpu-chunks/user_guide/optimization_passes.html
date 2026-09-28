@@ -550,6 +550,7 @@
 </table>
 </div>
 <p>For everyday use, leave them at their defaults - they are the best-supported and most reliable configuration. The most common deliberate change is <code class="docutils literal notranslate"><span class="pre">cfg_optimization=False</span></code> when iterating on a kernel whose compile time is in your way.</p>
+<p>The CPU-specific <code class="docutils literal notranslate"><span class="pre">make_cpu_multithreaded_range_for</span></code> transform groups original iterations into compiled inner loops. It is enabled by <code class="docutils literal notranslate"><span class="pre">make_cpu_multithreading_loop=True</span></code>, the default. See <a class="reference internal" href="parallelization.html#cpu-parallelization"><span class="std std-ref">CPU parallelization</span></a> for its scheduling behavior, configuration, and comparison with the untransformed path.</p>
 </section>
 <section id="inspecting-what-the-compiler-did">
 <h2>Inspecting what the compiler did<a class="headerlink" href="#inspecting-what-the-compiler-did" title="Link to this heading">#</a></h2>
