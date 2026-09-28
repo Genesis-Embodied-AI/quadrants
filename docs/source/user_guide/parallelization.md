@@ -20,6 +20,28 @@ By default, Quadrants creates one worker thread per system-reported logical core
 
 For a CPU `range()` loop, the compiler groups consecutive iterations into blocks. A block is a range of original iterations processed by one generated inner loop. The compiler creates one block per worker and schedules each block as a separate task.
 
+For example, consider this loop with 12,000 iterations. Here `work(i)` stands for the original work at iteration index `i`:
+
+```python
+for i in range(12000):
+    work(i)
+```
+
+With 12 workers, the default scheduling divides these iterations into 12 blocks of 1,000 iterations each. The following pseudocode shows the resulting work and its scheduling. Pseudocode illustrates the steps without requiring executable Python. Here `submit_task` means scheduling the indented work on an available worker. Each task keeps its own block index:
+
+```text
+for block_index in range(12):
+    submit_task:
+        start = block_index * 1000
+        end = start + 1000
+
+        # Compiled inner loop for this block:
+        for i in range(start, end):
+            work(i)
+```
+
+Block 0 runs original iteration indices 0 through 999. Block 1 runs indices 1,000 through 1,999. This continues through block 11, which runs indices 11,000 through 11,999. Each task executes its inner loop sequentially, while different tasks can run in parallel.
+
 To choose the block size, Quadrants divides the iteration count by the worker count and rounds up to an integer. It then takes the larger of that value and 512. The final nonempty block can be shorter. Blocks whose start would lie beyond the original range are empty.
 
 For example, with 12 workers and 200 iterations, the default block size is 512. All 200 iterations fit in the first block. The other eleven blocks are empty, so only one worker performs useful work. With 12 workers and 12,000 iterations, the default block size is 1,000. All twelve blocks contain useful work.
