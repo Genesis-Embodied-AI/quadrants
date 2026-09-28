@@ -23,32 +23,17 @@ For normal use, leave it at `True`; the caches are the main reason a repeated ru
 
 ## CPU loop scheduling
 
-### `cpu_min_range_for_block`
+CPU `range()` loops divide their iterations into chunks. A chunk is a consecutive group of iterations executed by one CPU thread. When a loop has too few iterations to occupy the CPU cores and each iteration does substantial work, smaller chunks can help.
 
-Minimum number of iterations per chunk of a parallel CPU `range()` loop. A chunk is a consecutive group of iterations
-executed by one CPU thread. Default `512`; must be a positive integer. Reduce it when the loop has too few iterations
-to occupy the CPU cores with the default minimum, and each iteration does substantial work.
+Two settings work together here: `cpu_max_num_threads` sets the maximum number of CPU threads used to run kernels, and `cpu_min_range_for_block` sets the minimum number of iterations per chunk. For full definitions, defaults, and constraints, see [All options](#all-options) below.
 
-`cpu_max_num_threads` sets the maximum number of threads used by the CPU thread pool. The thread pool is the group of
-CPU threads available to execute kernels. For example, this configuration allows up to 12 threads and sets the
-minimum chunk size to 1:
+For example, this configuration allows up to 12 threads and sets the minimum chunk size to 1:
 
 ```python
 qd.init(arch=qd.cpu, cpu_max_num_threads=12, cpu_min_range_for_block=1)
 ```
 
-With 200 iterations and `cpu_max_num_threads=12`, the default minimum of 512 puts all useful work in one chunk.
-Changing the minimum to 1 allows 12 chunks: eleven of 17 iterations and one of 13. It does not force one iteration
-per chunk. The chunk size is the larger of `ceil(number_of_iterations / cpu_max_num_threads)` and
-`cpu_min_range_for_block`. Here, `ceil` rounds up to the nearest integer. The final chunk may be smaller.
-
-`qd.loop_config(parallelize=...)` limits the number of CPU threads used by the loop that follows it. The thread pool
-can execute chunks concurrently, subject to that limit. Explicitly serialized loops still execute in order on one
-thread. This setting does not affect GPU loops.
-
-`make_cpu_multithreading_loop` controls the compiler step that divides CPU range-for loops into these chunks.
-It defaults to `True`. `cpu_min_range_for_block` only applies when that step is enabled.
-Changing `cpu_min_range_for_block` creates separate CPU kernel cache entries.
+With 200 iterations and 12 threads configured, the default minimum of 512 puts all useful work in one chunk. Reducing the minimum to 1 allows 12 chunks: eleven of 17 iterations and one of 13. It does not force one iteration per chunk. Explicitly serialized loops still execute in order on one thread.
 
 ## Compile-time tuning
 
