@@ -21,14 +21,6 @@ def test_cpu_range_for_block_bounds(cpu_min_block_size, threads):
             total += i
         return total
 
-    @qd.kernel
-    def constant() -> qd.i32:
-        total = 0
-        for i in range(200):
-            out[i + 20] += 1
-            total += i
-        return total
-
     for begin, end in [(-7, -7), (9, 3), (-7, -6), (-7, 6), (0, 200), (0, 512), (3, 516), (3, 1028)]:
         out.fill(0)
         assert dynamic(begin, end) == sum(range(begin, end))
@@ -36,6 +28,14 @@ def test_cpu_range_for_block_bounds(cpu_min_block_size, threads):
         if end > begin:
             expected[begin + 20 : end + 20] = 1
         np.testing.assert_array_equal(out.to_numpy(), expected)
+
+    @qd.kernel
+    def constant() -> qd.i32:
+        total = 0
+        for i in range(200):
+            out[i + 20] += 1
+            total += i
+        return total
 
     out.fill(0)
     assert constant() == sum(range(200))
