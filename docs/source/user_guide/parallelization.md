@@ -1,12 +1,127 @@
 # Parallelization
 
-Each top-level for-loop will be parallelized, within a kernel. Under the hood, each top-level for-loop will be launched as a separate GPU kernel.
+Each top-level for-loop will be parallelized, within a kernel. On a GPU, each top-level for-loop is launched as a separate GPU kernel. On the CPU, parallel loops run on CPU worker threads.
 
 A top-level for-loop can be encapsulated in one or more of the following, and still be parallelized:
 - `if` statements where the conditional is [`qd.static`](static.md)
 - inline functions (`@qd.func`)
 
 Note that adding a non-static `if` over the top of a for-loop will lead to the for-loop NOT being parallelized.
+
+## CPU parallelization
+
+On the CPU, a parallel top-level loop runs on a thread pool, a group of reusable worker threads. A worker is a CPU thread that executes assigned work. The runtime, the part of Quadrants that manages execution, divides the loop into scheduled tasks. A scheduled task is a group of work assigned to one worker. The worker executes that task's iterations sequentially. Other workers can execute other tasks in parallel.
+
+The number of tasks can differ from the number of workers. When there are more tasks than workers, workers take more tasks as they finish. A task is not permanently associated with a particular worker.
+
+### Default CPU scheduling
+
+The setting `cpu_max_num_threads` limits the number of CPU workers. By default, Quadrants uses the number of available CPU cores. This setting controls execution threads; `num_compile_threads` separately controls threads used to compile kernels.
+
+For CPU `range()` loops, Quadrants normally groups consecutive iterations into blocks. A block is the range of original iterations processed by one generated inner loop. The setting `cpu_min_block_size` sets the minimum block size. Its default is 512, and its value must be at least 1.
+
+For a nonempty range, Quadrants chooses:
+
+```text
+block_size = max(ceil(iteration_count / cpu_max_num_threads), cpu_min_block_size)
+```
+
+Here `ceil` means rounding up to the next integer. The final nonempty block can be shorter than `block_size`. Quadrants generates one block per configured CPU thread, so some blocks can be empty.
+
+For example:
+
+```python
+qd.init(arch=qd.cpu, cpu_max_num_threads=12, cpu_min_block_size=1)
+```
+
+A loop with 200 iterations then has eleven blocks of 17 iterations and one block of 13. With the default minimum of 512, the same loop puts all useful work in the first block. A minimum of 1 allows smaller blocks; it does not require one iteration per block.
+
+### The two CPU scheduling modes
+
+The setting `make_cpu_multithreading_loop` defaults to `True`. It controls whether the compiler runs the `make_cpu_multithreaded_range_for` transform. A transform is a compiler step that rewrites the loop before generating machine code. Both settings allow parallel execution.
+
+The examples below use this original loop. `work(i)` stands for the work performed at iteration index `i`:
+
+```python
+for i in range(200):
+    work(i)
+```
+
+#### With make_cpu_multithreading_loop=True
+
+The `make_cpu_multithreaded_range_for` transform creates an outer loop over block indices. Each outer iteration calculates a block's bounds and runs an inner loop over the original iterations.
+
+With 12 configured CPU threads and `cpu_min_block_size=1`, its generated structure is equivalent to this pseudocode. Pseudocode illustrates execution without requiring directly executable Python:
+
+```text
+# Generated kernel code:
+for block_index in range(12):
+    start = min(block_index * 17, 200)
+    end = min((block_index + 1) * 17, 200)
+    for i in range(start, end):
+        work(i)
+```
+
+The runtime schedules each outer iteration as a separate task. This produces 12 tasks. Within each task, the compiled inner loop executes the original work sequentially.
+
+The inner loop and its work are compiled together. This lets the compiler move calculations that do not change between iterations outside the loop. It also gives the compiler an opportunity to use vector instructions, which process several values in one CPU instruction.
+
+#### With make_cpu_multithreading_loop=False
+
+The `make_cpu_multithreaded_range_for` transform is not applied. The runtime instead groups original iterations into tasks and calls the compiled loop body separately for each iteration.
+
+The setting `default_cpu_block_dim` supplies the number of iterations per task when the loop does not specify a block size. Its default is 32. With that value, the runtime's work is equivalent to:
+
+```text
+# Runtime scheduling:
+for task_start in range(0, 200, 32):
+    task_end = min(task_start + 32, 200)
+    submit_task:
+        for i in range(task_start, task_end):
+            compiled_body(i)  # Executes work(i) for one original iteration.
+```
+
+Here `submit_task` means assigning the indented work to an available worker. Each task retains its own bounds. The runtime creates seven tasks: six cover 32 iterations each, and the last covers eight.
+
+In this mode, the task count is `ceil(iteration_count / block_dim)`. Here `block_dim` is the runtime's number of loop iterations per scheduled task. The task count is independent of the worker count. For example, 1,000 iterations with `block_dim=32` create 32 tasks, which a pool of four workers can process.
+
+The setting `cpu_min_block_size` has no effect when `make_cpu_multithreading_loop=False`.
+
+| Setting | True: with the `make_cpu_multithreaded_range_for` transform | False: without the `make_cpu_multithreaded_range_for` transform |
+| --- | --- | --- |
+| `cpu_max_num_threads` | Limits workers and determines the number of generated blocks. | Limits workers; task count depends on loop length and block size. |
+| `cpu_min_block_size` | Sets the minimum number of original iterations in a generated block. | Unused. |
+| `default_cpu_block_dim` | Overridden for the transformed outer loop: its `block_dim` is set to 1. | Supplies the number of original iterations per task when no loop-specific block size is set. |
+
+Setting `block_dim=1` after the `make_cpu_multithreaded_range_for` transform means one generated block per scheduled task. Each generated block already contains an inner loop over original iterations. It does not mean one original iteration per task.
+
+### Choosing a CPU scheduling configuration
+
+For short loops with expensive iterations, reducing `cpu_min_block_size` can expose more parallel work. Larger blocks give the compiler more iterations to process together and require fewer nonempty tasks. The best size depends on the work inside the loop.
+
+Uneven iteration costs also matter. If four workers receive four blocks and one block takes much longer than the others, the remaining workers cannot take over part of that running block. With more, smaller tasks, the workers can share the expensive region if it spans several tasks. Smaller tasks also require more scheduling operations.
+
+The default transformed path currently creates one block per configured thread. Lowering `cpu_min_block_size` can reduce the number of empty blocks, but it does not create more blocks than `cpu_max_num_threads`. The untransformed path can create more tasks than workers. These policies trade task granularity against scheduling work and compiler optimization opportunities. Task granularity means how much work is grouped into each task.
+
+When comparing configurations, time repeated kernel calls after compilation has completed. Check that the results agree. Separate compilation time from execution time so that the comparison measures the scheduling choice.
+
+### Requesting serial execution
+
+To run a loop's iterations in order on one thread, place `qd.loop_config(serialize=True)` immediately before it:
+
+```python
+@qd.kernel
+def k_serial() -> qd.i32:
+    result = 0
+    qd.loop_config(serialize=True)
+    for i in range(200):
+        result = (result * 3 + i) % 10007
+    return result
+```
+
+The directive `qd.loop_config(parallelize=1)` also makes the following loop execute on one thread. These requests apply with either value of `make_cpu_multithreading_loop`. Setting `make_cpu_multithreading_loop=False` by itself does not request serial execution.
+
+See [CPU loop scheduling in qd.init options](init_options.md#cpu-loop-scheduling) for an initialization example and [All options](init_options.md#all-options) for the configuration reference.
 
 ## Multi-dimensional parallelization with qd.ndrange
 
