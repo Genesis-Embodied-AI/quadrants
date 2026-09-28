@@ -74,7 +74,7 @@ def test_cpu_range_for_block_invalid(cpu_min_block_size):
 @test_utils.test(arch=qd.cpu)
 def test_cpu_range_for_block_offline_cache(tmp_path):
     @qd.kernel
-    def total(n: qd.i32) -> qd.i32:
+    def k_calc_total(n: qd.i32) -> qd.i32:
         result = 0
         for i in range(n):
             result += i
@@ -89,16 +89,15 @@ def test_cpu_range_for_block_offline_cache(tmp_path):
             offline_cache_file_path=str(tmp_path),
             offline_cache_cleaning_policy="never",
         )
-        assert total(200) == 19900
+        assert k_calc_total(200) == 19900
+        cache_hit = k_calc_total._primal.fe_ll_cache_observations.cache_hit
         qd.reset()
-        return {path.name for path in tmp_path.rglob("*.qdc")}
+        return cache_hit
 
-    default_files = run(512)
-    assert default_files
-    small_files = run(1)
-    assert default_files < small_files
-    assert run(512) == small_files
-    assert run(1) == small_files
+    assert not run(512)
+    assert not run(1)
+    assert run(512)
+    assert run(1)
 
 
 @pytest.mark.parametrize("cpu_min_block_size", [512, 1 << 30, (1 << 31) - 1])
