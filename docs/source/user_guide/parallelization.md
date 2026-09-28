@@ -42,30 +42,9 @@ for block_index in range(12):
 
 Block 0 runs original iteration indices 0 through 999. Block 1 runs indices 1,000 through 1,999. This continues through block 11, which runs indices 11,000 through 11,999. Each task executes its inner loop sequentially, while different tasks can run in parallel.
 
-### The two CPU scheduling modes
+### make_cpu_multithreading_loop=False
 
-Both modes run loop iterations in parallel. They differ in where the loop over original iterations runs and how those iterations are grouped into tasks.
-
-#### Compiled inner loops: the default mode
-
-The compiler creates an outer loop over block indices. Each outer iteration calculates a block's bounds and runs a compiled inner loop over the original iterations. The runtime schedules each outer iteration as a separate task.
-
-For example, consider 200 iterations and 12 workers. For this example, reduce the minimum block size from its default of 512 to 1. The resulting block size is 17. The generated structure is equivalent to this pseudocode. Pseudocode illustrates execution without requiring directly executable Python. Here `work(i)` stands for the original work at iteration index `i`:
-
-```text
-# Generated kernel code:
-for block_index in range(12):
-    start = min(block_index * 17, 200)
-    end = min((block_index + 1) * 17, 200)
-    for i in range(start, end):
-        work(i)
-```
-
-This produces 12 tasks. Within each task, the compiled inner loop executes the original work sequentially. This mode creates one block per configured worker, even when a block is empty.
-
-#### Runtime iteration loops: the alternative mode
-
-The runtime groups original iterations into tasks. Inside each task, the runtime loops over those indices and calls the compiled loop body separately for each iteration.
+Setting `make_cpu_multithreading_loop=False` in `qd.init(...)` selects an alternative CPU scheduling mode. The runtime groups original iterations into tasks. Inside each task, the runtime loops over those indices and calls the compiled loop body separately for each iteration. Parallel execution remains enabled.
 
 By default, this mode groups up to 32 original iterations into each task. With 200 iterations, the runtime's work is equivalent to this pseudocode. Here `submit_task` means assigning the indented work to an available worker. Each task retains its own bounds:
 
