@@ -44,22 +44,26 @@ Block 0 runs original iteration indices 0 through 999. Block 1 runs indices 1,00
 
 ### make_cpu_multithreading_loop=False
 
-Setting `make_cpu_multithreading_loop=False` in `qd.init(...)` selects an alternative CPU scheduling mode. The difference is what each call into the compiled kernel executes. In the default mode, one call executes a compiled inner loop over a whole block of original iterations. With `False`, one call executes just one original iteration. The loop that makes those calls lives in the runtime.
+Setting `make_cpu_multithreading_loop=False` in `qd.init(...)` changes how iterations are divided among tasks. The default mode creates one block per configured worker, with one task per block. With `False`, Quadrants creates one task per group of iterations, normally 32 iterations per task. The number of tasks is independent of the number of workers.
 
-By default, this mode groups up to 32 original iterations into each task. With 200 iterations, the runtime's work is equivalent to this pseudocode. Here `submit_task` means assigning the indented work to an available worker. Each task retains its own bounds:
+For example, with four workers and 1,000 iterations:
+
+| Mode | Tasks | Iterations per task |
+| --- | --- | --- |
+| `True` (default) | 4 | With the default minimum block size of 512: 512, 488, 0, and 0. |
+| `False` | 32 | With the default task size of 32: 31 tasks of 32 iterations and one of 8. |
+
+With `False`, the work is divided as follows. Here `submit_task` means assigning the indented work to an available worker. Each task retains its own bounds:
 
 ```text
-# Runtime scheduling:
-for task_start in range(0, 200, 32):
-    task_end = min(task_start + 32, 200)
+for task_start in range(0, 1000, 32):
+    task_end = min(task_start + 32, 1000)
     submit_task:
         for i in range(task_start, task_end):
-            compiled_body(i)  # Executes work(i) for one original iteration.
+            work(i)
 ```
 
-The runtime creates seven tasks: six cover 32 iterations each, and the last covers eight.
-
-In this mode, the task count is the iteration count divided by the task size, rounded up. It is independent of the worker count. For example, 1,000 iterations with a task size of 32 create 32 tasks, which a pool of four workers can process.
+Both modes run tasks in parallel, and each worker executes its current task's iterations sequentially. With four workers and 32 tasks, workers take another task whenever they finish. Having more tasks than workers lets several workers share an expensive region of the loop if that region spans multiple tasks. Once a worker starts a task, other workers cannot take over part of that task.
 
 ### Default block sizing and optimization
 
@@ -103,7 +107,7 @@ A loop with 200 iterations then has eleven blocks of 17 iterations and one block
 
 With `True`, Quadrants uses compiled inner loops. The compiler runs the `make_cpu_multithreaded_range_for` transform. A transform is a compiler step that rewrites the loop before generating machine code. This transform creates the outer block loop and compiled inner loop described above.
 
-With `False`, the `make_cpu_multithreaded_range_for` transform is not applied. The runtime loops over original iteration indices and calls the compiled body separately for each one. In this mode, `cpu_min_block_size` has no effect. Parallel execution remains enabled.
+With `False`, the `make_cpu_multithreaded_range_for` transform is not applied. The task count is the iteration count divided by the task size, rounded up, independently of the worker count. In this mode, `cpu_min_block_size` has no effect. Parallel execution remains enabled.
 
 #### default_cpu_block_dim
 
