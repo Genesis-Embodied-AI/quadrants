@@ -35,7 +35,9 @@ For example, this configuration allows up to 12 threads and sets the minimum chu
 qd.init(arch=qd.cpu, cpu_max_num_threads=12, cpu_min_range_for_block=1)
 ```
 
-With 200 iterations and 12 threads configured, the default minimum of 512 puts all useful work in one chunk. Reducing the minimum to 1 allows 12 chunks: eleven of 17 iterations and one of 13. It does not force one iteration per chunk. Explicitly serialized loops still execute in order on one thread.
+With 200 iterations and 12 threads configured, the default minimum of 512 puts all useful work in one chunk. Reducing the minimum to 1 allows 12 chunks: eleven of 17 iterations and one of 13. It does not force one iteration per chunk.
+
+Note that explicitly serialized loops still execute in order on one thread.
 
 ## Compile-time tuning
 
