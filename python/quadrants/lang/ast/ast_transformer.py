@@ -1522,7 +1522,12 @@ class ASTTransformer(Builder):
             parent_id = kernel._graph_do_while_level_stack[-1] if kernel._graph_do_while_level_stack else -1
             level_id = len(kernel.graph_do_while_levels)
             kernel.graph_do_while_levels.append(
-                GraphDoWhileLevel(cond_arg_name=cond_label, parent_id=parent_id, cond_cpp_arg_id=cond_cpp_arg_id)
+                GraphDoWhileLevel(
+                    cond_arg_name=cond_label,
+                    parent_id=parent_id,
+                    cond_cpp_arg_id=cond_cpp_arg_id,
+                    checkpoint_id=ctx.current_checkpoint_id,
+                )
             )
             if level_id == 0:
                 kernel.graph_do_while_arg = cond_label

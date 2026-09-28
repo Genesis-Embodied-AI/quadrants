@@ -218,6 +218,20 @@ def step(
 
 The `cp_id` argument is the label you'll use to identify the checkpoint from the host (in `GraphStatus.checkpoint` and `kernel.resume(from_checkpoint=...)`). It must be an int literal or an `IntEnum` value; the framework preserves the value as-is, so `qd.checkpoint(Stage.SIM, ...)` round-trips as `Stage.SIM` rather than the raw int. Labels must be unique within a kernel.
 
+A checkpoint body may contain a nested `qd.graph.do_while`, including the common solver shape `outer WHILE -> checkpoint IF -> inner WHILE`. On CUDA SM 9.0+, the inner WHILE stays inside the checkpoint's conditional CUDA Graph body, so resuming past that checkpoint skips the entire inner loop. CUDA devices without native conditional graph nodes use the normal host-driven fallback.
+
+```python
+with qd.checkpoint(Stage.SIM, yield_on=overflow_flag):
+    for _ in range(1):
+        inner_cond[()] = inner_iterations
+    while qd.graph.do_while(inner_cond):
+        for i in range(arr.shape[0]):
+            # ... iterative work ...
+            pass
+        for _ in range(1):
+            inner_cond[()] = inner_cond[()] - 1
+```
+
 ### Yield mechanism
 
 When the body of a checkpoint writes a non-zero value into `yield_on[()]`:
@@ -260,7 +274,7 @@ while status.yielded:
 - Must be used inside `@qd.kernel(graph=True, checkpoints=True)`. Without the flag, `qd.checkpoint(...)` raises `QuadrantsSyntaxError` at compile time.
 - `cp_id` must be an int literal or an `IntEnum` value, and must be unique across the kernel.
 - `yield_on=` must reference a 0-d `qd.types.ndarray(qd.i32, ndim=0)` - a bare kernel parameter (`yield_on=flag`), a [`@qd.data_oriented`](compound_types.md#qddata_oriented) member ndarray (`yield_on=self.flag`), or a [`@dataclasses.dataclass`](compound_types.md#dataclassesdataclass) parameter member (`yield_on=params.flag`). Arbitrary expressions are not supported.
-- Checkpoints cannot be nested inside other checkpoints. Checkpoints inside a `qd.graph.do_while` body are fine.
+- Checkpoints cannot be nested inside other checkpoints. Checkpoints inside a `qd.graph.do_while` body, and `qd.graph.do_while` loops inside a checkpoint body, are fine.
 - The body of a `with qd.checkpoint(...)` block cannot contain bare top-level statements (assignments, augmented assignments, or bare call/expression statements). Every top-level statement must be inside a `for`-loop (or other control-flow construct). A docstring as the first statement is allowed. Bare statements raise `QuadrantsSyntaxError` at compile time.
 
   ```python

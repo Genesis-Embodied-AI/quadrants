@@ -27,7 +27,7 @@
 #include "quadrants/runtime/cuda/graph_manager.h"
 
 #include <cstdlib>
-#include <unordered_map>
+#include <unordered_set>
 
 #include "quadrants/common/logging.h"
 #include "quadrants/rhi/cuda/cuda_context.h"
@@ -41,6 +41,42 @@
 
 namespace quadrants::lang {
 namespace cuda {
+
+namespace {
+
+constexpr int kUnsetCheckpointLevel = -2;
+
+int graph_do_while_level_depth(int level, const std::vector<GraphDoWhileLevel> &levels) {
+  int depth = 0;
+  for (int current = level; current != -1; current = levels[current].parent_id) {
+    ++depth;
+  }
+  return depth;
+}
+
+// Return the lowest common ancestor of two graph_do_while levels. The synthetic kernel top level is represented by -1.
+int common_graph_do_while_ancestor(int lhs, int rhs, const std::vector<GraphDoWhileLevel> &levels) {
+  if (lhs == -1 || rhs == -1) {
+    return -1;
+  }
+  int lhs_depth = graph_do_while_level_depth(lhs, levels);
+  int rhs_depth = graph_do_while_level_depth(rhs, levels);
+  while (lhs_depth > rhs_depth) {
+    lhs = levels[lhs].parent_id;
+    --lhs_depth;
+  }
+  while (rhs_depth > lhs_depth) {
+    rhs = levels[rhs].parent_id;
+    --rhs_depth;
+  }
+  while (lhs != rhs) {
+    lhs = levels[lhs].parent_id;
+    rhs = levels[rhs].parent_id;
+  }
+  return lhs;
+}
+
+}  // namespace
 
 // Lazy load of the cond-with-yield kernel from the same fatbin as the regular cond kernel. Returns silently when the
 // base module isn't loaded yet -- callers are expected to call `ensure_condition_kernel_loaded()` immediately before,
@@ -133,21 +169,26 @@ CheckpointBuildPlan GraphManager::compute_checkpoint_plan_for_build(const std::v
   // path. We need this before constructing CachedGraph so the latter can allocate the `resume_point` and `yield_signal`
   // scalars exactly when (and only when) they will be referenced.
   {
-    int prev_cp = -1;
+    std::unordered_set<int> checkpoint_ids;
     for (const auto &task : offloaded_tasks) {
       if (task.checkpoint_id >= 0) {
         plan.has_checkpoints = true;
-        if (task.checkpoint_id != prev_cp) {
-          ++plan.num_distinct_checkpoints;
-          prev_cp = task.checkpoint_id;
-        }
+        checkpoint_ids.insert(task.checkpoint_id);
         if (task.checkpoint_id > plan.max_cp_id) {
           plan.max_cp_id = task.checkpoint_id;
         }
-      } else {
-        prev_cp = -1;
       }
     }
+    for (const auto &level : ctx.graph_do_while_levels) {
+      if (level.checkpoint_id >= 0) {
+        plan.has_checkpoints = true;
+        checkpoint_ids.insert(level.checkpoint_id);
+        if (level.checkpoint_id > plan.max_cp_id) {
+          plan.max_cp_id = level.checkpoint_id;
+        }
+      }
+    }
+    plan.num_distinct_checkpoints = checkpoint_ids.size();
   }
 
   // Determine which checkpoints actually have a resolved `yield_on=` ndarray this launch. Only those need a per-cp
@@ -161,21 +202,36 @@ CheckpointBuildPlan GraphManager::compute_checkpoint_plan_for_build(const std::v
     }
   }
 
-  // Unsupported combined case: a `qd.checkpoint()` block whose body contains a nested `qd.graph_do_while` (one cp_id
-  // spanning more than one loop level). build_level's per-level IF grouping assumes a checkpoint's tasks are flat
-  // within a single level, so fall back to the non-graph launch path (correct results, just no on-device gating)
-  // rather than build a wrong graph.
-  if (plan.has_checkpoints && use_graph_do_while) {
-    std::unordered_map<int, int> cp_first_level;
+  // Locate the graph_do_while level that owns each checkpoint. A checkpoint may span direct tasks in one level plus
+  // tasks in one or more nested levels; its IF belongs at their lowest common ancestor so the nested WHILE nodes become
+  // children of that one IF body. The old per-level grouping rejected this shape and fell back to ordinary launches.
+  if (plan.has_checkpoints) {
+    plan.checkpoint_level_ids.assign((std::size_t)plan.max_cp_id + 1, kUnsetCheckpointLevel);
+    std::vector<int> first_task_level(plan.checkpoint_level_ids.size(), kUnsetCheckpointLevel);
     for (const auto &task : offloaded_tasks) {
       if (task.checkpoint_id >= 0) {
-        auto [iter, inserted] = cp_first_level.emplace(task.checkpoint_id, task.graph_do_while_level_id);
-        if (!inserted && iter->second != task.graph_do_while_level_id) {
-          QD_INFO(
-              "graph=True: a qd.checkpoint() block containing a nested qd.graph_do_while is not yet "
-              "supported on the CUDA graph path; falling back to the non-graph launch.");
-          plan.reject_graph_build = true;
-          return plan;
+        const std::size_t cp = (std::size_t)task.checkpoint_id;
+        int &owner = plan.checkpoint_level_ids[cp];
+        int &first_level = first_task_level[cp];
+        if (owner == kUnsetCheckpointLevel) {
+          owner = task.graph_do_while_level_id;
+          first_level = task.graph_do_while_level_id;
+        } else {
+          if (task.graph_do_while_level_id != first_level) {
+            plan.has_multi_level_checkpoint = true;
+          }
+          owner = common_graph_do_while_ancestor(owner, task.graph_do_while_level_id, ctx.graph_do_while_levels);
+        }
+      }
+    }
+    for (const auto &level : ctx.graph_do_while_levels) {
+      if (level.checkpoint_id >= 0) {
+        plan.has_multi_level_checkpoint = true;
+        int &owner = plan.checkpoint_level_ids[(std::size_t)level.checkpoint_id];
+        if (owner == kUnsetCheckpointLevel) {
+          owner = level.parent_id;
+        } else {
+          owner = common_graph_do_while_ancestor(owner, level.parent_id, ctx.graph_do_while_levels);
         }
       }
     }
@@ -202,6 +258,16 @@ CheckpointBuildPlan GraphManager::compute_checkpoint_plan_for_build(const std::v
       // identical to the pre-Hopper code path.
       plan.use_pre_hopper_flat_graph = true;
       QD_TRACE("QD_CUDA_FORCE_FLAT_CHECKPOINT_GRAPH=1 set; using pre-Hopper flat-graph path on SM 9.0+");
+    }
+    if (use_graph_do_while && plan.has_multi_level_checkpoint && plan.use_pre_hopper_flat_graph) {
+      // A flat checkpoint graph can self-gate work kernels, but it cannot gate the child WHILE node itself. Skipping
+      // all kernels in that loop would leave its condition unchanged and spin forever. Native IF nodes can contain the
+      // WHILE and are handled by build_level; without them, retain the correct host-driven fallback.
+      QD_INFO(
+          "graph=True: a qd.checkpoint() block containing a nested qd.graph_do_while requires CUDA conditional IF "
+          "nodes; falling back to the non-graph launch.");
+      plan.reject_graph_build = true;
+      return plan;
     }
     if (plan.has_yield) {
       ensure_checkpoint_yield_check_kernel_loaded();

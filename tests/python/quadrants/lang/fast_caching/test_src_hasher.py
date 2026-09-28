@@ -186,11 +186,11 @@ def test_src_hasher_store_validate_round_trips_schema_v3_metadata(
     monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, temporary_module
 ) -> None:
     """Schema v3 (`cachevalue-v3-ast-resolved-ids`) added AST-resolved arg-id fields to the persisted ``CacheValue`` so
-    the launch path can forward them after a fast-cache restore (which skips AST transformation). This test pins the
-    round-trip for the new fields -- ``graph_do_while_levels`` as 3-tuples carrying ``cond_cpp_arg_id``, plus
-    ``checkpoint_yield_on_args`` / ``checkpoint_yield_on_cpp_arg_ids`` / ``checkpoint_user_labels_by_cp_id``. Without
-    this, a schema bug (wrong tuple arity, dropped field, mis-typed BaseModel default) would only surface via a hard-to-
-    debug functional regression in a fast-cached checkpoint / graph_do_while kernel."""
+    the launch path can forward them after a fast-cache restore (which skips AST transformation). Schema v6 extended
+    ``graph_do_while_levels`` to 4-tuples carrying both ``cond_cpp_arg_id`` and the enclosing checkpoint id. This test
+    pins that table plus ``checkpoint_yield_on_args`` / ``checkpoint_yield_on_cpp_arg_ids`` /
+    ``checkpoint_user_labels_by_cp_id``. Without this, a schema bug would only surface via a hard-to-debug functional
+    regression in a fast-cached checkpoint / graph_do_while kernel."""
     test_files_path = pathlib.Path("tests/python/quadrants/lang/fast_caching/test_files")
 
     offline_cache_path = tmp_path / "cache"
@@ -211,7 +211,7 @@ def test_src_hasher_store_validate_round_trips_schema_v3_metadata(
     fast_cache_key = src_hasher.make_full_cache_key(l1_key, narrow_args_hash)
     assert fast_cache_key is not None
 
-    gdw_levels = [("self.outer", -1, 4), ("self.inner", 0, 5)]
+    gdw_levels = [("self.outer", -1, 4, -1), ("self.inner", 0, 5, 1)]
     cp_yield_args = ["self.flag", None, "params.flag"]
     cp_yield_cpp_ids = [3, -1, 7]
     cp_user_labels = [10, None, 20]
@@ -230,7 +230,7 @@ def test_src_hasher_store_validate_round_trips_schema_v3_metadata(
     loaded = src_hasher.load(fast_cache_key)
     assert loaded is not None
     assert loaded.frontend_cache_key == "kernel_cache_key_v3"
-    assert loaded.graph_do_while_levels == [("self.outer", -1, 4), ("self.inner", 0, 5)]
+    assert loaded.graph_do_while_levels == gdw_levels
     assert loaded.checkpoint_yield_on_args == cp_yield_args
     assert loaded.checkpoint_yield_on_cpp_arg_ids == cp_yield_cpp_ids
     assert loaded.checkpoint_user_labels_by_cp_id == cp_user_labels

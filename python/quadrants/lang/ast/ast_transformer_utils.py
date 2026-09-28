@@ -279,6 +279,10 @@ class ASTTransformerFuncContext:
         self.only_parse_function_def: bool = False
         self.autodiff_mode = autodiff_mode
         self.loop_depth: int = 0
+        # Internal id of the active qd.checkpoint scope, or -1 outside one. CheckpointTransformer owns this value while
+        # walking a checkpoint body; build_While records it on GraphDoWhileLevel so the CUDA graph builder can place a
+        # WHILE node inside its enclosing checkpoint IF even when the checkpoint contains no direct work task.
+        self.current_checkpoint_id: int = -1
         # Whether the (transitive) caller chain that reached this func compile was already inside non-static control
         # flow. Seeded from `global_context.caller_in_non_static_control_flow` in `_func_base.py`; kernels start at the
         # top of the call stack so they always begin False. Consulted (together with the local

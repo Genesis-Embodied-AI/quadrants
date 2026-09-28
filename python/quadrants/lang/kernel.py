@@ -299,6 +299,9 @@ class GraphDoWhileLevel:
     parent_id: int
     # Resolved C++ arg index of the condition ndarray (filled during launch-arg iteration).
     cond_cpp_arg_id: int = -1
+    # Internal id of the qd.checkpoint whose lexical body contains this WHILE node, or -1. Unlike per-task checkpoint
+    # tags, this preserves the scope when the checkpoint body consists solely of the child loop.
+    checkpoint_id: int = -1
 
 
 class Kernel(FuncBase):
@@ -467,8 +470,13 @@ class Kernel(FuncBase):
                     _cached_levels = cache_value.graph_do_while_levels
                     if _cached_levels:
                         self.graph_do_while_levels = [
-                            GraphDoWhileLevel(cond_arg_name=name, parent_id=parent, cond_cpp_arg_id=cpp_arg_id)
-                            for name, parent, cpp_arg_id in _cached_levels
+                            GraphDoWhileLevel(
+                                cond_arg_name=name,
+                                parent_id=parent,
+                                cond_cpp_arg_id=cpp_arg_id,
+                                checkpoint_id=checkpoint_id,
+                            )
+                            for name, parent, cpp_arg_id, checkpoint_id in _cached_levels
                         ]
                         self.graph_do_while_arg = self.graph_do_while_levels[0].cond_arg_name
                     if cache_value.checkpoint_yield_on_args:
@@ -494,8 +502,13 @@ class Kernel(FuncBase):
             # L1's level table seeds the cold-compile path until the AST transformer repopulates it.
             if cached_graph_do_while_levels and not self.graph_do_while_levels:
                 self.graph_do_while_levels = [
-                    GraphDoWhileLevel(cond_arg_name=name, parent_id=parent, cond_cpp_arg_id=cpp_arg_id)
-                    for name, parent, cpp_arg_id in cached_graph_do_while_levels
+                    GraphDoWhileLevel(
+                        cond_arg_name=name,
+                        parent_id=parent,
+                        cond_cpp_arg_id=cpp_arg_id,
+                        checkpoint_id=checkpoint_id,
+                    )
+                    for name, parent, cpp_arg_id, checkpoint_id in cached_graph_do_while_levels
                 ]
                 self.graph_do_while_arg = self.graph_do_while_levels[0].cond_arg_name
             return None
@@ -633,7 +646,8 @@ class Kernel(FuncBase):
             used_py_dataclass_parameters=self.used_py_dataclass_parameters_by_key_enforcing.get(key),
             visited_functions=self.visited_functions,
             graph_do_while_levels=[
-                (level.cond_arg_name, level.parent_id, level.cond_cpp_arg_id) for level in self.graph_do_while_levels
+                (level.cond_arg_name, level.parent_id, level.cond_cpp_arg_id, level.checkpoint_id)
+                for level in self.graph_do_while_levels
             ]
             or None,
             pruning_paths_from_l1=getattr(self, "_pruning_paths_from_l1", None),
@@ -810,7 +824,7 @@ class Kernel(FuncBase):
                         self.visited_functions,
                         self.used_py_dataclass_parameters_by_key_enforcing[key],
                         graph_do_while_levels=[  # type: ignore[reportCallIssue]
-                            (level.cond_arg_name, level.parent_id, level.cond_cpp_arg_id)
+                            (level.cond_arg_name, level.parent_id, level.cond_cpp_arg_id, level.checkpoint_id)
                             for level in self.graph_do_while_levels
                         ],
                         checkpoint_yield_on_args=list(self.checkpoint_yield_on_args),
@@ -826,7 +840,9 @@ class Kernel(FuncBase):
                     "See docs/source/user_guide/streams.md for details."
                 )
             for _gdw_level in self.graph_do_while_levels:
-                launch_ctx.add_graph_do_while_level(_gdw_level.cond_cpp_arg_id, _gdw_level.parent_id)
+                launch_ctx.add_graph_do_while_level(
+                    _gdw_level.cond_cpp_arg_id, _gdw_level.parent_id, _gdw_level.checkpoint_id
+                )
             # Single `use_checkpoints` gate around the entire checkpoint-wiring block so non-checkpoint kernels skip
             # both per-launch checks (yield-on table forward + resume_point copy) with one attribute lookup. Matches
             # the equivalent fast-path gate in `__call__`.

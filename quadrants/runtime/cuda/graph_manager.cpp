@@ -375,26 +375,110 @@ int child_of(int parent_id, int descendant, const std::vector<GraphDoWhileLevel>
 }
 }  // namespace
 
-void GraphManager::build_level(int parent_id,
-                               void *target_graph,
-                               int begin,
-                               int end,
-                               const std::vector<OffloadedTask> &tasks,
-                               const std::vector<GraphDoWhileLevel> &levels,
-                               std::vector<unsigned long long> &cond_handles,
-                               JITModule *cuda_module,
-                               CachedGraph &cached,
-                               std::size_t &total_nodes) {
+void *GraphManager::build_level(int parent_id,
+                                void *target_graph,
+                                int begin,
+                                int end,
+                                const std::vector<OffloadedTask> &tasks,
+                                const std::vector<GraphDoWhileLevel> &levels,
+                                const std::vector<int> &checkpoint_level_ids,
+                                std::vector<unsigned long long> &cond_handles,
+                                JITModule *cuda_module,
+                                CachedGraph &cached,
+                                std::size_t &total_nodes,
+                                void *prev_node,
+                                int active_checkpoint_id,
+                                bool append_condition) {
   // A yield-bearing kernel (has_yield) wires every loop level's condition kernel to the cond-with-yield variant, so a
   // yield raised inside any checkpoint exits this and every enclosing WHILE loop.
   const bool has_yield = (cached.yield_signal_dev_ptr != nullptr);
-  void *prev_node = nullptr;
   int cursor = begin;
   while (cursor < end) {
     const int task_level = tasks[cursor].graph_do_while_level_id;
+    const int child = task_level == parent_id ? -1 : child_of(parent_id, task_level, levels);
+    // A WHILE node carries the checkpoint active at its lexical declaration. Prefer that structural tag over the first
+    // descendant task's tag: compiler-generated pure tasks use cp_id=-1, and a checkpoint containing only this loop has
+    // no direct parent-level task from which the IF placement could otherwise be recovered.
+    int checkpoint_id = tasks[cursor].checkpoint_id;
+    if (child >= 0 && levels[child].checkpoint_id >= 0) {
+      checkpoint_id = levels[child].checkpoint_id;
+    }
+    const bool checkpoint_starts_here = checkpoint_id >= 0 && checkpoint_id != active_checkpoint_id &&
+                                        (std::size_t)checkpoint_id < checkpoint_level_ids.size() &&
+                                        checkpoint_level_ids[checkpoint_id] == parent_id;
+    if (checkpoint_starts_here) {
+      // The checkpoint range may cross child graph_do_while levels, with compiler-generated pure tasks (cp_id == -1)
+      // interleaved before a dynamic range task. Build through the final task carrying this cp_id so those prerequisite
+      // tasks and the child WHILE stay in one recursively-populated IF body.
+      int run_end = cursor + 1;
+      for (int candidate = run_end; candidate < end; ++candidate) {
+        if (tasks[candidate].checkpoint_id == checkpoint_id) {
+          run_end = candidate + 1;
+        }
+      }
+
+      // Keep the cp_id alive for the graph's lifetime (gate / yield-check kernels read it by pointer); cp_id_storage_
+      // is reserved up front so push_back never reallocates.
+      cp_id_storage_.push_back(checkpoint_id);
+      int32_t &cp_id_val = cp_id_storage_.back();
+      const bool cp_has_yield = (std::size_t)checkpoint_id < cached.checkpoint_yield_on_ptr_slots.size() &&
+                                cached.checkpoint_yield_on_ptr_slots[checkpoint_id] != nullptr;
+
+      if (use_pre_hopper_flat_graph_) {
+        // No conditional IF node is available. Direct work kernels self-gate through their codegen prologue; the build
+        // plan rejects multi-level checkpoints on this path because the child WHILE node itself cannot self-gate.
+        prev_node = build_level(parent_id, target_graph, cursor, run_end, tasks, levels, checkpoint_level_ids,
+                                cond_handles, cuda_module, cached, total_nodes, prev_node, checkpoint_id,
+                                /*append_condition=*/false);
+        if (cp_has_yield) {
+          void *yield_args[4] = {&cached.checkpoint_yield_on_ptr_slots[checkpoint_id], &cp_id_val,
+                                 &cached.yield_signal_dev_ptr, &cached.resume_point_dev_ptr};
+          prev_node = add_kernel_node(target_graph, prev_node, yield_check_kernel_func_, 1, 1, 0, yield_args);
+          ++total_nodes;
+        }
+      } else {
+        // SM 9.0+: gate kernel -> one IF conditional node -> recursively-built body containing direct kernels and any
+        // child WHILE nodes, followed by the checkpoint's single yield-check.
+        unsigned long long if_handle = 0;
+        void *cu_ctx_local = CUDAContext::get_instance().get_context();
+        CUDADriver::get_instance().graph_conditional_handle_create(&if_handle, target_graph, cu_ctx_local,
+                                                                   /*defaultLaunchValue=*/0,
+                                                                   /*flags=CU_GRAPH_COND_ASSIGN_DEFAULT=*/1);
+        void *gate_args[3] = {&if_handle, &cp_id_val, &cached.resume_point_dev_ptr};
+        prev_node = add_kernel_node(target_graph, prev_node, gate_kernel_func_, 1, 1, 0, gate_args);
+        ++total_nodes;
+
+        GraphNodeParams cond_node_params{};
+        cond_node_params.type = 13;  // CU_GRAPH_NODE_TYPE_CONDITIONAL
+        cond_node_params.handle = if_handle;
+        cond_node_params.condType = 0;  // CU_GRAPH_COND_TYPE_IF
+        cond_node_params.size = 1;
+        cond_node_params.phGraph_out = nullptr;
+        cond_node_params.ctx = cu_ctx_local;
+        void *if_node = nullptr;
+        CUDADriver::get_instance().graph_add_node(&if_node, target_graph, &prev_node, 1, &cond_node_params);
+        void **body_graphs = (void **)cond_node_params.phGraph_out;
+        QD_ASSERT(body_graphs && body_graphs[0]);
+        ++total_nodes;
+
+        void *body_prev =
+            build_level(parent_id, body_graphs[0], cursor, run_end, tasks, levels, checkpoint_level_ids, cond_handles,
+                        cuda_module, cached, total_nodes, /*prev_node=*/nullptr, checkpoint_id,
+                        /*append_condition=*/false);
+        if (cp_has_yield) {
+          void *yield_args[4] = {&cached.checkpoint_yield_on_ptr_slots[checkpoint_id], &cp_id_val,
+                                 &cached.yield_signal_dev_ptr, &cached.resume_point_dev_ptr};
+          body_prev = add_kernel_node(body_graphs[0], body_prev, yield_check_kernel_func_, 1, 1, 0, yield_args);
+          ++total_nodes;
+        }
+        prev_node = if_node;
+      }
+      cursor = run_end;
+      continue;
+    }
+
     if (task_level != parent_id) {
       // --- Start of a contiguous run belonging to a child level (or its descendants). ---
-      const int child = child_of(parent_id, task_level, levels);
       int run_end = cursor;
       while (run_end < end && is_descendant_or_self(tasks[run_end].graph_do_while_level_id, child, levels)) {
         run_end++;
@@ -414,7 +498,8 @@ void GraphManager::build_level(int parent_id,
       void *child_body = nullptr;
       void *cond_node = add_conditional_while_node(target_graph, prev_node, cond_handles[child], &child_body);
       ++total_nodes;
-      build_level(child, child_body, cursor, run_end, tasks, levels, cond_handles, cuda_module, cached, total_nodes);
+      build_level(child, child_body, cursor, run_end, tasks, levels, checkpoint_level_ids, cond_handles, cuda_module,
+                  cached, total_nodes, /*prev_node=*/nullptr, active_checkpoint_id, /*append_condition=*/true);
       // Subsequent siblings in this body depend on the conditional node.
       prev_node = cond_node;
       cursor = run_end;
@@ -482,105 +567,35 @@ void GraphManager::build_level(int parent_id,
       continue;
     }
 
-    // --- A direct task of this level. Group consecutive tasks by checkpoint_id. ---
+    // --- A direct task of this level. Checkpoints owned here were handled above; when recursively building an IF body,
+    // its active checkpoint's tasks become ordinary direct body kernels. ---
     const int cp = tasks[cursor].checkpoint_id;
-    if (cp < 0) {
-      // Non-checkpoint work kernel, chained directly into this level's graph.
-      void *ctx_ptr = &cached.persistent_ctx;
-      prev_node = add_kernel_node(target_graph, prev_node, cuda_module->lookup_function(tasks[cursor].name),
-                                  (unsigned int)tasks[cursor].grid_dim, (unsigned int)tasks[cursor].block_dim,
-                                  (unsigned int)tasks[cursor].dynamic_shared_array_bytes, &ctx_ptr);
-      ++total_nodes;
-      cursor++;
-      continue;
-    }
-
-    // Checkpoint run: the maximal contiguous set of this level's direct tasks sharing cp_id == cp. (The try_launch
-    // guard guarantees a checkpoint's tasks stay within one level, so the run is not interrupted by a nested loop.)
-    int run_end = cursor;
-    while (run_end < end && tasks[run_end].graph_do_while_level_id == parent_id && tasks[run_end].checkpoint_id == cp) {
-      run_end++;
-    }
-    // Keep the cp_id alive for the graph's lifetime (gate / yield-check kernels read it by pointer); cp_id_storage_ is
-    // reserved up front so push_back never reallocates.
-    cp_id_storage_.push_back(cp);
-    int32_t &cp_id_val = cp_id_storage_.back();
-    const bool cp_has_yield = (std::size_t)cp < cached.checkpoint_yield_on_ptr_slots.size() &&
-                              cached.checkpoint_yield_on_ptr_slots[cp] != nullptr;
-
-    if (use_pre_hopper_flat_graph_) {
-      // Pre-Hopper: no conditional node. Body kernels chain directly and self-gate via the codegen prologue; a trailing
-      // yield-check kernel (if this cp has yield_on=) runs inline after the run.
-      for (int t = cursor; t < run_end; t++) {
-        void *ctx_ptr = &cached.persistent_ctx;
-        prev_node = add_kernel_node(target_graph, prev_node, cuda_module->lookup_function(tasks[t].name),
-                                    (unsigned int)tasks[t].grid_dim, (unsigned int)tasks[t].block_dim,
-                                    (unsigned int)tasks[t].dynamic_shared_array_bytes, &ctx_ptr);
-        ++total_nodes;
-      }
-      if (cp_has_yield) {
-        void *yield_args[4] = {&cached.checkpoint_yield_on_ptr_slots[cp], &cp_id_val, &cached.yield_signal_dev_ptr,
-                               &cached.resume_point_dev_ptr};
-        prev_node = add_kernel_node(target_graph, prev_node, yield_check_kernel_func_, 1, 1, 0, yield_args);
-        ++total_nodes;
-      }
-    } else {
-      // SM 9.0+: gate kernel (sets the handle from cp_id >= *resume_point) -> IF conditional node -> body graph holding
-      // the run's work kernels and an optional trailing yield-check.
-      unsigned long long if_handle = 0;
-      void *cu_ctx_local = CUDAContext::get_instance().get_context();
-      CUDADriver::get_instance().graph_conditional_handle_create(&if_handle, target_graph, cu_ctx_local,
-                                                                 /*defaultLaunchValue=*/0,
-                                                                 /*flags=CU_GRAPH_COND_ASSIGN_DEFAULT=*/1);
-      void *gate_args[3] = {&if_handle, &cp_id_val, &cached.resume_point_dev_ptr};
-      prev_node = add_kernel_node(target_graph, prev_node, gate_kernel_func_, 1, 1, 0, gate_args);
-      ++total_nodes;
-      GraphNodeParams cond_node_params{};
-      cond_node_params.type = 13;  // CU_GRAPH_NODE_TYPE_CONDITIONAL
-      cond_node_params.handle = if_handle;
-      cond_node_params.condType = 0;  // CU_GRAPH_COND_TYPE_IF
-      cond_node_params.size = 1;
-      cond_node_params.phGraph_out = nullptr;
-      cond_node_params.ctx = cu_ctx_local;
-      void *if_node = nullptr;
-      CUDADriver::get_instance().graph_add_node(&if_node, target_graph, prev_node ? &prev_node : nullptr,
-                                                prev_node ? 1 : 0, &cond_node_params);
-      void **body_graphs = (void **)cond_node_params.phGraph_out;
-      QD_ASSERT(body_graphs && body_graphs[0]);
-      void *if_body = body_graphs[0];
-      ++total_nodes;
-      void *body_prev = nullptr;
-      for (int t = cursor; t < run_end; t++) {
-        void *ctx_ptr = &cached.persistent_ctx;
-        body_prev = add_kernel_node(if_body, body_prev, cuda_module->lookup_function(tasks[t].name),
-                                    (unsigned int)tasks[t].grid_dim, (unsigned int)tasks[t].block_dim,
-                                    (unsigned int)tasks[t].dynamic_shared_array_bytes, &ctx_ptr);
-        ++total_nodes;
-      }
-      if (cp_has_yield) {
-        void *yield_args[4] = {&cached.checkpoint_yield_on_ptr_slots[cp], &cp_id_val, &cached.yield_signal_dev_ptr,
-                               &cached.resume_point_dev_ptr};
-        body_prev = add_kernel_node(if_body, body_prev, yield_check_kernel_func_, 1, 1, 0, yield_args);
-        ++total_nodes;
-      }
-      prev_node = if_node;
-    }
-    cursor = run_end;
+    QD_ASSERT_INFO(cp < 0 || cp == active_checkpoint_id,
+                   "checkpoint task {} (cp {}, level {}) reached build level {} with active cp {} and owner level {}",
+                   cursor, cp, tasks[cursor].graph_do_while_level_id, parent_id, active_checkpoint_id,
+                   (std::size_t)cp < checkpoint_level_ids.size() ? checkpoint_level_ids[cp] : -99);
+    void *ctx_ptr = &cached.persistent_ctx;
+    prev_node = add_kernel_node(target_graph, prev_node, cuda_module->lookup_function(tasks[cursor].name),
+                                (unsigned int)tasks[cursor].grid_dim, (unsigned int)tasks[cursor].block_dim,
+                                (unsigned int)tasks[cursor].dynamic_shared_array_bytes, &ctx_ptr);
+    ++total_nodes;
+    cursor++;
   }
   // For a real loop level, append its condition kernel last so it reads the flag after this iteration's work has
   // updated it. Use the cond-with-yield variant when the kernel has yielding checkpoints so a yield exits this (and
   // every enclosing) WHILE loop.
-  if (parent_id >= 0) {
+  if (append_condition && parent_id >= 0) {
     if (has_yield) {
       void *cond_args[4] = {&cond_handles[parent_id], &cached.counter_ptr_slots[parent_id],
                             &cached.yield_signal_dev_ptr, &cached.resume_point_dev_ptr};
-      add_kernel_node(target_graph, prev_node, cond_with_yield_kernel_func_, 1, 1, 0, cond_args);
+      prev_node = add_kernel_node(target_graph, prev_node, cond_with_yield_kernel_func_, 1, 1, 0, cond_args);
     } else {
       void *cond_args[2] = {&cond_handles[parent_id], &cached.counter_ptr_slots[parent_id]};
-      add_kernel_node(target_graph, prev_node, cond_kernel_func_, 1, 1, 0, cond_args);
+      prev_node = add_kernel_node(target_graph, prev_node, cond_kernel_func_, 1, 1, 0, cond_args);
     }
     ++total_nodes;
   }
+  return prev_node;
 }
 
 bool GraphManager::launch_cached_graph(CachedGraph &cached, LaunchContextBuilder &ctx, bool use_graph_do_while) {
@@ -715,20 +730,22 @@ bool GraphManager::try_launch(int launch_id,
   // Work kernels go directly into the top-level graph when the kernel has neither graph_do_while nor
   // checkpoints. Each graph_do_while loop level becomes a conditional WHILE node whose body graph holds
   // that level's direct work kernels, any nested conditional nodes, and finally that level's condition
-  // kernel (last, so it reads the flag after this iteration's work). Within any level's body, a
-  // contiguous run of same-cp_id tasks is wrapped in a gate-kernel + IF conditional node (SM 9.0+,
-  // gated by `resume_point`); tasks with cp_id == -1 stay siblings of the IF nodes. A yielding
-  // checkpoint appends a yield-check kernel that exits every enclosing WHILE loop. Combined example:
+  // kernel (last, so it reads the flag after this iteration's work). A checkpoint's task levels are reduced to their
+  // lowest common ancestor; at that level the whole contiguous cp_id run is wrapped in a gate-kernel + IF conditional
+  // node (SM 9.0+, gated by `resume_point`). The IF body is built recursively, so it can contain both direct kernels
+  // and child WHILE nodes. Tasks with cp_id == -1 stay siblings of the IF nodes. A yielding checkpoint appends one
+  // yield-check at the end of its IF body, which exits every enclosing WHILE loop. Combined example:
   //
   //   Top-level graph
   //     └── Conditional while node (outer, repeats while outer flag != 0)
   //           └── Outer body graph
-  //                 ├── init kernel (re-arm inner handle = 1)
-  //                 ├── Conditional while node (inner, repeats while inner flag != 0)
-  //                 │     └── Inner body graph: work kernels + inner condition kernel
   //                 ├── Gate kernel for cp 0   (sets handle_0 from cp_id >= *resume_point)
   //                 ├── IF conditional node (handle_0)
-  //                 │     └── Body: cp_id=0 tasks (+ yield-check if yield_on=)
+  //                 │     └── Body: direct cp_id=0 tasks
+  //                 │           ├── init kernel (re-arm inner handle = 1)
+  //                 │           ├── Conditional while node (inner, repeats while inner flag != 0)
+  //                 │           │     └── Inner body graph: work kernels + inner condition kernel
+  //                 │           └── yield-check (if cp 0 has yield_on=)
   //                 └── Outer condition kernel (cond-with-yield when the kernel has yielding cps)
   //
   // The recursive builder (build_level) places direct/checkpoint/child/condition nodes from the
@@ -780,7 +797,8 @@ bool GraphManager::try_launch(int launch_id,
   std::size_t total_nodes = 0;
   std::vector<unsigned long long> cond_handles(ctx.graph_do_while_levels.size(), 0);
   build_level(/*parent_id=*/-1, graph, 0, (int)offloaded_tasks.size(), offloaded_tasks, ctx.graph_do_while_levels,
-              cond_handles, cuda_module, cached, total_nodes);
+              cp_plan.checkpoint_level_ids, cond_handles, cuda_module, cached, total_nodes, /*prev_node=*/nullptr,
+              /*active_checkpoint_id=*/-1, /*append_condition=*/true);
 
   // --- Instantiate ---
   CUDADriver::get_instance().graph_instantiate(&cached.graph_exec, graph, nullptr, nullptr, 0);
