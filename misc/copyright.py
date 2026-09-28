@@ -46,8 +46,8 @@ Examples:
 
 {file} .
 {file} --check quadrants/common/core.cpp quadrants/ir/transforms.h
-{file} benchmarks cmake docs examples misc python quadrants tests
-{file} --exts "cpp,py" benchmarks cmake docs examples misc python quadrants tests""".format(
+{file} cmake docs examples misc python quadrants tests
+{file} --exts "cpp,py" cmake docs examples misc python quadrants tests""".format(
     file=os.path.relpath(__file__)
 )
 
