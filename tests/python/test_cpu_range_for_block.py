@@ -71,8 +71,10 @@ def test_cpu_range_for_block_invalid(cpu_min_block_size):
         qd.init(arch=qd.cpu, cpu_min_block_size=cpu_min_block_size)
 
 
+@pytest.mark.parametrize("src_ll_cache", [False, True])
 @test_utils.test(arch=qd.cpu)
-def test_cpu_range_for_block_offline_cache(tmp_path):
+def test_cpu_range_for_block_offline_cache(tmp_path, src_ll_cache):
+    @qd.pure
     @qd.kernel
     def k_calc_total(n: qd.i32) -> qd.i32:
         result = 0
@@ -86,11 +88,17 @@ def test_cpu_range_for_block_offline_cache(tmp_path):
             cpu_max_num_threads=4,
             cpu_min_block_size=cpu_min_block_size,
             offline_cache=True,
+            src_ll_cache=src_ll_cache,
             offline_cache_file_path=str(tmp_path),
             offline_cache_cleaning_policy="never",
         )
         assert k_calc_total(200) == 19900
-        cache_hit = k_calc_total._primal.fe_ll_cache_observations.cache_hit
+        if src_ll_cache:
+            observations = k_calc_total._primal.src_ll_cache_observations
+            assert observations.cache_key_generated
+            cache_hit = observations.cache_loaded
+        else:
+            cache_hit = k_calc_total._primal.fe_ll_cache_observations.cache_hit
         qd.reset()
         return cache_hit
 
@@ -105,7 +113,8 @@ def test_cpu_range_for_block_offline_cache(tmp_path):
 def test_cpu_range_for_block_overflow(cpu_min_block_size):
     qd.init(arch=qd.cpu, cpu_max_num_threads=4, cpu_min_block_size=cpu_min_block_size)
     # Each nonempty test range has seven iterations. Reserve the final slot for invalid visits.
-    out = qd.field(qd.i32, shape=16)
+    INVALID_VISIT_INDEX = 15
+    out = qd.field(qd.i32, shape=INVALID_VISIT_INDEX + 1)
 
     @qd.kernel
     def k_dynamic_range(begin: qd.i32, end: qd.i32):
@@ -113,7 +122,7 @@ def test_cpu_range_for_block_overflow(cpu_min_block_size):
             if begin <= i < end:
                 out[i - begin] += 1
             else:
-                qd.atomic_or(out[15], 1)
+                qd.atomic_or(out[INVALID_VISIT_INDEX], 1)
 
     @qd.kernel
     def k_constant_range(begin: qd.template(), end: qd.template()):
@@ -121,12 +130,12 @@ def test_cpu_range_for_block_overflow(cpu_min_block_size):
             if begin <= i < end:
                 out[i - begin] += 1
             else:
-                qd.atomic_or(out[15], 1)
+                qd.atomic_or(out[INVALID_VISIT_INDEX], 1)
 
     max_i32 = (1 << 31) - 1
     min_i32 = -(1 << 31)
     for begin, end in [(0, 7), (1, 1), (max_i32 - 7, max_i32), (min_i32, min_i32 + 7), (max_i32, min_i32)]:
-        expected = np.zeros(16, dtype=np.int32)
+        expected = np.zeros(INVALID_VISIT_INDEX + 1, dtype=np.int32)
         expected[: max(0, end - begin)] = 1
         for kernel in (k_dynamic_range, k_constant_range):
             out.fill(0)
