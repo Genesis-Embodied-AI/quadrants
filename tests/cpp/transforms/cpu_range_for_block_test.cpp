@@ -50,7 +50,7 @@ TEST(CPURangeForBlock, CallsBoundaryHelper) {
     auto *inner = offloaded->body->statements.back()->as<RangeForStmt>();
     for (auto *bound : {inner->begin, inner->end}) {
       auto *call = bound->as<InternalFuncStmt>();
-      EXPECT_EQ(call->func_name, "cpu_range_for_block_boundary");
+      EXPECT_EQ(call->func_name, "get_block_start_index");
       EXPECT_FALSE(call->with_runtime_context);
       EXPECT_EQ(call->ret_type, PrimitiveType::i32);
       ASSERT_EQ(call->args.size(), 5);

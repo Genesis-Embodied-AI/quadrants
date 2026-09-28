@@ -1704,7 +1704,7 @@ void parallel_struct_for(RuntimeContext *context,
 #endif
 }
 
-i32 cpu_range_for_block_boundary(i32 begin, i32 end, i32 num_threads, i32 cpu_min_block_size, i32 boundary_index) {
+i32 get_block_start_index(i32 begin, i32 end, i32 num_threads, i32 cpu_min_block_size, i32 boundary_index) {
   return quadrants::lang::cpu_range_for_boundary(begin, end, num_threads, cpu_min_block_size, boundary_index);
 }
 
