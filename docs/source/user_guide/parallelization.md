@@ -44,7 +44,7 @@ Block 0 runs original iteration indices 0 through 999. Block 1 runs indices 1,00
 
 ### make_cpu_multithreading_loop=False
 
-Setting `make_cpu_multithreading_loop=False` in `qd.init(...)` selects an alternative CPU scheduling mode. The runtime groups original iterations into tasks. Inside each task, the runtime loops over those indices and calls the compiled loop body separately for each iteration. Parallel execution remains enabled.
+Setting `make_cpu_multithreading_loop=False` in `qd.init(...)` selects an alternative CPU scheduling mode. The difference is what each call into the compiled kernel executes. In the default mode, one call executes a compiled inner loop over a whole block of original iterations. With `False`, one call executes just one original iteration. The loop that makes those calls lives in the runtime.
 
 By default, this mode groups up to 32 original iterations into each task. With 200 iterations, the runtime's work is equivalent to this pseudocode. Here `submit_task` means assigning the indented work to an available worker. Each task retains its own bounds:
 
