@@ -27,6 +27,8 @@ CPU `range()` loops divide their iterations into chunks. A chunk is a consecutiv
 
 Two settings work together here: `cpu_max_num_threads` sets the maximum number of CPU threads used to run kernels, and `cpu_min_range_for_block` sets the minimum number of iterations per chunk. For full definitions, defaults, and constraints, see [All options](#all-options) below.
 
+Larger chunks can help the compiler use vector instructions, which process several values in one CPU instruction. Short chunks may leave too few iterations to use those instructions efficiently. For cheap loop bodies, that loss can outweigh the benefit of spreading work across more threads. A minimum of 1 is therefore not always fastest. Compare timings for your loop when choosing the minimum.
+
 For example, this configuration allows up to 12 threads and sets the minimum chunk size to 1:
 
 ```python
