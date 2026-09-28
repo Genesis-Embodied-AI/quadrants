@@ -305,11 +305,9 @@ class CheckpointTransformer:
             f"must stay in lockstep so the GraphManager can index yield_on by cp_id"
         )
         ctx._in_checkpoint = True
-        ctx.current_checkpoint_id = py_cp_id
         try:
             build_stmts(ctx, node.body)
         finally:
-            ctx.current_checkpoint_id = -1
             ctx._in_checkpoint = False
             ctx.ast_builder.end_checkpoint()
         return None

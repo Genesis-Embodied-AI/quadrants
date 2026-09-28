@@ -968,6 +968,65 @@ def test_checkpoint_containing_only_graph_do_while_owns_child_node():
 
 
 @test_utils.test(arch=qd.cuda)
+def test_checkpoint_scope_reaches_graph_do_while_in_inlined_func():
+    """An inlined qd.func has a fresh Python transform context but must retain its caller's checkpoint scope."""
+    if not _is_checkpoint_if_path_native():
+        pytest.skip("nested CUDA conditional graph nodes require SM 9.0+")
+    N = 8
+
+    @qd.func
+    def run_inner(x: qd.types.ndarray(qd.i32, ndim=1), inner: qd.types.ndarray(qd.i32, ndim=0)):
+        while qd.graph.do_while(inner):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+            for _ in range(1):
+                inner[()] = inner[()] - 1
+
+    @qd.kernel(graph=True, checkpoints=True)
+    def k(
+        x: qd.types.ndarray(qd.i32, ndim=1),
+        inner: qd.types.ndarray(qd.i32, ndim=0),
+        marker: qd.types.ndarray(qd.i32, ndim=0),
+        flag: qd.types.ndarray(qd.i32, ndim=0),
+    ):
+        with qd.checkpoint(0, yield_on=flag):
+            if qd.static(True):
+                run_inner(x, inner)
+        with qd.checkpoint(1, yield_on=flag):
+            for _ in range(1):
+                marker[()] = marker[()] + 1
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    inner = qd.ndarray(qd.i32, shape=())
+    marker = qd.ndarray(qd.i32, shape=())
+    flag = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    inner.from_numpy(np.array(3, dtype=np.int32))
+    marker.from_numpy(np.array(0, dtype=np.int32))
+    flag.from_numpy(np.array(0, dtype=np.int32))
+
+    status = k(x, inner, marker, flag)
+    assert not status.yielded
+    assert impl.get_runtime().prog.get_graph_cache_used_on_last_call()
+    assert len(k._primal.graph_do_while_levels) == 1
+    assert k._primal.graph_do_while_levels[0].checkpoint_id == 0
+    assert inner.to_numpy() == 0
+    assert marker.to_numpy() == 1
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 3, dtype=np.int32))
+
+    # Resume past the checkpoint with a stale true condition. If the inlined function loses checkpoint ownership, the
+    # WHILE node executes, resets resume_point after its first skipped iteration, and reruns checkpoint 0 incorrectly.
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    inner.from_numpy(np.array(9, dtype=np.int32))
+    marker.from_numpy(np.array(0, dtype=np.int32))
+    status = k.resume(x, inner, marker, flag, from_checkpoint=1)
+    assert not status.yielded
+    assert inner.to_numpy() == 9
+    assert marker.to_numpy() == 1
+    np.testing.assert_array_equal(x.to_numpy(), np.zeros(N, dtype=np.int32))
+
+
+@test_utils.test(arch=qd.cuda)
 def test_checkpoint_inside_graph_do_while_can_contain_child_loop():
     """The IPC shape is outer WHILE -> checkpoint IF -> inner WHILE, re-armed on every outer iteration."""
     if not _is_checkpoint_if_path_native():

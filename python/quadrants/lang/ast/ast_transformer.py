@@ -1526,7 +1526,7 @@ class ASTTransformer(Builder):
                     cond_arg_name=cond_label,
                     parent_id=parent_id,
                     cond_cpp_arg_id=cond_cpp_arg_id,
-                    checkpoint_id=ctx.current_checkpoint_id,
+                    checkpoint_id=ctx.ast_builder.current_checkpoint_id(),
                 )
             )
             if level_id == 0:
