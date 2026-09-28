@@ -48,7 +48,7 @@ def test_cpu_range_for_block_bounds(cpu_min_block_size, threads):
 @test_utils.test(arch=qd.cpu, cpu_max_num_threads=4, cpu_min_block_size=1)
 def test_cpu_range_for_block_serial_execution(serialize):
     @qd.kernel
-    def recurrence() -> qd.i32:
+    def k_serial() -> qd.i32:
         result = 0
         if qd.static(serialize):
             qd.loop_config(serialize=True)
@@ -61,7 +61,7 @@ def test_cpu_range_for_block_serial_execution(serialize):
     expected = 0
     for i in range(200):
         expected = (expected * 3 + i) % 10007
-    assert recurrence() == expected
+    assert k_serial() == expected
 
 
 @pytest.mark.parametrize("cpu_min_block_size", [0, -1, -512])
