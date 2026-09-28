@@ -6,11 +6,11 @@ import quadrants as qd
 from tests import test_utils
 
 
-@pytest.mark.parametrize("minimum", [1, 16, 512, 2048])
+@pytest.mark.parametrize("cpu_min_block_size", [1, 16, 512, 2048])
 @pytest.mark.parametrize("threads", [1, 4])
 @test_utils.test(arch=qd.cpu)
-def test_cpu_range_for_block_bounds(minimum, threads):
-    qd.init(arch=qd.cpu, cpu_max_num_threads=threads, cpu_min_block_size=minimum)
+def test_cpu_range_for_block_bounds(cpu_min_block_size, threads):
+    qd.init(arch=qd.cpu, cpu_max_num_threads=threads, cpu_min_block_size=cpu_min_block_size)
     out = qd.field(qd.i32, shape=1100)
 
     @qd.kernel
@@ -64,11 +64,11 @@ def test_cpu_range_for_block_serial_execution(serialize):
     assert recurrence() == expected
 
 
-@pytest.mark.parametrize("minimum", [0, -1, -512])
+@pytest.mark.parametrize("cpu_min_block_size", [0, -1, -512])
 @test_utils.test(arch=qd.cpu)
-def test_cpu_range_for_block_invalid(minimum):
-    with pytest.raises(RuntimeError, match=rf"cpu_min_block_size must be >= 1, but got {minimum}\."):
-        qd.init(arch=qd.cpu, cpu_min_block_size=minimum)
+def test_cpu_range_for_block_invalid(cpu_min_block_size):
+    with pytest.raises(RuntimeError, match=rf"cpu_min_block_size must be >= 1, but got {cpu_min_block_size}\."):
+        qd.init(arch=qd.cpu, cpu_min_block_size=cpu_min_block_size)
 
 
 @test_utils.test(arch=qd.cpu)
@@ -80,11 +80,11 @@ def test_cpu_range_for_block_offline_cache(tmp_path):
             result += i
         return result
 
-    def run(minimum):
+    def run(cpu_min_block_size):
         qd.init(
             arch=qd.cpu,
             cpu_max_num_threads=4,
-            cpu_min_block_size=minimum,
+            cpu_min_block_size=cpu_min_block_size,
             offline_cache=True,
             offline_cache_file_path=str(tmp_path),
             offline_cache_cleaning_policy="never",
@@ -101,10 +101,10 @@ def test_cpu_range_for_block_offline_cache(tmp_path):
     assert run(1) == small_files
 
 
-@pytest.mark.parametrize("minimum", [512, 1 << 30, (1 << 31) - 1])
+@pytest.mark.parametrize("cpu_min_block_size", [512, 1 << 30, (1 << 31) - 1])
 @test_utils.test(arch=qd.cpu)
-def test_cpu_range_for_block_overflow(minimum):
-    qd.init(arch=qd.cpu, cpu_max_num_threads=4, cpu_min_block_size=minimum, debug=True)
+def test_cpu_range_for_block_overflow(cpu_min_block_size):
+    qd.init(arch=qd.cpu, cpu_max_num_threads=4, cpu_min_block_size=cpu_min_block_size, debug=True)
     out = qd.field(qd.i32, shape=16)
 
     @qd.kernel

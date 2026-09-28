@@ -11,10 +11,10 @@ namespace quadrants::lang {
 
 // Inspect the generated chunk width, rather than relying on timing or on how many workers the OS wakes up.
 TEST(CPURangeForBlock, ChunkWidth) {
-  for (int minimum : {1, 16, 512, 2048, 1 << 30, std::numeric_limits<int32>::max()}) {
+  for (int cpu_min_block_size : {1, 16, 512, 2048, 1 << 30, std::numeric_limits<int32>::max()}) {
     CompileConfig config;
     config.cpu_max_num_threads = 12;
-    config.cpu_min_block_size = minimum;
+    config.cpu_min_block_size = cpu_min_block_size;
     Block root;
     auto *offloaded =
         root.insert(std::make_unique<OffloadedStmt>(OffloadedStmt::TaskType::range_for, config.arch, nullptr))
@@ -40,7 +40,7 @@ TEST(CPURangeForBlock, ChunkWidth) {
     ASSERT_EQ(end_add->op_type, BinaryOpType::add);
     auto *width = end_add->rhs->as<ConstStmt>();
     EXPECT_EQ(width->ret_type, PrimitiveType::i64);
-    EXPECT_EQ(width->val.val_int(), std::max(17, minimum));
+    EXPECT_EQ(width->val.val_int(), std::max(17, cpu_min_block_size));
     EXPECT_EQ(offloaded->end_value, 12);
     EXPECT_EQ(offloaded->block_dim, 1);
   }
