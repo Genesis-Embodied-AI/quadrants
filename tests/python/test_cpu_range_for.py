@@ -109,7 +109,7 @@ def test_cpu_range_for_block_overflow(cpu_min_block_size):
             np.testing.assert_array_equal(out.to_numpy(), expected)
 
 
-@pytest.mark.parametrize("cpu_min_block_size", [1, 512])
+@pytest.mark.parametrize("cpu_min_block_size", [1, 16, 64, 512])
 def test_cpu_range_for_llvm_dump(cpu_min_block_size, tmp_path: Path, monkeypatch):
     monkeypatch.setenv("QD_DUMP_IR", "1")
     qd.init(
@@ -152,7 +152,7 @@ def test_cpu_range_for_llvm_dump(cpu_min_block_size, tmp_path: Path, monkeypatch
         task_count = (end - begin + block_dim - 1) // block_dim
         assert task_count == 4
 
-        # Both minimum settings create four tasks. To prove the setting reaches
+        # All minimum settings create four tasks. To prove the setting reaches
         # generated code, also inspect the two block-boundary helper calls.
         boundary_calls = re.findall(r"\bcall i32 @get_cpu_block_start_index\(([^\n)]*)\)", llvm_ir)
         assert len(boundary_calls) == 2, boundary_calls
