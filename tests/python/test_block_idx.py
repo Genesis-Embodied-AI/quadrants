@@ -7,8 +7,7 @@ from tests import test_utils
 
 
 @pytest.mark.parametrize("block_dim", [32, 64])
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan, qd.metal],
-                 make_cpu_multithreading_loop=False, cpu_max_num_threads=4)
+@test_utils.test(make_cpu_multithreading_loop=False, cpu_max_num_threads=4)
 def test_block_idx_portable(block_dim):
     block_indices = qd.ndarray(dtype=qd.i32, shape=(200, 2))
 
@@ -28,7 +27,7 @@ def test_block_idx_portable(block_dim):
     np.testing.assert_array_equal(block_indices.to_numpy(), expected)
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan, qd.metal])
+@test_utils.test()
 def test_block_idx_serial():
     @qd.kernel
     def k_block_idx() -> qd.i32:
