@@ -51,41 +51,10 @@ TEST(CPURangeForBlock, FullSignedRange) {
 
 namespace {
 
-// Owns the transformed compiler loop and exposes only the scheduling properties used by the test.
+// Keeps the compiler statements alive while the test inspects the transformed loop.
 struct TransformedCPURange {
   std::unique_ptr<Block> root;
   OffloadedStmt *offloaded;
-
-  int task_count() const {
-    QD_ASSERT(offloaded->const_begin && offloaded->const_end);
-    QD_ASSERT(offloaded->block_dim > 0);
-    const int iterations = offloaded->end_value - offloaded->begin_value;
-    return (iterations + offloaded->block_dim - 1) / offloaded->block_dim;
-  }
-
-  bool inner_loop_is_serial() const {
-    return inner_loop()->strictly_serialized;
-  }
-
-  int64 minimum_block_size() const {
-    auto *inner = inner_loop();
-    const int64 start_minimum = boundary_minimum(inner->begin);
-    EXPECT_EQ(start_minimum, boundary_minimum(inner->end));
-    return start_minimum;
-  }
-
- private:
-  RangeForStmt *inner_loop() const {
-    QD_ASSERT(!offloaded->body->statements.empty());
-    return offloaded->body->statements.back()->as<RangeForStmt>();
-  }
-
-  static int64 boundary_minimum(Stmt *bound) {
-    auto *call = bound->as<InternalFuncStmt>();
-    QD_ASSERT(call->func_name == "get_cpu_block_start_index");
-    QD_ASSERT(call->args.size() == 5);
-    return call->args[3]->as<ConstStmt>()->val.val_int();
-  }
 };
 
 TransformedCPURange transform_cpu_range(int begin, int end, int num_threads, int cpu_min_block_size) {
@@ -112,9 +81,30 @@ TEST(CPURangeForBlock, UsesConfiguredMinimum) {
     SCOPED_TRACE(cpu_min_block_size);
     auto loop = transform_cpu_range(/*begin=*/0, /*end=*/200, /*num_threads=*/4, cpu_min_block_size);
 
-    EXPECT_EQ(loop.task_count(), 4);
-    EXPECT_TRUE(loop.inner_loop_is_serial());
-    EXPECT_EQ(loop.minimum_block_size(), cpu_min_block_size);
+    // Check the number of runtime tasks described by the transformed outer loop.
+    auto *outer = loop.offloaded;
+    ASSERT_TRUE(outer->const_begin && outer->const_end);
+    ASSERT_GT(outer->block_dim, 0);
+    const int iterations = outer->end_value - outer->begin_value;
+    const int task_count = (iterations + outer->block_dim - 1) / outer->block_dim;
+    EXPECT_EQ(task_count, 4);
+
+    // Each task runs a serial inner loop over its original iterations.
+    ASSERT_FALSE(outer->body->statements.empty());
+    auto *inner = outer->body->statements.back()->cast<RangeForStmt>();
+    ASSERT_NE(inner, nullptr);
+    EXPECT_TRUE(inner->strictly_serialized);
+
+    // Both boundary calculations must receive the configured minimum.
+    for (auto *bound : {inner->begin, inner->end}) {
+      auto *call = bound->cast<InternalFuncStmt>();
+      ASSERT_NE(call, nullptr);
+      EXPECT_EQ(call->func_name, "get_cpu_block_start_index");
+      ASSERT_EQ(call->args.size(), 5);
+      auto *minimum = call->args[3]->cast<ConstStmt>();
+      ASSERT_NE(minimum, nullptr);
+      EXPECT_EQ(minimum->val.val_int(), cpu_min_block_size);
+    }
   }
 }
 
