@@ -188,5 +188,5 @@ def test_cpu_block_id_rejects_gpu():
     def k_block_id() -> qd.i32:
         return qd.cpu_block_id()
 
-    with pytest.raises(qd.QuadrantsCompilationError, match=r"qd.cpu_block_id\(\) is only supported on CPU"):
+    with pytest.raises(ValueError, match=r"qd.cpu_block_id\(\) is only supported on CPU"):
         k_block_id()
