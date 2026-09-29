@@ -774,16 +774,15 @@ def graph_do_while(condition) -> bool:
 
 
 @util.quadrants_scope
-def cpu_block_id():
-    """Return the current CPU block's index, or -1 outside a scheduled block.
+def block_idx():
+    """Return the current CPU scheduling block or GPU thread-block index.
 
-    Block indices start at zero for each parallel loop execution. Each block runs
-    as one task on a CPU worker. This works with both CPU scheduling modes.
-    Nested serial loops retain the enclosing block's index.
+    On CPU, indices start at zero for each parallel loop execution, and code
+    outside a scheduled block returns -1. Both CPU scheduling modes are supported.
+    On GPUs, this returns the hardware block index, which may process multiple
+    groups of iterations. Nested serial loops retain their enclosing block index.
     """
-    if impl.current_cfg().arch not in (_qd_core.x64, _qd_core.arm64):
-        raise ValueError("qd.cpu_block_id() is only supported on CPU")
-    return impl.call_internal("cpu_block_id")
+    return impl.call_internal("global_block_idx")
 
 
 def global_thread_idx():
@@ -929,7 +928,7 @@ __all__ = [
     "graph_parallel",
     "loop_config",
     "global_thread_idx",
-    "cpu_block_id",
+    "block_idx",
     "assume_in_range",
     "block_local",
     "cache_read_only",

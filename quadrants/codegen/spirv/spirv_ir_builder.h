@@ -390,6 +390,9 @@ class IRBuilder {
       // `qd.simt.block.thread_idx()` on Vulkan / Metal.
       ib_.add(gl_local_invocation_id_);
     }
+    if (gl_work_group_id_.id != 0) {
+      ib_.add(gl_work_group_id_);
+    }
     if (gl_num_work_groups_.id != 0) {
       ib_.add(gl_num_work_groups_);
     }
@@ -413,6 +416,7 @@ class IRBuilder {
   void set_work_group_size(const std::array<int, 3> group_size);
   Value get_work_group_size(uint32_t dim_index);
   Value get_num_work_groups(uint32_t dim_index);
+  Value get_work_group_id(uint32_t dim_index);
   Value get_local_invocation_id(uint32_t dim_index);
   Value get_global_invocation_id(uint32_t dim_index);
   Value get_subgroup_invocation_id();
@@ -595,6 +599,7 @@ class IRBuilder {
   Value gl_global_invocation_id_;
   Value gl_local_invocation_id_;
   Value gl_num_work_groups_;
+  Value gl_work_group_id_;
   Value gl_work_group_size_;
   Value subgroup_local_invocation_id_;
 

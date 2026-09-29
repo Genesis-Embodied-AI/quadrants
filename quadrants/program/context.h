@@ -44,7 +44,7 @@ struct RuntimeContext {
   int32_t *checkpoint_yield_signal_ptr{nullptr};
 
   // Append new fields to preserve the indices used by LLVM code generation.
-  int32_t cpu_block_id{-1};
+  int32_t cpu_block_idx{-1};
 };
 
 #if defined(QD_RUNTIME_HOST)

@@ -159,9 +159,9 @@ The setting `cpu_min_block_size` has no effect in this mode.
 
 For either mode, compare repeated kernel calls after compilation has completed and check that the results agree. The separate setting `num_compile_threads` controls threads used to compile kernels; it does not set the number of workers that execute the loop.
 
-### Inspecting CPU blocks
+### Inspecting block indices
 
-`qd.cpu_block_id()` returns the index of the CPU block executing the current iteration. Each block runs as one runtime task. Indices start at zero for each parallel loop execution. They identify blocks, not worker threads or execution order.
+`qd.block_idx()` works on CPU, CUDA, AMDGPU, Vulkan, and Metal. On CPU, it returns the index of the block executing the current iteration. Each block runs as one runtime task. Indices start at zero for each parallel loop execution. They identify blocks, not worker threads or execution order.
 
 This function works with both values of `make_cpu_multithreading_loop`. With `True`, it identifies the compiler-generated block of original iterations. With `False`, it identifies the group whose size is controlled by `block_dim`.
 
@@ -169,12 +169,16 @@ This function works with both values of `make_cpu_multithreading_loop`. With `Tr
 @qd.kernel
 def k_record_blocks(out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
     for i in range(200):
-        out[i] = qd.cpu_block_id()
+        out[i] = qd.block_idx()
 ```
 
 With four workers, `make_cpu_multithreading_loop=True`, and `cpu_min_block_size=1`, this records 50 occurrences of each index from 0 through 3. With `make_cpu_multithreading_loop=False` and the default block size of 32, it records indices 0 through 6. The last block contains eight iterations.
 
-Nested serial loops retain the enclosing block's index. Code outside a scheduled block, including a top-level explicitly serialized loop, receives `-1`. The function is only available inside CPU kernels and their called functions; GPU usage raises a compilation error. Empty blocks execute no original iterations, so the example does not record them.
+Nested serial loops retain the enclosing block's index. On CPU, code outside a scheduled block, including a top-level explicitly serialized loop, receives `-1`. The function is available inside kernels and their called functions. Empty blocks execute no original iterations, so the example does not record them.
+
+On GPUs, `qd.block_idx()` returns the hardware thread-block index. Vulkan and Metal call these blocks workgroups. A hardware block contains multiple GPU threads and can process several groups of original iterations. Its index stays the same when it processes another group. Serial GPU code runs in block zero.
+
+The same kernel can call `qd.block_idx()` on every supported backend, but block sizes and iteration assignments may differ. The returned index is not a globally unique identifier.
 
 ### Requesting serial execution
 
