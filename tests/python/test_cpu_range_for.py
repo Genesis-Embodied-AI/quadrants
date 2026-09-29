@@ -1,6 +1,3 @@
-import re
-from pathlib import Path
-
 import numpy as np
 import pytest
 
@@ -109,67 +106,79 @@ def test_cpu_range_for_block_overflow(cpu_min_block_size):
             np.testing.assert_array_equal(out.to_numpy(), expected)
 
 
-@pytest.mark.parametrize("cpu_min_block_size", [1, 16, 64, 512])
-def test_cpu_range_for_llvm_dump(cpu_min_block_size, tmp_path: Path, monkeypatch):
-    monkeypatch.setenv("QD_DUMP_IR", "1")
-    qd.init(
-        arch=qd.cpu,
-        cpu_max_num_threads=4,
-        cpu_min_block_size=cpu_min_block_size,
-        make_cpu_multithreading_loop=True,
-        offline_cache=False,
-        debug_dump_path=str(tmp_path),
-    )
+@pytest.mark.parametrize("cpu_min_block_size, expected_sizes", [
+    (1, [50, 50, 50, 50]),
+    (16, [50, 50, 50, 50]),
+    (64, [64, 64, 64, 8]),
+    (512, [200, 0, 0, 0]),
+])
+@test_utils.test(arch=qd.cpu)
+def test_cpu_range_for_block_sizes(cpu_min_block_size, expected_sizes):
+    qd.init(arch=qd.cpu, cpu_max_num_threads=4, cpu_min_block_size=cpu_min_block_size,
+            make_cpu_multithreading_loop=True)
+    block_ids = qd.ndarray(dtype=qd.i32, shape=200)
 
-    try:
-        @qd.kernel(fastcache=False)
-        def k_record_values(out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
-            for i in range(200):
-                out[i] = i
+    @qd.kernel
+    def k_record_blocks(out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        for i in range(200):
+            out[i] = qd.cpu_block_id()
 
-        out = qd.ndarray(dtype=qd.i32, shape=200)
-        k_record_values(out)
-        qd.sync()
+    k_record_blocks(block_ids)
+    # Check which block executed every iteration, including exact block sizes.
+    expected = np.repeat(np.arange(4, dtype=np.int32), expected_sizes)
+    np.testing.assert_array_equal(block_ids.to_numpy(), expected)
 
-        # These files contain LLVM IR before CPU optimization. Other .ll files
-        # contain Quadrants IR. Restrict the search to this kernel's LLVM dumps.
-        llvm_files = list(tmp_path.glob("k_record_values*_llvm.ll"))
-        assert llvm_files, f"No LLVM dump for k_record_values in {tmp_path}"
-        llvm_ir = "\n".join(path.read_text() for path in llvm_files)
 
-        # Match call instructions, not declarations of the runtime function.
-        dispatch_calls = re.findall(r"\bcall void @cpu_parallel_range_for\(([^\n)]*)\)", llvm_ir)
-        assert len(dispatch_calls) == 1, dispatch_calls
+@pytest.mark.parametrize("block_dim", [1, 16, 32, 64, 512])
+@test_utils.test(arch=qd.cpu, cpu_max_num_threads=4, make_cpu_multithreading_loop=False)
+def test_cpu_range_for_fixed_block_sizes(block_dim):
+    block_ids = qd.ndarray(dtype=qd.i32, shape=200)
 
-        # The five i32 arguments are workers, begin, end, step, and block_dim.
-        # Remaining arguments are context/function pointers and an i64 size.
-        dispatch_values = [int(value) for value in re.findall(r"\bi32\s+(-?\d+)\b", dispatch_calls[0])]
-        assert len(dispatch_values) == 5, dispatch_calls[0]
-        workers, begin, end, step, block_dim = dispatch_values
+    @qd.kernel
+    def k_record_blocks(out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        qd.loop_config(block_dim=block_dim)
+        for i in range(200):
+            out[i] = qd.cpu_block_id()
 
-        assert workers == 4
-        assert (begin, end, step, block_dim) == (0, 4, 1, 1)
-        task_count = (end - begin + block_dim - 1) // block_dim
-        assert task_count == 4
+    k_record_blocks(block_ids)
+    np.testing.assert_array_equal(block_ids.to_numpy(), np.arange(200, dtype=np.int32) // block_dim)
 
-        # All minimum settings create four tasks. To prove the setting reaches
-        # generated code, also inspect the two block-boundary helper calls.
-        boundary_calls = re.findall(r"\bcall i32 @get_cpu_block_start_index\(([^\n)]*)\)", llvm_ir)
-        assert len(boundary_calls) == 2, boundary_calls
 
-        for call in boundary_calls:
-            arguments = [argument.strip() for argument in call.split(",")]
-            assert len(arguments) == 5, call
+@pytest.mark.parametrize("make_cpu_multithreading_loop", [False, True])
+@test_utils.test(arch=qd.cpu)
+def test_cpu_block_id_serial_and_nested(make_cpu_multithreading_loop):
+    qd.init(arch=qd.cpu, cpu_max_num_threads=4, cpu_min_block_size=1,
+            make_cpu_multithreading_loop=make_cpu_multithreading_loop)
+    block_ids = qd.ndarray(dtype=qd.i32, shape=(200, 3))
 
-            # Original range, worker count, and configured minimum.
-            # The final argument is a computed block index, not a constant.
-            assert arguments[:4] == [
-                "i32 0",
-                "i32 200",
-                "i32 4",
-                f"i32 {cpu_min_block_size}",
-            ], call
+    @qd.kernel
+    def k_record_blocks(out: qd.types.ndarray(dtype=qd.i32, ndim=2)) -> qd.i32:
+        for i in range(200):
+            for j in range(3):
+                out[i, j] = qd.cpu_block_id()
+        return qd.cpu_block_id()
 
-        np.testing.assert_array_equal(out.to_numpy(), np.arange(200, dtype=np.int32))
-    finally:
-        qd.reset()
+    assert k_record_blocks(block_ids) == -1
+    width = 50 if make_cpu_multithreading_loop else 32
+    expected = np.repeat((np.arange(200, dtype=np.int32) // width)[:, None], 3, axis=1)
+    np.testing.assert_array_equal(block_ids.to_numpy(), expected)
+
+    @qd.kernel
+    def k_serial() -> qd.i32:
+        result = 0
+        qd.loop_config(serialize=True)
+        for i in range(10):
+            result += qd.cpu_block_id()
+        return result
+
+    assert k_serial() == -10
+
+
+@test_utils.test(arch=[qd.cuda, qd.amdgpu, qd.vulkan, qd.metal])
+def test_cpu_block_id_rejects_gpu():
+    @qd.kernel
+    def k_block_id() -> qd.i32:
+        return qd.cpu_block_id()
+
+    with pytest.raises(qd.QuadrantsCompilationError, match=r"qd.cpu_block_id\(\) is only supported on CPU"):
+        k_block_id()
