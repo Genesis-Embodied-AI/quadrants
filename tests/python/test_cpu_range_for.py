@@ -166,7 +166,7 @@ def test_cpu_block_idx_serial_and_nested(make_cpu_multithreading_loop):
                 out[i, j] = qd.block_idx()
         return qd.block_idx()
 
-    assert k_record_blocks(block_indices) == -1
+    assert k_record_blocks(block_indices) == 0
     width = 50 if make_cpu_multithreading_loop else 32
     expected = np.repeat((np.arange(200, dtype=np.int32) // width)[:, None], 3, axis=1)
     np.testing.assert_array_equal(block_indices.to_numpy(), expected)
@@ -179,4 +179,4 @@ def test_cpu_block_idx_serial_and_nested(make_cpu_multithreading_loop):
             result += qd.block_idx()
         return result
 
-    assert k_serial() == -10
+    assert k_serial() == 0

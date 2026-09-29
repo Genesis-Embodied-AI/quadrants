@@ -174,7 +174,7 @@ def k_record_blocks(out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
 
 With four workers, `make_cpu_multithreading_loop=True`, and `cpu_min_block_size=1`, this records 50 occurrences of each index from 0 through 3. With `make_cpu_multithreading_loop=False` and the default block size of 32, it records indices 0 through 6. The last block contains eight iterations.
 
-Nested serial loops retain the enclosing block's index. On CPU, code outside a scheduled block, including a top-level explicitly serialized loop, receives `-1`. The function is available inside kernels and their called functions. Empty blocks execute no original iterations, so the example does not record them.
+Nested serial loops retain the enclosing block's index. On CPU, code outside a scheduled block, including a top-level explicitly serialized loop, returns `0`. The function is available inside kernels and their called functions. Empty blocks execute no original iterations, so the example does not record them.
 
 On GPUs, `qd.block_idx()` returns the hardware thread-block index. Vulkan and Metal call these blocks workgroups. A hardware block contains multiple GPU threads and can process several groups of original iterations. Its index stays the same when it processes another group. Serial GPU code runs in block zero.
 

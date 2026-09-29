@@ -778,7 +778,7 @@ def block_idx():
     """Return the current CPU scheduling block or GPU thread-block index.
 
     On CPU, indices start at zero for each parallel loop execution, and code
-    outside a scheduled block returns -1. Both CPU scheduling modes are supported.
+    outside a scheduled block returns 0. Both CPU scheduling modes are supported.
     On GPUs, this returns the hardware block index, which may process multiple
     groups of iterations. Nested serial loops retain their enclosing block index.
     """

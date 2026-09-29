@@ -33,9 +33,7 @@ def test_block_idx_serial():
     def k_block_idx() -> qd.i32:
         return qd.block_idx()
 
-    # CPU serial code has no scheduled block; GPU serial code runs in block zero.
-    expected = -1 if qd.lang.impl.current_cfg().arch == qd.cpu else 0
-    assert k_block_idx() == expected
+    assert k_block_idx() == 0
 
 
 @test_utils.test(arch=[qd.cuda, qd.amdgpu], saturating_grid_dim=2)
