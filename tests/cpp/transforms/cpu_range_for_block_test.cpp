@@ -1,6 +1,7 @@
 #include "gtest/gtest.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <limits>
 
 #include "quadrants/runtime/llvm/runtime_module/cpu_range_for.h"
@@ -24,7 +25,7 @@ TEST(CPURangeForBlock, BlockBoundaries) {
 }
 
 TEST(CPURangeForBlock, BlockBoundaryEdgeCases) {
-  for (int cpu_min_block_size : {1, 16, 512, 2048, 1 << 30, std::numeric_limits<int32>::max()}) {
+  for (int cpu_min_block_size : {1, 16, 512, 2048, 1 << 30, std::numeric_limits<int32_t>::max()}) {
     // 200 iterations on 12 workers need blocks of 17, unless the configured minimum is larger.
     const int64_t expected_width = std::max(17, cpu_min_block_size);
     for (int boundary_index = 0; boundary_index <= 12; ++boundary_index) {
@@ -35,9 +36,9 @@ TEST(CPURangeForBlock, BlockBoundaryEdgeCases) {
 }
 
 TEST(CPURangeForBlock, FullSignedRange) {
-  const int32 begin = std::numeric_limits<int32>::min();
-  const int32 end = std::numeric_limits<int32>::max();
-  const int32 expected[] = {begin, -(1 << 30), 0, 1 << 30, end};
+  const int32_t begin = std::numeric_limits<int32_t>::min();
+  const int32_t end = std::numeric_limits<int32_t>::max();
+  const int32_t expected[] = {begin, -(1 << 30), 0, 1 << 30, end};
   for (int boundary_index = 0; boundary_index <= 4; ++boundary_index) {
     EXPECT_EQ(get_cpu_block_start_index(begin, end, 4, 1, boundary_index), expected[boundary_index]);
     EXPECT_EQ(get_cpu_block_start_index(end, begin, 4, 1, boundary_index), begin);
