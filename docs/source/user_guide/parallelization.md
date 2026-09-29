@@ -44,19 +44,26 @@ Block 0 runs original iteration indices 0 through 999. Block 1 runs indices 1,00
 
 ### make_cpu_multithreading_loop=False
 
-Setting `make_cpu_multithreading_loop=False` in `qd.init(...)` changes how iterations are divided among tasks. The default mode creates one block per configured worker, with one task per block. With `False`, Quadrants groups the iterations into fixed-size groups, 32 by default. The number of tasks is independent of the number of workers.
+Setting `make_cpu_multithreading_loop=False` in `qd.init(...)` changes how iterations are divided among tasks. The default mode creates one task per configured worker, with all loop iterations partitioned across these tasks. With `False`, Quadrants groups the iterations into fixed-size groups, 32 by default. The number of tasks is independent of the number of workers, and proportional to the number of loop iterations.
 
-With `True`, the number of tasks equals the configured worker count. For long loops, this groups many iterations into each task and keeps the number of scheduling operations small.
+### Comparison of make_cpu_multithreading_loop False vs True
 
-This mode also lets the compiler optimize consecutive iterations together. It can use vector instructions, which process several values in one CPU instruction, and avoid repeating calculations that stay the same across iterations. These opportunities are especially useful for cheap, regular work, such as adding two arrays. The benefit depends on the loop body.
+With `True` - the default - the number of tasks equals the configured worker count. For long loops, this groups many iterations into each task and keeps the number of scheduling operations small. This is efficient for very large numbers of iterations, and where the bodies of each loop take comparable compute time. For small loop bodies, an additional benefit is that the compiler can unroll the body, reducing loop control overhead.
 
 The tradeoff is that each task is indivisible once it starts. If one task takes much longer than the others, its worker must finish that task's remaining iterations while the other workers may be idle.
 
-With `False`, the task size stays fixed and the task count grows with the iteration count. When there are more tasks than workers, a worker that finishes one task can take another. This lets workers share an expensive region of the loop when that region spans several tasks. More tasks also require more scheduling operations.
+With `False`, the task size stays fixed - same number of iterations per task - and the task count grows with the iteration count. When there are more tasks than workers, a worker that finishes one task can take another. This lets workers share an expensive region of the loop when that region spans several tasks.
 
-Use the default mode when iterations have similar costs and the blocks provide enough parallel work, especially for cheap loops that benefit from vector instructions and low scheduling overhead. Try `False` when iteration costs vary substantially. Its smaller tasks can improve work distribution, but they add scheduling operations and do not provide the same compiled inner loops for optimization. Compare execution times for your loop before choosing.
+The trade-off is that for large numbers of loop iterations, by default many tasks will be created, which will require more scheduling operations, introducing overhead.
+
+How to choose?
+- with large numbers of similar size iteration bodies => use `True`
+- with small numbers of unevenly sized iteration bodies => use `False`
+- other scenarios => empirical question
 
 Select the mode with `qd.init(arch=qd.cpu, make_cpu_multithreading_loop=True)` or `qd.init(arch=qd.cpu, make_cpu_multithreading_loop=False)`. Omitting the argument selects `True`.
+
+======== FIXME: the doc under this point.
 
 For example, with four workers and 1,000 iterations:
 
