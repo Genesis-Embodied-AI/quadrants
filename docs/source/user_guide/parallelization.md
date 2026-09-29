@@ -57,8 +57,8 @@ With `False`, the task size stays fixed - same number of iterations per task - a
 The trade-off is that for large numbers of loop iterations, by default many tasks will be created, which will require more scheduling operations, introducing overhead.
 
 How to choose?
-- with large numbers of similar size iteration bodies => use `True`
-- with small numbers of unevenly sized iteration bodies => use `False`
+- with large numbers of similar size small iteration bodies => use `True`
+- with small numbers of unevenly sized large iteration bodies => use `False`
 - other scenarios => empirical question
 
 Select the mode with `qd.init(arch=qd.cpu, make_cpu_multithreading_loop=True)` or `qd.init(arch=qd.cpu, make_cpu_multithreading_loop=False)`. Omitting the argument selects `True`.
