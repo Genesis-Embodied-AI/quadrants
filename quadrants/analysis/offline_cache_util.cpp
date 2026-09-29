@@ -54,6 +54,7 @@ static std::vector<std::uint8_t> get_offline_cache_key_of_compile_config(const C
   serializer(config.default_ip.to_string());
   if (arch_is_cpu(config.arch)) {
     serializer(config.default_cpu_block_dim);
+    serializer(config.make_cpu_multithreading_loop);
     serializer(config.cpu_min_block_size);
     serializer(config.cpu_max_num_threads);
   } else if (arch_is_gpu(config.arch)) {
