@@ -106,16 +106,20 @@ def test_cpu_range_for_block_overflow(cpu_min_block_size):
             np.testing.assert_array_equal(out.to_numpy(), expected)
 
 
-@pytest.mark.parametrize("cpu_min_block_size, expected_sizes", [
-    (1, [50, 50, 50, 50]),
-    (16, [50, 50, 50, 50]),
-    (64, [64, 64, 64, 8]),
-    (512, [200, 0, 0, 0]),
-])
+@pytest.mark.parametrize(
+    "cpu_min_block_size, expected_sizes",
+    [
+        (1, [50, 50, 50, 50]),
+        (16, [50, 50, 50, 50]),
+        (64, [64, 64, 64, 8]),
+        (512, [200, 0, 0, 0]),
+    ],
+)
 @test_utils.test(arch=qd.cpu)
 def test_cpu_range_for_block_sizes(cpu_min_block_size, expected_sizes):
-    qd.init(arch=qd.cpu, cpu_max_num_threads=4, cpu_min_block_size=cpu_min_block_size,
-            make_cpu_multithreading_loop=True)
+    qd.init(
+        arch=qd.cpu, cpu_max_num_threads=4, cpu_min_block_size=cpu_min_block_size, make_cpu_multithreading_loop=True
+    )
     block_ids = qd.ndarray(dtype=qd.i32, shape=200)
 
     @qd.kernel
@@ -147,8 +151,12 @@ def test_cpu_range_for_fixed_block_sizes(block_dim):
 @pytest.mark.parametrize("make_cpu_multithreading_loop", [False, True])
 @test_utils.test(arch=qd.cpu)
 def test_cpu_block_id_serial_and_nested(make_cpu_multithreading_loop):
-    qd.init(arch=qd.cpu, cpu_max_num_threads=4, cpu_min_block_size=1,
-            make_cpu_multithreading_loop=make_cpu_multithreading_loop)
+    qd.init(
+        arch=qd.cpu,
+        cpu_max_num_threads=4,
+        cpu_min_block_size=1,
+        make_cpu_multithreading_loop=make_cpu_multithreading_loop,
+    )
     block_ids = qd.ndarray(dtype=qd.i32, shape=(200, 3))
 
     @qd.kernel
