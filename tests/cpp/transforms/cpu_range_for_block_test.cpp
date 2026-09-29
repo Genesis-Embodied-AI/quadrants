@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <limits>
 #include <memory>
-#include <utility>
 
 #include "quadrants/ir/statements.h"
 #include "quadrants/ir/transforms.h"
@@ -49,40 +48,24 @@ TEST(CPURangeForBlock, FullSignedRange) {
   }
 }
 
-namespace {
-
-// Keeps the compiler statements alive while the test inspects the transformed loop.
-struct TransformedCPURange {
-  std::unique_ptr<Block> root;
-  OffloadedStmt *offloaded;
-};
-
-TransformedCPURange transform_cpu_range(int begin, int end, int num_threads, int cpu_min_block_size) {
-  CompileConfig config;
-  config.cpu_max_num_threads = num_threads;
-  config.cpu_min_block_size = cpu_min_block_size;
-  auto root = std::make_unique<Block>();
-  auto *offloaded =
-      root->insert(std::make_unique<OffloadedStmt>(OffloadedStmt::TaskType::range_for, config.arch, nullptr))
-          ->as<OffloadedStmt>();
-  offloaded->const_begin = true;
-  offloaded->const_end = true;
-  offloaded->begin_value = begin;
-  offloaded->end_value = end;
-  irpass::make_cpu_multithreaded_range_for(root.get(), config);
-  irpass::type_check(root.get(), config);
-  return {std::move(root), offloaded};
-}
-
-}  // namespace
-
 TEST(CPURangeForBlock, UsesConfiguredMinimum) {
   for (int cpu_min_block_size : {1, 512}) {
     SCOPED_TRACE(cpu_min_block_size);
-    auto loop = transform_cpu_range(/*begin=*/0, /*end=*/200, /*num_threads=*/4, cpu_min_block_size);
+    CompileConfig config;
+    config.cpu_max_num_threads = 4;
+    config.cpu_min_block_size = cpu_min_block_size;
+    Block root;
+    auto *outer =
+        root.insert(std::make_unique<OffloadedStmt>(OffloadedStmt::TaskType::range_for, config.arch, nullptr))
+            ->as<OffloadedStmt>();
+    outer->const_begin = true;
+    outer->const_end = true;
+    outer->begin_value = 0;
+    outer->end_value = 200;
+    irpass::make_cpu_multithreaded_range_for(&root, config);
+    irpass::type_check(&root, config);
 
     // Check the number of runtime tasks described by the transformed outer loop.
-    auto *outer = loop.offloaded;
     ASSERT_TRUE(outer->const_begin && outer->const_end);
     ASSERT_GT(outer->block_dim, 0);
     const int iterations = outer->end_value - outer->begin_value;
