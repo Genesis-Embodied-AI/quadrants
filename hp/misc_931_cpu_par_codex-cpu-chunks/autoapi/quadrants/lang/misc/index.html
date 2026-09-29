@@ -479,16 +479,19 @@
 <tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.misc.graph_do_while" title="quadrants.lang.misc.graph_do_while"><code class="xref py py-obj docutils literal notranslate"><span class="pre">graph_do_while</span></code></a>(→ bool)</p></td>
 <td><p>Marks a while loop as a CUDA graph do-while conditional node.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.misc.global_thread_idx" title="quadrants.lang.misc.global_thread_idx"><code class="xref py py-obj docutils literal notranslate"><span class="pre">global_thread_idx</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.misc.block_idx" title="quadrants.lang.misc.block_idx"><code class="xref py py-obj docutils literal notranslate"><span class="pre">block_idx</span></code></a>()</p></td>
+<td><p>Return the current CPU scheduling block or GPU thread-block index.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.misc.global_thread_idx" title="quadrants.lang.misc.global_thread_idx"><code class="xref py py-obj docutils literal notranslate"><span class="pre">global_thread_idx</span></code></a>()</p></td>
 <td><p>Returns the global thread id of this running thread,</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.misc.mesh_patch_idx" title="quadrants.lang.misc.mesh_patch_idx"><code class="xref py py-obj docutils literal notranslate"><span class="pre">mesh_patch_idx</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.misc.mesh_patch_idx" title="quadrants.lang.misc.mesh_patch_idx"><code class="xref py py-obj docutils literal notranslate"><span class="pre">mesh_patch_idx</span></code></a>()</p></td>
 <td><p>Returns the internal mesh patch id of this running thread,</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.misc.is_extension_enabled" title="quadrants.lang.misc.is_extension_enabled"><code class="xref py py-obj docutils literal notranslate"><span class="pre">is_extension_enabled</span></code></a>(→ bool)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.misc.is_extension_enabled" title="quadrants.lang.misc.is_extension_enabled"><code class="xref py py-obj docutils literal notranslate"><span class="pre">is_extension_enabled</span></code></a>(→ bool)</p></td>
 <td><p>Directly returns whether extension is enabled, without needing to</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.misc.dump_compile_config" title="quadrants.lang.misc.dump_compile_config"><code class="xref py py-obj docutils literal notranslate"><span class="pre">dump_compile_config</span></code></a>(→ None)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.misc.dump_compile_config" title="quadrants.lang.misc.dump_compile_config"><code class="xref py py-obj docutils literal notranslate"><span class="pre">dump_compile_config</span></code></a>(→ None)</p></td>
 <td><p>Dumps the compile config, which can be usful for example in diagnosing fastcache issues, since</p></td>
 </tr>
 </tbody>
@@ -888,6 +891,16 @@ Requires <code class="docutils literal notranslate"><span class="pre">&#64;qd.ke
 </dd></dl>
 
 <dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.misc.block_idx">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.misc.</span></span><span class="sig-name descname"><span class="pre">block_idx</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/misc.html#block_idx"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.misc.block_idx" title="Link to this definition">#</a></dt>
+<dd><p>Return the current CPU scheduling block or GPU thread-block index.</p>
+<p>On CPU, indices start at zero for each parallel loop execution, and code
+outside a scheduled block returns 0. Both CPU scheduling modes are supported.
+On GPUs, this returns the hardware block index, which may process multiple
+groups of iterations. Nested serial loops retain their enclosing block index.</p>
+</dd></dl>
+
+<dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.misc.global_thread_idx">
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.misc.</span></span><span class="sig-name descname"><span class="pre">global_thread_idx</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/misc.html#global_thread_idx"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.misc.global_thread_idx" title="Link to this definition">#</a></dt>
 <dd><p>Returns the global thread id of this running thread,
@@ -1017,6 +1030,7 @@ the fastcache cache keys depend on the compile config.</p>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.misc.assume_in_range"><code class="docutils literal notranslate"><span class="pre">assume_in_range()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.misc.loop_config"><code class="docutils literal notranslate"><span class="pre">loop_config()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.misc.graph_do_while"><code class="docutils literal notranslate"><span class="pre">graph_do_while()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.misc.block_idx"><code class="docutils literal notranslate"><span class="pre">block_idx()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.misc.global_thread_idx"><code class="docutils literal notranslate"><span class="pre">global_thread_idx()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.misc.mesh_patch_idx"><code class="docutils literal notranslate"><span class="pre">mesh_patch_idx()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.misc.is_extension_enabled"><code class="docutils literal notranslate"><span class="pre">is_extension_enabled()</span></code></a></li>

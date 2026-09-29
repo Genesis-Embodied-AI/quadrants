@@ -553,6 +553,21 @@
 <p>For either mode, compare repeated kernel calls after compilation has completed and check that the results agree. The separate setting <code class="docutils literal notranslate"><span class="pre">num_compile_threads</span></code> controls threads used to compile kernels; it does not set the number of workers that execute the loop.</p>
 </section>
 </section>
+<section id="inspecting-block-indices">
+<h3>Inspecting block indices<a class="headerlink" href="#inspecting-block-indices" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">qd.block_idx()</span></code> works on CPU, CUDA, AMDGPU, Vulkan, and Metal. On CPU, it returns the index of the block executing the current iteration. Each block runs as one runtime task. Indices start at zero for each parallel loop execution. They identify blocks, not worker threads or execution order.</p>
+<p>This function works with both values of <code class="docutils literal notranslate"><span class="pre">make_cpu_multithreading_loop</span></code>. With <code class="docutils literal notranslate"><span class="pre">True</span></code>, it identifies the compiler-generated block of original iterations. With <code class="docutils literal notranslate"><span class="pre">False</span></code>, it identifies the group whose size is controlled by <code class="docutils literal notranslate"><span class="pre">block_dim</span></code>.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">k_record_blocks</span><span class="p">(</span><span class="n">out</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">)):</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">200</span><span class="p">):</span>
+        <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">block_idx</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>With four workers, <code class="docutils literal notranslate"><span class="pre">make_cpu_multithreading_loop=True</span></code>, and <code class="docutils literal notranslate"><span class="pre">cpu_min_block_size=1</span></code>, this records 50 occurrences of each index from 0 through 3. With <code class="docutils literal notranslate"><span class="pre">make_cpu_multithreading_loop=False</span></code> and the default block size of 32, it records indices 0 through 6. The last block contains eight iterations.</p>
+<p>Nested serial loops retain the enclosing block’s index. On CPU, code outside a scheduled block, including a top-level explicitly serialized loop, returns <code class="docutils literal notranslate"><span class="pre">0</span></code>. The function is available inside kernels and their called functions. Empty blocks execute no original iterations, so the example does not record them.</p>
+<p>On GPUs, <code class="docutils literal notranslate"><span class="pre">qd.block_idx()</span></code> returns the hardware thread-block index. Vulkan and Metal call these blocks workgroups. A hardware block contains multiple GPU threads and can process several groups of original iterations. Its index stays the same when it processes another group. Serial GPU code runs in block zero.</p>
+<p>The same kernel can call <code class="docutils literal notranslate"><span class="pre">qd.block_idx()</span></code> on every supported backend, but block sizes and iteration assignments may differ. The returned index is not a globally unique identifier.</p>
+</section>
 <section id="requesting-serial-execution">
 <h3>Requesting serial execution<a class="headerlink" href="#requesting-serial-execution" title="Link to this heading">#</a></h3>
 <p>To run a loop’s iterations in order on one thread, place <code class="docutils literal notranslate"><span class="pre">qd.loop_config(serialize=True)</span></code> immediately before it:</p>
@@ -751,6 +766,7 @@
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#default-cpu-block-dim">default_cpu_block_dim</a></li>
 </ul>
 </li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#inspecting-block-indices">Inspecting block indices</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#requesting-serial-execution">Requesting serial execution</a></li>
 </ul>
 </li>
