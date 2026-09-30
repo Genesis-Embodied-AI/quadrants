@@ -552,6 +552,47 @@ def test_checkpoint_yields_when_flag_is_set():
     assert status.checkpoint == 7
 
 
+@test_utils.test(arch=qd.cuda)
+def test_non_graph_launch_preserves_cuda_yield_status():
+    """Auxiliary CUDA launches clear graph introspection but preserve the last yield until another graph launch."""
+    if not _is_checkpoint_if_path_native():
+        pytest.skip("CUDA checkpoint status requires native conditional graph nodes")
+    N = 4
+
+    @qd.kernel(graph=True, checkpoints=True)
+    def yielding(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
+        with qd.checkpoint(73, yield_on=flag):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+
+    @qd.kernel
+    def plain(x: qd.types.ndarray(qd.i32, ndim=1)):
+        for i in range(x.shape[0]):
+            x[i] = x[i] + 10
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    flag = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    flag.from_numpy(np.array(1, dtype=np.int32))
+
+    status = yielding(x, flag)
+    assert status.yielded and status.checkpoint == 73
+    assert _num_checkpoints_on_last_call() == 1
+    assert _last_yield_cp_id_on_last_call() == 0
+
+    plain(x)
+    assert not impl.get_runtime().prog.get_graph_cache_used_on_last_call()
+    assert _num_checkpoints_on_last_call() == 0
+    assert _last_yield_cp_id_on_last_call() == 0
+
+    # A subsequent graph launch owns the yield status again and refreshes it to "no yield".
+    flag.from_numpy(np.array(0, dtype=np.int32))
+    status = yielding(x, flag)
+    assert not status.yielded
+    assert _num_checkpoints_on_last_call() == 1
+    assert _last_yield_cp_id_on_last_call() == -1
+
+
 @test_utils.test()
 def test_checkpoint_yield_first_wins_subsequent_skipped():
     """When two yielders both set their flag in the same launch, the *first* (in source / declaration order) wins:
@@ -852,12 +893,158 @@ def test_checkpoint_yield_exits_graph_do_while_early():
     assert status.checkpoint == 0
 
 
+@test_utils.test()
+def test_checkpoint_metadata_is_restored_per_template_specialization():
+    """An A -> B -> A launch sequence must select graph/checkpoint metadata by compiled specialization key."""
+
+    @qd.kernel(graph=True, checkpoints=True)
+    def k(
+        use_loop: qd.template(),
+        value: qd.types.ndarray(qd.i32, ndim=0),
+        counter: qd.types.ndarray(qd.i32, ndim=0),
+        flag: qd.types.ndarray(qd.i32, ndim=0),
+    ):
+        if qd.static(use_loop):
+            while qd.graph.do_while(counter):
+                with qd.checkpoint(11, yield_on=flag):
+                    for _ in range(1):
+                        value[()] = value[()] + 1
+                        counter[()] = counter[()] - 1
+        else:
+            with qd.checkpoint(22, yield_on=flag):
+                for _ in range(1):
+                    value[()] = value[()] + 10
+
+    value = qd.ndarray(qd.i32, shape=())
+    counter = qd.ndarray(qd.i32, shape=())
+    flag = qd.ndarray(qd.i32, shape=())
+    value.from_numpy(np.array(0, dtype=np.int32))
+    flag.from_numpy(np.array(0, dtype=np.int32))
+
+    counter.from_numpy(np.array(1, dtype=np.int32))
+    status = k(True, value, counter, flag)
+    assert not status.yielded
+    assert len(k._primal.graph_do_while_levels) == 1
+    assert k._primal.checkpoint_user_labels_by_cp_id == [11]
+
+    status = k(False, value, counter, flag)
+    assert not status.yielded
+    assert k._primal.graph_do_while_levels == []
+    assert k._primal.checkpoint_user_labels_by_cp_id == [22]
+
+    counter.from_numpy(np.array(1, dtype=np.int32))
+    status = k(True, value, counter, flag)
+    assert not status.yielded
+    assert len(k._primal.graph_do_while_levels) == 1
+    assert k._primal.checkpoint_user_labels_by_cp_id == [11]
+    assert value.to_numpy() == 12
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan])
+def test_checkpoint_metadata_survives_snode_tree_invalidation():
+    """Signature-only rematerialization after SNode-tree destruction must retain the specialization's launch metadata."""
+
+    @qd.kernel(graph=True, checkpoints=True)
+    def k(
+        value: qd.types.ndarray(qd.i32, ndim=0),
+        counter: qd.types.ndarray(qd.i32, ndim=0),
+        flag: qd.types.ndarray(qd.i32, ndim=0),
+    ):
+        while qd.graph.do_while(counter):
+            with qd.checkpoint(7, yield_on=flag):
+                for _ in range(1):
+                    value[()] = value[()] + 1
+                    counter[()] = counter[()] - 1
+
+    value = qd.ndarray(qd.i32, shape=())
+    counter = qd.ndarray(qd.i32, shape=())
+    flag = qd.ndarray(qd.i32, shape=())
+    value.from_numpy(np.array(0, dtype=np.int32))
+    counter.from_numpy(np.array(1, dtype=np.int32))
+    flag.from_numpy(np.array(0, dtype=np.int32))
+
+    status = k(value, counter, flag)
+    assert not status.yielded
+    primal = k._primal
+    key = primal._last_launch_key
+    assert len(primal.graph_do_while_levels) == 1
+    assert primal.checkpoint_user_labels_by_cp_id == [7]
+
+    fields_builder = qd.FieldsBuilder()
+    temporary_field = qd.field(qd.i32)
+    fields_builder.place(temporary_field)
+    snode_tree = fields_builder.finalize()
+    snode_tree.destroy()
+
+    assert key not in primal.materialized_kernels
+    assert key in primal.compiled_kernel_data_by_key
+    assert primal.ensure_compiled(value, counter, flag) == key
+    assert len(primal.graph_do_while_levels) == 1
+    assert primal.checkpoint_user_labels_by_cp_id == [7]
+
+    counter.from_numpy(np.array(1, dtype=np.int32))
+    status = k(value, counter, flag)
+    assert not status.yielded
+    assert value.to_numpy() == 2
+
+
+@test_utils.test()
+def test_checkpoint_containing_graph_do_while_rejects_non_native_backend():
+    """Per-task fallback gates cannot skip a checkpoint-owned WHILE node as one structural unit."""
+    if _is_checkpoint_if_path_native():
+        pytest.skip("native CUDA conditional graph nodes support this composition")
+
+    @qd.kernel(graph=True, checkpoints=True)
+    def k(
+        inner: qd.types.ndarray(qd.i32, ndim=0),
+        flag: qd.types.ndarray(qd.i32, ndim=0),
+    ):
+        with qd.checkpoint(0, yield_on=flag):
+            while qd.graph.do_while(inner):
+                for _ in range(1):
+                    inner[()] = inner[()] - 1
+
+    inner = qd.ndarray(qd.i32, shape=())
+    flag = qd.ndarray(qd.i32, shape=())
+    inner.from_numpy(np.array(1, dtype=np.int32))
+    flag.from_numpy(np.array(0, dtype=np.int32))
+
+    with pytest.raises(qd.QuadrantsRuntimeError, match=r"requires CUDA SM 9\.0\+"):
+        k(inner, flag)
+
+
+@test_utils.test(arch=qd.cuda)
+def test_checkpoint_containing_graph_do_while_rejects_forced_flat_path(monkeypatch: pytest.MonkeyPatch):
+    """Even on SM 9.0+, forcing the flat graph must fail instead of silently weakening resume semantics."""
+    if not _is_checkpoint_if_path_native():
+        pytest.skip("forced-flat regression requires CUDA SM 9.0+")
+    monkeypatch.setenv("QD_CUDA_FORCE_FLAT_CHECKPOINT_GRAPH", "1")
+
+    @qd.kernel(graph=True, checkpoints=True)
+    def k(
+        inner: qd.types.ndarray(qd.i32, ndim=0),
+        flag: qd.types.ndarray(qd.i32, ndim=0),
+    ):
+        with qd.checkpoint(0, yield_on=flag):
+            while qd.graph.do_while(inner):
+                for _ in range(1):
+                    inner[()] = inner[()] - 1
+
+    inner = qd.ndarray(qd.i32, shape=())
+    flag = qd.ndarray(qd.i32, shape=())
+    inner.from_numpy(np.array(1, dtype=np.int32))
+    flag.from_numpy(np.array(0, dtype=np.int32))
+
+    with pytest.raises(RuntimeError, match=r"flat checkpoint graph cannot skip the child WHILE"):
+        k(inner, flag)
+
+
 @test_utils.test(arch=qd.cuda)
 def test_checkpoint_containing_graph_do_while_uses_cuda_graph():
     """A checkpoint may contain a graph_do_while node, not just flat work kernels.
 
-    The checkpoint's IF body must own the nested WHILE node. Splitting the same checkpoint id by loop level makes the
-    CUDA GraphManager reject the build and silently fall back to ordinary kernel launches.
+    The checkpoint's native IF body must own the nested WHILE node. Splitting one checkpoint by loop level would lose
+    that structural ownership and cannot preserve resume semantics.
     """
     if not _is_checkpoint_if_path_native():
         pytest.skip("nested CUDA conditional graph nodes require SM 9.0+")
@@ -1362,9 +1549,9 @@ def _fastcache_checkpoint_child(args: list[str]) -> None:
     np.testing.assert_array_equal(sim.x.to_numpy(), np.ones(N, dtype=np.int32))
 
     primal = type(sim).step._primal
-    # The schema-v3 fast-cache restore path must repopulate `checkpoint_yield_on_args` and
-    # `checkpoint_yield_on_cpp_arg_ids` from the cached `CacheValue` (since AST transformation is skipped on a cache
-    # hit). A regression here would surface as an empty `_forward_yield_on_table_to_ctx` call, silently breaking
+    # The fast-cache restore path must repopulate `checkpoint_yield_on_args` and
+    # `checkpoint_yield_on_cpp_arg_ids` from the cached `CacheValue` because AST transformation is skipped on a cache
+    # hit. A regression here would surface as an empty `_forward_yield_on_table_to_ctx` call, silently breaking
     # yield/resume on fast-cached checkpoint kernels.
     labels = primal.checkpoint_yield_on_args
     cpp_ids = primal.checkpoint_yield_on_cpp_arg_ids
@@ -1391,7 +1578,7 @@ def test_checkpoint_fastcache_restores_self_member_yield_on(tmp_path: pathlib.Pa
     """After a fast-cache restore in a fresh process, a `@qd.kernel(graph=True, checkpoints=True, fastcache=True)`
     kernel with `yield_on=self.flag` must repopulate `checkpoint_yield_on_args` / `checkpoint_yield_on_cpp_arg_ids` /
     `checkpoint_user_labels_by_cp_id` from the persisted ``CacheValue`` -- not from the AST transformer, which is
-    skipped on a cache hit. Without the schema-v3 round-trip the launch path's `forward_yield_on_table_to_ctx` would
+    skipped on a cache hit. Without the metadata round-trip the launch path's `forward_yield_on_table_to_ctx` would
     be a no-op and yield/resume would silently break for fast-cached checkpoint kernels."""
     assert qd.lang is not None
     arch = qd.lang.impl.current_cfg().arch.name
@@ -1415,9 +1602,100 @@ def test_checkpoint_fastcache_restores_self_member_yield_on(tmp_path: pathlib.Pa
         assert proc.returncode == RET_SUCCESS
 
 
+@qd.kernel(graph=True, checkpoints=True, fastcache=True)
+def _fastcache_checkpoint_owned_loop(
+    x: qd.types.ndarray(qd.i32, ndim=0),
+    inner: qd.types.ndarray(qd.i32, ndim=0),
+    marker: qd.types.ndarray(qd.i32, ndim=0),
+    flag: qd.types.ndarray(qd.i32, ndim=0),
+):
+    with qd.checkpoint(0, yield_on=flag):
+        while qd.graph.do_while(inner):
+            for _ in range(1):
+                x[()] = x[()] + 1
+                inner[()] = inner[()] - 1
+    with qd.checkpoint(1, yield_on=flag):
+        for _ in range(1):
+            marker[()] = marker[()] + 1
+
+
+def _fastcache_checkpoint_owned_loop_child(args: list[str]) -> None:
+    args_obj = _FastcacheCheckpointArgs.model_validate_json(args[0])
+    qd.init(
+        arch=getattr(qd, args_obj.arch),
+        offline_cache=True,
+        offline_cache_file_path=args_obj.offline_cache_file_path,
+        src_ll_cache=True,
+    )
+
+    x = qd.ndarray(qd.i32, shape=())
+    inner = qd.ndarray(qd.i32, shape=())
+    marker = qd.ndarray(qd.i32, shape=())
+    flag = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.array(0, dtype=np.int32))
+    inner.from_numpy(np.array(2, dtype=np.int32))
+    marker.from_numpy(np.array(0, dtype=np.int32))
+    flag.from_numpy(np.array(0, dtype=np.int32))
+
+    status = _fastcache_checkpoint_owned_loop(x, inner, marker, flag)
+    assert not status.yielded
+    assert x.to_numpy() == 2
+    assert inner.to_numpy() == 0
+    assert marker.to_numpy() == 1
+
+    primal = _fastcache_checkpoint_owned_loop._primal
+    assert len(primal.graph_do_while_levels) == 1
+    assert primal.graph_do_while_levels[0].checkpoint_id == 0
+    assert primal.src_ll_cache_observations.cache_loaded == args_obj.expect_loaded_from_fastcache
+
+    # On a fast-cache hit, the restored checkpoint_id must still place the whole child WHILE inside checkpoint 0's IF.
+    # Resuming at checkpoint 1 with a stale true condition must therefore skip the child node rather than enter it.
+    x.from_numpy(np.array(0, dtype=np.int32))
+    inner.from_numpy(np.array(9, dtype=np.int32))
+    marker.from_numpy(np.array(0, dtype=np.int32))
+    status = _fastcache_checkpoint_owned_loop.resume(x, inner, marker, flag, from_checkpoint=1)
+    assert not status.yielded
+    assert x.to_numpy() == 0
+    assert inner.to_numpy() == 9
+    assert marker.to_numpy() == 1
+
+    print(TEST_RAN)
+    sys.exit(RET_SUCCESS)
+
+
+@test_utils.test(arch=qd.cuda)
+def test_checkpoint_fastcache_restores_owned_graph_do_while(tmp_path: pathlib.Path):
+    """A fresh process must restore checkpoint ownership of a child WHILE from fast-cache metadata."""
+    if not _is_checkpoint_if_path_native():
+        pytest.skip("checkpoint-owned WHILE fast-cache behavior requires CUDA SM 9.0+")
+    env = dict(os.environ)
+    env["PYTHONPATH"] = "."
+
+    for expect_loaded in [False, True]:
+        args_obj = _FastcacheCheckpointArgs(
+            arch=qd.cuda.name,
+            offline_cache_file_path=str(tmp_path / "cache"),
+            expect_loaded_from_fastcache=expect_loaded,
+        )
+        cmd_line = [
+            sys.executable,
+            __file__,
+            _fastcache_checkpoint_owned_loop_child.__name__,
+            args_obj.model_dump_json(),
+        ]
+        proc = subprocess.run(cmd_line, capture_output=True, text=True, env=env)
+        if proc.returncode != RET_SUCCESS:
+            print(" ".join(cmd_line))
+            print(proc.stdout)
+            print("-" * 100)
+            print(proc.stderr)
+        assert TEST_RAN in proc.stdout
+        assert proc.returncode == RET_SUCCESS
+
+
 # Module-level IntEnum so `_resolve_intenum_member` can find it via importlib from the persisted qualname
 # (`tests.python.test_checkpoint._FastcacheStage.LOAD`). The kernel below uses it as the cp_id so the fast-cache
-# round-trip exercises the schema-v4 enum-identity preservation path.
+# round-trip exercises enum-identity preservation.
 class _FastcacheStage(IntEnum):
     LOAD = 10
     REDUCE = 20
@@ -1455,8 +1733,8 @@ def _fastcache_intenum_child(args: list[str]) -> None:
 
     primal = _fastcache_intenum_kernel._primal
     labels = primal.checkpoint_user_labels_by_cp_id
-    # The schema-v4 round-trip must rebuild the IntEnum identity, not just the int equality. A regression here would
-    # show up as `labels == [10, 20]` (plain ints) breaking the documented contract that `qd.checkpoint(Stage.X, ...)`
+    # The qualname round-trip must rebuild the IntEnum identity, not just int equality. A regression here would show
+    # up as `labels == [10, 20]` (plain ints) breaking the documented contract that `qd.checkpoint(Stage.X, ...)`
     # surfaces as `Stage.X` (not the raw int) on `status.checkpoint`.
     assert labels == [
         _FastcacheStage.LOAD,
@@ -1474,8 +1752,8 @@ def _fastcache_intenum_child(args: list[str]) -> None:
 @test_utils.test()
 def test_checkpoint_fastcache_preserves_intenum_label_identity(tmp_path: pathlib.Path):
     """Fast-cache restore must rebuild ``checkpoint_user_labels_by_cp_id`` with the original ``IntEnum`` members, not
-    just int-equal plain ints. Schema v4 adds a parallel ``checkpoint_user_label_enum_qualnames`` column so
-    ``_resolve_intenum_member`` can re-import the enum class on cache hit -- pydantic coerces ``IntEnum`` to ``int`` at
+    just int-equal plain ints. The parallel ``checkpoint_user_label_enum_qualnames`` column lets
+    ``_resolve_intenum_member`` re-import the enum class on cache hit -- pydantic coerces ``IntEnum`` to ``int`` at
     ``CacheValue`` construction, which would otherwise silently drop enum identity and break the documented contract
     that ``qd.checkpoint(Stage.X, ...)`` surfaces as ``Stage.X`` (not the raw int) on ``status.checkpoint`` after a
     fast-cache hit."""
@@ -1510,7 +1788,7 @@ def test_checkpoint_fastcache_preserves_intenum_label_identity(tmp_path: pathlib
 def test_checkpoint_emits_if_nodes_on_cuda_native():
     """On CUDA SM 9.0+, the GraphManager wires one IF conditional node per checkpoint (explicit AND implicit).
 
-    Three implicit + one explicit yielder = four IF nodes on the native path. On non-CUDA / pre-SM-9.0 backends the
+    Two implicit + one explicit yielder = three IF nodes on the native path. On non-CUDA / pre-SM-9.0 backends the
     kernel still runs to completion; the body-kernel correctness assertion holds either way.
     """
     N = 8
@@ -1530,11 +1808,11 @@ def test_checkpoint_emits_if_nodes_on_cuda_native():
     x.from_numpy(np.zeros(N, dtype=np.int32))
     flag.from_numpy(np.array(0, dtype=np.int32))
     k(x, flag)
-    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 3, dtype=np.int32))
     if _is_checkpoint_if_path_native():
         assert (
             _num_checkpoints_on_last_call() == 3
         ), f"expected 3 IF conditional nodes (2 implicit + 1 explicit), got {_num_checkpoints_on_last_call()}"
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 3, dtype=np.int32))
 
 
 # Subprocess dispatch for fast-cache restoration tests above (mirrors the pattern in `test_graph_do_while.py`). The

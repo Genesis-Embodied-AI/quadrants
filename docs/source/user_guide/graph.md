@@ -218,7 +218,7 @@ def step(
 
 The `cp_id` argument is the label you'll use to identify the checkpoint from the host (in `GraphStatus.checkpoint` and `kernel.resume(from_checkpoint=...)`). It must be an int literal or an `IntEnum` value; the framework preserves the value as-is, so `qd.checkpoint(Stage.SIM, ...)` round-trips as `Stage.SIM` rather than the raw int. Labels must be unique within a kernel.
 
-A checkpoint body may contain a nested `qd.graph.do_while`, including the common solver shape `outer WHILE -> checkpoint IF -> inner WHILE`. On CUDA SM 9.0+, the inner WHILE stays inside the checkpoint's conditional CUDA Graph body, so resuming past that checkpoint skips the entire inner loop. CUDA devices without native conditional graph nodes use the normal host-driven fallback.
+A checkpoint body may contain a nested `qd.graph.do_while`, including the common solver shape `outer WHILE -> checkpoint IF -> inner WHILE`. This composition currently requires CUDA SM 9.0+ native conditional graph nodes. The inner WHILE stays inside the checkpoint's conditional CUDA Graph body, so resuming past that checkpoint skips the entire inner loop. Other backends fail at launch instead of using their per-task fallback, because that fallback cannot skip the WHILE node itself as one checkpoint unit.
 
 ```python
 with qd.checkpoint(Stage.SIM, yield_on=overflow_flag):
@@ -269,12 +269,27 @@ while status.yielded:
 - you must therefore ensure that re-running this checkpoint will not break the algorithm
 - for example make sure that any check that lead to the yield do not modify any data before yielding
 
+Inside a `qd.graph.do_while`, the resume offset applies only to the first resumed iteration. Later iterations run the complete loop body. The resume target must therefore be another checkpoint in the same WHILE body at the same nesting level:
+
+```python
+while qd.graph.do_while(outer):
+    with qd.checkpoint(Stage.SIM, yield_on=overflow_flag):
+        # ...
+        pass
+    with qd.checkpoint(Stage.NEXT, yield_on=overflow_flag):
+        # resume(from_checkpoint=Stage.NEXT) starts here on the first resumed iteration
+        # ...
+        pass
+```
+
+Crossing a WHILE boundary is not supported. For example, a checkpoint inside a loop cannot resume to a checkpoint after that loop, in an enclosing loop body, or in a sibling loop. The loop condition kernel resets the resume offset before a later iteration, so such a layout could re-run work that the resume target was meant to skip. Keep both checkpoints at the same loop nesting level, or split the stages into separate kernels.
+
 ### Restrictions
 
 - Must be used inside `@qd.kernel(graph=True, checkpoints=True)`. Without the flag, `qd.checkpoint(...)` raises `QuadrantsSyntaxError` at compile time.
 - `cp_id` must be an int literal or an `IntEnum` value, and must be unique across the kernel.
 - `yield_on=` must reference a 0-d `qd.types.ndarray(qd.i32, ndim=0)` - a bare kernel parameter (`yield_on=flag`), a [`@qd.data_oriented`](compound_types.md#qddata_oriented) member ndarray (`yield_on=self.flag`), or a [`@dataclasses.dataclass`](compound_types.md#dataclassesdataclass) parameter member (`yield_on=params.flag`). Arbitrary expressions are not supported.
-- Checkpoints cannot be nested inside other checkpoints. Checkpoints inside a `qd.graph.do_while` body, and `qd.graph.do_while` loops inside a checkpoint body, are fine.
+- Checkpoints cannot be nested inside other checkpoints. Checkpoints inside a `qd.graph.do_while` body are supported on every backend listed below. The reverse composition, a `qd.graph.do_while` loop inside a checkpoint body, currently requires CUDA SM 9.0+.
 - The body of a `with qd.checkpoint(...)` block cannot contain bare top-level statements (assignments, augmented assignments, or bare call/expression statements). Every top-level statement must be inside a `for`-loop (or other control-flow construct). A docstring as the first statement is allowed. Bare statements raise `QuadrantsSyntaxError` at compile time.
 
   ```python
@@ -361,6 +376,7 @@ Because `qd.graph.parallel` sections are independent by construction, running th
 | `graph=True` | hardware accelerated | hardware accelerated | hardware accelerated | runs (no acceleration) | runs (no acceleration) | runs (no acceleration) |
 | `qd.graph.do_while` | hardware accelerated | host fallback | host fallback | host fallback | host fallback | host fallback |
 | `qd.checkpoint` | GPU-side | GPU-side | GPU-side | GPU-side | GPU-side | host-side |
+| `qd.graph.do_while` inside `qd.checkpoint` | supported | unsupported | unsupported | unsupported | unsupported | unsupported |
 | `qd.graph.parallel_context` / `qd.graph.parallel` (sections) | concurrent | concurrent | runs serially | runs serially | runs serially | runs serially |
 
 AMDGPU `qd.graph.do_while` falls back to the host-side loop because HIP does not currently expose conditional / while graph nodes (as of [ROCm](https://www.amd.com/en/products/software/rocm.html) 7.2).

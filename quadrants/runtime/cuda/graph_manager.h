@@ -145,6 +145,10 @@ class GraphManager {
   void mark_not_used() {
     used_on_last_call_ = false;
     num_nodes_on_last_call_ = 0;
+    num_checkpoints_on_last_call_ = 0;
+    // Preserve last_yield_cp_id_on_last_call_: non-graph auxiliary launches (for example a conversion kernel used by
+    // to_numpy()) must not erase the result of the preceding yield-capable graph launch. The next successful graph
+    // launch refreshes it in launch_cached_graph().
   }
   std::size_t cache_size() const {
     return cache_.size();
@@ -164,10 +168,10 @@ class GraphManager {
   std::size_t num_checkpoints_on_last_call() const {
     return num_checkpoints_on_last_call_;
   }
-  // cp_id of the checkpoint that fired its `yield_on` flag on the most recent successful graph launch, or `-1` if no
-  // checkpoint yielded. Read back from the device's `yield_signal` scalar at the end of `launch_cached_graph` (a host
-  // sync precedes the copy so the value is valid). Returns `-1` when the most recent launch wasn't a graph launch or
-  // the kernel had no `yield_on` checkpoints.
+  // cp_id of the checkpoint that fired its `yield_on` flag on the most recent successful graph launch, or `-1` if that
+  // graph launch did not yield. Read back from the device's `yield_signal` scalar at the end of `launch_cached_graph`
+  // (a host sync precedes the copy so the value is valid). Non-graph launches deliberately leave this value unchanged
+  // so auxiliary work cannot clobber a pending GraphStatus observation.
   int last_yield_cp_id_on_last_call() const {
     return last_yield_cp_id_on_last_call_;
   }
@@ -255,9 +259,9 @@ class GraphManager {
   bool used_on_last_call_{false};
   std::size_t num_nodes_on_last_call_{0};
   std::size_t num_checkpoints_on_last_call_{0};
-  // -1 means "no checkpoint yielded on the most recent graph launch" (or the most recent call didn't take the graph
-  // path). Slice 1d uses this for test-side introspection; slice 2 will route it through `GraphStatus` on the Python
-  // API.
+  // -1 means "no checkpoint yielded on the most recent graph launch". Non-graph launches leave this value untouched;
+  // the next graph launch resets / refreshes it. Slice 1d uses this for test-side introspection; slice 2 routes it
+  // through `GraphStatus` on the Python API.
   int last_yield_cp_id_on_last_call_{-1};
   std::size_t total_builds_{0};
 

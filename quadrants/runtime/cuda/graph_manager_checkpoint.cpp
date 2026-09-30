@@ -261,13 +261,12 @@ CheckpointBuildPlan GraphManager::compute_checkpoint_plan_for_build(const std::v
     }
     if (use_graph_do_while && plan.has_multi_level_checkpoint && plan.use_pre_hopper_flat_graph) {
       // A flat checkpoint graph can self-gate work kernels, but it cannot gate the child WHILE node itself. Skipping
-      // all kernels in that loop would leave its condition unchanged and spin forever. Native IF nodes can contain the
-      // WHILE and are handled by build_level; without them, retain the correct host-driven fallback.
-      QD_INFO(
-          "graph=True: a qd.checkpoint() block containing a nested qd.graph_do_while requires CUDA conditional IF "
-          "nodes; falling back to the non-graph launch.");
-      plan.reject_graph_build = true;
-      return plan;
+      // all kernels in that loop would leave its condition unchanged and can make a host-driven fallback re-enter work
+      // that resume was meant to skip. Native IF nodes can contain the whole WHILE and are handled by build_level;
+      // reject this shape rather than silently weaken checkpoint semantics on the flat path.
+      QD_ERROR(
+          "A qd.checkpoint() block containing qd.graph.do_while() requires CUDA SM 9.0+ native conditional graph "
+          "nodes; the flat checkpoint graph cannot skip the child WHILE as one checkpoint unit.");
     }
     if (plan.has_yield) {
       ensure_checkpoint_yield_check_kernel_loaded();

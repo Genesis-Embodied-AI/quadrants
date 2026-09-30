@@ -172,8 +172,8 @@ def test_src_hasher_store_validate(monkeypatch: pytest.MonkeyPatch, tmp_path: pa
     loaded = src_hasher.load(fast_cache_key)
     assert loaded is not None
     assert loaded.used_py_dataclass_parameters == some_used_vars
-    # The new schema-v3+v4 AST-resolved fields default to empty for kernels with no graph_do_while / checkpoint
-    # metadata, exercising the BaseModel default path on round-trip.
+    # AST-resolved fields default to empty for kernels with no graph_do_while / checkpoint metadata, exercising the
+    # BaseModel default path on round-trip.
     assert loaded.graph_do_while_levels is None
     assert loaded.checkpoint_yield_on_args == []
     assert loaded.checkpoint_yield_on_cpp_arg_ids == []
@@ -182,15 +182,14 @@ def test_src_hasher_store_validate(monkeypatch: pytest.MonkeyPatch, tmp_path: pa
 
 
 @test_utils.test()
-def test_src_hasher_store_validate_round_trips_schema_v3_metadata(
+def test_src_hasher_store_validate_round_trips_graph_checkpoint_metadata(
     monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, temporary_module
 ) -> None:
-    """Schema v3 (`cachevalue-v3-ast-resolved-ids`) added AST-resolved arg-id fields to the persisted ``CacheValue`` so
-    the launch path can forward them after a fast-cache restore (which skips AST transformation). Schema v6 extended
-    ``graph_do_while_levels`` to 4-tuples carrying both ``cond_cpp_arg_id`` and the enclosing checkpoint id. This test
-    pins that table plus ``checkpoint_yield_on_args`` / ``checkpoint_yield_on_cpp_arg_ids`` /
-    ``checkpoint_user_labels_by_cp_id``. Without this, a schema bug would only surface via a hard-to-debug functional
-    regression in a fast-cached checkpoint / graph_do_while kernel."""
+    """Persisted AST metadata must survive fast-cache restore, which skips AST transformation.
+
+    Pin ``graph_do_while_levels`` as 4-tuples carrying both ``cond_cpp_arg_id`` and the enclosing checkpoint id, plus
+    the checkpoint yield-argument and user-label tables.
+    """
     test_files_path = pathlib.Path("tests/python/quadrants/lang/fast_caching/test_files")
 
     offline_cache_path = tmp_path / "cache"
@@ -200,8 +199,8 @@ def test_src_hasher_store_validate_round_trips_schema_v3_metadata(
     qd_init_same_arch(offline_cache_file_path=str(offline_cache_path))
 
     monkeypatch.syspath_prepend(temp_import_path)
-    shutil.copy2(test_files_path / "child_diff_base.py", temp_import_path / "child_diff_schema_v3.py")
-    mod = temporary_module("child_diff_schema_v3")
+    shutil.copy2(test_files_path / "child_diff_base.py", temp_import_path / "child_diff_graph_checkpoint_metadata.py")
+    mod = temporary_module("child_diff_graph_checkpoint_metadata")
     info, _src = _wrap_inspect.get_source_info_and_src(mod.f1.fn)
     fileinfos = [info]
     # L2 key (source+config, then the args-narrow tail) - the layer ``store`` / ``load`` operate on.
@@ -217,7 +216,7 @@ def test_src_hasher_store_validate_round_trips_schema_v3_metadata(
     cp_user_labels = [10, None, 20]
 
     src_hasher.store(
-        "kernel_cache_key_v3",
+        "kernel_cache_key_metadata",
         fast_cache_key,
         fileinfos,
         {"used_var"},
@@ -229,7 +228,7 @@ def test_src_hasher_store_validate_round_trips_schema_v3_metadata(
 
     loaded = src_hasher.load(fast_cache_key)
     assert loaded is not None
-    assert loaded.frontend_cache_key == "kernel_cache_key_v3"
+    assert loaded.frontend_cache_key == "kernel_cache_key_metadata"
     assert loaded.graph_do_while_levels == gdw_levels
     assert loaded.checkpoint_yield_on_args == cp_yield_args
     assert loaded.checkpoint_yield_on_cpp_arg_ids == cp_yield_cpp_ids
@@ -242,20 +241,20 @@ def test_src_hasher_store_validate_round_trips_schema_v3_metadata(
 def test_src_hasher_intenum_qualname_round_trip(
     monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, temporary_module
 ) -> None:
-    """Schema v4 (`cachevalue-v4-intenum-qualnames`) added a parallel `checkpoint_user_label_enum_qualnames` column so
-    an ``IntEnum`` cp_id round-trips through fast-cache restore as the original enum member rather than the underlying
-    int. ``src_hasher.store`` derives the qualname column from the live label list (which still holds the original
-    ``IntEnum`` instances) before pydantic int-coerces them; ``_resolve_intenum_member`` re-imports the enum class on
-    load. This test covers both the store-side derivation (mixed IntEnum / plain int / None) and the load-side
-    resolution (verifies identity is preserved, not just int equality)."""
+    """The parallel ``checkpoint_user_label_enum_qualnames`` column preserves ``IntEnum`` checkpoint identity.
+
+    ``src_hasher.store`` derives the qualname column from the live label list before pydantic coerces the members to
+    plain ints; ``_resolve_intenum_member`` re-imports the enum class on load. Cover mixed IntEnum / plain-int / None
+    storage and verify that load-side resolution preserves identity, not just int equality.
+    """
     test_files_path = pathlib.Path("tests/python/quadrants/lang/fast_caching/test_files")
     offline_cache_path = tmp_path / "cache"
     temp_import_path = tmp_path / "temp_import"
     temp_import_path.mkdir(exist_ok=True)
     qd_init_same_arch(offline_cache_file_path=str(offline_cache_path))
     monkeypatch.syspath_prepend(temp_import_path)
-    shutil.copy2(test_files_path / "child_diff_base.py", temp_import_path / "child_diff_v4_intenum.py")
-    mod = temporary_module("child_diff_v4_intenum")
+    shutil.copy2(test_files_path / "child_diff_base.py", temp_import_path / "child_diff_intenum.py")
+    mod = temporary_module("child_diff_intenum")
     info, _src = _wrap_inspect.get_source_info_and_src(mod.f1.fn)
     # L2 key (source+config, then the args-narrow tail) - the layer ``store`` / ``load`` operate on.
     l1_key = src_hasher.make_source_config_key(info)
@@ -266,7 +265,7 @@ def test_src_hasher_intenum_qualname_round_trip(
 
     # Reference the module-level enum below so it has a real importable qualname.
     src_hasher.store(
-        "kernel_cache_key_v4",
+        "kernel_cache_key_intenum",
         fast_cache_key,
         [info],
         {"used_var"},
