@@ -153,12 +153,24 @@ def test_cpu_fixed_block_dim_execution(cpu_fixed_block_dim, loop_block_dim):
 @pytest.mark.parametrize(
     "base, changed, base_width, changed_width",
     [
-        ({"cpu_work_scheduling": "PER_WORKER", "cpu_per_worker_min_block_dim": 16},
-         {"cpu_work_scheduling": "PER_WORKER", "cpu_per_worker_min_block_dim": 64}, 50, 64),
-        ({"cpu_work_scheduling": "FIXED_SIZE", "cpu_fixed_block_dim": 17},
-         {"cpu_work_scheduling": "FIXED_SIZE", "cpu_fixed_block_dim": 64}, 17, 64),
-        ({"cpu_work_scheduling": "PER_WORKER", "cpu_per_worker_min_block_dim": 16, "cpu_fixed_block_dim": 17},
-         {"cpu_work_scheduling": "FIXED_SIZE", "cpu_per_worker_min_block_dim": 16, "cpu_fixed_block_dim": 17}, 50, 17),
+        (
+            {"cpu_work_scheduling": "PER_WORKER", "cpu_per_worker_min_block_dim": 16},
+            {"cpu_work_scheduling": "PER_WORKER", "cpu_per_worker_min_block_dim": 64},
+            50,
+            64,
+        ),
+        (
+            {"cpu_work_scheduling": "FIXED_SIZE", "cpu_fixed_block_dim": 17},
+            {"cpu_work_scheduling": "FIXED_SIZE", "cpu_fixed_block_dim": 64},
+            17,
+            64,
+        ),
+        (
+            {"cpu_work_scheduling": "PER_WORKER", "cpu_per_worker_min_block_dim": 16, "cpu_fixed_block_dim": 17},
+            {"cpu_work_scheduling": "FIXED_SIZE", "cpu_per_worker_min_block_dim": 16, "cpu_fixed_block_dim": 17},
+            50,
+            17,
+        ),
     ],
 )
 @test_utils.test(arch=qd.cpu)
@@ -194,8 +206,15 @@ print("checked block assignments")
     # Each process shares the cache directory. Returning to the first settings should reuse its cached kernel.
     for options, width, warm in [(base, base_width, False), (changed, changed_width, False), (base, base_width, True)]:
         result = subprocess.run(
-            [sys.executable, str(script), str(tmp_path / "cache"), json.dumps(options),
-             str(int(fastcache)), str(width), str(int(warm))],
+            [
+                sys.executable,
+                str(script),
+                str(tmp_path / "cache"),
+                json.dumps(options),
+                str(int(fastcache)),
+                str(width),
+                str(int(warm)),
+            ],
             capture_output=True,
             text=True,
             timeout=120,

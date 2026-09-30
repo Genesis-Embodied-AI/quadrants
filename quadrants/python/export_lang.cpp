@@ -224,7 +224,8 @@ void export_lang(nb::module_ &m) {
               "Cache loop-invariant global loads into locals inside loops.")
       .def_rw("cpu_fixed_block_dim", &CompileConfig::cpu_fixed_block_dim,
               "Iterations per task in CPUWorkScheduling.FIXED_SIZE mode (must be >= 1, default 32). "
-              "Overridden by qd.loop_config(block_dim=...). Ignored in PER_WORKER mode and on GPUs.")
+              "Overridden by qd.loop_config(block_dim=...). Does not set range-loop block size in PER_WORKER mode. "
+              "Does not affect GPU loops.")
       .def_rw("default_gpu_block_dim", &CompileConfig::default_gpu_block_dim, "Default GPU thread-block size.")
       .def_rw("saturating_grid_dim", &CompileConfig::saturating_grid_dim,
               "Target GPU grid size (number of blocks) on the CUDA/AMDGPU backends; 0 lets Quadrants pick based on "
@@ -236,7 +237,7 @@ void export_lang(nb::module_ &m) {
               "list-generation kernels; ordinary range-for/struct-for launches use default_gpu_block_dim instead. 0 "
               "means no cap.")
       .def_rw("cpu_max_num_threads", &CompileConfig::cpu_max_num_threads,
-              "Maximum number of CPU threads used to run kernels (the runtime thread pool and CPU parallel-for loops). "
+              "Number of worker threads in the shared CPU thread pool. "
               "Compilation threads are governed separately by num_compile_threads.")
       .def_rw("cpu_per_worker_min_block_dim", &CompileConfig::cpu_per_worker_min_block_dim,
               "Minimum iterations per CPU range-for block (must be >= 1, default 512). Block size is "
