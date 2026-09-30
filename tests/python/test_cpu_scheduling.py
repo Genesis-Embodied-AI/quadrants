@@ -136,10 +136,11 @@ def test_cpu_fixed_block_dim_execution(cpu_fixed_block_dim, loop_block_dim):
         cpu_max_num_threads=4,
     )
     out = qd.ndarray(qd.i32, shape=200)
+    has_loop_override = loop_block_dim is not None
 
     @qd.kernel
     def k_record_blocks(out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
-        if qd.static(loop_block_dim is not None):
+        if qd.static(has_loop_override):
             qd.loop_config(block_dim=loop_block_dim)
         for i in range(200):
             out[i] = qd.block_idx()
