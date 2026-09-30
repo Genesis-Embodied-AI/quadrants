@@ -14,7 +14,7 @@
 
 namespace quadrants {
 
-using RangeForTaskFunc = void(void *, int thread_id, int i);
+using RangeForTaskFunc = void(void *, int thread_id, int task_id);
 using ParallelFor = void(int n, int num_threads, void *, RangeForTaskFunc func);
 
 class ThreadPool {
