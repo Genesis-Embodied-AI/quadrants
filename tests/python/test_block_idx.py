@@ -55,8 +55,12 @@ def test_block_idx_grid_stride():
 @test_utils.test(arch=qd.cpu, offline_cache=False)
 def test_block_idx_cpu_scheduling_modes(make_cpu_multithreading_loop):
     # Keep this independent of the existing cache-key bug when switching scheduling modes.
-    qd.init(arch=qd.cpu, cpu_max_num_threads=4, make_cpu_multithreading_loop=make_cpu_multithreading_loop,
-            offline_cache=False)
+    qd.init(
+        arch=qd.cpu,
+        cpu_max_num_threads=4,
+        make_cpu_multithreading_loop=make_cpu_multithreading_loop,
+        offline_cache=False,
+    )
     out = qd.ndarray(qd.i32, shape=4096)
 
     @qd.kernel
