@@ -41,7 +41,7 @@ ThreadPool::ThreadPool(int max_num_threads) : max_num_threads(max_num_threads) {
   }
 }
 
-void ThreadPool::run(int splits, int desired_num_threads, void *range_for_task_context, RangeForTaskFunc *task_fn) {
+void ThreadPool::run(int splits, int desired_num_threads, void *range_for_task_context, TaskFn *task_fn) {
   {
     std::lock_guard _(mutex);
     this->range_for_task_context = range_for_task_context;

@@ -56,7 +56,7 @@ using assert_failed_type = void (*)(const char *);
 using host_printf_type = void (*)(const char *, ...);
 using host_vsnprintf_type = int (*)(char *, std::size_t, const char *, std::va_list);
 using host_allocator_type = void *(*)(void *, std::size_t, std::size_t);
-using RangeForTaskFunc = void(RuntimeContext *, const char *tls, int i);
+using RangeForBodyFn = void(RuntimeContext *, const char *tls, int i);
 using MeshForTaskFunc = void(RuntimeContext *, const char *tls, std::uint32_t i);
 using parallel_for_type = void (*)(void *thread_pool,
                                    int splits,

@@ -1712,7 +1712,7 @@ using mesh_for_xlogue = void (*)(RuntimeContext *,
 struct range_task_helper_context {
   RuntimeContext *context;
   range_for_xlogue prologue{nullptr};
-  RangeForTaskFunc *body{nullptr};
+  RangeForBodyFn *body{nullptr};
   range_for_xlogue epilogue{nullptr};
   std::size_t tls_size{1};
   int begin;
@@ -1773,7 +1773,7 @@ void cpu_parallel_range_for(RuntimeContext *context,
                             int step,
                             int block_dim,
                             range_for_xlogue prologue,
-                            RangeForTaskFunc *body,
+                            RangeForBodyFn *body,
                             range_for_xlogue epilogue,
                             std::size_t tls_size) {
   range_task_helper_context ctx;
@@ -1799,7 +1799,7 @@ void gpu_parallel_range_for(RuntimeContext *context,
                             int begin,
                             int end,
                             range_for_xlogue prologue,
-                            RangeForTaskFunc *func,
+                            RangeForBodyFn *func,
                             range_for_xlogue epilogue,
                             const std::size_t tls_size) {
   int idx = thread_idx() + block_dim() * block_idx() + begin;
@@ -1827,7 +1827,7 @@ void gpu_parallel_range_for(RuntimeContext *context,
 struct mesh_task_helper_context {
   RuntimeContext *context;
   mesh_for_xlogue prologue{nullptr};
-  RangeForTaskFunc *body{nullptr};
+  RangeForBodyFn *body{nullptr};
   mesh_for_xlogue epilogue{nullptr};
   std::size_t tls_size{1};
   int num_patches;
@@ -1874,7 +1874,7 @@ void cpu_parallel_mesh_for(RuntimeContext *context,
                            int num_patches,
                            int block_dim,
                            mesh_for_xlogue prologue,
-                           RangeForTaskFunc *body,
+                           RangeForBodyFn *body,
                            mesh_for_xlogue epilogue,
                            std::size_t tls_size) {
   mesh_task_helper_context ctx;
