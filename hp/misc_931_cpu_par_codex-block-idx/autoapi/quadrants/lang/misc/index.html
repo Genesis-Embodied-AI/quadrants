@@ -892,10 +892,6 @@ Requires <code class="docutils literal notranslate"><span class="pre">&#64;qd.ke
 <dt class="sig sig-object py" id="quadrants.lang.misc.block_idx">
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.misc.</span></span><span class="sig-name descname"><span class="pre">block_idx</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/misc.html#block_idx"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.misc.block_idx" title="Link to this definition">#</a></dt>
 <dd><p>Return the current CPU scheduling block or GPU thread-block index.</p>
-<p>On CPU, indices start at zero for each parallel loop execution, and code
-outside a scheduled block returns 0. Both CPU scheduling modes are supported.
-On GPUs, this returns the hardware block index, which may process multiple
-groups of iterations. Nested serial loops retain their enclosing block index.</p>
 </dd></dl>
 
 <dl class="py function">
