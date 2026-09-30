@@ -708,8 +708,10 @@ complete list, please check out
 <a class="github reference external" href="https://github.com/Genesis-Embodied-AI/quadrants/blob/master/quadrants/program/compile_config.h">Genesis-Embodied-AI/quadrants</a>.</p>
 <ul>
 <li><p><code class="docutils literal notranslate"><span class="pre">cpu_max_num_threads</span></code> (int): Sets the number of threads used by the CPU thread pool.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">cpu_min_block_size</span></code> (int): Minimum CPU range-for block size (default: 512, must be &gt;= 1).
-Reduce it for small loops with expensive iterations. Only used when <code class="docutils literal notranslate"><span class="pre">make_cpu_multithreading_loop=True</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cpu_work_scheduling</span></code> (CPUWorkScheduling): CPU scheduling mode (default: PER_WORKER).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cpu_fixed_block_dim</span></code> (int): Iterations per fixed-size CPU task (default: 32, must be &gt;= 1).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cpu_per_worker_min_block_dim</span></code> (int): Minimum CPU range-for block size (default: 512, must be &gt;= 1).
+Reduce it for small loops with expensive iterations. Only used with <code class="docutils literal notranslate"><span class="pre">CPUWorkScheduling.PER_WORKER</span></code>.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">debug</span></code> (bool): Enables the debug mode, under which Quadrants does a few more things like boundary checks.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">print_ir</span></code> (bool): Prints the CHI IR of the Quadrants kernels.</p></li>
 </ul>

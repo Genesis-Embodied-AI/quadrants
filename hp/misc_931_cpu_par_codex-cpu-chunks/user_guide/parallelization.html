@@ -463,9 +463,9 @@
 </div>
 <p>Block 0 runs original iteration indices 0 through 999. Block 1 runs indices 1,000 through 1,999. This continues through block 11, which runs indices 11,000 through 11,999. Each task executes its inner loop sequentially, while different tasks can run in parallel.</p>
 </section>
-<section id="make-cpu-multithreading-loop-false">
-<h3>make_cpu_multithreading_loop=False<a class="headerlink" href="#make-cpu-multithreading-loop-false" title="Link to this heading">#</a></h3>
-<p>Setting <code class="docutils literal notranslate"><span class="pre">make_cpu_multithreading_loop=False</span></code> in <code class="docutils literal notranslate"><span class="pre">qd.init(...)</span></code> changes how iterations are divided among tasks. The default mode creates one task per configured worker, with all loop iterations partitioned across these tasks. With <code class="docutils literal notranslate"><span class="pre">False</span></code>, Quadrants groups the iterations into fixed-size groups, 32 by default. The number of tasks is independent of the number of workers, and proportional to the number of loop iterations.</p>
+<section id="fixed-size-scheduling">
+<h3>Fixed-size scheduling<a class="headerlink" href="#fixed-size-scheduling" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">qd.CPUWorkScheduling</span></code> is an enum, a type with named choices. Setting <code class="docutils literal notranslate"><span class="pre">cpu_work_scheduling=qd.CPUWorkScheduling.FIXED_SIZE</span></code> in <code class="docutils literal notranslate"><span class="pre">qd.init(...)</span></code> changes how iterations are divided among tasks. The default mode creates one task per configured worker, with all loop iterations partitioned across these tasks. With <code class="docutils literal notranslate"><span class="pre">FIXED_SIZE</span></code>, Quadrants groups the iterations into fixed-size groups, 32 by default. The number of tasks is independent of the number of workers, and proportional to the number of loop iterations.</p>
 <p>For the same 12,000-iteration loop, the default task size of 32 produces this pseudocode. Each <code class="docutils literal notranslate"><span class="pre">submit_task</span></code> schedules the indented work on an available worker and retains its own start and end indices:</p>
 <div class="highlight-text notranslate"><div class="highlight"><pre><span></span>for task_start in range(0, 12000, 32):
     task_end = min(task_start + 32, 12000)
@@ -476,94 +476,144 @@
 </div>
 <p>This creates 375 tasks of 32 iterations each. A pool of 12 workers processes them, with each worker taking another task when it finishes. The default mode instead creates 12 tasks of 1,000 iterations for this loop.</p>
 </section>
-<section id="comparison-of-make-cpu-multithreading-loop-false-vs-true">
-<h3>Comparison of make_cpu_multithreading_loop False vs True<a class="headerlink" href="#comparison-of-make-cpu-multithreading-loop-false-vs-true" title="Link to this heading">#</a></h3>
-<p>With <code class="docutils literal notranslate"><span class="pre">True</span></code> - the default - the number of tasks equals the configured worker count. For long loops, this groups many iterations into each task and keeps the number of scheduling operations small. This is efficient for very large numbers of iterations, and where the bodies of each loop take comparable compute time. For small loop bodies, an additional benefit is that the compiler can unroll the body, reducing loop control overhead.</p>
+<section id="comparing-the-scheduling-modes">
+<h3>Comparing the scheduling modes<a class="headerlink" href="#comparing-the-scheduling-modes" title="Link to this heading">#</a></h3>
+<p>With <code class="docutils literal notranslate"><span class="pre">PER_WORKER</span></code> - the default - the number of tasks equals the configured worker count. For long loops, this groups many iterations into each task and keeps the number of scheduling operations small. This is efficient for very large numbers of iterations, and where the bodies of each loop take comparable compute time. For small loop bodies, an additional benefit is that the compiler can unroll the body, reducing loop control overhead.</p>
 <p>The tradeoff is that each task is indivisible once it starts. If one task takes much longer than the others, its worker must finish that task’s remaining iterations while the other workers may be idle.</p>
-<p>With <code class="docutils literal notranslate"><span class="pre">False</span></code>, the task size stays fixed - same number of iterations per task - and the task count grows with the iteration count. When there are more tasks than workers, a worker that finishes one task can take another. This lets workers share an expensive region of the loop when that region spans several tasks.</p>
+<p>With <code class="docutils literal notranslate"><span class="pre">FIXED_SIZE</span></code>, the task size stays fixed - same number of iterations per task - and the task count grows with the iteration count. When there are more tasks than workers, a worker that finishes one task can take another. This lets workers share an expensive region of the loop when that region spans several tasks.</p>
 <p>The trade-off is that for large numbers of loop iterations, by default many tasks will be created, which will require more scheduling operations, introducing overhead.</p>
 <p>How to choose?</p>
 <ul class="simple">
-<li><p>with large numbers of similar size small iteration bodies =&gt; use <code class="docutils literal notranslate"><span class="pre">True</span></code></p></li>
-<li><p>with small numbers of unevenly sized large iteration bodies =&gt; use <code class="docutils literal notranslate"><span class="pre">False</span></code></p></li>
+<li><p>with large numbers of similar size small iteration bodies =&gt; use <code class="docutils literal notranslate"><span class="pre">PER_WORKER</span></code></p></li>
+<li><p>with small numbers of unevenly sized large iteration bodies =&gt; use <code class="docutils literal notranslate"><span class="pre">FIXED_SIZE</span></code></p></li>
 <li><p>other scenarios =&gt; empirical question</p></li>
 </ul>
-<p>Select the mode with <code class="docutils literal notranslate"><span class="pre">qd.init(arch=qd.cpu,</span> <span class="pre">make_cpu_multithreading_loop=True)</span></code> or <code class="docutils literal notranslate"><span class="pre">qd.init(arch=qd.cpu,</span> <span class="pre">make_cpu_multithreading_loop=False)</span></code>. Omitting the argument selects <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p>
+<p>Select the mode with <code class="docutils literal notranslate"><span class="pre">qd.init(arch=qd.cpu,</span> <span class="pre">cpu_work_scheduling=qd.CPUWorkScheduling.PER_WORKER)</span></code> or <code class="docutils literal notranslate"><span class="pre">qd.init(arch=qd.cpu,</span> <span class="pre">cpu_work_scheduling=qd.CPUWorkScheduling.FIXED_SIZE)</span></code>. Omitting the argument selects <code class="docutils literal notranslate"><span class="pre">PER_WORKER</span></code>.</p>
 </section>
-<section id="parameterizing-make-cpu-multithreading-loop-true">
-<h3>Parameterizing make_cpu_multithreading_loop=True<a class="headerlink" href="#parameterizing-make-cpu-multithreading-loop-true" title="Link to this heading">#</a></h3>
-<p>Select this mode with <code class="docutils literal notranslate"><span class="pre">qd.init(arch=qd.cpu,</span> <span class="pre">make_cpu_multithreading_loop=True)</span></code>. It is also the default when the argument is omitted. The two settings that determine work partitioning are <code class="docutils literal notranslate"><span class="pre">cpu_max_num_threads</span></code> and <code class="docutils literal notranslate"><span class="pre">cpu_min_block_size</span></code>.</p>
+<section id="parameterizing-per-worker">
+<h3>Parameterizing PER_WORKER<a class="headerlink" href="#parameterizing-per-worker" title="Link to this heading">#</a></h3>
+<p>Select this mode with <code class="docutils literal notranslate"><span class="pre">qd.init(arch=qd.cpu,</span> <span class="pre">cpu_work_scheduling=qd.CPUWorkScheduling.PER_WORKER)</span></code>. It is also the default when the argument is omitted. The two settings that determine work partitioning are <code class="docutils literal notranslate"><span class="pre">cpu_max_num_threads</span></code> and <code class="docutils literal notranslate"><span class="pre">cpu_per_worker_min_block_dim</span></code>.</p>
 <section id="cpu-max-num-threads">
 <h4>cpu_max_num_threads<a class="headerlink" href="#cpu-max-num-threads" title="Link to this heading">#</a></h4>
 <p><code class="docutils literal notranslate"><span class="pre">cpu_max_num_threads</span></code> sets the number of CPU worker threads in the thread pool. Its default is the system-reported number of logical cores. In this mode, it also sets the number of tasks created for each parallel <code class="docutils literal notranslate"><span class="pre">range()</span></code> loop.</p>
 <p>The worker count is not capped to the number of logical cores. If it exceeds that count, the operating system shares CPU time among the worker threads.</p>
 </section>
-<section id="cpu-min-block-size">
-<h4>cpu_min_block_size<a class="headerlink" href="#cpu-min-block-size" title="Link to this heading">#</a></h4>
-<p><code class="docutils literal notranslate"><span class="pre">cpu_min_block_size</span></code> sets the minimum number of original iterations per block. Its default is 512, and its value must be at least 1.</p>
+<section id="cpu-per-worker-min-block-dim">
+<h4>cpu_per_worker_min_block_dim<a class="headerlink" href="#cpu-per-worker-min-block-dim" title="Link to this heading">#</a></h4>
+<p><code class="docutils literal notranslate"><span class="pre">cpu_per_worker_min_block_dim</span></code> sets the minimum number of original iterations per block. Its default is 512, and its value must be at least 1.</p>
 <p>For a nonempty loop, the block size is:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>block_size = max(ceil(iteration_count / cpu_max_num_threads), cpu_min_block_size)
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>block_size = max(ceil(iteration_count / cpu_max_num_threads), cpu_per_worker_min_block_dim)
 </pre></div>
 </div>
 <p>Here <code class="docutils literal notranslate"><span class="pre">iteration_count</span></code> is the number of original loop iterations, and <code class="docutils literal notranslate"><span class="pre">ceil</span></code> means rounding up to an integer. The final nonempty block can be shorter than <code class="docutils literal notranslate"><span class="pre">block_size</span></code>. Blocks beyond the original loop range are empty.</p>
 <p>For example, configure four workers:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span>
     <span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">cpu</span><span class="p">,</span>
-    <span class="n">make_cpu_multithreading_loop</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">cpu_work_scheduling</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">CPUWorkScheduling</span><span class="o">.</span><span class="n">PER_WORKER</span><span class="p">,</span>
     <span class="n">cpu_max_num_threads</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
-    <span class="n">cpu_min_block_size</span><span class="o">=</span><span class="mi">512</span><span class="p">,</span>
+    <span class="n">cpu_per_worker_min_block_dim</span><span class="o">=</span><span class="mi">512</span><span class="p">,</span>
 <span class="p">)</span>
 </pre></div>
 </div>
 <p>For a loop with 1,000 iterations, dividing by four gives 250. The minimum of 512 raises the block size to 512. The four tasks therefore contain 512, 488, 0, and 0 iterations.</p>
-<p>Changing only <code class="docutils literal notranslate"><span class="pre">cpu_min_block_size</span></code> to 1 makes the block size 250. All four tasks then contain 250 iterations. It does not create 1,000 single-iteration tasks: the number of tasks remains four.</p>
+<p>Changing only <code class="docutils literal notranslate"><span class="pre">cpu_per_worker_min_block_dim</span></code> to 1 makes the block size 250. All four tasks then contain 250 iterations. It does not create 1,000 single-iteration tasks: the number of tasks remains four.</p>
 <p>Reducing the minimum can expose more parallel work when a short loop otherwise leaves blocks empty. It does not create more tasks than the configured worker count. Once all blocks contain useful work, lowering the minimum further may leave the partition unchanged.</p>
-<p>The setting <code class="docutils literal notranslate"><span class="pre">default_cpu_block_dim</span></code>, which controls task size in the alternative mode, does not determine the original-iteration block size in this mode. Use <code class="docutils literal notranslate"><span class="pre">cpu_min_block_size</span></code> for that purpose.</p>
+<p>The setting <code class="docutils literal notranslate"><span class="pre">cpu_fixed_block_dim</span></code>, which controls task size in the alternative mode, does not determine the original-iteration block size in this mode. Use <code class="docutils literal notranslate"><span class="pre">cpu_per_worker_min_block_dim</span></code> for that purpose.</p>
 </section>
 </section>
-<section id="parameterizing-make-cpu-multithreading-loop-false">
-<h3>Parameterizing make_cpu_multithreading_loop=False<a class="headerlink" href="#parameterizing-make-cpu-multithreading-loop-false" title="Link to this heading">#</a></h3>
-<p>Select this mode with <code class="docutils literal notranslate"><span class="pre">qd.init(arch=qd.cpu,</span> <span class="pre">make_cpu_multithreading_loop=False)</span></code>. Worker count and task size are independent. The two settings are <code class="docutils literal notranslate"><span class="pre">cpu_max_num_threads</span></code> and <code class="docutils literal notranslate"><span class="pre">default_cpu_block_dim</span></code>.</p>
+<section id="parameterizing-fixed-size">
+<h3>Parameterizing FIXED_SIZE<a class="headerlink" href="#parameterizing-fixed-size" title="Link to this heading">#</a></h3>
+<p>Select this mode with <code class="docutils literal notranslate"><span class="pre">qd.init(arch=qd.cpu,</span> <span class="pre">cpu_work_scheduling=qd.CPUWorkScheduling.FIXED_SIZE)</span></code>. Worker count and task size are independent. The two settings are <code class="docutils literal notranslate"><span class="pre">cpu_max_num_threads</span></code> and <code class="docutils literal notranslate"><span class="pre">cpu_fixed_block_dim</span></code>.</p>
 <section id="id1">
 <h4>cpu_max_num_threads<a class="headerlink" href="#id1" title="Link to this heading">#</a></h4>
 <p><code class="docutils literal notranslate"><span class="pre">cpu_max_num_threads</span></code> sets the number of CPU worker threads in the thread pool. Its default is the system-reported number of logical cores. It does not set the number of tasks in this mode.</p>
 <p>For example, four workers can process 32 tasks. As a worker finishes one task, it takes another until all tasks are complete. Increasing the worker count does not change those tasks’ iteration ranges.</p>
 </section>
-<section id="default-cpu-block-dim">
-<h4>default_cpu_block_dim<a class="headerlink" href="#default-cpu-block-dim" title="Link to this heading">#</a></h4>
-<p><code class="docutils literal notranslate"><span class="pre">default_cpu_block_dim</span></code> sets the number of original iterations per task when the loop does not specify its own block size. Its default is 32. The final task can contain fewer iterations.</p>
+<section id="cpu-fixed-block-dim">
+<h4>cpu_fixed_block_dim<a class="headerlink" href="#cpu-fixed-block-dim" title="Link to this heading">#</a></h4>
+<p><code class="docutils literal notranslate"><span class="pre">cpu_fixed_block_dim</span></code> sets the number of original iterations per task when the loop does not specify its own block size. Its default is 32, and its value must be at least 1. The final task can contain fewer iterations.</p>
 <p>For a nonempty loop without a loop-specific block size:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>task_count = ceil(iteration_count / default_cpu_block_dim)
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>task_count = ceil(iteration_count / cpu_fixed_block_dim)
 </pre></div>
 </div>
 <p>For example:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span>
     <span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">cpu</span><span class="p">,</span>
-    <span class="n">make_cpu_multithreading_loop</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">cpu_work_scheduling</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">CPUWorkScheduling</span><span class="o">.</span><span class="n">FIXED_SIZE</span><span class="p">,</span>
     <span class="n">cpu_max_num_threads</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
-    <span class="n">default_cpu_block_dim</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span>
+    <span class="n">cpu_fixed_block_dim</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span>
 <span class="p">)</span>
 </pre></div>
 </div>
 <p>For a loop with 1,000 iterations, this creates 32 tasks: 31 tasks of 32 iterations and one task of eight. The four workers share those tasks.</p>
-<p>Changing only <code class="docutils literal notranslate"><span class="pre">default_cpu_block_dim</span></code> to 250 creates four tasks of 250 iterations. Changing it to 16 creates 63 tasks: 62 tasks of 16 iterations and one task of eight. The worker count stays at four in both cases.</p>
+<p>Changing only <code class="docutils literal notranslate"><span class="pre">cpu_fixed_block_dim</span></code> to 250 creates four tasks of 250 iterations. Changing it to 16 creates 63 tasks: 62 tasks of 16 iterations and one task of eight. The worker count stays at four in both cases.</p>
 <p>Smaller tasks let workers share uneven work more finely, but require more scheduling operations. Larger tasks reduce the number of scheduling operations, but a long-running task can leave other workers idle near the end of the loop.</p>
-<p>To override the task size for one loop, place <code class="docutils literal notranslate"><span class="pre">qd.loop_config(block_dim=64)</span></code> immediately before that loop inside the kernel. In this mode, the loop then uses up to 64 original iterations per task instead of <code class="docutils literal notranslate"><span class="pre">default_cpu_block_dim</span></code>.</p>
-<p>The setting <code class="docutils literal notranslate"><span class="pre">cpu_min_block_size</span></code> has no effect in this mode.</p>
+<p>To override the task size for one loop, place <code class="docutils literal notranslate"><span class="pre">qd.loop_config(block_dim=64)</span></code> immediately before that loop inside the kernel. In this mode, the loop then uses up to 64 original iterations per task instead of <code class="docutils literal notranslate"><span class="pre">cpu_fixed_block_dim</span></code>.</p>
+<p>The setting <code class="docutils literal notranslate"><span class="pre">cpu_per_worker_min_block_dim</span></code> has no effect in this mode.</p>
 <p>For either mode, compare repeated kernel calls after compilation has completed and check that the results agree. The separate setting <code class="docutils literal notranslate"><span class="pre">num_compile_threads</span></code> controls threads used to compile kernels; it does not set the number of workers that execute the loop.</p>
 </section>
+</section>
+<section id="initialization-environment-variables-and-deprecated-names">
+<h3>Initialization, environment variables, and deprecated names<a class="headerlink" href="#initialization-environment-variables-and-deprecated-names" title="Link to this heading">#</a></h3>
+<p>These settings are compile-time options supplied to <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code>. They apply to all kernels compiled by that runtime. They cannot be supplied as runtime kernel arguments. The existing <code class="docutils literal notranslate"><span class="pre">qd.loop_config(block_dim=...)</span></code>, <code class="docutils literal notranslate"><span class="pre">parallelize</span></code>, and <code class="docutils literal notranslate"><span class="pre">serialize</span></code> directives remain available for individual loops.</p>
+<p>The equivalent environment variables are:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Initialization option</p></th>
+<th class="head"><p>Environment variable</p></th>
+<th class="head"><p>Accepted values</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">cpu_work_scheduling</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">QD_CPU_WORK_SCHEDULING</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">PER_WORKER</span></code> or <code class="docutils literal notranslate"><span class="pre">FIXED_SIZE</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">cpu_fixed_block_dim</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">QD_CPU_FIXED_BLOCK_DIM</span></code></p></td>
+<td><p>Positive integer</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">cpu_per_worker_min_block_dim</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">QD_CPU_PER_WORKER_MIN_BLOCK_DIM</span></code></p></td>
+<td><p>Positive integer</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Python code must pass a <code class="docutils literal notranslate"><span class="pre">qd.CPUWorkScheduling</span></code> member for the scheduling mode. Strings, integers, and booleans are not accepted for that option. A keyword argument overrides the environment variable with the same name. Empty environment variables are ignored.</p>
+<p>The following initialization options remain accepted but emit a deprecation warning:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Deprecated option</p></th>
+<th class="head"><p>Replacement</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">make_cpu_multithreading_loop=True</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cpu_work_scheduling=qd.CPUWorkScheduling.PER_WORKER</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">make_cpu_multithreading_loop=False</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cpu_work_scheduling=qd.CPUWorkScheduling.FIXED_SIZE</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">default_cpu_block_dim=N</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cpu_fixed_block_dim=N</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Their environment variables, <code class="docutils literal notranslate"><span class="pre">QD_MAKE_CPU_MULTITHREADING_LOOP</span></code> (<code class="docutils literal notranslate"><span class="pre">1</span></code> or <code class="docutils literal notranslate"><span class="pre">0</span></code>) and <code class="docutils literal notranslate"><span class="pre">QD_DEFAULT_CPU_BLOCK_DIM</span></code>, are also deprecated. Supplying both an old name and its replacement raises an error, even if their values agree. This includes mixing a keyword argument with the other spelling’s environment variable.</p>
 </section>
 <section id="inspecting-block-indices">
 <h3>Inspecting block indices<a class="headerlink" href="#inspecting-block-indices" title="Link to this heading">#</a></h3>
 <p><code class="docutils literal notranslate"><span class="pre">qd.block_idx()</span></code> works on CPU, CUDA, AMDGPU, Vulkan, and Metal. On CPU, it returns the index of the block executing the current iteration. Each block runs as one runtime task. Indices start at zero for each parallel loop execution. They identify blocks, not worker threads or execution order.</p>
-<p>This function works with both values of <code class="docutils literal notranslate"><span class="pre">make_cpu_multithreading_loop</span></code>. With <code class="docutils literal notranslate"><span class="pre">True</span></code>, it identifies the compiler-generated block of original iterations. With <code class="docutils literal notranslate"><span class="pre">False</span></code>, it identifies the group whose size is controlled by <code class="docutils literal notranslate"><span class="pre">block_dim</span></code>.</p>
+<p>This function works with both scheduling modes. With <code class="docutils literal notranslate"><span class="pre">PER_WORKER</span></code>, it identifies the compiler-generated block of original iterations. With <code class="docutils literal notranslate"><span class="pre">FIXED_SIZE</span></code>, it identifies the group whose size is controlled by <code class="docutils literal notranslate"><span class="pre">block_dim</span></code>.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">k_record_blocks</span><span class="p">(</span><span class="n">out</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">)):</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">200</span><span class="p">):</span>
         <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">block_idx</span><span class="p">()</span>
 </pre></div>
 </div>
-<p>With four workers, <code class="docutils literal notranslate"><span class="pre">make_cpu_multithreading_loop=True</span></code>, and <code class="docutils literal notranslate"><span class="pre">cpu_min_block_size=1</span></code>, this records 50 occurrences of each index from 0 through 3. With <code class="docutils literal notranslate"><span class="pre">make_cpu_multithreading_loop=False</span></code> and the default block size of 32, it records indices 0 through 6. The last block contains eight iterations.</p>
+<p>With four workers, <code class="docutils literal notranslate"><span class="pre">cpu_work_scheduling=qd.CPUWorkScheduling.PER_WORKER</span></code>, and <code class="docutils literal notranslate"><span class="pre">cpu_per_worker_min_block_dim=1</span></code>, this records 50 occurrences of each index from 0 through 3. With <code class="docutils literal notranslate"><span class="pre">cpu_work_scheduling=qd.CPUWorkScheduling.FIXED_SIZE</span></code> and the default block size of 32, it records indices 0 through 6. The last block contains eight iterations.</p>
 <p>Nested serial loops retain the enclosing block’s index. On CPU, code outside a scheduled block, including a top-level explicitly serialized loop, returns <code class="docutils literal notranslate"><span class="pre">0</span></code>. The function is available inside kernels and their called functions. Empty blocks execute no original iterations, so the example does not record them.</p>
 <p>On GPUs, <code class="docutils literal notranslate"><span class="pre">qd.block_idx()</span></code> returns the hardware thread-block index. Vulkan and Metal call these blocks workgroups. A hardware block contains multiple GPU threads and can process several groups of original iterations. Its index stays the same when it processes another group. Serial GPU code runs in block zero.</p>
 <p>The same kernel can call <code class="docutils literal notranslate"><span class="pre">qd.block_idx()</span></code> on every supported backend, but block sizes and iteration assignments may differ. The returned index is not a globally unique identifier.</p>
@@ -580,7 +630,7 @@
     <span class="k">return</span> <span class="n">result</span>
 </pre></div>
 </div>
-<p>The directive <code class="docutils literal notranslate"><span class="pre">qd.loop_config(parallelize=1)</span></code> also makes the following loop execute on one thread. These requests apply with either value of <code class="docutils literal notranslate"><span class="pre">make_cpu_multithreading_loop</span></code>. Setting <code class="docutils literal notranslate"><span class="pre">make_cpu_multithreading_loop=False</span></code> by itself does not request serial execution.</p>
+<p>The directive <code class="docutils literal notranslate"><span class="pre">qd.loop_config(parallelize=1)</span></code> also makes the following loop execute on one thread. These requests apply with either scheduling mode. Setting <code class="docutils literal notranslate"><span class="pre">cpu_work_scheduling=qd.CPUWorkScheduling.FIXED_SIZE</span></code> by itself does not request serial execution.</p>
 <p>See <a class="reference internal" href="init_options.html#cpu-loop-scheduling"><span class="std std-ref">CPU loop scheduling in qd.init options</span></a> for an initialization example and <a class="reference internal" href="init_options.html#all-options"><span class="std std-ref">All options</span></a> for the configuration reference.</p>
 </section>
 </section>
@@ -754,18 +804,19 @@
     <ul class="pst-show_toc_level nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#cpu-parallelization">CPU parallelization</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#default-cpu-scheduling">Default CPU scheduling</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#make-cpu-multithreading-loop-false">make_cpu_multithreading_loop=False</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#comparison-of-make-cpu-multithreading-loop-false-vs-true">Comparison of make_cpu_multithreading_loop False vs True</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#parameterizing-make-cpu-multithreading-loop-true">Parameterizing make_cpu_multithreading_loop=True</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#fixed-size-scheduling">Fixed-size scheduling</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#comparing-the-scheduling-modes">Comparing the scheduling modes</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#parameterizing-per-worker">Parameterizing PER_WORKER</a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#cpu-max-num-threads">cpu_max_num_threads</a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#cpu-min-block-size">cpu_min_block_size</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#cpu-per-worker-min-block-dim">cpu_per_worker_min_block_dim</a></li>
 </ul>
 </li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#parameterizing-make-cpu-multithreading-loop-false">Parameterizing make_cpu_multithreading_loop=False</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#parameterizing-fixed-size">Parameterizing FIXED_SIZE</a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">cpu_max_num_threads</a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#default-cpu-block-dim">default_cpu_block_dim</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#cpu-fixed-block-dim">cpu_fixed_block_dim</a></li>
 </ul>
 </li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#initialization-environment-variables-and-deprecated-names">Initialization, environment variables, and deprecated names</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#inspecting-block-indices">Inspecting block indices</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#requesting-serial-execution">Requesting serial execution</a></li>
 </ul>

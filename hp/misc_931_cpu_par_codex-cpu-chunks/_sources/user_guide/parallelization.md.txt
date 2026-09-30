@@ -42,9 +42,9 @@ for block_index in range(12):
 
 Block 0 runs original iteration indices 0 through 999. Block 1 runs indices 1,000 through 1,999. This continues through block 11, which runs indices 11,000 through 11,999. Each task executes its inner loop sequentially, while different tasks can run in parallel.
 
-### make_cpu_multithreading_loop=False
+### Fixed-size scheduling
 
-Setting `make_cpu_multithreading_loop=False` in `qd.init(...)` changes how iterations are divided among tasks. The default mode creates one task per configured worker, with all loop iterations partitioned across these tasks. With `False`, Quadrants groups the iterations into fixed-size groups, 32 by default. The number of tasks is independent of the number of workers, and proportional to the number of loop iterations.
+`qd.CPUWorkScheduling` is an enum, a type with named choices. Setting `cpu_work_scheduling=qd.CPUWorkScheduling.FIXED_SIZE` in `qd.init(...)` changes how iterations are divided among tasks. The default mode creates one task per configured worker, with all loop iterations partitioned across these tasks. With `FIXED_SIZE`, Quadrants groups the iterations into fixed-size groups, 32 by default. The number of tasks is independent of the number of workers, and proportional to the number of loop iterations.
 
 For the same 12,000-iteration loop, the default task size of 32 produces this pseudocode. Each `submit_task` schedules the indented work on an available worker and retains its own start and end indices:
 
@@ -58,26 +58,26 @@ for task_start in range(0, 12000, 32):
 
 This creates 375 tasks of 32 iterations each. A pool of 12 workers processes them, with each worker taking another task when it finishes. The default mode instead creates 12 tasks of 1,000 iterations for this loop.
 
-### Comparison of make_cpu_multithreading_loop False vs True
+### Comparing the scheduling modes
 
-With `True` - the default - the number of tasks equals the configured worker count. For long loops, this groups many iterations into each task and keeps the number of scheduling operations small. This is efficient for very large numbers of iterations, and where the bodies of each loop take comparable compute time. For small loop bodies, an additional benefit is that the compiler can unroll the body, reducing loop control overhead.
+With `PER_WORKER` - the default - the number of tasks equals the configured worker count. For long loops, this groups many iterations into each task and keeps the number of scheduling operations small. This is efficient for very large numbers of iterations, and where the bodies of each loop take comparable compute time. For small loop bodies, an additional benefit is that the compiler can unroll the body, reducing loop control overhead.
 
 The tradeoff is that each task is indivisible once it starts. If one task takes much longer than the others, its worker must finish that task's remaining iterations while the other workers may be idle.
 
-With `False`, the task size stays fixed - same number of iterations per task - and the task count grows with the iteration count. When there are more tasks than workers, a worker that finishes one task can take another. This lets workers share an expensive region of the loop when that region spans several tasks.
+With `FIXED_SIZE`, the task size stays fixed - same number of iterations per task - and the task count grows with the iteration count. When there are more tasks than workers, a worker that finishes one task can take another. This lets workers share an expensive region of the loop when that region spans several tasks.
 
 The trade-off is that for large numbers of loop iterations, by default many tasks will be created, which will require more scheduling operations, introducing overhead.
 
 How to choose?
-- with large numbers of similar size small iteration bodies => use `True`
-- with small numbers of unevenly sized large iteration bodies => use `False`
+- with large numbers of similar size small iteration bodies => use `PER_WORKER`
+- with small numbers of unevenly sized large iteration bodies => use `FIXED_SIZE`
 - other scenarios => empirical question
 
-Select the mode with `qd.init(arch=qd.cpu, make_cpu_multithreading_loop=True)` or `qd.init(arch=qd.cpu, make_cpu_multithreading_loop=False)`. Omitting the argument selects `True`.
+Select the mode with `qd.init(arch=qd.cpu, cpu_work_scheduling=qd.CPUWorkScheduling.PER_WORKER)` or `qd.init(arch=qd.cpu, cpu_work_scheduling=qd.CPUWorkScheduling.FIXED_SIZE)`. Omitting the argument selects `PER_WORKER`.
 
-### Parameterizing make_cpu_multithreading_loop=True
+### Parameterizing PER_WORKER
 
-Select this mode with `qd.init(arch=qd.cpu, make_cpu_multithreading_loop=True)`. It is also the default when the argument is omitted. The two settings that determine work partitioning are `cpu_max_num_threads` and `cpu_min_block_size`.
+Select this mode with `qd.init(arch=qd.cpu, cpu_work_scheduling=qd.CPUWorkScheduling.PER_WORKER)`. It is also the default when the argument is omitted. The two settings that determine work partitioning are `cpu_max_num_threads` and `cpu_per_worker_min_block_dim`.
 
 #### cpu_max_num_threads
 
@@ -85,14 +85,14 @@ Select this mode with `qd.init(arch=qd.cpu, make_cpu_multithreading_loop=True)`.
 
 The worker count is not capped to the number of logical cores. If it exceeds that count, the operating system shares CPU time among the worker threads.
 
-#### cpu_min_block_size
+#### cpu_per_worker_min_block_dim
 
-`cpu_min_block_size` sets the minimum number of original iterations per block. Its default is 512, and its value must be at least 1.
+`cpu_per_worker_min_block_dim` sets the minimum number of original iterations per block. Its default is 512, and its value must be at least 1.
 
 For a nonempty loop, the block size is:
 
 ```text
-block_size = max(ceil(iteration_count / cpu_max_num_threads), cpu_min_block_size)
+block_size = max(ceil(iteration_count / cpu_max_num_threads), cpu_per_worker_min_block_dim)
 ```
 
 Here `iteration_count` is the number of original loop iterations, and `ceil` means rounding up to an integer. The final nonempty block can be shorter than `block_size`. Blocks beyond the original loop range are empty.
@@ -102,23 +102,23 @@ For example, configure four workers:
 ```python
 qd.init(
     arch=qd.cpu,
-    make_cpu_multithreading_loop=True,
+    cpu_work_scheduling=qd.CPUWorkScheduling.PER_WORKER,
     cpu_max_num_threads=4,
-    cpu_min_block_size=512,
+    cpu_per_worker_min_block_dim=512,
 )
 ```
 
 For a loop with 1,000 iterations, dividing by four gives 250. The minimum of 512 raises the block size to 512. The four tasks therefore contain 512, 488, 0, and 0 iterations.
 
-Changing only `cpu_min_block_size` to 1 makes the block size 250. All four tasks then contain 250 iterations. It does not create 1,000 single-iteration tasks: the number of tasks remains four.
+Changing only `cpu_per_worker_min_block_dim` to 1 makes the block size 250. All four tasks then contain 250 iterations. It does not create 1,000 single-iteration tasks: the number of tasks remains four.
 
 Reducing the minimum can expose more parallel work when a short loop otherwise leaves blocks empty. It does not create more tasks than the configured worker count. Once all blocks contain useful work, lowering the minimum further may leave the partition unchanged.
 
-The setting `default_cpu_block_dim`, which controls task size in the alternative mode, does not determine the original-iteration block size in this mode. Use `cpu_min_block_size` for that purpose.
+The setting `cpu_fixed_block_dim`, which controls task size in the alternative mode, does not determine the original-iteration block size in this mode. Use `cpu_per_worker_min_block_dim` for that purpose.
 
-### Parameterizing make_cpu_multithreading_loop=False
+### Parameterizing FIXED_SIZE
 
-Select this mode with `qd.init(arch=qd.cpu, make_cpu_multithreading_loop=False)`. Worker count and task size are independent. The two settings are `cpu_max_num_threads` and `default_cpu_block_dim`.
+Select this mode with `qd.init(arch=qd.cpu, cpu_work_scheduling=qd.CPUWorkScheduling.FIXED_SIZE)`. Worker count and task size are independent. The two settings are `cpu_max_num_threads` and `cpu_fixed_block_dim`.
 
 #### cpu_max_num_threads
 
@@ -126,14 +126,14 @@ Select this mode with `qd.init(arch=qd.cpu, make_cpu_multithreading_loop=False)`
 
 For example, four workers can process 32 tasks. As a worker finishes one task, it takes another until all tasks are complete. Increasing the worker count does not change those tasks' iteration ranges.
 
-#### default_cpu_block_dim
+#### cpu_fixed_block_dim
 
-`default_cpu_block_dim` sets the number of original iterations per task when the loop does not specify its own block size. Its default is 32. The final task can contain fewer iterations.
+`cpu_fixed_block_dim` sets the number of original iterations per task when the loop does not specify its own block size. Its default is 32, and its value must be at least 1. The final task can contain fewer iterations.
 
 For a nonempty loop without a loop-specific block size:
 
 ```text
-task_count = ceil(iteration_count / default_cpu_block_dim)
+task_count = ceil(iteration_count / cpu_fixed_block_dim)
 ```
 
 For example:
@@ -141,29 +141,53 @@ For example:
 ```python
 qd.init(
     arch=qd.cpu,
-    make_cpu_multithreading_loop=False,
+    cpu_work_scheduling=qd.CPUWorkScheduling.FIXED_SIZE,
     cpu_max_num_threads=4,
-    default_cpu_block_dim=32,
+    cpu_fixed_block_dim=32,
 )
 ```
 
 For a loop with 1,000 iterations, this creates 32 tasks: 31 tasks of 32 iterations and one task of eight. The four workers share those tasks.
 
-Changing only `default_cpu_block_dim` to 250 creates four tasks of 250 iterations. Changing it to 16 creates 63 tasks: 62 tasks of 16 iterations and one task of eight. The worker count stays at four in both cases.
+Changing only `cpu_fixed_block_dim` to 250 creates four tasks of 250 iterations. Changing it to 16 creates 63 tasks: 62 tasks of 16 iterations and one task of eight. The worker count stays at four in both cases.
 
 Smaller tasks let workers share uneven work more finely, but require more scheduling operations. Larger tasks reduce the number of scheduling operations, but a long-running task can leave other workers idle near the end of the loop.
 
-To override the task size for one loop, place `qd.loop_config(block_dim=64)` immediately before that loop inside the kernel. In this mode, the loop then uses up to 64 original iterations per task instead of `default_cpu_block_dim`.
+To override the task size for one loop, place `qd.loop_config(block_dim=64)` immediately before that loop inside the kernel. In this mode, the loop then uses up to 64 original iterations per task instead of `cpu_fixed_block_dim`.
 
-The setting `cpu_min_block_size` has no effect in this mode.
+The setting `cpu_per_worker_min_block_dim` has no effect in this mode.
 
 For either mode, compare repeated kernel calls after compilation has completed and check that the results agree. The separate setting `num_compile_threads` controls threads used to compile kernels; it does not set the number of workers that execute the loop.
+
+### Initialization, environment variables, and deprecated names
+
+These settings are compile-time options supplied to `qd.init()`. They apply to all kernels compiled by that runtime. They cannot be supplied as runtime kernel arguments. The existing `qd.loop_config(block_dim=...)`, `parallelize`, and `serialize` directives remain available for individual loops.
+
+The equivalent environment variables are:
+
+| Initialization option | Environment variable | Accepted values |
+| --- | --- | --- |
+| `cpu_work_scheduling` | `QD_CPU_WORK_SCHEDULING` | `PER_WORKER` or `FIXED_SIZE` |
+| `cpu_fixed_block_dim` | `QD_CPU_FIXED_BLOCK_DIM` | Positive integer |
+| `cpu_per_worker_min_block_dim` | `QD_CPU_PER_WORKER_MIN_BLOCK_DIM` | Positive integer |
+
+Python code must pass a `qd.CPUWorkScheduling` member for the scheduling mode. Strings, integers, and booleans are not accepted for that option. A keyword argument overrides the environment variable with the same name. Empty environment variables are ignored.
+
+The following initialization options remain accepted but emit a deprecation warning:
+
+| Deprecated option | Replacement |
+| --- | --- |
+| `make_cpu_multithreading_loop=True` | `cpu_work_scheduling=qd.CPUWorkScheduling.PER_WORKER` |
+| `make_cpu_multithreading_loop=False` | `cpu_work_scheduling=qd.CPUWorkScheduling.FIXED_SIZE` |
+| `default_cpu_block_dim=N` | `cpu_fixed_block_dim=N` |
+
+Their environment variables, `QD_MAKE_CPU_MULTITHREADING_LOOP` (`1` or `0`) and `QD_DEFAULT_CPU_BLOCK_DIM`, are also deprecated. Supplying both an old name and its replacement raises an error, even if their values agree. This includes mixing a keyword argument with the other spelling's environment variable.
 
 ### Inspecting block indices
 
 `qd.block_idx()` works on CPU, CUDA, AMDGPU, Vulkan, and Metal. On CPU, it returns the index of the block executing the current iteration. Each block runs as one runtime task. Indices start at zero for each parallel loop execution. They identify blocks, not worker threads or execution order.
 
-This function works with both values of `make_cpu_multithreading_loop`. With `True`, it identifies the compiler-generated block of original iterations. With `False`, it identifies the group whose size is controlled by `block_dim`.
+This function works with both scheduling modes. With `PER_WORKER`, it identifies the compiler-generated block of original iterations. With `FIXED_SIZE`, it identifies the group whose size is controlled by `block_dim`.
 
 ```python
 @qd.kernel
@@ -172,7 +196,7 @@ def k_record_blocks(out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
         out[i] = qd.block_idx()
 ```
 
-With four workers, `make_cpu_multithreading_loop=True`, and `cpu_min_block_size=1`, this records 50 occurrences of each index from 0 through 3. With `make_cpu_multithreading_loop=False` and the default block size of 32, it records indices 0 through 6. The last block contains eight iterations.
+With four workers, `cpu_work_scheduling=qd.CPUWorkScheduling.PER_WORKER`, and `cpu_per_worker_min_block_dim=1`, this records 50 occurrences of each index from 0 through 3. With `cpu_work_scheduling=qd.CPUWorkScheduling.FIXED_SIZE` and the default block size of 32, it records indices 0 through 6. The last block contains eight iterations.
 
 Nested serial loops retain the enclosing block's index. On CPU, code outside a scheduled block, including a top-level explicitly serialized loop, returns `0`. The function is available inside kernels and their called functions. Empty blocks execute no original iterations, so the example does not record them.
 
@@ -194,7 +218,7 @@ def k_serial() -> qd.i32:
     return result
 ```
 
-The directive `qd.loop_config(parallelize=1)` also makes the following loop execute on one thread. These requests apply with either value of `make_cpu_multithreading_loop`. Setting `make_cpu_multithreading_loop=False` by itself does not request serial execution.
+The directive `qd.loop_config(parallelize=1)` also makes the following loop execute on one thread. These requests apply with either scheduling mode. Setting `cpu_work_scheduling=qd.CPUWorkScheduling.FIXED_SIZE` by itself does not request serial execution.
 
 See [CPU loop scheduling in qd.init options](init_options.md#cpu-loop-scheduling) for an initialization example and [All options](init_options.md#all-options) for the configuration reference.
 
