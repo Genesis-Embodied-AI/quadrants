@@ -15,7 +15,7 @@
 namespace quadrants {
 
 using RangeForTaskFunc = void(void *ctx, int thread_id, int task_id);
-using ParallelFor = void(int n, int num_threads, void *, RangeForTaskFunc func);
+using ParallelFor = void(int n, int num_threads, void *, RangeForTaskFunc task_fn);
 
 class ThreadPool {
  public:
@@ -32,7 +32,7 @@ class ThreadPool {
   uint64 last_finished;
   bool started;
   bool exiting;
-  RangeForTaskFunc *func;
+  RangeForTaskFunc *task_fn;
   void *range_for_task_context;  // Note: this is a pointer to a
                                  // range_task_helper_context defined in the
                                  // LLVM runtime, which is different from
@@ -41,14 +41,14 @@ class ThreadPool {
 
   explicit ThreadPool(int max_num_threads);
 
-  void run(int splits, int desired_num_threads, void *range_for_task_context, RangeForTaskFunc *func);
+  void run(int splits, int desired_num_threads, void *range_for_task_context, RangeForTaskFunc *task_fn);
 
   static void static_run(ThreadPool *pool,
                          int splits,
                          int desired_num_threads,
                          void *range_for_task_context,
-                         RangeForTaskFunc *func) {
-    return pool->run(splits, desired_num_threads, range_for_task_context, func);
+                         RangeForTaskFunc *task_fn) {
+    return pool->run(splits, desired_num_threads, range_for_task_context, task_fn);
   }
 
   void target();

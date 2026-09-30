@@ -62,7 +62,7 @@ using parallel_for_type = void (*)(void *thread_pool,
                                    int splits,
                                    int num_desired_threads,
                                    void *context,
-                                   void (*func)(void *ctx, int thread_id, int task_id));
+                                   void (*task_fn)(void *ctx, int thread_id, int task_id));
 
 // `STRUCT_FIELD` and friends. Generate `extern "C"` getters / setters that the host invokes via the JIT to read /
 // write fields by name without taking on the struct layout. Both runtime.cpp and adstack_runtime.cpp use these to
