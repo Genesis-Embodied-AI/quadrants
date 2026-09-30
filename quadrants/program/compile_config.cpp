@@ -60,7 +60,8 @@ CompileConfig::CompileConfig() {
 
 void CompileConfig::fit() {
   QD_ERROR_IF(cpu_fixed_block_dim < 1, "cpu_fixed_block_dim must be >= 1, but got {}.", cpu_fixed_block_dim);
-  QD_ERROR_IF(cpu_per_worker_min_block_dim < 1, "cpu_per_worker_min_block_dim must be >= 1, but got {}.", cpu_per_worker_min_block_dim);
+  QD_ERROR_IF(cpu_per_worker_min_block_dim < 1, "cpu_per_worker_min_block_dim must be >= 1, but got {}.",
+              cpu_per_worker_min_block_dim);
   if (debug) {
     // TODO: allow users to run in debug mode without out-of-bound checks
     check_out_of_bound = true;

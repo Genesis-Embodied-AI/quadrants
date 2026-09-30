@@ -1,3 +1,6 @@
+import json
+import subprocess
+import sys
 import warnings
 from enum import Enum
 
@@ -90,7 +93,9 @@ def test_cpu_scheduling_deprecated_alias(old, value, new, expected, env_value, m
     ],
 )
 @test_utils.test(arch=qd.cpu)
-def test_cpu_scheduling_conflicting_aliases(old_env, new_env, old, old_value, new, new_value, new_env_value, monkeypatch):
+def test_cpu_scheduling_conflicting_aliases(
+    old_env, new_env, old, old_value, new, new_value, new_env_value, monkeypatch
+):
     kwargs = {}
     if old_env:
         monkeypatch.setenv("QD_" + old.upper(), str(int(old_value)))
@@ -142,3 +147,58 @@ def test_cpu_fixed_block_dim_execution(cpu_fixed_block_dim, loop_block_dim):
     k_record_blocks(out)
     width = cpu_fixed_block_dim if loop_block_dim is None else loop_block_dim
     np.testing.assert_array_equal(out.to_numpy(), np.arange(200, dtype=np.int32) // width)
+
+
+@pytest.mark.parametrize("fastcache", [False, True])
+@pytest.mark.parametrize(
+    "base, changed, base_width, changed_width",
+    [
+        ({"cpu_work_scheduling": "PER_WORKER", "cpu_per_worker_min_block_dim": 16},
+         {"cpu_work_scheduling": "PER_WORKER", "cpu_per_worker_min_block_dim": 64}, 50, 64),
+        ({"cpu_work_scheduling": "FIXED_SIZE", "cpu_fixed_block_dim": 17},
+         {"cpu_work_scheduling": "FIXED_SIZE", "cpu_fixed_block_dim": 64}, 17, 64),
+        ({"cpu_work_scheduling": "PER_WORKER", "cpu_per_worker_min_block_dim": 16, "cpu_fixed_block_dim": 17},
+         {"cpu_work_scheduling": "FIXED_SIZE", "cpu_per_worker_min_block_dim": 16, "cpu_fixed_block_dim": 17}, 50, 17),
+    ],
+)
+@test_utils.test(arch=qd.cpu)
+def test_cpu_scheduling_cache_across_processes(tmp_path, fastcache, base, changed, base_width, changed_width):
+    script = tmp_path / "record_blocks.py"
+    script.write_text(
+        """
+import json
+import sys
+import numpy as np
+import quadrants as qd
+
+options = json.loads(sys.argv[2])
+options["cpu_work_scheduling"] = getattr(qd.CPUWorkScheduling, options["cpu_work_scheduling"])
+fastcache = bool(int(sys.argv[3]))
+qd.init(arch=qd.cpu, cpu_max_num_threads=4, offline_cache=True,
+        offline_cache_file_path=sys.argv[1], **options)
+
+@qd.kernel(fastcache=fastcache)
+def k_record_blocks(out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+    for i in range(200):
+        out[i] = qd.block_idx()
+
+out = qd.ndarray(qd.i32, shape=200)
+k_record_blocks(out)
+np.testing.assert_array_equal(out.to_numpy(), np.arange(200, dtype=np.int32) // int(sys.argv[4]))
+if fastcache:
+    assert k_record_blocks._primal.src_ll_cache_observations.cache_loaded == bool(int(sys.argv[5]))
+qd.reset()
+print("checked block assignments")
+"""
+    )
+    # Each process shares the cache directory. Returning to the first settings should reuse its cached kernel.
+    for options, width, warm in [(base, base_width, False), (changed, changed_width, False), (base, base_width, True)]:
+        result = subprocess.run(
+            [sys.executable, str(script), str(tmp_path / "cache"), json.dumps(options),
+             str(int(fastcache)), str(width), str(int(warm))],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "checked block assignments" in result.stdout

@@ -565,10 +565,22 @@ def test_offline_cache_with_changing_compile_config(curr_arch):
             c += i
 
     assert added_files() == expected_num_cache_files()
-    qd.init(arch=curr_arch, enable_fallback=False, opt_level=0, cpu_per_worker_min_block_dim=16, **current_thread_ext_options())
+    qd.init(
+        arch=curr_arch,
+        enable_fallback=False,
+        opt_level=0,
+        cpu_per_worker_min_block_dim=16,
+        **current_thread_ext_options(),
+    )
     helper()
 
-    qd.init(arch=curr_arch, enable_fallback=False, opt_level=1, cpu_per_worker_min_block_dim=16, **current_thread_ext_options())
+    qd.init(
+        arch=curr_arch,
+        enable_fallback=False,
+        opt_level=1,
+        cpu_per_worker_min_block_dim=16,
+        **current_thread_ext_options(),
+    )
     assert added_files() == expected_num_cache_files(1)
     helper()
 

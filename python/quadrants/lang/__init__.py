@@ -18,7 +18,12 @@ from quadrants.lang.snode import *
 from quadrants.lang.source_builder import *
 from quadrants.lang.stream import *
 from quadrants.lang.struct import *
-from quadrants.types.enums import CPUWorkScheduling, DeviceCapability, Format, Layout  # noqa: F401
+from quadrants.types.enums import (  # noqa: F401
+    CPUWorkScheduling,
+    DeviceCapability,
+    Format,
+    Layout,
+)
 
 from ._perf_dispatch import perf_dispatch  # noqa: F401
 

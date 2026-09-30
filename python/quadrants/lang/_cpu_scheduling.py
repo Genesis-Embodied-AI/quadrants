@@ -22,8 +22,10 @@ def _read(kwargs, name, cast):
 
 def _mode_from_env(value):
     try:
-        return {"PER_WORKER": _qd_core.CPUWorkScheduling.PER_WORKER,
-                "FIXED_SIZE": _qd_core.CPUWorkScheduling.FIXED_SIZE}[value]
+        return {
+            "PER_WORKER": _qd_core.CPUWorkScheduling.PER_WORKER,
+            "FIXED_SIZE": _qd_core.CPUWorkScheduling.FIXED_SIZE,
+        }[value]
     except KeyError:
         raise ValueError("QD_CPU_WORK_SCHEDULING must be PER_WORKER or FIXED_SIZE") from None
 

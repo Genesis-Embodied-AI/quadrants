@@ -67,7 +67,9 @@ def test_cpu_range_for_block_serial_execution(serialize):
 @pytest.mark.parametrize("cpu_per_worker_min_block_dim", [0, -1, -512])
 @test_utils.test(arch=qd.cpu)
 def test_cpu_range_for_block_invalid(cpu_per_worker_min_block_dim):
-    with pytest.raises(RuntimeError, match=rf"cpu_per_worker_min_block_dim must be >= 1, but got {cpu_per_worker_min_block_dim}\."):
+    with pytest.raises(
+        RuntimeError, match=rf"cpu_per_worker_min_block_dim must be >= 1, but got {cpu_per_worker_min_block_dim}\."
+    ):
         qd.init(arch=qd.cpu, cpu_per_worker_min_block_dim=cpu_per_worker_min_block_dim)
 
 
@@ -118,7 +120,10 @@ def test_cpu_range_for_block_overflow(cpu_per_worker_min_block_dim):
 @test_utils.test(arch=qd.cpu)
 def test_cpu_range_for_block_sizes(cpu_per_worker_min_block_dim, expected_sizes):
     qd.init(
-        arch=qd.cpu, cpu_max_num_threads=4, cpu_per_worker_min_block_dim=cpu_per_worker_min_block_dim, cpu_work_scheduling=qd.CPUWorkScheduling.PER_WORKER
+        arch=qd.cpu,
+        cpu_max_num_threads=4,
+        cpu_per_worker_min_block_dim=cpu_per_worker_min_block_dim,
+        cpu_work_scheduling=qd.CPUWorkScheduling.PER_WORKER,
     )
     block_indices = qd.ndarray(dtype=qd.i32, shape=200)
 

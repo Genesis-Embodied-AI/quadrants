@@ -92,7 +92,8 @@ class MakeCPUMultithreadedRangeFor : public BasicStmtVisitor {
     auto get_cpu_block_start_index_fn = [&](Stmt *index) {
       return offloaded_body->insert(Stmt::make_typed<InternalFuncStmt>(
           "get_cpu_block_start_index",
-          std::vector<Stmt *>{begin_stmt, end_stmt, num_threads, cpu_per_worker_min_block_dim, index}, PrimitiveType::i32,
+          std::vector<Stmt *>{begin_stmt, end_stmt, num_threads, cpu_per_worker_min_block_dim, index},
+          PrimitiveType::i32,
           /*with_runtime_context=*/false));
     };
     auto block_begin = get_cpu_block_start_index_fn(block_index);
