@@ -34,12 +34,12 @@ using TaskType = OffloadedStmt::TaskType;
  *       for i in range(block_begin, block_end):
  *           a[i] = i
  *
- * where 8 is the number of threads available on the CPU and cpu_min_block_size is set to 1.
+ * where 8 is the number of threads available on the CPU and cpu_per_worker_min_block_dim is set to 1.
  *
  * This pass is only applied to range-for loops that are offloaded to
  * CPUs. The number of threads is determined by the config option
  * "cpu_max_num_threads", and the minimum chunk size by
- * "cpu_min_block_size" (default 512).
+ * "cpu_per_worker_min_block_dim" (default 512).
  *
  * The effect is that more invarants in the inner most can be identified and
  * moved outside, so that LLVM has more chance to vectorize the innermost
@@ -65,8 +65,8 @@ class MakeCPUMultithreadedRangeFor : public BasicStmtVisitor {
 
     auto offloaded_body = std::make_unique<Block>();
     auto one = offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(PrimitiveType::i32, 1)));
-    auto cpu_min_block_size =
-        offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(config_.cpu_min_block_size)));
+    auto cpu_per_worker_min_block_dim =
+        offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(config_.cpu_per_worker_min_block_dim)));
     auto num_threads = offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(config_.cpu_max_num_threads)));
     auto block_index = offloaded_body->insert(Stmt::make_typed<LoopIndexStmt>(offloaded, 0));
 
@@ -92,7 +92,7 @@ class MakeCPUMultithreadedRangeFor : public BasicStmtVisitor {
     auto get_cpu_block_start_index_fn = [&](Stmt *index) {
       return offloaded_body->insert(Stmt::make_typed<InternalFuncStmt>(
           "get_cpu_block_start_index",
-          std::vector<Stmt *>{begin_stmt, end_stmt, num_threads, cpu_min_block_size, index}, PrimitiveType::i32,
+          std::vector<Stmt *>{begin_stmt, end_stmt, num_threads, cpu_per_worker_min_block_dim, index}, PrimitiveType::i32,
           /*with_runtime_context=*/false));
     };
     auto block_begin = get_cpu_block_start_index_fn(block_index);

@@ -7,7 +7,7 @@ from tests import test_utils
 
 
 @pytest.mark.parametrize("block_dim", [32, 64])
-@test_utils.test(make_cpu_multithreading_loop=False, cpu_max_num_threads=4)
+@test_utils.test(cpu_work_scheduling=qd.CPUWorkScheduling.FIXED_SIZE, cpu_max_num_threads=4)
 def test_block_idx_portable(block_dim):
     block_indices = qd.ndarray(dtype=qd.i32, shape=(200, 2))
 

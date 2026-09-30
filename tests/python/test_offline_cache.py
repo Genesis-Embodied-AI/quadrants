@@ -565,10 +565,10 @@ def test_offline_cache_with_changing_compile_config(curr_arch):
             c += i
 
     assert added_files() == expected_num_cache_files()
-    qd.init(arch=curr_arch, enable_fallback=False, opt_level=0, cpu_min_block_size=16, **current_thread_ext_options())
+    qd.init(arch=curr_arch, enable_fallback=False, opt_level=0, cpu_per_worker_min_block_dim=16, **current_thread_ext_options())
     helper()
 
-    qd.init(arch=curr_arch, enable_fallback=False, opt_level=1, cpu_min_block_size=16, **current_thread_ext_options())
+    qd.init(arch=curr_arch, enable_fallback=False, opt_level=1, cpu_per_worker_min_block_dim=16, **current_thread_ext_options())
     assert added_files() == expected_num_cache_files(1)
     helper()
 
@@ -578,7 +578,7 @@ def test_offline_cache_with_changing_compile_config(curr_arch):
         arch=curr_arch,
         enable_fallback=False,
         opt_level=1,
-        cpu_min_block_size=16,
+        cpu_per_worker_min_block_dim=16,
         default_fp=qd.f32,
         **current_thread_ext_options(),
     )
@@ -588,12 +588,12 @@ def test_offline_cache_with_changing_compile_config(curr_arch):
     assert added_files() == expected_num_cache_files(2)
 
     if curr_arch == qd.cpu:
-        for cpu_min_block_size in [32, 16]:
+        for cpu_per_worker_min_block_dim in [32, 16]:
             qd.init(
                 arch=curr_arch,
                 enable_fallback=False,
                 opt_level=1,
-                cpu_min_block_size=cpu_min_block_size,
+                cpu_per_worker_min_block_dim=cpu_per_worker_min_block_dim,
                 **current_thread_ext_options(),
             )
             helper()

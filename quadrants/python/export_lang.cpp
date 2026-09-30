@@ -163,6 +163,10 @@ void export_lang(nb::module_ &m) {
       .def_rw("tb", &DebugInfo::tb)
       .def_rw("src_loc", &DebugInfo::src_loc);
 
+  nb::enum_<CPUWorkScheduling>(m, "CPUWorkScheduling")
+      .value("PER_WORKER", CPUWorkScheduling::PER_WORKER)
+      .value("FIXED_SIZE", CPUWorkScheduling::FIXED_SIZE);
+
   nb::class_<CompileConfig>(m, "CompileConfig")
       .def(nb::init<>())
       .def_rw("arch", &CompileConfig::arch,
@@ -218,8 +222,9 @@ void export_lang(nb::module_ &m) {
               "advanced_optimization pipeline.")
       .def_rw("cache_loop_invariant_global_vars", &CompileConfig::cache_loop_invariant_global_vars,
               "Cache loop-invariant global loads into locals inside loops.")
-      .def_rw("default_cpu_block_dim", &CompileConfig::default_cpu_block_dim,
-              "Number of iterations per CPU parallel-for block.")
+      .def_rw("cpu_fixed_block_dim", &CompileConfig::cpu_fixed_block_dim,
+              "Iterations per task in CPUWorkScheduling.FIXED_SIZE mode (must be >= 1, default 32). "
+              "Overridden by qd.loop_config(block_dim=...). Ignored in PER_WORKER mode and on GPUs.")
       .def_rw("default_gpu_block_dim", &CompileConfig::default_gpu_block_dim, "Default GPU thread-block size.")
       .def_rw("saturating_grid_dim", &CompileConfig::saturating_grid_dim,
               "Target GPU grid size (number of blocks) on the CUDA/AMDGPU backends; 0 lets Quadrants pick based on "
@@ -233,11 +238,10 @@ void export_lang(nb::module_ &m) {
       .def_rw("cpu_max_num_threads", &CompileConfig::cpu_max_num_threads,
               "Maximum number of CPU threads used to run kernels (the runtime thread pool and CPU parallel-for loops). "
               "Compilation threads are governed separately by num_compile_threads.")
-      .def_rw("cpu_min_block_size", &CompileConfig::cpu_min_block_size,
+      .def_rw("cpu_per_worker_min_block_dim", &CompileConfig::cpu_per_worker_min_block_dim,
               "Minimum iterations per CPU range-for block (must be >= 1, default 512). Block size is "
-              "max(ceil((end - begin) / cpu_max_num_threads), cpu_min_block_size). Larger blocks help vectorize "
-              "cheap loop bodies; reduce the minimum for short loops with expensive iterations. Only used when "
-              "make_cpu_multithreading_loop is enabled; the final block may be smaller. Does not affect GPU loops.")
+              "max(ceil((end - begin) / cpu_max_num_threads), cpu_per_worker_min_block_dim). Only used with "
+              "CPUWorkScheduling.PER_WORKER; the final nonempty block may be smaller. Does not affect GPU loops.")
       .def_rw("random_seed", &CompileConfig::random_seed, "Seed for Quadrants' random-number generation.")
       .def_rw("demote_dense_struct_fors", &CompileConfig::demote_dense_struct_fors,
               "Lower dense struct-for loops to ordinary range-for loops. Forced on for the Vulkan/Metal (SPIR-V) "
@@ -293,8 +297,9 @@ void export_lang(nb::module_ &m) {
       .def_rw("half2_vectorization", &CompileConfig::half2_vectorization,
               "Vectorize pairs of float16 operations into half2 ops. CUDA only, and only when real_matrix_scalarize "
               "is also enabled.")
-      .def_rw("make_cpu_multithreading_loop", &CompileConfig::make_cpu_multithreading_loop,
-              "Parallelize outer loops across CPU threads.")
+      .def_rw("cpu_work_scheduling", &CompileConfig::cpu_work_scheduling,
+              "CPU range-loop scheduling: CPUWorkScheduling.PER_WORKER (default) creates one task per configured "
+              "worker; CPUWorkScheduling.FIXED_SIZE groups iterations into fixed-size tasks.")
       .def_rw("quant_opt_store_fusion", &CompileConfig::quant_opt_store_fusion,
               "Fuse consecutive stores to quantized (bit-packed) fields.")
       .def_rw("quant_opt_atomic_demotion", &CompileConfig::quant_opt_atomic_demotion,

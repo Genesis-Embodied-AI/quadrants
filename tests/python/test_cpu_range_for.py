@@ -6,11 +6,11 @@ import quadrants as qd
 from tests import test_utils
 
 
-@pytest.mark.parametrize("cpu_min_block_size", [1, 16, 512, 2048])
+@pytest.mark.parametrize("cpu_per_worker_min_block_dim", [1, 16, 512, 2048])
 @pytest.mark.parametrize("threads", [1, 4])
 @test_utils.test(arch=qd.cpu)
-def test_cpu_range_for_block_bounds(cpu_min_block_size, threads):
-    qd.init(arch=qd.cpu, cpu_max_num_threads=threads, cpu_min_block_size=cpu_min_block_size)
+def test_cpu_range_for_block_bounds(cpu_per_worker_min_block_dim, threads):
+    qd.init(arch=qd.cpu, cpu_max_num_threads=threads, cpu_per_worker_min_block_dim=cpu_per_worker_min_block_dim)
     out = qd.field(qd.i32, shape=1100)
 
     @qd.kernel
@@ -45,7 +45,7 @@ def test_cpu_range_for_block_bounds(cpu_min_block_size, threads):
 
 
 @pytest.mark.parametrize("serialize", [False, True])
-@test_utils.test(arch=qd.cpu, cpu_max_num_threads=4, cpu_min_block_size=1)
+@test_utils.test(arch=qd.cpu, cpu_max_num_threads=4, cpu_per_worker_min_block_dim=1)
 def test_cpu_range_for_block_serial_execution(serialize):
     @qd.kernel
     def k_serial() -> qd.i32:
@@ -64,17 +64,17 @@ def test_cpu_range_for_block_serial_execution(serialize):
     assert k_serial() == expected
 
 
-@pytest.mark.parametrize("cpu_min_block_size", [0, -1, -512])
+@pytest.mark.parametrize("cpu_per_worker_min_block_dim", [0, -1, -512])
 @test_utils.test(arch=qd.cpu)
-def test_cpu_range_for_block_invalid(cpu_min_block_size):
-    with pytest.raises(RuntimeError, match=rf"cpu_min_block_size must be >= 1, but got {cpu_min_block_size}\."):
-        qd.init(arch=qd.cpu, cpu_min_block_size=cpu_min_block_size)
+def test_cpu_range_for_block_invalid(cpu_per_worker_min_block_dim):
+    with pytest.raises(RuntimeError, match=rf"cpu_per_worker_min_block_dim must be >= 1, but got {cpu_per_worker_min_block_dim}\."):
+        qd.init(arch=qd.cpu, cpu_per_worker_min_block_dim=cpu_per_worker_min_block_dim)
 
 
-@pytest.mark.parametrize("cpu_min_block_size", [512, 1 << 30, (1 << 31) - 1])
+@pytest.mark.parametrize("cpu_per_worker_min_block_dim", [512, 1 << 30, (1 << 31) - 1])
 @test_utils.test(arch=qd.cpu)
-def test_cpu_range_for_block_overflow(cpu_min_block_size):
-    qd.init(arch=qd.cpu, cpu_max_num_threads=4, cpu_min_block_size=cpu_min_block_size)
+def test_cpu_range_for_block_overflow(cpu_per_worker_min_block_dim):
+    qd.init(arch=qd.cpu, cpu_max_num_threads=4, cpu_per_worker_min_block_dim=cpu_per_worker_min_block_dim)
     # Each nonempty test range has seven iterations. Reserve the final slot for invalid visits.
     INVALID_VISIT_INDEX = 15
     out = qd.field(qd.i32, shape=INVALID_VISIT_INDEX + 1)
@@ -107,7 +107,7 @@ def test_cpu_range_for_block_overflow(cpu_min_block_size):
 
 
 @pytest.mark.parametrize(
-    "cpu_min_block_size, expected_sizes",
+    "cpu_per_worker_min_block_dim, expected_sizes",
     [
         (1, [50, 50, 50, 50]),
         (16, [50, 50, 50, 50]),
@@ -116,9 +116,9 @@ def test_cpu_range_for_block_overflow(cpu_min_block_size):
     ],
 )
 @test_utils.test(arch=qd.cpu)
-def test_cpu_range_for_block_sizes(cpu_min_block_size, expected_sizes):
+def test_cpu_range_for_block_sizes(cpu_per_worker_min_block_dim, expected_sizes):
     qd.init(
-        arch=qd.cpu, cpu_max_num_threads=4, cpu_min_block_size=cpu_min_block_size, make_cpu_multithreading_loop=True
+        arch=qd.cpu, cpu_max_num_threads=4, cpu_per_worker_min_block_dim=cpu_per_worker_min_block_dim, cpu_work_scheduling=qd.CPUWorkScheduling.PER_WORKER
     )
     block_indices = qd.ndarray(dtype=qd.i32, shape=200)
 
@@ -134,7 +134,7 @@ def test_cpu_range_for_block_sizes(cpu_min_block_size, expected_sizes):
 
 
 @pytest.mark.parametrize("block_dim", [1, 16, 32, 64, 512])
-@test_utils.test(arch=qd.cpu, cpu_max_num_threads=4, make_cpu_multithreading_loop=False)
+@test_utils.test(arch=qd.cpu, cpu_max_num_threads=4, cpu_work_scheduling=qd.CPUWorkScheduling.FIXED_SIZE)
 def test_cpu_range_for_fixed_block_sizes(block_dim):
     block_indices = qd.ndarray(dtype=qd.i32, shape=200)
 
@@ -148,14 +148,14 @@ def test_cpu_range_for_fixed_block_sizes(block_dim):
     np.testing.assert_array_equal(block_indices.to_numpy(), np.arange(200, dtype=np.int32) // block_dim)
 
 
-@pytest.mark.parametrize("make_cpu_multithreading_loop", [False, True])
+@pytest.mark.parametrize("cpu_work_scheduling", [qd.CPUWorkScheduling.FIXED_SIZE, qd.CPUWorkScheduling.PER_WORKER])
 @test_utils.test(arch=qd.cpu)
-def test_cpu_block_idx_serial_and_nested(make_cpu_multithreading_loop):
+def test_cpu_block_idx_serial_and_nested(cpu_work_scheduling):
     qd.init(
         arch=qd.cpu,
         cpu_max_num_threads=4,
-        cpu_min_block_size=1,
-        make_cpu_multithreading_loop=make_cpu_multithreading_loop,
+        cpu_per_worker_min_block_dim=1,
+        cpu_work_scheduling=cpu_work_scheduling,
     )
     block_indices = qd.ndarray(dtype=qd.i32, shape=(200, 3))
 
@@ -167,7 +167,7 @@ def test_cpu_block_idx_serial_and_nested(make_cpu_multithreading_loop):
         return qd.block_idx()
 
     assert k_record_blocks(block_indices) == 0
-    width = 50 if make_cpu_multithreading_loop else 32
+    width = 50 if cpu_work_scheduling == qd.CPUWorkScheduling.PER_WORKER else 32
     expected = np.repeat((np.arange(200, dtype=np.int32) // width)[:, None], 3, axis=1)
     np.testing.assert_array_equal(block_indices.to_numpy(), expected)
 

@@ -22,7 +22,7 @@ TEST_RAN = "test ran"
 RET_SUCCESS = 42
 
 
-@pytest.mark.parametrize("changed_config", [{"random_seed": 123}, {"cpu_min_block_size": 1}])
+@pytest.mark.parametrize("changed_config", [{"random_seed": 123}, {"cpu_per_worker_min_block_dim": 1}, {"cpu_fixed_block_dim": 16}, {"cpu_work_scheduling": qd.CPUWorkScheduling.FIXED_SIZE}])
 @test_utils.test()
 def test_src_hasher_create_cache_key_vary_config(changed_config) -> None:
     """Source+config key (L1) is stable across re-init with identical config, changes when the config changes.
