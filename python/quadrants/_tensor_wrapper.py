@@ -419,7 +419,7 @@ def _rebuild_vector_tensor(
 
     backend = qd.Backend(backend_int)  # type: ignore[reportOptionalCall]
     (n,) = element_shape
-    t = qd.tensor(qd.types.vector(n, dtype), shape, backend=backend, layout=layout)
+    t = typing.cast(VectorTensor, qd.tensor(qd.types.vector(n, dtype), shape, backend=backend, layout=layout))
     t.from_numpy(data)
     return t
 
@@ -436,6 +436,6 @@ def _rebuild_matrix_tensor(
 
     backend = qd.Backend(backend_int)  # type: ignore[reportOptionalCall]
     n, m = element_shape
-    t = qd.tensor(qd.types.matrix(n, m, dtype), shape, backend=backend, layout=layout)
+    t = typing.cast(MatrixTensor, qd.tensor(qd.types.matrix(n, m, dtype), shape, backend=backend, layout=layout))
     t.from_numpy(data)
     return t
