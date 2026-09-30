@@ -1,0 +1,89 @@
+quadrants.lang.exception
+========================
+
+.. py:module:: quadrants.lang.exception
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   quadrants.lang.exception.QuadrantsCompilationError
+   quadrants.lang.exception.QuadrantsSyntaxError
+   quadrants.lang.exception.QuadrantsNameError
+   quadrants.lang.exception.QuadrantsTypeError
+   quadrants.lang.exception.QuadrantsRuntimeError
+   quadrants.lang.exception.QuadrantsAssertionError
+   quadrants.lang.exception.QuadrantsRuntimeTypeError
+
+
+Module Contents
+---------------
+
+.. py:exception:: QuadrantsCompilationError
+
+   Bases: :py:obj:`Exception`
+
+
+   Base class for all compilation exceptions.
+
+
+.. py:exception:: QuadrantsSyntaxError
+
+   Bases: :py:obj:`QuadrantsCompilationError`, :py:obj:`SyntaxError`
+
+
+   Thrown when a syntax error is found during compilation.
+
+
+.. py:exception:: QuadrantsNameError
+
+   Bases: :py:obj:`QuadrantsCompilationError`, :py:obj:`NameError`
+
+
+   Thrown when an undefine name is found during compilation.
+
+
+.. py:exception:: QuadrantsTypeError
+
+   Bases: :py:obj:`QuadrantsCompilationError`, :py:obj:`TypeError`
+
+
+   Thrown when a type mismatch is found during compilation.
+
+
+.. py:exception:: QuadrantsRuntimeError
+
+   Bases: :py:obj:`RuntimeError`
+
+
+   Thrown when the compiled program cannot be executed due to unspecified reasons.
+
+
+.. py:exception:: QuadrantsAssertionError
+
+   Bases: :py:obj:`QuadrantsRuntimeError`, :py:obj:`AssertionError`
+
+
+   Thrown when assertion fails at runtime.
+
+
+.. py:exception:: QuadrantsRuntimeTypeError
+
+   Bases: :py:obj:`QuadrantsRuntimeError`, :py:obj:`TypeError`
+
+
+   Thrown when the compiled program cannot be executed due to unspecified reasons.
+
+
+   .. py:method:: get(pos, needed, provided)
+      :staticmethod:
+
+
+
+   .. py:method:: get_ret(needed, provided)
+      :staticmethod:
+
+
+
