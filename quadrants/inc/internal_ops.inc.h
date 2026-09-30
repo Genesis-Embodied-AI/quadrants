@@ -85,3 +85,6 @@ PER_INTERNAL_OP(amdgpu_clock_i64)
 
 // CPU
 PER_INTERNAL_OP(cpu_clock_i64)
+
+// CPU and GPU
+PER_INTERNAL_OP(global_block_idx)
