@@ -1718,7 +1718,7 @@ struct RangeTaskContext {
   std::size_t tls_size{1};
   int begin;
   int end;
-  int block_size;
+  int body_loop_size;
   int step;
 };
 
@@ -1744,16 +1744,16 @@ void cpu_parallel_range_for_task(void *range_context, int thread_id, int task_id
   }
 
   if (range_task_context.step == 1) {
-    int body_loop_start = range_task_context.begin + task_id * range_task_context.block_size;
-    int body_loop_end = std::min(body_loop_start + range_task_context.block_size, range_task_context.end);
+    int body_loop_start = range_task_context.begin + task_id * range_task_context.body_loop_size;
+    int body_loop_end = std::min(body_loop_start + range_task_context.body_loop_size, range_task_context.end);
     for (int body_loop_idx = body_loop_start; body_loop_idx < body_loop_end; body_loop_idx++) {
       range_task_context.body(&this_thread_context, tls_ptr, body_loop_idx);
       if (this_thread_context.cpu_assert_failed)
         break;
     }
   } else if (range_task_context.step == -1) {
-    int body_loop_start = range_task_context.end - task_id * range_task_context.block_size;
-    int body_loop_end = std::max(range_task_context.begin, body_loop_start - range_task_context.block_size);
+    int body_loop_start = range_task_context.end - task_id * range_task_context.body_loop_size;
+    int body_loop_end = std::max(range_task_context.begin, body_loop_start - range_task_context.body_loop_size);
     for (int body_loop_idx = body_loop_start - 1; body_loop_idx >= body_loop_end; body_loop_idx--) {
       range_task_context.body(&this_thread_context, tls_ptr, body_loop_idx);
       if (this_thread_context.cpu_assert_failed)
@@ -1790,7 +1790,7 @@ void cpu_parallel_range_for(RuntimeContext *context,
     quadrants_printf(context->runtime, "step must not be %d\n", step);
     exit(-1);
   }
-  range_task_context.block_size = block_dim;
+  range_task_context.body_loop_size = block_dim;
   auto runtime = context->runtime;
   runtime->parallel_for(runtime->thread_pool, (end - begin + block_dim - 1) / block_dim, num_threads, &range_task_context,
                         cpu_parallel_range_for_task);
