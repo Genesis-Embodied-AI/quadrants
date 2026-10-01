@@ -1723,48 +1723,48 @@ struct RangeTaskContext {
 };
 
 void cpu_parallel_range_for_task(void *range_context, int thread_id, int task_id) {
-  auto ctx = *(RangeTaskContext *)range_context;
+  auto range_task_context = *(RangeTaskContext *)range_context;
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wvla-cxx-extension"
-  alignas(8) char tls_buffer[ctx.tls_size];
+  alignas(8) char tls_buffer[range_task_context.tls_size];
 #pragma clang diagnostic pop
   auto tls_ptr = &tls_buffer[0];
 
-  RuntimeContext this_thread_context = *ctx.context;
+  RuntimeContext this_thread_context = *range_task_context.context;
   this_thread_context.cpu_thread_id = thread_id;
   this_thread_context.cpu_block_idx = task_id;
   this_thread_context.cpu_assert_failed = 0;
 
-  if (ctx.prologue) {
-    ctx.prologue(&this_thread_context, tls_ptr);
+  if (range_task_context.prologue) {
+    range_task_context.prologue(&this_thread_context, tls_ptr);
     if (this_thread_context.cpu_assert_failed) {
-      ctx.context->cpu_assert_failed = 1;
+      range_task_context.context->cpu_assert_failed = 1;
       return;
     }
   }
 
-  if (ctx.step == 1) {
-    int block_start = ctx.begin + task_id * ctx.block_size;
-    int block_end = std::min(block_start + ctx.block_size, ctx.end);
+  if (range_task_context.step == 1) {
+    int block_start = range_task_context.begin + task_id * range_task_context.block_size;
+    int block_end = std::min(block_start + range_task_context.block_size, range_task_context.end);
     for (int i = block_start; i < block_end; i++) {
-      ctx.body(&this_thread_context, tls_ptr, i);
+      range_task_context.body(&this_thread_context, tls_ptr, i);
       if (this_thread_context.cpu_assert_failed)
         break;
     }
-  } else if (ctx.step == -1) {
-    int block_start = ctx.end - task_id * ctx.block_size;
-    int block_end = std::max(ctx.begin, block_start - ctx.block_size);
+  } else if (range_task_context.step == -1) {
+    int block_start = range_task_context.end - task_id * range_task_context.block_size;
+    int block_end = std::max(range_task_context.begin, block_start - range_task_context.block_size);
     for (int i = block_start - 1; i >= block_end; i--) {
-      ctx.body(&this_thread_context, tls_ptr, i);
+      range_task_context.body(&this_thread_context, tls_ptr, i);
       if (this_thread_context.cpu_assert_failed)
         break;
     }
   }
 
-  if (!this_thread_context.cpu_assert_failed && ctx.epilogue)
-    ctx.epilogue(&this_thread_context, tls_ptr);
+  if (!this_thread_context.cpu_assert_failed && range_task_context.epilogue)
+    range_task_context.epilogue(&this_thread_context, tls_ptr);
   if (this_thread_context.cpu_assert_failed)
-    ctx.context->cpu_assert_failed = 1;
+    range_task_context.context->cpu_assert_failed = 1;
 }
 
 void cpu_parallel_range_for(RuntimeContext *context,
@@ -1777,22 +1777,22 @@ void cpu_parallel_range_for(RuntimeContext *context,
                             RangeForBodyFn *body,
                             range_for_xlogue epilogue,
                             std::size_t tls_size) {
-  RangeTaskContext ctx;
-  ctx.context = context;
-  ctx.prologue = prologue;
-  ctx.tls_size = tls_size;
-  ctx.body = body;
-  ctx.epilogue = epilogue;
-  ctx.begin = begin;
-  ctx.end = end;
-  ctx.step = step;
+  RangeTaskContext range_task_context;
+  range_task_context.context = context;
+  range_task_context.prologue = prologue;
+  range_task_context.tls_size = tls_size;
+  range_task_context.body = body;
+  range_task_context.epilogue = epilogue;
+  range_task_context.begin = begin;
+  range_task_context.end = end;
+  range_task_context.step = step;
   if (step != 1 && step != -1) {
     quadrants_printf(context->runtime, "step must not be %d\n", step);
     exit(-1);
   }
-  ctx.block_size = block_dim;
+  range_task_context.block_size = block_dim;
   auto runtime = context->runtime;
-  runtime->parallel_for(runtime->thread_pool, (end - begin + block_dim - 1) / block_dim, num_threads, &ctx,
+  runtime->parallel_for(runtime->thread_pool, (end - begin + block_dim - 1) / block_dim, num_threads, &range_task_context,
                         cpu_parallel_range_for_task);
 }
 
