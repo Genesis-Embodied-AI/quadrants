@@ -33,22 +33,21 @@ class ThreadPool {
   bool started;
   bool exiting;
   TaskFn *task_fn;
-  void *range_for_task_context;  // Note: this is a pointer to a
-                                 // range_task_helper_context defined in the
-                                 // LLVM runtime, which is different from
-                                 // quadrants::lang::Context.
+  // Opaque context passed to task_fn. LLVM runtime tasks use loop-specific helper
+  // contexts here, not quadrants::lang::Context.
+  void *task_context;
   int thread_counter;
 
   explicit ThreadPool(int max_num_threads);
 
-  void run(int splits, int desired_num_threads, void *range_for_task_context, TaskFn *task_fn);
+  void run(int splits, int desired_num_threads, void *task_context, TaskFn *task_fn);
 
   static void static_run(ThreadPool *pool,
                          int splits,
                          int desired_num_threads,
-                         void *range_for_task_context,
+                         void *task_context,
                          TaskFn *task_fn) {
-    return pool->run(splits, desired_num_threads, range_for_task_context, task_fn);
+    return pool->run(splits, desired_num_threads, task_context, task_fn);
   }
 
   void target();
