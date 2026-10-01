@@ -33,8 +33,8 @@ class ThreadPool {
   bool started;
   bool exiting;
   TaskFn *task_fn;
-  // Opaque context passed to task_fn. LLVM runtime tasks use loop-specific helper
-  // contexts here, not quadrants::lang::Context.
+  // Opaque context passed to task_fn. LLVM runtime tasks use loop-specific helper contexts here, not
+  // quadrants::lang::Context.
   void *task_context;
   int thread_counter;
 
