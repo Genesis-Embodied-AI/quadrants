@@ -77,9 +77,7 @@ def setup_vulkan():
             # so `find_file` in `quadrants/rhi/CMakeLists.txt` can locate it without path guessing.
             os.environ["MOLTENVK_DIR"] = str(sdk / "lib")
         case ("Windows", "AMD64"):
-            url = (
-                f"https://sdk.lunarg.com/sdk/download/{VULKAN_VERSION}/windows/vulkansdk-windows-X64-{VULKAN_VERSION}.exe"
-            )
+            url = f"https://sdk.lunarg.com/sdk/download/{VULKAN_VERSION}/windows/vulkansdk-windows-X64-{VULKAN_VERSION}.exe"
             prefix = get_cache_home() / f"vulkan-{VULKAN_VERSION}"
             download_dep(
                 url,
