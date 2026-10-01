@@ -89,3 +89,57 @@ def test_block_idx_serialized_loop():
     out.fill(-1)
     k_serial(out)
     np.testing.assert_array_equal(out.to_numpy(), np.zeros(16, dtype=np.int32))
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], offline_cache=False)
+def test_block_idx_real_func_serial():
+    @qd.real_func
+    def get_block_idx() -> qd.i32:
+        return qd.block_idx()
+
+    @qd.real_func
+    def nested_get_block_idx() -> qd.i32:
+        return get_block_idx()
+
+    @qd.kernel
+    def k_record_serial(out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        out[0] = get_block_idx()
+        out[1] = nested_get_block_idx()
+
+    out = qd.ndarray(qd.i32, shape=2)
+    out.fill(-1)
+    k_record_serial(out)
+    np.testing.assert_array_equal(out.to_numpy(), np.zeros(2, dtype=np.int32))
+
+
+@pytest.mark.parametrize("make_cpu_multithreading_loop", [False, True])
+@test_utils.test(arch=qd.cpu, offline_cache=False)
+def test_block_idx_real_func_cpu_scheduling_modes(make_cpu_multithreading_loop):
+    qd.init(
+        arch=qd.cpu,
+        cpu_max_num_threads=4,
+        make_cpu_multithreading_loop=make_cpu_multithreading_loop,
+        offline_cache=False,
+    )
+
+    @qd.real_func
+    def get_block_idx() -> qd.i32:
+        return qd.block_idx()
+
+    @qd.real_func
+    def nested_get_block_idx() -> qd.i32:
+        return get_block_idx()
+
+    @qd.kernel
+    def k_record_blocks(out: qd.types.ndarray(dtype=qd.i32, ndim=2), begin: qd.i32, end: qd.i32) -> qd.i32:
+        for i in range(begin, end):
+            out[i - begin, 0] = get_block_idx()
+            out[i - begin, 1] = nested_get_block_idx()
+        return nested_get_block_idx()
+
+    out = qd.ndarray(qd.i32, shape=(4096, 2))
+    out.fill(-1)
+    assert k_record_blocks(out, -13, 4083) == 0
+    width = 1024 if make_cpu_multithreading_loop else 32
+    expected = np.repeat((np.arange(4096, dtype=np.int32) // width)[:, None], 2, axis=1)
+    np.testing.assert_array_equal(out.to_numpy(), expected)

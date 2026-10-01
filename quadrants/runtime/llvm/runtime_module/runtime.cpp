@@ -223,6 +223,7 @@ STRUCT_FIELD_ARRAY(PhysicalCoordinates, val);
 STRUCT_FIELD(RuntimeContext, runtime);
 STRUCT_FIELD(RuntimeContext, result_buffer)
 STRUCT_FIELD(RuntimeContext, cpu_assert_failed)
+STRUCT_FIELD(RuntimeContext, cpu_block_idx)
 
 #include "quadrants/runtime/llvm/runtime_module/atomic.h"
 

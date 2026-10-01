@@ -37,7 +37,7 @@ k_record_blocks(out)
 
 On GPU, a block is a group of GPU threads. Vulkan and Metal call it a workgroup. The function returns the hardware block index along the x dimension. A hardware block can process several groups of iterations while retaining the same index. CPU and GPU iteration assignments can therefore differ for the same kernel.
 
-Top-level serial execution returns `0`, including loops preceded by `qd.loop_config(serialize=True)`. A serial loop nested inside a parallel loop retains the enclosing block's index. Empty blocks execute no original iterations, so recording indices from the loop body does not record empty blocks.
+Top-level serial execution returns `0`, including loops preceded by `qd.loop_config(serialize=True)`. A serial loop nested inside a parallel loop retains the enclosing block's index. Calls through `@qd.func` or `@qd.real_func` also retain the caller's block index. Empty blocks execute no original iterations, so recording indices from the loop body does not record empty blocks.
 
 Block indices are local to one loop execution. They are not globally unique identifiers, and reading an index does not synchronize threads.
 
