@@ -672,9 +672,8 @@ bool GraphManager::try_launch(int launch_id,
   // accordingly); both kernels are baked into the graph so the host never gets a chance to run in between.
   // For graph-compatible, statically-bounded adstack kernels, codegen still sets
   // `static_num_threads = grid_dim * block_dim` and we could size the heap once at graph build, but that
-  // path is not exercised today and the existing `grad_ptr != nullptr` guard below rejects the standard
-  // autograd entry points that would hit it. Fail loudly instead of silently running with a nullptr
-  // `runtime->adstack_heap_buffer`.
+  // path is not exercised today and this check alone covers it, since reverse-mode (adjoint) kernels never
+  // carry `use_graph`. Fail loudly instead of silently running with a nullptr `runtime->adstack_heap_buffer`.
   for (const auto &task : offloaded_tasks) {
     QD_ERROR_IF(!task.ad_stack.allocas.empty(),
                 "graph=True is not supported for kernels that use the reverse-mode autodiff stack "

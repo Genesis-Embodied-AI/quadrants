@@ -463,9 +463,11 @@ def test_graph_ndarray_grad_pointer_refreshed_on_replay():
 
     z = qd.ndarray(qd.f32, shape=(n,))
     w = qd.ndarray(qd.f32, shape=(n,))
-    for grad_value in (5.0, 7.0):
-        x = qd.ndarray(qd.f32, shape=(n,), needs_grad=True)
-        x.grad.fill(grad_value)
+    x1 = qd.ndarray(qd.f32, shape=(n,), needs_grad=True)
+    x2 = qd.ndarray(qd.f32, shape=(n,), needs_grad=True)
+    x1.grad.fill(5.0)
+    x2.grad.fill(7.0)
+    for x, grad_value in ((x1, 5.0), (x2, 7.0), (x1, 5.0)):
         read_grad(x, z, w)
         assert _graph_used() == platform_supports_graph
         assert np.allclose(w.to_numpy(), (grad_value + 1.0) * 2.0)
