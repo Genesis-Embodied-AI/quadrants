@@ -5,6 +5,6 @@
 
 namespace quadrants::lang::spirv {
 
-std::vector<uint32_t> link_workgroup_helper(const std::vector<uint32_t> &kernel);
+std::vector<uint32_t> link_shader_helpers(const std::vector<uint32_t> &kernel);
 
 }  // namespace quadrants::lang::spirv

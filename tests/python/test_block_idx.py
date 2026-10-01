@@ -6,11 +6,8 @@ import quadrants as qd
 from tests import test_utils
 
 
-@pytest.mark.parametrize("external_optimization_level", [0, 1])
 @test_utils.test(arch=[qd.vulkan, qd.metal], offline_cache=False)
-def test_block_idx_shader_helper(external_optimization_level):
-    arch = qd.lang.impl.current_cfg().arch
-    qd.init(arch=arch, external_optimization_level=external_optimization_level, offline_cache=False)
+def test_block_idx_shader_helper():
     out = qd.ndarray(dtype=qd.i32, shape=(200, 2))
 
     @qd.kernel

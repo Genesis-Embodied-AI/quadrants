@@ -203,7 +203,7 @@ std::vector<uint32_t> IRBuilder::finalize() {
   if (workgroup_helper_.id != 0) {
     // Capabilities precede extensions and imports in the SPIR-V module layout.
     data.insert(data.begin() + 5, {(2u << 16) | spv::OpCapability, spv::CapabilityLinkage});
-    return link_workgroup_helper(data);
+    return link_shader_helpers(data);
   }
   return data;
 }
