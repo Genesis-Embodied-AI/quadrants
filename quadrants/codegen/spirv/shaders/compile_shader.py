@@ -18,7 +18,17 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         binary = Path(tmp) / "shader.spv"
         subprocess.run(
-            [args.compiler, "-V", "--target-env", args.target_env, "--no-link", "-Od", str(args.input), "-o", str(binary)],
+            [
+                args.compiler,
+                "-V",
+                "--target-env",
+                args.target_env,
+                "--no-link",
+                "-Od",
+                str(args.input),
+                "-o",
+                str(binary),
+            ],
             check=True,
         )
         data = binary.read_bytes()
