@@ -1509,6 +1509,8 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
                    ir_->int_immediate_number(ir_->i32_type(), spv::MemorySemanticsWorkgroupMemoryMask |
                                                                   spv::MemorySemanticsAcquireReleaseMask));
     val = ir_->const_i32_zero_;
+  } else if (stmt->func_name == "global_block_idx") {
+    val = ir_->cast(ir_->i32_type(), ir_->get_work_group_id(0));
   } else if (stmt->func_name == "localInvocationId") {
     val = ir_->cast(ir_->i32_type(), ir_->get_local_invocation_id(0));
   } else if (stmt->func_name == "globalInvocationId") {
