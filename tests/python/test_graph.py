@@ -1,3 +1,6 @@
+import ctypes
+import ctypes.util
+
 import numpy as np
 import pytest
 
@@ -286,6 +289,40 @@ def test_graph_changed_args(tensor_type):
     y1_np = y1.to_numpy()
     assert np.allclose(x1_np, 2.0), f"x1 should be unchanged, got {x1_np[:5]}"
     assert np.allclose(y1_np, 4.0), f"y1 should be unchanged, got {y1_np[:5]}"
+
+
+@test_utils.test(arch=qd.cuda)
+def test_cached_graph_arg_upload_does_not_wait_for_gpu():
+    result = qd.field(qd.i32, shape=())
+
+    @qd.kernel
+    def occupy_gpu(cycles: qd.i64):
+        for _ in range(1):
+            start = qd.clock_counter()
+            while qd.clock_counter() - start < cycles:
+                pass
+
+    @qd.kernel(graph=True)
+    def add(value: qd.i32):
+        for _ in range(1):
+            result[None] += value
+
+    occupy_gpu(1)
+    add(0)  # Build and cache the graph before measuring the replay.
+    qd.sync()
+
+    driver = ctypes.CDLL(ctypes.util.find_library("cuda") or "nvcuda.dll")
+    driver.cuEventQuery.argtypes = [ctypes.c_void_p]
+    driver.cuEventQuery.restype = ctypes.c_int
+    with qd.create_event() as pending:
+        occupy_gpu(int(qd.clock_freq_hz()))
+        pending.record()
+        add(1)
+        assert _graph_used()
+        assert driver.cuEventQuery(pending.handle) == 600  # CUDA_ERROR_NOT_READY
+        pending.synchronize()
+    qd.sync()
+    assert result[None] == 1
 
 
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
