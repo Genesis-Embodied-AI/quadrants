@@ -197,25 +197,25 @@ void GraphManager::resolve_ctx_ndarray_ptrs(LaunchContextBuilder &ctx,
       auto data_ptr = ctx.array_ptrs[data_ptr_idx];
       auto grad_ptr = ctx.array_ptrs[grad_ptr_idx];
 
-      QD_ERROR_IF(grad_ptr != nullptr,
-                  "graph does not support autograd; "
-                  "ndarray arg {} has a non-null gradient pointer",
-                  arg_id);
-
       void *resolved_data = nullptr;
+      void *resolved_grad = nullptr;
       if (ctx.device_allocation_type[arg_id] == LaunchContextBuilder::DevAllocType::kNone) {
         QD_ERROR_IF(!on_amdgpu_device(data_ptr),
                     "graph requires all ndarrays to be device-resident; "
                     "ndarray arg {} is host-resident",
                     arg_id);
         resolved_data = data_ptr;
+        resolved_grad = grad_ptr;
       } else if (arr_sz > 0) {
         DeviceAllocation *ptr = static_cast<DeviceAllocation *>(data_ptr);
         resolved_data = executor->get_device_alloc_info_ptr(*ptr);
+        if (grad_ptr != nullptr) {
+          resolved_grad = executor->get_device_alloc_info_ptr(*static_cast<DeviceAllocation *>(grad_ptr));
+        }
       }
 
       if (resolved_data) {
-        ctx.set_ndarray_ptrs(arg_id, (uint64)resolved_data, (uint64) nullptr);
+        ctx.set_ndarray_ptrs(arg_id, (uint64)resolved_data, (uint64)resolved_grad);
         // Resolve every graph_do_while level whose condition ndarray is this arg (multi-level table).
         ctx.resolve_graph_do_while_flag(arg_id, resolved_data);
         // Route this ndarray into the per-cp yield-flag table for every checkpoint that named it.
