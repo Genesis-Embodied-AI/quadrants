@@ -6,9 +6,9 @@ The caller matches this helper's GLSL calling convention, not arbitrary shader f
 
 import argparse
 import json
-from pathlib import Path
 import re
 import subprocess
+from pathlib import Path
 
 
 def run(*args):
@@ -23,7 +23,7 @@ def caller_assembly():
     values: helper(0), helper(1), helper(2), and helper(global_x % 3).
     GLSL uses a Function-storage pointer for this scalar parameter.
     """
-    assembly = '''OpCapability Shader
+    assembly = """OpCapability Shader
 OpCapability Linkage
 OpMemoryModel Logical GLSL450
 OpEntryPoint GLCompute %main "main" %gid
@@ -70,30 +70,38 @@ OpFunctionEnd
 %linear = OpIAdd %uint %x %row_offset
 %base = OpIMul %uint %linear %four
 %dynamic_dim = OpUMod %uint %x %three
-'''
+"""
     for n, dim in enumerate(["zero", "one", "two", "dynamic_dim"]):
         offset = ["zero", "one", "two", "three"][n]
-        assembly += f'''OpStore %arg %{dim}
+        assembly += f"""OpStore %arg %{dim}
 %value_{n} = OpFunctionCall %uint %get_id %arg
 %offset_{n} = OpIAdd %uint %base %{offset}
 %dest_{n} = OpAccessChain %output_uint_ptr %output %zero %offset_{n}
 OpStore %dest_{n} %value_{n}
-'''
+"""
     return assembly + "OpReturn\nOpFunctionEnd\n"
 
 
 def build(out):
     out.mkdir(parents=True, exist_ok=True)
-    run("glslangValidator", "-V", "--target-env", "vulkan1.1", "-Od", "--no-link",
-        Path(__file__).with_name("helper.comp"), "-o", out / "library.spv")
+    run(
+        "glslangValidator",
+        "-V",
+        "--target-env",
+        "vulkan1.1",
+        "-Od",
+        "--no-link",
+        Path(__file__).with_name("helper.comp"),
+        "-o",
+        out / "library.spv",
+    )
     library = run("spirv-dis", out / "library.spv")
     (out / "library.spvasm").write_text(library)
     run("spirv-val", "--target-env", "spv1.3", out / "library.spv")
     (out / "caller.spvasm").write_text(caller_assembly())
     run("spirv-as", "--target-env", "spv1.3", out / "caller.spvasm", "-o", out / "caller.spv")
     run("spirv-val", "--target-env", "spv1.3", out / "caller.spv")
-    run("spirv-link", "--target-env", "spv1.3", out / "caller.spv", out / "library.spv",
-        "-o", out / "kernel.spv")
+    run("spirv-link", "--target-env", "spv1.3", out / "caller.spv", out / "library.spv", "-o", out / "kernel.spv")
     linked = run("spirv-dis", out / "kernel.spv")
     (out / "linked.spvasm").write_text(linked)
     workgroup = re.search(r"OpDecorate (%\w+) BuiltIn WorkgroupId", linked).group(1)
@@ -114,10 +122,13 @@ def build(out):
     constant_dimensions = [int(constants[index]) for index in accesses if index in constants]
     if constant_dimensions != [0, 1, 2] or len(accesses) != 4:
         raise RuntimeError(f"Expected three constant component reads and one dynamic read, got {accesses}")
-    report = {"function_calls_before": linked.count("OpFunctionCall"), "function_calls_after": calls,
-              "constant_workgroup_dimensions": constant_dimensions,
-              "dynamic_workgroup_reads": len(accesses) - len(constant_dimensions),
-              "linker_included_helper_input": True}
+    report = {
+        "function_calls_before": linked.count("OpFunctionCall"),
+        "function_calls_after": calls,
+        "constant_workgroup_dimensions": constant_dimensions,
+        "dynamic_workgroup_reads": len(accesses) - len(constant_dimensions),
+        "linker_included_helper_input": True,
+    }
     (out / "report.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
 
