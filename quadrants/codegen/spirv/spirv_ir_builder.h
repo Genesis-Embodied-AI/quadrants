@@ -550,6 +550,9 @@ class IRBuilder {
   Value rand_i32(Value global_tmp_);
 
  private:
+  // Import and call a GLSL uint(uint) helper, caching its declaration in function.
+  Value call_glsl_u32_helper(Value &function, const char *name, uint32_t argument_value);
+
   Value get_const(const SType &dtype, const uint64_t *pvalue, bool cache);
   SType declare_primitive_type(DataType dt);
 

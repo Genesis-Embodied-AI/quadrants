@@ -1,11 +1,31 @@
 #include "quadrants/codegen/spirv/shader_library.h"
 
 #include "quadrants/common/logging.h"
+#include "quadrants/codegen/spirv/spirv_ir_builder.h"
 #include "quadrants/codegen/spirv/shaders/workgroup_spv.h"
 #include "spirv-tools/linker.hpp"
 #include "spirv/unified1/spirv.hpp"
 
 namespace quadrants::lang::spirv {
+
+Value IRBuilder::call_glsl_u32_helper(Value &function, const char *name, uint32_t argument_value) {
+  if (function.id == 0) {
+    auto parameter_type = get_pointer_type(t_uint32_, spv::StorageClassFunction);
+    SType function_type;
+    function_type.id = id_counter_++;
+    ib_.begin(spv::OpTypeFunction).add_seq(function_type, t_uint32_, parameter_type).commit(&global_);
+    function = new_value(function_type, ValueKind::kFunction);
+    decorate(spv::OpDecorate, function, spv::DecorationLinkageAttributes, name, spv::LinkageTypeImport);
+    ib_.begin(spv::OpFunction).add_seq(t_uint32_, function, 0, function_type).commit(&imported_functions_);
+    auto parameter = new_value(parameter_type, ValueKind::kVariablePtr);
+    ib_.begin(spv::OpFunctionParameter).add_seq(parameter_type, parameter).commit(&imported_functions_);
+    ib_.begin(spv::OpFunctionEnd).commit(&imported_functions_);
+  }
+  // GLSL passes scalar function arguments through Function-storage pointers.
+  auto argument = alloca_variable(t_uint32_);
+  store_variable(argument, uint_immediate_number(t_uint32_, argument_value));
+  return make_value(spv::OpFunctionCall, t_uint32_, function, argument);
+}
 
 std::vector<uint32_t> link_workgroup_helper(const std::vector<uint32_t> &kernel) {
   std::vector<uint32_t> library(std::begin(workgroup_helper_spv), std::end(workgroup_helper_spv));

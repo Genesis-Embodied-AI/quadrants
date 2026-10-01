@@ -729,23 +729,7 @@ Value IRBuilder::get_num_work_groups(uint32_t dim_index) {
 
 Value IRBuilder::get_work_group_id(uint32_t dim_index) {
   QD_ASSERT(dim_index < 3);
-  if (workgroup_helper_.id == 0) {
-    auto parameter_type = get_pointer_type(t_uint32_, spv::StorageClassFunction);
-    SType function_type;
-    function_type.id = id_counter_++;
-    ib_.begin(spv::OpTypeFunction).add_seq(function_type, t_uint32_, parameter_type).commit(&global_);
-    workgroup_helper_ = new_value(function_type, ValueKind::kFunction);
-    decorate(spv::OpDecorate, workgroup_helper_, spv::DecorationLinkageAttributes, "get_work_group_id",
-             spv::LinkageTypeImport);
-    ib_.begin(spv::OpFunction).add_seq(t_uint32_, workgroup_helper_, 0, function_type).commit(&imported_functions_);
-    auto parameter = new_value(parameter_type, ValueKind::kVariablePtr);
-    ib_.begin(spv::OpFunctionParameter).add_seq(parameter_type, parameter).commit(&imported_functions_);
-    ib_.begin(spv::OpFunctionEnd).commit(&imported_functions_);
-  }
-  // GLSL passes scalar function arguments through Function-storage pointers.
-  auto argument = alloca_variable(t_uint32_);
-  store_variable(argument, uint_immediate_number(t_uint32_, dim_index));
-  return make_value(spv::OpFunctionCall, t_uint32_, workgroup_helper_, argument);
+  return call_glsl_u32_helper(workgroup_helper_, "get_work_group_id", dim_index);
 }
 
 Value IRBuilder::get_local_invocation_id(uint32_t dim_index) {
