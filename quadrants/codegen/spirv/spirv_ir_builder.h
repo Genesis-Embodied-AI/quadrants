@@ -390,9 +390,6 @@ class IRBuilder {
       // `qd.simt.block.thread_idx()` on Vulkan / Metal.
       ib_.add(gl_local_invocation_id_);
     }
-    if (gl_work_group_id_.id != 0) {
-      ib_.add(gl_work_group_id_);
-    }
     if (gl_num_work_groups_.id != 0) {
       ib_.add(gl_num_work_groups_);
     }
@@ -599,7 +596,7 @@ class IRBuilder {
   Value gl_global_invocation_id_;
   Value gl_local_invocation_id_;
   Value gl_num_work_groups_;
-  Value gl_work_group_id_;
+  Value workgroup_helper_;
   Value gl_work_group_size_;
   Value subgroup_local_invocation_id_;
 
@@ -640,6 +637,8 @@ class IRBuilder {
   std::vector<uint32_t> decorate_;
   // Global segment: types, variables, types
   std::vector<uint32_t> global_;
+  // Imported function declarations precede function definitions.
+  std::vector<uint32_t> imported_functions_;
   // Function header segment
   std::vector<uint32_t> func_header_;
   // Main Function segment

@@ -1,5 +1,6 @@
 #include "quadrants/codegen/spirv/spirv_ir_builder.h"
 #include "fp16.h"
+#include "quadrants/codegen/spirv/shader_library.h"
 
 namespace quadrants::lang {
 
@@ -196,8 +197,14 @@ std::vector<uint32_t> IRBuilder::finalize() {
   data.insert(data.end(), names_.begin(), names_.end());
   data.insert(data.end(), decorate_.begin(), decorate_.end());
   data.insert(data.end(), global_.begin(), global_.end());
+  data.insert(data.end(), imported_functions_.begin(), imported_functions_.end());
   data.insert(data.end(), func_header_.begin(), func_header_.end());
   data.insert(data.end(), function_.begin(), function_.end());
+  if (workgroup_helper_.id != 0) {
+    // Capabilities precede extensions and imports in the SPIR-V module layout.
+    data.insert(data.begin() + 5, {(2u << 16) | spv::OpCapability, spv::CapabilityLinkage});
+    return link_workgroup_helper(data);
+  }
   return data;
 }
 
@@ -721,17 +728,23 @@ Value IRBuilder::get_num_work_groups(uint32_t dim_index) {
 }
 
 Value IRBuilder::get_work_group_id(uint32_t dim_index) {
-  if (gl_work_group_id_.id == 0) {
-    SType ptr_type = this->get_pointer_type(t_v3_uint_, spv::StorageClassInput);
-    gl_work_group_id_ = new_value(ptr_type, ValueKind::kVectorPtr);
-    ib_.begin(spv::OpVariable).add_seq(ptr_type, gl_work_group_id_, spv::StorageClassInput).commit(&global_);
-    this->decorate(spv::OpDecorate, gl_work_group_id_, spv::DecorationBuiltIn, spv::BuiltInWorkgroupId);
+  QD_ASSERT(dim_index < 3);
+  if (workgroup_helper_.id == 0) {
+    auto parameter_type = get_pointer_type(t_uint32_, spv::StorageClassFunction);
+    SType function_type;
+    function_type.id = id_counter_++;
+    ib_.begin(spv::OpTypeFunction).add_seq(function_type, t_uint32_, parameter_type).commit(&global_);
+    workgroup_helper_ = new_value(function_type, ValueKind::kFunction);
+    decorate(spv::OpDecorate, workgroup_helper_, spv::DecorationLinkageAttributes, "get_work_group_id", spv::LinkageTypeImport);
+    ib_.begin(spv::OpFunction).add_seq(t_uint32_, workgroup_helper_, 0, function_type).commit(&imported_functions_);
+    auto parameter = new_value(parameter_type, ValueKind::kVariablePtr);
+    ib_.begin(spv::OpFunctionParameter).add_seq(parameter_type, parameter).commit(&imported_functions_);
+    ib_.begin(spv::OpFunctionEnd).commit(&imported_functions_);
   }
-  SType pint_type = this->get_pointer_type(t_uint32_, spv::StorageClassInput);
-  Value ptr = this->make_value(spv::OpAccessChain, pint_type, gl_work_group_id_,
-                               uint_immediate_number(t_uint32_, static_cast<uint64_t>(dim_index)));
-
-  return this->make_value(spv::OpLoad, t_uint32_, ptr);
+  // GLSL passes scalar function arguments through Function-storage pointers.
+  auto argument = alloca_variable(t_uint32_);
+  store_variable(argument, uint_immediate_number(t_uint32_, dim_index));
+  return make_value(spv::OpFunctionCall, t_uint32_, workgroup_helper_, argument);
 }
 
 Value IRBuilder::get_local_invocation_id(uint32_t dim_index) {
