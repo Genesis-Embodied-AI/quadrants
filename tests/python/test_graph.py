@@ -419,3 +419,54 @@ def test_graph_annotation_cross_platform(tensor_type):
     y_np = y.to_numpy()
     assert np.allclose(x_np, 2.0), f"Expected 2.0, got {x_np[:5]}"
     assert np.allclose(y_np, 4.0), f"Expected 4.0, got {y_np[:5]}"
+
+
+@test_utils.test()
+def test_graph_ndarray_with_grad():
+    """An ndarray that owns a gradient buffer is accepted by a graph=True kernel, and its adjoint still works."""
+    platform_supports_graph = _platform_supports_graph()
+    n = 16
+
+    @qd.kernel(graph=True)
+    def square_then_sum(x: qd.types.ndarray(), y: qd.types.ndarray(), loss: qd.types.ndarray()):
+        for i in range(n):
+            y[i] = x[i] * x[i]
+        for i in range(n):
+            loss[None] += y[i]
+
+    x = qd.ndarray(qd.f32, shape=(n,), needs_grad=True)
+    y = qd.ndarray(qd.f32, shape=(n,), needs_grad=True)
+    loss = qd.ndarray(qd.f32, shape=(), needs_grad=True)
+    x.fill(2.0)
+
+    square_then_sum(x, y, loss)
+    assert _graph_used() == platform_supports_graph
+    assert loss[None] == pytest.approx(4.0 * n)
+
+    loss.grad.fill(1.0)
+    square_then_sum.grad(x, y, loss)
+    assert np.allclose(x.grad.to_numpy(), 4.0)
+
+
+@test_utils.test()
+def test_graph_ndarray_grad_pointer_refreshed_on_replay():
+    """The gradient pointer reaches the graph kernel, and is re-resolved when another ndarray is passed."""
+    platform_supports_graph = _platform_supports_graph()
+    n = 8
+
+    @qd.kernel(graph=True)
+    def read_grad(x: qd.types.ndarray(), z: qd.types.ndarray(), w: qd.types.ndarray()):
+        for i in range(n):
+            z[i] = x.grad[i] + 1.0
+        for i in range(n):
+            w[i] = z[i] * 2.0
+
+    z = qd.ndarray(qd.f32, shape=(n,))
+    w = qd.ndarray(qd.f32, shape=(n,))
+    for grad_value in (5.0, 7.0):
+        x = qd.ndarray(qd.f32, shape=(n,), needs_grad=True)
+        x.grad.fill(grad_value)
+        read_grad(x, z, w)
+        assert _graph_used() == platform_supports_graph
+        assert np.allclose(w.to_numpy(), (grad_value + 1.0) * 2.0)
+    assert _graph_cache_size() == (1 if platform_supports_graph else 0)
