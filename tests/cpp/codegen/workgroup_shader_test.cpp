@@ -24,7 +24,8 @@ TEST(WorkgroupShader, LinksAndValidatesAcrossTargets) {
         ir.start_function(main);
         for (uint32_t dim : {0u, 1u, 2u, 0u}) {
           auto index = ir.get_work_group_id(dim);
-          auto destination = ir.struct_array_access(ir.u32_type(), output, ir.uint_immediate_number(ir.u32_type(), dim));
+          auto destination =
+              ir.struct_array_access(ir.u32_type(), output, ir.uint_immediate_number(ir.u32_type(), dim));
           ir.store_variable(destination, index);
         }
         ir.make_inst(spv::OpReturn);
@@ -32,8 +33,9 @@ TEST(WorkgroupShader, LinksAndValidatesAcrossTargets) {
         ir.commit_kernel_function(main, "main", {output}, {1, 1, 1});
         auto binary = ir.finalize();
         EXPECT_EQ(binary[1], version);
-        auto environment = version >= 0x10600 ? SPV_ENV_VULKAN_1_3
-                                             : version >= 0x10300 ? SPV_ENV_VULKAN_1_1 : SPV_ENV_VULKAN_1_0;
+        auto environment = version >= 0x10600   ? SPV_ENV_VULKAN_1_3
+                           : version >= 0x10300 ? SPV_ENV_VULKAN_1_1
+                                                : SPV_ENV_VULKAN_1_0;
         spvtools::SpirvTools tools(environment);
         std::string diagnostics;
         auto report = [&](spv_message_level_t, const char *, const spv_position_t &, const char *message) {

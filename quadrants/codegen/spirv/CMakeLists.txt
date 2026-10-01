@@ -1,7 +1,11 @@
 # ./quadrants/codegen/spirv/CMakeLists.txt
 
 # Embed the precompiled GLSL library so wheel builds do not require glslang.
-file(SHA256 "${CMAKE_CURRENT_SOURCE_DIR}/shaders/workgroup.comp" WORKGROUP_SOURCE_SHA256)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  shaders/workgroup.comp shaders/workgroup_spv.h)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/shaders/workgroup.comp" WORKGROUP_SOURCE)
+string(REPLACE "\r\n" "\n" WORKGROUP_SOURCE "${WORKGROUP_SOURCE}")
+string(SHA256 WORKGROUP_SOURCE_SHA256 "${WORKGROUP_SOURCE}")
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/shaders/workgroup_spv.h" WORKGROUP_HEADER)
 string(FIND "${WORKGROUP_HEADER}" "GLSL source SHA256: ${WORKGROUP_SOURCE_SHA256}" WORKGROUP_HASH_POSITION)
 if(WORKGROUP_HASH_POSITION EQUAL -1)

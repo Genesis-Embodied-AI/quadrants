@@ -735,7 +735,8 @@ Value IRBuilder::get_work_group_id(uint32_t dim_index) {
     function_type.id = id_counter_++;
     ib_.begin(spv::OpTypeFunction).add_seq(function_type, t_uint32_, parameter_type).commit(&global_);
     workgroup_helper_ = new_value(function_type, ValueKind::kFunction);
-    decorate(spv::OpDecorate, workgroup_helper_, spv::DecorationLinkageAttributes, "get_work_group_id", spv::LinkageTypeImport);
+    decorate(spv::OpDecorate, workgroup_helper_, spv::DecorationLinkageAttributes, "get_work_group_id",
+             spv::LinkageTypeImport);
     ib_.begin(spv::OpFunction).add_seq(t_uint32_, workgroup_helper_, 0, function_type).commit(&imported_functions_);
     auto parameter = new_value(parameter_type, ValueKind::kVariablePtr);
     ib_.begin(spv::OpFunctionParameter).add_seq(parameter_type, parameter).commit(&imported_functions_);
