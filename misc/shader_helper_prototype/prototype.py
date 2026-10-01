@@ -1,7 +1,7 @@
 """Compile a GLSL helper separately, link a generated caller, and inspect the result.
 
 This deliberately exercises module integration without modifying Quadrants' compiler.
-The small text adapter is specific to this helper, not a general SPIR-V importer.
+The caller matches this helper's GLSL calling convention, not arbitrary shader functions.
 """
 
 import argparse
@@ -14,29 +14,6 @@ import subprocess
 def run(*args):
     print("+", " ".join(map(str, args)), flush=True)
     return subprocess.check_output(list(map(str, args)), text=True)
-
-
-def export_helper(assembly):
-    """Remove glslang's required dummy entry point and export the retained helper."""
-    helper = re.search(r'OpName (%\w+) "get_work_group_id\(', assembly).group(1)
-    main = re.search(r'OpEntryPoint GLCompute (%\w+)', assembly).group(1)
-    lines = []
-    skipping_main = False
-    for line in assembly.splitlines():
-        if re.search(rf"{re.escape(main)} = OpFunction\b", line):
-            skipping_main = True
-        if skipping_main:
-            if "OpFunctionEnd" in line:
-                skipping_main = False
-            continue
-        if "OpEntryPoint" in line or "OpExecutionMode" in line or f"OpName {main} " in line:
-            continue
-        lines.append(line)
-        if "OpCapability Shader" in line:
-            lines.append("OpCapability Linkage")
-        if "OpDecorate" in line and "BuiltIn WorkgroupId" in line:
-            lines.append(f'OpDecorate {helper} LinkageAttributes "get_work_group_id" Export')
-    return "\n".join(lines) + "\n"
 
 
 def caller_assembly():
@@ -105,39 +82,24 @@ OpStore %dest_{n} %value_{n}
     return assembly + "OpReturn\nOpFunctionEnd\n"
 
 
-def add_helper_input(assembly):
-    """Include the library's WorkgroupId input in the caller's entry-point interface."""
-    workgroup = re.search(r"OpDecorate (%\w+) BuiltIn WorkgroupId", assembly).group(1)
-    lines = assembly.splitlines()
-    for n, line in enumerate(lines):
-        if "OpEntryPoint GLCompute" in line and workgroup not in line.split():
-            lines[n] += " " + workgroup
-    return "\n".join(lines) + "\n"
-
-
 def build(out):
     out.mkdir(parents=True, exist_ok=True)
-    source = Path(__file__).with_name("helper.comp").read_text()
-    # Older glslang requires an entry point even when compiling reusable helpers.
-    # Keep the helper uncalled, then remove only this empty entry point.
-    (out / "helper_with_entry.comp").write_text(source + "\nvoid main() {}\n")
-    run("glslangValidator", "-V", "--target-env", "vulkan1.1", "-Od", "--keep-uncalled",
-        out / "helper_with_entry.comp", "-o", out / "helper.spv")
-    helper = run("spirv-dis", out / "helper.spv")
-    (out / "helper.spvasm").write_text(helper)
-    (out / "library.spvasm").write_text(export_helper(helper))
+    run("glslangValidator", "-V", "--target-env", "vulkan1.1", "-Od", "--no-link",
+        Path(__file__).with_name("helper.comp"), "-o", out / "library.spv")
+    library = run("spirv-dis", out / "library.spv")
+    (out / "library.spvasm").write_text(library)
+    run("spirv-val", "--target-env", "spv1.3", out / "library.spv")
     (out / "caller.spvasm").write_text(caller_assembly())
-    for name in ["library", "caller"]:
-        run("spirv-as", "--target-env", "spv1.3", out / f"{name}.spvasm", "-o", out / f"{name}.spv")
-        run("spirv-val", "--target-env", "spv1.3", out / f"{name}.spv")
+    run("spirv-as", "--target-env", "spv1.3", out / "caller.spvasm", "-o", out / "caller.spv")
+    run("spirv-val", "--target-env", "spv1.3", out / "caller.spv")
     run("spirv-link", "--target-env", "spv1.3", out / "caller.spv", out / "library.spv",
-        "-o", out / "linked.spv")
-    linked = run("spirv-dis", out / "linked.spv")
+        "-o", out / "kernel.spv")
+    linked = run("spirv-dis", out / "kernel.spv")
     (out / "linked.spvasm").write_text(linked)
-    # Linking functions does not necessarily merge their input interfaces.
-    kernel = add_helper_input(linked)
-    (out / "kernel.spvasm").write_text(kernel)
-    run("spirv-as", "--target-env", "spv1.3", out / "kernel.spvasm", "-o", out / "kernel.spv")
+    workgroup = re.search(r"OpDecorate (%\w+) BuiltIn WorkgroupId", linked).group(1)
+    entry = next(line for line in linked.splitlines() if "OpEntryPoint GLCompute" in line)
+    if workgroup not in entry.split():
+        raise RuntimeError("Linker did not include the helper's WorkgroupId in the entry-point interface")
     run("spirv-val", "--target-env", "vulkan1.1", out / "kernel.spv")
     run("spirv-opt", "--target-env=vulkan1.1", "-O", out / "kernel.spv", "-o", out / "optimized.spv")
     run("spirv-val", "--target-env", "vulkan1.1", out / "optimized.spv")
@@ -155,7 +117,7 @@ def build(out):
     report = {"function_calls_before": linked.count("OpFunctionCall"), "function_calls_after": calls,
               "constant_workgroup_dimensions": constant_dimensions,
               "dynamic_workgroup_reads": len(accesses) - len(constant_dimensions),
-              "manual_interface_repair_needed": kernel != linked}
+              "linker_included_helper_input": True}
     (out / "report.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
 
