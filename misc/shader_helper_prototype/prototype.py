@@ -135,7 +135,8 @@ def build(out):
     linked = run("spirv-dis", out / "linked.spv")
     (out / "linked.spvasm").write_text(linked)
     # Linking functions does not necessarily merge their input interfaces.
-    (out / "kernel.spvasm").write_text(add_helper_input(linked))
+    kernel = add_helper_input(linked)
+    (out / "kernel.spvasm").write_text(kernel)
     run("spirv-as", "--target-env", "spv1.3", out / "kernel.spvasm", "-o", out / "kernel.spv")
     run("spirv-val", "--target-env", "vulkan1.1", out / "kernel.spv")
     run("spirv-opt", "--target-env=vulkan1.1", "-O", out / "kernel.spv", "-o", out / "optimized.spv")
@@ -145,8 +146,16 @@ def build(out):
     calls = len(re.findall(r"\bOpFunctionCall\b", optimized))
     if calls:
         raise RuntimeError(f"Helper calls remain after optimization: {calls}")
+    workgroup = re.search(r"OpDecorate (%\w+) BuiltIn WorkgroupId", optimized).group(1)
+    accesses = re.findall(rf"OpAccessChain %\w+ {re.escape(workgroup)} (%\w+)", optimized)
+    constants = dict(re.findall(r"(%\w+) = OpConstant %\w+ (\d+)", optimized))
+    constant_dimensions = [int(constants[index]) for index in accesses if index in constants]
+    if constant_dimensions != [0, 1, 2] or len(accesses) != 4:
+        raise RuntimeError(f"Expected three constant component reads and one dynamic read, got {accesses}")
     report = {"function_calls_before": linked.count("OpFunctionCall"), "function_calls_after": calls,
-              "constant_component_extracts": re.findall(r"OpCompositeExtract[^\n]+", optimized)}
+              "constant_workgroup_dimensions": constant_dimensions,
+              "dynamic_workgroup_reads": len(accesses) - len(constant_dimensions),
+              "manual_interface_repair_needed": kernel != linked}
     (out / "report.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
 
