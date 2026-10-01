@@ -1,5 +1,6 @@
 #include "quadrants/codegen/spirv/spirv_ir_builder.h"
 #include "fp16.h"
+#include "quadrants/codegen/spirv/shader_library.h"
 
 namespace quadrants::lang {
 
@@ -196,8 +197,14 @@ std::vector<uint32_t> IRBuilder::finalize() {
   data.insert(data.end(), names_.begin(), names_.end());
   data.insert(data.end(), decorate_.begin(), decorate_.end());
   data.insert(data.end(), global_.begin(), global_.end());
+  data.insert(data.end(), imported_functions_.begin(), imported_functions_.end());
   data.insert(data.end(), func_header_.begin(), func_header_.end());
   data.insert(data.end(), function_.begin(), function_.end());
+  if (workgroup_helper_.id != 0) {
+    // Capabilities precede extensions and imports in the SPIR-V module layout.
+    data.insert(data.begin() + 5, {(2u << 16) | spv::OpCapability, spv::CapabilityLinkage});
+    return link_shader_helpers(data);
+  }
   return data;
 }
 
@@ -721,17 +728,8 @@ Value IRBuilder::get_num_work_groups(uint32_t dim_index) {
 }
 
 Value IRBuilder::get_work_group_id(uint32_t dim_index) {
-  if (gl_work_group_id_.id == 0) {
-    SType ptr_type = this->get_pointer_type(t_v3_uint_, spv::StorageClassInput);
-    gl_work_group_id_ = new_value(ptr_type, ValueKind::kVectorPtr);
-    ib_.begin(spv::OpVariable).add_seq(ptr_type, gl_work_group_id_, spv::StorageClassInput).commit(&global_);
-    this->decorate(spv::OpDecorate, gl_work_group_id_, spv::DecorationBuiltIn, spv::BuiltInWorkgroupId);
-  }
-  SType pint_type = this->get_pointer_type(t_uint32_, spv::StorageClassInput);
-  Value ptr = this->make_value(spv::OpAccessChain, pint_type, gl_work_group_id_,
-                               uint_immediate_number(t_uint32_, static_cast<uint64_t>(dim_index)));
-
-  return this->make_value(spv::OpLoad, t_uint32_, ptr);
+  QD_ASSERT(dim_index < 3);
+  return call_glsl_u32_helper(workgroup_helper_, "get_work_group_id", dim_index);
 }
 
 Value IRBuilder::get_local_invocation_id(uint32_t dim_index) {

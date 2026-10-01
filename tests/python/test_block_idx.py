@@ -6,6 +6,22 @@ import quadrants as qd
 from tests import test_utils
 
 
+@test_utils.test(arch=[qd.vulkan, qd.metal], offline_cache=False)
+def test_block_idx_shader_helper():
+    out = qd.ndarray(dtype=qd.i32, shape=(200, 2))
+
+    @qd.kernel
+    def k_block_indices(out: qd.types.ndarray(dtype=qd.i32, ndim=2)):
+        qd.loop_config(block_dim=32)
+        for i in range(200):
+            out[i, 0] = qd.block_idx()
+            out[i, 1] = qd.block_idx()
+
+    k_block_indices(out)
+    expected = np.repeat((np.arange(200, dtype=np.int32) // 32)[:, None], 2, axis=1)
+    np.testing.assert_array_equal(out.to_numpy(), expected)
+
+
 @pytest.mark.parametrize("block_dim", [32, 64])
 @test_utils.test(make_cpu_multithreading_loop=False, cpu_max_num_threads=4)
 def test_block_idx_portable(block_dim):
