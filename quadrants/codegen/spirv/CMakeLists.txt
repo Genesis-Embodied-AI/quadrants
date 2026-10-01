@@ -10,15 +10,24 @@ if(NOT GLSLANG_HELP MATCHES "--no-link")
   message(FATAL_ERROR "Shader helpers require glslang with --no-link support (13.1 or newer).")
 endif()
 find_package(Python COMPONENTS Interpreter REQUIRED)
-set(WORKGROUP_HEADER "${CMAKE_CURRENT_BINARY_DIR}/generated/workgroup_spv.h")
-add_custom_command(OUTPUT "${WORKGROUP_HEADER}"
-  COMMAND "${Python_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/shaders/generate_workgroup.py"
-    --compiler "${QD_GLSLANG_EXECUTABLE}" --output "${WORKGROUP_HEADER}"
-  DEPENDS shaders/workgroup.comp shaders/generate_workgroup.py "${QD_GLSLANG_EXECUTABLE}"
-  COMMENT "Compiling GLSL shader helpers"
-  VERBATIM)
+# Each helper uses the same compiler invocation and dependency tracking.
+function(qd_add_shader_helper target source header symbol)
+  set(source_path "${CMAKE_CURRENT_SOURCE_DIR}/${source}")
+  set(output_path "${CMAKE_CURRENT_BINARY_DIR}/generated/${header}")
+  set(compiler_script "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/shaders/compile_shader.py")
+  add_custom_command(OUTPUT "${output_path}"
+    COMMAND "${Python_EXECUTABLE}" "${compiler_script}"
+      --compiler "${QD_GLSLANG_EXECUTABLE}" --input "${source_path}"
+      --output "${output_path}" --symbol "${symbol}"
+    DEPENDS "${source_path}" "${compiler_script}" "${QD_GLSLANG_EXECUTABLE}"
+    COMMENT "Compiling GLSL helper ${source}"
+    VERBATIM)
+  target_sources(${target} PRIVATE "${output_path}")
+  target_include_directories(${target} PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
+endfunction()
 
 add_library(spirv_codegen)
+qd_add_shader_helper(spirv_codegen shaders/workgroup.comp workgroup_spv.h workgroup_helper_spv)
 target_sources(spirv_codegen
   PRIVATE
     adstack_bound_reducer_shader.cpp
@@ -32,7 +41,6 @@ target_sources(spirv_codegen
     spirv_shared_array_retyping.cpp
     spirv_ir_builder.cpp
     shader_library.cpp
-    "${WORKGROUP_HEADER}"
     spirv_types.cpp
     compiled_kernel_data.cpp
     kernel_compiler.cpp
@@ -41,7 +49,6 @@ target_sources(spirv_codegen
 target_include_directories(spirv_codegen
   PRIVATE
     ${PROJECT_SOURCE_DIR}
-    "${CMAKE_CURRENT_BINARY_DIR}/generated"
     ${PROJECT_SOURCE_DIR}/external/eigen
     ${PROJECT_SOURCE_DIR}/external/include
     ${PROJECT_SOURCE_DIR}/external/SPIRV-Headers/include
