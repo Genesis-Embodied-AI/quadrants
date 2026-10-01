@@ -1710,7 +1710,7 @@ using mesh_for_xlogue = void (*)(RuntimeContext *,
                                  /*TLS*/ char *tls_base,
                                  uint32_t patch_idx);
 
-struct range_task_helper_context {
+struct RangeTaskContext {
   RuntimeContext *context;
   range_for_xlogue prologue{nullptr};
   RangeForBodyFn *body{nullptr};
@@ -1723,7 +1723,7 @@ struct range_task_helper_context {
 };
 
 void cpu_parallel_range_for_task(void *range_context, int thread_id, int task_id) {
-  auto ctx = *(range_task_helper_context *)range_context;
+  auto ctx = *(RangeTaskContext *)range_context;
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wvla-cxx-extension"
   alignas(8) char tls_buffer[ctx.tls_size];
@@ -1777,7 +1777,7 @@ void cpu_parallel_range_for(RuntimeContext *context,
                             RangeForBodyFn *body,
                             range_for_xlogue epilogue,
                             std::size_t tls_size) {
-  range_task_helper_context ctx;
+  RangeTaskContext ctx;
   ctx.context = context;
   ctx.prologue = prologue;
   ctx.tls_size = tls_size;
