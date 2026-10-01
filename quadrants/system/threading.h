@@ -42,11 +42,7 @@ class ThreadPool {
 
   void run(int splits, int desired_num_threads, void *task_context, TaskFn *task_fn);
 
-  static void static_run(ThreadPool *pool,
-                         int splits,
-                         int desired_num_threads,
-                         void *task_context,
-                         TaskFn *task_fn) {
+  static void static_run(ThreadPool *pool, int splits, int desired_num_threads, void *task_context, TaskFn *task_fn) {
     return pool->run(splits, desired_num_threads, task_context, task_fn);
   }
 

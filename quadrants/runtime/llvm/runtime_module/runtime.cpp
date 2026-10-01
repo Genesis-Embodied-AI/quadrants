@@ -1792,8 +1792,8 @@ void cpu_parallel_range_for(RuntimeContext *context,
   }
   range_task_context.body_loop_size = block_dim;
   auto runtime = context->runtime;
-  runtime->parallel_for(runtime->thread_pool, (end - begin + block_dim - 1) / block_dim, num_threads, &range_task_context,
-                        cpu_parallel_range_for_task);
+  runtime->parallel_for(runtime->thread_pool, (end - begin + block_dim - 1) / block_dim, num_threads,
+                        &range_task_context, cpu_parallel_range_for_task);
 }
 
 void gpu_parallel_range_for(RuntimeContext *context,
