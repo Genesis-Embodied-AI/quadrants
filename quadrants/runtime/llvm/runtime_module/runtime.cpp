@@ -1635,11 +1635,11 @@ struct cpu_block_task_helper_context {
 // TODO: TLS should be directly passed to the scheduler, so that it lives
 // with the threads (instead of blocks).
 
-void cpu_struct_for_block_helper(void *ctx_, int thread_id, int i) {
+void cpu_struct_for_block_helper(void *ctx_, int thread_id, int task_id) {
   auto ctx = (cpu_block_task_helper_context *)(ctx_);
-  int element_id = i / ctx->element_split;
+  int element_id = task_id / ctx->element_split;
   int part_size = ctx->element_size / ctx->element_split;
-  int part_id = i % ctx->element_split;
+  int part_id = task_id % ctx->element_split;
   auto &e = ctx->list->get<Element>(element_id);
   int lower = e.loop_bounds[0] + part_id * part_size;
   int upper = e.loop_bounds[0] + (part_id + 1) * part_size;
@@ -1651,7 +1651,7 @@ void cpu_struct_for_block_helper(void *ctx_, int thread_id, int i) {
 
   RuntimeContext this_thread_context = *ctx->context;
   this_thread_context.cpu_thread_id = thread_id;
-  this_thread_context.cpu_block_idx = i;
+  this_thread_context.cpu_block_idx = task_id;
   this_thread_context.cpu_assert_failed = 0;
 
   if (lower < upper) {
