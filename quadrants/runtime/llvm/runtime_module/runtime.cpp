@@ -1744,18 +1744,18 @@ void cpu_parallel_range_for_task(void *range_context, int thread_id, int task_id
   }
 
   if (range_task_context.step == 1) {
-    int block_start = range_task_context.begin + task_id * range_task_context.block_size;
-    int block_end = std::min(block_start + range_task_context.block_size, range_task_context.end);
-    for (int i = block_start; i < block_end; i++) {
-      range_task_context.body(&this_thread_context, tls_ptr, i);
+    int body_loop_start = range_task_context.begin + task_id * range_task_context.block_size;
+    int body_loop_end = std::min(body_loop_start + range_task_context.block_size, range_task_context.end);
+    for (int body_loop_idx = body_loop_start; body_loop_idx < body_loop_end; body_loop_idx++) {
+      range_task_context.body(&this_thread_context, tls_ptr, body_loop_idx);
       if (this_thread_context.cpu_assert_failed)
         break;
     }
   } else if (range_task_context.step == -1) {
-    int block_start = range_task_context.end - task_id * range_task_context.block_size;
-    int block_end = std::max(range_task_context.begin, block_start - range_task_context.block_size);
-    for (int i = block_start - 1; i >= block_end; i--) {
-      range_task_context.body(&this_thread_context, tls_ptr, i);
+    int body_loop_start = range_task_context.end - task_id * range_task_context.block_size;
+    int body_loop_end = std::max(range_task_context.begin, body_loop_start - range_task_context.block_size);
+    for (int body_loop_idx = body_loop_start - 1; body_loop_idx >= body_loop_end; body_loop_idx--) {
+      range_task_context.body(&this_thread_context, tls_ptr, body_loop_idx);
       if (this_thread_context.cpu_assert_failed)
         break;
     }
