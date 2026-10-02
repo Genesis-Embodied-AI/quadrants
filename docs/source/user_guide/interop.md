@@ -95,7 +95,7 @@ Zero-copy uses [DLPack](https://github.com/dmlc/dlpack) and requires:
 - a DLPack-supported dtype: `i32`, `i64`, `f32`, `f64`, `u1` (other dtypes such as `f16`, `u8`, `u16` fall back to the kernel-copy path);
 - on Apple Metal, `torch >= 2.9.2` for fields (required for DLPack `bytes_offset` on MPS, PyTorch's GPU backend for Apple Metal; see [pytorch/pytorch#168193](https://github.com/pytorch/pytorch/pull/168193));
 - 0-dim `ScalarField` instances are not zero-copyable on any backend (PyTorch DLPack `bytes_offset` limitation);
-- members of an AOS `StructField` (the default `Struct.field(..., layout=Layout.AOS)`) are not zero-copyable yet (see [Struct fields](#struct-fields) below); members of an SOA `StructField` (`layout=Layout.SOA`) **are** zero-copyable individually.
+- members of an AOS (array of structures, with each element's members stored together) `StructField` (the default `Struct.field(..., layout=Layout.AOS)`) are not zero-copyable yet (see [Struct fields](#struct-fields) below); members of an SOA (structure of arrays, with each member stored separately) `StructField` (`layout=Layout.SOA`) **are** zero-copyable individually.
 
 Zero-copy `to_numpy()` additionally requires a CPU backend, because numpy arrays cannot reference GPU memory. Note: `Field.to_numpy(copy=False)` and `MatrixField.to_numpy(copy=False)` currently require torch to be installed. `Ndarray.to_numpy(copy=False)` does not require torch.
 
