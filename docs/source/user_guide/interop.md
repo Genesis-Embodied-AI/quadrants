@@ -2,7 +2,7 @@
 
 Quadrants provides interop with both numpy and PyTorch. There are three mechanisms:
 - **Copy-based**: convert data between quadrants fields/ndarrays and numpy arrays or torch tensors
-- **Zero-copy via DLPack**: obtain a torch tensor or numpy array that aliases the underlying Quadrants memory
+- **Zero-copy via [DLPack](https://github.com/dmlc/dlpack)**: obtain a torch tensor or numpy array that aliases the underlying Quadrants memory
 - **Direct pass-through**: pass torch tensors directly into kernels as ndarray arguments (zero-copy)
 
 ## Copy-based interop
@@ -72,7 +72,7 @@ m.from_numpy(arr)
 
 ## Zero-copy interop via DLPack
 
-Quadrants' zero-copy interop has been designed with **PyTorch as the first-class user interface**: support, defaults, and supported-dtype/backend matrices are driven by what PyTorch can consume cleanly via DLPack. NumPy is supported on CPU backends as a free side benefit of the same DLPack capsule. Several of the limitations below (e.g. the Apple Metal `torch >= 2.9.2` requirement, or the 0-dim `ScalarField` carve-out) are inherited from PyTorch's current DLPack importer rather than from Quadrants itself.
+Quadrants' zero-copy interop has been designed with **PyTorch as the first-class user interface**: support, defaults, and supported-dtype/backend matrices are driven by what PyTorch can consume cleanly via DLPack. NumPy is supported on CPU backends as a free side benefit of the same DLPack capsule, a Python object carrying tensor metadata and a reference to its memory. Several of the limitations below (e.g. the Apple Metal `torch >= 2.9.2` requirement, or the 0-dim `ScalarField` carve-out) are inherited from PyTorch's current DLPack importer rather than from Quadrants itself.
 
 `to_torch()` and `to_numpy()` accept a keyword-only `copy` argument that controls whether the returned tensor/array is an independent copy of the data or a zero-copy view that aliases the underlying Quadrants memory.
 
@@ -214,7 +214,7 @@ d_soa["pos"][0] = 1.0                                                   # writes
 
 ### Raw DLPack export with `to_dlpack()`
 
-All field and ndarray types expose a `to_dlpack()` method that returns a raw [DLPack](https://github.com/dmlc/dlpack) `PyCapsule`. This is the low-level primitive that `to_torch(copy=False)` and `to_numpy(copy=False)` are built on; use it when you need to feed Quadrants data into a framework that speaks DLPack directly (e.g. JAX, CuPy, or a custom C extension).
+All field and ndarray types expose a `to_dlpack()` method that returns a raw [DLPack](https://github.com/dmlc/dlpack) `PyCapsule` (Python’s wrapper for a C pointer). This is the low-level primitive that `to_torch(copy=False)` and `to_numpy(copy=False)` are built on; use it when you need to feed Quadrants data into a framework that speaks DLPack directly (e.g. JAX, CuPy, or a custom C extension).
 
 ```python
 qd.init(arch=qd.cpu)
@@ -265,7 +265,7 @@ y = torch.zeros(32, dtype=torch.float32, device="cuda:0")
 square(x, y)
 ```
 
-With a ROCm build of PyTorch (`torch.version.hip` is set), the same `device="cuda:0"` spelling refers to an AMD GPU. Initialize Quadrants with `qd.init(arch=qd.amdgpu)` to pass contiguous HIP tensors and their gradients directly to kernels, without copying tensor contents through temporary buffers. Both the CUDA and AMDGPU backends use visible device 0; tensors on other devices or with a mismatched GPU backend are copied through CPU memory and copied back after the kernel.
+With a ROCm build of PyTorch (ROCm is AMD’s GPU software platform; `torch.version.hip` is set), the same `device="cuda:0"` spelling refers to an AMD GPU. Initialize Quadrants with `qd.init(arch=qd.amdgpu)` to pass contiguous tensors backed by HIP (AMD’s GPU programming interface) and their gradients directly to kernels, without copying tensor contents through temporary buffers. Both the CUDA and AMDGPU backends use visible device 0; tensors on other devices or with a mismatched GPU backend are copied through CPU memory and copied back after the kernel.
 
 When sharing tensors across PyTorch and Quadrants streams, finish the producer's work before the consumer uses the tensor. For example, call `torch.cuda.synchronize(0)` after PyTorch writes and before launching a Quadrants kernel, then `qd.sync()` before PyTorch reads the result. For kernels launched with `qd_stream=stream`, use `stream.synchronize()` before consuming their results. Stream and event dependencies can replace these blocking waits; see [Streams](streams.md). Keep the tensors alive until their GPU work finishes. Quadrants waits for initialization of a gradient buffer it creates internally, but does not automatically synchronize other PyTorch operations.
 
