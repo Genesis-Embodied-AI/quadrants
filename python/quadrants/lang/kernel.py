@@ -59,6 +59,10 @@ from quadrants.lang.exception import (
     handle_exception_from_cpp,
 )
 from quadrants.lang.impl import Program
+from quadrants.lang.kernel_launch_metadata import (
+    GraphDoWhileLevel,
+    KernelLaunchMetadata,
+)
 from quadrants.lang.shell import _shell_pop_print
 from quadrants.lang.util import cook_dtype, is_data_oriented
 from quadrants.types import (
@@ -290,17 +294,6 @@ class ASTGenerator:
         return node  # Basic types (str, int, None, etc.)
 
 
-@dataclasses.dataclass
-class GraphDoWhileLevel:
-    """One nested ``qd.graph_do_while`` loop in a ``graph=True`` kernel, indexed by level id (assigned
-    outer-before-inner by the AST transformer). Mirrors the C++ ``GraphDoWhileLevel``."""
-
-    cond_arg_name: str
-    parent_id: int
-    # Resolved C++ arg index of the condition ndarray (filled during launch-arg iteration).
-    cond_cpp_arg_id: int = -1
-
-
 class Kernel(FuncBase):
     counter = 0
 
@@ -324,6 +317,8 @@ class Kernel(FuncBase):
         self.autodiff_mode = autodiff_mode
         self.grad: "Kernel | None" = None
         impl.get_runtime().kernels.append(self)  # type: ignore[arg-type]
+        self._launch_metadata: dict[CompiledKernelKeyType, KernelLaunchMetadata] = {}
+        self._active_launch_metadata_key: CompiledKernelKeyType | None = None
         self.reset()
         self.kernel_cpp: None | KernelCxx = None
         # A materialized kernel is a KernelCxx object which may or may not have been compiled. It generally has been
@@ -339,17 +334,14 @@ class Kernel(FuncBase):
         # Legacy single-loop arg name, kept for reporting/back-compat; equals the outermost level's condition arg for
         # nested kernels. The authoritative data is `graph_do_while_levels`.
         self.graph_do_while_arg: str | None = None
-        # Nested graph_do_while level table, indexed by level id (outer before inner). Rebuilt each compilation pass by
-        # the AST transformer; serialized to the launch context at launch.
+        # Active specialization's graph_do_while level table, indexed outer before inner. Immutable per-key snapshots
+        # live in `_launch_metadata`; these mutable fields remain for AST transformation and introspection.
         self.graph_do_while_levels: list[GraphDoWhileLevel] = []
         # Transient stack of active level ids, used only while transforming the AST.
         self._graph_do_while_level_stack: list[int] = []
-        # Per-checkpoint metadata, one entry per `with qd.checkpoint(...)` block (explicit AND auto-injected implicit)
-        # in declaration order. List index is the checkpoint's internal `cp_id` (0, 1, 2, ... dense, flat across the
-        # kernel). Each entry is the readable label of the `yield_on=` argument (e.g. "flag" or "self.flag"), or
-        # `None` for implicit checkpoints (which never yield). Populated by the AST transformer; empty means the
-        # kernel uses no checkpoints. Used for error messages / introspection only -- the runtime forwards the flat
-        # C++ arg-id from `checkpoint_yield_on_cpp_arg_ids` below.
+        # Active specialization's per-checkpoint metadata, one entry per explicit or auto-injected checkpoint in
+        # declaration order. List index is the internal dense cp_id. Each value is the readable `yield_on=` argument,
+        # or None for an implicit checkpoint. The launch path reads the matching per-key snapshot.
         self.checkpoint_yield_on_args: list[str | None] = []
         # Flat C++ arg-ids (post-template) of each explicit checkpoint's `yield_on=` ndarray, resolved at AST-build time
         # by `CheckpointTransformer.build_checkpoint_with` via `ASTTransformer._resolve_ndarray_kernel_arg_id`. Same
@@ -401,9 +393,47 @@ class Kernel(FuncBase):
         self.runtime = impl.get_runtime()
         self.materialized_kernels = {}
         self.compiled_kernel_data_by_key = {}
+        self._launch_metadata.clear()
+        self._active_launch_metadata_key = None
         self._last_compiled_kernel_data = None
         self.src_ll_cache_observations = SrcLlCacheObservations()
         self.fe_ll_cache_observations = FeLlCacheObservations()
+        if hasattr(self, "graph_do_while_levels"):
+            self._clear_active_launch_metadata()
+
+    def _clear_active_launch_metadata(self) -> None:
+        self._active_launch_metadata_key = None
+        self.graph_do_while_arg = None
+        self.graph_do_while_levels = []
+        self._graph_do_while_level_stack = []
+        self.checkpoint_yield_on_args = []
+        self.checkpoint_yield_on_cpp_arg_ids = []
+        self.checkpoint_user_labels_by_cp_id = []
+
+    def _snapshot_launch_metadata(self, key: CompiledKernelKeyType) -> KernelLaunchMetadata:
+        metadata = KernelLaunchMetadata(
+            graph_do_while_levels=tuple(self.graph_do_while_levels),
+            checkpoint_yield_on_args=tuple(self.checkpoint_yield_on_args),
+            checkpoint_yield_on_cpp_arg_ids=tuple(self.checkpoint_yield_on_cpp_arg_ids),
+            checkpoint_user_labels_by_cp_id=tuple(self.checkpoint_user_labels_by_cp_id),
+        )
+        self._launch_metadata[key] = metadata
+        self._active_launch_metadata_key = key
+        return metadata
+
+    def _activate_launch_metadata(self, key: CompiledKernelKeyType, *, force: bool = False) -> KernelLaunchMetadata:
+        metadata = self._launch_metadata[key]
+        if force or key != self._active_launch_metadata_key:
+            self.graph_do_while_levels = list(metadata.graph_do_while_levels)
+            self.graph_do_while_arg = (
+                self.graph_do_while_levels[0].cond_arg_name if self.graph_do_while_levels else None
+            )
+            self._graph_do_while_level_stack = []
+            self.checkpoint_yield_on_args = list(metadata.checkpoint_yield_on_args)
+            self.checkpoint_yield_on_cpp_arg_ids = list(metadata.checkpoint_yield_on_cpp_arg_ids)
+            self.checkpoint_user_labels_by_cp_id = list(metadata.checkpoint_user_labels_by_cp_id)
+        self._active_launch_metadata_key = key
+        return metadata
 
     def _try_load_fastcache(self, args: tuple[Any, ...], key: "CompiledKernelKeyType") -> set[str] | None:
         """Two-phase fastcache lookup: L1 (source+config, no args) for pruning info, then a narrow args walk over
@@ -464,38 +494,44 @@ class Kernel(FuncBase):
                     # `checkpoint_transformer.py` + `build_While` would have written. L1's copy of the level table is
                     # deliberately not consulted here: it is shared by every specialization, and a `qd.graph_do_while`
                     # inside a `qd.static` branch belongs to only some of them.
-                    _cached_levels = cache_value.graph_do_while_levels
-                    if _cached_levels:
-                        self.graph_do_while_levels = [
-                            GraphDoWhileLevel(cond_arg_name=name, parent_id=parent, cond_cpp_arg_id=cpp_arg_id)
-                            for name, parent, cpp_arg_id in _cached_levels
-                        ]
-                        self.graph_do_while_arg = self.graph_do_while_levels[0].cond_arg_name
-                    if cache_value.checkpoint_yield_on_args:
-                        self.checkpoint_yield_on_args = list(cache_value.checkpoint_yield_on_args)
-                        self.checkpoint_yield_on_cpp_arg_ids = list(cache_value.checkpoint_yield_on_cpp_arg_ids)
-                        # Pydantic coerces IntEnum -> int at CacheValue construction time, so the raw labels are plain
-                        # ints after JSON round-trip. ``checkpoint_user_label_enum_qualnames`` carries the parallel
-                        # ``module.ClassQualName.MEMBER`` strings that ``_resolve_intenum_member`` uses to rebuild the
-                        # original ``IntEnum`` member -- preserving the documented contract that
-                        # ``qd.checkpoint(Stage.X, ...)`` surfaces as ``Stage.X`` (not the raw int) on
-                        # ``status.checkpoint``. Older v3 caches predate the qualname column, so we default any missing
-                        # slots to ``None`` -> raw-int fallback (the same behaviour they had on v3).
-                        raw_labels = list(cache_value.checkpoint_user_labels_by_cp_id)
-                        qualnames = list(cache_value.checkpoint_user_label_enum_qualnames) or [None] * len(raw_labels)
-                        if len(qualnames) != len(raw_labels):
-                            qualnames = [None] * len(raw_labels)
-                        self.checkpoint_user_labels_by_cp_id = [
-                            src_hasher._resolve_intenum_member(qn, lbl) for qn, lbl in zip(qualnames, raw_labels)
-                        ]
+                    _cached_levels = cache_value.graph_do_while_levels or []
+                    self.graph_do_while_levels = [
+                        GraphDoWhileLevel(
+                            cond_arg_name=name,
+                            parent_id=parent,
+                            cond_cpp_arg_id=cpp_arg_id,
+                            checkpoint_id=checkpoint_id,
+                        )
+                        for name, parent, cpp_arg_id, checkpoint_id in _cached_levels
+                    ]
+                    self.graph_do_while_arg = (
+                        self.graph_do_while_levels[0].cond_arg_name if self.graph_do_while_levels else None
+                    )
+                    self.checkpoint_yield_on_args = list(cache_value.checkpoint_yield_on_args)
+                    self.checkpoint_yield_on_cpp_arg_ids = list(cache_value.checkpoint_yield_on_cpp_arg_ids)
+                    # Pydantic coerces IntEnum -> int at CacheValue construction time. Rebuild enum members from the
+                    # parallel qualname column; missing or mismatched slots fall back to plain ints.
+                    raw_labels = list(cache_value.checkpoint_user_labels_by_cp_id)
+                    qualnames = list(cache_value.checkpoint_user_label_enum_qualnames) or [None] * len(raw_labels)
+                    if len(qualnames) != len(raw_labels):
+                        qualnames = [None] * len(raw_labels)
+                    self.checkpoint_user_labels_by_cp_id = [
+                        src_hasher._resolve_intenum_member(qn, lbl) for qn, lbl in zip(qualnames, raw_labels)
+                    ]
                     return cache_value.used_py_dataclass_parameters
             # L2 miss or artifact load failed: report cold, so ``materialize`` runs pass 0 + pass 1 and populates
             # per-callee pruning info. ``fast_checksum`` stays set, so a fresh L2 entry is written after the compile.
-            # L1's level table seeds the cold-compile path until the AST transformer repopulates it.
-            if cached_graph_do_while_levels and not self.graph_do_while_levels:
+            # L1's level table may seed a new specialization until the AST transformer repopulates it. It must not
+            # overwrite an existing specialization's authoritative empty snapshot after SNode-tree invalidation.
+            if cached_graph_do_while_levels and key not in self._launch_metadata and not self.graph_do_while_levels:
                 self.graph_do_while_levels = [
-                    GraphDoWhileLevel(cond_arg_name=name, parent_id=parent, cond_cpp_arg_id=cpp_arg_id)
-                    for name, parent, cpp_arg_id in cached_graph_do_while_levels
+                    GraphDoWhileLevel(
+                        cond_arg_name=name,
+                        parent_id=parent,
+                        cond_cpp_arg_id=cpp_arg_id,
+                        checkpoint_id=checkpoint_id,
+                    )
+                    for name, parent, cpp_arg_id, checkpoint_id in cached_graph_do_while_levels
                 ]
                 self.graph_do_while_arg = self.graph_do_while_levels[0].cond_arg_name
             return None
@@ -512,6 +548,8 @@ class Kernel(FuncBase):
         if key is None:
             key = (self.func, 0, self.autodiff_mode)
         if key in self.materialized_kernels:
+            if self.use_graph:
+                self._activate_launch_metadata(key)
             return
 
         # Deprecation warning: passing a ``@dataclasses.dataclass`` instance through a ``qd.Template``-annotated kernel
@@ -543,9 +581,17 @@ class Kernel(FuncBase):
 
         with self.runtime.compilation_lock:
             if key in self.materialized_kernels:
+                if self.use_graph:
+                    self._activate_launch_metadata(key)
                 return
 
             self.runtime.materialize()
+            # SNode-tree destruction clears `materialized_kernels` but retains compiled data. Restore metadata before
+            # the signature-only rematerialization pass, which does not walk the body. New keys start from empty state.
+            if key in self._launch_metadata:
+                self._activate_launch_metadata(key, force=True)
+            else:
+                self._clear_active_launch_metadata()
             used_py_dataclass_parameters = self._try_load_fastcache(py_args, key)
             kernel_name = f"{self.func.__name__}_c{self.kernel_counter}_{key[1]}"
             _logging.trace(f"Materializing kernel {kernel_name} in {self.autodiff_mode}...")
@@ -585,6 +631,8 @@ class Kernel(FuncBase):
                 )
                 if _pass == 1:
                     assert key not in self.materialized_kernels
+                    if self.use_graph:
+                        self._snapshot_launch_metadata(key)
                     self.materialized_kernels[key] = quadrants_kernel
                     self._struct_ndarray_launch_info_by_key[key] = getattr(
                         ctx.global_context, "struct_ndarray_launch_info", []
@@ -633,7 +681,8 @@ class Kernel(FuncBase):
             used_py_dataclass_parameters=self.used_py_dataclass_parameters_by_key_enforcing.get(key),
             visited_functions=self.visited_functions,
             graph_do_while_levels=[
-                (level.cond_arg_name, level.parent_id, level.cond_cpp_arg_id) for level in self.graph_do_while_levels
+                (level.cond_arg_name, level.parent_id, level.cond_cpp_arg_id, level.checkpoint_id)
+                for level in self.graph_do_while_levels
             ]
             or None,
             pruning_paths_from_l1=getattr(self, "_pruning_paths_from_l1", None),
@@ -658,6 +707,7 @@ class Kernel(FuncBase):
     ) -> Any:
         assert len(args) == len(self.arg_metas), f"{len(self.arg_metas)} arguments needed but {len(args)} provided"
 
+        launch_metadata = self._launch_metadata[key] if self.use_graph else None
         callbacks: list[Callable[[], None]] = []
         launch_ctx = t_kernel.make_launch_context()
         # Special treatment for primitive types is unecessary and detrimental. See 'TemplateMapper.lookup' for details.
@@ -809,13 +859,23 @@ class Kernel(FuncBase):
                         self.fast_checksum,
                         self.visited_functions,
                         self.used_py_dataclass_parameters_by_key_enforcing[key],
-                        graph_do_while_levels=[  # type: ignore[reportCallIssue]
-                            (level.cond_arg_name, level.parent_id, level.cond_cpp_arg_id)
-                            for level in self.graph_do_while_levels
-                        ],
-                        checkpoint_yield_on_args=list(self.checkpoint_yield_on_args),
-                        checkpoint_yield_on_cpp_arg_ids=list(self.checkpoint_yield_on_cpp_arg_ids),
-                        checkpoint_user_labels_by_cp_id=list(self.checkpoint_user_labels_by_cp_id),
+                        graph_do_while_levels=(
+                            [  # type: ignore[reportCallIssue]
+                                (level.cond_arg_name, level.parent_id, level.cond_cpp_arg_id, level.checkpoint_id)
+                                for level in launch_metadata.graph_do_while_levels
+                            ]
+                            if launch_metadata is not None
+                            else []
+                        ),
+                        checkpoint_yield_on_args=(
+                            list(launch_metadata.checkpoint_yield_on_args) if launch_metadata is not None else []
+                        ),
+                        checkpoint_yield_on_cpp_arg_ids=(
+                            list(launch_metadata.checkpoint_yield_on_cpp_arg_ids) if launch_metadata is not None else []
+                        ),
+                        checkpoint_user_labels_by_cp_id=(
+                            list(launch_metadata.checkpoint_user_labels_by_cp_id) if launch_metadata is not None else []
+                        ),
                     )
                     self.src_ll_cache_observations.cache_stored = True
             self._last_compiled_kernel_data = compiled_kernel_data
@@ -825,14 +885,20 @@ class Kernel(FuncBase):
                     "qd_stream is not compatible with graph=True kernels. "
                     "See docs/source/user_guide/streams.md for details."
                 )
-            for _gdw_level in self.graph_do_while_levels:
-                launch_ctx.add_graph_do_while_level(_gdw_level.cond_cpp_arg_id, _gdw_level.parent_id)
+            if launch_metadata is not None:
+                for _gdw_level in launch_metadata.graph_do_while_levels:
+                    launch_ctx.add_graph_do_while_level(
+                        _gdw_level.cond_cpp_arg_id, _gdw_level.parent_id, _gdw_level.checkpoint_id
+                    )
             # Single `use_checkpoints` gate around the entire checkpoint-wiring block so non-checkpoint kernels skip
             # both per-launch checks (yield-on table forward + resume_point copy) with one attribute lookup. Matches
             # the equivalent fast-path gate in `__call__`.
             if self.use_checkpoints:
-                if self.checkpoint_yield_on_args:
-                    _checkpoint_helpers.forward_yield_on_table_to_ctx(self, launch_ctx)
+                assert launch_metadata is not None
+                if launch_metadata.checkpoint_yield_on_args:
+                    _checkpoint_helpers.forward_yield_on_table_to_ctx(
+                        launch_metadata.checkpoint_yield_on_cpp_arg_ids, launch_ctx
+                    )
                 # `_resume_from_checkpoint` is `None` for fresh launches (host-side default 0 in
                 # `LaunchContextBuilder`, which means "run every checkpoint"). When `Kernel.resume` plumbs an int
                 # through, copy it onto the launch context so the GraphManager's `launch_cached_graph` memcpys it into
@@ -971,12 +1037,8 @@ class Kernel(FuncBase):
             # Pop the resume cookie before anything else touches kwargs -- the AST mapper sees user parameter names
             # only, so a stray `from_checkpoint=` would raise "unexpected kwarg". `_resume_from_checkpoint` is the
             # resolved cp_id to copy into the device-side `resume_point` slot before launch; `None` means "fresh start,
-            # reset to 0". Plumbed via `Kernel.resume()` only; users do not pass this directly.
+            # reset to 0". Validation waits until `ensure_compiled` selects this specialization's metadata.
             _resume_from_checkpoint = kwargs.pop("_qd_from_checkpoint", None)
-            # `validate_resume_cookie` only does work when a resume cookie was actually passed; skip the function call
-            # entirely otherwise so the dominant non-resume call path stays clear of the checkpoint helpers.
-            if _resume_from_checkpoint is not None:
-                _checkpoint_helpers.validate_resume_cookie(self, _resume_from_checkpoint)
         else:
             _resume_from_checkpoint = None
         if qd_stream is not None and self.autodiff_mode != _NONE:
@@ -1058,12 +1120,20 @@ class Kernel(FuncBase):
                 assert self._last_compiled_kernel_data is not None
                 self.compiled_kernel_data_by_key[key] = self._last_compiled_kernel_data
             return ret
+        launch_metadata = self._launch_metadata[key]
+        if _resume_from_checkpoint is not None:
+            _checkpoint_helpers.validate_resume_cookie(
+                _resume_from_checkpoint, launch_metadata.checkpoint_yield_on_args
+            )
+        _checkpoint_helpers.validate_graph_do_while_in_checkpoint_backend(
+            launch_metadata.graph_do_while_levels, graph_enabled=_GRAPH_ENABLED
+        )
         # Checkpoint-enabled slow path: translate the user-supplied `from_checkpoint=` label into the dense,
         # source-order internal cp_id the runtime uses. Translation happens here (after `ensure_compiled`) because
         # `checkpoint_user_labels_by_cp_id` is populated during AST processing inside `ensure_compiled`.
         if _resume_from_checkpoint is not None:
             _resume_from_checkpoint = _checkpoint_helpers.translate_user_label_to_internal_cp_id(
-                self, _resume_from_checkpoint
+                self, _resume_from_checkpoint, launch_metadata.checkpoint_user_labels_by_cp_id
             )
         # Only forward `_resume_from_checkpoint` when the caller actually supplied one (i.e. via `Kernel.resume(...)`).
         # Otherwise omit the kwarg entirely so subclasses / monkeypatches of `launch_kernel` that pre-date this kwarg
@@ -1092,6 +1162,10 @@ class Kernel(FuncBase):
         # Surface a GraphStatus for kernels with `qd.checkpoint(yield_on=...)` so the host can drive the qipc-style
         # re-entrant loop. Kernels without yield-capable checkpoints get `ret` (typically `None`) passed through;
         # short-circuit the helper call so the hot non-checkpoint path doesn't even enter the Python frame.
-        if self.checkpoint_yield_on_args:
-            return _checkpoint_helpers.maybe_build_graph_status(self, ret)
+        if launch_metadata.checkpoint_yield_on_args:
+            return _checkpoint_helpers.maybe_build_graph_status(
+                launch_metadata.checkpoint_yield_on_args,
+                launch_metadata.checkpoint_user_labels_by_cp_id,
+                ret,
+            )
         return ret

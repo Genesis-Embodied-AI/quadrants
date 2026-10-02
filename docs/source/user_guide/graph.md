@@ -218,6 +218,22 @@ def step(
 
 The `cp_id` argument is the label you'll use to identify the checkpoint from the host (in `GraphStatus.checkpoint` and `kernel.resume(from_checkpoint=...)`). It must be an int literal or an `IntEnum` value; the framework preserves the value as-is, so `qd.checkpoint(Stage.SIM, ...)` round-trips as `Stage.SIM` rather than the raw int. Labels must be unique within a kernel.
 
+On CUDA GPUs with [compute capability](https://developer.nvidia.com/cuda-gpus) 9.0 or newer (NVIDIA's hardware version number), a checkpoint body may contain a `qd.graph.do_while` loop. Resuming past the checkpoint skips the whole loop.
+
+This nesting is rejected at launch on other backends, and when CUDA Graph execution is disabled, because those paths cannot safely skip the whole loop. Allowing it could enter the loop with an unchanged condition and repeat forever.
+
+```python
+with qd.checkpoint(Stage.SIM, yield_on=overflow_flag):
+    for _ in range(1):
+        inner_cond[()] = inner_iterations
+    while qd.graph.do_while(inner_cond):
+        for i in range(arr.shape[0]):
+            # ... iterative work ...
+            pass
+        for _ in range(1):
+            inner_cond[()] = inner_cond[()] - 1
+```
+
 ### Yield mechanism
 
 When the body of a checkpoint writes a non-zero value into `yield_on[()]`:
@@ -249,6 +265,8 @@ while status.yielded:
                          from_checkpoint=status.checkpoint)
 ```
 
+Inside `qd.graph.do_while`, the selected resume point applies only to the first loop iteration after `kernel.resume(...)`. Later iterations run the complete loop body. Keep the checkpoint that yielded and the checkpoint passed to `from_checkpoint` in the same loop body and at the same nesting level. Resuming into or out of a loop, or between sibling loops, is not supported.
+
 ### Resume where?
 
 - execution starts from and including the checkpoint block that yielded
@@ -260,7 +278,9 @@ while status.yielded:
 - Must be used inside `@qd.kernel(graph=True, checkpoints=True)`. Without the flag, `qd.checkpoint(...)` raises `QuadrantsSyntaxError` at compile time.
 - `cp_id` must be an int literal or an `IntEnum` value, and must be unique across the kernel.
 - `yield_on=` must reference a 0-d `qd.types.ndarray(qd.i32, ndim=0)` - a bare kernel parameter (`yield_on=flag`), a [`@qd.data_oriented`](compound_types.md#qddata_oriented) member ndarray (`yield_on=self.flag`), or a [`@dataclasses.dataclass`](compound_types.md#dataclassesdataclass) parameter member (`yield_on=params.flag`). Arbitrary expressions are not supported.
-- Checkpoints cannot be nested inside other checkpoints. Checkpoints inside a `qd.graph.do_while` body are fine.
+- Checkpoints cannot be nested inside other checkpoints.
+- Checkpoints inside a `qd.graph.do_while` body work on every supported backend.
+- A `qd.graph.do_while` loop inside a checkpoint body requires enabled CUDA Graph execution on compute capability 9.0 or newer.
 - The body of a `with qd.checkpoint(...)` block cannot contain bare top-level statements (assignments, augmented assignments, or bare call/expression statements). Every top-level statement must be inside a `for`-loop (or other control-flow construct). A docstring as the first statement is allowed. Bare statements raise `QuadrantsSyntaxError` at compile time.
 
   ```python
@@ -347,6 +367,7 @@ Because `qd.graph.parallel` sections are independent by construction, running th
 | `graph=True` | hardware accelerated | hardware accelerated | hardware accelerated | runs (no acceleration) | runs (no acceleration) | runs (no acceleration) |
 | `qd.graph.do_while` | hardware accelerated | host fallback | host fallback | host fallback | host fallback | host fallback |
 | `qd.checkpoint` | GPU-side | GPU-side | GPU-side | GPU-side | GPU-side | host-side |
+| `qd.graph.do_while` inside `qd.checkpoint` | supported when CUDA Graphs are enabled | launch error | launch error | launch error | launch error | launch error |
 | `qd.graph.parallel_context` / `qd.graph.parallel` (sections) | concurrent | concurrent | runs serially | runs serially | runs serially | runs serially |
 
 AMDGPU `qd.graph.do_while` falls back to the host-side loop because HIP does not currently expose conditional / while graph nodes (as of [ROCm](https://www.amd.com/en/products/software/rocm.html) 7.2).
