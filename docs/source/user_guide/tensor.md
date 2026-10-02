@@ -113,6 +113,20 @@ b[i, j] = ...                   # canonical indexing in kernels still works
 
 Any permutation is supported, up to Quadrants' maximum number of tensor dimensions (`quadrants_max_num_indices`, a compile-time constant currently equal to 12). `layout=None` and the identity permutation (`(0, 1, ..., N-1)`) are equivalent and forward no permutation to the underlying allocator.
 
+For vector or matrix elements, pass a compound dtype to `qd.tensor`. The layout permutes only the axes in `shape`; vector components or matrix rows and columns remain innermost. NumPy, PyTorch, and DLPack exports append these component axes to the canonical shape:
+
+```python
+v = qd.tensor(qd.types.vector(3, qd.f32), shape=(4, 5), layout=(1, 0))
+assert v.shape == (4, 5)
+assert v.to_numpy().shape == (4, 5, 3)  # physical storage order is (5, 4, 3)
+
+m = qd.tensor(qd.types.matrix(2, 3, qd.f32), shape=(4, 5),
+              backend=qd.Backend.FIELD, layout=(1, 0))
+assert m.to_numpy().shape == (4, 5, 2, 3)
+```
+
+Both backends support this form. The convenience factories `qd.Vector.tensor` and `qd.Matrix.tensor` do not accept `layout=`; use `qd.tensor` when you need a custom layout.
+
 For best performance, pair `qd.tensor(..., layout=...)` with a matching iteration order via `qd.ndrange(..., axes=...)` (see [`parallelization`](parallelization.md#controlling-iteration-order-with-axes)): the permutation has the same meaning in both APIs (canonical axis index at each successive nesting level, outermost first), and using the same value on both lines adjacent flat threads up with adjacent physical memory slots.
 
 Quadrants rejects mismatched / invalid layouts up front:
