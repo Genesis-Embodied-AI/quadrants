@@ -27,6 +27,7 @@
 #include "quadrants/math/arithmetic.h"
 #include "llvm_runtime.h"
 #include "adstack_runtime.h"
+#include "cpu_range_for.h"
 
 // In llvm 15, host_printf_type will be saved as ptr instead of ptr of FunctionType. Add dummy function to save function
 // type for host_printf_type.
@@ -1650,6 +1651,7 @@ void cpu_struct_for_block_helper(void *ctx_, int thread_id, int task_id) {
 
   RuntimeContext this_thread_context = *ctx->context;
   this_thread_context.cpu_thread_id = thread_id;
+  this_thread_context.cpu_block_idx = i;
   this_thread_context.cpu_assert_failed = 0;
 
   if (lower < upper) {
@@ -1703,6 +1705,11 @@ void parallel_struct_for(RuntimeContext *context,
 #endif
 }
 
+i32 get_cpu_block_start_index(i32 range_begin, i32 range_end, i32 num_threads, i32 min_block_size, i32 boundary_index) {
+  return quadrants::lang::get_cpu_block_start_index(range_begin, range_end, num_threads, min_block_size,
+                                                    boundary_index);
+}
+
 using range_for_xlogue = void (*)(RuntimeContext *, /*TLS*/ char *tls_base);
 using mesh_for_xlogue = void (*)(RuntimeContext *,
                                  /*TLS*/ char *tls_base,
@@ -1730,6 +1737,7 @@ void cpu_parallel_range_for_task(void *range_context, int thread_id, int task_id
 
   RuntimeContext this_thread_context = *range_task_context.context;
   this_thread_context.cpu_thread_id = thread_id;
+  this_thread_context.cpu_block_idx = task_id;
   this_thread_context.cpu_assert_failed = 0;
 
   if (range_task_context.prologue) {
@@ -1842,6 +1850,7 @@ void cpu_parallel_mesh_for_task(void *range_context, int thread_id, int task_id)
 
   RuntimeContext this_thread_context = *ctx.context;
   this_thread_context.cpu_thread_id = thread_id;
+  this_thread_context.cpu_block_idx = task_id;
   this_thread_context.cpu_assert_failed = 0;
 
   int block_start = task_id * ctx.block_size;
@@ -1917,6 +1926,14 @@ void gpu_parallel_mesh_for(RuntimeContext *context,
     if (epilogue)
       epilogue(context, tls_ptr, idx);
   }
+}
+
+i32 global_block_idx(RuntimeContext *context) {
+#if ARCH_cuda || ARCH_amdgpu
+  return block_idx();
+#else
+  return context->cpu_block_idx;
+#endif
 }
 
 i32 linear_thread_idx(RuntimeContext *context) {

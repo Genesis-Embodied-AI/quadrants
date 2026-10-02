@@ -21,6 +21,28 @@ When to set it to `False`:
 
 For normal use, leave it at `True`; the caches are the main reason a repeated run starts up quickly.
 
+## CPU loop scheduling
+
+With the default `cpu_work_scheduling=qd.CPUWorkScheduling.PER_WORKER`, CPU `range()` loops divide their iterations into blocks. A block is a consecutive group of iterations executed by one CPU thread. When a loop has too few iterations to occupy the CPU cores and each iteration does substantial work, smaller blocks can help.
+
+Two settings work together here: `cpu_max_num_threads` sets the number of CPU worker threads, and `cpu_per_worker_min_block_dim` sets the minimum number of iterations per block. For full definitions, defaults, and constraints, see [All options](#all-options) below.
+
+Larger blocks require fewer scheduling operations for long loops. Smaller blocks can distribute uneven work across more workers. Compare timings for your workload when choosing a scheduling mode and block size.
+
+For example, this configuration allows up to 12 threads and sets the minimum block size to 1:
+
+```python
+qd.init(arch=qd.cpu, cpu_max_num_threads=12, cpu_per_worker_min_block_dim=1)
+```
+
+With 200 iterations and 12 threads configured, the default minimum of 512 puts all useful work in one block. Reducing the minimum to 1 allows 12 blocks: eleven of 17 iterations and one of 13. It does not force one iteration per block.
+
+Note that explicitly serialized loops (loops preceded by `qd.loop_config(serialize=True)` or `qd.loop_config(parallelize=1)`) still execute in order on a single thread.
+
+See [CPU parallelization](parallelization.md#cpu-parallelization) for worker and task scheduling, the two scheduling modes, and their performance tradeoffs.
+
+For fixed-size tasks, select `cpu_work_scheduling=qd.CPUWorkScheduling.FIXED_SIZE` and set `cpu_fixed_block_dim` (default 32). Both block-size settings must be positive integers. The old `make_cpu_multithreading_loop` and `default_cpu_block_dim` names are deprecated; see [migration and environment variables](parallelization.md#initialization-environment-variables-and-deprecated-names).
+
 ## Compile-time tuning
 
 ### `cfg_optimization`
@@ -146,4 +168,4 @@ These are compiler settings, so most do not apply to the pure-Python `qd.python`
 
 These options were accepted by `qd.init` in earlier versions but never had any effect (nothing in the compiler or runtime read their value), so they have been removed: `use_llvm`, `lower_access`, `simplify_before_lower_access`, `simplify_after_lower_access`, `verbose`, `verbose_kernel_launches`, `gpu_max_reg`, and `cpu_block_dim_adaptive`. Passing any of them to `qd.init` now raises a `KeyError` (they were previously ignored), and the corresponding `QD_<NAME>` environment variables are no longer read. If your code passed any of these, drop them: none of them changed behavior.
 
-The `block_dim_adaptive` keyword of `qd.loop_config` (the helper that sets directives such as GPU block size and CPU parallelization for the loop that immediately follows it) has also been removed. It was the only setter for `cpu_block_dim_adaptive` and equally had no effect, so `qd.loop_config(block_dim_adaptive=...)` now raises a `TypeError`; drop the argument. The CPU parallel-for block size is controlled by `default_cpu_block_dim`.
+The `block_dim_adaptive` keyword of `qd.loop_config` (the helper that sets directives such as GPU block size and CPU parallelization for the loop that immediately follows it) has also been removed. It was the only setter for `cpu_block_dim_adaptive` and equally had no effect, so `qd.loop_config(block_dim_adaptive=...)` now raises a `TypeError`; drop the argument. For CPU range loops with `cpu_work_scheduling=qd.CPUWorkScheduling.FIXED_SIZE`, `cpu_fixed_block_dim` supplies the block size when the loop does not specify one. With the default `cpu_work_scheduling=qd.CPUWorkScheduling.PER_WORKER`, use `cpu_per_worker_min_block_dim`; see [CPU parallelization](parallelization.md#cpu-parallelization).

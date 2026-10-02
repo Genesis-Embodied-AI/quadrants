@@ -431,7 +431,7 @@ void Program::finalize() {
 
 int Program::default_block_dim(const CompileConfig &config) {
   if (arch_is_cpu(config.arch)) {
-    return config.default_cpu_block_dim;
+    return config.cpu_fixed_block_dim;
   } else {
     return config.default_gpu_block_dim;
   }

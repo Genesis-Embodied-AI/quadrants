@@ -5,6 +5,8 @@
 
 namespace quadrants::lang {
 
+enum class CPUWorkScheduling { PER_WORKER, FIXED_SIZE };
+
 struct CompileConfig {
   Arch arch;
   bool debug;
@@ -40,11 +42,11 @@ struct CompileConfig {
   bool real_matrix_scalarize;
   bool force_scalarize_matrix;
   bool half2_vectorization;
-  bool make_cpu_multithreading_loop;
+  CPUWorkScheduling cpu_work_scheduling;
   DataType default_fp;
   DataType default_ip;
   DataType default_up;
-  int default_cpu_block_dim;
+  int cpu_fixed_block_dim;
   int default_gpu_block_dim;
   bool ad_stack_experimental_enabled{false};
   int ad_stack_size{0};  // 0 = adaptive
@@ -60,6 +62,7 @@ struct CompileConfig {
   int saturating_grid_dim;
   int max_block_dim;
   int cpu_max_num_threads;
+  int cpu_per_worker_min_block_dim;
   int random_seed;
 
   // Debugging options:

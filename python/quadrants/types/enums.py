@@ -1,5 +1,6 @@
 from quadrants._lib import core as _qd_core
 
+CPUWorkScheduling = _qd_core.CPUWorkScheduling
 Layout = _qd_core.Layout
 AutodiffMode = _qd_core.AutodiffMode
 SNodeGradType = _qd_core.SNodeGradType
@@ -44,4 +45,4 @@ class DeviceCapability:
     spirv_has_no_integer_wrap_decoration = "spirv_has_no_integer_wrap_decoration"
 
 
-__all__ = ["Layout", "AutodiffMode", "SNodeGradType", "Format", "BoundaryMode", "DeviceCapability"]
+__all__ = ["CPUWorkScheduling", "Layout", "AutodiffMode", "SNodeGradType", "Format", "BoundaryMode", "DeviceCapability"]

@@ -42,6 +42,9 @@ struct RuntimeContext {
   // via SPIR-V gate shaders that don't go through RuntimeContext).
   int32_t *checkpoint_resume_point_ptr{nullptr};
   int32_t *checkpoint_yield_signal_ptr{nullptr};
+
+  // Append new fields to preserve the indices used by LLVM code generation.
+  int32_t cpu_block_idx{0};
 };
 
 #if defined(QD_RUNTIME_HOST)
