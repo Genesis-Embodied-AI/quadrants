@@ -42,8 +42,11 @@ TEST(AMDGPUInterop, RejectOldRuntimeBeforeInitialization) {
   try {
     AMDGPUContext context;
     ADD_FAILURE() << "HIP 5 must be rejected";
-  } catch (const std::exception &error) {
-    EXPECT_NE(std::string(error.what()).find("requires HIP 6.0 or newer"), std::string::npos);
+  } catch (const std::string &error) {
+    EXPECT_NE(error.find("requires HIP 6.0 or newer"), std::string::npos);
+  } catch (...) {
+    driver.runtime_get_version = original;
+    throw;
   }
   driver.runtime_get_version = original;
 }
@@ -59,8 +62,11 @@ TEST(AMDGPUInterop, RejectFailedRuntimeVersionQuery) {
   try {
     AMDGPUContext context;
     ADD_FAILURE() << "A failed HIP version query must be rejected";
-  } catch (const std::exception &error) {
-    EXPECT_NE(std::string(error.what()).find("Cannot query the loaded HIP runtime version"), std::string::npos);
+  } catch (const std::string &error) {
+    EXPECT_NE(error.find("Cannot query the loaded HIP runtime version"), std::string::npos);
+  } catch (...) {
+    driver.runtime_get_version = original;
+    throw;
   }
   driver.runtime_get_version = original;
 }
