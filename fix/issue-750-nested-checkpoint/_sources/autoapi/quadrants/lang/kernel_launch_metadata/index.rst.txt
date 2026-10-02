@@ -1,0 +1,69 @@
+quadrants.lang.kernel_launch_metadata
+=====================================
+
+.. py:module:: quadrants.lang.kernel_launch_metadata
+
+.. autoapi-nested-parse::
+
+   Specialization-specific metadata used when launching graph kernels.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   quadrants.lang.kernel_launch_metadata.GraphDoWhileLevel
+   quadrants.lang.kernel_launch_metadata.KernelLaunchMetadata
+
+
+Module Contents
+---------------
+
+.. py:class:: GraphDoWhileLevel
+
+   One ``qd.graph_do_while`` loop, indexed outer-before-inner by the AST transformer.
+
+
+   .. py:attribute:: cond_arg_name
+      :type:  str
+
+
+   .. py:attribute:: parent_id
+      :type:  int
+
+
+   .. py:attribute:: cond_cpp_arg_id
+      :type:  int
+      :value: -1
+
+
+
+   .. py:attribute:: checkpoint_id
+      :type:  int
+      :value: -1
+
+
+
+.. py:class:: KernelLaunchMetadata
+
+   AST metadata consumed by one compiled specialization's launch path.
+
+
+   .. py:attribute:: graph_do_while_levels
+      :type:  tuple[GraphDoWhileLevel, ...]
+
+
+   .. py:attribute:: checkpoint_yield_on_args
+      :type:  tuple[str | None, ...]
+
+
+   .. py:attribute:: checkpoint_yield_on_cpp_arg_ids
+      :type:  tuple[int, ...]
+
+
+   .. py:attribute:: checkpoint_user_labels_by_cp_id
+      :type:  tuple[int | None, ...]
+
+

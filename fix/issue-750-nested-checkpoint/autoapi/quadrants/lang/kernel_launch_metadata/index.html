@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>quadrants.lang.checkpoint &#8212; Quadrants 1.3.4 documentation</title>
+    <title>quadrants.lang.kernel_launch_metadata &#8212; Quadrants 1.3.4 documentation</title>
   
   
   
@@ -55,12 +55,12 @@
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../../../../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/quadrants/lang/checkpoint/index';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/quadrants/lang/kernel_launch_metadata/index';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../../../../genindex.html" />
     <link rel="search" title="Search" href="../../../../search.html" />
-    <link rel="next" title="quadrants.lang.common_ops" href="../common_ops/index.html" />
-    <link rel="prev" title="quadrants.lang.buffer_view" href="../buffer_view/index.html" />
+    <link rel="next" title="quadrants.lang.matrix" href="../matrix/index.html" />
+    <link rel="prev" title="quadrants.lang.kernel_impl" href="../kernel_impl/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="1.3.4" />
@@ -343,7 +343,7 @@
     
     <li class="breadcrumb-item"><a href="../index.html" class="nav-link">quadrants.lang</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.checkpoint</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.kernel_launch_metadata</span></li>
   </ul>
 </nav>
 </div>
@@ -360,19 +360,18 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="module-quadrants.lang.checkpoint">
-<span id="quadrants-lang-checkpoint"></span><h1>quadrants.lang.checkpoint<a class="headerlink" href="#module-quadrants.lang.checkpoint" title="Link to this heading">#</a></h1>
-<p>User-facing <code class="docutils literal notranslate"><span class="pre">qd.checkpoint</span></code> context-manager and its no-op Python-runtime stub.</p>
-<p>Mirrors <code class="docutils literal notranslate"><span class="pre">graph_status.py</span></code>, which holds the other half of the same feature surface (<code class="docutils literal notranslate"><span class="pre">GraphStatus</span></code>). Kept in its own
-module to keep <code class="docutils literal notranslate"><span class="pre">lang/misc.py</span></code> from growing further – the AST transformer and the C++ runtime are doing all the actual
-implementation work; this file is just the public API entry point.</p>
-<p>Re-exported via <code class="docutils literal notranslate"><span class="pre">qd.lang.misc</span></code> (and therefore as <code class="docutils literal notranslate"><span class="pre">qd.checkpoint</span></code>) for the user-facing canonical import path.</p>
-<section id="functions">
-<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">#</a></h2>
+  <section id="module-quadrants.lang.kernel_launch_metadata">
+<span id="quadrants-lang-kernel-launch-metadata"></span><h1>quadrants.lang.kernel_launch_metadata<a class="headerlink" href="#module-quadrants.lang.kernel_launch_metadata" title="Link to this heading">#</a></h1>
+<p>Specialization-specific metadata used when launching graph kernels.</p>
+<section id="classes">
+<h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.checkpoint.checkpoint" title="quadrants.lang.checkpoint.checkpoint"><code class="xref py py-obj docutils literal notranslate"><span class="pre">checkpoint</span></code></a>(cp_id, yield_on)</p></td>
-<td><p>Marks a section of a graph kernel as a pause / resume point.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.kernel_launch_metadata.GraphDoWhileLevel" title="quadrants.lang.kernel_launch_metadata.GraphDoWhileLevel"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GraphDoWhileLevel</span></code></a></p></td>
+<td><p>One <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while</span></code> loop, indexed outer-before-inner by the AST transformer.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.kernel_launch_metadata.KernelLaunchMetadata" title="quadrants.lang.kernel_launch_metadata.KernelLaunchMetadata"><code class="xref py py-obj docutils literal notranslate"><span class="pre">KernelLaunchMetadata</span></code></a></p></td>
+<td><p>AST metadata consumed by one compiled specialization's launch path.</p></td>
 </tr>
 </tbody>
 </table>
@@ -380,54 +379,56 @@ implementation work; this file is just the public API entry point.</p>
 </section>
 <section id="module-contents">
 <h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">#</a></h2>
-<dl class="py function">
-<dt class="sig sig-object py" id="quadrants.lang.checkpoint.checkpoint">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.checkpoint.</span></span><span class="sig-name descname"><span class="pre">checkpoint</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cp_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">yield_on</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/checkpoint.html#checkpoint"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.checkpoint.checkpoint" title="Link to this definition">#</a></dt>
-<dd><p>Marks a section of a graph kernel as a pause / resume point.</p>
-<div class="admonition warning">
-<p class="admonition-title">Warning</p>
-<p><strong>Experimental.</strong> <code class="docutils literal notranslate"><span class="pre">qd.checkpoint</span></code> (together with <code class="docutils literal notranslate"><span class="pre">qd.GraphStatus</span></code> and
-<code class="docutils literal notranslate"><span class="pre">kernel.resume(from_checkpoint=...)</span></code>) is an experimental API. The signature, the lowering across backends, the
-error messages, and the host-side yield/resume contract may change in any future release without a deprecation
-cycle.</p>
-</div>
-<p>Used as <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.checkpoint(cp_id,</span> <span class="pre">yield_on=flag):</span></code> inside a <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True,</span> <span class="pre">checkpoints=True)</span></code> kernel
-body. When the body writes a non-zero value into <code class="docutils literal notranslate"><span class="pre">flag</span></code>, the kernel pauses at this checkpoint and returns a
-<code class="docutils literal notranslate"><span class="pre">GraphStatus</span></code> to the host carrying <code class="docutils literal notranslate"><span class="pre">status.checkpoint</span> <span class="pre">==</span> <span class="pre">cp_id</span></code>. The host can then fix things up and call
-<code class="docutils literal notranslate"><span class="pre">kernel.resume(...,</span> <span class="pre">from_checkpoint=cp_id)</span></code> to continue from the same point on the next launch.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>cp_id</strong> – User-facing label identifying this checkpoint to the host. Must be an <code class="docutils literal notranslate"><span class="pre">int</span></code> literal or an <code class="docutils literal notranslate"><span class="pre">IntEnum</span></code>
-value, and must be unique within the kernel. The value is preserved as-is end-to-end – if you pass
-<code class="docutils literal notranslate"><span class="pre">Stage.SIM</span></code> (an <code class="docutils literal notranslate"><span class="pre">IntEnum</span></code> member), <code class="docutils literal notranslate"><span class="pre">status.checkpoint</span></code> round-trips back as <code class="docutils literal notranslate"><span class="pre">Stage.SIM</span></code> rather than
-the raw int.</p></li>
-<li><p><strong>yield_on</strong> – Name of a kernel parameter that is a 0-d <code class="docutils literal notranslate"><span class="pre">qd.types.ndarray(qd.i32,</span> <span class="pre">ndim=0)</span></code>. The body may write a
-non-zero value into it to signal “pause here, host needs to handle something”. The framework never writes
-into this buffer – the host owns it end-to-end and must initialise it to <code class="docutils literal notranslate"><span class="pre">0</span></code> before the first launch
-(<code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code> is not zero-initialised) AND reset it to <code class="docutils literal notranslate"><span class="pre">0</span></code> before each <code class="docutils literal notranslate"><span class="pre">kernel.resume(...)</span></code> call
-(otherwise the same checkpoint sees the stale non-zero value and yields again).</p></li>
-</ul>
-</dd>
-</dl>
-<dl class="simple">
-<dt>Restrictions (enforced at kernel compile time):</dt><dd><ul class="simple">
-<li><p>Must be used inside <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True,</span> <span class="pre">checkpoints=True)</span></code>.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">cp_id</span></code> must be an <code class="docutils literal notranslate"><span class="pre">int</span></code> (or <code class="docutils literal notranslate"><span class="pre">IntEnum</span></code> value), and must be unique across the kernel.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">yield_on</span></code> must name a kernel parameter that is a 0-d <code class="docutils literal notranslate"><span class="pre">qd.types.ndarray(qd.i32,</span> <span class="pre">ndim=0)</span></code>.</p></li>
-<li><p>Checkpoints cannot be nested inside other checkpoints. Checkpoints inside a <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code> body are fine.</p></li>
-<li><p>A checkpoint body containing <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code> requires enabled CUDA Graph execution on compute capability
-9.0 or newer.</p></li>
-<li><p>Cannot be combined with <code class="docutils literal notranslate"><span class="pre">qd.stream_parallel()</span></code> in the same kernel.</p></li>
-<li><p>The body cannot contain bare top-level statements (assignments, expressions); wrap them in
-<code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">_</span> <span class="pre">in</span> <span class="pre">range(1):</span></code> so the lowering surfaces the per-statement task cost.</p></li>
-</ul>
-</dd>
-</dl>
-<p>This function should not be called directly at runtime; it is recognised and transformed during AST compilation. At
-Python runtime (outside kernels), this is a no-op context manager so that doctests / type-checking can import the
-symbol freely.</p>
-<p>See <code class="docutils literal notranslate"><span class="pre">docs/source/user_guide/graph.md</span></code> for the host-side yield/resume loop and cross-backend semantics.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="quadrants.lang.kernel_launch_metadata.GraphDoWhileLevel">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">quadrants.lang.kernel_launch_metadata.</span></span><span class="sig-name descname"><span class="pre">GraphDoWhileLevel</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/kernel_launch_metadata.html#GraphDoWhileLevel"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.kernel_launch_metadata.GraphDoWhileLevel" title="Link to this definition">#</a></dt>
+<dd><p>One <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while</span></code> loop, indexed outer-before-inner by the AST transformer.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="quadrants.lang.kernel_launch_metadata.GraphDoWhileLevel.cond_arg_name">
+<span class="sig-name descname"><span class="pre">cond_arg_name</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></em><a class="reference internal" href="../../../../_modules/quadrants/lang/kernel_launch_metadata.html#GraphDoWhileLevel.cond_arg_name"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.kernel_launch_metadata.GraphDoWhileLevel.cond_arg_name" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="quadrants.lang.kernel_launch_metadata.GraphDoWhileLevel.parent_id">
+<span class="sig-name descname"><span class="pre">parent_id</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="reference internal" href="../../../../_modules/quadrants/lang/kernel_launch_metadata.html#GraphDoWhileLevel.parent_id"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.kernel_launch_metadata.GraphDoWhileLevel.parent_id" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="quadrants.lang.kernel_launch_metadata.GraphDoWhileLevel.cond_cpp_arg_id">
+<span class="sig-name descname"><span class="pre">cond_cpp_arg_id</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">-1</span></em><a class="reference internal" href="../../../../_modules/quadrants/lang/kernel_launch_metadata.html#GraphDoWhileLevel.cond_cpp_arg_id"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.kernel_launch_metadata.GraphDoWhileLevel.cond_cpp_arg_id" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="quadrants.lang.kernel_launch_metadata.GraphDoWhileLevel.checkpoint_id">
+<span class="sig-name descname"><span class="pre">checkpoint_id</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">-1</span></em><a class="reference internal" href="../../../../_modules/quadrants/lang/kernel_launch_metadata.html#GraphDoWhileLevel.checkpoint_id"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.kernel_launch_metadata.GraphDoWhileLevel.checkpoint_id" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="quadrants.lang.kernel_launch_metadata.KernelLaunchMetadata">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">quadrants.lang.kernel_launch_metadata.</span></span><span class="sig-name descname"><span class="pre">KernelLaunchMetadata</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/kernel_launch_metadata.html#KernelLaunchMetadata"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.kernel_launch_metadata.KernelLaunchMetadata" title="Link to this definition">#</a></dt>
+<dd><p>AST metadata consumed by one compiled specialization’s launch path.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="quadrants.lang.kernel_launch_metadata.KernelLaunchMetadata.graph_do_while_levels">
+<span class="sig-name descname"><span class="pre">graph_do_while_levels</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#quadrants.lang.kernel_launch_metadata.GraphDoWhileLevel" title="quadrants.lang.kernel_launch_metadata.GraphDoWhileLevel"><span class="pre">GraphDoWhileLevel</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></em><a class="reference internal" href="../../../../_modules/quadrants/lang/kernel_launch_metadata.html#KernelLaunchMetadata.graph_do_while_levels"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.kernel_launch_metadata.KernelLaunchMetadata.graph_do_while_levels" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="quadrants.lang.kernel_launch_metadata.KernelLaunchMetadata.checkpoint_yield_on_args">
+<span class="sig-name descname"><span class="pre">checkpoint_yield_on_args</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></em><a class="reference internal" href="../../../../_modules/quadrants/lang/kernel_launch_metadata.html#KernelLaunchMetadata.checkpoint_yield_on_args"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.kernel_launch_metadata.KernelLaunchMetadata.checkpoint_yield_on_args" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="quadrants.lang.kernel_launch_metadata.KernelLaunchMetadata.checkpoint_yield_on_cpp_arg_ids">
+<span class="sig-name descname"><span class="pre">checkpoint_yield_on_cpp_arg_ids</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></em><a class="reference internal" href="../../../../_modules/quadrants/lang/kernel_launch_metadata.html#KernelLaunchMetadata.checkpoint_yield_on_cpp_arg_ids"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.kernel_launch_metadata.KernelLaunchMetadata.checkpoint_yield_on_cpp_arg_ids" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="quadrants.lang.kernel_launch_metadata.KernelLaunchMetadata.checkpoint_user_labels_by_cp_id">
+<span class="sig-name descname"><span class="pre">checkpoint_user_labels_by_cp_id</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></em><a class="reference internal" href="../../../../_modules/quadrants/lang/kernel_launch_metadata.html#KernelLaunchMetadata.checkpoint_user_labels_by_cp_id"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.kernel_launch_metadata.KernelLaunchMetadata.checkpoint_user_labels_by_cp_id" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
 </dd></dl>
 
 </section>
@@ -444,20 +445,20 @@ symbol freely.</p>
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="../buffer_view/index.html"
+       href="../kernel_impl/index.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">quadrants.lang.buffer_view</p>
+        <p class="prev-next-title">quadrants.lang.kernel_impl</p>
       </div>
     </a>
     <a class="right-next"
-       href="../common_ops/index.html"
+       href="../matrix/index.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">quadrants.lang.common_ops</p>
+        <p class="prev-next-title">quadrants.lang.matrix</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -480,9 +481,22 @@ symbol freely.</p>
   </div>
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#functions">Functions</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#classes">Classes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.checkpoint.checkpoint"><code class="docutils literal notranslate"><span class="pre">checkpoint()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel_launch_metadata.GraphDoWhileLevel"><code class="docutils literal notranslate"><span class="pre">GraphDoWhileLevel</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel_launch_metadata.GraphDoWhileLevel.cond_arg_name"><code class="docutils literal notranslate"><span class="pre">GraphDoWhileLevel.cond_arg_name</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel_launch_metadata.GraphDoWhileLevel.parent_id"><code class="docutils literal notranslate"><span class="pre">GraphDoWhileLevel.parent_id</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel_launch_metadata.GraphDoWhileLevel.cond_cpp_arg_id"><code class="docutils literal notranslate"><span class="pre">GraphDoWhileLevel.cond_cpp_arg_id</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel_launch_metadata.GraphDoWhileLevel.checkpoint_id"><code class="docutils literal notranslate"><span class="pre">GraphDoWhileLevel.checkpoint_id</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel_launch_metadata.KernelLaunchMetadata"><code class="docutils literal notranslate"><span class="pre">KernelLaunchMetadata</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel_launch_metadata.KernelLaunchMetadata.graph_do_while_levels"><code class="docutils literal notranslate"><span class="pre">KernelLaunchMetadata.graph_do_while_levels</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel_launch_metadata.KernelLaunchMetadata.checkpoint_yield_on_args"><code class="docutils literal notranslate"><span class="pre">KernelLaunchMetadata.checkpoint_yield_on_args</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel_launch_metadata.KernelLaunchMetadata.checkpoint_yield_on_cpp_arg_ids"><code class="docutils literal notranslate"><span class="pre">KernelLaunchMetadata.checkpoint_yield_on_cpp_arg_ids</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel_launch_metadata.KernelLaunchMetadata.checkpoint_user_labels_by_cp_id"><code class="docutils literal notranslate"><span class="pre">KernelLaunchMetadata.checkpoint_user_labels_by_cp_id</span></code></a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
@@ -491,7 +505,7 @@ symbol freely.</p>
   <div class="sidebar-secondary-item">
 
   <div class="tocsection sourcelink">
-    <a href="../../../../_sources/autoapi/quadrants/lang/checkpoint/index.rst.txt">
+    <a href="../../../../_sources/autoapi/quadrants/lang/kernel_launch_metadata/index.rst.txt">
       <i class="fa-solid fa-file-lines"></i> Show Source
     </a>
   </div>

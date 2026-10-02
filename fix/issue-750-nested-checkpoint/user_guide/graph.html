@@ -647,7 +647,8 @@
 </pre></div>
 </div>
 <p>The <code class="docutils literal notranslate"><span class="pre">cp_id</span></code> argument is the label you’ll use to identify the checkpoint from the host (in <code class="docutils literal notranslate"><span class="pre">GraphStatus.checkpoint</span></code> and <code class="docutils literal notranslate"><span class="pre">kernel.resume(from_checkpoint=...)</span></code>). It must be an int literal or an <code class="docutils literal notranslate"><span class="pre">IntEnum</span></code> value; the framework preserves the value as-is, so <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(Stage.SIM,</span> <span class="pre">...)</span></code> round-trips as <code class="docutils literal notranslate"><span class="pre">Stage.SIM</span></code> rather than the raw int. Labels must be unique within a kernel.</p>
-<p>A checkpoint body may contain a nested <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code>, including the common solver shape <code class="docutils literal notranslate"><span class="pre">outer</span> <span class="pre">WHILE</span> <span class="pre">-&gt;</span> <span class="pre">checkpoint</span> <span class="pre">IF</span> <span class="pre">-&gt;</span> <span class="pre">inner</span> <span class="pre">WHILE</span></code>. On CUDA SM 9.0+, the inner WHILE stays inside the checkpoint’s conditional CUDA Graph body, so resuming past that checkpoint skips the entire inner loop. CUDA devices without native conditional graph nodes use the normal host-driven fallback.</p>
+<p>On CUDA GPUs with <a class="reference external" href="https://developer.nvidia.com/cuda-gpus">compute capability</a> 9.0 or newer (NVIDIA’s hardware version number), a checkpoint body may contain a <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code> loop. Resuming past the checkpoint skips the whole loop.</p>
+<p>This nesting is rejected at launch on other backends, and when CUDA Graph execution is disabled, because those paths cannot safely skip the whole loop. Allowing it could enter the loop with an unchanged condition and repeat forever.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">qd</span><span class="o">.</span><span class="n">checkpoint</span><span class="p">(</span><span class="n">Stage</span><span class="o">.</span><span class="n">SIM</span><span class="p">,</span> <span class="n">yield_on</span><span class="o">=</span><span class="n">overflow_flag</span><span class="p">):</span>
     <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">):</span>
         <span class="n">inner_cond</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">inner_iterations</span>
@@ -689,6 +690,7 @@
                          <span class="n">from_checkpoint</span><span class="o">=</span><span class="n">status</span><span class="o">.</span><span class="n">checkpoint</span><span class="p">)</span>
 </pre></div>
 </div>
+<p>Inside <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code>, the selected resume point applies only to the first loop iteration after <code class="docutils literal notranslate"><span class="pre">kernel.resume(...)</span></code>. Later iterations run the complete loop body. Keep the checkpoint that yielded and the checkpoint passed to <code class="docutils literal notranslate"><span class="pre">from_checkpoint</span></code> in the same loop body and at the same nesting level. Resuming into or out of a loop, or between sibling loops, is not supported.</p>
 </section>
 <section id="resume-where">
 <h3>Resume where?<a class="headerlink" href="#resume-where" title="Link to this heading">#</a></h3>
@@ -704,7 +706,9 @@
 <li><p>Must be used inside <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True,</span> <span class="pre">checkpoints=True)</span></code>. Without the flag, <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(...)</span></code> raises <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code> at compile time.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">cp_id</span></code> must be an int literal or an <code class="docutils literal notranslate"><span class="pre">IntEnum</span></code> value, and must be unique across the kernel.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">yield_on=</span></code> must reference a 0-d <code class="docutils literal notranslate"><span class="pre">qd.types.ndarray(qd.i32,</span> <span class="pre">ndim=0)</span></code> - a bare kernel parameter (<code class="docutils literal notranslate"><span class="pre">yield_on=flag</span></code>), a <a class="reference internal" href="compound_types.html#qd-data-oriented"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code></span></a> member ndarray (<code class="docutils literal notranslate"><span class="pre">yield_on=self.flag</span></code>), or a <a class="reference internal" href="compound_types.html#dataclasses-dataclass"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">&#64;dataclasses.dataclass</span></code></span></a> parameter member (<code class="docutils literal notranslate"><span class="pre">yield_on=params.flag</span></code>). Arbitrary expressions are not supported.</p></li>
-<li><p>Checkpoints cannot be nested inside other checkpoints. Checkpoints inside a <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code> body, and <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code> loops inside a checkpoint body, are fine.</p></li>
+<li><p>Checkpoints cannot be nested inside other checkpoints.</p></li>
+<li><p>Checkpoints inside a <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code> body work on every supported backend.</p></li>
+<li><p>A <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code> loop inside a checkpoint body requires enabled CUDA Graph execution on compute capability 9.0 or newer.</p></li>
 <li><p>The body of a <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.checkpoint(...)</span></code> block cannot contain bare top-level statements (assignments, augmented assignments, or bare call/expression statements). Every top-level statement must be inside a <code class="docutils literal notranslate"><span class="pre">for</span></code>-loop (or other control-flow construct). A docstring as the first statement is allowed. Bare statements raise <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code> at compile time.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">qd</span><span class="o">.</span><span class="n">checkpoint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">yield_on</span><span class="o">=</span><span class="n">flag</span><span class="p">):</span>
     <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">):</span>
@@ -833,7 +837,15 @@
 <td><p>GPU-side</p></td>
 <td><p>host-side</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">qd.graph.parallel_context</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> (sections)</p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code> inside <code class="docutils literal notranslate"><span class="pre">qd.checkpoint</span></code></p></td>
+<td><p>supported when CUDA Graphs are enabled</p></td>
+<td><p>launch error</p></td>
+<td><p>launch error</p></td>
+<td><p>launch error</p></td>
+<td><p>launch error</p></td>
+<td><p>launch error</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qd.graph.parallel_context</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> (sections)</p></td>
 <td><p>concurrent</p></td>
 <td><p>concurrent</p></td>
 <td><p>runs serially</p></td>

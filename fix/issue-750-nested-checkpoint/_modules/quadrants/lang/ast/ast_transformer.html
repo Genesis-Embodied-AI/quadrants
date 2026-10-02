@@ -380,6 +380,7 @@
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.expr</span><span class="w"> </span><span class="kn">import</span> <span class="n">Expr</span><span class="p">,</span> <span class="n">make_expr_group</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.field</span><span class="w"> </span><span class="kn">import</span> <span class="n">Field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.kernel_launch_metadata</span><span class="w"> </span><span class="kn">import</span> <span class="n">GraphDoWhileLevel</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.matrix</span><span class="w"> </span><span class="kn">import</span> <span class="n">Matrix</span><span class="p">,</span> <span class="n">MatrixType</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.snode</span><span class="w"> </span><span class="kn">import</span> <span class="n">append</span><span class="p">,</span> <span class="n">deactivate</span><span class="p">,</span> <span class="n">length</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.struct</span><span class="w"> </span><span class="kn">import</span> <span class="n">Struct</span><span class="p">,</span> <span class="n">StructType</span>
@@ -1990,7 +1991,6 @@
         <span class="n">graph_do_while_node</span> <span class="o">=</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">_is_graph_do_while_call</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">test</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">graph_do_while_node</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">graph_api</span><span class="o">.</span><span class="n">warn_if_deprecated</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">test</span><span class="o">.</span><span class="n">func</span><span class="p">,</span> <span class="s2">"do_while"</span><span class="p">)</span>
-            <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.kernel</span><span class="w"> </span><span class="kn">import</span> <span class="n">GraphDoWhileLevel</span>  <span class="c1"># pylint: disable=C0415</span>
 
             <span class="n">kernel</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">current_kernel</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">kernel</span><span class="o">.</span><span class="n">use_graph</span><span class="p">:</span>

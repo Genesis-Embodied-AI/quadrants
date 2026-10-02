@@ -333,7 +333,7 @@
   <h1>Source code for quadrants.lang.kernel_checkpoint</h1><div class="highlight"><pre>
 <span></span><span class="sd">"""Helpers extracted from ``kernel.py`` for the ``qd.checkpoint(...)`` pause / resume model.</span>
 
-<span class="sd">``Kernel.__call__`` / ``Kernel.launch_kernel`` delegate the resume-cookie validation, the user-label-to-internal- cp_id</span>
+<span class="sd">``Kernel.__call__`` / ``Kernel.launch_kernel`` delegate the resume-cookie validation, the user-label-to-internal cp_id</span>
 <span class="sd">translation, the per-launch ``yield_on=`` arg-id table construction, and the ``GraphStatus`` build to the free functions</span>
 <span class="sd">below so the central ``Kernel`` class doesn't accrete checkpoint-feature-specific blocks. See ``qd.checkpoint`` /</span>
 <span class="sd">``kernel.resume`` / ``docs/source/user_guide/graph.md`` for the user-facing surface.</span>
@@ -341,21 +341,25 @@
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Sequence</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.exception</span><span class="w"> </span><span class="kn">import</span> <span class="n">QuadrantsRuntimeError</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.graph_status</span><span class="w"> </span><span class="kn">import</span> <span class="n">GraphStatus</span>
 
 
 <div class="viewcode-block" id="validate_resume_cookie">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_checkpoint/index.html#quadrants.lang.kernel_checkpoint.validate_resume_cookie">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">validate_resume_cookie</span><span class="p">(</span><span class="n">kernel</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">resume_from_checkpoint</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">validate_resume_cookie</span><span class="p">(</span>
+    <span class="n">resume_from_checkpoint</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">checkpoint_yield_on_args</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">],</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Raise if ``_qd_from_checkpoint`` was passed to a kernel without any ``qd.checkpoint(yield_on=...)`` block.</span>
 
-<span class="sd">    Called from the preamble of ``Kernel.__call__`` so the user gets a clear error before any compile / launch work</span>
-<span class="sd">    happens, rather than a confusing "no GraphStatus surface" failure later.</span>
+<span class="sd">    Called after specialization selection so the check reads that specialization's checkpoint table.</span>
 <span class="sd">    """</span>
-    <span class="k">if</span> <span class="n">resume_from_checkpoint</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">resume_from_checkpoint</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">checkpoint_yield_on_args</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
             <span class="s2">"`from_checkpoint=` is only valid for kernels that contain at least one "</span>
             <span class="s2">"qd.checkpoint(yield_on=...) block; this kernel has none."</span>
@@ -363,9 +367,39 @@
 
 
 
+<div class="viewcode-block" id="validate_graph_do_while_in_checkpoint_backend">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_checkpoint/index.html#quadrants.lang.kernel_checkpoint.validate_graph_do_while_in_checkpoint_backend">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">validate_graph_do_while_in_checkpoint_backend</span><span class="p">(</span><span class="n">graph_do_while_levels</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="o">*</span><span class="p">,</span> <span class="n">graph_enabled</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Reject checkpoint-owned graph loops when the backend cannot skip the loop as one unit."""</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="n">level</span><span class="o">.</span><span class="n">checkpoint_id</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="k">for</span> <span class="n">level</span> <span class="ow">in</span> <span class="n">graph_do_while_levels</span><span class="p">):</span>
+        <span class="k">return</span>
+
+    <span class="n">arch</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
+    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">Arch</span><span class="o">.</span><span class="n">cuda</span><span class="p">:</span>
+        <span class="n">compute_capability</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_cuda_compute_capability</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">compute_capability</span> <span class="o">&gt;=</span> <span class="mi">90</span> <span class="ow">and</span> <span class="n">graph_enabled</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="n">backend</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"CUDA SM </span><span class="si">{</span><span class="n">compute_capability</span><span class="w"> </span><span class="o">//</span><span class="w"> </span><span class="mi">10</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">compute_capability</span><span class="w"> </span><span class="o">%</span><span class="w"> </span><span class="mi">10</span><span class="si">}</span><span class="s2">"</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">graph_enabled</span><span class="p">:</span>
+            <span class="n">backend</span> <span class="o">+=</span> <span class="s2">" with CUDA Graph execution disabled"</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">backend</span> <span class="o">=</span> <span class="n">arch</span><span class="o">.</span><span class="n">name</span>
+
+    <span class="k">raise</span> <span class="n">QuadrantsRuntimeError</span><span class="p">(</span>
+        <span class="s2">"A qd.checkpoint() block containing qd.graph.do_while() requires the native CUDA Graph path on CUDA SM 9.0+; "</span>
+        <span class="sa">f</span><span class="s2">"the active backend (</span><span class="si">{</span><span class="n">backend</span><span class="si">}</span><span class="s2">) cannot skip the whole loop when resuming. "</span>
+        <span class="s2">"Move the loop outside the checkpoint or enable CUDA Graph execution on CUDA SM 9.0+."</span>
+    <span class="p">)</span></div>
+
+
+
 <div class="viewcode-block" id="translate_user_label_to_internal_cp_id">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_checkpoint/index.html#quadrants.lang.kernel_checkpoint.translate_user_label_to_internal_cp_id">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">translate_user_label_to_internal_cp_id</span><span class="p">(</span><span class="n">kernel</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">user_label</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">translate_user_label_to_internal_cp_id</span><span class="p">(</span>
+    <span class="n">kernel</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="n">user_label</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">checkpoint_user_labels_by_cp_id</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span><span class="p">],</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Translate a user-supplied ``from_checkpoint=`` label (int or IntEnum) to the runtime's internal dense cp_id.</span>
 
 <span class="sd">    The runtime indexes checkpoints by source-declaration order (0, 1, 2, ...). The user-facing label is whatever int /</span>
@@ -374,10 +408,10 @@
 <span class="sd">    value matches its underlying int. Implicit (auto-wrapped) checkpoints have ``None`` in the table and are never</span>
 <span class="sd">    resume targets. Raises ``RuntimeError`` listing the available labels when the user passed an unknown one.</span>
 <span class="sd">    """</span>
-    <span class="k">for</span> <span class="n">internal_cp_id</span><span class="p">,</span> <span class="n">label</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_user_labels_by_cp_id</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">internal_cp_id</span><span class="p">,</span> <span class="n">label</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">checkpoint_user_labels_by_cp_id</span><span class="p">):</span>
         <span class="k">if</span> <span class="n">label</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">label</span> <span class="o">==</span> <span class="n">user_label</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">internal_cp_id</span>
-    <span class="n">available</span> <span class="o">=</span> <span class="p">[</span><span class="n">lbl</span> <span class="k">for</span> <span class="n">lbl</span> <span class="ow">in</span> <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_user_labels_by_cp_id</span> <span class="k">if</span> <span class="n">lbl</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">]</span>
+    <span class="n">available</span> <span class="o">=</span> <span class="p">[</span><span class="n">lbl</span> <span class="k">for</span> <span class="n">lbl</span> <span class="ow">in</span> <span class="n">checkpoint_user_labels_by_cp_id</span> <span class="k">if</span> <span class="n">lbl</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">]</span>
     <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
         <span class="sa">f</span><span class="s2">"from_checkpoint=</span><span class="si">{</span><span class="n">user_label</span><span class="si">!r}</span><span class="s2"> does not match any qd.checkpoint(cp_id=...) in "</span>
         <span class="sa">f</span><span class="s2">"kernel </span><span class="si">{</span><span class="n">kernel</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">!r}</span><span class="s2">. Available cp_id labels (source-declaration order): </span><span class="si">{</span><span class="n">available</span><span class="si">}</span><span class="s2">."</span>
@@ -387,23 +421,26 @@
 
 <div class="viewcode-block" id="forward_yield_on_table_to_ctx">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_checkpoint/index.html#quadrants.lang.kernel_checkpoint.forward_yield_on_table_to_ctx">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">forward_yield_on_table_to_ctx</span><span class="p">(</span><span class="n">kernel</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">launch_ctx</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">forward_yield_on_table_to_ctx</span><span class="p">(</span><span class="n">checkpoint_yield_on_cpp_arg_ids</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">launch_ctx</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Copy the ``cp_id -&gt; C++ arg-id`` table onto the launch context so the runtime can find each ``yield_on=``</span>
 <span class="sd">    ndarray's device address at launch.</span>
 
-<span class="sd">    The table (``kernel.checkpoint_yield_on_cpp_arg_ids``) is populated at AST-build time by</span>
-<span class="sd">    ``CheckpointTransformer.build_checkpoint_with`` via ``ASTTransformer._resolve_ndarray_kernel_arg_id``, which</span>
-<span class="sd">    uniformly handles bare kernel parameters (``yield_on=flag``) and ``@qd.data_oriented`` member ndarrays</span>
-<span class="sd">    (``yield_on=self.flag``). No per-launch arg iteration / name match is required.</span>
+<span class="sd">    The table is populated at AST-build time by ``CheckpointTransformer.build_checkpoint_with`` via</span>
+<span class="sd">    ``ASTTransformer._resolve_ndarray_kernel_arg_id``. It handles bare kernel parameters and data-oriented members</span>
+<span class="sd">    without per-launch name matching.</span>
 <span class="sd">    """</span>
-    <span class="k">if</span> <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_cpp_arg_ids</span><span class="p">:</span>
-        <span class="n">launch_ctx</span><span class="o">.</span><span class="n">checkpoint_yield_on_arg_ids</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_cpp_arg_ids</span><span class="p">)</span></div>
+    <span class="k">if</span> <span class="n">checkpoint_yield_on_cpp_arg_ids</span><span class="p">:</span>
+        <span class="n">launch_ctx</span><span class="o">.</span><span class="n">checkpoint_yield_on_arg_ids</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">checkpoint_yield_on_cpp_arg_ids</span><span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="maybe_build_graph_status">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_checkpoint/index.html#quadrants.lang.kernel_checkpoint.maybe_build_graph_status">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">maybe_build_graph_status</span><span class="p">(</span><span class="n">kernel</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">default_ret</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">maybe_build_graph_status</span><span class="p">(</span>
+    <span class="n">checkpoint_yield_on_args</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">],</span>
+    <span class="n">checkpoint_user_labels_by_cp_id</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span><span class="p">],</span>
+    <span class="n">default_ret</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Translate the runtime's internal yielding cp_id back to the user-supplied label and return a ``GraphStatus``.</span>
 
 <span class="sd">    Returns ``default_ret`` unchanged for kernels without any yielding checkpoint -- there's no ``yield_on=`` parameter</span>
@@ -411,13 +448,11 @@
 <span class="sd">    (auto-wrapped) checkpoints have ``None`` in ``checkpoint_user_labels_by_cp_id`` but they never have ``yield_on=``,</span>
 <span class="sd">    so the runtime can't surface them as the yielding cp -- the lookup is always to an explicit checkpoint.</span>
 <span class="sd">    """</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span> <span class="ow">and</span> <span class="nb">any</span><span class="p">(</span><span class="n">n</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">)):</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">checkpoint_yield_on_args</span> <span class="ow">and</span> <span class="nb">any</span><span class="p">(</span><span class="n">n</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">checkpoint_yield_on_args</span><span class="p">)):</span>
         <span class="k">return</span> <span class="n">default_ret</span>
     <span class="n">cp</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">get_graph_last_yield_cp_id_on_last_call</span><span class="p">()</span>
     <span class="k">if</span> <span class="n">cp</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">:</span>
-        <span class="n">user_label</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_user_labels_by_cp_id</span><span class="p">[</span><span class="n">cp</span><span class="p">]</span> <span class="k">if</span> <span class="n">cp</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_user_labels_by_cp_id</span><span class="p">)</span> <span class="k">else</span> <span class="kc">None</span>
-        <span class="p">)</span>
+        <span class="n">user_label</span> <span class="o">=</span> <span class="n">checkpoint_user_labels_by_cp_id</span><span class="p">[</span><span class="n">cp</span><span class="p">]</span> <span class="k">if</span> <span class="n">cp</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">checkpoint_user_labels_by_cp_id</span><span class="p">)</span> <span class="k">else</span> <span class="kc">None</span>
         <span class="k">return</span> <span class="n">GraphStatus</span><span class="p">(</span><span class="n">yielded</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">checkpoint</span><span class="o">=</span><span class="n">user_label</span> <span class="k">if</span> <span class="n">user_label</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">cp</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">GraphStatus</span><span class="p">(</span><span class="n">yielded</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">checkpoint</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></div>
 
