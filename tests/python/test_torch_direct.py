@@ -37,8 +37,15 @@ def test_torch_direct_aliases(monkeypatch, custom_stream, with_grad):
             a[i] += 3
             if qd.static(with_grad):
                 a.grad[i] += 2
-        # Read through the aliases in a second task. Separate staging buffers would still contain the old values.
-        # Copy-back could fix x afterward, but cannot fix the stale value already recorded in out.
+        # Read through the aliases in a second task, after the writes finish.
+        #
+        # Reading x_alias outside the kernel is not enough: copy-back could update
+        # the original shared memory, making x_alias show the correct value.
+        #
+        # Instead, pass both x and x_alias into the kernel. Write through x, then
+        # read through x_alias into output. Separate staging buffers would hide
+        # the write from x_alias, so output would record the old value.
+        # Copy-back afterward cannot repair that recorded value.
         for i in b:
             out[i] = b[i]
             if qd.static(with_grad):
