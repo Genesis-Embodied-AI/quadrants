@@ -37,7 +37,8 @@ def test_torch_direct_aliases(monkeypatch, custom_stream, with_grad):
             a[i] += 3
             if qd.static(with_grad):
                 a.grad[i] += 2
-        # A second task reads through the aliases. Separate staging buffers would hide the preceding writes.
+        # Read through the aliases in a second task. Separate staging buffers would still contain the old values.
+        # Copy-back could fix x afterward, but cannot fix the stale value already recorded in out.
         for i in b:
             out[i] = b[i]
             if qd.static(with_grad):
