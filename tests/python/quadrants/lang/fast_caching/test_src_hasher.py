@@ -172,8 +172,8 @@ def test_src_hasher_store_validate(monkeypatch: pytest.MonkeyPatch, tmp_path: pa
     loaded = src_hasher.load(fast_cache_key)
     assert loaded is not None
     assert loaded.used_py_dataclass_parameters == some_used_vars
-    # AST-resolved fields default to empty for kernels with no graph_do_while / checkpoint metadata, exercising the
-    # BaseModel default path on round-trip.
+    # The new schema-v3+v4 AST-resolved fields default to empty for kernels with no graph_do_while / checkpoint
+    # metadata, exercising the BaseModel default path on round-trip.
     assert loaded.graph_do_while_levels is None
     assert loaded.checkpoint_yield_on_args == []
     assert loaded.checkpoint_yield_on_cpp_arg_ids == []
@@ -187,8 +187,8 @@ def test_src_hasher_store_validate_round_trips_graph_checkpoint_metadata(
 ) -> None:
     """Persisted AST metadata must survive fast-cache restore, which skips AST transformation.
 
-    Pin ``graph_do_while_levels`` as 4-tuples carrying both ``cond_cpp_arg_id`` and the enclosing checkpoint id, plus
-    the checkpoint yield-argument and user-label tables.
+    Pin ``graph_do_while_levels`` as 4-tuples carrying both the condition arg id and checkpoint owner, plus the
+    checkpoint yield-argument and user-label tables.
     """
     test_files_path = pathlib.Path("tests/python/quadrants/lang/fast_caching/test_files")
 
@@ -241,20 +241,20 @@ def test_src_hasher_store_validate_round_trips_graph_checkpoint_metadata(
 def test_src_hasher_intenum_qualname_round_trip(
     monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, temporary_module
 ) -> None:
-    """The parallel ``checkpoint_user_label_enum_qualnames`` column preserves ``IntEnum`` checkpoint identity.
-
-    ``src_hasher.store`` derives the qualname column from the live label list before pydantic coerces the members to
-    plain ints; ``_resolve_intenum_member`` re-imports the enum class on load. Cover mixed IntEnum / plain-int / None
-    storage and verify that load-side resolution preserves identity, not just int equality.
-    """
+    """Schema v4 (`cachevalue-v4-intenum-qualnames`) added a parallel `checkpoint_user_label_enum_qualnames` column so
+    an ``IntEnum`` cp_id round-trips through fast-cache restore as the original enum member rather than the underlying
+    int. ``src_hasher.store`` derives the qualname column from the live label list (which still holds the original
+    ``IntEnum`` instances) before pydantic int-coerces them; ``_resolve_intenum_member`` re-imports the enum class on
+    load. This test covers both the store-side derivation (mixed IntEnum / plain int / None) and the load-side
+    resolution (verifies identity is preserved, not just int equality)."""
     test_files_path = pathlib.Path("tests/python/quadrants/lang/fast_caching/test_files")
     offline_cache_path = tmp_path / "cache"
     temp_import_path = tmp_path / "temp_import"
     temp_import_path.mkdir(exist_ok=True)
     qd_init_same_arch(offline_cache_file_path=str(offline_cache_path))
     monkeypatch.syspath_prepend(temp_import_path)
-    shutil.copy2(test_files_path / "child_diff_base.py", temp_import_path / "child_diff_intenum.py")
-    mod = temporary_module("child_diff_intenum")
+    shutil.copy2(test_files_path / "child_diff_base.py", temp_import_path / "child_diff_v4_intenum.py")
+    mod = temporary_module("child_diff_v4_intenum")
     info, _src = _wrap_inspect.get_source_info_and_src(mod.f1.fn)
     # L2 key (source+config, then the args-narrow tail) - the layer ``store`` / ``load`` operate on.
     l1_key = src_hasher.make_source_config_key(info)
@@ -265,7 +265,7 @@ def test_src_hasher_intenum_qualname_round_trip(
 
     # Reference the module-level enum below so it has a real importable qualname.
     src_hasher.store(
-        "kernel_cache_key_intenum",
+        "kernel_cache_key_v4",
         fast_cache_key,
         [info],
         {"used_var"},

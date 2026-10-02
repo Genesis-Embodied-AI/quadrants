@@ -1,6 +1,6 @@
 """Helpers extracted from ``kernel.py`` for the ``qd.checkpoint(...)`` pause / resume model.
 
-``Kernel.__call__`` / ``Kernel.launch_kernel`` delegate the resume-cookie validation, the user-label-to-internal- cp_id
+``Kernel.__call__`` / ``Kernel.launch_kernel`` delegate the resume-cookie validation, the user-label-to-internal cp_id
 translation, the per-launch ``yield_on=`` arg-id table construction, and the ``GraphStatus`` build to the free functions
 below so the central ``Kernel`` class doesn't accrete checkpoint-feature-specific blocks. See ``qd.checkpoint`` /
 ``kernel.resume`` / ``docs/source/user_guide/graph.md`` for the user-facing surface.
@@ -22,8 +22,7 @@ def validate_resume_cookie(
 ) -> None:
     """Raise if ``_qd_from_checkpoint`` was passed to a kernel without any ``qd.checkpoint(yield_on=...)`` block.
 
-    Called after specialization selection so the check uses that specialization's checkpoint table rather than
-    whichever table the shared ``Kernel`` object populated most recently.
+    Called after specialization selection so the check reads that specialization's checkpoint table.
     """
     if resume_from_checkpoint is not None and not checkpoint_yield_on_args:
         raise RuntimeError(
@@ -32,30 +31,26 @@ def validate_resume_cookie(
         )
 
 
-def validate_graph_do_while_in_checkpoint_backend(graph_do_while_levels: Sequence[Any]) -> None:
-    """Reject checkpoint-owned graph loops when the backend cannot skip the WHILE node as one unit.
-
-    Per-task checkpoint gates are insufficient for this shape: a skipped child loop with a stale nonzero condition can
-    re-enter and execute on a later host-driven iteration. CUDA SM 9.0+ avoids that by placing the whole WHILE node
-    inside a native checkpoint IF. Keep the public surface fail-fast everywhere else until those fallback drivers gain
-    equivalent structural gating.
-    """
+def validate_graph_do_while_in_checkpoint_backend(graph_do_while_levels: Sequence[Any], *, graph_enabled: bool) -> None:
+    """Reject checkpoint-owned graph loops when the backend cannot skip the loop as one unit."""
     if not any(level.checkpoint_id >= 0 for level in graph_do_while_levels):
         return
 
     arch = impl.current_cfg().arch
     if arch == _qd_core.Arch.cuda:
         compute_capability = impl.get_cuda_compute_capability()
-        if compute_capability >= 90:
+        if compute_capability >= 90 and graph_enabled:
             return
         backend = f"CUDA SM {compute_capability // 10}.{compute_capability % 10}"
+        if not graph_enabled:
+            backend += " with CUDA Graph execution disabled"
     else:
         backend = arch.name
 
     raise QuadrantsRuntimeError(
-        "A qd.checkpoint() block containing qd.graph.do_while() currently requires CUDA SM 9.0+ native "
-        f"conditional graph nodes; the active backend ({backend}) cannot skip the child WHILE as one checkpoint unit. "
-        "Move the loop outside the checkpoint or run this kernel on CUDA SM 9.0+."
+        "A qd.checkpoint() block containing qd.graph.do_while() requires the native CUDA Graph path on CUDA SM 9.0+; "
+        f"the active backend ({backend}) cannot skip the whole loop when resuming. "
+        "Move the loop outside the checkpoint or enable CUDA Graph execution on CUDA SM 9.0+."
     )
 
 
@@ -86,10 +81,9 @@ def forward_yield_on_table_to_ctx(checkpoint_yield_on_cpp_arg_ids: Sequence[int]
     """Copy the ``cp_id -> C++ arg-id`` table onto the launch context so the runtime can find each ``yield_on=``
     ndarray's device address at launch.
 
-    The table is populated at AST-build time by
-    ``CheckpointTransformer.build_checkpoint_with`` via ``ASTTransformer._resolve_ndarray_kernel_arg_id``, which
-    uniformly handles bare kernel parameters (``yield_on=flag``) and ``@qd.data_oriented`` member ndarrays
-    (``yield_on=self.flag``). No per-launch arg iteration / name match is required.
+    The table is populated at AST-build time by ``CheckpointTransformer.build_checkpoint_with`` via
+    ``ASTTransformer._resolve_ndarray_kernel_arg_id``. It handles bare kernel parameters and data-oriented members
+    without per-launch name matching.
     """
     if checkpoint_yield_on_cpp_arg_ids:
         launch_ctx.checkpoint_yield_on_arg_ids = tuple(checkpoint_yield_on_cpp_arg_ids)

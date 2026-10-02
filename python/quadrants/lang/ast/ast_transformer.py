@@ -47,6 +47,7 @@ from quadrants.lang.exception import (
 )
 from quadrants.lang.expr import Expr, make_expr_group
 from quadrants.lang.field import Field
+from quadrants.lang.kernel_launch_metadata import GraphDoWhileLevel
 from quadrants.lang.matrix import Matrix, MatrixType
 from quadrants.lang.snode import append, deactivate, length
 from quadrants.lang.struct import Struct, StructType
@@ -1497,7 +1498,6 @@ class ASTTransformer(Builder):
         graph_do_while_node = ASTTransformer._is_graph_do_while_call(node.test)
         if graph_do_while_node is not None:
             graph_api.warn_if_deprecated(node.test.func, "do_while")
-            from quadrants.lang.kernel import GraphDoWhileLevel  # pylint: disable=C0415
 
             kernel = ctx.global_context.current_kernel
             if not kernel.use_graph:
