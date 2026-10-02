@@ -22,7 +22,8 @@ def matching_gpu():
 @pytest.mark.parametrize("with_grad", [False, True])
 @test_utils.test(arch=[qd.cuda, qd.amdgpu])
 def test_torch_direct_aliases(monkeypatch, custom_stream, with_grad):
-    """Check tensor and gradient aliasing on default and custom streams, and reject CPU staging."""
+    """Catch separate staging buffers that break tensor or gradient sharing, even when copy-back gives correct values.
+    """
     matching_gpu()
     x = torch.full((16384,), 11.0, device="cuda:0", requires_grad=with_grad)
     if with_grad:
