@@ -835,8 +835,8 @@ class FuncBase:
                     if v.requires_grad and v.grad is None:
                         v.grad = torch.zeros_like(v)
                         if direct_gpu and quadrants_arch == _qd_core.Arch.amdgpu:
-                            # This producer is internal: callers cannot synchronize it before launching on a
-                            # custom Quadrants stream. Complete the first-time initialization before handing off.
+                            # This producer is internal: callers cannot synchronize it before launching on a custom
+                            # Quadrants stream. Complete the first-time initialization before handing off.
                             torch.cuda.current_stream(v.device).synchronize()
 
                     if v.requires_grad:
