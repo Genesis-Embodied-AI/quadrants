@@ -26,7 +26,7 @@ If you have a newer NVIDIA GPU (above `sm_120`), please [open an issue on the Qu
 
 ### Backend / OS matrix
 
-Which backends are available on each supported platform. `qd.cpu` and `qd.vulkan` run on every OS; the other GPU backends are platform-specific because they wrap vendor drivers (CUDA on NVIDIA, ROCm on AMD, Metal on Apple).
+Which backends are available on each supported platform. `qd.cpu` and `qd.vulkan` run on every OS; the other GPU backends are platform-specific because they wrap vendor drivers: CUDA on NVIDIA, ROCm (AMD's GPU software platform) on AMD, and Metal on Apple.
 
 | OS \ backend | `qd.cpu` | `qd.cuda` | `qd.amdgpu` | `qd.metal` | `qd.vulkan` |
 | --- | --- | --- | --- | --- | --- |
