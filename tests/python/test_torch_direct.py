@@ -14,8 +14,8 @@ pytestmark = pytest.mark.needs_torch
 def matching_gpu():
     arch = impl.current_cfg().arch
     torch_arch = qd.amdgpu if torch.version.hip else qd.cuda
-    if not torch.cuda.is_available() or arch != torch_arch:
-        pytest.skip("Requires PyTorch and Quadrants on the same GPU backend")
+    assert torch.cuda.is_available(), f"PyTorch cannot access a GPU for the selected Quadrants backend {arch}"
+    assert arch == torch_arch, f"PyTorch GPU backend {torch_arch} does not match selected Quadrants backend {arch}"
 
 
 @pytest.mark.parametrize("custom_stream", [False, True])
