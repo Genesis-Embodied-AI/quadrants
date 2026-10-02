@@ -35,8 +35,8 @@ AMDGPUContext::AMDGPUContext() : driver_(AMDGPUDriver::get_instance_without_cont
               "Cannot query the loaded HIP runtime version (hipRuntimeGetVersion returned {}). "
               "Quadrants AMDGPU requires HIP 6.0 or newer.",
               version_error);
-  QD_ERROR_IF(runtime_version < 60000000,
-              "Quadrants AMDGPU requires HIP 6.0 or newer; loaded HIP runtime version {}.", runtime_version);
+  QD_ERROR_IF(runtime_version < 60000000, "Quadrants AMDGPU requires HIP 6.0 or newer; loaded HIP runtime version {}.",
+              runtime_version);
 
   dev_count_ = 0;
   driver_.init(0);

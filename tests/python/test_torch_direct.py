@@ -32,9 +32,7 @@ def test_torch_direct_aliases(monkeypatch, custom_stream, with_grad):
     torch.cuda.synchronize(0)
 
     @qd.kernel
-    def update(
-        a: qd.types.ndarray(), b: qd.types.ndarray(), g: qd.types.ndarray(), out: qd.types.ndarray()
-    ):
+    def update(a: qd.types.ndarray(), b: qd.types.ndarray(), g: qd.types.ndarray(), out: qd.types.ndarray()):
         for i in a:
             a[i] += 3
             if qd.static(with_grad):
