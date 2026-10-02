@@ -26,7 +26,7 @@ def test_torch_direct_aliases(monkeypatch, custom_stream, with_grad):
     x = torch.full((16384,), 11.0, device="cuda:0", requires_grad=with_grad)
     if with_grad:
         x.grad = torch.full_like(x, 5.0)
-    alias = x.detach()
+    x_alias = x.detach()
     output = torch.empty_like(x)
     grad_alias = x.grad if with_grad else torch.empty_like(x)
     torch.cuda.synchronize(0)
@@ -54,7 +54,7 @@ def test_torch_direct_aliases(monkeypatch, custom_stream, with_grad):
     try:
         with monkeypatch.context() as patch:
             patch.setattr(torch.Tensor, "to", no_cpu_copy)
-            update(x, alias, grad_alias, output, qd_stream=stream)
+            update(x, x_alias, grad_alias, output, qd_stream=stream)
         if stream is not None:
             stream.synchronize()
         else:
