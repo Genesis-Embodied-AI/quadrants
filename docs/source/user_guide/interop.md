@@ -265,7 +265,7 @@ y = torch.zeros(32, dtype=torch.float32, device="cuda:0")
 square(x, y)
 ```
 
-With a ROCm build of PyTorch (`torch.version.hip` is set), the same `device="cuda:0"` spelling refers to an AMD GPU. Initialize Quadrants with `qd.init(arch=qd.amdgpu)` to pass contiguous HIP tensors and their gradients directly to kernels, without payload staging. This requires HIP 6.0 or newer. Quadrants uses visible HIP device 0; tensors on other devices or with a mismatched GPU backend are copied through CPU memory and copied back after the kernel.
+With a ROCm build of PyTorch (`torch.version.hip` is set), the same `device="cuda:0"` spelling refers to an AMD GPU. Initialize Quadrants with `qd.init(arch=qd.amdgpu)` to pass contiguous HIP tensors and their gradients directly to kernels, without payload staging. This requires HIP 6.0 or newer. Both the CUDA and AMDGPU backends use visible device 0; tensors on other devices or with a mismatched GPU backend are copied through CPU memory and copied back after the kernel.
 
 When sharing tensors across PyTorch and Quadrants streams, finish the producer's work before the consumer uses the tensor. For example, call `torch.cuda.synchronize(0)` after PyTorch writes and before launching a Quadrants kernel, then `qd.sync()` before PyTorch reads the result. For kernels launched with `qd_stream=stream`, use `stream.synchronize()` before consuming their results. Stream and event dependencies can replace these blocking waits; see [Streams](streams.md). Keep the tensors alive until their GPU work finishes. Quadrants waits for initialization of a gradient buffer it creates internally, but does not automatically synchronize other PyTorch operations.
 

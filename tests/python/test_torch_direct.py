@@ -119,11 +119,11 @@ def test_torch_mismatched_runtime_stages(monkeypatch):
     assert torch.equal(x.cpu(), torch.full((32,), 14, dtype=torch.int32))
 
 
-@test_utils.test(arch=qd.amdgpu)
-def test_torch_other_hip_device_stages(monkeypatch):
+@test_utils.test(arch=[qd.cuda, qd.amdgpu])
+def test_torch_other_gpu_device_stages(monkeypatch):
     matching_gpu()
     if torch.cuda.device_count() < 2:
-        pytest.skip("Requires two HIP devices")
+        pytest.skip("Requires two matching GPU devices")
     x = torch.full((32,), 11, dtype=torch.int32, device="cuda:1")
     torch.cuda.synchronize(1)
     original_to = torch.Tensor.to

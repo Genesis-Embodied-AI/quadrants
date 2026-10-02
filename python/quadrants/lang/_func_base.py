@@ -826,14 +826,10 @@ class FuncBase:
                             "passing it into quadrants kernel."
                         )
                     quadrants_arch = impl.current_cfg().arch
-                    # PyTorch uses the "cuda" device spelling for both CUDA and HIP tensors. AMDGPUContext uses
-                    # device 0; tensors from other HIP devices must retain the CPU staging/copy-back path.
+                    # PyTorch uses the "cuda" device spelling for both CUDA and HIP tensors. Both GPU contexts use
+                    # device 0; tensors from other GPU devices must retain the CPU staging/copy-back path.
                     torch_gpu_arch = _qd_core.Arch.amdgpu if torch.version.hip else _arch_cuda
-                    direct_gpu = (
-                        v.device.type == "cuda"
-                        and quadrants_arch == torch_gpu_arch
-                        and (quadrants_arch != _qd_core.Arch.amdgpu or v.device.index == 0)
-                    )
+                    direct_gpu = v.device.type == "cuda" and quadrants_arch == torch_gpu_arch and v.device.index == 0
 
                     # FIXME: only allocate when launching grad kernel
                     if v.requires_grad and v.grad is None:
