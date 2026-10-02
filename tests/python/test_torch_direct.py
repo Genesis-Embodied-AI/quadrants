@@ -32,11 +32,16 @@ def test_torch_direct_aliases(monkeypatch, custom_stream, with_grad):
     torch.cuda.synchronize(0)
 
     @qd.kernel
-    def update(a: qd.types.ndarray(), b: qd.types.ndarray(), g: qd.types.ndarray(), out: qd.types.ndarray()):
-        for i in a:
-            a[i] += 3
+    def update(
+        x: qd.types.ndarray(),
+        x_alias: qd.types.ndarray(),
+        x_grad_alias: qd.types.ndarray(),
+        output: qd.types.ndarray(),
+    ):
+        for i in x:
+            x[i] += 3
             if qd.static(with_grad):
-                a.grad[i] += 2
+                x.grad[i] += 2
         # Read through the aliases in a second task, after the writes finish.
         #
         # Reading x_alias outside the kernel is not enough: copy-back could update the original shared memory, making
@@ -45,10 +50,10 @@ def test_torch_direct_aliases(monkeypatch, custom_stream, with_grad):
         # Instead, pass both x and x_alias into the kernel. Write through x, then read through x_alias into output.
         # Separate staging buffers would hide the write from x_alias, so output would record the old value. Copy-back
         # afterward cannot repair that recorded value.
-        for i in b:
-            out[i] = b[i]
+        for i in x_alias:
+            output[i] = x_alias[i]
             if qd.static(with_grad):
-                out[i] += g[i]
+                output[i] += x_grad_alias[i]
 
     original_to = torch.Tensor.to
 
