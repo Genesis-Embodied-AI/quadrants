@@ -103,6 +103,16 @@ def test_bool_parameter():
 
 
 @test_utils.test()
+def test_bool_neg():
+    @qd.kernel
+    def func(x: qd.u1) -> qd.u1:
+        return -x
+
+    assert func(True) == True
+    assert func(False) == False
+
+
+@test_utils.test()
 def test_if():
     @qd.kernel
     def func(x: qd.u1) -> qd.u1:
