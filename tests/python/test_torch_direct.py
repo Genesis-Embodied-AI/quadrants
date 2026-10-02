@@ -55,15 +55,19 @@ def test_torch_direct_aliases(monkeypatch, custom_stream, with_grad):
             if qd.static(with_grad):
                 output[i] += x_grad_alias[i]
 
+    # Save the original method before replacing Tensor.to; this stores the function without calling it.
     original_to = torch.Tensor.to
 
     def no_cpu_copy(self, *args, **kwargs):
+        # Intercept Tensor.to calls and reject CPU transfers during kernel argument preparation.
         target = kwargs.get("device", args[0] if args else None)
         assert target != "cpu" and target != torch.device("cpu"), "Unexpected CPU staging"
+        # Call the saved method with the tensor as self. Calling self.to here would re-enter this replacement.
         return original_to(self, *args, **kwargs)
 
     stream = qd.create_stream() if custom_stream else None
     try:
+        # The replacement is active only inside this block; monkeypatch restores Tensor.to even if the call fails.
         with monkeypatch.context() as patch:
             patch.setattr(torch.Tensor, "to", no_cpu_copy)
             update(x, x_alias, x_grad_alias, output, qd_stream=stream)
@@ -108,12 +112,15 @@ def test_torch_mismatched_runtime_stages(monkeypatch):
     matching_gpu()
     x = torch.full((32,), 11, dtype=torch.int32, device="cuda:0")
     torch.cuda.synchronize(0)
+    # Save the original method before replacing Tensor.to; this stores the function without calling it.
     original_to = torch.Tensor.to
     copies = []
 
     def record_to(self, *args, **kwargs):
+        # Record which tensors take the CPU fallback while still performing the real transfer.
         if kwargs.get("device") == "cpu":
             copies.append(self.data_ptr())
+        # Call the saved method with the tensor as self. Calling self.to here would re-enter this replacement.
         return original_to(self, *args, **kwargs)
 
     @qd.kernel
@@ -138,12 +145,15 @@ def test_torch_other_gpu_device_stages(monkeypatch):
         pytest.skip("Requires two matching GPU devices")
     x = torch.full((32,), 11, dtype=torch.int32, device="cuda:1")
     torch.cuda.synchronize(1)
+    # Save the original method before replacing Tensor.to; this stores the function without calling it.
     original_to = torch.Tensor.to
     copies = []
 
     def record_to(self, *args, **kwargs):
+        # Record which tensors take the CPU fallback while still performing the real transfer.
         if kwargs.get("device") == "cpu":
             copies.append(self.data_ptr())
+        # Call the saved method with the tensor as self. Calling self.to here would re-enter this replacement.
         return original_to(self, *args, **kwargs)
 
     @qd.kernel
