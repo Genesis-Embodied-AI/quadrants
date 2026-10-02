@@ -93,7 +93,7 @@ Zero-copy uses [DLPack](https://github.com/dmlc/dlpack) and requires:
 
 - a backend with DLPack support: `cpu` (`x64`/`arm64`), `cuda`, `amdgpu`, or `metal`. Vulkan is not supported: Vulkan-backed DLPack tensors are not processed by many well-known scientific computing libraries (torch, numpy, etc.);
 - a DLPack-supported dtype: `i32`, `i64`, `f32`, `f64`, `u1` (other dtypes such as `f16`, `u8`, `u16` fall back to the kernel-copy path);
-- on Apple Metal, `torch >= 2.9.2` for fields (required for DLPack `bytes_offset` on MPS; see [pytorch/pytorch#168193](https://github.com/pytorch/pytorch/pull/168193));
+- on Apple Metal, `torch >= 2.9.2` for fields (required for DLPack `bytes_offset` on MPS, PyTorch’s GPU backend for Apple Metal; see [pytorch/pytorch#168193](https://github.com/pytorch/pytorch/pull/168193));
 - 0-dim `ScalarField` instances are not zero-copyable on any backend (PyTorch DLPack `bytes_offset` limitation);
 - members of an AOS `StructField` (the default `Struct.field(..., layout=Layout.AOS)`) are not zero-copyable yet (see [Struct fields](#struct-fields) below); members of an SOA `StructField` (`layout=Layout.SOA`) **are** zero-copyable individually.
 
@@ -153,7 +153,7 @@ assert v1.data_ptr() == v2.data_ptr()   # same underlying memory
 
 ### Apple Metal: synchronization
 
-On Apple Metal, Quadrants and PyTorch MPS use separate Metal command queues. Every `to_torch()` / `to_numpy()` call runs `qd.sync()` internally to flush the Quadrants queue. Additionally, `copy=True` (the default) calls `torch.mps.synchronize()` after the kernel copy. This is necessary because, on Metal, Quadrants and Torch do not share the same compute streams. `copy=False` does **not** call `torch.mps.synchronize()`:
+On Apple Metal, Quadrants and PyTorch MPS use separate Metal command queues, which hold GPU operations in submission order. Every `to_torch()` / `to_numpy()` call runs `qd.sync()` internally to flush the Quadrants queue. Additionally, `copy=True` (the default) calls `torch.mps.synchronize()` after the kernel copy. This is necessary because, on Metal, Quadrants and Torch do not share the same [compute streams](streams.md), ordered sequences of GPU operations. `copy=False` does **not** call `torch.mps.synchronize()`:
 
 ```python
 qd.init(arch=qd.metal)
@@ -317,4 +317,4 @@ print(x.grad[0])  # 4.0
 | `to_dlpack()` | no (raw capsule) | yes | yes |
 | Direct pass-through | no | no | yes (as kernel arg) |
 
-The `copy` parameter is supported on `to_numpy()` and `to_torch()` for `ScalarField`, `MatrixField` (and `VectorField`), `StructField`, `qd.Tensor`, and all `Ndarray` types. See [Zero-copy interop via DLPack](#zero-copy-interop-via-dlpack) for the support matrix and lifetime rules.
+The `copy` parameter is supported on `to_numpy()` and `to_torch()` for `ScalarField`, `MatrixField` (and `VectorField`), `StructField`, [`qd.Tensor`](tensor.md), and all `Ndarray` types. See [Zero-copy interop via DLPack](#zero-copy-interop-via-dlpack) for the support matrix and lifetime rules.

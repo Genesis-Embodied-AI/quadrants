@@ -17,7 +17,7 @@ We test the following systems in our CI servers:
 
 ### GPUs
 
-- CUDA GPUs, `sm_60` (Pascal) through `sm_120` (Blackwell / Thor) — i.e. `>=sm_60` and `<=sm_120`
+- NVIDIA GPUs with compute capability 6.0 (`sm_60`, Pascal) through 12.0 (`sm_120`, Blackwell / Thor). Compute capability identifies the GPU features supported by an NVIDIA architecture; `sm_60` and `sm_120` are CUDA’s codes for these versions.
 - Metal GPUs
 - AMD GPUs
 - Vulkan-compatible GPUs (e.g. Intel Arc)
