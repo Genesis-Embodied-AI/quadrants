@@ -67,7 +67,7 @@ def test_torch_direct_aliases(monkeypatch, custom_stream, with_grad):
 
     stream = qd.create_stream() if custom_stream else None
     try:
-        # The replacement is active only inside this block; monkeypatch restores Tensor.to even if the call fails.
+        # The Tensor.to replacement is active only inside this block; monkeypatch restores Tensor.to even if the call fails.
         with monkeypatch.context() as patch:
             patch.setattr(torch.Tensor, "to", no_cpu_copy)
             update(x, x_alias, x_grad_alias, output, qd_stream=stream)
