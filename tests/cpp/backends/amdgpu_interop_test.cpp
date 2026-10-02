@@ -65,5 +65,19 @@ TEST(AMDGPUInterop, RejectFailedRuntimeVersionQuery) {
   driver.runtime_get_version = original;
 }
 
+TEST(AMDGPUInterop, AcceptMinimumRuntimeVersion) {
+  auto &driver = AMDGPUDriver::get_instance_without_context();
+  auto original = driver.runtime_get_version;
+  driver.runtime_get_version = [](int *version) -> uint32 {
+    *version = 60000000;
+    return HIP_SUCCESS;
+  };
+  EXPECT_NO_THROW({
+    AMDGPUContext context;
+    EXPECT_TRUE(context.detected());
+  });
+  driver.runtime_get_version = original;
+}
+
 }  // namespace quadrants::lang
 #endif

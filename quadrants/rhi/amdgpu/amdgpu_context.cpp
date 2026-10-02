@@ -82,13 +82,6 @@ AMDGPUContext::AMDGPUContext() : driver_(AMDGPUDriver::get_instance_without_cont
   mcpu_ = std::string((char *)((int *)hip_device_prop + HIP_DEVICE_GCN_ARCH_NAME));
   // Basic sanity check on mcpu_ to ensure we're calling R0000 instead of R0600
   if (mcpu_.empty() || mcpu_.substr(0, 3) != "gfx") {
-    // ROCm 6 starts with 60000000
-    if (runtime_version < 60000000) {
-      QD_ERROR(
-          "hipGetDevicePropertiesR0000 returned an invalid mcpu_ but HIP "
-          "version {} is not ROCm 6",
-          runtime_version);
-    }
     compute_capability_ = (*((int *)(hip_device_prop) + int(HIP_DEVICE_MAJOR_6))) * 100;
     compute_capability_ += (*((int *)(hip_device_prop) + int(HIP_DEVICE_MINOR_6))) * 10;
     mcpu_ = std::string((char *)((int *)(hip_device_prop) + int(HIP_DEVICE_GCN_ARCH_NAME_6)));
