@@ -314,3 +314,50 @@ print(x.grad[0])  # 4.0
 | Direct pass-through | no | no | yes (as kernel arg) |
 
 The `copy` parameter is supported on `to_numpy()` and `to_torch()` for `ScalarField`, `MatrixField` (and `VectorField`), `StructField`, `qd.Tensor`, and all `Ndarray` types. See [Zero-copy interop via DLPack](#zero-copy-interop-via-dlpack) for the support matrix and lifetime rules.
+
+
+## Vulkan external-memory import
+
+`quadrants.interop.VkImport` imports a Linux Vulkan `VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD` allocation into the active CUDA or AMDGPU backend and exposes the mapped range through DLPack.
+
+```python
+import torch
+import quadrants as qd
+from quadrants.interop import VkImport
+
+qd.init(arch=qd.amdgpu)  # or qd.cuda
+
+mapping = VkImport(
+    handle=exported_fd,
+    allocation_size=allocation_size,
+    offset=byte_offset,
+    size=logical_size,
+    shape=(height, width, 3),
+    dtype="uint8",
+)
+tensor = torch.utils.dlpack.from_dlpack(mapping)
+```
+
+### Ownership contract
+
+- The constructor validates the logical range and shape before importing.
+- It imports an internal duplicate of the supplied FD.
+- The caller's original FD is consumed only after external-memory import and buffer mapping both succeed.
+- On constructor failure, the original FD remains caller-owned.
+- Keep the `VkImport` object alive for at least as long as every DLPack consumer.
+- Call `close()` only after all tensor views have been released.
+
+### Synchronization
+
+`release_to_vulkan()` completes compute-device work before Vulkan consumes the allocation. `acquire_from_vulkan()` completes the ownership boundary before compute reads Vulkan-written memory. The implementation uses device-wide synchronization and assumes the Vulkan queue is flushed by the producer/consumer call sequence.
+
+FIXME: Define specification-valid memory visibility in both directions and determine whether imported/exported binary or timeline semaphores are required instead of device-wide host synchronization.
+
+### Limitations
+
+- Linux opaque FDs only; Win32 handles are not implemented.
+- CUDA and AMDGPU only.
+- Vulkan and compute must select the same physical GPU.
+- CUDA device selection targets device zero in the active process.
+- The DLPack capsule uses a no-op deleter; the `VkImport` owner must outlive the tensor view.
+- This API is not yet a stable compatibility commitment.

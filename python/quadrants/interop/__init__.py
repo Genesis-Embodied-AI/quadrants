@@ -5,5 +5,6 @@ command-queue level, enabling zero-overhead shared-queue execution without expli
 """
 
 from quadrants.interop._torch_mps import get_mps_command_queue
+from quadrants.interop._vk_import import VkImport
 
-__all__ = ["get_mps_command_queue"]
+__all__ = ["VkImport", "get_mps_command_queue"]
