@@ -93,8 +93,8 @@ AMDGPUContext::AMDGPUContext() : driver_(AMDGPUDriver::get_instance_without_cont
   QD_TRACE("Emitting AMDGPU code for {}", mcpu_);
 
   // Probe async memory-pool support (hipMallocAsync / hipFreeAsync) so the LLVM executor can skip the fixed-size
-  // device_memory_GB preallocation, the same way the CUDA backend does via cuMemAllocAsync. This feature requires
-  // ROCm >= 5.2 (Quadrants requires HIP >= 6). Use the non-throwing .call() variant so a future
+  // device_memory_GB preallocation, the same way the CUDA backend does via cuMemAllocAsync. HIP 6+ provides these
+  // APIs, but support still depends on the device. Use the non-throwing .call() variant so a future
   // hipDeviceAttribute_t reshuffle degrades to "no pool" rather than aborting init.
   //
   // QD_ENABLE_HIP_MEMPOOL=0 forces the sync hipMalloc path. Known-unreliable mcpu ids (see
