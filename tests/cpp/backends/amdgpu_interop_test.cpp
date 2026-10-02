@@ -1,6 +1,7 @@
 #include "gtest/gtest.h"
 
 #ifdef QD_WITH_AMDGPU
+#include "gmock/gmock.h"
 #include "quadrants/rhi/amdgpu/amdgpu_context.h"
 #include "quadrants/rhi/amdgpu/amdgpu_driver.h"
 #include "quadrants/runtime/amdgpu/amdgpu_utils.h"
@@ -46,7 +47,7 @@ TEST(AMDGPUInterop, RejectOldRuntimeBeforeInitialization) {
     AMDGPUContext context;
     ADD_FAILURE() << "HIP 5 must be rejected";
   } catch (const std::string &error) {
-    EXPECT_NE(error.find("requires HIP 6.0 or newer"), std::string::npos);
+    EXPECT_THAT(error, ::testing::HasSubstr("requires HIP 6.0 or newer"));
   } catch (...) {
     driver.runtime_get_version = original;
     throw;
@@ -67,7 +68,7 @@ TEST(AMDGPUInterop, RejectFailedRuntimeVersionQuery) {
     AMDGPUContext context;
     ADD_FAILURE() << "A failed HIP version query must be rejected";
   } catch (const std::string &error) {
-    EXPECT_NE(error.find("Cannot query the loaded HIP runtime version"), std::string::npos);
+    EXPECT_THAT(error, ::testing::HasSubstr("Cannot query the loaded HIP runtime version"));
   } catch (...) {
     driver.runtime_get_version = original;
     throw;
