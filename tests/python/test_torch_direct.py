@@ -22,7 +22,7 @@ def matching_gpu():
 @pytest.mark.parametrize("with_grad", [False, True])
 @test_utils.test(arch=[qd.cuda, qd.amdgpu])
 def test_torch_direct_aliases(monkeypatch, custom_stream, with_grad):
-    """Catch separate staging buffers that break tensor or gradient sharing, even when copy-back gives correct values."""
+    """Catch separate buffers that break tensor or gradient sharing, even when copy-back gives correct values."""
     matching_gpu()
     x = torch.full((16384,), 11.0, device="cuda:0", requires_grad=with_grad)
     if with_grad:
@@ -68,7 +68,7 @@ def test_torch_direct_aliases(monkeypatch, custom_stream, with_grad):
 
     stream = qd.create_stream() if custom_stream else None
     try:
-        # The Tensor.to replacement is active only inside this block; monkeypatch restores Tensor.to even if the call fails.
+        # The Tensor.to replacement is scoped to this block; monkeypatch restores Tensor.to even if the call fails.
         with monkeypatch.context() as patch:
             patch.setattr(torch.Tensor, "to", no_cpu_copy)
             update(x, x_alias, x_grad_alias, output, qd_stream=stream)
@@ -171,3 +171,23 @@ def test_torch_other_gpu_device_stages(monkeypatch):
     qd.sync()
     assert copies == [x.data_ptr()]
     assert torch.equal(x.cpu(), torch.full((32,), 14, dtype=torch.int32))
+
+
+@test_utils.test(arch=[qd.cuda, qd.amdgpu])
+def test_torch_gradient_device_mismatch_rejected():
+    """Prevent a CPU gradient pointer from being passed directly alongside a GPU tensor pointer."""
+    matching_gpu()
+    x = torch.full((32,), 11.0, device="cuda:0", requires_grad=True)
+    x.grad = torch.zeros_like(x)
+    torch.cuda.synchronize(0)
+    # PyTorch rejects assigning a CPU tensor to x.grad directly, but permits replacing an existing gradient's data.
+    x.grad.data = x.grad.cpu()
+    assert x.device.type == "cuda" and x.grad.device.type == "cpu"
+
+    @qd.kernel
+    def update(x: qd.types.ndarray()):
+        for i in x:
+            x.grad[i] += x[i]
+
+    with pytest.raises(ValueError, match="The gradient tensor must be on the same device as its tensor"):
+        update(x)

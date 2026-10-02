@@ -97,7 +97,7 @@ Zero-copy uses [DLPack](https://github.com/dmlc/dlpack) and requires:
 - 0-dim `ScalarField` instances are not zero-copyable on any backend (PyTorch DLPack `bytes_offset` limitation);
 - members of an AOS `StructField` (the default `Struct.field(..., layout=Layout.AOS)`) are not zero-copyable yet (see [Struct fields](#struct-fields) below); members of an SOA `StructField` (`layout=Layout.SOA`) **are** zero-copyable individually.
 
-Zero-copy `to_numpy()` additionally requires a CPU backend, because numpy arrays cannot reference GPU memory. Note: `Field.to_numpy(copy=False)` and `MatrixField.to_numpy(copy=False)` currently require torch to be installed, because the C++ `field_to_dlpack` checks the torch version internally. `Ndarray.to_numpy(copy=False)` does not require torch.
+Zero-copy `to_numpy()` additionally requires a CPU backend, because numpy arrays cannot reference GPU memory. Note: `Field.to_numpy(copy=False)` and `MatrixField.to_numpy(copy=False)` currently require torch to be installed. `Ndarray.to_numpy(copy=False)` does not require torch.
 
 On **NumPy >= 2.1**, `to_numpy(copy=False)` returns a **writable** array (via a DLPack v1 capsule). On NumPy 1.26–2.0, the returned array is **read-only** because those versions only consume DLPack v0 capsules, which lack writability metadata. If you need writable zero-copy numpy views, upgrade to NumPy >= 2.1.
 
@@ -196,10 +196,10 @@ The default `copy=True` produces an independent copy that is unaffected. Only `c
 
 ### Struct fields
 
-`StructField.to_torch()` and `StructField.to_numpy()` return a dictionary mapping each member name to a tensor / array; the `copy` argument is propagated to each member, so zero-copy availability is decided per member. The relevant axis is the SNode layout chosen at construction:
+`StructField.to_torch()` and `StructField.to_numpy()` return a dictionary mapping each member name to a tensor / array; the `copy` argument is propagated to each member, so zero-copy availability is decided per member. Availability depends on the memory layout chosen at construction:
 
-- **AOS** (default `Struct.field(..., layout=Layout.AOS)`): all members share the struct cell, e.g. `Struct.field({"a": i32, "b": f32}, shape=(N,))` stores `[a0, b0, a1, b1, ...]` in memory, with stride `sizeof(cell)` between consecutive `a`'s. Quadrants' C++ DLPack export does not currently emit cell-stride-aware views for individual members (it computes contiguous strides at the member dtype size, which would interleave neighboring members' bytes), so AOS members fall back to a kernel copy and `copy=False` raises on each AOS member.
-- **SOA** (`Struct.field(..., layout=Layout.SOA)`): each member sits in its own dense SNode subtree with contiguous storage, so members are zero-copyable individually under the usual backend / dtype rules. `copy=False` succeeds and returns aliasing views.
+- **AOS** (array of structures, the default `Struct.field(..., layout=Layout.AOS)`): members of each element are stored together. For example, `Struct.field({"a": i32, "b": f32}, shape=(N,))` stores `[a0, b0, a1, b1, ...]`. Zero-copy conversion of individual members is not supported for this layout. Use `copy=True`; `copy=False` raises an error.
+- **SOA** (structure of arrays, `Struct.field(..., layout=Layout.SOA)`): each member has separate contiguous storage. Members support zero-copy conversion individually under the usual backend and data-type requirements. `copy=False` returns views that share the member's memory.
 
 ```python
 S_aos = qd.Struct.field({"pos": qd.f32, "vel": qd.f32}, shape=(16,))   # AOS (default)
@@ -265,7 +265,7 @@ y = torch.zeros(32, dtype=torch.float32, device="cuda:0")
 square(x, y)
 ```
 
-With a ROCm build of PyTorch (`torch.version.hip` is set), the same `device="cuda:0"` spelling refers to an AMD GPU. Initialize Quadrants with `qd.init(arch=qd.amdgpu)` to pass contiguous HIP tensors and their gradients directly to kernels, without payload staging. Both the CUDA and AMDGPU backends use visible device 0; tensors on other devices or with a mismatched GPU backend are copied through CPU memory and copied back after the kernel.
+With a ROCm build of PyTorch (`torch.version.hip` is set), the same `device="cuda:0"` spelling refers to an AMD GPU. Initialize Quadrants with `qd.init(arch=qd.amdgpu)` to pass contiguous HIP tensors and their gradients directly to kernels, without copying tensor contents through temporary buffers. Both the CUDA and AMDGPU backends use visible device 0; tensors on other devices or with a mismatched GPU backend are copied through CPU memory and copied back after the kernel.
 
 When sharing tensors across PyTorch and Quadrants streams, finish the producer's work before the consumer uses the tensor. For example, call `torch.cuda.synchronize(0)` after PyTorch writes and before launching a Quadrants kernel, then `qd.sync()` before PyTorch reads the result. For kernels launched with `qd_stream=stream`, use `stream.synchronize()` before consuming their results. Stream and event dependencies can replace these blocking waits; see [Streams](streams.md). Keep the tensors alive until their GPU work finishes. Quadrants waits for initialization of a gradient buffer it creates internally, but does not automatically synchronize other PyTorch operations.
 
