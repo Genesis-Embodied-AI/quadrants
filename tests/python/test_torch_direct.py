@@ -22,6 +22,7 @@ def matching_gpu():
 @pytest.mark.parametrize("with_grad", [False, True])
 @test_utils.test(arch=[qd.cuda, qd.amdgpu])
 def test_torch_direct_aliases(monkeypatch, custom_stream, with_grad):
+    """Check tensor and gradient aliasing on default and custom streams, and reject CPU staging."""
     matching_gpu()
     x = torch.full((16384,), 11.0, device="cuda:0", requires_grad=with_grad)
     if with_grad:
@@ -86,6 +87,7 @@ def test_torch_direct_aliases(monkeypatch, custom_stream, with_grad):
 
 @test_utils.test(arch=qd.amdgpu)
 def test_torch_direct_allocates_gradient_on_custom_stream():
+    """Check that a newly created gradient is initialized before a custom Quadrants stream uses it."""
     matching_gpu()
     x = torch.full((16384,), 11.0, device="cuda:0", requires_grad=True)
     torch.cuda.synchronize(0)
@@ -109,6 +111,7 @@ def test_torch_direct_allocates_gradient_on_custom_stream():
 
 @test_utils.test(arch=[qd.cuda, qd.amdgpu])
 def test_torch_mismatched_runtime_stages(monkeypatch):
+    """Check that a mismatched PyTorch backend triggers CPU staging and copies the kernel result back."""
     matching_gpu()
     x = torch.full((32,), 11, dtype=torch.int32, device="cuda:0")
     torch.cuda.synchronize(0)
@@ -140,6 +143,7 @@ def test_torch_mismatched_runtime_stages(monkeypatch):
 
 @test_utils.test(arch=[qd.cuda, qd.amdgpu])
 def test_torch_other_gpu_device_stages(monkeypatch):
+    """Check that a tensor on visible device 1 stages through CPU and receives the kernel result."""
     matching_gpu()
     if torch.cuda.device_count() < 2:
         pytest.skip("Requires two matching GPU devices")

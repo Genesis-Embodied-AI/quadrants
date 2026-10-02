@@ -7,6 +7,7 @@
 
 namespace quadrants::lang {
 
+// Check that a real HIP device allocation is classified as GPU memory.
 TEST(AMDGPUInterop, DevicePointerClassification) {
   auto &driver = AMDGPUDriver::get_instance();
   void *device_ptr = nullptr;
@@ -15,6 +16,7 @@ TEST(AMDGPUInterop, DevicePointerClassification) {
   driver.mem_free(device_ptr);
 }
 
+// Check that registered CPU memory is rejected as GPU memory even when its attribute query succeeds.
 TEST(AMDGPUInterop, RegisteredHostPointerIsNotDeviceMemory) {
   // Query registered memory, not an ordinary malloc pointer whose attribute query could simply fail.
   auto &driver = AMDGPUDriver::get_instance();
@@ -32,6 +34,7 @@ TEST(AMDGPUInterop, RegisteredHostPointerIsNotDeviceMemory) {
   EXPECT_EQ(host_unregister(host_memory), HIP_SUCCESS);
 }
 
+// Check that a reported HIP 5 runtime is rejected before HIP initialization.
 TEST(AMDGPUInterop, RejectOldRuntimeBeforeInitialization) {
   auto &driver = AMDGPUDriver::get_instance_without_context();
   auto original = driver.runtime_get_version;
@@ -51,6 +54,7 @@ TEST(AMDGPUInterop, RejectOldRuntimeBeforeInitialization) {
   driver.runtime_get_version = original;
 }
 
+// Check that a failed version query is rejected even when it writes a supported version number.
 TEST(AMDGPUInterop, RejectFailedRuntimeVersionQuery) {
   auto &driver = AMDGPUDriver::get_instance_without_context();
   auto original = driver.runtime_get_version;
@@ -71,6 +75,7 @@ TEST(AMDGPUInterop, RejectFailedRuntimeVersionQuery) {
   driver.runtime_get_version = original;
 }
 
+// Check that reporting exactly HIP 6.0 allows context initialization on the installed runtime.
 TEST(AMDGPUInterop, AcceptMinimumRuntimeVersion) {
   auto &driver = AMDGPUDriver::get_instance_without_context();
   auto original = driver.runtime_get_version;
