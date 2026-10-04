@@ -1,6 +1,3 @@
-import ctypes
-import ctypes.util
-
 import numpy as np
 import pytest
 
@@ -8,6 +5,9 @@ import quadrants as qd
 from quadrants.lang import impl
 
 from tests import test_utils
+
+CUDA_SUCCESS = 0
+CUDA_ERROR_NOT_READY = 600
 
 
 def _graph_cache_size():
@@ -311,16 +311,14 @@ def test_cached_graph_arg_upload_does_not_wait_for_gpu():
     add(0)  # Build and cache the graph before measuring the replay.
     qd.sync()
 
-    driver = ctypes.CDLL(ctypes.util.find_library("cuda") or "nvcuda.dll")
-    driver.cuEventQuery.argtypes = [ctypes.c_void_p]
-    driver.cuEventQuery.restype = ctypes.c_int
-    with qd.create_event() as pending:
+    with qd.create_event() as evt:
         occupy_gpu(int(qd.clock_freq_hz()))
-        pending.record()
+        evt.record()
         add(1)
         assert _graph_used()
-        assert driver.cuEventQuery(pending.handle) == 600  # CUDA_ERROR_NOT_READY
-        pending.synchronize()
+        assert impl.get_runtime().prog._cuda_event_query(evt.handle) == CUDA_ERROR_NOT_READY
+        evt.synchronize()
+        assert impl.get_runtime().prog._cuda_event_query(evt.handle) == CUDA_SUCCESS
     qd.sync()
     assert result[None] == 1
 

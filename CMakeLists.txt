@@ -256,6 +256,7 @@ if (DEFINED SKBUILD_PROJECT_NAME AND QD_WITH_PYTHON)
     nanobind_add_stub(
         quadrants_python_stub
         INSTALL_TIME
+        INCLUDE_PRIVATE
         MODULE quadrants._lib.core.quadrants_python
         OUTPUT ${QD_PY_INSTALL_ROOT}/_lib/core/quadrants_python.pyi
         MARKER_FILE ${QD_PY_INSTALL_ROOT}/_lib/core/py.typed
