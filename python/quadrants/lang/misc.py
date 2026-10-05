@@ -771,6 +771,14 @@ def graph_do_while(condition) -> bool:
     return bool(condition)
 
 
+@util.quadrants_scope
+def block_idx():
+    """Return the current CPU scheduling block or GPU thread-block index."""
+    if impl.current_cfg().arch not in (cpu, cuda, amdgpu):
+        raise ValueError("qd.block_idx() is only supported on CPU, CUDA, and AMDGPU")
+    return impl.call_internal("global_block_idx")
+
+
 def global_thread_idx():
     """Returns the global thread id of this running thread,
     only available for cpu and cuda backends.
@@ -914,6 +922,7 @@ __all__ = [
     "graph_parallel",
     "loop_config",
     "global_thread_idx",
+    "block_idx",
     "assume_in_range",
     "block_local",
     "cache_read_only",

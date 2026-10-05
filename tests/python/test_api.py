@@ -122,6 +122,7 @@ user_api[qd] = [
     "axes",
     "bit_cast",
     "bit_shr",
+    "block_idx",
     "block_local",
     "cache_read_only",
     "cast",

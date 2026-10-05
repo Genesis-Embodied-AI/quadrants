@@ -223,6 +223,7 @@ STRUCT_FIELD_ARRAY(PhysicalCoordinates, val);
 STRUCT_FIELD(RuntimeContext, runtime);
 STRUCT_FIELD(RuntimeContext, result_buffer)
 STRUCT_FIELD(RuntimeContext, cpu_assert_failed)
+STRUCT_FIELD(RuntimeContext, cpu_block_idx)
 
 #include "quadrants/runtime/llvm/runtime_module/atomic.h"
 
@@ -1650,6 +1651,7 @@ void cpu_struct_for_block_helper(void *ctx_, int thread_id, int task_id) {
 
   RuntimeContext this_thread_context = *ctx->context;
   this_thread_context.cpu_thread_id = thread_id;
+  this_thread_context.cpu_block_idx = task_id;
   this_thread_context.cpu_assert_failed = 0;
 
   if (lower < upper) {
@@ -1730,6 +1732,7 @@ void cpu_parallel_range_for_task(void *range_context, int thread_id, int task_id
 
   RuntimeContext this_thread_context = *range_task_context.context;
   this_thread_context.cpu_thread_id = thread_id;
+  this_thread_context.cpu_block_idx = task_id;
   this_thread_context.cpu_assert_failed = 0;
 
   if (range_task_context.prologue) {
@@ -1842,6 +1845,7 @@ void cpu_parallel_mesh_for_task(void *range_context, int thread_id, int task_id)
 
   RuntimeContext this_thread_context = *ctx.context;
   this_thread_context.cpu_thread_id = thread_id;
+  this_thread_context.cpu_block_idx = task_id;
   this_thread_context.cpu_assert_failed = 0;
 
   int block_start = task_id * ctx.block_size;
@@ -1917,6 +1921,14 @@ void gpu_parallel_mesh_for(RuntimeContext *context,
     if (epilogue)
       epilogue(context, tls_ptr, idx);
   }
+}
+
+i32 global_block_idx(RuntimeContext *context) {
+#if ARCH_cuda || ARCH_amdgpu
+  return block_idx();
+#else
+  return context->cpu_block_idx;
+#endif
 }
 
 i32 linear_thread_idx(RuntimeContext *context) {
