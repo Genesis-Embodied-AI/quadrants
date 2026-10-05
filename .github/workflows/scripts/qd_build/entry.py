@@ -13,6 +13,7 @@ from . import misc
 from .alter import handle_alternate_actions
 from .cmake import cmake_args
 from .compiler import setup_clang, setup_msvc
+from .glslang import setup_glslang
 from .llvm import setup_llvm
 from .misc import banner, path_prepend
 from .ospkg import setup_os_pkgs
@@ -74,8 +75,6 @@ def setup_basic_build_env():
         from .vulkan import setup_vulkan
 
         setup_vulkan()
-
-    from .glslang import setup_glslang
 
     setup_glslang()
     sccache = setup_sccache()
