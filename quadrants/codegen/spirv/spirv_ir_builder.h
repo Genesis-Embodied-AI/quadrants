@@ -550,8 +550,11 @@ class IRBuilder {
   Value rand_i32(Value global_tmp_);
 
  private:
-  // Import and call a GLSL uint(uint) helper, caching its declaration in function.
-  Value call_glsl_u32_helper(Value &function, const char *name, uint32_t argument_value);
+  // Import and call a GLSL scalar helper, caching its declaration in function for this fixed signature.
+  Value call_glsl_helper(Value &function,
+                         const char *name,
+                         const SType &return_type,
+                         const std::vector<Value> &arguments);
 
   Value get_const(const SType &dtype, const uint64_t *pvalue, bool cache);
   SType declare_primitive_type(DataType dt);
@@ -600,6 +603,7 @@ class IRBuilder {
   Value gl_local_invocation_id_;
   Value gl_num_work_groups_;
   Value workgroup_helper_;
+  Value ge_i32_helper_;
   Value gl_work_group_size_;
   Value subgroup_local_invocation_id_;
 

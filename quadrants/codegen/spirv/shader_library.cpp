@@ -10,23 +10,34 @@
 
 namespace quadrants::lang::spirv {
 
-Value IRBuilder::call_glsl_u32_helper(Value &function, const char *name, uint32_t argument_value) {
+Value IRBuilder::call_glsl_helper(Value &function,
+                                 const char *name,
+                                 const SType &return_type,
+                                 const std::vector<Value> &arguments) {
   if (function.id == 0) {
-    auto parameter_type = get_pointer_type(t_uint32_, spv::StorageClassFunction);
+    std::vector<uint32_t> parameter_types;
+    for (const auto &argument : arguments) {
+      parameter_types.push_back(get_pointer_type(argument.stype, spv::StorageClassFunction).id);
+    }
     SType function_type;
     function_type.id = id_counter_++;
-    ib_.begin(spv::OpTypeFunction).add_seq(function_type, t_uint32_, parameter_type).commit(&global_);
+    ib_.begin(spv::OpTypeFunction).add_seq(function_type, return_type, parameter_types).commit(&global_);
     function = new_value(function_type, ValueKind::kFunction);
     decorate(spv::OpDecorate, function, spv::DecorationLinkageAttributes, name, spv::LinkageTypeImport);
-    ib_.begin(spv::OpFunction).add_seq(t_uint32_, function, 0, function_type).commit(&imported_functions_);
-    auto parameter = new_value(parameter_type, ValueKind::kVariablePtr);
-    ib_.begin(spv::OpFunctionParameter).add_seq(parameter_type, parameter).commit(&imported_functions_);
+    ib_.begin(spv::OpFunction).add_seq(return_type, function, 0, function_type).commit(&imported_functions_);
+    for (auto parameter_type : parameter_types) {
+      ib_.begin(spv::OpFunctionParameter).add_seq(parameter_type, id_counter_++).commit(&imported_functions_);
+    }
     ib_.begin(spv::OpFunctionEnd).commit(&imported_functions_);
   }
   // GLSL passes scalar function arguments through Function-storage pointers.
-  auto argument = alloca_variable(t_uint32_);
-  store_variable(argument, uint_immediate_number(t_uint32_, argument_value));
-  return make_value(spv::OpFunctionCall, t_uint32_, function, argument);
+  std::vector<uint32_t> argument_pointers;
+  for (const auto &argument : arguments) {
+    auto pointer = alloca_variable(argument.stype);
+    store_variable(pointer, argument);
+    argument_pointers.push_back(pointer.id);
+  }
+  return make_value(spv::OpFunctionCall, return_type, function, argument_pointers);
 }
 
 std::vector<uint32_t> link_shader_helpers(const std::vector<uint32_t> &kernel) {

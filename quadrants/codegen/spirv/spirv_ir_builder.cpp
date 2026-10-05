@@ -200,7 +200,7 @@ std::vector<uint32_t> IRBuilder::finalize() {
   data.insert(data.end(), imported_functions_.begin(), imported_functions_.end());
   data.insert(data.end(), func_header_.begin(), func_header_.end());
   data.insert(data.end(), function_.begin(), function_.end());
-  if (workgroup_helper_.id != 0) {
+  if (!imported_functions_.empty()) {
     // Capabilities precede extensions and imports in the SPIR-V module layout.
     data.insert(data.begin() + 5, {(2u << 16) | spv::OpCapability, spv::CapabilityLinkage});
     return link_shader_helpers(data);
@@ -729,7 +729,8 @@ Value IRBuilder::get_num_work_groups(uint32_t dim_index) {
 
 Value IRBuilder::get_work_group_id(uint32_t dim_index) {
   QD_ASSERT(dim_index < 3);
-  return call_glsl_u32_helper(workgroup_helper_, "get_work_group_id", dim_index);
+  return call_glsl_helper(workgroup_helper_, "get_work_group_id", t_uint32_,
+                          {uint_immediate_number(t_uint32_, dim_index)});
 }
 
 Value IRBuilder::get_local_invocation_id(uint32_t dim_index) {
@@ -839,7 +840,17 @@ Value IRBuilder::mod(Value a, Value b) {
 DEFINE_BUILDER_CMP_OP(lt, LessThan);
 DEFINE_BUILDER_CMP_OP(le, LessThanEqual);
 DEFINE_BUILDER_CMP_OP(gt, GreaterThan);
-DEFINE_BUILDER_CMP_OP(ge, GreaterThanEqual);
+Value IRBuilder::ge(Value a, Value b) {
+  QD_ASSERT(a.stype.id == b.stype.id);
+  if (a.stype.id == t_int32_.id) {
+    return call_glsl_helper(ge_i32_helper_, "ge_i32", t_bool_, {a, b});
+  }
+  if (is_integral(a.stype.dt)) {
+    return make_value(is_signed(a.stype.dt) ? spv::OpSGreaterThanEqual : spv::OpUGreaterThanEqual, t_bool_, a, b);
+  }
+  QD_ASSERT(is_real(a.stype.dt));
+  return make_value(spv::OpFOrdGreaterThanEqual, t_bool_, a, b);
+}
 
 #define DEFINE_BUILDER_CMP_UOP(_OpName, _Op)                               \
   Value IRBuilder::_OpName(Value a, Value b) {                             \
