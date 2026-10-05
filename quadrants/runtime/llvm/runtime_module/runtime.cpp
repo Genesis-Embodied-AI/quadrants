@@ -224,6 +224,8 @@ STRUCT_FIELD(RuntimeContext, runtime);
 STRUCT_FIELD(RuntimeContext, result_buffer)
 STRUCT_FIELD(RuntimeContext, cpu_assert_failed)
 STRUCT_FIELD(RuntimeContext, cpu_block_idx)
+STRUCT_FIELD(RuntimeContext, checkpoint_resume_point_ptr)
+STRUCT_FIELD(RuntimeContext, checkpoint_yield_signal_ptr)
 
 #include "quadrants/runtime/llvm/runtime_module/atomic.h"
 
