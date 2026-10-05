@@ -43,7 +43,7 @@ struct RuntimeContext {
   int32_t *checkpoint_resume_point_ptr{nullptr};
   int32_t *checkpoint_yield_signal_ptr{nullptr};
 
-  // Append new fields to preserve the indices used by LLVM code generation.
+  // Use runtime accessors in LLVM code generation; Clang can insert explicit padding between these fields.
   int32_t cpu_block_idx{0};
 };
 
