@@ -2,5 +2,12 @@
 #extension GL_ARB_gpu_shader_int64 : require
 
 uint64_t bit_field_extract_u64(uint64_t base, int offset, int count) {
-    return bitfieldExtract(base, offset, count);
+    // Handle empty and full-width extracts without shifting by 64.
+    if (count == 0) {
+        return uint64_t(0);
+    }
+    if (count == 64) {
+        return base;
+    }
+    return (base >> offset) & ((uint64_t(1) << count) - uint64_t(1));
 }

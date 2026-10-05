@@ -898,9 +898,9 @@ Value IRBuilder::bit_field_extract(Value base, Value offset, Value count) {
   auto &helper = is_64_bit ? bit_field_extract_u64_helper_ : bit_field_extract_u32_helper_;
   const char *name = is_64_bit ? "bit_field_extract_u64" : "bit_field_extract_u32";
   // Reinterpret signed bases as unsigned before widening narrow inputs, preserving zero-extension.
-  auto result = call_glsl_helper(helper, name, helper_type,
-                                {cast(helper_type, cast(unsigned_type, base)), cast(t_int32_, offset),
-                                 cast(t_int32_, count)});
+  auto result =
+      call_glsl_helper(helper, name, helper_type,
+                       {cast(helper_type, cast(unsigned_type, base)), cast(t_int32_, offset), cast(t_int32_, count)});
   return cast(base.stype, result);
 }
 

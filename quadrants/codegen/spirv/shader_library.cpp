@@ -42,7 +42,8 @@ Value IRBuilder::call_glsl_helper(Value &function,
 }
 
 std::vector<uint32_t> link_shader_helpers(const std::vector<uint32_t> &kernel, bool use_int64_helpers) {
-  std::vector<std::vector<uint32_t>> modules{kernel, {std::begin(workgroup_helper_spv), std::end(workgroup_helper_spv)}};
+  std::vector<std::vector<uint32_t>> modules{kernel,
+                                             {std::begin(workgroup_helper_spv), std::end(workgroup_helper_spv)}};
   // Keep Int64 out of kernels that only use narrower types.
   if (use_int64_helpers) {
     modules.emplace_back(std::begin(bit_field_extract_u64_spv), std::end(bit_field_extract_u64_spv));
