@@ -203,7 +203,7 @@ std::vector<uint32_t> IRBuilder::finalize() {
   if (!imported_functions_.empty()) {
     // Capabilities precede extensions and imports in the SPIR-V module layout.
     data.insert(data.begin() + 5, {(2u << 16) | spv::OpCapability, spv::CapabilityLinkage});
-    return link_shader_helpers(data);
+    return link_shader_helpers(data, bit_field_extract_u64_helper_.id != 0);
   }
   return data;
 }
@@ -892,13 +892,16 @@ Value IRBuilder::bit_field_extract(Value base, Value offset, Value count) {
   QD_ASSERT(is_integral(base.stype.dt));
   QD_ASSERT(is_integral(offset.stype.dt));
   QD_ASSERT(is_integral(count.stype.dt));
-  if (base.stype.id == t_uint32_.id || base.stype.id == t_int32_.id) {
-    // Use unsigned extraction even for signed bases, matching OpBitFieldUExtract.
-    auto result = call_glsl_helper(bit_field_extract_u32_helper_, "bit_field_extract_u32", t_uint32_,
-                                   {cast(t_uint32_, base), cast(t_int32_, offset), cast(t_int32_, count)});
-    return cast(base.stype, result);
-  }
-  return make_value(spv::OpBitFieldUExtract, base.stype, base, offset, count);
+  const auto unsigned_type = get_primitive_uint_type(base.stype.dt);
+  const bool is_64_bit = data_type_bits(base.stype.dt) == 64;
+  const auto helper_type = is_64_bit ? t_uint64_ : t_uint32_;
+  auto &helper = is_64_bit ? bit_field_extract_u64_helper_ : bit_field_extract_u32_helper_;
+  const char *name = is_64_bit ? "bit_field_extract_u64" : "bit_field_extract_u32";
+  // Reinterpret signed bases as unsigned before widening narrow inputs, preserving zero-extension.
+  auto result = call_glsl_helper(helper, name, helper_type,
+                                {cast(helper_type, cast(unsigned_type, base)), cast(t_int32_, offset),
+                                 cast(t_int32_, count)});
+  return cast(base.stype, result);
 }
 
 Value IRBuilder::select(Value cond, Value a, Value b) {

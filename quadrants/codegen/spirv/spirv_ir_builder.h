@@ -605,6 +605,7 @@ class IRBuilder {
   Value workgroup_helper_;
   Value ge_i32_helper_;
   Value bit_field_extract_u32_helper_;
+  Value bit_field_extract_u64_helper_;
   Value gl_work_group_size_;
   Value subgroup_local_invocation_id_;
 

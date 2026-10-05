@@ -5,6 +5,7 @@
 #include "quadrants/common/logging.h"
 #include "quadrants/codegen/spirv/spirv_ir_builder.h"
 #include "workgroup_spv.h"
+#include "bit_field_extract_u64_spv.h"
 #include "spirv-tools/linker.hpp"
 #include "spirv/unified1/spirv.hpp"
 
@@ -40,8 +41,12 @@ Value IRBuilder::call_glsl_helper(Value &function,
   return make_value(spv::OpFunctionCall, return_type, function, argument_pointers);
 }
 
-std::vector<uint32_t> link_shader_helpers(const std::vector<uint32_t> &kernel) {
-  std::vector<uint32_t> library(std::begin(workgroup_helper_spv), std::end(workgroup_helper_spv));
+std::vector<uint32_t> link_shader_helpers(const std::vector<uint32_t> &kernel, bool use_int64_helpers) {
+  std::vector<std::vector<uint32_t>> modules{kernel, {std::begin(workgroup_helper_spv), std::end(workgroup_helper_spv)}};
+  // Keep Int64 out of kernels that only use narrower types.
+  if (use_int64_helpers) {
+    modules.emplace_back(std::begin(bit_field_extract_u64_spv), std::end(bit_field_extract_u64_spv));
+  }
   // The helper only uses Input and Function pointers. Match the caller's module addressing model; any required
   // physical-storage capability and extension are already declared by the caller and retained by the linker.
   uint32_t addressing_model = spv::AddressingModelLogical;
@@ -51,10 +56,13 @@ std::vector<uint32_t> link_shader_helpers(const std::vector<uint32_t> &kernel) {
       break;
     }
   }
-  for (size_t i = 5; i < library.size(); i += library[i] >> 16) {
-    if ((library[i] & 0xffff) == spv::OpMemoryModel) {
-      library[i + 1] = addressing_model;
-      break;
+  for (size_t module_index = 1; module_index < modules.size(); ++module_index) {
+    auto &library = modules[module_index];
+    for (size_t i = 5; i < library.size(); i += library[i] >> 16) {
+      if ((library[i] & 0xffff) == spv::OpMemoryModel) {
+        library[i + 1] = addressing_model;
+        break;
+      }
     }
   }
   spvtools::Context context(SPV_ENV_UNIVERSAL_1_6);
@@ -66,7 +74,7 @@ std::vector<uint32_t> link_shader_helpers(const std::vector<uint32_t> &kernel) {
   spvtools::LinkerOptions options;
   options.SetUseHighestVersion(true);
   std::vector<uint32_t> linked;
-  auto result = spvtools::Link(context, {kernel, library}, &linked, options);
+  auto result = spvtools::Link(context, modules, &linked, options);
   QD_ERROR_IF(result != SPV_SUCCESS, "Failed to link GLSL shader helpers: {}", error);
   return linked;
 }

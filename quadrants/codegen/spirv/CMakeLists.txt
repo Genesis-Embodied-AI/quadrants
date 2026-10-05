@@ -40,6 +40,7 @@ endfunction()
 
 add_library(spirv_codegen)
 qd_add_shader_helper(spirv_codegen shaders/workgroup.comp workgroup_spv.h workgroup_helper_spv)
+qd_add_shader_helper(spirv_codegen shaders/bit_field_extract_u64.comp bit_field_extract_u64_spv.h bit_field_extract_u64_spv)
 target_sources(spirv_codegen
   PRIVATE
     adstack_bound_reducer_shader.cpp
