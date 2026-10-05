@@ -63,7 +63,7 @@ def setup_basic_build_env():
 
     setup_llvm()
     if u.system in ("Linux", "Darwin", "Windows"):
-        # All platforms: glslang compiles GLSL helpers during the build.
+        # Windows and macOS: the SDK supplies glslang for compiling GLSL helpers.
         # Linux: validation layers + SPIR-V tools (shader debug printf support).
         # macOS: the SDK bundles a current MoltenVK that advertises `VK_KHR_buffer_device_address`, which
         # the adstack sizer shader needs for `ExternalTensorRead` via Physical Storage Buffer addressing.
@@ -75,6 +75,9 @@ def setup_basic_build_env():
 
         setup_vulkan()
 
+    from .glslang import setup_glslang
+
+    setup_glslang()
     sccache = setup_sccache()
     python = sh.bake(sys.executable)
     return sccache, python
