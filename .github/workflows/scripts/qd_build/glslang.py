@@ -6,15 +6,15 @@ from .cmake import cmake_args
 from .dep import download_dep
 from .misc import banner, get_cache_home
 
-GLSLANG_RELEASE = "glslang-15.4.0-20261005132022"
+GLSLANG_RELEASE = "glslang-15.4.0-202610051822"
 GLSLANG_ARCHIVES = {
     "x86_64": (
         "glslang-15.4.0-manylinux_2_28_x86_64.tar.xz",
-        "77b4e1852ef75e1b9a42a2cf2fde602cb3339235752990dc32ce8fcc1c5eedb7",
+        "fdaab840fddc91acda447eaabb9d0f534177d40acff610bcefa81929a26954f0",
     ),
     "aarch64": (
         "glslang-15.4.0-manylinux_2_34_aarch64.tar.xz",
-        "badc8a6798680e559cfb68f5661deb7469958fa833524f04f4ea5d1644790f37",
+        "7fa035b0282e54598a26b28dafd0950c8a278cb89026b9d243f8dd79c5313ff1",
     ),
 }
 
