@@ -4,7 +4,7 @@
 
 CMake compiles the shader automatically and writes `generated/workgroup_spv.h` under the SPIR-V build directory. Editing the shader or its generator rebuilds the header. Generated headers are not stored in Git.
 
-Source builds require glslang with `--no-link` support (13.1 or newer; tested with 15.4.0). The build bootstrap installs the Vulkan SDK on Linux, macOS, and Windows. For direct CMake builds, install the SDK and put its tools on PATH, set VULKAN_SDK, or pass `-DQD_GLSLANG_EXECUTABLE=/path/to/glslangValidator`. Installed wheels do not require glslang.
+Source builds require glslang with `--no-link` support (13.1 or newer; tested with 15.4.0). The build bootstrap uses pinned glslang 15.4.0 archives on Linux x86_64 and ARM64. It verifies their SHA-256 checksums before extraction and caches the compiler. These archives are built for the manylinux 2.28 x86_64 and manylinux 2.34 ARM64 containers. Windows and macOS use the Vulkan SDK compiler. An explicit `QD_GLSLANG_EXECUTABLE` setting takes precedence. For direct CMake builds, install the SDK and put its tools on PATH, set VULKAN_SDK, or pass `-DQD_GLSLANG_EXECUTABLE=/path/to/glslangValidator`. Installed wheels do not require glslang.
 
 `compile_shader.py` accepts `--input`, `--output`, and `--symbol` arguments. The symbol names the generated C++ array in the `quadrants::lang::spirv` namespace. The script does not hardcode a shader file or array name. Its optional `--compiler` argument selects glslang. Its optional `--target-env` argument defaults to Vulkan 1.0 / SPIR-V 1.0 for compatibility with the oldest generated kernels.
 
@@ -21,3 +21,5 @@ The arguments name the consuming target, GLSL source, generated header, and C++ 
 The linker requires matching addressing models. The library uses only Input and Function pointers, so the linker wrapper adjusts its module addressing model to match the kernel. The kernel already supplies any required physical-storage capability and extension. It does not change the helper's executable instructions.
 
 C++ tests validate linking and optimization across SPIR-V versions and addressing models, including the Metal compiler configuration. C++ tests cover both unoptimized and optimized modules. Python tests execute repeated `impl.call_internal("workgroupId")` queries on Vulkan and Metal. This internal operation returns the x component as a signed 32-bit integer. It does not add a public Python API. Metal execution still requires Apple hardware.
+
+The Linux compiler archives come from [release glslang-15.4.0-20261005132022](https://github.com/Genesis-Embodied-AI/quadrants-sdk-builds/releases/tag/glslang-15.4.0-20261005132022), built from glslang revision `8a85691a0740d390761a1008b4696f57facd02c4`. Normal Quadrants builds download these binaries; they do not build glslang from source. The archive names and checksums are pinned in `.github/workflows/scripts/qd_build/glslang.py`.
