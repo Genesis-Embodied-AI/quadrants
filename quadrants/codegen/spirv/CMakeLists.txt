@@ -15,9 +15,9 @@ if(NOT GLSLANG_HELP MATCHES "--no-link")
   message(FATAL_ERROR "Shader helpers require glslang with --no-link support (13.1 or newer).")
 endif()
 # Each helper uses the same compiler invocation and dependency tracking.
-function(qd_add_shader_helper target source header symbol)
-  set(source_path "${CMAKE_CURRENT_SOURCE_DIR}/${source}")
-  set(output_path "${CMAKE_CURRENT_BINARY_DIR}/generated/${header}")
+function(qd_add_shader_helper build_target input_filepath output_filepath array_name)
+  set(source_path "${CMAKE_CURRENT_SOURCE_DIR}/${input_filepath}")
+  set(output_path "${CMAKE_CURRENT_BINARY_DIR}/generated/${output_filepath}")
   get_filename_component(output_directory "${output_path}" DIRECTORY)
   add_custom_command(OUTPUT "${output_path}"
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${output_directory}"
@@ -28,13 +28,13 @@ function(qd_add_shader_helper target source header symbol)
     # --vn: Write a C header containing an array with the specified name.
     # -o: Write the generated header to the specified output path.
     COMMAND "${QD_GLSLANG_EXECUTABLE}" -V --target-env vulkan1.0 --no-link -Od
-      --vn "${symbol}" "${source_path}" -o "${output_path}"
+      --vn "${array_name}" "${source_path}" -o "${output_path}"
     DEPENDS "${source_path}" "${QD_GLSLANG_EXECUTABLE}"
-    COMMENT "Compiling GLSL helper ${source}"
+    COMMENT "Compiling GLSL helper ${input_filepath}"
     # Preserve each command argument, including paths containing spaces, as a single argument.
     VERBATIM)
-  target_sources(${target} PRIVATE "${output_path}")
-  target_include_directories(${target} PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
+  target_sources(${build_target} PRIVATE "${output_path}")
+  target_include_directories(${build_target} PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 endfunction()
 
 add_library(spirv_codegen)
