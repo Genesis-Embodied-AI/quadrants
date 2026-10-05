@@ -11,9 +11,9 @@
 namespace quadrants::lang::spirv {
 
 Value IRBuilder::call_glsl_helper(Value &function,
-                                 const char *name,
-                                 const SType &return_type,
-                                 const std::vector<Value> &arguments) {
+                                  const char *name,
+                                  const SType &return_type,
+                                  const std::vector<Value> &arguments) {
   if (function.id == 0) {
     std::vector<uint32_t> parameter_types;
     for (const auto &argument : arguments) {

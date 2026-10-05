@@ -7,7 +7,7 @@ from tests import test_utils
 
 
 @pytest.mark.parametrize("dtype", [qd.i32, qd.u32, qd.f32])
-@test_utils.test(arch=[qd.vulkan, qd.metal], offline_cache=False, external_optimization_level=0)
+@test_utils.test(arch=[qd.vulkan, qd.metal], offline_cache=False, fast_math=False)
 def test_ge_shader_and_fallbacks(dtype):
     if dtype == qd.i32:
         values = np.array([-(2**31), -17, -1, 0, 1, 17, 2**31 - 1], dtype=np.int32)
