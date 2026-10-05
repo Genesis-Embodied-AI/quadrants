@@ -21,10 +21,17 @@ function(qd_add_shader_helper target source header symbol)
   get_filename_component(output_directory "${output_path}" DIRECTORY)
   add_custom_command(OUTPUT "${output_path}"
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${output_directory}"
+    # -V: Generate SPIR-V for Vulkan.
+    # --target-env vulkan1.0: Target Vulkan 1.0 and SPIR-V 1.0.
+    # --no-link: Compile a helper library without linking an entry point.
+    # -Od: Disable optimization during shader compilation.
+    # --vn: Write a C header containing an array with the specified name.
+    # -o: Write the generated header to the specified output path.
     COMMAND "${QD_GLSLANG_EXECUTABLE}" -V --target-env vulkan1.0 --no-link -Od
       --vn "${symbol}" "${source_path}" -o "${output_path}"
     DEPENDS "${source_path}" "${QD_GLSLANG_EXECUTABLE}"
     COMMENT "Compiling GLSL helper ${source}"
+    # Escape command arguments correctly for the build tool and shell.
     VERBATIM)
   target_sources(${target} PRIVATE "${output_path}")
   target_include_directories(${target} PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
