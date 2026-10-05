@@ -892,6 +892,12 @@ Value IRBuilder::bit_field_extract(Value base, Value offset, Value count) {
   QD_ASSERT(is_integral(base.stype.dt));
   QD_ASSERT(is_integral(offset.stype.dt));
   QD_ASSERT(is_integral(count.stype.dt));
+  if (base.stype.id == t_uint32_.id || base.stype.id == t_int32_.id) {
+    // Use unsigned extraction even for signed bases, matching OpBitFieldUExtract.
+    auto result = call_glsl_helper(bit_field_extract_u32_helper_, "bit_field_extract_u32", t_uint32_,
+                                   {cast(t_uint32_, base), cast(t_int32_, offset), cast(t_int32_, count)});
+    return cast(base.stype, result);
+  }
   return make_value(spv::OpBitFieldUExtract, base.stype, base, offset, count);
 }
 

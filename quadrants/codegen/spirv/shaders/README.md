@@ -25,3 +25,5 @@ C++ tests validate linking and optimization across SPIR-V versions and addressin
 The Linux compiler archives come from [release glslang-15.4.0-202610051822](https://github.com/Genesis-Embodied-AI/quadrants-sdk-builds/releases/tag/glslang-15.4.0-202610051822), built from glslang revision `8a85691a0740d390761a1008b4696f57facd02c4`. Normal Quadrants builds download these binaries; they do not build glslang from source. The archive names and checksums are pinned in `.github/workflows/scripts/qd_build/glslang.py`.
 
 `IRBuilder::ge()` uses the `bool ge_i32(int, int)` helper for signed 32-bit operands. Other numeric types retain direct SPIR-V comparisons. Both helpers share one compiled library. Linking runs when any helper is imported.
+
+`IRBuilder::bit_field_extract()` uses `uint bit_field_extract_u32(uint, int, int)` for 32-bit bases. Signed bases are converted to unsigned before extraction and converted back afterward, preserving zero-extension. Other widths retain direct SPIR-V extraction. This builder method currently has no callers; the prototype is exercised directly by C++ tests.
