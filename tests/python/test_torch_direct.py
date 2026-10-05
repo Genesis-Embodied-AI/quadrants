@@ -24,9 +24,10 @@ def matching_gpu():
 def test_torch_direct_aliases(monkeypatch, custom_stream, with_grad):
     """Catch separate buffers that break tensor or gradient sharing, even when copy-back gives correct values."""
     matching_gpu()
-    x = torch.full((16384,), 11.0, device="cuda:0", requires_grad=with_grad)
+    # Initialize on CPU, then upload: some ROCm wheels support V520 copies but lack its GPU fill kernels.
+    x = torch.full((16384,), 11.0).to("cuda:0").requires_grad_(with_grad)
     if with_grad:
-        x.grad = torch.full_like(x, 5.0)
+        x.grad = torch.full(x.shape, 5.0, dtype=x.dtype).to(x.device)
     x_alias = x.detach()
     output = torch.empty_like(x)
     x_grad_alias = x.grad if with_grad else torch.empty_like(x)
@@ -89,7 +90,7 @@ def test_torch_direct_aliases(monkeypatch, custom_stream, with_grad):
 def test_torch_direct_allocates_gradient_on_custom_stream():
     """Check that a newly created gradient is initialized before a custom Quadrants stream uses it."""
     matching_gpu()
-    x = torch.full((16384,), 11.0, device="cuda:0", requires_grad=True)
+    x = torch.full((16384,), 11.0).to("cuda:0").requires_grad_(True)
     torch.cuda.synchronize(0)
     assert x.grad is None
 
@@ -113,7 +114,7 @@ def test_torch_direct_allocates_gradient_on_custom_stream():
 def test_torch_mismatched_runtime_stages(monkeypatch):
     """Check that a mismatched PyTorch backend triggers CPU staging and copies the kernel result back."""
     matching_gpu()
-    x = torch.full((32,), 11, dtype=torch.int32, device="cuda:0")
+    x = torch.full((32,), 11, dtype=torch.int32).to("cuda:0")
     torch.cuda.synchronize(0)
     # Save the original method before replacing Tensor.to; this stores the function without calling it.
     original_to = torch.Tensor.to
@@ -147,7 +148,7 @@ def test_torch_other_gpu_device_stages(monkeypatch):
     matching_gpu()
     if torch.cuda.device_count() < 2:
         pytest.skip("Requires two matching GPU devices")
-    x = torch.full((32,), 11, dtype=torch.int32, device="cuda:1")
+    x = torch.full((32,), 11, dtype=torch.int32).to("cuda:1")
     torch.cuda.synchronize(1)
     # Save the original method before replacing Tensor.to; this stores the function without calling it.
     original_to = torch.Tensor.to
@@ -177,8 +178,8 @@ def test_torch_other_gpu_device_stages(monkeypatch):
 def test_torch_gradient_device_mismatch_rejected():
     """Prevent a CPU gradient pointer from being passed directly alongside a GPU tensor pointer."""
     matching_gpu()
-    x = torch.full((32,), 11.0, device="cuda:0", requires_grad=True)
-    x.grad = torch.zeros_like(x)
+    x = torch.full((32,), 11.0).to("cuda:0").requires_grad_(True)
+    x.grad = torch.zeros(x.shape, dtype=x.dtype).to(x.device)
     torch.cuda.synchronize(0)
     # PyTorch rejects assigning a CPU tensor to x.grad directly, but permits replacing an existing gradient's data.
     x.grad.data = x.grad.cpu()
