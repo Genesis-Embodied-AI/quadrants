@@ -31,7 +31,7 @@ function(qd_add_shader_helper target source header symbol)
       --vn "${symbol}" "${source_path}" -o "${output_path}"
     DEPENDS "${source_path}" "${QD_GLSLANG_EXECUTABLE}"
     COMMENT "Compiling GLSL helper ${source}"
-    # Escape command arguments correctly for the build tool and shell.
+    # Preserve each command argument, including paths containing spaces, as a single argument.
     VERBATIM)
   target_sources(${target} PRIVATE "${output_path}")
   target_include_directories(${target} PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
