@@ -2,11 +2,11 @@
 
 `workgroup.comp` implements the workgroup-index query in GLSL. `workgroup_spv.h` contains its compiled SPIR-V library, embedded in Quadrants so installed wheels do not require a shader compiler or an extra runtime file.
 
-CMake compiles the shader automatically and writes `generated/workgroup_spv.h` under the SPIR-V build directory. Editing the shader or its generator rebuilds the header. Generated headers are not stored in Git.
+CMake compiles the shader automatically and writes `generated/workgroup_spv.h` under the SPIR-V build directory. Editing the shader rebuilds the header. Generated headers are not stored in Git.
 
 Source builds require glslang with `--no-link` support (13.1 or newer; tested with 15.4.0). The build bootstrap uses pinned glslang 15.4.0 archives on Linux x86_64 and ARM64. It verifies their SHA-256 checksums before extraction and caches the compiler. These archives are built for the manylinux 2.28 x86_64 and manylinux 2.34 ARM64 containers. Windows and macOS use the Vulkan SDK compiler. An explicit `QD_GLSLANG_EXECUTABLE` setting takes precedence. For direct CMake builds, install the SDK and put its tools on PATH, set VULKAN_SDK, or pass `-DQD_GLSLANG_EXECUTABLE=/path/to/glslangValidator`. Installed wheels do not require glslang.
 
-`compile_shader.py` accepts `--input`, `--output`, and `--symbol` arguments. The symbol names the generated C++ array in the `quadrants::lang::spirv` namespace. The script does not hardcode a shader file or array name. Its optional `--compiler` argument selects glslang. Its optional `--target-env` argument defaults to Vulkan 1.0 / SPIR-V 1.0 for compatibility with the oldest generated kernels.
+CMake invokes glslang directly with `--vn` to generate a C++ array in the header. The array contains the compiled SPIR-V words. The `--target-env vulkan1.0` option selects Vulkan 1.0 / SPIR-V 1.0 for compatibility with the oldest generated kernels.
 
 Add another helper through the reusable CMake function:
 

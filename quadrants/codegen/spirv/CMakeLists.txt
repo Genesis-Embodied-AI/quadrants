@@ -14,17 +14,16 @@ execute_process(COMMAND "${QD_GLSLANG_EXECUTABLE}" --help
 if(NOT GLSLANG_HELP MATCHES "--no-link")
   message(FATAL_ERROR "Shader helpers require glslang with --no-link support (13.1 or newer).")
 endif()
-find_package(Python COMPONENTS Interpreter REQUIRED)
 # Each helper uses the same compiler invocation and dependency tracking.
 function(qd_add_shader_helper target source header symbol)
   set(source_path "${CMAKE_CURRENT_SOURCE_DIR}/${source}")
   set(output_path "${CMAKE_CURRENT_BINARY_DIR}/generated/${header}")
-  set(compiler_script "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/shaders/compile_shader.py")
+  get_filename_component(output_directory "${output_path}" DIRECTORY)
   add_custom_command(OUTPUT "${output_path}"
-    COMMAND "${Python_EXECUTABLE}" "${compiler_script}"
-      --compiler "${QD_GLSLANG_EXECUTABLE}" --input "${source_path}"
-      --output "${output_path}" --symbol "${symbol}"
-    DEPENDS "${source_path}" "${compiler_script}" "${QD_GLSLANG_EXECUTABLE}"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${output_directory}"
+    COMMAND "${QD_GLSLANG_EXECUTABLE}" -V --target-env vulkan1.0 --no-link -Od
+      --vn "${symbol}" "${source_path}" -o "${output_path}"
+    DEPENDS "${source_path}" "${QD_GLSLANG_EXECUTABLE}"
     COMMENT "Compiling GLSL helper ${source}"
     VERBATIM)
   target_sources(${target} PRIVATE "${output_path}")
