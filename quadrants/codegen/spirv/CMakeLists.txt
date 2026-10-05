@@ -14,7 +14,8 @@ execute_process(COMMAND "${QD_GLSLANG_EXECUTABLE}" --help
 if(NOT GLSLANG_HELP MATCHES "--no-link")
   message(FATAL_ERROR "Shader helpers require glslang with --no-link support (13.1 or newer).")
 endif()
-# Compile a GLSL helper into a C++ array header and make it available to the build target.
+# Compile a GLSL helper in input_filepath into a C++ array called array_name
+# in the generated header file output_filepath. Make it available to build_target.
 function(qd_add_shader_helper build_target input_filepath output_filepath array_name)
   set(source_path "${CMAKE_CURRENT_SOURCE_DIR}/${input_filepath}")
   set(output_path "${CMAKE_CURRENT_BINARY_DIR}/generated/${output_filepath}")
