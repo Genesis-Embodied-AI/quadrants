@@ -1,5 +1,7 @@
 #include "quadrants/codegen/spirv/shader_library.h"
 
+#include <cstdint>
+
 #include "quadrants/common/logging.h"
 #include "quadrants/codegen/spirv/spirv_ir_builder.h"
 #include "workgroup_spv.h"
