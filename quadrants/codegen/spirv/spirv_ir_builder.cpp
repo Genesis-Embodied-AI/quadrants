@@ -1,5 +1,6 @@
 #include "quadrants/codegen/spirv/spirv_ir_builder.h"
 #include "fp16.h"
+#include "quadrants/codegen/spirv/shader_library.h"
 
 namespace quadrants::lang {
 
@@ -222,8 +223,14 @@ std::vector<uint32_t> IRBuilder::finalize() {
   spirv_module.insert(spirv_module.end(), global_.begin(), global_.end());
 
   // 6. Function declarations without bodies, then function definitions with bodies.
+  spirv_module.insert(spirv_module.end(), imported_functions_.begin(), imported_functions_.end());
   spirv_module.insert(spirv_module.end(), func_header_.begin(), func_header_.end());
   spirv_module.insert(spirv_module.end(), function_.begin(), function_.end());
+  if (workgroup_helper_.id != 0) {
+    // Capabilities precede extensions and imports in the SPIR-V module layout.
+    spirv_module.insert(spirv_module.begin() + 5, {(2u << 16) | spv::OpCapability, spv::CapabilityLinkage});
+    return link_shader_helpers(spirv_module);
+  }
   return spirv_module;
 }
 
@@ -710,6 +717,11 @@ Value IRBuilder::struct_array_access(const SType &res_type, Value buffer, Value 
   ib_.begin(spv::OpAccessChain).add_seq(ptr_type, ret, buffer, const_i32_zero_, index).commit(&function_);
 
   return ret;
+}
+
+Value IRBuilder::get_work_group_id(uint32_t dim_index) {
+  QD_ASSERT(dim_index < 3);
+  return call_glsl_u32_helper(workgroup_helper_, "get_work_group_id", dim_index);
 }
 
 Value IRBuilder::alloca_variable(const SType &type) {

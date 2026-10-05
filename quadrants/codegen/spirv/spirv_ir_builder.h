@@ -411,6 +411,8 @@ class IRBuilder {
     curr_label_ = start_label;
   }
 
+  Value get_work_group_id(uint32_t dim_index);
+
   // Create a GLSL450 call
   template <typename... Args>
   Value call_glsl450(const SType &ret_type, uint32_t inst_id, Args &&...args) {
@@ -503,6 +505,9 @@ class IRBuilder {
   Value const_i32_one_;
 
  private:
+  // Import and call a GLSL uint(uint) helper, caching its declaration in function.
+  Value call_glsl_u32_helper(Value &function, const char *name, uint32_t argument_value);
+
   Value get_const(const SType &dtype, const uint64_t *pvalue, bool cache);
   SType declare_primitive_type(DataType dt);
 
@@ -541,6 +546,7 @@ class IRBuilder {
   SType t_v4_fp32_;
   SType t_v3_fp32_;
   SType t_v2_fp32_;
+  Value workgroup_helper_;
   // map from value to its pointer type
   std::map<std::pair<uint32_t, spv::StorageClass>, SType> pointer_type_tbl_;
 
@@ -575,6 +581,8 @@ class IRBuilder {
   std::vector<uint32_t> decorate_;
   // Global segment: types, variables, types
   std::vector<uint32_t> global_;
+  // Imported function declarations precede function definitions.
+  std::vector<uint32_t> imported_functions_;
   // Function header segment
   std::vector<uint32_t> func_header_;
   // Main Function segment

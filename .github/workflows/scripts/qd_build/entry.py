@@ -62,7 +62,8 @@ def setup_basic_build_env():
         setup_msvc()
 
     setup_llvm()
-    if u.system in ("Linux", "Darwin"):
+    if u.system in ("Linux", "Darwin", "Windows"):
+        # All platforms: glslang compiles GLSL helpers during the build.
         # Linux: validation layers + SPIR-V tools (shader debug printf support).
         # macOS: the SDK bundles a current MoltenVK that advertises `VK_KHR_buffer_device_address`, which
         # the adstack sizer shader needs for `ExternalTensorRead` via Physical Storage Buffer addressing.

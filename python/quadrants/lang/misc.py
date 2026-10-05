@@ -774,8 +774,8 @@ def graph_do_while(condition) -> bool:
 @util.quadrants_scope
 def block_idx():
     """Return the current CPU scheduling block or GPU thread-block index."""
-    if impl.current_cfg().arch not in (cpu, cuda, amdgpu):
-        raise ValueError("qd.block_idx() is only supported on CPU, CUDA, and AMDGPU")
+    if impl.current_cfg().arch in (vulkan, metal):
+        return impl.call_internal("workgroupId")
     return impl.call_internal("global_block_idx")
 
 

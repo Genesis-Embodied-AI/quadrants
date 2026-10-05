@@ -10,11 +10,11 @@ Note that adding a non-static `if` over the top of a for-loop will lead to the f
 
 ## Inspecting execution with qd.block_idx()
 
-`qd.block_idx()` returns the current block index as a signed 32-bit integer. Call it inside a kernel or a function called by a kernel. It works on CPU, CUDA, and AMDGPU. Other backends raise an unsupported-platform error.
+`qd.block_idx()` returns the current block index as a signed 32-bit integer. Call it inside a kernel or a function called by a kernel. It works on CPU, CUDA, AMDGPU, Vulkan, and Metal.
 
 On CPU, a block is a group of iterations executed as one runtime task. A task is work assigned to a worker thread. Block indices start at zero for each parallel loop execution. They identify blocks, not worker threads or execution order. A worker can execute several blocks.
 
-On CUDA and AMDGPU, it returns the hardware block index along the x dimension. A block is a group of GPU threads. CPU and GPU iteration assignments can differ for the same kernel.
+On GPUs, it returns the hardware block index along the x dimension. A block is a group of GPU threads. Vulkan and Metal call it a workgroup. CPU and GPU iteration assignments can differ for the same kernel.
 
 Top-level serial execution returns `0`. Nested serial loops and called functions retain the enclosing block's index. Reading an index does not synchronize threads.
 
