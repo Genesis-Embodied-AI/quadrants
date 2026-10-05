@@ -1,5 +1,7 @@
 """Direct tensor access must preserve aliasing, not merely copy correct values back."""
 
+import os
+
 import pytest
 
 import quadrants as qd
@@ -87,12 +89,35 @@ def test_torch_direct_aliases(monkeypatch, custom_stream, with_grad):
 
 
 @test_utils.test(arch=qd.amdgpu)
-def test_torch_direct_allocates_gradient_on_custom_stream():
+def test_torch_direct_allocates_gradient_on_custom_stream(monkeypatch):
     """Check that a newly created gradient is initialized before a custom Quadrants stream uses it."""
     matching_gpu()
     x = torch.full((16384,), 11.0).to("cuda:0").requires_grad_(True)
     torch.cuda.synchronize(0)
     assert x.grad is None
+
+    if os.environ.get("QD_AMDGPU_V520") == "1":
+        # The CI PyTorch wheel cannot run zeros_like on V520. Replace only its initialization with an asynchronous
+        # upload; Quadrants must still allocate the missing gradient and wait for its initialization before use. Pinned
+        # CPU memory permits an asynchronous copy. Keep it alive until the kernel and upload have finished.
+        host_gradient = torch.zeros(x.shape, dtype=x.dtype, pin_memory=True)
+
+        def zeros_like_by_upload(tensor):
+            assert tensor is x
+            return host_gradient.to(device=tensor.device, non_blocking=True)
+
+        monkeypatch.setattr(torch, "zeros_like", zeros_like_by_upload)
+
+    producer_stream = torch.cuda.Stream(device=0)
+    original_synchronize = torch.cuda.Stream.synchronize
+    synchronized_streams = []
+
+    def record_synchronize(self):
+        original_synchronize(self)
+        synchronized_streams.append(self.cuda_stream)
+
+    # A small initialization can finish before the kernel even without a wait. Check the wait explicitly as well.
+    monkeypatch.setattr(torch.cuda.Stream, "synchronize", record_synchronize)
 
     @qd.kernel
     def update(a: qd.types.ndarray()):
@@ -102,9 +127,10 @@ def test_torch_direct_allocates_gradient_on_custom_stream():
     stream = qd.create_stream()
     try:
         # The adapter initializes the missing gradient on this non-default PyTorch stream after the caller's sync.
-        with torch.cuda.stream(torch.cuda.Stream(device=0)):
+        with torch.cuda.stream(producer_stream):
             update(x, qd_stream=stream)
         stream.synchronize()
+        assert producer_stream.cuda_stream in synchronized_streams
         assert torch.equal(x.grad.cpu(), torch.full((16384,), 11.0))
     finally:
         stream.destroy()
