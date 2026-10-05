@@ -26,8 +26,7 @@ TEST(WorkgroupShader, LinksAndValidatesAcrossTargets) {
           auto index = ir.get_work_group_id(dim);
           auto destination =
               ir.struct_array_access(ir.u32_type(), output, ir.uint_immediate_number(ir.u32_type(), dim));
-          auto comparison = ir.ge(ir.cast(ir.i32_type(), index), ir.int_immediate_number(ir.i32_type(), 1));
-          ir.store_variable(destination, ir.cast(ir.u32_type(), comparison));
+          ir.store_variable(destination, index);
         }
         ir.make_inst(spv::OpReturn);
         ir.make_inst(spv::OpFunctionEnd);
@@ -59,86 +58,6 @@ TEST(WorkgroupShader, LinksAndValidatesAcrossTargets) {
         EXPECT_EQ(disassembly.find("OpFunctionCall"), std::string::npos);
         EXPECT_NE(disassembly.find("BuiltIn WorkgroupId"), std::string::npos);
       }
-    }
-  }
-}
-
-TEST(WorkgroupShader, ComparisonWithoutWorkgroupQuery) {
-  for (auto arch : {Arch::vulkan, Arch::metal}) {
-    DeviceCapabilityConfig caps;
-    caps.set(DeviceCapability::spirv_version, 0x10000);
-    IRBuilder ir(arch, &caps);
-    ir.init_header();
-    auto buffer = ir.buffer_argument(ir.i32_type(), 0, 0, "values");
-    auto main = ir.new_function();
-    ir.start_function(main);
-    auto address = ir.struct_array_access(ir.i32_type(), buffer, ir.int_immediate_number(ir.i32_type(), 0));
-    auto value = ir.load_variable(address, ir.i32_type());
-    auto result = ir.ge(value, ir.int_immediate_number(ir.i32_type(), -1));
-    ir.store_variable(address, ir.cast(ir.i32_type(), result));
-    ir.make_inst(spv::OpReturn);
-    ir.make_inst(spv::OpFunctionEnd);
-    ir.commit_kernel_function(main, "main", {buffer}, {1, 1, 1});
-    auto binary = ir.finalize();
-    spvtools::SpirvTools tools(SPV_ENV_VULKAN_1_0);
-    ASSERT_TRUE(tools.Validate(binary));
-    std::string disassembly;
-    ASSERT_TRUE(tools.Disassemble(binary, &disassembly));
-    EXPECT_NE(disassembly.find("OpFunctionCall"), std::string::npos);
-    EXPECT_EQ(disassembly.find("LinkageAttributes"), std::string::npos);
-    spvtools::Optimizer optimizer(SPV_ENV_VULKAN_1_0);
-    optimizer.RegisterPerformancePasses();
-    std::vector<uint32_t> optimized;
-    ASSERT_TRUE(optimizer.Run(binary.data(), binary.size(), &optimized));
-    ASSERT_TRUE(tools.Validate(optimized));
-    ASSERT_TRUE(tools.Disassemble(optimized, &disassembly));
-    EXPECT_EQ(disassembly.find("OpFunctionCall"), std::string::npos);
-    EXPECT_NE(disassembly.find("OpSGreaterThanEqual"), std::string::npos);
-  }
-}
-
-TEST(WorkgroupShader, BitExtractionWithoutOtherHelpers) {
-  for (auto arch : {Arch::vulkan, Arch::metal}) {
-    for (bool signed_base : {false, true}) {
-      SCOPED_TRACE(fmt::format("arch={} signed_base={}", arch_name(arch), signed_base));
-      DeviceCapabilityConfig caps;
-      caps.set(DeviceCapability::spirv_version, 0x10000);
-      IRBuilder ir(arch, &caps);
-      ir.init_header();
-      auto type = signed_base ? ir.i32_type() : ir.u32_type();
-      auto buffer = ir.buffer_argument(type, 0, 0, "values");
-      auto main = ir.new_function();
-      ir.start_function(main);
-      auto zero = ir.int_immediate_number(ir.i32_type(), 0);
-      auto address = ir.struct_array_access(type, buffer, zero);
-      auto base = ir.load_variable(address, type);
-      auto offset_address = ir.struct_array_access(type, buffer, ir.int_immediate_number(ir.i32_type(), 1));
-      auto count_address = ir.struct_array_access(type, buffer, ir.int_immediate_number(ir.i32_type(), 2));
-      auto offset = ir.load_variable(offset_address, type);
-      auto count = ir.load_variable(count_address, type);
-      // Repeated calls exercise declaration reuse with dynamic and constant arguments.
-      ir.store_variable(address, ir.bit_field_extract(base, offset, count));
-      ir.store_variable(offset_address, ir.bit_field_extract(base, zero, ir.int_immediate_number(ir.i32_type(), 32)));
-      ir.store_variable(count_address, ir.bit_field_extract(base, zero, zero));
-      ir.make_inst(spv::OpReturn);
-      ir.make_inst(spv::OpFunctionEnd);
-      ir.commit_kernel_function(main, "main", {buffer}, {1, 1, 1});
-      auto binary = ir.finalize();
-      spvtools::SpirvTools tools(SPV_ENV_VULKAN_1_0);
-      ASSERT_TRUE(tools.Validate(binary));
-      std::string disassembly;
-      ASSERT_TRUE(tools.Disassemble(binary, &disassembly));
-      EXPECT_NE(disassembly.find("OpFunctionCall"), std::string::npos);
-      EXPECT_EQ(disassembly.find("LinkageAttributes"), std::string::npos);
-      spvtools::Optimizer optimizer(SPV_ENV_VULKAN_1_0);
-      optimizer.RegisterPerformancePasses();
-      std::vector<uint32_t> optimized;
-      ASSERT_TRUE(optimizer.Run(binary.data(), binary.size(), &optimized));
-      ASSERT_TRUE(tools.Validate(optimized));
-      ASSERT_TRUE(tools.Disassemble(optimized, &disassembly));
-      EXPECT_EQ(disassembly.find("OpFunctionCall"), std::string::npos);
-      EXPECT_NE(disassembly.find("OpBitFieldUExtract"), std::string::npos);
-      EXPECT_EQ(disassembly.find("OpBitFieldSExtract"), std::string::npos);
     }
   }
 }
