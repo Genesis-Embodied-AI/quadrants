@@ -1214,6 +1214,8 @@
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/misc/index.html#quadrants.lang.misc.block_idx">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">block_idx</span><span class="p">():</span>
 <span class="w">    </span><span class="sd">"""Return the current CPU scheduling block or GPU thread-block index."""</span>
+    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="n">cpu</span><span class="p">,</span> <span class="n">cuda</span><span class="p">,</span> <span class="n">amdgpu</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"qd.block_idx() is only supported on CPU, CUDA, and AMDGPU"</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">"global_block_idx"</span><span class="p">)</span></div>
 
 

@@ -439,7 +439,7 @@
 <p>Note that adding a non-static <code class="docutils literal notranslate"><span class="pre">if</span></code> over the top of a for-loop will lead to the for-loop NOT being parallelized.</p>
 <section id="inspecting-execution-with-qd-block-idx">
 <h2>Inspecting execution with qd.block_idx()<a class="headerlink" href="#inspecting-execution-with-qd-block-idx" title="Link to this heading">#</a></h2>
-<p><code class="docutils literal notranslate"><span class="pre">qd.block_idx()</span></code> returns the current block index as a signed 32-bit integer. Call it inside a kernel or a function called by a kernel. It works on CPU, CUDA, AMDGPU, Vulkan, and Metal.</p>
+<p><code class="docutils literal notranslate"><span class="pre">qd.block_idx()</span></code> returns the current block index as a signed 32-bit integer. Call it inside a kernel or a function called by a kernel. It works on CPU, CUDA, and AMDGPU. Other backends raise an unsupported-platform error.</p>
 <p>On CPU, a block is a group of iterations executed as one runtime task. A task is work assigned to a worker thread. Block indices start at zero for each parallel loop execution. They identify blocks, not worker threads or execution order. A worker can execute several blocks.</p>
 <p>Both existing CPU scheduling modes support this function:</p>
 <ul class="simple">
@@ -460,7 +460,7 @@
 <span class="c1"># out contains 32 zeros, 32 ones, 32 twos, and 32 threes.</span>
 </pre></div>
 </div>
-<p>On GPU, a block is a group of GPU threads. Vulkan and Metal call it a workgroup. The function returns the hardware block index along the x dimension. A hardware block can process several groups of iterations while retaining the same index. CPU and GPU iteration assignments can therefore differ for the same kernel.</p>
+<p>On CUDA and AMDGPU, a block is a group of GPU threads. The function returns the hardware block index along the x dimension. A hardware block can process several groups of iterations while retaining the same index. CPU and GPU iteration assignments can therefore differ for the same kernel.</p>
 <p>Top-level serial execution returns <code class="docutils literal notranslate"><span class="pre">0</span></code>, including loops preceded by <code class="docutils literal notranslate"><span class="pre">qd.loop_config(serialize=True)</span></code>. A serial loop nested inside a parallel loop retains the enclosing block’s index. Calls through <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> or <code class="docutils literal notranslate"><span class="pre">&#64;qd.real_func</span></code> also retain the caller’s block index. Empty blocks execute no original iterations, so recording indices from the loop body does not record empty blocks.</p>
 <p>Block indices are local to one loop execution. They are not globally unique identifiers, and reading an index does not synchronize threads.</p>
 </section>
