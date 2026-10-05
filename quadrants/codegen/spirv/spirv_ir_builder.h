@@ -413,6 +413,7 @@ class IRBuilder {
   void set_work_group_size(const std::array<int, 3> group_size);
   Value get_work_group_size(uint32_t dim_index);
   Value get_num_work_groups(uint32_t dim_index);
+  Value get_work_group_id(uint32_t dim_index);
   Value get_local_invocation_id(uint32_t dim_index);
   Value get_global_invocation_id(uint32_t dim_index);
   Value get_subgroup_invocation_id();
@@ -549,6 +550,9 @@ class IRBuilder {
   Value rand_i32(Value global_tmp_);
 
  private:
+  // Import and call a GLSL uint(uint) helper, caching its declaration in function.
+  Value call_glsl_u32_helper(Value &function, const char *name, uint32_t argument_value);
+
   Value get_const(const SType &dtype, const uint64_t *pvalue, bool cache);
   SType declare_primitive_type(DataType dt);
 
@@ -595,6 +599,7 @@ class IRBuilder {
   Value gl_global_invocation_id_;
   Value gl_local_invocation_id_;
   Value gl_num_work_groups_;
+  Value workgroup_helper_;
   Value gl_work_group_size_;
   Value subgroup_local_invocation_id_;
 
@@ -635,6 +640,8 @@ class IRBuilder {
   std::vector<uint32_t> decorate_;
   // Global segment: types, variables, types
   std::vector<uint32_t> global_;
+  // Imported function declarations precede function definitions.
+  std::vector<uint32_t> imported_functions_;
   // Function header segment
   std::vector<uint32_t> func_header_;
   // Main Function segment
