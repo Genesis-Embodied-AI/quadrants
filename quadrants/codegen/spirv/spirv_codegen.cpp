@@ -1366,10 +1366,10 @@ void TaskCodegen::visit(BinaryOpStmt *bin) {
     }
     bin_value = ops_->cast(dst_type, bin_value);
   }
-#define BINARY_OP_TO_SPIRV_ARTHIMATIC(op, func)  \
-  else if (op_type == BinaryOpType::op) {        \
+#define BINARY_OP_TO_SPIRV_ARTHIMATIC(op, func)   \
+  else if (op_type == BinaryOpType::op) {         \
     bin_value = ops_->func(lhs_value, rhs_value); \
-    bin_value = ops_->cast(dst_type, bin_value); \
+    bin_value = ops_->cast(dst_type, bin_value);  \
   }
 
   BINARY_OP_TO_SPIRV_ARTHIMATIC(add, add)
@@ -1403,10 +1403,10 @@ void TaskCodegen::visit(BinaryOpStmt *bin) {
   }
 #undef BINARY_OP_TO_SPIRV_BITWISE
 
-#define BINARY_OP_TO_SPIRV_LOGICAL(op, func)     \
-  else if (op_type == BinaryOpType::op) {        \
+#define BINARY_OP_TO_SPIRV_LOGICAL(op, func)      \
+  else if (op_type == BinaryOpType::op) {         \
     bin_value = ops_->func(lhs_value, rhs_value); \
-    bin_value = ops_->cast(dst_type, bin_value); \
+    bin_value = ops_->cast(dst_type, bin_value);  \
   }
 
   BINARY_OP_TO_SPIRV_LOGICAL(cmp_lt, lt)
@@ -3110,7 +3110,8 @@ void TaskCodegen::visit(AdStackPopStmt *stmt) {
 // the published `max_size` and skips both the cap subtract and the UMin call, mirroring LLVM's release-build
 // LoadTop emit. `max_size` is a runtime value loaded from AdStackMetadata, so `max_size - 1` becomes an OpISub
 // rather than a compile-time immediate when clamping is requested.
-static spirv::Value ad_stack_top_index(spirv::IRBuilder *ir, spirv::SpirvOperations &ops_,
+static spirv::Value ad_stack_top_index(spirv::IRBuilder *ir,
+                                       spirv::SpirvOperations &ops_,
                                        spirv::Value count,
                                        spirv::Value max_size_val,
                                        bool clamp_to_max_size) {
