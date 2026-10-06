@@ -186,6 +186,13 @@ void IRBuilder::init_header() {
 }
 
 std::vector<uint32_t> IRBuilder::finalize() {
+  // SPIR-V module layout, in order (each element is a 32-bit word):
+  // 1. Five-word header: magic number, version, generator ID, ID bound, reserved word.
+  // 2. Required capabilities, extensions, and extended-instruction-set imports.
+  // 3. Memory model, entry points, and execution modes.
+  // 4. Debug information and annotations.
+  // 5. Types, constants, and global variables.
+  // 6. Function declarations without bodies, then function definitions with bodies.
   std::vector<uint32_t> spirv_module;
   // set bound
   const int bound_loc = 3;
