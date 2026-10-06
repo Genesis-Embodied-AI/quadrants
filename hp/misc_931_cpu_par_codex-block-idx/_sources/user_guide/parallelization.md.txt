@@ -14,32 +14,9 @@ Note that adding a non-static `if` over the top of a for-loop will lead to the f
 
 On CPU, a block is a group of iterations executed as one runtime task. A task is work assigned to a worker thread. Block indices start at zero for each parallel loop execution. They identify blocks, not worker threads or execution order. A worker can execute several blocks.
 
-The `make_cpu_multithreading_loop` parameter of `qd.init()` selects the CPU scheduling mode. Both modes support `qd.block_idx()`:
+On CUDA and AMDGPU, it returns the hardware block index along the x dimension. A block is a group of GPU threads. CPU and GPU iteration assignments can differ for the same kernel.
 
-- With `make_cpu_multithreading_loop=True`, the default, it identifies a compiler-generated block of original iterations.
-- With `make_cpu_multithreading_loop=False`, it identifies a fixed-size group of iterations. `qd.loop_config(block_dim=...)` controls that group's size. Its default is 32.
-
-For example, this CPU kernel records four groups of 32 iterations:
-
-```python
-qd.init(arch=qd.cpu, make_cpu_multithreading_loop=False)
-out = qd.ndarray(qd.i32, shape=128)
-
-@qd.kernel
-def k_record_blocks(out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
-    qd.loop_config(block_dim=32)
-    for i in range(128):
-        out[i] = qd.block_idx()
-
-k_record_blocks(out)
-# out contains 32 zeros, 32 ones, 32 twos, and 32 threes.
-```
-
-On CUDA and AMDGPU, a block is a group of GPU threads. The function returns the hardware block index along the x dimension. A hardware block can process several groups of iterations while retaining the same index. CPU and GPU iteration assignments can therefore differ for the same kernel.
-
-Top-level serial execution returns `0`, including loops preceded by `qd.loop_config(serialize=True)`. A serial loop nested inside a parallel loop retains the enclosing block's index. Calls through `@qd.func` also retain the caller's block index. The same holds for `@qd.real_func`, which defines a separately compiled function. Empty blocks execute no original iterations, so recording indices from the loop body does not record empty blocks.
-
-Block indices are local to one loop execution. They are not globally unique identifiers, and reading an index does not synchronize threads.
+Top-level serial execution returns `0`. Nested serial loops and called functions retain the enclosing block's index. Reading an index does not synchronize threads.
 
 ## Multi-dimensional parallelization with qd.ndrange
 

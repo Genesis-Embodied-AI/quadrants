@@ -453,7 +453,7 @@
 <section id="gpus">
 <h3>GPUs<a class="headerlink" href="#gpus" title="Link to this heading">#</a></h3>
 <ul class="simple">
-<li><p>CUDA GPUs, <code class="docutils literal notranslate"><span class="pre">sm_60</span></code> (Pascal) through <code class="docutils literal notranslate"><span class="pre">sm_120</span></code> (Blackwell / Thor) — i.e. <code class="docutils literal notranslate"><span class="pre">&gt;=sm_60</span></code> and <code class="docutils literal notranslate"><span class="pre">&lt;=sm_120</span></code></p></li>
+<li><p>NVIDIA GPUs with compute capability 6.0 (<code class="docutils literal notranslate"><span class="pre">sm_60</span></code>, Pascal) through 12.0 (<code class="docutils literal notranslate"><span class="pre">sm_120</span></code>, Blackwell / Thor). Compute capability identifies the GPU features supported by an NVIDIA architecture; <code class="docutils literal notranslate"><span class="pre">sm_60</span></code> and <code class="docutils literal notranslate"><span class="pre">sm_120</span></code> are CUDA’s codes for these versions.</p></li>
 <li><p>Metal GPUs</p></li>
 <li><p>AMD GPUs</p></li>
 <li><p>Vulkan-compatible GPUs (e.g. Intel Arc)</p></li>
@@ -462,7 +462,7 @@
 </section>
 <section id="backend-os-matrix">
 <h3>Backend / OS matrix<a class="headerlink" href="#backend-os-matrix" title="Link to this heading">#</a></h3>
-<p>Which backends are available on each supported platform. <code class="docutils literal notranslate"><span class="pre">qd.cpu</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.vulkan</span></code> run on every OS; the other GPU backends are platform-specific because they wrap vendor drivers (CUDA on NVIDIA, ROCm on AMD, Metal on Apple).</p>
+<p>Which backends are available on each supported platform. <code class="docutils literal notranslate"><span class="pre">qd.cpu</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.vulkan</span></code> run on every OS; the other GPU backends are platform-specific because they wrap vendor drivers: CUDA on NVIDIA, ROCm (AMD’s GPU software platform) on AMD, and Metal on Apple.</p>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
 <tr class="row-odd"><th class="head"><p>OS \ backend</p></th>
@@ -515,7 +515,7 @@
 <p>Notes:</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">qd.cuda</span></code> requires an NVIDIA driver and CUDA runtime installed on the host. NVIDIA ships CUDA for Linux ARM64 and Windows ARM64, but quadrants does not support them yet.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.amdgpu</span></code> currently wires up the Linux x64 ROCm path only. AMD’s GPU toolchain also ships on Windows and on some Linux ARM64 targets, but quadrants does not support them yet. On AMD GPUs, a subgroup is always 64 threads wide, so <a class="reference internal" href="subgroup.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup</span></code></span></a> primitives operate over 64 lanes on both CDNA (Instinct) and RDNA (Radeon) hardware.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.amdgpu</span></code> requires HIP 6.0 or newer (HIP is AMD’s GPU programming interface) and currently wires up the Linux x64 ROCm path only. AMD’s GPU toolchain also ships on Windows and on some Linux ARM64 targets, but quadrants does not support them yet. On AMD GPUs, a subgroup is always 64 threads wide, so <a class="reference internal" href="subgroup.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup</span></code></span></a> primitives operate over 64 lanes on both CDNA (Instinct) and RDNA (Radeon) hardware.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">qd.metal</span></code> is only available on Apple hardware and is the recommended GPU backend there.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">qd.vulkan</span></code> on macOS bundles a copy of MoltenVK (a Vulkan-to-Metal translation layer) inside the wheel, so no separate install is required.</p></li>
 </ul>
