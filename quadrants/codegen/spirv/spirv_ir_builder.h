@@ -546,8 +546,8 @@ class IRBuilder {
   SType t_v4_fp32_;
   SType t_v3_fp32_;
   SType t_v2_fp32_;
-  // Cached declarations of imported GLSL functions.
-  Value get_work_group_id_fn_;
+  // Cached IDs and type information for imported GLSL functions.
+  Value get_work_group_id_fn_id_;
   // map from value to its pointer type
   std::map<std::pair<uint32_t, spv::StorageClass>, SType> pointer_type_tbl_;
 
@@ -582,8 +582,8 @@ class IRBuilder {
   std::vector<uint32_t> decorate_;
   // Global segment: types, variables, types
   std::vector<uint32_t> global_;
-  // Imported function declarations precede function definitions.
-  std::vector<uint32_t> imported_functions_;
+  // Imported GLSL function declarations.
+  std::vector<uint32_t> imported_glsl_function_declarations_;
   // Function header segment
   std::vector<uint32_t> func_header_;
   // Main Function segment

@@ -20,10 +20,14 @@ Value IRBuilder::call_glsl_u32(Value &function, const char *name, uint32_t argum
     ib_.begin(spv::OpTypeFunction).add_seq(function_type, t_uint32_, parameter_type).commit(&global_);
     function = new_value(function_type, ValueKind::kFunction);
     decorate(spv::OpDecorate, function, spv::DecorationLinkageAttributes, name, spv::LinkageTypeImport);
-    ib_.begin(spv::OpFunction).add_seq(t_uint32_, function, 0, function_type).commit(&imported_functions_);
+    ib_.begin(spv::OpFunction)
+        .add_seq(t_uint32_, function, 0, function_type)
+        .commit(&imported_glsl_function_declarations_);
     auto parameter = new_value(parameter_type, ValueKind::kVariablePtr);
-    ib_.begin(spv::OpFunctionParameter).add_seq(parameter_type, parameter).commit(&imported_functions_);
-    ib_.begin(spv::OpFunctionEnd).commit(&imported_functions_);
+    ib_.begin(spv::OpFunctionParameter)
+        .add_seq(parameter_type, parameter)
+        .commit(&imported_glsl_function_declarations_);
+    ib_.begin(spv::OpFunctionEnd).commit(&imported_glsl_function_declarations_);
   }
   // GLSL passes scalar function arguments through Function-storage pointers.
   auto argument = alloca_variable(t_uint32_);
