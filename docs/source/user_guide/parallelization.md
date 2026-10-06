@@ -96,7 +96,7 @@ If kernel launch latency is a bottleneck, then you can look into:
 
 Reducing the number and complexity kernel parameters reduces the kernel launch latency. In addition:
 - field args incur less launch latency than ndarray args
-- global fields incur no parameter-related launch latency
+- [global fields](tensor_types.md), accessed through global variables rather than passed as kernel arguments, incur no parameter-related launch latency
 
 For the underlying execution model - what a launch actually involves, where the latency comes from, and when reducing it helps - see [Performance](performance.md).
 
