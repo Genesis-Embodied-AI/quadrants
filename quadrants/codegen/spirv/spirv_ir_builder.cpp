@@ -768,18 +768,18 @@ Value IRBuilder::struct_array_access(const SType &res_type, Value buffer, Value 
 // Declare the function as an import on its first use and cache that declaration in function.
 Value IRBuilder::call_glsl_u32_to_u32(Value &function, const char *name, uint32_t argument_value) {
   if (function.id == 0) {
-    auto parameter_type = get_pointer_type(t_uint32_, spv::StorageClassFunction);
+    auto p_uint32_type = get_pointer_type(t_uint32_, spv::StorageClassFunction);
     SType function_type;
     function_type.id = id_counter_++;
-    ib_.begin(spv::OpTypeFunction).add_seq(function_type, t_uint32_, parameter_type).commit(&global_);
+    ib_.begin(spv::OpTypeFunction).add_seq(function_type, t_uint32_, p_uint32_type).commit(&global_);
     function = new_value(function_type, ValueKind::kFunction);
     decorate(spv::OpDecorate, function, spv::DecorationLinkageAttributes, name, spv::LinkageTypeImport);
     ib_.begin(spv::OpFunction)
         .add_seq(t_uint32_, function, 0, function_type)
         .commit(&imported_glsl_function_declarations_);
-    auto parameter = new_value(parameter_type, ValueKind::kVariablePtr);
+    auto parameter = new_value(p_uint32_type, ValueKind::kVariablePtr);
     ib_.begin(spv::OpFunctionParameter)
-        .add_seq(parameter_type, parameter)
+        .add_seq(p_uint32_type, parameter)
         .commit(&imported_glsl_function_declarations_);
     ib_.begin(spv::OpFunctionEnd).commit(&imported_glsl_function_declarations_);
   }
