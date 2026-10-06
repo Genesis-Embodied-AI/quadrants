@@ -1,6 +1,7 @@
 #include "quadrants/codegen/spirv/adstack_max_reducer_shader.h"
 
 #include "quadrants/codegen/spirv/spirv_ir_builder.h"
+#include "quadrants/codegen/spirv/spirv_operations.h"
 #include "quadrants/ir/adstack_size_expr_device.h"
 #include "quadrants/ir/type.h"
 
@@ -479,6 +480,7 @@ std::vector<uint32_t> build_adstack_max_reducer_spirv(Arch arch, const DeviceCap
   }
 
   IRBuilder ir(arch, caps);
+  SpirvOperations op_(ir);
   ir.init_header();
 
   // Storage-buffer bindings (set 0). The output buffer holds two u32 slots per spec: even index = u32 atomic-max
@@ -493,9 +495,9 @@ std::vector<uint32_t> build_adstack_max_reducer_spirv(Arch arch, const DeviceCap
 
   Value main_func = ir.new_function();
   ir.start_function(main_func);
-  ir.set_work_group_size({static_cast<int>(kAdStackMaxReducerWorkgroupSize), 1, 1});
+  op_.set_work_group_size({static_cast<int>(kAdStackMaxReducerWorkgroupSize), 1, 1});
 
-  Value gid_u32 = ir.get_global_invocation_id(0);
+  Value gid_u32 = op_.get_global_invocation_id(0);
 
   // Load params at the top of `main`. spirv-opt CSEs the redundant loads if any, but the explicit hoist makes the
   // shader's data flow easier to read against the host POD. Per-axis arrays are loaded inside the per-thread loop since
@@ -566,7 +568,7 @@ std::vector<uint32_t> build_adstack_max_reducer_spirv(Arch arch, const DeviceCap
   // Strided loop: for k in [0, kElementsPerThread), idx = (gid + k * total_threads). `total_threads = num_workgroups_x
   // * workgroup_size_x` matches what the host computed when sizing the dispatch.
   Value workgroup_size_v = ir.uint_immediate_number(ir.u32_type(), kAdStackMaxReducerWorkgroupSize);
-  Value num_wg_x = ir.get_num_work_groups(0);
+  Value num_wg_x = op_.get_num_work_groups(0);
   Value total_threads = ir.mul(num_wg_x, workgroup_size_v);
 
   Value k_var = ir.alloca_variable(ir.u32_type());

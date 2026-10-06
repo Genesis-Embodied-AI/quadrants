@@ -1,6 +1,7 @@
 #include "quadrants/codegen/spirv/checkpoint_gate_shader.h"
 
 #include "quadrants/codegen/spirv/spirv_ir_builder.h"
+#include "quadrants/codegen/spirv/spirv_operations.h"
 
 namespace quadrants::lang::spirv {
 
@@ -24,6 +25,7 @@ void store_buf_u32(IRBuilder &ir, Value buffer, Value word_idx, Value value) {
 
 std::vector<uint32_t> build_checkpoint_gate_spirv(Arch arch, const DeviceCapabilityConfig *caps) {
   IRBuilder ir(arch, caps);
+  SpirvOperations op_(ir);
   ir.init_header();
 
   // Bindings: see header doc.
@@ -39,7 +41,7 @@ std::vector<uint32_t> build_checkpoint_gate_spirv(Arch arch, const DeviceCapabil
   // 1x1x1: a single thread runs the per-kernel write loop. The total number of writes is at most a few dozen per
   // checkpoint (one (gx,gy,gz) triple per body kernel in the checkpoint); a larger workgroup would just synchronise on
   // the same loop with extra book-keeping.
-  ir.set_work_group_size({1, 1, 1});
+  op_.set_work_group_size({1, 1, 1});
 
   // resume_point + yield_signal are int32 in semantics ("yield_signal == -1" means no yield), but the SSBO is u32[];
   // reinterpret via `OpBitcast` for the comparisons. Same convention as the CUDA-native `_qd_checkpoint_if_gate`.

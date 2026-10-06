@@ -1,0 +1,47 @@
+#pragma once
+
+#include "quadrants/codegen/spirv/spirv_ir_builder.h"
+
+namespace quadrants::lang::spirv {
+
+// Concrete GPU operations implemented using the generic SPIR-V builder.
+// Keep one instance per builder so repeated operations reuse their declarations and state.
+class SpirvOperations {
+ public:
+  explicit SpirvOperations(IRBuilder &ir) : ir_(ir) {
+  }
+
+  void set_work_group_size(const std::array<int, 3> group_size);
+  Value get_num_work_groups(uint32_t dim_index);
+  Value get_local_invocation_id(uint32_t dim_index);
+  Value get_global_invocation_id(uint32_t dim_index);
+  Value get_subgroup_invocation_id();
+
+  Value float_atomic(AtomicOpType op_type, Value addr_ptr, Value data, const DataType &dt);
+  Value integer_atomic(AtomicOpType op_type, Value addr_ptr, Value data, const DataType &dt);
+  Value atomic_operation(Value addr_ptr, Value data, std::function<Value(Value, Value)> op, const DataType &dt);
+
+  Value rand_u32(Value global_tmp);
+  Value rand_f32(Value global_tmp);
+  Value rand_i32(Value global_tmp);
+  void call_debugprintf(std::string formats, const std::vector<Value> &args);
+
+ private:
+  void init_random_function(Value global_tmp);
+
+  IRBuilder &ir_;
+  Value gl_global_invocation_id_;
+  Value gl_local_invocation_id_;
+  Value gl_num_work_groups_;
+  Value gl_work_group_size_;
+  Value subgroup_local_invocation_id_;
+  Value debug_printf_;
+
+  bool init_rand_{false};
+  Value rand_x_;
+  Value rand_y_;
+  Value rand_z_;
+  Value rand_w_;
+};
+
+}  // namespace quadrants::lang::spirv

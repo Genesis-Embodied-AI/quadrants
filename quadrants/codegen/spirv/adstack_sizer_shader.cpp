@@ -6,6 +6,7 @@
 #include <string>
 
 #include "quadrants/codegen/spirv/spirv_ir_builder.h"
+#include "quadrants/codegen/spirv/spirv_operations.h"
 #include "quadrants/ir/adstack_size_expr_device.h"
 #include "quadrants/ir/type.h"
 
@@ -864,6 +865,7 @@ std::vector<uint32_t> build_adstack_sizer_spirv(Arch arch, const DeviceCapabilit
   }
 
   IRBuilder ir(arch, caps);
+  SpirvOperations op_(ir);
   // `init_header` already calls `init_pre_defs` at the end; invoking both would duplicate every primitive
   // type declaration and trip `spirv-val`'s "Duplicate non-aggregate type declarations" check.
   ir.init_header();
@@ -884,7 +886,7 @@ std::vector<uint32_t> build_adstack_sizer_spirv(Arch arch, const DeviceCapabilit
 
   Value main_func = ir.new_function();
   ir.start_function(main_func);
-  ir.set_work_group_size({1, 1, 1});
+  op_.set_work_group_size({1, 1, 1});
 
   ShaderState st;
   st.bytecode_buf = bytecode_buf;
