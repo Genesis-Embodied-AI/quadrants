@@ -642,7 +642,6 @@ class IRBuilder {
   std::vector<uint32_t> decorate_;
   // Global segment: types, variables, types
   std::vector<uint32_t> global_;
-  // Imported GLSL function declarations.
   std::vector<uint32_t> imported_glsl_function_declarations_;
   // Function header segment
   std::vector<uint32_t> func_header_;
