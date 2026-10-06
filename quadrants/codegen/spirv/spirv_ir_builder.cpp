@@ -197,7 +197,12 @@ std::vector<uint32_t> IRBuilder::finalize() {
   // set bound
   const int bound_loc = 3;
   header_[bound_loc] = id_counter_;
-  spirv_module.insert(spirv_module.end(), header_.begin(), header_.end());
+  spirv_module.insert(spirv_module.end(), header_.begin(), header_.begin() + 5);
+  if (get_work_group_id_fn_id_.id != 0) {
+    // Capabilities precede extensions and imports in the SPIR-V module layout.
+    spirv_module.insert(spirv_module.end(), {(2u << 16) | spv::OpCapability, spv::CapabilityLinkage});
+  }
+  spirv_module.insert(spirv_module.end(), header_.begin() + 5, header_.end());
   spirv_module.insert(spirv_module.end(), entry_.begin(), entry_.end());
   spirv_module.insert(spirv_module.end(), exec_mode_.begin(), exec_mode_.end());
   spirv_module.insert(spirv_module.end(), strings_.begin(), strings_.end());
@@ -209,8 +214,6 @@ std::vector<uint32_t> IRBuilder::finalize() {
   spirv_module.insert(spirv_module.end(), func_header_.begin(), func_header_.end());
   spirv_module.insert(spirv_module.end(), function_.begin(), function_.end());
   if (get_work_group_id_fn_id_.id != 0) {
-    // Capabilities precede extensions and imports in the SPIR-V module layout.
-    spirv_module.insert(spirv_module.begin() + 5, {(2u << 16) | spv::OpCapability, spv::CapabilityLinkage});
     return link_shader_helpers(spirv_module);
   }
   return spirv_module;
