@@ -23,36 +23,36 @@ void IRBuilder::init_header() {
   header_.push_back(0U);
 
   // capability
-  ib_.begin(spv::OpCapability).add(spv::CapabilityShader).commit(&header_);
+  ib_.begin(spv::OpCapability).add(spv::CapabilityShader).commit(&capabilities_extensions_imports_);
 
   if (caps_->get(cap::spirv_has_atomic_float64_add)) {
-    ib_.begin(spv::OpCapability).add(spv::CapabilityAtomicFloat64AddEXT).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityAtomicFloat64AddEXT).commit(&capabilities_extensions_imports_);
   }
 
   if (caps_->get(cap::spirv_has_atomic_float_add)) {
-    ib_.begin(spv::OpCapability).add(spv::CapabilityAtomicFloat32AddEXT).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityAtomicFloat32AddEXT).commit(&capabilities_extensions_imports_);
   }
 
   if (caps_->get(cap::spirv_has_atomic_float_minmax)) {
-    ib_.begin(spv::OpCapability).add(spv::CapabilityAtomicFloat32MinMaxEXT).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityAtomicFloat32MinMaxEXT).commit(&capabilities_extensions_imports_);
   }
 
   if (caps_->get(cap::spirv_has_variable_ptr)) {
     /*
     ib_.begin(spv::OpCapability)
         .add(spv::CapabilityVariablePointers)
-        .commit(&header_);
+        .commit(&capabilities_extensions_imports_);
     ib_.begin(spv::OpCapability)
         .add(spv::CapabilityVariablePointersStorageBuffer)
-        .commit(&header_);
+        .commit(&capabilities_extensions_imports_);
         */
   }
 
   if (caps_->get(cap::spirv_has_int8)) {
-    ib_.begin(spv::OpCapability).add(spv::CapabilityInt8).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityInt8).commit(&capabilities_extensions_imports_);
   }
   if (caps_->get(cap::spirv_has_int16)) {
-    ib_.begin(spv::OpCapability).add(spv::CapabilityInt16).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityInt16).commit(&capabilities_extensions_imports_);
   }
   // `CapabilityStorageBuffer{8,16}BitAccess` gate narrow-typed loads / stores through a
   // descriptor-bound `StorageBuffer` pointer (e.g. `OpLoad %_ptr_StorageBuffer_ushort`). The
@@ -65,30 +65,32 @@ void IRBuilder::init_header() {
   // ndarray access is spec-compliant on drivers that enforce the letter of
   // `SPV_KHR_{8,16}bit_storage`.
   if (caps_->get(cap::spirv_has_storage_buffer_8bit_access)) {
-    ib_.begin(spv::OpCapability).add(spv::CapabilityStorageBuffer8BitAccess).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityStorageBuffer8BitAccess).commit(&capabilities_extensions_imports_);
   }
   if (caps_->get(cap::spirv_has_storage_buffer_16bit_access)) {
-    ib_.begin(spv::OpCapability).add(spv::CapabilityStorageBuffer16BitAccess).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityStorageBuffer16BitAccess).commit(&capabilities_extensions_imports_);
   }
   if (caps_->get(cap::spirv_has_int64)) {
-    ib_.begin(spv::OpCapability).add(spv::CapabilityInt64).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityInt64).commit(&capabilities_extensions_imports_);
   }
   if (caps_->get(cap::spirv_has_atomic_int64)) {
     // Required for OpAtomicLoad/OpAtomicCompareExchange on u64, used by
     // the CAS-based f64 shared float atomic emulation path.
-    ib_.begin(spv::OpCapability).add(spv::CapabilityInt64Atomics).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityInt64Atomics).commit(&capabilities_extensions_imports_);
   }
   if (caps_->get(cap::spirv_has_float16)) {
-    ib_.begin(spv::OpCapability).add(spv::CapabilityFloat16).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityFloat16).commit(&capabilities_extensions_imports_);
   }
   if (caps_->get(cap::spirv_has_float64)) {
-    ib_.begin(spv::OpCapability).add(spv::CapabilityFloat64).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityFloat64).commit(&capabilities_extensions_imports_);
   }
   if (caps_->get(cap::spirv_has_physical_storage_buffer)) {
-    ib_.begin(spv::OpCapability).add(spv::CapabilityPhysicalStorageBufferAddresses).commit(&header_);
+    ib_.begin(spv::OpCapability)
+        .add(spv::CapabilityPhysicalStorageBufferAddresses)
+        .commit(&capabilities_extensions_imports_);
   }
   if (caps_->get(cap::spirv_has_shader_clock)) {
-    ib_.begin(spv::OpCapability).add(spv::CapabilityShaderClockKHR).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityShaderClockKHR).commit(&capabilities_extensions_imports_);
   }
 
   // Subgroup / GroupNonUniform capabilities. Required by every SPIR-V module that lowers any
@@ -100,7 +102,7 @@ void IRBuilder::init_header() {
   // subgroup feature; the underlying caps are gated by Vulkan's
   // `VkPhysicalDeviceSubgroupProperties::supportedOperations` query in `vulkan_device_creator.cpp`.
   if (caps_->get(cap::spirv_has_subgroup_basic)) {
-    ib_.begin(spv::OpCapability).add(spv::CapabilityGroupNonUniform).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityGroupNonUniform).commit(&capabilities_extensions_imports_);
     // `Broadcast` / `Shuffle` and the relative variants used by `_exclusive_scan_tiled` / shuffle
     // intrinsics. The two are separate SPIR-V caps but every desktop/mobile Vulkan implementation
     // that advertises basic GroupNonUniform also advertises both shuffle variants in practice
@@ -120,58 +122,62 @@ void IRBuilder::init_header() {
     // `rhi/rhi_constants.inc.h`, populate them from the two Vulkan bits in
     // `vulkan_device_creator.cpp::populate_subgroup_caps`, and gate the two
     // `CapabilityGroupNonUniformShuffle{,Relative}` emissions on those caps individually.
-    ib_.begin(spv::OpCapability).add(spv::CapabilityGroupNonUniformShuffle).commit(&header_);
-    ib_.begin(spv::OpCapability).add(spv::CapabilityGroupNonUniformShuffleRelative).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityGroupNonUniformShuffle).commit(&capabilities_extensions_imports_);
+    ib_.begin(spv::OpCapability)
+        .add(spv::CapabilityGroupNonUniformShuffleRelative)
+        .commit(&capabilities_extensions_imports_);
   }
   if (caps_->get(cap::spirv_has_subgroup_vote)) {
-    ib_.begin(spv::OpCapability).add(spv::CapabilityGroupNonUniformVote).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityGroupNonUniformVote).commit(&capabilities_extensions_imports_);
   }
   if (caps_->get(cap::spirv_has_subgroup_arithmetic)) {
-    ib_.begin(spv::OpCapability).add(spv::CapabilityGroupNonUniformArithmetic).commit(&header_);
+    ib_.begin(spv::OpCapability)
+        .add(spv::CapabilityGroupNonUniformArithmetic)
+        .commit(&capabilities_extensions_imports_);
   }
   if (caps_->get(cap::spirv_has_subgroup_ballot)) {
-    ib_.begin(spv::OpCapability).add(spv::CapabilityGroupNonUniformBallot).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityGroupNonUniformBallot).commit(&capabilities_extensions_imports_);
   }
 
-  ib_.begin(spv::OpExtension).add("SPV_KHR_storage_buffer_storage_class").commit(&header_);
+  ib_.begin(spv::OpExtension).add("SPV_KHR_storage_buffer_storage_class").commit(&capabilities_extensions_imports_);
 
   // `SPV_KHR_{8,16}bit_storage` is paired with `CapabilityStorageBuffer{8,16}BitAccess` above.
   // Both the capability and the extension are needed for narrow-typed `StorageBuffer` loads /
   // stores to validate on Vulkan; declaring only the capability without the extension is
   // ill-formed SPIR-V.
   if (caps_->get(cap::spirv_has_storage_buffer_8bit_access)) {
-    ib_.begin(spv::OpExtension).add("SPV_KHR_8bit_storage").commit(&header_);
+    ib_.begin(spv::OpExtension).add("SPV_KHR_8bit_storage").commit(&capabilities_extensions_imports_);
   }
   if (caps_->get(cap::spirv_has_storage_buffer_16bit_access)) {
-    ib_.begin(spv::OpExtension).add("SPV_KHR_16bit_storage").commit(&header_);
+    ib_.begin(spv::OpExtension).add("SPV_KHR_16bit_storage").commit(&capabilities_extensions_imports_);
   }
 
   if (caps_->get(cap::spirv_has_no_integer_wrap_decoration)) {
-    ib_.begin(spv::OpExtension).add("SPV_KHR_no_integer_wrap_decoration").commit(&header_);
+    ib_.begin(spv::OpExtension).add("SPV_KHR_no_integer_wrap_decoration").commit(&capabilities_extensions_imports_);
   }
 
   if (caps_->get(cap::spirv_has_non_semantic_info)) {
-    ib_.begin(spv::OpExtension).add("SPV_KHR_non_semantic_info").commit(&header_);
+    ib_.begin(spv::OpExtension).add("SPV_KHR_non_semantic_info").commit(&capabilities_extensions_imports_);
   }
 
   if (caps_->get(cap::spirv_has_variable_ptr)) {
-    ib_.begin(spv::OpExtension).add("SPV_KHR_variable_pointers").commit(&header_);
+    ib_.begin(spv::OpExtension).add("SPV_KHR_variable_pointers").commit(&capabilities_extensions_imports_);
   }
 
   if (caps_->get(cap::spirv_has_atomic_float_add)) {
-    ib_.begin(spv::OpExtension).add("SPV_EXT_shader_atomic_float_add").commit(&header_);
+    ib_.begin(spv::OpExtension).add("SPV_EXT_shader_atomic_float_add").commit(&capabilities_extensions_imports_);
   }
 
   if (caps_->get(cap::spirv_has_atomic_float_minmax)) {
-    ib_.begin(spv::OpExtension).add("SPV_EXT_shader_atomic_float_min_max").commit(&header_);
+    ib_.begin(spv::OpExtension).add("SPV_EXT_shader_atomic_float_min_max").commit(&capabilities_extensions_imports_);
   }
 
   if (caps_->get(cap::spirv_has_shader_clock)) {
-    ib_.begin(spv::OpExtension).add("SPV_KHR_shader_clock").commit(&header_);
+    ib_.begin(spv::OpExtension).add("SPV_KHR_shader_clock").commit(&capabilities_extensions_imports_);
   }
 
   if (caps_->get(cap::spirv_has_physical_storage_buffer)) {
-    ib_.begin(spv::OpExtension).add("SPV_KHR_physical_storage_buffer").commit(&header_);
+    ib_.begin(spv::OpExtension).add("SPV_KHR_physical_storage_buffer").commit(&capabilities_extensions_imports_);
 
     // memory model
     ib_.begin(spv::OpMemoryModel)
@@ -185,20 +191,40 @@ void IRBuilder::init_header() {
 }
 
 std::vector<uint32_t> IRBuilder::finalize() {
-  std::vector<uint32_t> data;
-  // set bound
+  // SPIR-V module layout, in order (each element is a 32-bit word):
+  // 1. Five-word header: magic number, version, generator ID, ID bound, reserved word.
+  // 2. Required capabilities, extensions, and extended-instruction-set imports.
+  // 3. Memory model, entry points, and execution modes.
+  // 4. Debug information and annotations.
+  // 5. Types, constants, and global variables.
+  // 6. Function declarations without bodies, then function definitions with bodies.
+  std::vector<uint32_t> spirv_module;
+
+  // 1. Five-word header: magic number, version, generator ID, ID bound, reserved word.
   const int bound_loc = 3;
   header_[bound_loc] = id_counter_;
-  data.insert(data.end(), header_.begin(), header_.end());
-  data.insert(data.end(), entry_.begin(), entry_.end());
-  data.insert(data.end(), exec_mode_.begin(), exec_mode_.end());
-  data.insert(data.end(), strings_.begin(), strings_.end());
-  data.insert(data.end(), names_.begin(), names_.end());
-  data.insert(data.end(), decorate_.begin(), decorate_.end());
-  data.insert(data.end(), global_.begin(), global_.end());
-  data.insert(data.end(), func_header_.begin(), func_header_.end());
-  data.insert(data.end(), function_.begin(), function_.end());
-  return data;
+  spirv_module.insert(spirv_module.end(), header_.begin(), header_.end());
+
+  // 2. Required capabilities, extensions, and extended-instruction-set imports.
+  spirv_module.insert(spirv_module.end(), capabilities_extensions_imports_.begin(),
+                      capabilities_extensions_imports_.end());
+
+  // 3. Memory model, entry points, and execution modes.
+  spirv_module.insert(spirv_module.end(), entry_.begin(), entry_.end());
+  spirv_module.insert(spirv_module.end(), exec_mode_.begin(), exec_mode_.end());
+
+  // 4. Debug information and annotations.
+  spirv_module.insert(spirv_module.end(), strings_.begin(), strings_.end());
+  spirv_module.insert(spirv_module.end(), names_.begin(), names_.end());
+  spirv_module.insert(spirv_module.end(), decorate_.begin(), decorate_.end());
+
+  // 5. Types, constants, and global variables.
+  spirv_module.insert(spirv_module.end(), global_.begin(), global_.end());
+
+  // 6. Function declarations without bodies, then function definitions with bodies.
+  spirv_module.insert(spirv_module.end(), func_header_.begin(), func_header_.end());
+  spirv_module.insert(spirv_module.end(), function_.begin(), function_.end());
+  return spirv_module;
 }
 
 void IRBuilder::init_pre_defs() {
