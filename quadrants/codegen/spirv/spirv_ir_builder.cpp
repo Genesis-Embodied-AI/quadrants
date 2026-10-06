@@ -207,6 +207,9 @@ std::vector<uint32_t> IRBuilder::finalize() {
   spirv_module.insert(spirv_module.end(), header_.begin(), header_.end());
 
   // 2. Required capabilities, extensions, and extended-instruction-set imports.
+  if (get_work_group_id_fn_id_.id != 0) {
+    spirv_module.insert(spirv_module.end(), {(2u << 16) | spv::OpCapability, spv::CapabilityLinkage});
+  }
   spirv_module.insert(spirv_module.end(), capabilities_extensions_imports_.begin(),
                       capabilities_extensions_imports_.end());
 
@@ -227,8 +230,6 @@ std::vector<uint32_t> IRBuilder::finalize() {
   spirv_module.insert(spirv_module.end(), func_header_.begin(), func_header_.end());
   spirv_module.insert(spirv_module.end(), function_.begin(), function_.end());
   if (get_work_group_id_fn_id_.id != 0) {
-    // Capabilities precede extensions and imports in the SPIR-V module layout.
-    spirv_module.insert(spirv_module.begin() + 5, {(2u << 16) | spv::OpCapability, spv::CapabilityLinkage});
     return link_shader_helpers(spirv_module);
   }
   return spirv_module;
