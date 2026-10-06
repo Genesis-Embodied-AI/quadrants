@@ -729,7 +729,7 @@ Value IRBuilder::get_num_work_groups(uint32_t dim_index) {
 
 Value IRBuilder::get_work_group_id(uint32_t dim_index) {
   QD_ASSERT(dim_index < 3);
-  return call_glsl_u32_helper(workgroup_helper_, "get_work_group_id", dim_index);
+  return call_glsl_u32(workgroup_helper_, "get_work_group_id", dim_index);
 }
 
 Value IRBuilder::get_local_invocation_id(uint32_t dim_index) {
