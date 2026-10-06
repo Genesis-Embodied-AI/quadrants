@@ -256,7 +256,7 @@ class IRBuilder {
 
   Value ext_inst_import(const std::string &name) {
     Value val = new_value(SType(), ValueKind::kExtInst);
-    ib_.begin(spv::OpExtInstImport).add_seq(val, name).commit(&header_);
+    ib_.begin(spv::OpExtInstImport).add_seq(val, name).commit(&capabilities_extensions_imports_);
     return val;
   }
 
@@ -613,8 +613,10 @@ class IRBuilder {
   // map from raw_name(string) to Value
   std::unordered_map<std::string, Value> value_name_tbl_;
 
-  // Header segment, include import
+  // Five-word SPIR-V module header.
   std::vector<uint32_t> header_;
+  // Required capabilities, extensions, and extended-instruction-set imports.
+  std::vector<uint32_t> capabilities_extensions_imports_;
   // engtry point segment
   std::vector<uint32_t> entry_;
   // Header segment
