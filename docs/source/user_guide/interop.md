@@ -2,7 +2,7 @@
 
 Quadrants provides interop with both numpy and PyTorch. There are three mechanisms:
 - **Copy-based**: convert data between quadrants fields/ndarrays and numpy arrays or torch tensors
-- **Zero-copy via DLPack**: obtain a torch tensor or numpy array that aliases the underlying Quadrants memory
+- **Zero-copy via [DLPack](https://github.com/dmlc/dlpack)**: obtain a torch tensor or numpy array that aliases the underlying Quadrants memory
 - **Direct pass-through**: pass torch tensors directly into kernels as ndarray arguments (zero-copy)
 
 ## Copy-based interop
@@ -72,7 +72,7 @@ m.from_numpy(arr)
 
 ## Zero-copy interop via DLPack
 
-Quadrants' zero-copy interop has been designed with **PyTorch as the first-class user interface**: support, defaults, and supported-dtype/backend matrices are driven by what PyTorch can consume cleanly via DLPack. NumPy is supported on CPU backends as a free side benefit of the same DLPack capsule. Several of the limitations below (e.g. the Apple Metal `torch >= 2.9.2` requirement, or the 0-dim `ScalarField` carve-out) are inherited from PyTorch's current DLPack importer rather than from Quadrants itself.
+Quadrants' zero-copy interop has been designed with **PyTorch as the first-class user interface**: support, defaults, and supported-dtype/backend matrices are driven by what PyTorch can consume cleanly via DLPack. NumPy is supported on CPU backends as a free side benefit of the same DLPack capsule, a Python object carrying tensor metadata and a reference to its memory. Several of the limitations below (e.g. the Apple Metal `torch >= 2.9.2` requirement, or the 0-dim `ScalarField` carve-out) are inherited from PyTorch's current DLPack importer rather than from Quadrants itself.
 
 `to_torch()` and `to_numpy()` accept a keyword-only `copy` argument that controls whether the returned tensor/array is an independent copy of the data or a zero-copy view that aliases the underlying Quadrants memory.
 
@@ -93,11 +93,11 @@ Zero-copy uses [DLPack](https://github.com/dmlc/dlpack) and requires:
 
 - a backend with DLPack support: `cpu` (`x64`/`arm64`), `cuda`, `amdgpu`, or `metal`. Vulkan is not supported: Vulkan-backed DLPack tensors are not processed by many well-known scientific computing libraries (torch, numpy, etc.);
 - a DLPack-supported dtype: `i32`, `i64`, `f32`, `f64`, `u1` (other dtypes such as `f16`, `u8`, `u16` fall back to the kernel-copy path);
-- on Apple Metal, `torch >= 2.9.2` for fields (required for DLPack `bytes_offset` on MPS; see [pytorch/pytorch#168193](https://github.com/pytorch/pytorch/pull/168193));
+- on Apple Metal, `torch >= 2.9.2` for fields (required for DLPack `bytes_offset` on MPS, PyTorch's GPU backend for Apple Metal; see [pytorch/pytorch#168193](https://github.com/pytorch/pytorch/pull/168193));
 - 0-dim `ScalarField` instances are not zero-copyable on any backend (PyTorch DLPack `bytes_offset` limitation);
-- members of an AOS `StructField` (the default `Struct.field(..., layout=Layout.AOS)`) are not zero-copyable yet (see [Struct fields](#struct-fields) below); members of an SOA `StructField` (`layout=Layout.SOA`) **are** zero-copyable individually.
+- members of an AOS (array of structures, with each element's members stored together) `StructField` (the default `Struct.field(..., layout=Layout.AOS)`) are not zero-copyable yet (see [Struct fields](#struct-fields) below); members of an SOA (structure of arrays, with each member stored separately) `StructField` (`layout=Layout.SOA`) **are** zero-copyable individually.
 
-Zero-copy `to_numpy()` additionally requires a CPU backend, because numpy arrays cannot reference GPU memory. Note: `Field.to_numpy(copy=False)` and `MatrixField.to_numpy(copy=False)` currently require torch to be installed, because the C++ `field_to_dlpack` checks the torch version internally. `Ndarray.to_numpy(copy=False)` does not require torch.
+Zero-copy `to_numpy()` additionally requires a CPU backend, because numpy arrays cannot reference GPU memory. Note: `Field.to_numpy(copy=False)` and `MatrixField.to_numpy(copy=False)` currently require torch to be installed. `Ndarray.to_numpy(copy=False)` does not require torch.
 
 On **NumPy >= 2.1**, `to_numpy(copy=False)` returns a **writable** array (via a DLPack v1 capsule). On NumPy 1.26–2.0, the returned array is **read-only** because those versions only consume DLPack v0 capsules, which lack writability metadata. If you need writable zero-copy numpy views, upgrade to NumPy >= 2.1.
 
@@ -153,7 +153,7 @@ assert v1.data_ptr() == v2.data_ptr()   # same underlying memory
 
 ### Apple Metal: synchronization
 
-On Apple Metal, Quadrants and PyTorch MPS use separate Metal command queues. Every `to_torch()` / `to_numpy()` call runs `qd.sync()` internally to flush the Quadrants queue. Additionally, `copy=True` (the default) calls `torch.mps.synchronize()` after the kernel copy. This is necessary because, on Metal, Quadrants and Torch do not share the same compute streams. `copy=False` does **not** call `torch.mps.synchronize()`:
+On Apple Metal, Quadrants and PyTorch MPS use separate Metal command queues, which hold GPU operations in submission order. Every `to_torch()` / `to_numpy()` call runs `qd.sync()` internally to flush the Quadrants queue. Additionally, `copy=True` (the default) calls `torch.mps.synchronize()` after the kernel copy. This is necessary because, on Metal, Quadrants and Torch do not share the same [compute streams](streams.md), ordered sequences of GPU operations. `copy=False` does **not** call `torch.mps.synchronize()`:
 
 ```python
 qd.init(arch=qd.metal)
@@ -196,10 +196,10 @@ The default `copy=True` produces an independent copy that is unaffected. Only `c
 
 ### Struct fields
 
-`StructField.to_torch()` and `StructField.to_numpy()` return a dictionary mapping each member name to a tensor / array; the `copy` argument is propagated to each member, so zero-copy availability is decided per member. The relevant axis is the SNode layout chosen at construction:
+`StructField.to_torch()` and `StructField.to_numpy()` return a dictionary mapping each member name to a tensor / array; the `copy` argument is propagated to each member, so zero-copy availability is decided per member. Availability depends on the memory layout chosen at construction:
 
-- **AOS** (default `Struct.field(..., layout=Layout.AOS)`): all members share the struct cell, e.g. `Struct.field({"a": i32, "b": f32}, shape=(N,))` stores `[a0, b0, a1, b1, ...]` in memory, with stride `sizeof(cell)` between consecutive `a`'s. Quadrants' C++ DLPack export does not currently emit cell-stride-aware views for individual members (it computes contiguous strides at the member dtype size, which would interleave neighboring members' bytes), so AOS members fall back to a kernel copy and `copy=False` raises on each AOS member.
-- **SOA** (`Struct.field(..., layout=Layout.SOA)`): each member sits in its own dense SNode subtree with contiguous storage, so members are zero-copyable individually under the usual backend / dtype rules. `copy=False` succeeds and returns aliasing views.
+- **AOS** (array of structures, the default `Struct.field(..., layout=Layout.AOS)`): members of each element are stored together. For example, `Struct.field({"a": i32, "b": f32}, shape=(N,))` stores `[a0, b0, a1, b1, ...]`. Zero-copy conversion of individual members is not supported for this layout. Use `copy=True`; `copy=False` raises an error.
+- **SOA** (structure of arrays, `Struct.field(..., layout=Layout.SOA)`): each member has separate contiguous storage. Members support zero-copy conversion individually under the usual backend and data-type requirements. `copy=False` returns views that share the member's memory.
 
 ```python
 S_aos = qd.Struct.field({"pos": qd.f32, "vel": qd.f32}, shape=(16,))   # AOS (default)
@@ -214,7 +214,7 @@ d_soa["pos"][0] = 1.0                                                   # writes
 
 ### Raw DLPack export with `to_dlpack()`
 
-All field and ndarray types expose a `to_dlpack()` method that returns a raw [DLPack](https://github.com/dmlc/dlpack) `PyCapsule`. This is the low-level primitive that `to_torch(copy=False)` and `to_numpy(copy=False)` are built on; use it when you need to feed Quadrants data into a framework that speaks DLPack directly (e.g. JAX, CuPy, or a custom C extension).
+All field and ndarray types expose a `to_dlpack()` method that returns a raw [DLPack](https://github.com/dmlc/dlpack) `PyCapsule` (Python's wrapper for a C pointer). This is the low-level primitive that `to_torch(copy=False)` and `to_numpy(copy=False)` are built on; use it when you need to feed Quadrants data into a framework that speaks DLPack directly (e.g. JAX, CuPy, or a custom C extension).
 
 ```python
 qd.init(arch=qd.cpu)
@@ -265,6 +265,10 @@ y = torch.zeros(32, dtype=torch.float32, device="cuda:0")
 square(x, y)
 ```
 
+With a ROCm build of PyTorch (ROCm is AMD's GPU software platform; `torch.version.hip` is set), the same `device="cuda:0"` spelling refers to an AMD GPU. Initialize Quadrants with `qd.init(arch=qd.amdgpu)` to pass contiguous tensors backed by HIP (AMD's GPU programming interface) and their gradients directly to kernels, without copying tensor contents through temporary buffers. Both the CUDA and AMDGPU backends use visible device 0; tensors on other devices or with a mismatched GPU backend are copied through CPU memory and copied back after the kernel.
+
+When sharing tensors across PyTorch and Quadrants streams, finish the producer's work before the consumer uses the tensor. For example, call `torch.cuda.synchronize(0)` after PyTorch writes and before launching a Quadrants kernel, then `qd.sync()` before PyTorch reads the result. For kernels launched with `qd_stream=stream`, use `stream.synchronize()` before consuming their results. Stream and event dependencies can replace these blocking waits; see [Streams](streams.md). Keep the tensors alive until their GPU work finishes. Quadrants waits for initialization of a gradient buffer it creates internally, but does not automatically synchronize other PyTorch operations.
+
 ### Integration with torch.autograd
 
 Since torch tensors can be passed directly into kernels, you can integrate Quadrants kernels into PyTorch's autograd system by wrapping them in a `torch.autograd.Function`:
@@ -313,4 +317,4 @@ print(x.grad[0])  # 4.0
 | `to_dlpack()` | no (raw capsule) | yes | yes |
 | Direct pass-through | no | no | yes (as kernel arg) |
 
-The `copy` parameter is supported on `to_numpy()` and `to_torch()` for `ScalarField`, `MatrixField` (and `VectorField`), `StructField`, `qd.Tensor`, and all `Ndarray` types. See [Zero-copy interop via DLPack](#zero-copy-interop-via-dlpack) for the support matrix and lifetime rules.
+The `copy` parameter is supported on `to_numpy()` and `to_torch()` for `ScalarField`, `MatrixField` (and `VectorField`), `StructField`, [`qd.Tensor`](tensor.md), and all `Ndarray` types. See [Zero-copy interop via DLPack](#zero-copy-interop-via-dlpack) for the support matrix and lifetime rules.
