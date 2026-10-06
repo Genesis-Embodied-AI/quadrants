@@ -207,7 +207,7 @@ std::vector<uint32_t> IRBuilder::finalize() {
   spirv_module.insert(spirv_module.end(), header_.begin(), header_.end());
 
   // 2. Required capabilities, extensions, and extended-instruction-set imports.
-  if (get_work_group_id_fn_id_.id != 0) {
+  if (!imported_glsl_function_declarations_.empty()) {
     spirv_module.insert(spirv_module.end(), {(2u << 16) | spv::OpCapability, spv::CapabilityLinkage});
   }
   spirv_module.insert(spirv_module.end(), capabilities_extensions_imports_.begin(),
@@ -226,10 +226,13 @@ std::vector<uint32_t> IRBuilder::finalize() {
   spirv_module.insert(spirv_module.end(), global_.begin(), global_.end());
 
   // 6. Function declarations without bodies, then function definitions with bodies.
-  spirv_module.insert(spirv_module.end(), imported_glsl_function_declarations_.begin(), imported_glsl_function_declarations_.end());
+  spirv_module.insert(spirv_module.end(), imported_glsl_function_declarations_.begin(),
+                      imported_glsl_function_declarations_.end());
   spirv_module.insert(spirv_module.end(), func_header_.begin(), func_header_.end());
   spirv_module.insert(spirv_module.end(), function_.begin(), function_.end());
-  if (get_work_group_id_fn_id_.id != 0) {
+
+  // Link the completed module.
+  if (!imported_glsl_function_declarations_.empty()) {
     return link_shader_helpers(spirv_module);
   }
   return spirv_module;
@@ -743,11 +746,6 @@ Value IRBuilder::call_glsl_u32(Value &function, const char *name, uint32_t argum
   auto argument = alloca_variable(t_uint32_);
   store_variable(argument, uint_immediate_number(t_uint32_, argument_value));
   return make_value(spv::OpFunctionCall, t_uint32_, function, argument);
-}
-
-Value IRBuilder::get_work_group_id(uint32_t dim_index) {
-  QD_ASSERT(dim_index < 3);
-  return call_glsl_u32(get_work_group_id_fn_id_, "get_work_group_id", dim_index);
 }
 
 Value IRBuilder::alloca_variable(const SType &type) {

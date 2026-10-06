@@ -1,6 +1,6 @@
 #include "quadrants/common/logging.h"
 #include "gtest/gtest.h"
-#include "quadrants/codegen/spirv/spirv_ir_builder.h"
+#include "quadrants/codegen/spirv/spirv_operations.h"
 #include "spirv-tools/libspirv.hpp"
 #include "spirv-tools/optimizer.hpp"
 
@@ -18,12 +18,13 @@ TEST(WorkgroupShader, LinksAndValidatesAcrossTargets) {
         caps.set(DeviceCapability::spirv_version, version);
         caps.set(DeviceCapability::spirv_has_physical_storage_buffer, physical);
         IRBuilder ir(arch, &caps);
+        SpirvOperations ops_(ir);
         ir.init_header();
         auto output = ir.buffer_argument(ir.u32_type(), 0, 0, "result");
         auto main = ir.new_function();
         ir.start_function(main);
         for (uint32_t dim : {0u, 1u, 2u, 0u}) {
-          auto index = ir.get_work_group_id(dim);
+          auto index = ops_.get_work_group_id(dim);
           auto destination =
               ir.struct_array_access(ir.u32_type(), output, ir.uint_immediate_number(ir.u32_type(), dim));
           ir.store_variable(destination, index);
