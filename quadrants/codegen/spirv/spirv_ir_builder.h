@@ -599,9 +599,10 @@ class IRBuilder {
   Value gl_global_invocation_id_;
   Value gl_local_invocation_id_;
   Value gl_num_work_groups_;
-  Value get_work_group_id_fn_;
   Value gl_work_group_size_;
   Value subgroup_local_invocation_id_;
+
+  Value get_work_group_id_fn_;
 
   // Random function and variables
   bool init_rand_{false};
