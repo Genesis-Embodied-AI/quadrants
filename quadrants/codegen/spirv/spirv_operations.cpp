@@ -2,6 +2,223 @@
 
 namespace quadrants::lang::spirv {
 
+Value SpirvOperations::popcnt(Value x) {
+  QD_ASSERT(is_integral(x.stype.dt));
+  return ir_.make_value(spv::OpBitCount, x.stype, x);
+}
+
+#define DEFINE_SPIRV_BINARY_USIGN_OP(_OpName, _Op)   \
+  Value SpirvOperations::_OpName(Value a, Value b) {         \
+    QD_ASSERT(a.stype.id == b.stype.id);               \
+    if (is_integral(a.stype.dt)) {                     \
+      return ir_.make_value(spv::OpI##_Op, a.stype, a, b); \
+    } else {                                           \
+      QD_ASSERT(is_real(a.stype.dt));                  \
+      return ir_.make_value(spv::OpF##_Op, a.stype, a, b); \
+    }                                                  \
+  }
+
+#define DEFINE_SPIRV_BINARY_SIGN_OP(_OpName, _Op)         \
+  Value SpirvOperations::_OpName(Value a, Value b) {              \
+    QD_ASSERT(a.stype.id == b.stype.id);                    \
+    if (is_integral(a.stype.dt) && is_signed(a.stype.dt)) { \
+      return ir_.make_value(spv::OpS##_Op, a.stype, a, b);      \
+    } else if (is_integral(a.stype.dt)) {                   \
+      return ir_.make_value(spv::OpU##_Op, a.stype, a, b);      \
+    } else {                                                \
+      QD_ASSERT(is_real(a.stype.dt));                       \
+      return ir_.make_value(spv::OpF##_Op, a.stype, a, b);      \
+    }                                                       \
+  }
+
+DEFINE_SPIRV_BINARY_USIGN_OP(add, Add);
+DEFINE_SPIRV_BINARY_USIGN_OP(sub, Sub);
+DEFINE_SPIRV_BINARY_USIGN_OP(mul, Mul);
+DEFINE_SPIRV_BINARY_SIGN_OP(div, Div);
+
+Value SpirvOperations::mod(Value a, Value b) {
+  QD_ASSERT(a.stype.id == b.stype.id);
+  if (is_integral(a.stype.dt) && is_signed(a.stype.dt)) {
+    // FIXME: figure out why OpSRem does not work
+    return sub(a, mul(b, div(a, b)));
+  } else if (is_integral(a.stype.dt)) {
+    return ir_.make_value(spv::OpUMod, a.stype, a, b);
+  } else {
+    QD_ASSERT(is_real(a.stype.dt));
+    return ir_.make_value(spv::OpFRem, a.stype, a, b);
+  }
+}
+
+#define DEFINE_SPIRV_CMP_OP(_OpName, _Op)                                \
+  Value SpirvOperations::_OpName(Value a, Value b) {                             \
+    QD_ASSERT(a.stype.id == b.stype.id);                                   \
+    const auto &bool_type = ir_.bool_type(); /* TODO: Only scalar supported now */ \
+    if (is_integral(a.stype.dt) && is_signed(a.stype.dt)) {                \
+      return ir_.make_value(spv::OpS##_Op, bool_type, a, b);                   \
+    } else if (is_integral(a.stype.dt)) {                                  \
+      return ir_.make_value(spv::OpU##_Op, bool_type, a, b);                   \
+    } else {                                                               \
+      QD_ASSERT(is_real(a.stype.dt));                                      \
+      return ir_.make_value(spv::OpFOrd##_Op, bool_type, a, b);                \
+    }                                                                      \
+  }
+
+DEFINE_SPIRV_CMP_OP(lt, LessThan);
+DEFINE_SPIRV_CMP_OP(le, LessThanEqual);
+DEFINE_SPIRV_CMP_OP(gt, GreaterThan);
+DEFINE_SPIRV_CMP_OP(ge, GreaterThanEqual);
+
+#define DEFINE_SPIRV_CMP_UOP(_OpName, _Op)                               \
+  Value SpirvOperations::_OpName(Value a, Value b) {                             \
+    QD_ASSERT(a.stype.id == b.stype.id);                                   \
+    const auto &bool_type = ir_.bool_type(); /* TODO: Only scalar supported now */ \
+    if (a.stype.id == bool_type.id) {                                      \
+      return ir_.make_value(spv::OpLogical##_Op, bool_type, a, b);             \
+    } else if (is_integral(a.stype.dt)) {                                  \
+      return ir_.make_value(spv::OpI##_Op, bool_type, a, b);                   \
+    } else {                                                               \
+      QD_ASSERT(is_real(a.stype.dt));                                      \
+      return ir_.make_value(spv::OpFOrd##_Op, bool_type, a, b);                \
+    }                                                                      \
+  }
+
+DEFINE_SPIRV_CMP_UOP(eq, Equal);
+DEFINE_SPIRV_CMP_UOP(ne, NotEqual);
+
+#define DEFINE_SPIRV_LOGICAL_OP(_OpName, _Op)                                                 \
+  Value SpirvOperations::_OpName(Value a, Value b) {                                                  \
+    QD_ASSERT(a.stype.id == b.stype.id);                                                        \
+    if (a.stype.id == ir_.bool_type().id) {                                                             \
+      return ir_.make_value(spv::OpLogical##_Op, ir_.bool_type(), a, b);                                    \
+    } else if (is_integral(a.stype.dt)) {                                                       \
+      Value val_a = ir_.make_value(spv::OpINotEqual, ir_.bool_type(), a, ir_.int_immediate_number(a.stype, 0)); \
+      Value val_b = ir_.make_value(spv::OpINotEqual, ir_.bool_type(), b, ir_.int_immediate_number(b.stype, 0)); \
+      Value val_ret = ir_.make_value(spv::OpLogical##_Op, ir_.bool_type(), val_a, val_b);                   \
+      return cast(a.stype, val_ret);                                                            \
+    } else {                                                                                    \
+      QD_ERROR("Logical ops on real types are not supported.");                                 \
+      return Value();                                                                           \
+    }                                                                                           \
+  }
+
+DEFINE_SPIRV_LOGICAL_OP(logical_and, And);
+DEFINE_SPIRV_LOGICAL_OP(logical_or, Or);
+
+Value SpirvOperations::bit_field_extract(Value base, Value offset, Value count) {
+  QD_ASSERT(is_integral(base.stype.dt));
+  QD_ASSERT(is_integral(offset.stype.dt));
+  QD_ASSERT(is_integral(count.stype.dt));
+  return ir_.make_value(spv::OpBitFieldUExtract, base.stype, base, offset, count);
+}
+
+Value SpirvOperations::select(Value cond, Value a, Value b) {
+  QD_ASSERT(a.stype.id == b.stype.id);
+  QD_ASSERT(cond.stype.id == ir_.bool_type().id);
+  return ir_.make_value(spv::OpSelect, a.stype, cond, a, b);
+}
+
+Value SpirvOperations::cast(const SType &dst_type, Value value) {
+  QD_ASSERT(value.stype.id > 0U);
+  if (value.stype.id == dst_type.id)
+    return value;
+  const DataType &from = value.stype.dt;
+  const DataType &to = dst_type.dt;
+  if (from->is_primitive(PrimitiveTypeID::u1)) {  // Bool
+    if (is_integral(to) && is_signed(to)) {       // Bool -> Int
+      return select(value, ir_.int_immediate_number(dst_type, 1), ir_.int_immediate_number(dst_type, 0));
+    } else if (is_integral(to) && is_unsigned(to)) {  // Bool -> UInt
+      return select(value, ir_.uint_immediate_number(dst_type, 1), ir_.uint_immediate_number(dst_type, 0));
+    } else if (is_real(to)) {  // Bool -> Float
+      return ir_.make_value(spv::OpConvertUToF, dst_type,
+                        select(value, ir_.uint_immediate_number(ir_.u32_type(), 1), ir_.uint_immediate_number(ir_.u32_type(), 0)));
+    } else {
+      QD_ERROR("do not support type cast from {} to {}", from.to_string(), to.to_string());
+      return Value();
+    }
+  } else if (to->is_primitive(PrimitiveTypeID::u1)) {  // Bool
+    if (is_integral(from) && is_signed(from)) {        // Int -> Bool
+      return ne(value, ir_.int_immediate_number(value.stype, 0));
+    } else if (is_integral(from) && is_unsigned(from)) {  // UInt -> Bool
+      return ne(value, ir_.uint_immediate_number(value.stype, 0));
+    } else {
+      QD_ERROR("do not support type cast from {} to {}", from.to_string(), to.to_string());
+      return Value();
+    }
+  } else if (is_integral(from) && is_integral(to)) {
+    auto ret = value;
+
+    if (data_type_bits(from) == data_type_bits(to)) {
+      // Same width conversion
+      ret = ir_.make_value(spv::OpBitcast, dst_type, ret);
+    } else {
+      // Different width
+      // Step 1. Sign extend / truncate value to width of `to`
+      // Step 2. Bitcast to signess of `to`
+      auto get_signed_type = [](DataType dt) -> DataType {
+        // Create a output signed type with the same width as `dt`
+        if (data_type_bits(dt) == 8)
+          return PrimitiveType::i8;
+        else if (data_type_bits(dt) == 16)
+          return PrimitiveType::i16;
+        else if (data_type_bits(dt) == 32)
+          return PrimitiveType::i32;
+        else if (data_type_bits(dt) == 64)
+          return PrimitiveType::i64;
+        else
+          return PrimitiveType::unknown;
+      };
+      auto get_unsigned_type = [](DataType dt) -> DataType {
+        // Create a output unsigned type with the same width as `dt`
+        if (data_type_bits(dt) == 8)
+          return PrimitiveType::u8;
+        else if (data_type_bits(dt) == 16)
+          return PrimitiveType::u16;
+        else if (data_type_bits(dt) == 32)
+          return PrimitiveType::u32;
+        else if (data_type_bits(dt) == 64)
+          return PrimitiveType::u64;
+        else
+          return PrimitiveType::unknown;
+      };
+
+      DataType intermediate_dt;
+      if (is_signed(from)) {
+        intermediate_dt = get_signed_type(to);
+        ret = ir_.make_value(spv::OpSConvert, ir_.get_primitive_type(intermediate_dt), ret);
+      } else {
+        intermediate_dt = get_unsigned_type(to);
+        ret = ir_.make_value(spv::OpUConvert, ir_.get_primitive_type(intermediate_dt), ret);
+      }
+
+      // OpBitcast(T, T) is invalid per SPIR-V spec ("Result Type must not equal Operand Type"). When the
+      // intermediate dtype (same signedness as the source but width-matched to the destination) already
+      // matches the caller's destination type, skip the trailing bitcast so the widening / narrowing SConvert
+      // / UConvert above is the final instruction. The trailing bitcast still runs in the mixed-signedness
+      // case, which is the scenario it was written for.
+      if (intermediate_dt != to) {
+        ret = ir_.make_value(spv::OpBitcast, dst_type, ret);
+      }
+    }
+
+    return ret;
+  } else if (is_real(from) && is_integral(to) && is_signed(to)) {  // Float -> Int
+    return ir_.make_value(spv::OpConvertFToS, dst_type, value);
+  } else if (is_real(from) && is_integral(to) && is_unsigned(to)) {  // Float -> UInt
+    return ir_.make_value(spv::OpConvertFToU, dst_type, value);
+  } else if (is_integral(from) && is_signed(from) && is_real(to)) {  // Int -> Float
+    return ir_.make_value(spv::OpConvertSToF, dst_type, value);
+  } else if (is_integral(from) && is_unsigned(from) && is_real(to)) {  // UInt -> Float
+    return ir_.make_value(spv::OpConvertUToF, dst_type, value);
+  } else if (is_real(from) && is_real(to)) {  // Float -> Float
+    return ir_.make_value(spv::OpFConvert, dst_type, value);
+  } else {
+    QD_ERROR("do not support type cast from {} to {}", from.to_string(), to.to_string());
+    return Value();
+  }
+}
+
+
+
 void SpirvOperations::set_work_group_size(const std::array<int, 3> group_size) {
   Value size_x = ir_.uint_immediate_number(ir_.u32_type(), static_cast<uint64_t>(group_size[0]));
   Value size_y = ir_.uint_immediate_number(ir_.u32_type(), static_cast<uint64_t>(group_size[1]));
@@ -76,11 +293,11 @@ Value SpirvOperations::float_atomic(AtomicOpType op_type, Value addr_ptr, Value 
   // Use dt-derived type instead of ir_.f32_type() so FMin/FMax work for f16/f64.
   auto float_type = ir_.get_primitive_type(dt);
   if (op_type == AtomicOpType::add) {
-    return atomic_operation(addr_ptr, data, [&](Value lhs, Value rhs) { return ir_.add(lhs, rhs); }, dt);
+    return atomic_operation(addr_ptr, data, [&](Value lhs, Value rhs) { return add(lhs, rhs); }, dt);
   } else if (op_type == AtomicOpType::sub) {
-    return atomic_operation(addr_ptr, data, [&](Value lhs, Value rhs) { return ir_.sub(lhs, rhs); }, dt);
+    return atomic_operation(addr_ptr, data, [&](Value lhs, Value rhs) { return sub(lhs, rhs); }, dt);
   } else if (op_type == AtomicOpType::mul) {
-    return atomic_operation(addr_ptr, data, [&](Value lhs, Value rhs) { return ir_.mul(lhs, rhs); }, dt);
+    return atomic_operation(addr_ptr, data, [&](Value lhs, Value rhs) { return mul(lhs, rhs); }, dt);
   } else if (op_type == AtomicOpType::min) {
     return atomic_operation(
         addr_ptr, data, [&](Value lhs, Value rhs) { return ir_.call_glsl450(float_type, /*FMin*/ 37, lhs, rhs); }, dt);
@@ -94,7 +311,7 @@ Value SpirvOperations::float_atomic(AtomicOpType op_type, Value addr_ptr, Value 
 
 Value SpirvOperations::integer_atomic(AtomicOpType op_type, Value addr_ptr, Value data, const DataType &dt) {
   if (op_type == AtomicOpType::mul) {
-    return atomic_operation(addr_ptr, data, [&](Value lhs, Value rhs) { return ir_.mul(lhs, rhs); }, dt);
+    return atomic_operation(addr_ptr, data, [&](Value lhs, Value rhs) { return mul(lhs, rhs); }, dt);
   } else {
     QD_NOT_IMPLEMENTED
   }
@@ -213,8 +430,8 @@ Value SpirvOperations::rand_f32(Value global_tmp_) {
 
   Value _1_4294967296f = ir_.float_immediate_number(ir_.f32_type(), 1.0f / 4294967296.0f);
   Value tmp0 = rand_u32(global_tmp_);
-  Value tmp1 = ir_.cast(ir_.f32_type(), tmp0);
-  Value val = ir_.mul(tmp1, _1_4294967296f);
+  Value tmp1 = cast(ir_.f32_type(), tmp0);
+  Value val = mul(tmp1, _1_4294967296f);
 
   return val;
 }
@@ -225,7 +442,7 @@ Value SpirvOperations::rand_i32(Value global_tmp_) {
   }
 
   Value tmp0 = rand_u32(global_tmp_);
-  Value val = ir_.cast(ir_.i32_type(), tmp0);
+  Value val = cast(ir_.i32_type(), tmp0);
   return val;
 }
 

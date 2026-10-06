@@ -34,7 +34,7 @@ std::vector<uint32_t> build_checkpoint_yield_check_spirv(Arch arch, const Device
   // `memory_barrier()` call provides the same ordering, so a plain load is also sufficient here.
   Value flag = load_buf_u32(ir, yield_on_buf, ir.uint_immediate_number(ir.u32_type(), 0u));
   Value zero_u32 = ir.uint_immediate_number(ir.u32_type(), 0u);
-  Value flag_set = ir.ne(flag, zero_u32);
+  Value flag_set = ops_.ne(flag, zero_u32);
 
   Label body_lbl = ir.new_label();
   Label merge_lbl = ir.new_label();

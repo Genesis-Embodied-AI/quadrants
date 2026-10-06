@@ -409,27 +409,6 @@ class IRBuilder {
     curr_label_ = start_label;
   }
 
-  // Expressions
-  Value add(Value a, Value b);
-  Value sub(Value a, Value b);
-  Value mul(Value a, Value b);
-  Value div(Value a, Value b);
-  Value mod(Value a, Value b);
-  Value eq(Value a, Value b);
-  Value ne(Value a, Value b);
-  Value lt(Value a, Value b);
-  Value le(Value a, Value b);
-  Value gt(Value a, Value b);
-  Value ge(Value a, Value b);
-  Value logical_and(Value a, Value b);
-  Value logical_or(Value a, Value b);
-  Value bit_field_extract(Value base, Value offset, Value count);
-  Value select(Value cond, Value a, Value b);
-  Value popcnt(Value x);
-
-  // Create a cast that cast value to dst_type
-  Value cast(const SType &dst_type, Value value);
-
   // Create a GLSL450 call
   template <typename... Args>
   Value call_glsl450(const SType &ret_type, uint32_t inst_id, Args &&...args) {

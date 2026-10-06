@@ -4,12 +4,33 @@
 
 namespace quadrants::lang::spirv {
 
-// Concrete GPU operations implemented using the generic SPIR-V builder.
+// Concrete shader computations and GPU operations implemented using the generic SPIR-V builder.
 // Keep one instance per builder so repeated operations reuse their declarations and state.
 class SpirvOperations {
  public:
   explicit SpirvOperations(IRBuilder &ir) : ir_(ir) {
   }
+
+  // Expressions
+  Value add(Value a, Value b);
+  Value sub(Value a, Value b);
+  Value mul(Value a, Value b);
+  Value div(Value a, Value b);
+  Value mod(Value a, Value b);
+  Value eq(Value a, Value b);
+  Value ne(Value a, Value b);
+  Value lt(Value a, Value b);
+  Value le(Value a, Value b);
+  Value gt(Value a, Value b);
+  Value ge(Value a, Value b);
+  Value logical_and(Value a, Value b);
+  Value logical_or(Value a, Value b);
+  Value bit_field_extract(Value base, Value offset, Value count);
+  Value select(Value cond, Value a, Value b);
+  Value popcnt(Value x);
+
+  // Create a cast that cast value to dst_type
+  Value cast(const SType &dst_type, Value value);
 
   void set_work_group_size(const std::array<int, 3> group_size);
   Value get_num_work_groups(uint32_t dim_index);
