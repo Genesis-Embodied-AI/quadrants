@@ -233,7 +233,7 @@ std::vector<uint32_t> IRBuilder::finalize() {
 
   // Link the completed module.
   if (get_work_group_id_fn_id_.id != 0) {
-    return link_shader_helpers(spirv_module);
+    return link_spirv_modules({spirv_module, get_workgroup_shader_library(spirv_module)});
   }
   return spirv_module;
 }
