@@ -52,7 +52,6 @@ target_sources(spirv_codegen
     spirv_codegen.cpp
     spirv_shared_array_retyping.cpp
     spirv_ir_builder.cpp
-    shader_library.cpp
     spirv_operations.cpp
     spirv_types.cpp
     compiled_kernel_data.cpp

@@ -1,10 +1,55 @@
 #include "quadrants/codegen/spirv/spirv_ir_builder.h"
 #include "fp16.h"
-#include "quadrants/codegen/spirv/shader_library.h"
+#include <cstdint>
+#include <iterator>
+
+#include "spirv-tools/linker.hpp"
+#include "workgroup_spv.h"
 
 namespace quadrants::lang {
 
 namespace spirv {
+namespace {
+
+// Link the kernel with the supplied compiled GLSL helper libraries, resolving imported functions to their implementations.
+// Return the combined SPIR-V module, or report an error if linking fails.
+std::vector<uint32_t> link_shader_helpers(const std::vector<uint32_t> &kernel,
+                                          std::vector<std::vector<uint32_t>> libraries) {
+  // These helper libraries use Input and Function pointers. Match their addressing model to the kernel.
+  // Any required physical-storage capability and extension must already be declared by the kernel.
+  uint32_t addressing_model = spv::AddressingModelLogical;
+  for (size_t i = 5; i < kernel.size(); i += kernel[i] >> 16) {
+    if ((kernel[i] & 0xffff) == spv::OpMemoryModel) {
+      addressing_model = kernel[i + 1];
+      break;
+    }
+  }
+  for (auto &library : libraries) {
+    for (size_t i = 5; i < library.size(); i += library[i] >> 16) {
+      if ((library[i] & 0xffff) == spv::OpMemoryModel) {
+        library[i + 1] = addressing_model;
+        break;
+      }
+    }
+  }
+  spvtools::Context context(SPV_ENV_UNIVERSAL_1_6);
+  std::string error;
+  context.SetMessageConsumer([&](spv_message_level_t, const char *, const spv_position_t &, const char *message) {
+    error += message;
+    error += '\n';
+  });
+  spvtools::LinkerOptions options;
+  options.SetUseHighestVersion(true);
+  std::vector<uint32_t> linked;
+  libraries.insert(libraries.begin(), kernel);
+  auto result = spvtools::Link(context, libraries, &linked, options);
+  QD_ERROR_IF(result != SPV_SUCCESS, "Failed to link GLSL shader helpers: {}", error);
+  return linked;
+}
+
+
+}  // namespace
+
 
 using cap = DeviceCapability;
 
@@ -233,7 +278,8 @@ std::vector<uint32_t> IRBuilder::finalize() {
 
   // Link the completed module.
   if (!imported_glsl_function_declarations_.empty()) {
-    return link_shader_helpers(spirv_module);
+    std::vector<uint32_t> workgroup_library(std::begin(workgroup_helper_spv), std::end(workgroup_helper_spv));
+    return link_shader_helpers(spirv_module, {std::move(workgroup_library)});
   }
   return spirv_module;
 }
