@@ -232,7 +232,7 @@ void SpirvOperations::set_work_group_size(const std::array<int, 3> group_size) {
 
 Value SpirvOperations::get_work_group_id(uint32_t dim_index) {
   QD_ASSERT(dim_index < 3);
-  return ir_.call_glsl_u32(get_work_group_id_fn_id_, "get_work_group_id", dim_index);
+  return ir_.call_glsl_u32_to_u32(get_work_group_id_fn_id_, "get_work_group_id", dim_index);
 }
 
 Value SpirvOperations::get_num_work_groups(uint32_t dim_index) {

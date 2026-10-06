@@ -766,7 +766,7 @@ Value IRBuilder::struct_array_access(const SType &res_type, Value buffer, Value 
 
 // Emit a call to a named GLSL function taking and returning a uint32, and return the value representing its result.
 // Declare the function as an import on its first use and cache that declaration in function.
-Value IRBuilder::call_glsl_u32(Value &function, const char *name, uint32_t argument_value) {
+Value IRBuilder::call_glsl_u32_to_u32(Value &function, const char *name, uint32_t argument_value) {
   if (function.id == 0) {
     auto parameter_type = get_pointer_type(t_uint32_, spv::StorageClassFunction);
     SType function_type;
