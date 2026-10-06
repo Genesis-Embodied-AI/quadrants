@@ -47,6 +47,7 @@ from quadrants.lang.exception import (
 )
 from quadrants.lang.expr import Expr, make_expr_group
 from quadrants.lang.field import Field
+from quadrants.lang.kernel_launch_metadata import GraphDoWhileLevel
 from quadrants.lang.matrix import Matrix, MatrixType
 from quadrants.lang.snode import append, deactivate, length
 from quadrants.lang.struct import Struct, StructType
@@ -1497,7 +1498,6 @@ class ASTTransformer(Builder):
         graph_do_while_node = ASTTransformer._is_graph_do_while_call(node.test)
         if graph_do_while_node is not None:
             graph_api.warn_if_deprecated(node.test.func, "do_while")
-            from quadrants.lang.kernel import GraphDoWhileLevel  # pylint: disable=C0415
 
             kernel = ctx.global_context.current_kernel
             if not kernel.use_graph:
@@ -1522,7 +1522,12 @@ class ASTTransformer(Builder):
             parent_id = kernel._graph_do_while_level_stack[-1] if kernel._graph_do_while_level_stack else -1
             level_id = len(kernel.graph_do_while_levels)
             kernel.graph_do_while_levels.append(
-                GraphDoWhileLevel(cond_arg_name=cond_label, parent_id=parent_id, cond_cpp_arg_id=cond_cpp_arg_id)
+                GraphDoWhileLevel(
+                    cond_arg_name=cond_label,
+                    parent_id=parent_id,
+                    cond_cpp_arg_id=cond_cpp_arg_id,
+                    checkpoint_id=ctx.ast_builder.current_checkpoint_id(),
+                )
             )
             if level_id == 0:
                 kernel.graph_do_while_arg = cond_label

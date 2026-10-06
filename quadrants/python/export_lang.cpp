@@ -428,6 +428,7 @@ void export_lang(nb::module_ &m) {
       .def("begin_graph_parallel_context", &ASTBuilder::begin_graph_parallel_context)
       .def("end_graph_parallel_context", &ASTBuilder::end_graph_parallel_context)
       .def("set_graph_do_while_level_id", &ASTBuilder::set_graph_do_while_level_id)
+      .def("current_checkpoint_id", &ASTBuilder::current_checkpoint_id)
       .def("begin_checkpoint", &ASTBuilder::begin_checkpoint)
       .def("end_checkpoint", &ASTBuilder::end_checkpoint);
 
