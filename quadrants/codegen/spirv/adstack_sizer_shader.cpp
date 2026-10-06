@@ -122,12 +122,20 @@ void store_buf_u32(IRBuilder &ir, Value buffer, Value word_idx, Value value) {
 // with `VK_ERROR_UNKNOWN`. Each per-array slice within a scratch SSBO has a fixed compile-time base index
 // (`base_in_elems`); element access is `base_in_elems + index` then `OpAccessChain` through the SSBO's runtime array.
 // The sizer dispatches `1x1x1` so cross-thread aliasing is impossible.
-Value array_i64_access_ptr(IRBuilder &ir, SpirvOperations &ops_, Value scratch_i64_buf, uint32_t base_in_elems, Value index) {
+Value array_i64_access_ptr(IRBuilder &ir,
+                           SpirvOperations &ops_,
+                           Value scratch_i64_buf,
+                           uint32_t base_in_elems,
+                           Value index) {
   Value abs_idx = ops_.add(ir.uint_immediate_number(ir.u32_type(), base_in_elems), ops_.cast(ir.u32_type(), index));
   return ir.struct_array_access(ir.i64_type(), scratch_i64_buf, abs_idx);
 }
 
-Value array_i32_access_ptr(IRBuilder &ir, SpirvOperations &ops_, Value scratch_i32_buf, uint32_t base_in_elems, Value index) {
+Value array_i32_access_ptr(IRBuilder &ir,
+                           SpirvOperations &ops_,
+                           Value scratch_i32_buf,
+                           uint32_t base_in_elems,
+                           Value index) {
   Value abs_idx = ops_.add(ir.uint_immediate_number(ir.u32_type(), base_in_elems), ops_.cast(ir.u32_type(), index));
   return ir.struct_array_access(ir.i32_type(), scratch_i32_buf, abs_idx);
 }
@@ -143,7 +151,8 @@ Value array_i32_access_ptr(IRBuilder &ir, SpirvOperations &ops_, Value scratch_i
 // when `physical_ptr_components_` doesn't carry a decomposed base+index pair, so we're staying within a
 // pattern SPIRV-Cross already knows how to lower on Metal / Vulkan without tripping the
 // rvalue-pointer-to-atomic MSL miscompile.
-Value psb_load_scalar(IRBuilder &ir, SpirvOperations &ops_,
+Value psb_load_scalar(IRBuilder &ir,
+                      SpirvOperations &ops_,
                       Value base_u64,
                       Value elem_idx_i32,
                       const SType &elem_sty,
@@ -238,12 +247,14 @@ Value local_values_idx(IRBuilder &ir, SpirvOperations &ops_, const ShaderState &
 }
 
 Value load_values_at(IRBuilder &ir, SpirvOperations &ops_, const ShaderState &st, Value index_i32) {
-  Value ptr = array_i64_access_ptr(ir, ops_, st.scratch_i64_buf, kI64BaseValuesArr, local_values_idx(ir, ops_, st, index_i32));
+  Value ptr =
+      array_i64_access_ptr(ir, ops_, st.scratch_i64_buf, kI64BaseValuesArr, local_values_idx(ir, ops_, st, index_i32));
   return ir.load_variable(ptr, ir.i64_type());
 }
 
 void store_values_at(IRBuilder &ir, SpirvOperations &ops_, const ShaderState &st, Value index_i32, Value v_i64) {
-  Value ptr = array_i64_access_ptr(ir, ops_, st.scratch_i64_buf, kI64BaseValuesArr, local_values_idx(ir, ops_, st, index_i32));
+  Value ptr =
+      array_i64_access_ptr(ir, ops_, st.scratch_i64_buf, kI64BaseValuesArr, local_values_idx(ir, ops_, st, index_i32));
   ir.store_variable(ptr, v_i64);
 }
 
@@ -258,7 +269,11 @@ void store_scope_at(IRBuilder &ir, SpirvOperations &ops_, const ShaderState &st,
 }
 
 // Compute the u32 word offset of field `word_off` inside the device node at index `node_idx`.
-Value node_field_word_idx(IRBuilder &ir, SpirvOperations &ops_, Value nodes_base_word, Value node_idx_i32, int word_off_in_node) {
+Value node_field_word_idx(IRBuilder &ir,
+                          SpirvOperations &ops_,
+                          Value nodes_base_word,
+                          Value node_idx_i32,
+                          int word_off_in_node) {
   Value node_idx_u32 = ops_.cast(ir.u32_type(), node_idx_i32);
   Value node_words = ir.uint_immediate_number(ir.u32_type(), kNodeWords);
   Value base = ops_.mul(node_idx_u32, node_words);
@@ -278,7 +293,8 @@ Value node_field_word_idx(IRBuilder &ir, SpirvOperations &ops_, Value nodes_base
 // counts axes and the actual buffer range is `indices[off .. off + 2 * count)`. Each pair contributes
 // `idx_a * stride_a` to the element index. Mirrors `compute_linear_index` for ETR but walks pairs and multiplies
 // in the per-axis stride read from the second half of each pair, matching how the host encoder emits the table.
-Value compute_field_load_elem_index(IRBuilder &ir, SpirvOperations &ops_,
+Value compute_field_load_elem_index(IRBuilder &ir,
+                                    SpirvOperations &ops_,
                                     const ShaderState &st,
                                     Value indices_base_word,  // u32
                                     Value indices_offset_i32,
@@ -694,7 +710,8 @@ void emit_tree_eval_loop(IRBuilder &ir, SpirvOperations &ops_, const ShaderState
     // rather than the stride-1 helper: without the per-axis multiply a multi-dim `a[i, j]` read would pick
     // up `a_flat[i + j]` instead of `a_flat[i * shape[1] + j]` and the sizer's inner loop max collapses to
     // a spurious low value, tripping an `Adstack overflow` at the next `qd.sync()`.
-    Value linear_i32 = compute_field_load_elem_index(ir, ops_, st, indices_base_word, indices_offset_i32, indices_count_i32);
+    Value linear_i32 =
+        compute_field_load_elem_index(ir, ops_, st, indices_base_word, indices_offset_i32, indices_count_i32);
     Value elem_i64 = emit_psb_load_i64(ir, ops_, data_ptr_u64, linear_i32, prim_dt_i32);
     store_values_at(ir, ops_, st, current_now, elem_i64);
     Value next_cur = ops_.add(current_now, ir.int_immediate_number(ir.i32_type(), 1));
@@ -797,14 +814,17 @@ void emit_tree_eval_loop(IRBuilder &ir, SpirvOperations &ops_, const ShaderState
       Value sp_val = ir.load_variable(st.sp_var, ir.i32_type());
       ir.store_variable(array_i32_access_ptr(ir, ops_, st.scratch_i32_buf, kI32BasePendingMorIdx, sp_val), current_now);
       Value body_start = ops_.add(op_b_i32, ir.int_immediate_number(ir.i32_type(), 1));
-      ir.store_variable(array_i32_access_ptr(ir, ops_, st.scratch_i32_buf, kI32BasePendingBodyStart, sp_val), body_start);
-      ir.store_variable(array_i32_access_ptr(ir, ops_, st.scratch_i32_buf, kI32BasePendingBodyEnd, sp_val), body_node_i32);
+      ir.store_variable(array_i32_access_ptr(ir, ops_, st.scratch_i32_buf, kI32BasePendingBodyStart, sp_val),
+                        body_start);
+      ir.store_variable(array_i32_access_ptr(ir, ops_, st.scratch_i32_buf, kI32BasePendingBodyEnd, sp_val),
+                        body_node_i32);
       ir.store_variable(array_i64_access_ptr(ir, ops_, st.scratch_i64_buf, kI64BasePendingCurI, sp_val), begin_i64);
       ir.store_variable(array_i64_access_ptr(ir, ops_, st.scratch_i64_buf, kI64BasePendingEnd, sp_val), effective_end);
       ir.store_variable(array_i32_access_ptr(ir, ops_, st.scratch_i32_buf, kI32BasePendingVarId, sp_val), var_id_i32);
       ir.store_variable(array_i64_access_ptr(ir, ops_, st.scratch_i64_buf, kI64BasePendingMaxAccum, sp_val),
                         ir.int_immediate_number(ir.i64_type(), 0));
-      ir.store_variable(array_i32_access_ptr(ir, ops_, st.scratch_i32_buf, kI32BasePendingSavedMaxK, sp_val), max_k_now);
+      ir.store_variable(array_i32_access_ptr(ir, ops_, st.scratch_i32_buf, kI32BasePendingSavedMaxK, sp_val),
+                        max_k_now);
 
       Value new_sp = ops_.add(sp_val, ir.int_immediate_number(ir.i32_type(), 1));
       ir.store_variable(st.sp_var, new_sp);
@@ -914,7 +934,8 @@ std::vector<uint32_t> build_adstack_sizer_spirv(Arch arch, const DeviceCapabilit
   Value zero_i64_for_scope_init = ir.int_immediate_number(ir.i64_type(), 0);
   for (int vi = 0; vi < kMaxVars; ++vi) {
     Value idx = ir.int_immediate_number(ir.i32_type(), vi);
-    ir.store_variable(array_i64_access_ptr(ir, ops_, st.scratch_i64_buf, kI64BaseScopeArr, idx), zero_i64_for_scope_init);
+    ir.store_variable(array_i64_access_ptr(ir, ops_, st.scratch_i64_buf, kI64BaseScopeArr, idx),
+                      zero_i64_for_scope_init);
   }
 
   // Read header: n_stacks, total_nodes.
@@ -927,7 +948,7 @@ std::vector<uint32_t> build_adstack_sizer_spirv(Arch arch, const DeviceCapabilit
   // `adstack_sizer_launch.cpp` checks the slot and raises if non-zero.
   st.overflow_flag_word_var = ir.alloca_variable(ir.u32_type());
   Value overflow_word_idx = ops_.add(ir.uint_immediate_number(ir.u32_type(), 2u),
-                                   ops_.mul(n_stacks_u32, ir.uint_immediate_number(ir.u32_type(), 2u)));
+                                     ops_.mul(n_stacks_u32, ir.uint_immediate_number(ir.u32_type(), 2u)));
   ir.store_variable(st.overflow_flag_word_var, overflow_word_idx);
 
   // Word-offsets inside the bytecode buffer for the nodes and indices arrays.
@@ -1021,7 +1042,7 @@ std::vector<uint32_t> build_adstack_sizer_spirv(Arch arch, const DeviceCapabilit
 
     // Route to float/int running-offset and write metadata entries.
     Value slot_base_word = ops_.add(ir.uint_immediate_number(ir.u32_type(), 2u),
-                                  ops_.mul(stack_i_now, ir.uint_immediate_number(ir.u32_type(), 2u)));
+                                    ops_.mul(stack_i_now, ir.uint_immediate_number(ir.u32_type(), 2u)));
     Value slot_off_word = slot_base_word;
     Value slot_max_word = ops_.add(slot_base_word, ir.uint_immediate_number(ir.u32_type(), 1u));
 

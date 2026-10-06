@@ -334,7 +334,7 @@ void TaskCodegen::visit(Block *stmt) {
     ir_->store_variable(ad_stack_row_id_var_float_, clamped_row);
     spirv::Value overflow_signal =
         ops_->select(ops_->ge(claimed_row, capacity), ir_->uint_immediate_number(ir_->u32_type(), UINT32_MAX),
-                    ir_->uint_immediate_number(ir_->u32_type(), 0));
+                     ir_->uint_immediate_number(ir_->u32_type(), 0));
     spirv::Value overflow_buf = get_buffer_value(BufferType::AdStackOverflow, PrimitiveType::u32);
     spirv::Value overflow_ptr =
         ir_->struct_array_access(ir_->u32_type(), overflow_buf, ir_->uint_immediate_number(ir_->i32_type(), 0));
@@ -1368,8 +1368,8 @@ void TaskCodegen::visit(BinaryOpStmt *bin) {
   }
 #define BINARY_OP_TO_SPIRV_ARTHIMATIC(op, func)  \
   else if (op_type == BinaryOpType::op) {        \
-    bin_value = ir_->func(lhs_value, rhs_value); \
-    bin_value = ops_->cast(dst_type, bin_value);  \
+    bin_value = ops_->func(lhs_value, rhs_value); \
+    bin_value = ops_->cast(dst_type, bin_value); \
   }
 
   BINARY_OP_TO_SPIRV_ARTHIMATIC(add, add)
@@ -1405,8 +1405,8 @@ void TaskCodegen::visit(BinaryOpStmt *bin) {
 
 #define BINARY_OP_TO_SPIRV_LOGICAL(op, func)     \
   else if (op_type == BinaryOpType::op) {        \
-    bin_value = ir_->func(lhs_value, rhs_value); \
-    bin_value = ops_->cast(dst_type, bin_value);  \
+    bin_value = ops_->func(lhs_value, rhs_value); \
+    bin_value = ops_->cast(dst_type, bin_value); \
   }
 
   BINARY_OP_TO_SPIRV_LOGICAL(cmp_lt, lt)
@@ -1472,8 +1472,8 @@ void TaskCodegen::visit(TernaryOpStmt *tri) {
   spirv::Value op1 = ir_->query_value(tri->op1->raw_name());
   spirv::Value op2 = ir_->query_value(tri->op2->raw_name());
   spirv::Value op3 = ir_->query_value(tri->op3->raw_name());
-  spirv::Value tri_val =
-      ops_->cast(ir_->get_primitive_type(tri->element_type()), ops_->select(ops_->cast(ir_->bool_type(), op1), op2, op3));
+  spirv::Value tri_val = ops_->cast(ir_->get_primitive_type(tri->element_type()),
+                                    ops_->select(ops_->cast(ir_->bool_type(), op1), op2, op3));
   ir_->register_value(tri->raw_name(), tri_val);
 }
 
@@ -2083,7 +2083,7 @@ void TaskCodegen::generate_serial_kernel(OffloadedStmt *stmt) {
   ensure_any_overflow_signal_var();
   preload_ad_stack_metadata_strides();
   spirv::Value cond = ops_->eq(ops_->get_global_invocation_id(0),
-                              ir_->uint_immediate_number(ir_->u32_type(), 0));  // if (gl_GlobalInvocationID.x > 0)
+                               ir_->uint_immediate_number(ir_->u32_type(), 0));  // if (gl_GlobalInvocationID.x > 0)
   spirv::Label then_label = ir_->new_label();
   spirv::Label merge_label = ir_->new_label();
   kernel_return_label_ = merge_label;
@@ -2256,7 +2256,7 @@ void TaskCodegen::generate_range_for_kernel(OffloadedStmt *stmt) {
   spirv::Value total_invocs = ops_->cast(
       ir_->i32_type(),
       ops_->mul(ops_->get_num_work_groups(0),
-               ir_->uint_immediate_number(ir_->u32_type(), task_attribs_.advisory_num_threads_per_group, true)));
+                ir_->uint_immediate_number(ir_->u32_type(), task_attribs_.advisory_num_threads_per_group, true)));
   /*
   const int group_x = (task_attribs_.advisory_total_num_threads +
                         task_attribs_.advisory_num_threads_per_group - 1) /
@@ -2359,7 +2359,7 @@ void TaskCodegen::generate_struct_for_kernel(OffloadedStmt *stmt) {
     spirv::Value total_invocs = ops_->cast(
         ir_->u32_type(),
         ops_->mul(ops_->get_num_work_groups(0),
-                 ir_->uint_immediate_number(ir_->u32_type(), task_attribs_.advisory_num_threads_per_group, true)));
+                  ir_->uint_immediate_number(ir_->u32_type(), task_attribs_.advisory_num_threads_per_group, true)));
     auto next_index = ops_->add(loop_index, total_invocs);
     ir_->store_variable(loop_index_var, next_index);
     ir_->make_inst(spv::OpBranch, loop_head);
@@ -3083,7 +3083,7 @@ void TaskCodegen::visit(AdStackPushStmt *stmt) {
   spirv::Value any_overflow_var = ensure_any_overflow_signal_var();
   spirv::Value overflow_signal =
       ops_->select(ops_->ge(count, max_val), ir_->uint_immediate_number(ir_->u32_type(), info.stack_id + 1),
-                  ir_->uint_immediate_number(ir_->u32_type(), 0));
+                   ir_->uint_immediate_number(ir_->u32_type(), 0));
   spirv::Value prev = ir_->load_variable(any_overflow_var, ir_->u32_type());
   spirv::Value updated = ir_->call_glsl450(ir_->u32_type(), GLSLstd450UMax, prev, overflow_signal);
   ir_->store_variable(any_overflow_var, updated);
@@ -3110,16 +3110,16 @@ void TaskCodegen::visit(AdStackPopStmt *stmt) {
 // the published `max_size` and skips both the cap subtract and the UMin call, mirroring LLVM's release-build
 // LoadTop emit. `max_size` is a runtime value loaded from AdStackMetadata, so `max_size - 1` becomes an OpISub
 // rather than a compile-time immediate when clamping is requested.
-static spirv::Value ad_stack_top_index(spirv::IRBuilder *ir,
+static spirv::Value ad_stack_top_index(spirv::IRBuilder *ir, spirv::SpirvOperations &ops_,
                                        spirv::Value count,
                                        spirv::Value max_size_val,
                                        bool clamp_to_max_size) {
   spirv::Value one = ir->uint_immediate_number(ir->u32_type(), 1);
-  spirv::Value idx = ir->sub(count, one);
+  spirv::Value idx = ops_.sub(count, one);
   if (!clamp_to_max_size) {
     return idx;
   }
-  spirv::Value cap = ir->sub(max_size_val, one);
+  spirv::Value cap = ops_.sub(max_size_val, one);
   return ir->call_glsl450(ir->u32_type(), GLSLstd450UMin, idx, cap);
 }
 
@@ -3140,7 +3140,7 @@ void TaskCodegen::visit(AdStackLoadTopStmt *stmt) {
   ensure_ad_stack_metadata_loaded(info);
   spirv::Value count = ir_->load_variable(info.count_var, ir_->u32_type());
   spirv::Value idx =
-      ad_stack_top_index(ir_.get(), count, info.max_size_val, compile_config_ && (compile_config_->debug));
+      ad_stack_top_index(ir_.get(), *ops_, count, info.max_size_val, compile_config_ && (compile_config_->debug));
   spirv::Value ptr = ad_stack_slot_ptr(info, idx, /*primal=*/true);
   spirv::SType backing_type = ad_stack_backing_type(info);
   spirv::Value loaded = ir_->load_variable(ptr, backing_type);
@@ -3163,7 +3163,7 @@ void TaskCodegen::visit(AdStackLoadTopAdjStmt *stmt) {
   // unconditionally, so any cast would be a no-op.
   spirv::Value count = ir_->load_variable(info.count_var, ir_->u32_type());
   spirv::Value idx =
-      ad_stack_top_index(ir_.get(), count, info.max_size_val, compile_config_ && (compile_config_->debug));
+      ad_stack_top_index(ir_.get(), *ops_, count, info.max_size_val, compile_config_ && (compile_config_->debug));
   spirv::Value ptr = ad_stack_slot_ptr(info, idx, /*primal=*/false);
   spirv::Value loaded = ir_->load_variable(ptr, info.elem_type);
   ir_->register_value(stmt->raw_name(), loaded);
@@ -3177,7 +3177,7 @@ void TaskCodegen::visit(AdStackAccAdjointStmt *stmt) {
   // See the note in `AdStackLoadTopAdjStmt`: no cast is needed because heap_int is excluded by the assert above.
   spirv::Value count = ir_->load_variable(info.count_var, ir_->u32_type());
   spirv::Value idx =
-      ad_stack_top_index(ir_.get(), count, info.max_size_val, compile_config_ && (compile_config_->debug));
+      ad_stack_top_index(ir_.get(), *ops_, count, info.max_size_val, compile_config_ && (compile_config_->debug));
   spirv::Value ptr = ad_stack_slot_ptr(info, idx, /*primal=*/false);
   spirv::Value old_val = ir_->load_variable(ptr, info.elem_type);
   spirv::Value incr = ir_->query_value(stmt->v->raw_name());

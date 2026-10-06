@@ -54,7 +54,12 @@ Value float_to_shared_uint(IRBuilder &ir, Value val, const DataType &dt);
 // CAS-based float atomic for shared (workgroup) arrays. Unlike
 // SpirvOperations::float_atomic, this handles width-mismatched uint backing
 // (e.g. u32 backing for f16 arrays, since Metal/Vulkan lack 16-bit atomics).
-Value shared_float_atomic(IRBuilder &ir, SpirvOperations &ops_, AtomicOpType op_type, Value addr_ptr, Value data, const DataType &dt);
+Value shared_float_atomic(IRBuilder &ir,
+                          SpirvOperations &ops_,
+                          AtomicOpType op_type,
+                          Value addr_ptr,
+                          Value data,
+                          const DataType &dt);
 
 // Check whether the device has native float atomic add for dt.
 // When is_shared=true, checks shared/workgroup capabilities;

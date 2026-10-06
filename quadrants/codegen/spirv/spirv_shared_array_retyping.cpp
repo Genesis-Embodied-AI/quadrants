@@ -215,7 +215,12 @@ Value float_to_shared_uint(IRBuilder &ir, Value val, const DataType &dt) {
   return val;
 }
 
-Value shared_float_atomic(IRBuilder &ir, SpirvOperations &ops_, AtomicOpType op_type, Value addr_ptr, Value data, const DataType &dt) {
+Value shared_float_atomic(IRBuilder &ir,
+                          SpirvOperations &ops_,
+                          AtomicOpType op_type,
+                          Value addr_ptr,
+                          Value data,
+                          const DataType &dt) {
   auto atomic_uint_dt = get_atomic_uint_dtype(ir, dt);
   auto float_type = ir.get_primitive_type(dt);
   if (op_type == AtomicOpType::add) {

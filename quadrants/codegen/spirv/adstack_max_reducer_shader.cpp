@@ -80,7 +80,8 @@ Value load_arg_buf_u64_ptr(IRBuilder &ir, SpirvOperations &ops_, Value buffer, V
 // Physical-Storage-Buffer load of one scalar of `load_ty` width `elem_size` bytes at byte offset `byte_off_u64` from
 // `base_u64`. Mirrors the wrapper-struct PSB load pattern in `adstack_sizer_shader.cpp::psb_load_scalar` and
 // `adstack_bound_reducer_shader.cpp::psb_load_u32_at_byte_off`.
-Value psb_load_scalar_at_byte_off(IRBuilder &ir, SpirvOperations &ops_,
+Value psb_load_scalar_at_byte_off(IRBuilder &ir,
+                                  SpirvOperations &ops_,
                                   Value base_u64,
                                   Value byte_off_u64,
                                   const SType &load_ty,
@@ -101,7 +102,11 @@ Value psb_load_scalar_at_byte_off(IRBuilder &ir, SpirvOperations &ops_,
 // recognizer only emits integer leaves (`recognize_adstack_max_reducer_specs` rejects float-typed bodies), so the float
 // arms are unreachable and not emitted. Element index is in elements (not bytes); the per-dtype load multiplies by the
 // element size internally.
-Value emit_psb_load_i64_int_only(IRBuilder &ir, SpirvOperations &ops_, Value data_ptr_u64, Value linear_i32, Value prim_dt_i32) {
+Value emit_psb_load_i64_int_only(IRBuilder &ir,
+                                 SpirvOperations &ops_,
+                                 Value data_ptr_u64,
+                                 Value linear_i32,
+                                 Value prim_dt_i32) {
   Label merge = ir.new_label();
   Label case_i8 = ir.new_label();
   Label case_i16 = ir.new_label();
@@ -182,7 +187,8 @@ Value alloca_array_access(IRBuilder &ir, Value arr_var, const SType &elem_type, 
 // a device-scope slot in `[0, num_axes)`, so `var_id = -(idx_raw + 1)` and we read `scope[var_id]` at runtime.
 // Multi-axis chain captures (Case 3) populate one scope slot per axis before the body walk; single-axis specs collapse
 // to one populated slot at index 0.
-Value compute_external_read_elem_index(IRBuilder &ir, SpirvOperations &ops_,
+Value compute_external_read_elem_index(IRBuilder &ir,
+                                       SpirvOperations &ops_,
                                        Value bytecode_buf,
                                        Value indices_base_word,
                                        Value indices_offset_i32,
@@ -264,7 +270,8 @@ Value compute_external_read_elem_index(IRBuilder &ir, SpirvOperations &ops_,
 // i64 value into `vals[i]`. The `vals[]` array is a Function-scope OpVariable of `i64[kAdStackMaxReducerMax
 // BodyNodes]`; per-thread footprint is 8 bytes/node-slot. Final result is `vals[body_node_count - 1]` (the root, since
 // post-order encoding places the root last).
-Value interpret_body(IRBuilder &ir, SpirvOperations &ops_,
+Value interpret_body(IRBuilder &ir,
+                     SpirvOperations &ops_,
                      Value args_buf,
                      Value bytecode_buf,
                      Value body_bytecode_offset_words,
@@ -358,8 +365,8 @@ Value interpret_body(IRBuilder &ir, SpirvOperations &ops_,
         ir, bytecode_buf, ops_.add(slot_base, ir.uint_immediate_number(ir.u32_type(), kNodeWordIndicesOffset)));
     Value indices_count = load_buf_i32(
         ir, bytecode_buf, ops_.add(slot_base, ir.uint_immediate_number(ir.u32_type(), kNodeWordIndicesCount)));
-    Value linear_i32 = compute_external_read_elem_index(ir, ops_, bytecode_buf, body_indices_offset_words, indices_offset,
-                                                        indices_count, scope_var);
+    Value linear_i32 = compute_external_read_elem_index(ir, ops_, bytecode_buf, body_indices_offset_words,
+                                                        indices_offset, indices_count, scope_var);
     // The host encoder writes `arg_buffer_offset` in bytes (it's the byte offset of the ndarray's `data_ptr` slot
     // within the kernel arg buffer). The shader reads `args_buf` as u32[], so divide by 4 to land at the right u32 word
     // index. Mirrors `adstack_sizer_shader.cpp`'s same conversion.
@@ -389,8 +396,8 @@ Value interpret_body(IRBuilder &ir, SpirvOperations &ops_,
         ir, bytecode_buf, ops_.add(slot_base, ir.uint_immediate_number(ir.u32_type(), kNodeWordIndicesOffset)));
     Value indices_count = load_buf_i32(
         ir, bytecode_buf, ops_.add(slot_base, ir.uint_immediate_number(ir.u32_type(), kNodeWordIndicesCount)));
-    Value linear_i32 = compute_external_read_elem_index(ir, ops_, bytecode_buf, body_indices_offset_words, indices_offset,
-                                                        indices_count, scope_var);
+    Value linear_i32 = compute_external_read_elem_index(ir, ops_, bytecode_buf, body_indices_offset_words,
+                                                        indices_offset, indices_count, scope_var);
     Value loaded_i64 = emit_psb_load_i64_int_only(ir, ops_, base_u64, linear_i32, prim_dt);
     ir.store_variable(computed_var, loaded_i64);
     ir.make_inst(spv::OpBranch, kind_merge);
@@ -544,8 +551,8 @@ std::vector<uint32_t> build_adstack_max_reducer_spirv(Arch arch, const DeviceCap
     ir.make_inst(spv::OpBranch, init_head);
     ir.start_label(init_head);
     Value init_k_now = ir.load_variable(init_k_var, ir.i32_type());
-    Value init_cond =
-        ops_.lt(init_k_now, ir.int_immediate_number(ir.i32_type(), static_cast<int>(kAdStackSizeExprDeviceMaxBoundVars)));
+    Value init_cond = ops_.lt(
+        init_k_now, ir.int_immediate_number(ir.i32_type(), static_cast<int>(kAdStackSizeExprDeviceMaxBoundVars)));
     ir.make_inst(spv::OpLoopMerge, init_merge, init_cont, spv::LoopControlMaskNone);
     ir.make_inst(spv::OpBranchConditional, init_cond, init_body, init_merge);
     ir.start_label(init_body);
