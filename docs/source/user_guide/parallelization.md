@@ -187,7 +187,7 @@ Their environment variables, `QD_MAKE_CPU_MULTITHREADING_LOOP` (`1` or `0`) and 
 
 `qd.block_idx()` works on CPU, CUDA, AMDGPU, Vulkan, and Metal. On CPU, it returns the index of the block executing the current iteration. Each block runs as one runtime task. Indices start at zero for each parallel loop execution. They identify blocks, not worker threads or execution order.
 
-This function works with both scheduling modes. With `PER_WORKER`, it identifies the compiler-generated block of original iterations. With `FIXED_SIZE`, it identifies the group whose size is controlled by `block_dim`.
+This function works with both scheduling modes. With `PER_WORKER`, it identifies the compiler-generated block of original iterations. With `FIXED_SIZE`, it identifies a group of up to `cpu_fixed_block_dim` iterations, which defaults to 32. A loop can override that size with `qd.loop_config(block_dim=...)`.
 
 ```python
 @qd.kernel
@@ -198,11 +198,27 @@ def k_record_blocks(out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
 
 With four workers, `cpu_work_scheduling=qd.CPUWorkScheduling.PER_WORKER`, and `cpu_per_worker_min_block_dim=1`, this records 50 occurrences of each index from 0 through 3. With `cpu_work_scheduling=qd.CPUWorkScheduling.FIXED_SIZE` and the default block size of 32, it records indices 0 through 6. The last block contains eight iterations.
 
-Nested serial loops retain the enclosing block's index. On CPU, code outside a scheduled block, including a top-level explicitly serialized loop, returns `0`. The function is available inside kernels and their called functions. Empty blocks execute no original iterations, so the example does not record them.
+For example, this CPU kernel records four groups of 32 iterations:
 
-On GPUs, `qd.block_idx()` returns the hardware thread-block index. Vulkan and Metal call these blocks workgroups. A hardware block contains multiple GPU threads and can process several groups of original iterations. Its index stays the same when it processes another group. Serial GPU code runs in block zero.
+```python
+qd.init(arch=qd.cpu, cpu_work_scheduling=qd.CPUWorkScheduling.FIXED_SIZE)
+out = qd.ndarray(qd.i32, shape=128)
 
-The same kernel can call `qd.block_idx()` on every supported backend, but block sizes and iteration assignments may differ. The returned index is not a globally unique identifier.
+@qd.kernel
+def k_record_blocks(out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+    qd.loop_config(block_dim=32)
+    for i in range(128):
+        out[i] = qd.block_idx()
+
+k_record_blocks(out)
+# out contains 32 zeros, 32 ones, 32 twos, and 32 threes.
+```
+
+Nested serial loops retain the enclosing block's index. On CPU, code outside a scheduled block, including a top-level explicitly serialized loop, returns `0`. The function is available inside kernels and their called functions. Calls through `@qd.func` retain the caller's block index. The same holds for `@qd.real_func`, which defines a separately compiled function. Empty blocks execute no original iterations, so the example does not record them.
+
+On GPUs, `qd.block_idx()` returns the hardware thread-block index along the x dimension. Vulkan and Metal call these blocks workgroups. A hardware block contains multiple GPU threads and can process several groups of original iterations. Its index stays the same when it processes another group. Serial GPU code runs in block zero.
+
+The same kernel can call `qd.block_idx()` on every supported backend, but block sizes and iteration assignments may differ. Block indices are local to one loop execution. They are not globally unique identifiers, and reading an index does not synchronize threads.
 
 ### Requesting serial execution
 
