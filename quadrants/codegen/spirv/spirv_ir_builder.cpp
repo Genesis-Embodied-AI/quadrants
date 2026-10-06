@@ -186,26 +186,27 @@ void IRBuilder::init_header() {
 }
 
 std::vector<uint32_t> IRBuilder::finalize() {
-  std::vector<uint32_t> data;
+  std::vector<uint32_t> spirv_module;
   // set bound
   const int bound_loc = 3;
   header_[bound_loc] = id_counter_;
-  data.insert(data.end(), header_.begin(), header_.end());
-  data.insert(data.end(), entry_.begin(), entry_.end());
-  data.insert(data.end(), exec_mode_.begin(), exec_mode_.end());
-  data.insert(data.end(), strings_.begin(), strings_.end());
-  data.insert(data.end(), names_.begin(), names_.end());
-  data.insert(data.end(), decorate_.begin(), decorate_.end());
-  data.insert(data.end(), global_.begin(), global_.end());
-  data.insert(data.end(), imported_glsl_function_declarations_.begin(), imported_glsl_function_declarations_.end());
-  data.insert(data.end(), func_header_.begin(), func_header_.end());
-  data.insert(data.end(), function_.begin(), function_.end());
+  spirv_module.insert(spirv_module.end(), header_.begin(), header_.end());
+  spirv_module.insert(spirv_module.end(), entry_.begin(), entry_.end());
+  spirv_module.insert(spirv_module.end(), exec_mode_.begin(), exec_mode_.end());
+  spirv_module.insert(spirv_module.end(), strings_.begin(), strings_.end());
+  spirv_module.insert(spirv_module.end(), names_.begin(), names_.end());
+  spirv_module.insert(spirv_module.end(), decorate_.begin(), decorate_.end());
+  spirv_module.insert(spirv_module.end(), global_.begin(), global_.end());
+  spirv_module.insert(spirv_module.end(), imported_glsl_function_declarations_.begin(),
+                      imported_glsl_function_declarations_.end());
+  spirv_module.insert(spirv_module.end(), func_header_.begin(), func_header_.end());
+  spirv_module.insert(spirv_module.end(), function_.begin(), function_.end());
   if (get_work_group_id_fn_id_.id != 0) {
     // Capabilities precede extensions and imports in the SPIR-V module layout.
-    data.insert(data.begin() + 5, {(2u << 16) | spv::OpCapability, spv::CapabilityLinkage});
-    return link_shader_helpers(data);
+    spirv_module.insert(spirv_module.begin() + 5, {(2u << 16) | spv::OpCapability, spv::CapabilityLinkage});
+    return link_shader_helpers(spirv_module);
   }
-  return data;
+  return spirv_module;
 }
 
 void IRBuilder::init_pre_defs() {
