@@ -169,7 +169,7 @@ class TaskCodegen : public IRVisitor {
   spirv::Value ret_buffer_value_;
 
   std::shared_ptr<spirv::IRBuilder> ir_;  // spirv binary code builder
-  std::unique_ptr<spirv::SpirvOperations> op_;
+  std::unique_ptr<spirv::SpirvOperations> ops_;
   std::unordered_map<std::pair<BufferInfo, int>, spirv::Value, BufferInfoTypeTupleHasher> buffer_value_map_;
   std::unordered_map<std::pair<BufferInfo, int>, uint32_t, BufferInfoTypeTupleHasher> buffer_binding_map_;
   // All existing type views of each underlying storage buffer, in creation order. When a second or later view is minted

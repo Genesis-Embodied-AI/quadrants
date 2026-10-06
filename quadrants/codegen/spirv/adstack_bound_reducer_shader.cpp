@@ -139,7 +139,7 @@ std::vector<uint32_t> build_adstack_bound_reducer_spirv(Arch arch, const DeviceC
   }
 
   IRBuilder ir(arch, caps);
-  SpirvOperations op_(ir);
+  SpirvOperations ops_(ir);
   ir.init_header();
 
   // Storage-buffer bindings (set 0). Layout matches `AdStackBoundReducerParams` documentation in the header and the
@@ -157,11 +157,11 @@ std::vector<uint32_t> build_adstack_bound_reducer_spirv(Arch arch, const DeviceC
 
   Value main_func = ir.new_function();
   ir.start_function(main_func);
-  op_.set_work_group_size({static_cast<int>(kAdStackBoundReducerWorkgroupSize), 1, 1});
+  ops_.set_work_group_size({static_cast<int>(kAdStackBoundReducerWorkgroupSize), 1, 1});
 
   // Per-thread invocation index. The host launcher dispatches `ceil(length / kWorkgroupSize)` workgroups, so `gid` may
   // exceed `length` on the trailing workgroup; the early-return below handles that case.
-  Value gid_u32 = op_.get_global_invocation_id(0);
+  Value gid_u32 = ops_.get_global_invocation_id(0);
 
   // Load the parameter blob fields once at the top of `main`. spirv-opt CSEs the redundant param loads if they happen
   // multiple times within the same basic block, but keeping them explicit at the top makes the shader-side data-flow

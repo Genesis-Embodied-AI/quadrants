@@ -104,7 +104,7 @@ TaskCodegen::TaskCodegen(const Params &params)
 
   fill_snode_to_root();
   ir_ = std::make_shared<spirv::IRBuilder>(arch_, caps_);
-  op_ = std::make_unique<spirv::SpirvOperations>(*ir_);
+  ops_ = std::make_unique<spirv::SpirvOperations>(*ir_);
   // Workaround for Metal/MoltenVK shader compiler bug: the compiler
   // incorrectly hoists storage buffer loads out of loops (LICM), causing
   // stale reads when a buffer is written and re-read within the same loop.
@@ -281,7 +281,7 @@ void TaskCodegen::visit(Block *stmt) {
   // `get_ad_stack_heap_thread_base_float()` reads it and produces the same per-thread addressing the int heap uses.
   if (stmt == ad_stack_lca_block_float_ && ad_stack_lca_block_float_ != nullptr &&
       !task_attribs_.ad_stack.bound_expr.has_value()) {
-    spirv::Value invoc_id = op_->get_global_invocation_id(0);
+    spirv::Value invoc_id = ops_->get_global_invocation_id(0);
     ir_->store_variable(ad_stack_row_id_var_float_, invoc_id);
   } else if (stmt == ad_stack_lca_block_float_ && ad_stack_lca_block_float_ != nullptr) {
     if (ad_stack_row_counter_buffer_.id == 0) {
@@ -399,7 +399,7 @@ void TaskCodegen::visit(PrintStmt *stmt) {
       formats += sanitize_format_string(arg_str);
     }
   }
-  op_->call_debugprintf(formats, vals);
+  ops_->call_debugprintf(formats, vals);
 }
 
 void TaskCodegen::visit(ConstStmt *const_stmt) {
@@ -676,13 +676,13 @@ void TaskCodegen::visit(RandStmt *stmt) {
   spirv::Value val;
   spirv::Value global_tmp = get_buffer_value(BufferType::GlobalTmps, PrimitiveType::u32);
   if (stmt->element_type()->is_primitive(PrimitiveTypeID::i32)) {
-    val = op_->rand_i32(global_tmp);
+    val = ops_->rand_i32(global_tmp);
   } else if (stmt->element_type()->is_primitive(PrimitiveTypeID::u32)) {
-    val = op_->rand_u32(global_tmp);
+    val = ops_->rand_u32(global_tmp);
   } else if (stmt->element_type()->is_primitive(PrimitiveTypeID::f32)) {
-    val = op_->rand_f32(global_tmp);
+    val = ops_->rand_f32(global_tmp);
   } else if (stmt->element_type()->is_primitive(PrimitiveTypeID::f16)) {
-    auto highp_val = op_->rand_f32(global_tmp);
+    auto highp_val = ops_->rand_f32(global_tmp);
     val = ir_->cast(ir_->f16_type(), highp_val);
   } else {
     QD_ERROR("rand only support 32-bit type");
@@ -1211,7 +1211,7 @@ void TaskCodegen::generate_overflow_branch(const spirv::Value &cond_v, const std
       safe_tb += c;
     }
   }
-  op_->call_debugprintf(op + " overflow detected in " + safe_tb, {});
+  ops_->call_debugprintf(op + " overflow detected in " + safe_tb, {});
   ir_->make_inst(spv::OpBranch, merge_label);
   // merge label
   ir_->start_label(merge_label);
@@ -1511,9 +1511,9 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
                                                                   spv::MemorySemanticsAcquireReleaseMask));
     val = ir_->const_i32_zero_;
   } else if (stmt->func_name == "localInvocationId") {
-    val = ir_->cast(ir_->i32_type(), op_->get_local_invocation_id(0));
+    val = ir_->cast(ir_->i32_type(), ops_->get_local_invocation_id(0));
   } else if (stmt->func_name == "globalInvocationId") {
-    val = ir_->cast(ir_->i32_type(), op_->get_global_invocation_id(0));
+    val = ir_->cast(ir_->i32_type(), ops_->get_global_invocation_id(0));
   } else if (stmt->func_name == "workgroupMemoryBarrier") {
     ir_->make_inst(spv::OpMemoryBarrier, ir_->int_immediate_number(ir_->i32_type(), spv::ScopeWorkgroup),
                    ir_->int_immediate_number(ir_->i32_type(), spv::MemorySemanticsWorkgroupMemoryMask |
@@ -1551,7 +1551,7 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
                                                                   spv::MemorySemanticsAcquireReleaseMask));
     val = ir_->const_i32_zero_;
   } else if (stmt->func_name == "subgroupInvocationId") {
-    val = ir_->cast(ir_->i32_type(), op_->get_subgroup_invocation_id());
+    val = ir_->cast(ir_->i32_type(), ops_->get_subgroup_invocation_id());
   } else if (stmt->func_name == "subgroupBroadcast") {
     auto value = ir_->query_value(stmt->args[0]->raw_name());
     auto index = ir_->query_value(stmt->args[1]->raw_name());
@@ -1672,7 +1672,7 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
   spirv::Label merge_label;
 
   if (use_subgroup_reduction) {
-    spirv::Value subgroup_id = op_->get_subgroup_invocation_id();
+    spirv::Value subgroup_id = ops_->get_subgroup_invocation_id();
     spirv::Value cond = ir_->make_value(spv::OpIEqual, ir_->bool_type(), subgroup_id, ir_->const_i32_zero_);
 
     then_label = ir_->new_label();
@@ -1785,7 +1785,7 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
       QD_ASSERT_INFO(stmt->op_type != AtomicOpType::xchg,
                      "atomic_exchange on f16 (global memory) is not yet implemented for SPIR-V; would need a "
                      "width-mismatched uint-backed bitcast analogous to the f16 atomic-add CAS path");
-      val = op_->float_atomic(stmt->op_type, addr_ptr, data, dt);
+      val = ops_->float_atomic(stmt->op_type, addr_ptr, data, dt);
     }
   } else if (is_integral(dt)) {
     if (stmt->op_type == AtomicOpType::cas) {
@@ -1815,7 +1815,7 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
       // dest_is_ptr guard needed here too - at_buffer would crash on shared
       // integer arrays (same reason as the float branches above).
       addr_ptr = dest_is_ptr ? dest_val : at_buffer(stmt->dest, ir_->get_quadrants_uint_type(dt));
-      val = op_->integer_atomic(stmt->op_type, addr_ptr, data, dt);
+      val = ops_->integer_atomic(stmt->op_type, addr_ptr, data, dt);
       use_native_atomics = false;
     } else if (stmt->op_type == AtomicOpType::min) {
       op = is_signed(dt) ? spv::OpAtomicSMin : spv::OpAtomicUMin;
@@ -2041,7 +2041,7 @@ void TaskCodegen::emit_headers() {
   }
   */
   std::array<int, 3> group_size = {task_attribs_.advisory_num_threads_per_group, 1, 1};
-  op_->set_work_group_size(group_size);
+  ops_->set_work_group_size(group_size);
   std::vector<spirv::Value> buffers;
   if (caps_->get(DeviceCapability::spirv_version) > 0x10300) {
     buffers = shared_array_binds_;
@@ -2082,7 +2082,7 @@ void TaskCodegen::generate_serial_kernel(OffloadedStmt *stmt) {
   // every push site and the task-end read. See `ensure_any_overflow_signal_var` doc for details.
   ensure_any_overflow_signal_var();
   preload_ad_stack_metadata_strides();
-  spirv::Value cond = ir_->eq(op_->get_global_invocation_id(0),
+  spirv::Value cond = ir_->eq(ops_->get_global_invocation_id(0),
                               ir_->uint_immediate_number(ir_->u32_type(), 0));  // if (gl_GlobalInvocationID.x > 0)
   spirv::Label then_label = ir_->new_label();
   spirv::Label merge_label = ir_->new_label();
@@ -2243,7 +2243,7 @@ void TaskCodegen::generate_range_for_kernel(OffloadedStmt *stmt) {
   ir_->debug_name(spv::OpName, begin_expr_value, "begin_expr_value");
   ir_->debug_name(spv::OpName, total_elems, total_elems_name);
 
-  spirv::Value begin_ = ir_->add(ir_->cast(ir_->i32_type(), op_->get_global_invocation_id(0)), begin_expr_value);
+  spirv::Value begin_ = ir_->add(ir_->cast(ir_->i32_type(), ops_->get_global_invocation_id(0)), begin_expr_value);
   ir_->debug_name(spv::OpName, begin_, "begin_");
   spirv::Value end_ = ir_->add(total_elems, begin_expr_value);
   ir_->debug_name(spv::OpName, end_, "end_");
@@ -2255,7 +2255,7 @@ void TaskCodegen::generate_range_for_kernel(OffloadedStmt *stmt) {
   // HLSL & WGSL cross compilers do not support this builtin
   spirv::Value total_invocs = ir_->cast(
       ir_->i32_type(),
-      ir_->mul(op_->get_num_work_groups(0),
+      ir_->mul(ops_->get_num_work_groups(0),
                ir_->uint_immediate_number(ir_->u32_type(), task_attribs_.advisory_num_threads_per_group, true)));
   /*
   const int group_x = (task_attribs_.advisory_total_num_threads +
@@ -2328,7 +2328,7 @@ void TaskCodegen::generate_struct_for_kernel(OffloadedStmt *stmt) {
   auto listgen_count_ptr = ir_->struct_array_access(ir_->u32_type(), listgen_buffer, ir_->const_i32_zero_);
   auto listgen_count = ir_->load_variable(listgen_count_ptr, ir_->u32_type());
 
-  auto invoc_index = op_->get_global_invocation_id(0);
+  auto invoc_index = ops_->get_global_invocation_id(0);
 
   spirv::Label loop_head = ir_->new_label();
   spirv::Label loop_body = ir_->new_label();
@@ -2358,7 +2358,7 @@ void TaskCodegen::generate_struct_for_kernel(OffloadedStmt *stmt) {
     // continue
     spirv::Value total_invocs = ir_->cast(
         ir_->u32_type(),
-        ir_->mul(op_->get_num_work_groups(0),
+        ir_->mul(ops_->get_num_work_groups(0),
                  ir_->uint_immediate_number(ir_->u32_type(), task_attribs_.advisory_num_threads_per_group, true)));
     auto next_index = ir_->add(loop_index, total_invocs);
     ir_->store_variable(loop_index_var, next_index);
@@ -2820,7 +2820,7 @@ spirv::Value TaskCodegen::get_ad_stack_heap_thread_base_int() {
   // int strides typically stay in the tens of i32 entries, two orders of magnitude below the float strides whose
   // worst-case footprint motivated this change). The same u64 widening rule applies for the same wrap-aliasing reason
   // as the float counterpart.
-  spirv::Value row_id = op_->get_global_invocation_id(0);
+  spirv::Value row_id = ops_->get_global_invocation_id(0);
   spirv::Value stride_u32 = get_ad_stack_metadata_stride_int();
   if (caps_->get(DeviceCapability::spirv_has_int64)) {
     spirv::Value row_id_u64 = ir_->make_value(spv::OpUConvert, ir_->u64_type(), row_id);

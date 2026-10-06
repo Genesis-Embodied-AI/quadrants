@@ -17,7 +17,7 @@ Value load_buf_u32(IRBuilder &ir, Value buffer, Value word_idx) {
 
 std::vector<uint32_t> build_checkpoint_yield_check_spirv(Arch arch, const DeviceCapabilityConfig *caps) {
   IRBuilder ir(arch, caps);
-  SpirvOperations op_(ir);
+  SpirvOperations ops_(ir);
   ir.init_header();
 
   // Bindings: see header doc.
@@ -27,7 +27,7 @@ std::vector<uint32_t> build_checkpoint_yield_check_spirv(Arch arch, const Device
 
   Value main_func = ir.new_function();
   ir.start_function(main_func);
-  op_.set_work_group_size({1, 1, 1});
+  ops_.set_work_group_size({1, 1, 1});
 
   // Read flag once. The CUDA-native yield-check uses a non-atomic `*yield_on` load because the checkpoint body's writes
   // were already serialised by the graph node dependency; on Vulkan / Metal the cmdlist's between-dispatch
