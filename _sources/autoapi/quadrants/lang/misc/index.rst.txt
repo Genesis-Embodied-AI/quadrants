@@ -51,6 +51,7 @@ Functions
    quadrants.lang.misc.assume_in_range
    quadrants.lang.misc.loop_config
    quadrants.lang.misc.graph_do_while
+   quadrants.lang.misc.block_idx
    quadrants.lang.misc.global_thread_idx
    quadrants.lang.misc.mesh_patch_idx
    quadrants.lang.misc.is_extension_enabled
@@ -380,6 +381,11 @@ Module Contents
 
    This function should not be called directly at runtime; it is recognized and transformed during AST compilation.
    Requires ``@qd.kernel(graph=True)``.
+
+
+.. py:function:: block_idx()
+
+   Return the current CPU scheduling block or GPU thread-block index.
 
 
 .. py:function:: global_thread_idx()

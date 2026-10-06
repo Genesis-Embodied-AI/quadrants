@@ -8,6 +8,16 @@ A top-level for-loop can be encapsulated in one or more of the following, and st
 
 Note that adding a non-static `if` over the top of a for-loop will lead to the for-loop NOT being parallelized.
 
+## Inspecting execution with qd.block_idx()
+
+`qd.block_idx()` returns the current block index as a signed 32-bit integer. Call it inside a kernel or a function called by a kernel. It works on CPU, CUDA, and AMDGPU. Other backends raise an unsupported-platform error.
+
+On CPU, a block is a group of iterations executed as one runtime task. A task is work assigned to a worker thread. Block indices start at zero for each parallel loop execution. They identify blocks, not worker threads or execution order. A worker can execute several blocks.
+
+On CUDA and AMDGPU, it returns the hardware block index along the x dimension. A block is a group of GPU threads. CPU and GPU iteration assignments can differ for the same kernel.
+
+Top-level serial execution returns `0`. Nested serial loops and called functions retain the enclosing block's index. Reading an index does not synchronize threads.
+
 ## Multi-dimensional parallelization with qd.ndrange
 
 Since only top-level for loops are parallelized, nested for loops will run sequentially on each thread. To parallelize over multiple dimensions, use `qd.ndrange()` to flatten them into a single top-level loop:
@@ -62,7 +72,7 @@ def k():
 
 The yielded loop variables (`i`, `j`, ...) are still bound to canonical axes 0, 1, ... — only the visit order changes. `axes=None` (the default) and the identity permutation `(0, 1, ..., N-1)` are equivalent and reproduce the default last-argument-innermost order. Mismatched length and non-permutation values are rejected up front with `qd.QuadrantsSyntaxError`; non-integer entries with `qd.QuadrantsTypeError`.
 
-`axes=` is independent of what's in the loop body: it controls the iteration order regardless of whether the body touches a `qd.field`, a `qd.ndarray`, a `qd.tensor`, a `qd.Vector` / `qd.Matrix` variant, or no tensor at all.
+`axes=` is independent of what's in the loop body: it controls the iteration order regardless of whether the body touches a `qd.field`, a `qd.ndarray`, a [`qd.tensor`](tensor.md), a `qd.Vector` / [`qd.Matrix`](matrix_vector.md) variant, or no tensor at all.
 
 `axes=` is supported by both the plain and `qd.grouped` forms:
 
@@ -105,7 +115,7 @@ Quadrants gives access to shared memory, using `qd.simt.block.SharedArray()`, bu
 
 ## Thread synchronization
 
-Typically, Quadrants kernels use `atomic_` operations for synchronization. This is relatively easy and intuitive, and it works perfectly with global memory. The main downside is that `atomic` operations are slow, because they involve both global memory and thread synchronization, both of which are intrinsically slow, and combining them is slower still.
+Typically, Quadrants kernels use `atomic_` operations for synchronization. An atomic operation reads and updates a memory location as one indivisible operation, so concurrent updates to that location do not overwrite each other. This is relatively easy and intuitive, and it works perfectly with global memory. The main downside is that `atomic` operations are slow, because they involve both global memory and thread synchronization, both of which are intrinsically slow, and combining them is slower still.
 
 When using shared memory, there are various barriers and fences that can be used, to ensure that writes from all threads so far have completed, and now threads are free to read from memory written by other threads. The block-level primitives (`qd.simt.block.sync`, `qd.simt.block.mem_fence`, the predicate-reducing barriers, and `SharedArray` itself) are documented in [block](block.md), which also discusses the important distinction between a thread-converging barrier and a memory-only fence.
 
