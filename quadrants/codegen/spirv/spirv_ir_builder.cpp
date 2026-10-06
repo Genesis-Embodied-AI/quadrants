@@ -10,10 +10,10 @@ namespace quadrants::lang {
 
 namespace spirv {
 
-// Link the kernel with the supplied compiled GLSL helper libraries, resolving imported functions to their implementations.
-// Return the combined SPIR-V module, or report an error if linking fails.
+// Link the kernel with the supplied compiled GLSL helper libraries, resolving imported functions to their
+// implementations. Return the combined SPIR-V module, or report an error if linking fails.
 std::vector<uint32_t> IRBuilder::link_shader_helpers(const std::vector<uint32_t> &kernel,
-                                          std::vector<std::vector<uint32_t>> libraries) {
+                                                     std::vector<std::vector<uint32_t>> libraries) {
   // These helper libraries use Input and Function pointers. Match their addressing model to the kernel.
   // Any required physical-storage capability and extension must already be declared by the kernel.
   uint32_t addressing_model = spv::AddressingModelLogical;
@@ -45,7 +45,6 @@ std::vector<uint32_t> IRBuilder::link_shader_helpers(const std::vector<uint32_t>
   QD_ERROR_IF(result != SPV_SUCCESS, "Failed to link GLSL shader helpers: {}", error);
   return linked;
 }
-
 
 using cap = DeviceCapability;
 

@@ -508,7 +508,7 @@ class IRBuilder {
  private:
   // Link the kernel with the supplied GLSL libraries and return the combined SPIR-V module.
   static std::vector<uint32_t> link_shader_helpers(const std::vector<uint32_t> &kernel,
-                                                  std::vector<std::vector<uint32_t>> libraries);
+                                                   std::vector<std::vector<uint32_t>> libraries);
 
   Value get_const(const SType &dtype, const uint64_t *pvalue, bool cache);
   SType declare_primitive_type(DataType dt);
