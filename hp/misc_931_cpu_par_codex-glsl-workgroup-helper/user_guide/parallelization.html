@@ -514,7 +514,7 @@
 <p>Reducing the number and complexity kernel parameters reduces the kernel launch latency. In addition:</p>
 <ul class="simple">
 <li><p>field args incur less launch latency than ndarray args</p></li>
-<li><p>global fields incur no parameter-related launch latency</p></li>
+<li><p><a class="reference internal" href="tensor_types.html"><span class="std std-doc">global fields</span></a>, accessed through global variables rather than passed as kernel arguments, incur no parameter-related launch latency</p></li>
 </ul>
 <p>For the underlying execution model - what a launch actually involves, where the latency comes from, and when reducing it helps - see <a class="reference internal" href="performance.html"><span class="std std-doc">Performance</span></a>.</p>
 </section>
