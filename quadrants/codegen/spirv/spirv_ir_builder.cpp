@@ -197,10 +197,10 @@ std::vector<uint32_t> IRBuilder::finalize() {
   data.insert(data.end(), names_.begin(), names_.end());
   data.insert(data.end(), decorate_.begin(), decorate_.end());
   data.insert(data.end(), global_.begin(), global_.end());
-  data.insert(data.end(), imported_functions_.begin(), imported_functions_.end());
+  data.insert(data.end(), imported_glsl_function_declarations_.begin(), imported_glsl_function_declarations_.end());
   data.insert(data.end(), func_header_.begin(), func_header_.end());
   data.insert(data.end(), function_.begin(), function_.end());
-  if (get_work_group_id_fn_.id != 0) {
+  if (get_work_group_id_fn_id_.id != 0) {
     // Capabilities precede extensions and imports in the SPIR-V module layout.
     data.insert(data.begin() + 5, {(2u << 16) | spv::OpCapability, spv::CapabilityLinkage});
     return link_shader_helpers(data);
@@ -729,7 +729,7 @@ Value IRBuilder::get_num_work_groups(uint32_t dim_index) {
 
 Value IRBuilder::get_work_group_id(uint32_t dim_index) {
   QD_ASSERT(dim_index < 3);
-  return call_glsl_u32(get_work_group_id_fn_, "get_work_group_id", dim_index);
+  return call_glsl_u32(get_work_group_id_fn_id_, "get_work_group_id", dim_index);
 }
 
 Value IRBuilder::get_local_invocation_id(uint32_t dim_index) {

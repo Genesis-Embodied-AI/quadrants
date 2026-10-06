@@ -602,8 +602,8 @@ class IRBuilder {
   Value gl_work_group_size_;
   Value subgroup_local_invocation_id_;
 
-  // Cached declarations of imported GLSL functions.
-  Value get_work_group_id_fn_;
+  // Cached IDs and type information for imported GLSL functions.
+  Value get_work_group_id_fn_id_;
 
   // Random function and variables
   bool init_rand_{false};
@@ -642,8 +642,8 @@ class IRBuilder {
   std::vector<uint32_t> decorate_;
   // Global segment: types, variables, types
   std::vector<uint32_t> global_;
-  // Imported function declarations precede function definitions.
-  std::vector<uint32_t> imported_functions_;
+  // Imported GLSL function declarations.
+  std::vector<uint32_t> imported_glsl_function_declarations_;
   // Function header segment
   std::vector<uint32_t> func_header_;
   // Main Function segment
