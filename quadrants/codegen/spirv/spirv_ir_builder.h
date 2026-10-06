@@ -246,13 +246,15 @@ class IRBuilder {
     return ib_.begin(op).add_seq(std::forward<Args>(args)...).commit(&function_);
   }
 
-  // Emit an instruction in the function entry block, before the main body instructions.
+  // Place an instruction at the start of the generated function, before its main body.
+  // Used to initialize random-number state before the body uses it.
   template <typename... Args>
   Instr make_function_header_inst(spv::Op op, Args &&...args) {
     return ib_.begin(op).add_seq(std::forward<Args>(args)...).commit(&func_header_);
   }
 
-  // Register an input variable for the kernel entry-point interface.
+  // Record an input, such as the global thread ID, for the kernel's SPIR-V entry-point declaration.
+  // SPIR-V requires that declaration to list the input variables the kernel uses.
   void register_entry_point_input(Value input) {
     entry_point_inputs_.push_back(input);
   }
