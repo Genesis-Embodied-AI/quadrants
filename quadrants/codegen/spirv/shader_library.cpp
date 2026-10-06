@@ -10,6 +10,8 @@
 
 namespace quadrants::lang::spirv {
 
+// Emit a call to a named GLSL function taking and returning a uint32, and return the value representing its result.
+// Declare the function as an import on its first use and cache that declaration in function.
 Value IRBuilder::call_glsl_u32(Value &function, const char *name, uint32_t argument_value) {
   if (function.id == 0) {
     auto parameter_type = get_pointer_type(t_uint32_, spv::StorageClassFunction);
@@ -29,6 +31,8 @@ Value IRBuilder::call_glsl_u32(Value &function, const char *name, uint32_t argum
   return make_value(spv::OpFunctionCall, t_uint32_, function, argument);
 }
 
+// Link the kernel with the compiled GLSL helper library, resolving imported functions to their implementations.
+// Return the combined SPIR-V module, or report an error if linking fails.
 std::vector<uint32_t> link_shader_helpers(const std::vector<uint32_t> &kernel) {
   std::vector<uint32_t> library(std::begin(workgroup_helper_spv), std::end(workgroup_helper_spv));
   // The helper only uses Input and Function pointers. Match the caller's module addressing model; any required
