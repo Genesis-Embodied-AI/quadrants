@@ -210,7 +210,7 @@ std::vector<uint32_t> IRBuilder::finalize() {
   if (get_work_group_id_fn_id_.id != 0) {
     spirv_module.insert(spirv_module.end(), {(2u << 16) | spv::OpCapability, spv::CapabilityLinkage});
   }
-  spirv_module.insert(spirv_module.end(), capabilities_extensions_imports_.begin(), 
+  spirv_module.insert(spirv_module.end(), capabilities_extensions_imports_.begin(),
                       capabilities_extensions_imports_.end());
 
   // 3. Memory model, entry points, and execution modes.
