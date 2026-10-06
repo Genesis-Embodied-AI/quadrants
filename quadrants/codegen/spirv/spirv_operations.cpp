@@ -24,7 +24,7 @@ Value SpirvOperations::get_num_work_groups(uint32_t dim_index) {
   }
   SType pint_type = ir_.get_pointer_type(ir_.u32_type(), spv::StorageClassInput);
   Value ptr = ir_.make_value(spv::OpAccessChain, pint_type, gl_num_work_groups_,
-                               ir_.uint_immediate_number(ir_.u32_type(), static_cast<uint64_t>(dim_index)));
+                             ir_.uint_immediate_number(ir_.u32_type(), static_cast<uint64_t>(dim_index)));
 
   return ir_.make_value(spv::OpLoad, ir_.u32_type(), ptr);
 }
@@ -39,7 +39,7 @@ Value SpirvOperations::get_local_invocation_id(uint32_t dim_index) {
   }
   SType pint_type = ir_.get_pointer_type(ir_.u32_type(), spv::StorageClassInput);
   Value ptr = ir_.make_value(spv::OpAccessChain, pint_type, gl_local_invocation_id_,
-                               ir_.uint_immediate_number(ir_.u32_type(), static_cast<uint64_t>(dim_index)));
+                             ir_.uint_immediate_number(ir_.u32_type(), static_cast<uint64_t>(dim_index)));
 
   return ir_.make_value(spv::OpLoad, ir_.u32_type(), ptr);
 }
@@ -54,7 +54,7 @@ Value SpirvOperations::get_global_invocation_id(uint32_t dim_index) {
   }
   SType pint_type = ir_.get_pointer_type(ir_.u32_type(), spv::StorageClassInput);
   Value ptr = ir_.make_value(spv::OpAccessChain, pint_type, gl_global_invocation_id_,
-                               ir_.uint_immediate_number(ir_.u32_type(), static_cast<uint64_t>(dim_index)));
+                             ir_.uint_immediate_number(ir_.u32_type(), static_cast<uint64_t>(dim_index)));
 
   return ir_.make_value(spv::OpLoad, ir_.u32_type(), ptr);
 }
@@ -65,7 +65,7 @@ Value SpirvOperations::get_subgroup_invocation_id() {
     subgroup_local_invocation_id_ = ir_.new_value(ptr_type, ValueKind::kVariablePtr);
     ir_.declare_global(spv::OpVariable, ptr_type, subgroup_local_invocation_id_, spv::StorageClassInput);
     ir_.decorate(spv::OpDecorate, subgroup_local_invocation_id_, spv::DecorationBuiltIn,
-                   spv::BuiltInSubgroupLocalInvocationId);
+                 spv::BuiltInSubgroupLocalInvocationId);
     ir_.global_values.push_back(subgroup_local_invocation_id_);
   }
 
@@ -101,9 +101,9 @@ Value SpirvOperations::integer_atomic(AtomicOpType op_type, Value addr_ptr, Valu
 }
 
 Value SpirvOperations::atomic_operation(Value addr_ptr,
-                                  Value data,
-                                  std::function<Value(Value, Value)> op,
-                                  const DataType &dt) {
+                                        Value data,
+                                        std::function<Value(Value, Value)> op,
+                                        const DataType &dt) {
   SType out_type = ir_.get_primitive_type(dt);
   // Device-buffer pointers are uint-typed (from at_buffer), so CAS uses uint.
   // Workgroup (shared) pointers keep their original type (e.g. i32). Using uint
@@ -134,8 +134,8 @@ Value SpirvOperations::atomic_operation(Value addr_ptr,
     // emulation loop to re-read (and see the post-CAS value), breaking the
     // compare-and-swap logic on Metal.
     Value old_val = ir_.make_value(spv::OpAtomicLoad, res_type, addr_ptr,
-                               /*scope=*/ir_.const_i32_one_,
-                               /*semantics=*/ir_.const_i32_zero_);
+                                   /*scope=*/ir_.const_i32_one_,
+                                   /*semantics=*/ir_.const_i32_zero_);
     // Bitcast uint<->float for the operation. Skip when types already match
     // (integer workgroup path where res_type == out_type).
     Value old_data_value = (out_type.id != res_type.id) ? ir_.make_value(spv::OpBitcast, out_type, old_val) : old_val;
@@ -151,8 +151,8 @@ Value SpirvOperations::atomic_operation(Value addr_ptr,
     ir_.make_inst(spv::OpMemoryBarrier, ir_.const_i32_one_, semantics);
     */
     Value loaded = ir_.make_value(spv::OpAtomicCompareExchange, res_type, addr_ptr,
-                              /*scope=*/ir_.const_i32_one_, /*semantics if equal=*/ir_.const_i32_zero_,
-                              /*semantics if unequal=*/ir_.const_i32_zero_, new_val, old_val);
+                                  /*scope=*/ir_.const_i32_one_, /*semantics if equal=*/ir_.const_i32_zero_,
+                                  /*semantics if unequal=*/ir_.const_i32_zero_, new_val, old_val);
     // bool ok = (loaded == old);
     Value ok = ir_.make_value(spv::OpIEqual, ir_.bool_type(), loaded, old_val);
     // int ret_val_int = loaded;
@@ -284,7 +284,8 @@ void SpirvOperations::init_random_function(Value global_tmp_) {
   // (in generate_serial_kernel/generate_range_for_kernel
   SType pint_type = ir_.get_pointer_type(ir_.u32_type(), spv::StorageClassInput);
   Value tmp0 = ir_.new_value(pint_type, ValueKind::kVariablePtr);
-  ir_.make_function_header_inst(spv::OpAccessChain, pint_type, tmp0, gl_global_invocation_id_, ir_.uint_immediate_number(ir_.u32_type(), 0));
+  ir_.make_function_header_inst(spv::OpAccessChain, pint_type, tmp0, gl_global_invocation_id_,
+                                ir_.uint_immediate_number(ir_.u32_type(), 0));
   Value tmp1 = load_var(tmp0, ir_.u32_type());
   Value tmp2_ = load_var(rand_gtmp_, ir_.u32_type());
   Value tmp2 = ir_.new_value(ir_.u32_type(), ValueKind::kNormal);
@@ -312,8 +313,8 @@ void SpirvOperations::init_random_function(Value global_tmp_) {
   if (use_atomic_increment) {
     Value tmp9 = ir_.new_value(ir_.u32_type(), ValueKind::kNormal);
     ir_.make_function_header_inst(spv::Op::OpAtomicIIncrement, ir_.u32_type(), tmp9, rand_gtmp_,
-                 /*scope_id*/ ir_.const_i32_one_,
-                 /*semantics*/ ir_.const_i32_zero_);
+                                  /*scope_id*/ ir_.const_i32_one_,
+                                  /*semantics*/ ir_.const_i32_zero_);
   } else {
     // Yes, this is not an atomic operation, but just fine since no matter
     // how RAND_STATE changes, `gl_GlobalInvocationID.x` can still help
