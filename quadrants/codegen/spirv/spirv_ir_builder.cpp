@@ -194,25 +194,47 @@ std::vector<uint32_t> IRBuilder::finalize() {
   // 5. Types, constants, and global variables.
   // 6. Function declarations without bodies, then function definitions with bodies.
   std::vector<uint32_t> spirv_module;
-  // set bound
+
+  // Header.
   const int bound_loc = 3;
   header_[bound_loc] = id_counter_;
   spirv_module.insert(spirv_module.end(), header_.begin(), header_.begin() + 5);
+
+  // Linkage capability.
   if (get_work_group_id_fn_id_.id != 0) {
-    // Capabilities precede extensions and imports in the SPIR-V module layout.
     spirv_module.insert(spirv_module.end(), {(2u << 16) | spv::OpCapability, spv::CapabilityLinkage});
   }
+
+  // Remaining capabilities, extensions, and extended-instruction-set imports.
   spirv_module.insert(spirv_module.end(), header_.begin() + 5, header_.end());
+
+  // Memory model, entry points, and their execution modes.
   spirv_module.insert(spirv_module.end(), entry_.begin(), entry_.end());
+
+  // Additional execution modes.
   spirv_module.insert(spirv_module.end(), exec_mode_.begin(), exec_mode_.end());
+
+  // Debug strings and source information.
   spirv_module.insert(spirv_module.end(), strings_.begin(), strings_.end());
+
+  // Debug names.
   spirv_module.insert(spirv_module.end(), names_.begin(), names_.end());
+
+  // Annotations.
   spirv_module.insert(spirv_module.end(), decorate_.begin(), decorate_.end());
+
+  // Types, constants, and global variables.
   spirv_module.insert(spirv_module.end(), global_.begin(), global_.end());
+
+  // Imported function declarations.
   spirv_module.insert(spirv_module.end(), imported_glsl_function_declarations_.begin(),
                       imported_glsl_function_declarations_.end());
+
+  // Function definitions.
   spirv_module.insert(spirv_module.end(), func_header_.begin(), func_header_.end());
   spirv_module.insert(spirv_module.end(), function_.begin(), function_.end());
+
+  // Link the completed module.
   if (get_work_group_id_fn_id_.id != 0) {
     return link_shader_helpers(spirv_module);
   }
