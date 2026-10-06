@@ -17,7 +17,7 @@ We test the following systems in our CI servers:
 
 ### GPUs
 
-- CUDA GPUs, `sm_60` (Pascal) through `sm_120` (Blackwell / Thor) — i.e. `>=sm_60` and `<=sm_120`
+- NVIDIA GPUs with compute capability 6.0 (`sm_60`, Pascal) through 12.0 (`sm_120`, Blackwell / Thor). Compute capability identifies the GPU features supported by an NVIDIA architecture; `sm_60` and `sm_120` are CUDA's codes for these versions.
 - Metal GPUs
 - AMD GPUs
 - Vulkan-compatible GPUs (e.g. Intel Arc)
@@ -26,7 +26,7 @@ If you have a newer NVIDIA GPU (above `sm_120`), please [open an issue on the Qu
 
 ### Backend / OS matrix
 
-Which backends are available on each supported platform. `qd.cpu` and `qd.vulkan` run on every OS; the other GPU backends are platform-specific because they wrap vendor drivers (CUDA on NVIDIA, ROCm on AMD, Metal on Apple).
+Which backends are available on each supported platform. `qd.cpu` and `qd.vulkan` run on every OS; the other GPU backends are platform-specific because they wrap vendor drivers: CUDA on NVIDIA, ROCm (AMD's GPU software platform) on AMD, and Metal on Apple.
 
 | OS \ backend | `qd.cpu` | `qd.cuda` | `qd.amdgpu` | `qd.metal` | `qd.vulkan` |
 | --- | --- | --- | --- | --- | --- |
@@ -38,7 +38,7 @@ Which backends are available on each supported platform. `qd.cpu` and `qd.vulkan
 
 Notes:
 - `qd.cuda` requires an NVIDIA driver and CUDA runtime installed on the host. NVIDIA ships CUDA for Linux ARM64 and Windows ARM64, but quadrants does not support them yet.
-- `qd.amdgpu` currently wires up the Linux x64 ROCm path only. AMD's GPU toolchain also ships on Windows and on some Linux ARM64 targets, but quadrants does not support them yet. On AMD GPUs, a subgroup is always 64 threads wide, so [`qd.simt.subgroup`](./subgroup.md) primitives operate over 64 lanes on both CDNA (Instinct) and RDNA (Radeon) hardware.
+- `qd.amdgpu` requires HIP 6.0 or newer (HIP is AMD's GPU programming interface) and currently wires up the Linux x64 ROCm path only. AMD's GPU toolchain also ships on Windows and on some Linux ARM64 targets, but quadrants does not support them yet. On AMD GPUs, a subgroup is always 64 threads wide, so [`qd.simt.subgroup`](./subgroup.md) primitives operate over 64 lanes on both CDNA (Instinct) and RDNA (Radeon) hardware.
 - `qd.metal` is only available on Apple hardware and is the recommended GPU backend there.
 - `qd.vulkan` on macOS bundles a copy of MoltenVK (a Vulkan-to-Metal translation layer) inside the wheel, so no separate install is required.
 
