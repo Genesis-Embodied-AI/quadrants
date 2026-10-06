@@ -546,6 +546,7 @@ class IRBuilder {
   SType t_v4_fp32_;
   SType t_v3_fp32_;
   SType t_v2_fp32_;
+  // Cached declarations of imported GLSL functions.
   Value get_work_group_id_fn_;
   // map from value to its pointer type
   std::map<std::pair<uint32_t, spv::StorageClass>, SType> pointer_type_tbl_;
