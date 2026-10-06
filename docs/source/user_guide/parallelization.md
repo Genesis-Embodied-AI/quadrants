@@ -14,7 +14,7 @@ Note that adding a non-static `if` over the top of a for-loop will lead to the f
 
 On CPU, a block is a group of iterations executed as one runtime task. A task is work assigned to a worker thread. Block indices start at zero for each parallel loop execution. They identify blocks, not worker threads or execution order. A worker can execute several blocks.
 
-Both existing CPU scheduling modes support this function:
+The `make_cpu_multithreading_loop` parameter of `qd.init()` selects the CPU scheduling mode. Both modes support `qd.block_idx()`:
 
 - With `make_cpu_multithreading_loop=True`, the default, it identifies a compiler-generated block of original iterations.
 - With `make_cpu_multithreading_loop=False`, it identifies a fixed-size group of iterations. `qd.loop_config(block_dim=...)` controls that group's size. Its default is 32.
@@ -138,7 +138,7 @@ Quadrants gives access to shared memory, using `qd.simt.block.SharedArray()`, bu
 
 ## Thread synchronization
 
-Typically, Quadrants kernels use `atomic_` operations for synchronization. This is relatively easy and intuitive, and it works perfectly with global memory. The main downside is that `atomic` operations are slow, because they involve both global memory and thread synchronization, both of which are intrinsically slow, and combining them is slower still.
+Typically, Quadrants kernels use `atomic_` operations for synchronization. An atomic operation reads and updates a memory location as one indivisible operation, so concurrent updates to that location do not overwrite each other. This is relatively easy and intuitive, and it works perfectly with global memory. The main downside is that `atomic` operations are slow, because they involve both global memory and thread synchronization, both of which are intrinsically slow, and combining them is slower still.
 
 When using shared memory, there are various barriers and fences that can be used, to ensure that writes from all threads so far have completed, and now threads are free to read from memory written by other threads. The block-level primitives (`qd.simt.block.sync`, `qd.simt.block.mem_fence`, the predicate-reducing barriers, and `SharedArray` itself) are documented in [block](block.md), which also discusses the important distinction between a thread-converging barrier and a memory-only fence.
 
