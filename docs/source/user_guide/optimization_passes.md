@@ -79,6 +79,8 @@ All of these are fields of `CompileConfig` (the Quadrants compiler-configuration
 
 For everyday use, leave them at their defaults - they are the best-supported and most reliable configuration. The most common deliberate change is `cfg_optimization=False` when iterating on a kernel whose compile time is in your way.
 
+The CPU-specific `make_cpu_multithreaded_range_for` transform groups original iterations into compiled inner loops. It is enabled by `cpu_work_scheduling=qd.CPUWorkScheduling.PER_WORKER`, the default. See [CPU parallelization](parallelization.md#cpu-parallelization) for its scheduling behavior, configuration, and comparison with the untransformed path.
+
 ## Inspecting what the compiler did
 
 These environment variables dump the IR so you can see the effect of each pass. Files are written to the directory set by the `debug_dump_path` option in `qd.init(...)` (default `/tmp/ir/`):

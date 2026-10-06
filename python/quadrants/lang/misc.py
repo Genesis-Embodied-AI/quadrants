@@ -10,6 +10,7 @@ from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import Extension
 from quadrants._lib.utils import get_os_name
 from quadrants.lang import impl, util
+from quadrants.lang._cpu_scheduling import configure_cpu_scheduling
 from quadrants.lang.checkpoint import checkpoint
 from quadrants.lang.expr import Expr
 from quadrants.lang.graph_parallel import graph_parallel, graph_parallel_context
@@ -386,6 +387,10 @@ def init(
             https://github.com/Genesis-Embodied-AI/quadrants/blob/master/quadrants/program/compile_config.h.
 
             * ``cpu_max_num_threads`` (int): Sets the number of threads used by the CPU thread pool.
+            * ``cpu_work_scheduling`` (CPUWorkScheduling): CPU scheduling mode (default: PER_WORKER).
+            * ``cpu_fixed_block_dim`` (int): Iterations per fixed-size CPU task (default: 32, must be >= 1).
+            * ``cpu_per_worker_min_block_dim`` (int): Minimum CPU range-for block size (default: 512, must be >= 1).
+              Reduce it for small loops with expensive iterations. Only used with ``CPUWorkScheduling.PER_WORKER``.
             * ``debug`` (bool): Enables the debug mode, under which Quadrants does a few more things like boundary checks.
             * ``print_ir`` (bool): Prints the CHI IR of the Quadrants kernels.
             *``offline_cache`` (bool): Enables offline cache of the compiled kernels. Default to True. When this is enabled Quadrants will cache compiled kernel on your local disk to accelerate future calls.
@@ -458,9 +463,11 @@ def init(
     env_spec.add("print_full_traceback")
     env_spec.add("unrolling_limit")
 
+    configure_cpu_scheduling(kwargs, cfg)
+
     # compiler configurations (qd.cfg):
     for key in dir(cfg):
-        if key in ["arch", "default_fp", "default_ip"]:
+        if key in ["arch", "default_fp", "default_ip", "cpu_work_scheduling", "cpu_fixed_block_dim"]:
             continue
         _cast = type(getattr(cfg, key))
         if _cast is bool:
@@ -771,6 +778,18 @@ def graph_do_while(condition) -> bool:
     return bool(condition)
 
 
+@util.quadrants_scope
+def block_idx():
+    """Return the current CPU scheduling block or GPU thread-block index.
+
+    On CPU, indices start at zero for each parallel loop execution, and code
+    outside a scheduled block returns 0. Both CPU scheduling modes are supported.
+    On GPUs, this returns the hardware block index, which may process multiple
+    groups of iterations. Nested serial loops retain their enclosing block index.
+    """
+    return impl.call_internal("global_block_idx")
+
+
 def global_thread_idx():
     """Returns the global thread id of this running thread,
     only available for cpu and cuda backends.
@@ -914,6 +933,7 @@ __all__ = [
     "graph_parallel",
     "loop_config",
     "global_thread_idx",
+    "block_idx",
     "assume_in_range",
     "block_local",
     "cache_read_only",
