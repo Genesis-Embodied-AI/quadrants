@@ -10,7 +10,7 @@
 
 namespace quadrants::lang::spirv {
 
-Value IRBuilder::call_glsl_u32_helper(Value &function, const char *name, uint32_t argument_value) {
+Value IRBuilder::call_glsl_u32(Value &function, const char *name, uint32_t argument_value) {
   if (function.id == 0) {
     auto parameter_type = get_pointer_type(t_uint32_, spv::StorageClassFunction);
     SType function_type;
