@@ -16,6 +16,9 @@ std::vector<uint32_t> IRBuilder::link_shader_helpers(const std::vector<uint32_t>
                                                      std::vector<std::vector<uint32_t>> libraries) {
   // These helper libraries use Input and Function pointers. Match their addressing model to the kernel.
   // Any required physical-storage capability and extension must already be declared by the kernel.
+  // OpMemoryModel has two operands: 0 is the addressing model (how pointers are represented), and 1 is the memory
+  // model (rules for memory operations). For example, OpMemoryModel Logical GLSL450 uses Logical addressing and
+  // GLSL450 memory rules. Read and update operand 0 to match the libraries' addressing model to the kernel's.
   uint32_t addressing_model = get_instruction_operand(kernel, spv::OpMemoryModel, /* operand_index= */ 0,
                                                       /* default_value= */ spv::AddressingModelLogical);
   for (auto &library : libraries) {
