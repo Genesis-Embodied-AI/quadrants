@@ -808,7 +808,10 @@ Value IRBuilder::call_glsl_u32_to_u32(Value &ref_to_imported_function_declaratio
     decorate(spv::OpDecorate, ref_to_imported_function_declaration, spv::DecorationLinkageAttributes, name,
              spv::LinkageTypeImport);
     ib_.begin(spv::OpFunction)
-        .add_seq(t_uint32_, ref_to_imported_function_declaration, 0, ref_to_function_type_declaration)
+        .add_seq(/* return_type= */ t_uint32_,
+                 /* result_id= */ ref_to_imported_function_declaration,
+                 /* function_control= */ 0,
+                 /* function_type= */ ref_to_function_type_declaration)
         .commit(&imported_glsl_function_declarations_);
     Value parameter = new_value(p_uint32_type, ValueKind::kVariablePtr);
     ib_.begin(spv::OpFunctionParameter).add_seq(p_uint32_type, parameter).commit(&imported_glsl_function_declarations_);
