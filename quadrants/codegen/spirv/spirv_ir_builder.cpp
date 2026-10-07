@@ -17,18 +17,14 @@ std::vector<uint32_t> IRBuilder::link_shader_helpers(const std::vector<uint32_t>
   // These helper libraries use Input and Function pointers. Match their addressing model to the kernel.
   // Any required physical-storage capability and extension must already be declared by the kernel.
   uint32_t addressing_model = spv::AddressingModelLogical;
-  for (size_t i = 5; i < kernel.size(); i += kernel[i] >> 16) {
-    if ((kernel[i] & 0xffff) == spv::OpMemoryModel) {
-      addressing_model = kernel[i + 1];
-      break;
-    }
+  size_t kernel_memory_model = find_instruction(kernel, spv::OpMemoryModel);
+  if (kernel_memory_model != kernel.size()) {
+    addressing_model = kernel[kernel_memory_model + 1];
   }
   for (auto &library : libraries) {
-    for (size_t i = 5; i < library.size(); i += library[i] >> 16) {
-      if ((library[i] & 0xffff) == spv::OpMemoryModel) {
-        library[i + 1] = addressing_model;
-        break;
-      }
+    size_t library_memory_model = find_instruction(library, spv::OpMemoryModel);
+    if (library_memory_model != library.size()) {
+      library[library_memory_model + 1] = addressing_model;
     }
   }
   spvtools::Context context(SPV_ENV_UNIVERSAL_1_6);
@@ -44,6 +40,17 @@ std::vector<uint32_t> IRBuilder::link_shader_helpers(const std::vector<uint32_t>
   auto result = spvtools::Link(context, libraries, &linked, options);
   QD_ERROR_IF(result != SPV_SUCCESS, "Failed to link GLSL shader helpers: {}", error);
   return linked;
+}
+
+// Return the word index of the first matching instruction, or spirv_module.size() if it is absent.
+size_t IRBuilder::find_instruction(const std::vector<uint32_t> &spirv_module, spv::Op opcode) {
+  // Skip the five-word module header. Each instruction encodes its word count above its 16-bit opcode.
+  for (size_t i = 5; i < spirv_module.size(); i += spirv_module[i] >> 16) {
+    if ((spirv_module[i] & 0xffff) == opcode) {
+      return i;
+    }
+  }
+  return spirv_module.size();
 }
 
 using cap = DeviceCapability;

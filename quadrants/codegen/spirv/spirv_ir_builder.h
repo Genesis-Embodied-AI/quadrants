@@ -510,6 +510,9 @@ class IRBuilder {
   static std::vector<uint32_t> link_shader_helpers(const std::vector<uint32_t> &kernel,
                                                    std::vector<std::vector<uint32_t>> libraries);
 
+  // Return the first matching instruction's word index, or spirv_module.size() if absent.
+  static size_t find_instruction(const std::vector<uint32_t> &spirv_module, spv::Op opcode);
+
   Value get_const(const SType &dtype, const uint64_t *pvalue, bool cache);
   SType declare_primitive_type(DataType dt);
 
