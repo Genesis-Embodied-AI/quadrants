@@ -799,6 +799,8 @@ Value IRBuilder::call_glsl_u32_to_u32(Value &function, const char *name, uint32_
     SType p_uint32_type = get_pointer_type(t_uint32_, spv::StorageClassFunction);
     SType function_type_declaration_ref;
     function_type_declaration_ref.id = id_counter_++;
+    // The function type declaration is stored in global_, and function_type_declaration_ref holds a reference to it.
+    // A function type declaration is like a function declaration, but is not named.
     ib_.begin(spv::OpTypeFunction).add_seq(function_type_declaration_ref, t_uint32_, p_uint32_type).commit(&global_);
     function = new_value(function_type_declaration_ref, ValueKind::kFunction);
     decorate(spv::OpDecorate, function, spv::DecorationLinkageAttributes, name, spv::LinkageTypeImport);
