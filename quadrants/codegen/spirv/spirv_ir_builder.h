@@ -411,8 +411,8 @@ class IRBuilder {
     curr_label_ = start_label;
   }
 
-  // Import and call a GLSL uint(uint) helper, caching its declaration in function.
-  Value call_glsl_u32_to_u32(Value &function, const char *name, uint32_t argument_value);
+  // Import and call a GLSL uint(uint) helper, caching its declaration in imported_function_ref.
+  Value call_glsl_u32_to_u32(Value &imported_function_ref, const char *name, uint32_t argument_value);
 
   // Create a GLSL450 call
   template <typename... Args>

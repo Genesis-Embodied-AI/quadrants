@@ -790,22 +790,22 @@ Value IRBuilder::struct_array_access(const SType &res_type, Value buffer, Value 
 //   }
 //
 // This method emits the two statements inside caller() into the kernel being compiled; it does not create a separate
-// caller function. On first use, it also declares the imported helper and caches its reference in function. glslang
-// supplies the helper body. The GLSL parameter retains value semantics: a write through the pointer changes only the
-// temporary argument, not the caller's original input.
-Value IRBuilder::call_glsl_u32_to_u32(Value &function, const char *name, uint32_t argument_value) {
-  // On first use, declare the imported helper and cache its reference in function.
-  if (function.id == 0) {
+// caller function. On first use, it also declares the imported helper and caches its reference in
+// imported_function_ref. glslang supplies the helper body. The GLSL parameter retains value semantics: a write through
+// the pointer changes only the temporary argument, not the caller's original input.
+Value IRBuilder::call_glsl_u32_to_u32(Value &imported_function_ref, const char *name, uint32_t argument_value) {
+  // On first use, declare the imported helper and cache its reference in imported_function_ref.
+  if (imported_function_ref.id == 0) {
     SType p_uint32_type = get_pointer_type(t_uint32_, spv::StorageClassFunction);
     SType function_type_declaration_ref;
     function_type_declaration_ref.id = id_counter_++;
     // The function type declaration is stored in global_, and function_type_declaration_ref holds a reference to it.
     // A function type declaration is like a function declaration, but is not named.
     ib_.begin(spv::OpTypeFunction).add_seq(function_type_declaration_ref, t_uint32_, p_uint32_type).commit(&global_);
-    function = new_value(function_type_declaration_ref, ValueKind::kFunction);
-    decorate(spv::OpDecorate, function, spv::DecorationLinkageAttributes, name, spv::LinkageTypeImport);
+    imported_function_ref = new_value(function_type_declaration_ref, ValueKind::kFunction);
+    decorate(spv::OpDecorate, imported_function_ref, spv::DecorationLinkageAttributes, name, spv::LinkageTypeImport);
     ib_.begin(spv::OpFunction)
-        .add_seq(t_uint32_, function, 0, function_type_declaration_ref)
+        .add_seq(t_uint32_, imported_function_ref, 0, function_type_declaration_ref)
         .commit(&imported_glsl_function_declarations_);
     Value parameter = new_value(p_uint32_type, ValueKind::kVariablePtr);
     ib_.begin(spv::OpFunctionParameter).add_seq(p_uint32_type, parameter).commit(&imported_glsl_function_declarations_);
@@ -814,7 +814,7 @@ Value IRBuilder::call_glsl_u32_to_u32(Value &function, const char *name, uint32_
   // GLSL passes scalar function arguments through Function-storage pointers.
   Value argument = alloca_variable(t_uint32_);
   store_variable(argument, uint_immediate_number(t_uint32_, argument_value));
-  return make_value(spv::OpFunctionCall, t_uint32_, function, argument);
+  return make_value(spv::OpFunctionCall, t_uint32_, imported_function_ref, argument);
 }
 
 Value IRBuilder::alloca_variable(const SType &type) {
