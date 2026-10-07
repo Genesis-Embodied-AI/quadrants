@@ -771,11 +771,19 @@ Value IRBuilder::struct_array_access(const SType &res_type, Value buffer, Value 
 // pseudocode:
 //
 // GLSL source, with an illustrative caller:
-//   uint get_work_group_id(uint dim_index) { return gl_WorkGroupID[dim_index]; }
-//   void caller() { uint result = get_work_group_id(0); }
+//   uint get_work_group_id(uint dim_index) {
+//     return gl_WorkGroupID[dim_index];
+//   }
+//
+//   void caller() {
+//     uint result = get_work_group_id(0);
+//   }
 //
 // Equivalent pointer passing, not literal generated source:
-//   uint get_work_group_id(uint* dim_index_ptr) { return gl_WorkGroupID[*dim_index_ptr]; }
+//   uint get_work_group_id(uint* dim_index_ptr) {
+//     return gl_WorkGroupID[*dim_index_ptr];
+//   }
+//
 //   void caller() {
 //     uint argument = 0;  // Function storage: private to this thread's call.
 //     uint result = get_work_group_id(&argument);
