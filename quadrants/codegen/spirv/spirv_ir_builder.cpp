@@ -778,9 +778,7 @@ Value IRBuilder::call_glsl_u32_to_u32(Value &function, const char *name, uint32_
         .add_seq(t_uint32_, function, 0, function_type)
         .commit(&imported_glsl_function_declarations_);
     auto parameter = new_value(p_uint32_type, ValueKind::kVariablePtr);
-    ib_.begin(spv::OpFunctionParameter)
-        .add_seq(p_uint32_type, parameter)
-        .commit(&imported_glsl_function_declarations_);
+    ib_.begin(spv::OpFunctionParameter).add_seq(p_uint32_type, parameter).commit(&imported_glsl_function_declarations_);
     ib_.begin(spv::OpFunctionEnd).commit(&imported_glsl_function_declarations_);
   }
   // GLSL passes scalar function arguments through Function-storage pointers.
