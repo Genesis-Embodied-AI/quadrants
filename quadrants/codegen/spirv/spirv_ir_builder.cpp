@@ -765,7 +765,26 @@ Value IRBuilder::struct_array_access(const SType &res_type, Value buffer, Value 
 }
 
 // Emit a call to a named GLSL function taking and returning a uint32, and return the value representing its result.
-// Declare the function as an import on its first use and cache that declaration in function.
+//
+// glslang represents this GLSL value parameter as a pointer in SPIR-V. SPIR-V also supports value parameters; the
+// pointer representation is glslang's choice. The caller must match the compiled helper. Equivalent C++-style
+// pseudocode:
+//
+// GLSL source, with an illustrative caller:
+//   uint get_work_group_id(uint dim_index) { return gl_WorkGroupID[dim_index]; }
+//   void caller() { uint result = get_work_group_id(0); }
+//
+// Equivalent pointer passing, not literal generated source:
+//   uint get_work_group_id(uint* dim_index_ptr) { return gl_WorkGroupID[*dim_index_ptr]; }
+//   void caller() {
+//     uint argument = 0;  // Function storage: private to this thread's call.
+//     uint result = get_work_group_id(&argument);
+//   }
+//
+// This method emits the two statements inside caller() into the kernel being compiled; it does not create a separate
+// caller function. On first use, it also declares the imported helper and caches its reference in function. glslang
+// supplies the helper body. The GLSL parameter retains value semantics: a write through the pointer changes only the
+// temporary argument, not the caller's original input.
 Value IRBuilder::call_glsl_u32_to_u32(Value &function, const char *name, uint32_t argument_value) {
   if (function.id == 0) {
     SType p_uint32_type = get_pointer_type(t_uint32_, spv::StorageClassFunction);
