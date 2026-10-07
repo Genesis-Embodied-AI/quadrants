@@ -16,16 +16,10 @@ std::vector<uint32_t> IRBuilder::link_shader_helpers(const std::vector<uint32_t>
                                                      std::vector<std::vector<uint32_t>> libraries) {
   // These helper libraries use Input and Function pointers. Match their addressing model to the kernel.
   // Any required physical-storage capability and extension must already be declared by the kernel.
-  uint32_t addressing_model = spv::AddressingModelLogical;
-  size_t kernel_memory_model = find_instruction(kernel, spv::OpMemoryModel);
-  if (kernel_memory_model != kernel.size()) {
-    addressing_model = kernel[kernel_memory_model + 1];
-  }
+  uint32_t addressing_model = get_instruction_operand(kernel, spv::OpMemoryModel, /* operand_index= */ 0,
+                                                      /* default_value= */ spv::AddressingModelLogical);
   for (auto &library : libraries) {
-    size_t library_memory_model = find_instruction(library, spv::OpMemoryModel);
-    if (library_memory_model != library.size()) {
-      library[library_memory_model + 1] = addressing_model;
-    }
+    set_instruction_operand(library, spv::OpMemoryModel, /* operand_index= */ 0, addressing_model);
   }
   spvtools::Context context(SPV_ENV_UNIVERSAL_1_6);
   std::string error;
@@ -40,6 +34,32 @@ std::vector<uint32_t> IRBuilder::link_shader_helpers(const std::vector<uint32_t>
   auto result = spvtools::Link(context, libraries, &linked, options);
   QD_ERROR_IF(result != SPV_SUCCESS, "Failed to link GLSL shader helpers: {}", error);
   return linked;
+}
+
+// Read a zero-based operand of the first matching instruction, or return default_value if the instruction is absent.
+uint32_t IRBuilder::get_instruction_operand(const std::vector<uint32_t> &spirv_module,
+                                            spv::Op opcode,
+                                            size_t operand_index,
+                                            uint32_t default_value) {
+  size_t instruction_index = find_instruction(spirv_module, opcode);
+  if (instruction_index == spirv_module.size()) {
+    return default_value;
+  }
+  QD_ASSERT(operand_index + 1 < (spirv_module[instruction_index] >> 16));
+  return spirv_module.at(instruction_index + 1 + operand_index);
+}
+
+// Update a zero-based operand of the first matching instruction; leave the module unchanged if it is absent.
+void IRBuilder::set_instruction_operand(std::vector<uint32_t> &spirv_module,
+                                        spv::Op opcode,
+                                        size_t operand_index,
+                                        uint32_t value) {
+  size_t instruction_index = find_instruction(spirv_module, opcode);
+  if (instruction_index == spirv_module.size()) {
+    return;
+  }
+  QD_ASSERT(operand_index + 1 < (spirv_module[instruction_index] >> 16));
+  spirv_module.at(instruction_index + 1 + operand_index) = value;
 }
 
 // Return the word index of the first matching instruction, or spirv_module.size() if it is absent.

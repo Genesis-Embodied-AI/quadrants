@@ -510,6 +510,17 @@ class IRBuilder {
   static std::vector<uint32_t> link_shader_helpers(const std::vector<uint32_t> &kernel,
                                                    std::vector<std::vector<uint32_t>> libraries);
 
+  // Read a zero-based operand, using default_value if the instruction is absent.
+  static uint32_t get_instruction_operand(const std::vector<uint32_t> &spirv_module,
+                                          spv::Op opcode,
+                                          size_t operand_index,
+                                          uint32_t default_value);
+  // Update a zero-based operand if the instruction exists.
+  static void set_instruction_operand(std::vector<uint32_t> &spirv_module,
+                                      spv::Op opcode,
+                                      size_t operand_index,
+                                      uint32_t value);
+
   // Return the first matching instruction's word index, or spirv_module.size() if absent.
   static size_t find_instruction(const std::vector<uint32_t> &spirv_module, spv::Op opcode);
 
