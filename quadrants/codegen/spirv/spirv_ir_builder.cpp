@@ -768,7 +768,7 @@ Value IRBuilder::struct_array_access(const SType &res_type, Value buffer, Value 
 // Declare the function as an import on its first use and cache that declaration in function.
 Value IRBuilder::call_glsl_u32_to_u32(Value &function, const char *name, uint32_t argument_value) {
   if (function.id == 0) {
-    auto p_uint32_type = get_pointer_type(t_uint32_, spv::StorageClassFunction);
+    SType p_uint32_type = get_pointer_type(t_uint32_, spv::StorageClassFunction);
     SType function_type;
     function_type.id = id_counter_++;
     ib_.begin(spv::OpTypeFunction).add_seq(function_type, t_uint32_, p_uint32_type).commit(&global_);
@@ -777,12 +777,12 @@ Value IRBuilder::call_glsl_u32_to_u32(Value &function, const char *name, uint32_
     ib_.begin(spv::OpFunction)
         .add_seq(t_uint32_, function, 0, function_type)
         .commit(&imported_glsl_function_declarations_);
-    auto parameter = new_value(p_uint32_type, ValueKind::kVariablePtr);
+    Value parameter = new_value(p_uint32_type, ValueKind::kVariablePtr);
     ib_.begin(spv::OpFunctionParameter).add_seq(p_uint32_type, parameter).commit(&imported_glsl_function_declarations_);
     ib_.begin(spv::OpFunctionEnd).commit(&imported_glsl_function_declarations_);
   }
   // GLSL passes scalar function arguments through Function-storage pointers.
-  auto argument = alloca_variable(t_uint32_);
+  Value argument = alloca_variable(t_uint32_);
   store_variable(argument, uint_immediate_number(t_uint32_, argument_value));
   return make_value(spv::OpFunctionCall, t_uint32_, function, argument);
 }
