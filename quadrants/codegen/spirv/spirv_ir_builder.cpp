@@ -797,13 +797,13 @@ Value IRBuilder::call_glsl_u32_to_u32(Value &function, const char *name, uint32_
   // On first use, declare the imported helper and cache its reference in function.
   if (function.id == 0) {
     SType p_uint32_type = get_pointer_type(t_uint32_, spv::StorageClassFunction);
-    SType function_type;
-    function_type.id = id_counter_++;
-    ib_.begin(spv::OpTypeFunction).add_seq(function_type, t_uint32_, p_uint32_type).commit(&global_);
-    function = new_value(function_type, ValueKind::kFunction);
+    SType function_type_declaration_ref;
+    function_type_declaration_ref.id = id_counter_++;
+    ib_.begin(spv::OpTypeFunction).add_seq(function_type_declaration_ref, t_uint32_, p_uint32_type).commit(&global_);
+    function = new_value(function_type_declaration_ref, ValueKind::kFunction);
     decorate(spv::OpDecorate, function, spv::DecorationLinkageAttributes, name, spv::LinkageTypeImport);
     ib_.begin(spv::OpFunction)
-        .add_seq(t_uint32_, function, 0, function_type)
+        .add_seq(t_uint32_, function, 0, function_type_declaration_ref)
         .commit(&imported_glsl_function_declarations_);
     Value parameter = new_value(p_uint32_type, ValueKind::kVariablePtr);
     ib_.begin(spv::OpFunctionParameter).add_seq(p_uint32_type, parameter).commit(&imported_glsl_function_declarations_);
