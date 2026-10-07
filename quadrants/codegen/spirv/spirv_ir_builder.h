@@ -511,9 +511,9 @@ class IRBuilder {
                                                    std::vector<std::vector<uint32_t>> libraries);
 
   // Read the addressing model, defaulting to Logical if OpMemoryModel is absent.
-  static uint32_t get_addressing_model(const std::vector<uint32_t> &spirv_module);
+  static uint32_t get_module_addressing_model(const std::vector<uint32_t> &spirv_module);
   // Update the addressing model if OpMemoryModel is present.
-  static void set_addressing_model(std::vector<uint32_t> &spirv_module, uint32_t addressing_model);
+  static void set_module_addressing_model(std::vector<uint32_t> &spirv_module, uint32_t addressing_model);
 
   // Read a zero-based operand, using default_value if the instruction is absent.
   static uint32_t get_instruction_operand(const std::vector<uint32_t> &spirv_module,
