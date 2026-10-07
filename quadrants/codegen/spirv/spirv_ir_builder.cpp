@@ -794,6 +794,7 @@ Value IRBuilder::struct_array_access(const SType &res_type, Value buffer, Value 
 // supplies the helper body. The GLSL parameter retains value semantics: a write through the pointer changes only the
 // temporary argument, not the caller's original input.
 Value IRBuilder::call_glsl_u32_to_u32(Value &function, const char *name, uint32_t argument_value) {
+  // On first use, declare the imported helper and cache its reference in function.
   if (function.id == 0) {
     SType p_uint32_type = get_pointer_type(t_uint32_, spv::StorageClassFunction);
     SType function_type;
