@@ -78,7 +78,7 @@ TEST(WorkgroupShader, UnusedHelperIsNotLinked) {
   ir.start_function(main);
   ir.make_inst(spv::OpReturn);
   ir.make_inst(spv::OpFunctionEnd);
-  ir.commit_kernel_function(main, "main", {}, {1, 1, 1});
+  ir.commit_kernel_function(/* func= */ main, /* name= */ "main", /* args= */ {}, /* local_size= */ {1, 1, 1});
   auto spirv_module = ir.finalize();
   spvtools::SpirvTools tools(SPV_ENV_VULKAN_1_0);
   ASSERT_TRUE(tools.Validate(spirv_module));
