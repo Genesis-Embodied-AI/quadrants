@@ -23,37 +23,41 @@ TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
     for (uint32_t version : {0x10300u, 0x10400u, 0x10500u}) {
       SCOPED_TRACE(version);
       DeviceCapabilityConfig caps;
-      caps.set(DeviceCapability::spirv_version, version);
+      caps.set(/* cap= */ DeviceCapability::spirv_version, /* level= */ version);
       IRBuilder ir(arch, &caps);
       ir.init_header();
 
       auto array = ir.buffer_argument(/* value_type= */ ir.u32_type(), /* descriptor_set= */ 0,
                                       /* binding= */ 0, /* name= */ "array");
       std::vector<std::tuple<SType, std::string, size_t>> members = {{ir.u32_type(), "value", 0}};
-      auto storage = ir.buffer_struct_argument(ir.create_struct_type(members), 0, 1, "storage");
-      auto uniform = ir.uniform_struct_argument(ir.create_struct_type(members), 0, 2, "uniform");
+      auto storage = ir.buffer_struct_argument(/* struct_type= */ ir.create_struct_type(members),
+                                               /* descriptor_set= */ 0, /* binding= */ 1, /* name= */ "storage");
+      auto uniform = ir.uniform_struct_argument(/* struct_type= */ ir.create_struct_type(members),
+                                                /* descriptor_set= */ 0, /* binding= */ 2, /* name= */ "uniform");
       auto storage_ptr_type = ir.get_storage_pointer_type(ir.u32_type());
-      auto uniform_ptr_type = ir.get_pointer_type(ir.u32_type(), spv::StorageClassUniform);
+      auto uniform_ptr_type = ir.get_pointer_type(/* value_type= */ ir.u32_type(),
+                                                  /* storage_class= */ spv::StorageClassUniform);
       EXPECT_EQ(storage_ptr_type.storage_class, spv::StorageClassStorageBuffer);
       EXPECT_EQ(uniform.stype.storage_class, spv::StorageClassUniform);
 
       auto main = ir.new_function();
       ir.start_function(main);
-      auto zero = ir.uint_immediate_number(ir.u32_type(), 0);
-      auto uniform_ptr = ir.make_value(spv::OpAccessChain, uniform_ptr_type, uniform, zero);
+      auto zero = ir.uint_immediate_number(/* dtype= */ ir.u32_type(), /* value= */ 0);
+      auto uniform_ptr = ir.make_value(/* op= */ spv::OpAccessChain, /* out_type= */ uniform_ptr_type, uniform, zero);
       auto value = ir.load_variable(uniform_ptr, ir.u32_type());
       ir.store_variable(ir.struct_array_access(ir.u32_type(), array, zero), value);
-      auto storage_ptr = ir.make_value(spv::OpAccessChain, storage_ptr_type, storage, zero);
+      auto storage_ptr = ir.make_value(/* op= */ spv::OpAccessChain, /* out_type= */ storage_ptr_type, storage, zero);
       ir.store_variable(storage_ptr, value);
-      ir.make_inst(spv::OpReturn);
-      ir.make_inst(spv::OpFunctionEnd);
+      ir.make_inst(/* op= */ spv::OpReturn);
+      ir.make_inst(/* op= */ spv::OpFunctionEnd);
 
       // SPIR-V 1.3 entry-point interfaces contain only Input/Output variables; 1.4 also requires the buffers.
       std::vector<Value> entry_point_args;
       if (version >= 0x10400) {
         entry_point_args = {array, storage, uniform};
       }
-      ir.commit_kernel_function(main, "main", entry_point_args, {1, 1, 1});
+      ir.commit_kernel_function(/* func= */ main, /* name= */ "main", /* args= */ entry_point_args,
+                                /* local_size= */ {1, 1, 1});
       auto binary = ir.finalize();
       ASSERT_GT(binary.size(), 5);
       EXPECT_EQ(binary[1], version);
