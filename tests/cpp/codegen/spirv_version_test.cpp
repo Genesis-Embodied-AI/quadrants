@@ -28,17 +28,25 @@ TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
       IRBuilder ir(arch, &caps);
       ir.init_header();
 
+      // Declare three buffers in the generated shader without allocating GPU memory or executing it. The descriptor set
+      // and binding identify where the runtime would supply each buffer. Set 0, binding 0 holds an array of uint32_t
+      // values.
       auto array = ir.buffer_argument(/* value_type= */ ir.u32_type(), /* descriptor_set= */ 0,
                                       /* binding= */ 0, /* name= */ "array");
       // Each tuple contains the member's SPIR-V type, name, and byte offset within the struct.
       std::vector<std::tuple<SType, std::string, size_t>> minimal_test_struct_members = {{ir.u32_type(), "value", 0}};
+      // Bindings 1 and 2 both use struct { uint32_t value; }: a read/write storage buffer and a read-only uniform
+      // buffer, respectively.
       auto storage = ir.buffer_struct_argument(/* struct_type= */ ir.create_struct_type(minimal_test_struct_members),
                                                /* descriptor_set= */ 0, /* binding= */ 1, /* name= */ "storage");
       auto uniform = ir.uniform_struct_argument(/* struct_type= */ ir.create_struct_type(minimal_test_struct_members),
                                                 /* descriptor_set= */ 0, /* binding= */ 2, /* name= */ "uniform");
+      // Create SPIR-V pointer types for accessing individual uint32_t values in storage-buffer and uniform-buffer
+      // memory.
       auto storage_ptr_type = ir.get_storage_pointer_type(ir.u32_type());
       auto uniform_ptr_type = ir.get_pointer_type(/* value_type= */ ir.u32_type(),
                                                   /* storage_class= */ spv::StorageClassUniform);
+      // Check that the storage pointer and uniform buffer declaration use their intended storage classes.
       EXPECT_EQ(storage_ptr_type.storage_class, spv::StorageClassStorageBuffer);
       EXPECT_EQ(uniform.stype.storage_class, spv::StorageClassUniform);
 
