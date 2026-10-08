@@ -41,19 +41,19 @@ TEST(WorkgroupShader, LinksAndValidatesAcrossTargets) {
                                                           : SPV_ENV_VULKAN_1_0;
         spvtools::SpirvTools tools(environment);
         std::string diagnostics;
-        spvtools::MessageConsumer report = [&](spv_message_level_t, const char *, const spv_position_t &,
-                                               const char *message) {
+        spvtools::MessageConsumer append_to_diagnostics = [&](spv_message_level_t, const char *, const spv_position_t &,
+                                                              const char *message) {
           diagnostics += message;
           diagnostics += '\n';
         };
-        tools.SetMessageConsumer(report);
+        tools.SetMessageConsumer(append_to_diagnostics);
         ASSERT_TRUE(tools.Validate(spirv_module)) << diagnostics;
         std::string disassembly;
         ASSERT_TRUE(tools.Disassemble(spirv_module, &disassembly));
         EXPECT_NE(disassembly.find("BuiltIn WorkgroupId"), std::string::npos);
         EXPECT_EQ(disassembly.find("LinkageAttributes"), std::string::npos);
         spvtools::Optimizer optimizer(environment);
-        optimizer.SetMessageConsumer(report);
+        optimizer.SetMessageConsumer(append_to_diagnostics);
         optimizer.RegisterPerformancePasses();
         std::vector<uint32_t> optimized;
         ASSERT_TRUE(optimizer.Run(spirv_module.data(), spirv_module.size(), &optimized)) << diagnostics;
