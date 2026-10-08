@@ -210,30 +210,12 @@ size_t get_device_score(VkPhysicalDevice device, VkSurfaceKHR surface) {
 }  // namespace
 
 VulkanDeviceCreator::VulkanDeviceCreator(const VulkanDeviceCreator::Params &params) : params_(params) {
-  if (params_.api_version.has_value() && params_.api_version.value() < VK_API_VERSION_1_1) {
-    throw std::runtime_error("Vulkan 1.1 or newer is required for SPIR-V 1.3");
-  }
   if (!VulkanLoader::instance().init()) {
     throw std::runtime_error("Error loading vulkan");
   }
 
   qd_device_ = std::make_unique<VulkanDevice>();
-  uint32_t vk_api_version;
-  bool manual_create;
-  if (params_.api_version.has_value()) {
-    // The version client specified to use
-    //
-    // If the user provided an API version then the device creation process is
-    // totally directed by the information provided externally.
-    vk_api_version = params_.api_version.value();
-    manual_create = true;
-  } else {
-    // The highest version designed to use
-    vk_api_version = VulkanEnvSettings::k_api_version();
-    manual_create = false;
-  }
-
-  create_instance(vk_api_version, manual_create);
+  create_instance();
   setup_debug_messenger();
   VkSurfaceKHR test_surface = VK_NULL_HANDLE;
   if (params_.is_for_ui) {
@@ -241,7 +223,7 @@ VulkanDeviceCreator::VulkanDeviceCreator(const VulkanDeviceCreator::Params &para
     RHI_ASSERT((test_surface != VK_NULL_HANDLE) && "failed to create window surface!");
   }
   pick_physical_device(test_surface);
-  create_logical_device(manual_create);
+  create_logical_device();
 
   {
     VulkanDevice::Params params;
@@ -290,7 +272,8 @@ VulkanDeviceCreator::~VulkanDeviceCreator() {
 //   VkInstanceCreateInfo with app info, optional validation layers and debug
 //   printf, collects required + supported instance extensions, calls
 //   vkCreateInstance, and stores the new instance in the VulkanLoader singleton for future reuse.
-void VulkanDeviceCreator::create_instance(uint32_t vk_api_version, bool manual_create) {
+void VulkanDeviceCreator::create_instance() {
+  const uint32_t vk_api_version = VulkanEnvSettings::k_api_version();
   // Discover instance extensions and set capability flags on qd_device_.
   // This must run every cycle because qd_device_ is freshly created.
   uint32_t num_instance_extensions = 0;
@@ -343,7 +326,7 @@ void VulkanDeviceCreator::create_instance(uint32_t vk_api_version, bool manual_c
   app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
   app_info.pEngineName = "No Engine";
   app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-  app_info.apiVersion = VulkanEnvSettings::k_api_version();
+  app_info.apiVersion = vk_api_version;
 
   VkInstanceCreateInfo create_info{};
   create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -485,7 +468,7 @@ void VulkanDeviceCreator::pick_physical_device(VkSurfaceKHR test_surface) {
   queue_family_indices_ = find_queue_families(physical_device_, test_surface);
 }
 
-void VulkanDeviceCreator::create_logical_device(bool manual_create) {
+void VulkanDeviceCreator::create_logical_device() {
   DeviceCapabilityConfig caps{};
 
   std::vector<VkDeviceQueueCreateInfo> queue_create_infos;
@@ -528,9 +511,6 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
     RHI_LOG_DEBUG(msg_buf);
   }
 
-  // (penguinliong) The actual logical device is created with lastest version of
-  // Vulkan but we use the device like it has a lower version (if the user
-  // wanted a lower version device).
   uint32_t vk_api_version = physical_device_properties.apiVersion;
   qd_device_->vk_caps().vk_api_version = vk_api_version;
   if (vk_api_version >= VK_API_VERSION_1_3) {
@@ -545,7 +525,6 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
   std::vector<const char *> enabled_extensions;
 
   uint32_t extension_count = 0;
-  // FIXME: (penguinliong) This was NOT called when `manual_create` is true.
   vkEnumerateDeviceExtensionProperties(physical_device_, nullptr, &extension_count, nullptr);
   std::vector<VkExtensionProperties> extension_properties(extension_count);
   vkEnumerateDeviceExtensionProperties(physical_device_, nullptr, &extension_count, extension_properties.data());

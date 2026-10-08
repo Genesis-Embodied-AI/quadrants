@@ -331,9 +331,6 @@ void export_lang(nb::module_ &m) {
       .def_rw("num_compile_threads", &CompileConfig::num_compile_threads,
               "Number of host threads used to compile kernels on the LLVM backends (CPU, CUDA, AMDGPU); other backends "
               "ignore it, and it is forced to 1 when print_ir is set.")
-      .def_rw("vk_api_version", &CompileConfig::vk_api_version,
-              "Vulkan API version to request, as a \"major.minor.patch\" string (e.g. \"1.3.0\"). Empty lets Quadrants "
-              "select a usable version automatically.")
       .def_rw("cuda_stack_limit", &CompileConfig::cuda_stack_limit,
               "Per-thread CUDA stack size limit in bytes (0 uses the driver default).")
       .def_rw("external_metal_command_queue", &CompileConfig::external_metal_command_queue,

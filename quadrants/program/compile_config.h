@@ -96,7 +96,6 @@ struct CompileConfig {
   double offline_cache_cleaning_factor{0.25};              // [0.f, 1.f]
 
   int num_compile_threads{4};
-  std::string vk_api_version;
 
   size_t cuda_stack_limit{0};
 
