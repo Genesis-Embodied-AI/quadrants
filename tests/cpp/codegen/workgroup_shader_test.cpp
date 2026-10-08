@@ -20,7 +20,8 @@ TEST(WorkgroupShader, LinksAndValidatesAcrossTargets) {
         IRBuilder ir(arch, &caps);
         SpirvOperations ops_(ir);
         ir.init_header();
-        Value output = ir.buffer_argument(ir.u32_type(), 0, 0, "result");
+        Value output = ir.buffer_argument(/* value_type= */ ir.u32_type(), /* descriptor_set= */ 0,
+                                          /* binding= */ 0, /* name= */ "result");
         Value main = ir.new_function();
         ir.start_function(main);
         for (uint32_t dim : {0u, 1u, 2u, 0u}) {
