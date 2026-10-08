@@ -31,7 +31,8 @@ TEST(WorkgroupShader, LinksAndValidatesAcrossTargets) {
         }
         ir.make_inst(spv::OpReturn);
         ir.make_inst(spv::OpFunctionEnd);
-        ir.commit_kernel_function(main, "main", {output}, {1, 1, 1});
+        ir.commit_kernel_function(/* func= */ main, /* name= */ "main", /* args= */ {output},
+                                  /* local_size= */ {1, 1, 1});
         std::vector<uint32_t> binary = ir.finalize();
         EXPECT_EQ(binary[1], version);
         spv_target_env environment = version >= 0x10600   ? SPV_ENV_VULKAN_1_3
