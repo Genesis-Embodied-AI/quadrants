@@ -1,4 +1,5 @@
 #include "quadrants/common/logging.h"
+#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "quadrants/codegen/spirv/spirv_operations.h"
 #include "spirv-tools/libspirv.hpp"
@@ -50,8 +51,8 @@ TEST(WorkgroupShader, LinksAndValidatesAcrossTargets) {
         ASSERT_TRUE(tools.Validate(spirv_module)) << diagnostics;
         std::string disassembly;
         ASSERT_TRUE(tools.Disassemble(spirv_module, &disassembly));
-        EXPECT_NE(disassembly.find("BuiltIn WorkgroupId"), std::string::npos);
-        EXPECT_EQ(disassembly.find("LinkageAttributes"), std::string::npos);
+        EXPECT_THAT(disassembly, ::testing::HasSubstr("BuiltIn WorkgroupId"));
+        EXPECT_THAT(disassembly, ::testing::Not(::testing::HasSubstr("LinkageAttributes")));
         spvtools::Optimizer optimizer(environment);
         optimizer.SetMessageConsumer(append_to_diagnostics);
         optimizer.RegisterPerformancePasses();
@@ -59,8 +60,8 @@ TEST(WorkgroupShader, LinksAndValidatesAcrossTargets) {
         ASSERT_TRUE(optimizer.Run(spirv_module.data(), spirv_module.size(), &optimized)) << diagnostics;
         ASSERT_TRUE(tools.Validate(optimized)) << diagnostics;
         ASSERT_TRUE(tools.Disassemble(optimized, &disassembly));
-        EXPECT_EQ(disassembly.find("OpFunctionCall"), std::string::npos);
-        EXPECT_NE(disassembly.find("BuiltIn WorkgroupId"), std::string::npos);
+        EXPECT_THAT(disassembly, ::testing::Not(::testing::HasSubstr("OpFunctionCall")));
+        EXPECT_THAT(disassembly, ::testing::HasSubstr("BuiltIn WorkgroupId"));
       }
     }
   }
@@ -81,8 +82,8 @@ TEST(WorkgroupShader, UnusedHelperIsNotLinked) {
   ASSERT_TRUE(tools.Validate(binary));
   std::string disassembly;
   ASSERT_TRUE(tools.Disassemble(binary, &disassembly));
-  EXPECT_EQ(disassembly.find("WorkgroupId"), std::string::npos);
-  EXPECT_EQ(disassembly.find("Linkage"), std::string::npos);
+  EXPECT_THAT(disassembly, ::testing::Not(::testing::HasSubstr("WorkgroupId")));
+  EXPECT_THAT(disassembly, ::testing::Not(::testing::HasSubstr("Linkage")));
 }
 
 }  // namespace quadrants::lang::spirv
