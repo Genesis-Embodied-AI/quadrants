@@ -9,7 +9,6 @@ namespace quadrants::lang::spirv {
 TEST(SpirvVersion, RejectsOlderTargets) {
   for (auto arch : {Arch::vulkan, Arch::metal}) {
     for (uint32_t version : {0u, 0x10000u, 0x10100u, 0x10200u}) {
-      // Include the current SPIR-V version in any assertion failure reported within this scope.
       SCOPED_TRACE(version);
       DeviceCapabilityConfig caps;
       caps.set(DeviceCapability::spirv_version, version);
@@ -22,7 +21,6 @@ TEST(SpirvVersion, RejectsOlderTargets) {
 TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
   for (auto arch : {Arch::vulkan, Arch::metal}) {
     for (uint32_t version : {0x10300u, 0x10400u, 0x10500u}) {
-      // Include the current SPIR-V version in any assertion failure reported within this scope.
       SCOPED_TRACE(version);
       DeviceCapabilityConfig caps;
       caps.set(DeviceCapability::spirv_version, version);
