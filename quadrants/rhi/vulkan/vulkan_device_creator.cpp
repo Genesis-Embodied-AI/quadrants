@@ -179,11 +179,7 @@ VulkanQueueFamilyIndices find_queue_families(VkPhysicalDevice device, VkSurfaceK
 }
 
 // Rank physical devices for selection; higher scores are preferred, and 0 excludes a device.
-// Returns multiples of 100 in [0, 104400] for valid Vulkan properties. Unsupported API versions return 0.
-// Otherwise, the score is 100 * API minor version (0..1023), plus 1000 for complete required queues,
-// 100 for wide lines, and 500 for an integrated GPU or 1000 for a discrete GPU (0 for other types).
-// Queue requirements include presentation when a surface is supplied. Missing queues lose their bonus but
-// do not force a zero score, so a positive score does not guarantee queue suitability.
+// Returns a score in [0, 104400] for valid Vulkan properties. Unsupported API versions return 0.
 size_t get_device_score(VkPhysicalDevice device, VkSurfaceKHR surface) {
   auto indices = find_queue_families(device, surface);
   VkPhysicalDeviceFeatures features{};
