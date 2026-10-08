@@ -42,6 +42,7 @@ Notes:
 - `qd.metal` is only available on Apple hardware and is the recommended GPU backend there.
 - `qd.vulkan` requires Vulkan 1.2 or newer. The Vulkan and Metal backends generate shaders in SPIR-V (an intermediate format for GPU programs), version 1.5 or newer; older targets are unsupported.
 - Quadrants normally detects GPU features and selects the shader format automatically. The `qd.types.DeviceCapability` class provides named constants for GPU features and shader-format versions when code specifies these choices explicitly. If your code uses its removed `spirv_version_1_3` or `spirv_version_1_4` constants, replace them with `qd.types.DeviceCapability.spirv_version_1_5` to select SPIR-V 1.5.
+- Quadrants selects the Vulkan API version automatically. The `vk_api_version` argument to `qd.init()` has been removed; omit it from existing calls.
 - `qd.vulkan` on macOS bundles a copy of MoltenVK (a Vulkan-to-Metal translation layer) inside the wheel, so no separate install is required.
 
 ### Python backend
