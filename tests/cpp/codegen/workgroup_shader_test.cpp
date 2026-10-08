@@ -34,8 +34,8 @@ TEST(WorkgroupShader, LinksAndValidatesAcrossTargets) {
         ir.make_inst(spv::OpFunctionEnd);
         ir.commit_kernel_function(/* func= */ main, /* name= */ "main", /* args= */ {output},
                                   /* local_size= */ {1, 1, 1});
-        std::vector<uint32_t> binary = ir.finalize();
-        EXPECT_EQ(binary[1], version);
+        std::vector<uint32_t> spirv_module = ir.finalize();
+        EXPECT_EQ(spirv_module[1], version);
         spv_target_env environment = version >= 0x10600   ? SPV_ENV_VULKAN_1_3
                                      : version >= 0x10300 ? SPV_ENV_VULKAN_1_1
                                                           : SPV_ENV_VULKAN_1_0;
@@ -47,16 +47,16 @@ TEST(WorkgroupShader, LinksAndValidatesAcrossTargets) {
           diagnostics += '\n';
         };
         tools.SetMessageConsumer(report);
-        ASSERT_TRUE(tools.Validate(binary)) << diagnostics;
+        ASSERT_TRUE(tools.Validate(spirv_module)) << diagnostics;
         std::string disassembly;
-        ASSERT_TRUE(tools.Disassemble(binary, &disassembly));
+        ASSERT_TRUE(tools.Disassemble(spirv_module, &disassembly));
         EXPECT_NE(disassembly.find("BuiltIn WorkgroupId"), std::string::npos);
         EXPECT_EQ(disassembly.find("LinkageAttributes"), std::string::npos);
         spvtools::Optimizer optimizer(environment);
         optimizer.SetMessageConsumer(report);
         optimizer.RegisterPerformancePasses();
         std::vector<uint32_t> optimized;
-        ASSERT_TRUE(optimizer.Run(binary.data(), binary.size(), &optimized)) << diagnostics;
+        ASSERT_TRUE(optimizer.Run(spirv_module.data(), spirv_module.size(), &optimized)) << diagnostics;
         ASSERT_TRUE(tools.Validate(optimized)) << diagnostics;
         ASSERT_TRUE(tools.Disassemble(optimized, &disassembly));
         EXPECT_EQ(disassembly.find("OpFunctionCall"), std::string::npos);
