@@ -40,7 +40,7 @@ Notes:
 - `qd.cuda` requires an NVIDIA driver and CUDA runtime installed on the host. NVIDIA ships CUDA for Linux ARM64 and Windows ARM64, but quadrants does not support them yet.
 - `qd.amdgpu` requires HIP 6.0 or newer (HIP is AMD's GPU programming interface) and currently wires up the Linux x64 ROCm path only. AMD's GPU toolchain also ships on Windows and on some Linux ARM64 targets, but quadrants does not support them yet. On AMD GPUs, a subgroup is always 64 threads wide, so [`qd.simt.subgroup`](./subgroup.md) primitives operate over 64 lanes on both CDNA (Instinct) and RDNA (Radeon) hardware.
 - `qd.metal` is only available on Apple hardware and is the recommended GPU backend there.
-- `qd.vulkan` requires Vulkan 1.1 or newer. Quadrants generates SPIR-V 1.3 or newer shader binaries; older targets are unsupported.
+- `qd.vulkan` requires Vulkan 1.1 or newer. Quadrants generates shaders in SPIR-V (an intermediate format for GPU programs), version 1.3 or newer; older targets are unsupported.
 - `qd.vulkan` on macOS bundles a copy of MoltenVK (a Vulkan-to-Metal translation layer) inside the wheel, so no separate install is required.
 
 ### Python backend
