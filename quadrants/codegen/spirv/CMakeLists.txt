@@ -24,6 +24,8 @@ function(qd_add_shader_helper build_target input_filepath output_filepath array_
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${output_directory}"
     # -V: Generate SPIR-V for Vulkan.
     # --target-env vulkan1.0: Target Vulkan 1.0 and SPIR-V 1.0.
+    # We chose 1.0 because the helper only reads a workgroup index and needs no newer features. This lets it link with
+    # our oldest supported kernel modules without raising their SPIR-V version.
     # --no-link: Compile a helper library without linking an entry point.
     # -Od: Disable optimization during shader compilation.
     # --vn: Write a C header containing an array with the specified name.
