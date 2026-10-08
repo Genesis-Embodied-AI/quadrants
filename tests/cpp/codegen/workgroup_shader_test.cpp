@@ -52,6 +52,7 @@ TEST(WorkgroupShader, LinksAndValidatesAcrossTargets) {
         std::string disassembly;
         ASSERT_TRUE(tools.Disassemble(spirv_module, &disassembly));
         EXPECT_THAT(disassembly, ::testing::HasSubstr("BuiltIn WorkgroupId"));
+        // Verify that linking resolved the helper and removed its import/export metadata.
         EXPECT_THAT(disassembly, ::testing::Not(::testing::HasSubstr("LinkageAttributes")));
         spvtools::Optimizer optimizer(environment);
         optimizer.SetMessageConsumer(append_to_diagnostics);
