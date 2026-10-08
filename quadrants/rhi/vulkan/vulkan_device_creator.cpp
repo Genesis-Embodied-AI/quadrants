@@ -518,6 +518,7 @@ void VulkanDeviceCreator::create_logical_device() {
   } else if (vk_api_version >= VK_API_VERSION_1_2) {
     caps.set(DeviceCapability::spirv_version, 0x10500);
   } else {
+    // Device selection requires Vulkan 1.1 or newer, which guarantees support for SPIR-V 1.3.
     caps.set(DeviceCapability::spirv_version, 0x10300);
   }
 
