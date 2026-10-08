@@ -60,6 +60,7 @@ TEST(WorkgroupShader, LinksAndValidatesAcrossTargets) {
         ASSERT_TRUE(optimizer.Run(spirv_module.data(), spirv_module.size(), &optimized)) << diagnostics;
         ASSERT_TRUE(tools.Validate(optimized)) << diagnostics;
         ASSERT_TRUE(tools.Disassemble(optimized, &disassembly));
+        // Verify that optimization inlined the workgroup-index helper, leaving no function calls.
         EXPECT_THAT(disassembly, ::testing::Not(::testing::HasSubstr("OpFunctionCall")));
         EXPECT_THAT(disassembly, ::testing::HasSubstr("BuiltIn WorkgroupId"));
       }
