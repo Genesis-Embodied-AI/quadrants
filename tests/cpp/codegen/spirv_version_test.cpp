@@ -27,7 +27,8 @@ TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
       IRBuilder ir(arch, &caps);
       ir.init_header();
 
-      auto array = ir.buffer_argument(ir.u32_type(), 0, 0, "array");
+      auto array = ir.buffer_argument(/* value_type= */ ir.u32_type(), /* descriptor_set= */ 0,
+                                      /* binding= */ 0, /* name= */ "array");
       std::vector<std::tuple<SType, std::string, size_t>> members = {{ir.u32_type(), "value", 0}};
       auto storage = ir.buffer_struct_argument(ir.create_struct_type(members), 0, 1, "storage");
       auto uniform = ir.uniform_struct_argument(ir.create_struct_type(members), 0, 2, "uniform");
