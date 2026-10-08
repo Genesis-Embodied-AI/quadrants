@@ -79,11 +79,11 @@ TEST(WorkgroupShader, UnusedHelperIsNotLinked) {
   ir.make_inst(spv::OpReturn);
   ir.make_inst(spv::OpFunctionEnd);
   ir.commit_kernel_function(main, "main", {}, {1, 1, 1});
-  auto binary = ir.finalize();
+  auto spirv_module = ir.finalize();
   spvtools::SpirvTools tools(SPV_ENV_VULKAN_1_0);
-  ASSERT_TRUE(tools.Validate(binary));
+  ASSERT_TRUE(tools.Validate(spirv_module));
   std::string disassembly;
-  ASSERT_TRUE(tools.Disassemble(binary, &disassembly));
+  ASSERT_TRUE(tools.Disassemble(spirv_module, &disassembly));
   EXPECT_THAT(disassembly, ::testing::Not(::testing::HasSubstr("WorkgroupId")));
   EXPECT_THAT(disassembly, ::testing::Not(::testing::HasSubstr("Linkage")));
 }
