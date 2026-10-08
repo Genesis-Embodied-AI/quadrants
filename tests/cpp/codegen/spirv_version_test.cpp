@@ -58,7 +58,7 @@ TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
       EXPECT_EQ(binary[1], version);
 
       auto env = version == 0x10300 ? SPV_ENV_VULKAN_1_1
-                                  : (version == 0x10400 ? SPV_ENV_VULKAN_1_1_SPIRV_1_4 : SPV_ENV_VULKAN_1_2);
+                                    : (version == 0x10400 ? SPV_ENV_VULKAN_1_1_SPIRV_1_4 : SPV_ENV_VULKAN_1_2);
       spvtools::SpirvTools tools(env);
       std::string diagnostics;
       tools.SetMessageConsumer([&](spv_message_level_t, const char *, const spv_position_t &, const char *message) {
