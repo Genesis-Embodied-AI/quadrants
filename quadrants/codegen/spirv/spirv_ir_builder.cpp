@@ -60,6 +60,7 @@ uint32_t IRBuilder::get_instruction_operand(const std::vector<uint32_t> &spirv_m
   if (instruction_index == spirv_module.size()) {
     return default_value;
   }
+  // Add one because the instruction's word count includes its first word, which holds the opcode and word count.
   QD_ASSERT(operand_index + 1 < (spirv_module[instruction_index] >> 16));
   return spirv_module.at(instruction_index + 1 + operand_index);
 }
@@ -73,6 +74,7 @@ void IRBuilder::set_instruction_operand(std::vector<uint32_t> &spirv_module,
   if (instruction_index == spirv_module.size()) {
     return;
   }
+  // Add one because the instruction's word count includes its first word, which holds the opcode and word count.
   QD_ASSERT(operand_index + 1 < (spirv_module[instruction_index] >> 16));
   spirv_module.at(instruction_index + 1 + operand_index) = value;
 }
