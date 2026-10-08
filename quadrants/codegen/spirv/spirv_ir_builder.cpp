@@ -20,6 +20,7 @@ std::vector<uint32_t> IRBuilder::link_shader_helpers(const std::vector<uint32_t>
   for (auto &library : libraries) {
     set_module_addressing_model(library, addressing_model);
   }
+  // Accept inputs through SPIR-V 1.6; SetUseHighestVersion below keeps the output at the highest input version.
   spvtools::Context context(SPV_ENV_UNIVERSAL_1_6);
   std::string error;
   context.SetMessageConsumer([&](spv_message_level_t, const char *, const spv_position_t &, const char *message) {
