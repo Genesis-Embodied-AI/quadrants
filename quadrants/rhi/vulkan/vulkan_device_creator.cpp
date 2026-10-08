@@ -513,6 +513,7 @@ void VulkanDeviceCreator::create_logical_device() {
 
   uint32_t vk_api_version = physical_device_properties.apiVersion;
   qd_device_->vk_caps().vk_api_version = vk_api_version;
+  // Device selection requires Vulkan 1.2 or newer, which guarantees support for SPIR-V 1.5.
   caps.set(DeviceCapability::spirv_version, 0x10500);
 
   // Detect extensions
