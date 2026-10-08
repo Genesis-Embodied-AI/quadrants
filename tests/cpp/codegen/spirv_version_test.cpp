@@ -29,6 +29,7 @@ TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
 
       auto array = ir.buffer_argument(/* value_type= */ ir.u32_type(), /* descriptor_set= */ 0,
                                       /* binding= */ 0, /* name= */ "array");
+      // Each tuple contains the member's SPIR-V type, name, and byte offset within the struct.
       std::vector<std::tuple<SType, std::string, size_t>> members = {{ir.u32_type(), "value", 0}};
       auto storage = ir.buffer_struct_argument(/* struct_type= */ ir.create_struct_type(members),
                                                /* descriptor_set= */ 0, /* binding= */ 1, /* name= */ "storage");
