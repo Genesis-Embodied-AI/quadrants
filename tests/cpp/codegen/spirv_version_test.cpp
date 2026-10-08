@@ -48,11 +48,11 @@ TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
       ir.make_inst(spv::OpFunctionEnd);
 
       // SPIR-V 1.3 entry-point interfaces contain only Input/Output variables; 1.4 also requires the buffers.
-      std::vector<Value> interface;
+      std::vector<Value> entry_point_args;
       if (version >= 0x10400) {
-        interface = {array, storage, uniform};
+        entry_point_args = {array, storage, uniform};
       }
-      ir.commit_kernel_function(main, "main", interface, {1, 1, 1});
+      ir.commit_kernel_function(main, "main", entry_point_args, {1, 1, 1});
       auto binary = ir.finalize();
       ASSERT_GT(binary.size(), 5);
       EXPECT_EQ(binary[1], version);
