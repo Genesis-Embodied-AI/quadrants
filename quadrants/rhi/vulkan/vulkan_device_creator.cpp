@@ -184,6 +184,9 @@ size_t get_device_score(VkPhysicalDevice device, VkSurfaceKHR surface) {
   vkGetPhysicalDeviceFeatures(device, &features);
   VkPhysicalDeviceProperties properties{};
   vkGetPhysicalDeviceProperties(device, &properties);
+  if (properties.apiVersion < VK_API_VERSION_1_1) {
+    return 0;
+  }
 
   size_t score = 0;
 
@@ -205,6 +208,9 @@ size_t get_device_score(VkPhysicalDevice device, VkSurfaceKHR surface) {
 }  // namespace
 
 VulkanDeviceCreator::VulkanDeviceCreator(const VulkanDeviceCreator::Params &params) : params_(params) {
+  if (params_.api_version.has_value() && params_.api_version.value() < VK_API_VERSION_1_1) {
+    throw std::runtime_error("Vulkan 1.1 or newer is required for SPIR-V 1.3");
+  }
   if (!VulkanLoader::instance().init()) {
     throw std::runtime_error("Error loading vulkan");
   }
@@ -281,9 +287,7 @@ VulkanDeviceCreator::~VulkanDeviceCreator() {
 // Phase 3 — First-time VkInstance creation (first qd.init() only).  Builds
 //   VkInstanceCreateInfo with app info, optional validation layers and debug
 //   printf, collects required + supported instance extensions, calls
-//   vkCreateInstance (with a Vulkan 1.0 fallback on
-//   VK_ERROR_INCOMPATIBLE_DRIVER), and stores the new instance in the
-//   VulkanLoader singleton for future reuse.
+//   vkCreateInstance, and stores the new instance in the VulkanLoader singleton for future reuse.
 void VulkanDeviceCreator::create_instance(uint32_t vk_api_version, bool manual_create) {
   // Discover instance extensions and set capability flags on qd_device_.
   // This must run every cycle because qd_device_ is freshly created.
@@ -399,20 +403,12 @@ void VulkanDeviceCreator::create_instance(uint32_t vk_api_version, bool manual_c
   VkResult res = vkCreateInstance(&create_info, kNoVkAllocCallbacks, &instance_);
 
   if (res == VK_ERROR_INCOMPATIBLE_DRIVER) {
-    // https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VkApplicationInfo.html
-    // Vulkan 1.0 implementation will return this when api version is not 1.0
-    // Vulkan 1.1+ implementation will work with maximum version set
-    qd_device_->vk_caps().vk_api_version = VK_API_VERSION_1_0;
-    app_info.apiVersion = VK_API_VERSION_1_0;
-
-    res = vkCreateInstance(&create_info, kNoVkAllocCallbacks, &instance_);
-  } else {
-    qd_device_->vk_caps().vk_api_version = vk_api_version;
+    throw std::runtime_error("Vulkan 1.1 or newer is required for SPIR-V 1.3");
   }
-
   if (res != VK_SUCCESS) {
     throw std::runtime_error("failed to create instance");
   }
+  qd_device_->vk_caps().vk_api_version = vk_api_version;
 
   VulkanLoader::instance().load_instance(instance_);
 }
@@ -456,9 +452,16 @@ void VulkanDeviceCreator::pick_physical_device(VkSurfaceKHR test_surface) {
       snprintf(msg_buf, sizeof(msg_buf), "QD_VISIBLE_DEVICE=%d is not valid, found %d devices available", id,
                device_count);
       RHI_LOG_ERROR(msg_buf);
-    } else if (get_device_score(devices[id], test_surface)) {
-      physical_device_ = devices[id];
-      has_visible_device = true;
+    } else {
+      VkPhysicalDeviceProperties properties{};
+      vkGetPhysicalDeviceProperties(devices[id], &properties);
+      if (properties.apiVersion < VK_API_VERSION_1_1) {
+        throw std::runtime_error("QD_VISIBLE_DEVICE requires a Vulkan 1.1 or newer device for SPIR-V 1.3");
+      }
+      if (get_device_score(devices[id], test_surface)) {
+        physical_device_ = devices[id];
+        has_visible_device = true;
+      }
     }
   }
 
@@ -473,7 +476,9 @@ void VulkanDeviceCreator::pick_physical_device(VkSurfaceKHR test_surface) {
       }
     }
   }
-  RHI_ASSERT(physical_device_ != VK_NULL_HANDLE && "failed to find a suitable GPU");
+  if (physical_device_ == VK_NULL_HANDLE) {
+    throw std::runtime_error("failed to find a suitable GPU with Vulkan 1.1 or newer for SPIR-V 1.3");
+  }
 
   queue_family_indices_ = find_queue_families(physical_device_, test_surface);
 }
@@ -530,10 +535,8 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
     caps.set(DeviceCapability::spirv_version, 0x10500);
   } else if (vk_api_version >= VK_API_VERSION_1_2) {
     caps.set(DeviceCapability::spirv_version, 0x10500);
-  } else if (vk_api_version >= VK_API_VERSION_1_1) {
-    caps.set(DeviceCapability::spirv_version, 0x10300);
   } else {
-    caps.set(DeviceCapability::spirv_version, 0x10000);
+    caps.set(DeviceCapability::spirv_version, 0x10300);
   }
 
   // Detect extensions
