@@ -282,7 +282,7 @@ if (QD_WITH_VULKAN OR QD_WITH_METAL)
   target_link_libraries(${CORE_LIBRARY_NAME} PRIVATE gfx_runtime)
 endif()
 
-if (QD_WITH_METAL)
+if (QD_WITH_METAL OR QD_BUILD_TESTS)
   set(SPIRV_CROSS_CLI false)
   add_subdirectory(${PROJECT_SOURCE_DIR}/external/SPIRV-Cross ${PROJECT_BINARY_DIR}/external/SPIRV-Cross)
 endif()

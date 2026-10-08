@@ -2042,24 +2042,18 @@ void TaskCodegen::emit_headers() {
   */
   std::array<int, 3> group_size = {task_attribs_.advisory_num_threads_per_group, 1, 1};
   ops_->set_work_group_size(group_size);
-  std::vector<spirv::Value> buffers;
-  if (caps_->get(DeviceCapability::spirv_version) > 0x10300) {
-    buffers = shared_array_binds_;
-    // One buffer can be bound to different bind points but has to be unique
-    // in OpEntryPoint interface declarations.
-    // From Spec: before SPIR-V version 1.4, duplication of these interface id
-    // is tolerated. Starting with version 1.4, an interface id must not
-    // appear more than once.
-    std::unordered_set<spirv::Value, spirv::ValueHasher> entry_point_values;
-    for (const auto &bb : task_attribs_.buffer_binds) {
-      for (auto &it : buffer_value_map_) {
-        if (it.first.first == bb.buffer) {
-          entry_point_values.insert(it.second);
-        }
+  std::vector<spirv::Value> buffers = shared_array_binds_;
+  // One buffer can be bound to different bind points, but every variable must occur only once in the
+  // OpEntryPoint interface.
+  std::unordered_set<spirv::Value, spirv::ValueHasher> entry_point_values;
+  for (const auto &bb : task_attribs_.buffer_binds) {
+    for (auto &it : buffer_value_map_) {
+      if (it.first.first == bb.buffer) {
+        entry_point_values.insert(it.second);
       }
     }
-    buffers.insert(buffers.end(), entry_point_values.begin(), entry_point_values.end());
   }
+  buffers.insert(buffers.end(), entry_point_values.begin(), entry_point_values.end());
   ir_->commit_kernel_function(kernel_function_, "main", buffers,
                               group_size);  // kernel entry
 }
@@ -3271,17 +3265,13 @@ KernelCodegen::KernelCodegen(const Params &params) : params_(params), ctx_attrib
   QD_ASSERT(params.ir_root);
 
   uint32_t spirv_version = params.caps.get(DeviceCapability::spirv_version);
-  QD_ASSERT_INFO(spirv_version >= 0x10300, "SPIR-V 1.3 or newer is required");
+  QD_ASSERT_INFO(spirv_version >= 0x10500, "SPIR-V 1.5 or newer is required");
 
   spv_target_env target_env;
   if (spirv_version >= 0x10600) {
     target_env = SPV_ENV_VULKAN_1_3;
-  } else if (spirv_version >= 0x10500) {
-    target_env = SPV_ENV_VULKAN_1_2;
-  } else if (spirv_version >= 0x10400) {
-    target_env = SPV_ENV_VULKAN_1_1_SPIRV_1_4;
   } else {
-    target_env = SPV_ENV_VULKAN_1_1;
+    target_env = SPV_ENV_VULKAN_1_2;
   }
 
   spirv_opt_ = std::make_unique<spvtools::Optimizer>(target_env);

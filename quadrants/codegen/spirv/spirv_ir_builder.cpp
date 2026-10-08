@@ -8,7 +8,7 @@ namespace spirv {
 using cap = DeviceCapability;
 
 void IRBuilder::init_header() {
-  QD_ASSERT_INFO(caps_->get(cap::spirv_version) >= 0x10300, "SPIR-V 1.3 or newer is required");
+  QD_ASSERT_INFO(caps_->get(cap::spirv_version) >= 0x10500, "SPIR-V 1.5 or newer is required");
   QD_ASSERT(header_.size() == 0U);
   header_.push_back(spv::MagicNumber);
 

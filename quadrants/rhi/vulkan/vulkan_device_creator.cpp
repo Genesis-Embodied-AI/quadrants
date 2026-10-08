@@ -184,7 +184,7 @@ size_t get_device_score(VkPhysicalDevice device, VkSurfaceKHR surface) {
   vkGetPhysicalDeviceFeatures(device, &features);
   VkPhysicalDeviceProperties properties{};
   vkGetPhysicalDeviceProperties(device, &properties);
-  if (properties.apiVersion < VK_API_VERSION_1_1) {
+  if (properties.apiVersion < VK_API_VERSION_1_2) {
     return 0;
   }
 
@@ -208,8 +208,8 @@ size_t get_device_score(VkPhysicalDevice device, VkSurfaceKHR surface) {
 }  // namespace
 
 VulkanDeviceCreator::VulkanDeviceCreator(const VulkanDeviceCreator::Params &params) : params_(params) {
-  if (params_.api_version.has_value() && params_.api_version.value() < VK_API_VERSION_1_1) {
-    throw std::runtime_error("Vulkan 1.1 or newer is required for SPIR-V 1.3");
+  if (params_.api_version.has_value() && params_.api_version.value() < VK_API_VERSION_1_2) {
+    throw std::runtime_error("Vulkan 1.2 or newer is required for SPIR-V 1.5");
   }
   if (!VulkanLoader::instance().init()) {
     throw std::runtime_error("Error loading vulkan");
@@ -403,7 +403,7 @@ void VulkanDeviceCreator::create_instance(uint32_t vk_api_version, bool manual_c
   VkResult res = vkCreateInstance(&create_info, kNoVkAllocCallbacks, &instance_);
 
   if (res == VK_ERROR_INCOMPATIBLE_DRIVER) {
-    throw std::runtime_error("Vulkan 1.1 or newer is required for SPIR-V 1.3");
+    throw std::runtime_error("Vulkan 1.2 or newer is required for SPIR-V 1.5");
   }
   if (res != VK_SUCCESS) {
     throw std::runtime_error("failed to create instance");
@@ -455,8 +455,8 @@ void VulkanDeviceCreator::pick_physical_device(VkSurfaceKHR test_surface) {
     } else {
       VkPhysicalDeviceProperties properties{};
       vkGetPhysicalDeviceProperties(devices[id], &properties);
-      if (properties.apiVersion < VK_API_VERSION_1_1) {
-        throw std::runtime_error("QD_VISIBLE_DEVICE requires a Vulkan 1.1 or newer device for SPIR-V 1.3");
+      if (properties.apiVersion < VK_API_VERSION_1_2) {
+        throw std::runtime_error("QD_VISIBLE_DEVICE requires a Vulkan 1.2 or newer device for SPIR-V 1.5");
       }
       if (get_device_score(devices[id], test_surface)) {
         physical_device_ = devices[id];
@@ -477,7 +477,7 @@ void VulkanDeviceCreator::pick_physical_device(VkSurfaceKHR test_surface) {
     }
   }
   if (physical_device_ == VK_NULL_HANDLE) {
-    throw std::runtime_error("failed to find a suitable GPU with Vulkan 1.1 or newer for SPIR-V 1.3");
+    throw std::runtime_error("failed to find a suitable GPU with Vulkan 1.2 or newer for SPIR-V 1.5");
   }
 
   queue_family_indices_ = find_queue_families(physical_device_, test_surface);
@@ -531,13 +531,7 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
   // wanted a lower version device).
   uint32_t vk_api_version = physical_device_properties.apiVersion;
   qd_device_->vk_caps().vk_api_version = vk_api_version;
-  if (vk_api_version >= VK_API_VERSION_1_3) {
-    caps.set(DeviceCapability::spirv_version, 0x10500);
-  } else if (vk_api_version >= VK_API_VERSION_1_2) {
-    caps.set(DeviceCapability::spirv_version, 0x10500);
-  } else {
-    caps.set(DeviceCapability::spirv_version, 0x10300);
-  }
+  caps.set(DeviceCapability::spirv_version, 0x10500);
 
   // Detect extensions
   std::vector<const char *> enabled_extensions;
@@ -577,11 +571,6 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
       enabled_extensions.push_back(ext.extensionName);
     } else if (name == VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME) {
       enabled_extensions.push_back(ext.extensionName);
-    } else if (name == VK_KHR_SPIRV_1_4_EXTENSION_NAME) {
-      if (caps.get(DeviceCapability::spirv_version) < 0x10400) {
-        caps.set(DeviceCapability::spirv_version, 0x10400);
-        enabled_extensions.push_back(ext.extensionName);
-      }
     } else if (name == VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME ||
                name == VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME) {
       qd_device_->vk_caps().external_memory = true;
@@ -658,7 +647,7 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
     qd_device_->vk_caps().wide_line = true;
   }
 
-  if (qd_device_->vk_caps().vk_api_version >= VK_API_VERSION_1_1) {
+  {
     VkPhysicalDeviceSubgroupProperties subgroup_properties{};
     subgroup_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES;
     subgroup_properties.pNext = nullptr;
