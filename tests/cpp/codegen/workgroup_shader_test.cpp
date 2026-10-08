@@ -7,8 +7,8 @@
 namespace quadrants::lang::spirv {
 
 TEST(WorkgroupShader, LinksAndValidatesAcrossTargets) {
-  for (auto arch : {Arch::vulkan, Arch::metal}) {
-    for (auto version : {0x10000, 0x10300, 0x10600}) {
+  for (Arch arch : {Arch::vulkan, Arch::metal}) {
+    for (int version : {0x10000, 0x10300, 0x10600}) {
       for (bool physical : {false, true}) {
         if (physical && (arch == Arch::metal || version < 0x10300)) {
           continue;
@@ -20,26 +20,27 @@ TEST(WorkgroupShader, LinksAndValidatesAcrossTargets) {
         IRBuilder ir(arch, &caps);
         SpirvOperations ops_(ir);
         ir.init_header();
-        auto output = ir.buffer_argument(ir.u32_type(), 0, 0, "result");
-        auto main = ir.new_function();
+        Value output = ir.buffer_argument(ir.u32_type(), 0, 0, "result");
+        Value main = ir.new_function();
         ir.start_function(main);
         for (uint32_t dim : {0u, 1u, 2u, 0u}) {
-          auto index = ops_.get_work_group_id(dim);
-          auto destination =
+          Value index = ops_.get_work_group_id(dim);
+          Value destination =
               ir.struct_array_access(ir.u32_type(), output, ir.uint_immediate_number(ir.u32_type(), dim));
           ir.store_variable(destination, index);
         }
         ir.make_inst(spv::OpReturn);
         ir.make_inst(spv::OpFunctionEnd);
         ir.commit_kernel_function(main, "main", {output}, {1, 1, 1});
-        auto binary = ir.finalize();
+        std::vector<uint32_t> binary = ir.finalize();
         EXPECT_EQ(binary[1], version);
-        auto environment = version >= 0x10600   ? SPV_ENV_VULKAN_1_3
-                           : version >= 0x10300 ? SPV_ENV_VULKAN_1_1
-                                                : SPV_ENV_VULKAN_1_0;
+        spv_target_env environment = version >= 0x10600   ? SPV_ENV_VULKAN_1_3
+                                     : version >= 0x10300 ? SPV_ENV_VULKAN_1_1
+                                                          : SPV_ENV_VULKAN_1_0;
         spvtools::SpirvTools tools(environment);
         std::string diagnostics;
-        auto report = [&](spv_message_level_t, const char *, const spv_position_t &, const char *message) {
+        spvtools::MessageConsumer report = [&](spv_message_level_t, const char *, const spv_position_t &,
+                                               const char *message) {
           diagnostics += message;
           diagnostics += '\n';
         };
