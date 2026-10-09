@@ -40,13 +40,16 @@ TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
       IRBuilder ir(arch, &caps);
       ir.init_header();
 
+      // layout(std430, set = 0, binding = 0) buffer ArrayBuffer { uint elements[]; } array_buffer;
       Value array_buffer = ir.buffer_argument(/* value_type= */ ir.u32_type(), /* descriptor_set= */ 0,
                                              /* binding= */ 0, /* name= */ "array_buffer");
       // Each tuple contains the member's SPIR-V type, name, and byte offset within the struct.
       std::vector<std::tuple<SType, std::string, size_t>> struct_members = {{ir.u32_type(), "value", 0}};
+      // layout(std430, set = 0, binding = 1) buffer ScalarBuffer { uint value; } scalar_buffer;
       Value scalar_buffer =
           ir.buffer_struct_argument(/* struct_type= */ ir.create_struct_type(struct_members),
                                     /* descriptor_set= */ 0, /* binding= */ 1, /* name= */ "scalar_buffer");
+      // layout(std140, set = 0, binding = 2) uniform ScalarUniform { uint value; } scalar_uniform;
       Value uniform = ir.uniform_struct_argument(/* struct_type= */ ir.create_struct_type(struct_members),
                                                 /* descriptor_set= */ 0, /* binding= */ 2, /* name= */ "uniform");
       SType storage_ptr_type = ir.get_storage_pointer_type(ir.u32_type());
