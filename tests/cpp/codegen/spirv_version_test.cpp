@@ -50,12 +50,12 @@ TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
           ir.buffer_struct_argument(/* struct_type= */ ir.create_struct_type(struct_members),
                                     /* descriptor_set= */ 0, /* binding= */ 1, /* name= */ "scalar_buffer");
       // layout(std140, set = 0, binding = 2) uniform ScalarUniform { uint value; } scalar_uniform;
-      Value uniform = ir.uniform_struct_argument(/* struct_type= */ ir.create_struct_type(struct_members),
-                                                /* descriptor_set= */ 0, /* binding= */ 2, /* name= */ "uniform");
+      Value scalar_uniform = ir.uniform_struct_argument(/* struct_type= */ ir.create_struct_type(struct_members),
+                                                /* descriptor_set= */ 0, /* binding= */ 2, /* name= */ "scalar_uniform");
       SType storage_ptr_type = ir.get_storage_pointer_type(ir.u32_type());
       SType uniform_ptr_type = ir.get_pointer_type(ir.u32_type(), spv::StorageClassUniform);
       EXPECT_EQ(storage_ptr_type.storage_class, spv::StorageClassStorageBuffer);
-      EXPECT_EQ(uniform.stype.storage_class, spv::StorageClassUniform);
+      EXPECT_EQ(scalar_uniform.stype.storage_class, spv::StorageClassUniform);
 
       Value main = ir.new_function();
       ir.start_function(main);
@@ -63,7 +63,7 @@ TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
 
       // uint v = scalar_uniform.value;
       Value uniform_ptr = ir.make_value(/* op= */ spv::OpAccessChain, /* out_type= */ uniform_ptr_type,
-                                       /* base= */ uniform, /* member_index= */ zero);
+                                       /* base= */ scalar_uniform, /* member_index= */ zero);
       Value value = ir.load_variable(uniform_ptr, ir.u32_type());
 
       // array_buffer.elements[0] = v;
@@ -79,7 +79,7 @@ TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
       // SPIR-V 1.3 entry-point interfaces contain only Input/Output variables; 1.4 also requires the buffers.
       std::vector<Value> entry_point_args;
       if (version >= 0x10400) {
-        entry_point_args = {array_buffer, scalar_buffer, uniform};
+        entry_point_args = {array_buffer, scalar_buffer, scalar_uniform};
       }
       ir.commit_kernel_function(/* func= */ main, /* name= */ "main", /* args= */ entry_point_args,
                                 /* local_size= */ {1, 1, 1});
