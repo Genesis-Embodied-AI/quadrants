@@ -28,9 +28,9 @@ TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
   // layout(std140, set = 0, binding = 2) uniform ScalarUniform { uint value; } scalar_uniform;
   //
   // void main() {
-  //     uint v = scalar_uniform.value;
-  //     array_buffer.elements[0] = v;
-  //     scalar_buffer.value = v;
+  //     uint v = scalar_uniform.value;  // Exercise reading a uniform-buffer member.
+  //     array_buffer.elements[0] = v;   // Exercise writing a storage-buffer array element.
+  //     scalar_buffer.value = v;       // Exercise writing a storage-buffer struct member.
   // }
   for (auto arch : {Arch::vulkan, Arch::metal}) {
     for (uint32_t version : {0x10300u, 0x10400u, 0x10500u}) {
