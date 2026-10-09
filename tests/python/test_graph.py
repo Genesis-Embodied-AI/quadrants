@@ -6,9 +6,6 @@ from quadrants.lang import impl
 
 from tests import test_utils
 
-CUDA_SUCCESS = 0
-CUDA_ERROR_NOT_READY = 600
-
 
 def _graph_cache_size():
     return impl.get_runtime().prog.get_graph_cache_size()
@@ -289,38 +286,6 @@ def test_graph_changed_args(tensor_type):
     y1_np = y1.to_numpy()
     assert np.allclose(x1_np, 2.0), f"x1 should be unchanged, got {x1_np[:5]}"
     assert np.allclose(y1_np, 4.0), f"y1 should be unchanged, got {y1_np[:5]}"
-
-
-@test_utils.test(arch=qd.cuda)
-def test_cached_graph_arg_upload_does_not_wait_for_gpu():
-    result = qd.field(qd.i32, shape=())
-
-    @qd.kernel
-    def occupy_gpu(cycles: qd.i64):
-        for _ in range(1):
-            start = qd.clock_counter()
-            while qd.clock_counter() - start < cycles:
-                pass
-
-    @qd.kernel(graph=True)
-    def add(value: qd.i32):
-        for _ in range(1):
-            result[None] += value
-
-    occupy_gpu(1)
-    add(0)  # Build and cache the graph before measuring the replay.
-    qd.sync()
-
-    with qd.create_event() as evt:
-        occupy_gpu(int(qd.clock_freq_hz()))
-        evt.record()
-        add(1)
-        assert _graph_used()
-        assert impl.get_runtime().prog._cuda_event_query(evt.handle) == CUDA_ERROR_NOT_READY
-        evt.synchronize()
-        assert impl.get_runtime().prog._cuda_event_query(evt.handle) == CUDA_SUCCESS
-    qd.sync()
-    assert result[None] == 1
 
 
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])

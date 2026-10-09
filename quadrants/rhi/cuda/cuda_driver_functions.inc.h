@@ -65,7 +65,6 @@ PER_CUDA_FUNCTION(stream_wait_event, cuStreamWaitEvent, void *, void *, uint32);
 PER_CUDA_FUNCTION(event_create, cuEventCreate, void **, uint32)
 PER_CUDA_FUNCTION(event_destroy, cuEventDestroy, void *)
 PER_CUDA_FUNCTION(event_record, cuEventRecord, void *, void *)
-PER_CUDA_FUNCTION(event_query, cuEventQuery, void *);
 PER_CUDA_FUNCTION(event_synchronize, cuEventSynchronize, void *);
 PER_CUDA_FUNCTION(event_elapsed_time, cuEventElapsedTime, float *, void *, void *);
 
