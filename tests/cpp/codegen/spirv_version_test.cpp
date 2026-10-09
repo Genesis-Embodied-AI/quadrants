@@ -37,6 +37,8 @@ TEST(SpirvVersion, ValidatesBuffersAndGlobalInterfaces) {
   //
   // void main() {
   //     uint v = scalar_uniform.value;  // Exercise reading a uniform-buffer member.
+  //     // SPIR-V requires used built-in inputs in the entry-point interface. Reading these inputs lets validation
+  //     // catch missing registrations after the interface changes; the additions' numerical results are not tested.
   //     v += gl_GlobalInvocationID.x;   // Exercise the registered entry-point input path.
   //     v += gl_LocalInvocationID.x;
   //     v += gl_SubgroupInvocationID;   // Exercise the input tracked through global_values.
@@ -84,8 +86,6 @@ TEST(SpirvVersion, ValidatesBuffersAndGlobalInterfaces) {
       Value uniform_ptr = ir.make_value(/* op= */ spv::OpAccessChain, /* out_type= */ uniform_ptr_type,
                                         /* base= */ scalar_uniform, /* member_index= */ zero);
       Value v = ir.load_variable(uniform_ptr, ir.u32_type());
-      // SPIR-V requires used built-in inputs in the entry-point interface. Reading this input lets validation catch
-      // a missing registration after the interface changes; the addition's numerical result is not tested.
       // v += gl_GlobalInvocationID.x;  // Registers the input through entry_point_inputs_.
       v = ops.add(v, ops.get_global_invocation_id(0));
       // v += gl_LocalInvocationID.x;  // Registers another input through entry_point_inputs_.
