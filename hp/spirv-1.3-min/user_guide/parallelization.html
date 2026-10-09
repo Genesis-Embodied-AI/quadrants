@@ -439,9 +439,9 @@
 <p>Note that adding a non-static <code class="docutils literal notranslate"><span class="pre">if</span></code> over the top of a for-loop will lead to the for-loop NOT being parallelized.</p>
 <section id="inspecting-execution-with-qd-block-idx">
 <h2>Inspecting execution with qd.block_idx()<a class="headerlink" href="#inspecting-execution-with-qd-block-idx" title="Link to this heading">#</a></h2>
-<p><code class="docutils literal notranslate"><span class="pre">qd.block_idx()</span></code> returns the current block index as a signed 32-bit integer. Call it inside a kernel or a function called by a kernel. It works on CPU, CUDA, and AMDGPU. Other backends raise an unsupported-platform error.</p>
+<p><code class="docutils literal notranslate"><span class="pre">qd.block_idx()</span></code> returns the current block index as a signed 32-bit integer. Call it inside a kernel or a function called by a kernel. It works on CPU, CUDA, AMDGPU, Vulkan, and Metal.</p>
 <p>On CPU, a block is a group of iterations executed as one runtime task. A task is work assigned to a worker thread. Block indices start at zero for each parallel loop execution. They identify blocks, not worker threads or execution order. A worker can execute several blocks.</p>
-<p>On CUDA and AMDGPU, it returns the hardware block index along the x dimension. A block is a group of GPU threads. CPU and GPU iteration assignments can differ for the same kernel.</p>
+<p>On GPUs, it returns the hardware block index along the x dimension. A block is a group of GPU threads. Vulkan and Metal call it a workgroup. CPU and GPU iteration assignments can differ for the same kernel.</p>
 <p>Top-level serial execution returns <code class="docutils literal notranslate"><span class="pre">0</span></code>. Nested serial loops and called functions retain the enclosing block’s index. Reading an index does not synchronize threads.</p>
 </section>
 <section id="multi-dimensional-parallelization-with-qd-ndrange">
@@ -478,7 +478,7 @@
         <span class="n">a</span><span class="p">[</span><span class="n">I</span><span class="p">]</span> <span class="o">=</span> <span class="n">I</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">I</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">I</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
 </pre></div>
 </div>
-<p><code class="docutils literal notranslate"><span class="pre">I</span></code> is a <code class="docutils literal notranslate"><span class="pre">qd.Vector</span></code> with one element per dimension.</p>
+<p><code class="docutils literal notranslate"><span class="pre">I</span></code> is a <a class="reference internal" href="matrix_vector.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">qd.Vector</span></code></span></a> with one element per dimension.</p>
 </section>
 <section id="controlling-iteration-order-with-axes">
 <h3>Controlling iteration order with <code class="docutils literal notranslate"><span class="pre">axes=</span></code><a class="headerlink" href="#controlling-iteration-order-with-axes" title="Link to this heading">#</a></h3>
@@ -514,7 +514,7 @@
 <p>Reducing the number and complexity kernel parameters reduces the kernel launch latency. In addition:</p>
 <ul class="simple">
 <li><p>field args incur less launch latency than ndarray args</p></li>
-<li><p>global fields incur no parameter-related launch latency</p></li>
+<li><p><a class="reference internal" href="tensor_types.html"><span class="std std-doc">global fields</span></a>, accessed through global variables rather than passed as kernel arguments, incur no parameter-related launch latency</p></li>
 </ul>
 <p>For the underlying execution model - what a launch actually involves, where the latency comes from, and when reducing it helps - see <a class="reference internal" href="performance.html"><span class="std std-doc">Performance</span></a>.</p>
 </section>
