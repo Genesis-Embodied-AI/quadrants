@@ -230,6 +230,11 @@ void SpirvOperations::set_work_group_size(const std::array<int, 3> group_size) {
   ir_.decorate(spv::OpDecorate, gl_work_group_size_, spv::DecorationBuiltIn, spv::BuiltInWorkgroupSize);
 }
 
+Value SpirvOperations::get_work_group_id(uint32_t dim_index) {
+  QD_ASSERT(dim_index < 3);
+  return ir_.call_glsl_u32_to_u32(get_work_group_id_fn_id_, "get_work_group_id", dim_index);
+}
+
 Value SpirvOperations::get_num_work_groups(uint32_t dim_index) {
   if (gl_num_work_groups_.id == 0) {
     SType ptr_type = ir_.get_pointer_type(ir_.v3_u32_type(), spv::StorageClassInput);

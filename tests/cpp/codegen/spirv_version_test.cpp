@@ -20,8 +20,21 @@ TEST(SpirvVersion, RejectsOlderTargets) {
   }
 }
 
+// Verify that the buffer code retained after dropping SPIR-V <1.5 still generates valid shaders.
 TEST(SpirvVersion, ValidatesBuffersAndGlobalInterfaces) {
-  for (auto arch : {Arch::vulkan, Arch::metal}) {
+  // Vulkan GLSL illustration of the buffer accesses; the test also exercises built-ins, RNG, and workgroup memory.
+  // #version 450
+  // layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+  // layout(std430, set = 0, binding = 0) buffer ArrayBuffer { uint elements[]; } array_buffer;
+  // layout(std430, set = 0, binding = 1) buffer ScalarBuffer { uint value; } scalar_buffer;
+  // layout(std140, set = 0, binding = 2) uniform ScalarUniform { uint value; } scalar_uniform;
+  //
+  // void main() {
+  //     uint v = scalar_uniform.value;  // Exercise reading a uniform-buffer member.
+  //     array_buffer.elements[0] = v;   // Exercise writing a storage-buffer array element.
+  //     scalar_buffer.value = v;       // Exercise writing a storage-buffer struct member.
+  // }
+  for (Arch arch : {Arch::vulkan, Arch::metal}) {
     for (uint32_t version : {0x10500u, 0x10600u}) {
       SCOPED_TRACE(version);
       DeviceCapabilityConfig caps;
@@ -31,61 +44,89 @@ TEST(SpirvVersion, ValidatesBuffersAndGlobalInterfaces) {
       SpirvOperations ops(ir);
       ir.init_header();
 
-      auto array = ir.buffer_argument(ir.u32_type(), 0, 0, "array");
-      std::vector<std::tuple<SType, std::string, size_t>> members = {{ir.u32_type(), "value", 0}};
-      auto storage = ir.buffer_struct_argument(ir.create_struct_type(members), 0, 1, "storage");
-      auto uniform = ir.uniform_struct_argument(ir.create_struct_type(members), 0, 2, "uniform");
-      auto shared = ir.alloca_workgroup_array(ir.get_function_array_type(ir.u32_type(), 1));
-      auto storage_ptr_type = ir.get_storage_pointer_type(ir.u32_type());
-      auto uniform_ptr_type = ir.get_pointer_type(ir.u32_type(), spv::StorageClassUniform);
+      // layout(std430, set = 0, binding = 0) buffer ArrayBuffer { uint elements[]; } array_buffer;
+      Value array_buffer = ir.buffer_argument(/* value_type= */ ir.u32_type(), /* descriptor_set= */ 0,
+                                              /* binding= */ 0, /* name= */ "array_buffer");
+      // Each tuple contains the member's SPIR-V type, name, and byte offset within the struct.
+      std::vector<std::tuple<SType, std::string, size_t>> struct_members = {{ir.u32_type(), "value", 0}};
+      // layout(std430, set = 0, binding = 1) buffer ScalarBuffer { uint value; } scalar_buffer;
+      Value scalar_buffer =
+          ir.buffer_struct_argument(/* struct_type= */ ir.create_struct_type(struct_members),
+                                    /* descriptor_set= */ 0, /* binding= */ 1, /* name= */ "scalar_buffer");
+      // layout(std140, set = 0, binding = 2) uniform ScalarUniform { uint value; } scalar_uniform;
+      Value scalar_uniform =
+          ir.uniform_struct_argument(/* struct_type= */ ir.create_struct_type(struct_members),
+                                     /* descriptor_set= */ 0, /* binding= */ 2, /* name= */ "scalar_uniform");
+      Value shared = ir.alloca_workgroup_array(ir.get_function_array_type(ir.u32_type(), 1));
+      SType storage_ptr_type = ir.get_storage_pointer_type(ir.u32_type());
+      SType uniform_ptr_type = ir.get_pointer_type(ir.u32_type(), spv::StorageClassUniform);
       EXPECT_EQ(storage_ptr_type.storage_class, spv::StorageClassStorageBuffer);
-      EXPECT_EQ(uniform.stype.storage_class, spv::StorageClassUniform);
+      EXPECT_EQ(scalar_uniform.stype.storage_class, spv::StorageClassUniform);
 
-      auto main = ir.new_function();
+      Value main = ir.new_function();
       ir.start_function(main);
-      auto zero = ir.uint_immediate_number(ir.u32_type(), 0);
-      auto uniform_ptr = ir.make_value(spv::OpAccessChain, uniform_ptr_type, uniform, zero);
-      auto value = ir.load_variable(uniform_ptr, ir.u32_type());
+      Value zero = ir.uint_immediate_number(ir.u32_type(), 0);
+
+      // uint v = scalar_uniform.value;
+      Value uniform_ptr = ir.make_value(/* op= */ spv::OpAccessChain, /* out_type= */ uniform_ptr_type,
+                                        /* base= */ scalar_uniform, /* member_index= */ zero);
+      Value v = ir.load_variable(uniform_ptr, ir.u32_type());
       // Exercise both input-registration paths and the private globals used by the random-number generator.
-      value = ops.add(value, ops.get_global_invocation_id(0));
-      value = ops.add(value, ops.get_local_invocation_id(0));
-      value = ops.add(value, ops.get_subgroup_invocation_id());
-      value = ops.add(value, ops.rand_u32(array));
-      auto shared_ptr_type = ir.get_pointer_type(ir.u32_type(), spv::StorageClassWorkgroup);
-      auto shared_ptr = ir.make_value(spv::OpAccessChain, shared_ptr_type, shared, zero);
-      ir.store_variable(shared_ptr, value);
-      value = ir.load_variable(shared_ptr, ir.u32_type());
-      ir.store_variable(ir.struct_array_access(ir.u32_type(), array, zero), value);
-      auto storage_ptr = ir.make_value(spv::OpAccessChain, storage_ptr_type, storage, zero);
-      ir.store_variable(storage_ptr, value);
+      v = ops.add(v, ops.get_global_invocation_id(0));
+      v = ops.add(v, ops.get_local_invocation_id(0));
+      v = ops.add(v, ops.get_subgroup_invocation_id());
+      v = ops.add(v, ops.rand_u32(array_buffer));
+      SType shared_ptr_type = ir.get_pointer_type(ir.u32_type(), spv::StorageClassWorkgroup);
+      Value shared_ptr = ir.make_value(spv::OpAccessChain, shared_ptr_type, shared, zero);
+      ir.store_variable(shared_ptr, v);
+      v = ir.load_variable(shared_ptr, ir.u32_type());
+
+      // array_buffer.elements[0] = v;
+      ir.store_variable(
+          ir.struct_array_access(/* res_type= */ ir.u32_type(), /* buffer= */ array_buffer, /* index= */ zero), v);
+
+      // scalar_buffer.value = v;
+      Value scalar_ptr =
+          ir.make_value(/* op= */ spv::OpAccessChain, /* out_type= */ storage_ptr_type, scalar_buffer, zero);
+      ir.store_variable(scalar_ptr, v);
       ir.make_inst(spv::OpReturn);
       ir.make_inst(spv::OpFunctionEnd);
 
-      ir.commit_kernel_function(main, "main", {array, storage, uniform, shared}, {1, 1, 1});
-      auto binary = ir.finalize();
-      ASSERT_GT(binary.size(), 5);
-      EXPECT_EQ(binary[1], version);
+      // SPIR-V 1.5+ entry-point interfaces include the buffers and workgroup variable used by this function.
+      std::vector<Value> entry_point_args = {array_buffer, scalar_buffer, scalar_uniform, shared};
+      ir.commit_kernel_function(/* func= */ main, /* name= */ "main", /* args= */ entry_point_args,
+                                /* local_size= */ {1, 1, 1});
+      std::vector<uint32_t> spirv_module = ir.finalize();
+      ASSERT_GT(spirv_module.size(), 5);
+      EXPECT_EQ(spirv_module[1], version);
 
-      auto env = version == 0x10500 ? SPV_ENV_VULKAN_1_2 : SPV_ENV_VULKAN_1_3;
+      spv_target_env env;
+      // clang-format off
+      switch (version) {
+        case 0x10500: env = SPV_ENV_VULKAN_1_2; break;
+        case 0x10600: env = SPV_ENV_VULKAN_1_3; break;
+        default: FAIL() << "Unexpected SPIR-V version: " << version;
+      }
+      // clang-format on
       spvtools::SpirvTools tools(env);
       std::string diagnostics;
       tools.SetMessageConsumer([&](spv_message_level_t, const char *, const spv_position_t &, const char *message) {
         diagnostics += message;
         diagnostics += '\n';
       });
-      EXPECT_TRUE(tools.Validate(binary)) << diagnostics;
+      EXPECT_TRUE(tools.Validate(spirv_module)) << diagnostics;
 
       if (arch == Arch::metal) {
         // SPIRV-Cross hides globals omitted from a 1.4+ interface. Validate the actual Metal translation as well
         // as the binary, including on Linux hosts where the native Metal runtime is unavailable.
-        spirv_cross::CompilerMSL compiler(binary);
+        spirv_cross::CompilerMSL compiler(spirv_module);
         spirv_cross::CompilerMSL::Options options;
         options.enable_decoration_binding = true;
         options.set_msl_version(2, 1, 0);
         compiler.set_msl_options(options);
-        auto msl = compiler.compile();
+        std::string msl = compiler.compile();
         EXPECT_FALSE(msl.empty());
-        auto resources = compiler.get_shader_resources();
+        spirv_cross::ShaderResources resources = compiler.get_shader_resources();
         EXPECT_EQ(resources.storage_buffers.size(), 2);
         EXPECT_EQ(resources.uniform_buffers.size(), 1);
       }

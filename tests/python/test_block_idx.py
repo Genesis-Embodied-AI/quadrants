@@ -7,7 +7,7 @@ from tests import test_utils
 
 
 @pytest.mark.parametrize("block_dim", [32, 64])
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], make_cpu_multithreading_loop=False, cpu_max_num_threads=4)
+@test_utils.test(make_cpu_multithreading_loop=False, cpu_max_num_threads=4)
 def test_block_idx_portable(block_dim):
     block_indices = qd.ndarray(dtype=qd.i32, shape=(200, 2))
 
@@ -27,7 +27,7 @@ def test_block_idx_portable(block_dim):
     np.testing.assert_array_equal(block_indices.to_numpy(), expected)
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
+@test_utils.test()
 def test_block_idx_serial():
     @qd.kernel
     def k_block_idx() -> qd.i32:
@@ -76,7 +76,7 @@ def test_block_idx_cpu_scheduling_modes(make_cpu_multithreading_loop):
     np.testing.assert_array_equal(out.to_numpy(), np.arange(4096, dtype=np.int32) // width)
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
+@test_utils.test()
 def test_block_idx_serialized_loop():
     out = qd.ndarray(qd.i32, shape=16)
 
@@ -143,13 +143,3 @@ def test_block_idx_real_func_cpu_scheduling_modes(make_cpu_multithreading_loop):
     width = 1024 if make_cpu_multithreading_loop else 32
     expected = np.repeat((np.arange(4096, dtype=np.int32) // width)[:, None], 2, axis=1)
     np.testing.assert_array_equal(out.to_numpy(), expected)
-
-
-@test_utils.test(arch=[qd.vulkan, qd.metal])
-def test_block_idx_rejects_unsupported_backend():
-    @qd.kernel
-    def k_block_idx() -> qd.i32:
-        return qd.block_idx()
-
-    with pytest.raises(ValueError, match="qd.block_idx\\(\\) is only supported on CPU, CUDA, and AMDGPU"):
-        k_block_idx()
