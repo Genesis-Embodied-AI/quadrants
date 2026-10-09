@@ -16,7 +16,7 @@ def to_boundary_enum(boundary):
 
 
 class DeviceCapability:
-    spirv_version_1_5 = "spirv_version=66816"
+    spirv_version_1_5 = f"spirv_version={0x10500}"
     spirv_has_int8 = "spirv_has_int8"
     spirv_has_int16 = "spirv_has_int16"
     spirv_has_int64 = "spirv_has_int64"
