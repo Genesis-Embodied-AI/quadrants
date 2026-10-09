@@ -47,8 +47,7 @@ TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
       auto uniform = ir.uniform_struct_argument(/* struct_type= */ ir.create_struct_type(minimal_test_struct_members),
                                                 /* descriptor_set= */ 0, /* binding= */ 2, /* name= */ "uniform");
       auto storage_ptr_type = ir.get_storage_pointer_type(ir.u32_type());
-      auto uniform_ptr_type = ir.get_pointer_type(/* value_type= */ ir.u32_type(),
-                                                  /* storage_class= */ spv::StorageClassUniform);
+      auto uniform_ptr_type = ir.get_pointer_type(ir.u32_type(), spv::StorageClassUniform);
       EXPECT_EQ(storage_ptr_type.storage_class, spv::StorageClassStorageBuffer);
       EXPECT_EQ(uniform.stype.storage_class, spv::StorageClassUniform);
 
