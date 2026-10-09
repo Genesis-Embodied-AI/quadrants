@@ -1,11 +1,11 @@
 # Algorithms
 
-The algorithms here operate at device-level, using all available gpu cores, and contrast with:
+The algorithms here operate at device-level and contrast with:
 - [Per-thread linear algorithms](linalg_per_thread.md): operate on per-thread level
 - [Subgroup-level operations](subgroup.md): operate on per-subgroup level
 - [Block-level operations](block.md): operate on per-block level
 
-Each function is a kernel-side qd.func functions, which must be launched from inside a qd.kernel. They are fully compatible with graph. Every op requires caller-owned **scratch**, covered in a later section.
+The current composable functions are kernel-side `@qd.func` operations called from inside a `@qd.kernel`. The reductions, scans, selection, sort, and reduce-by-key operations require caller-owned **scratch**, covered in a later section. [CSR sparse matrix multiplication](csr_spmm.md) uses no scratch and has its own argument and ownership contract. Graph capture and replay depend on the backend and surrounding kernel; do not assume that every operation/backend combination has been qualified.
 
 > **Experimental.** These device-wide algorithms are a new addition and should be considered experimental: their signatures and semantics may change in a future release. (This does not apply to the **deprecated** `parallel_sort` and `PrefixSumExecutor`, which are on their own removal track.)
 
@@ -13,6 +13,7 @@ Each function is a kernel-side qd.func functions, which must be launched from in
 
 | Op | What it does | Call from kernel | Call from host |
 |----|--------------|:----------------:|:--------------:|
+| `qd.algorithms.csr_spmm(row_ptr, col_idx, values, rhs, out)` | [Weighted CSR gather](csr_spmm.md): `out = A @ rhs`, with `i32` indices and `f32` values/features. Overwrites caller-owned output; no scratch. | yes | no |
 | `qd.algorithms.reduce_{add,min,max}(arr, out, scratch, n, dtype, log256_max_n)` | `out[0] = sum/min/max(arr[0:n])` (fixed-depth tree reduction; identity derived from `dtype` for min / max). Composed at the top level of your own kernel (device-resident count `n`, compile-time `log256_max_n`). | yes | no |
 | `qd.algorithms.exclusive_scan_{add,min,max}(arr, out, scratch, n, dtype, log256_max_n)` | `out[i] = sum/min/max(arr[0:i])` (three-pass Blelloch-style scan; 32-bit + 64-bit scalars; identity derived from `dtype` for min / max). | yes | no |
 | `qd.algorithms.select(arr, flags, out, num_out, scratch, n, log256_max_n)` | Stream compaction: copy `arr[i]` to a dense prefix of `out` for every `flags[i] == 1` (`flags` must be exactly 0/1; no `dtype` - the scatter is dtype-agnostic). | yes | no |
@@ -22,11 +23,15 @@ Each function is a kernel-side qd.func functions, which must be launched from in
 | `qd.algorithms.parallel_sort` | Odd-even merge sort (in-place, key or key-value). **Deprecated**: prefer `sort`. | no | yes |
 | `qd.algorithms.PrefixSumExecutor` | Inclusive in-place prefix sum (i32 only). **Deprecated**: prefer `exclusive_scan_add`. | no | yes |
 
-These algorithms run on all of Quadrants' GPU backends (CUDA, AMDGPU, Vulkan, Metal); they are GPU-only and are not available on the CPU backend. (On Metal only 32-bit dtypes are supported - no `i64` / `u64` / `f64`; `PrefixSumExecutor` is CUDA / Vulkan only.) The `*_scratch_slots` helpers are plain integer arithmetic, so they also run on the host / CPU.
+The reductions, scans, selection, sort, and reduce-by-key operations run on Quadrants' GPU backends (CUDA, AMDGPU, Vulkan, Metal); they are GPU-only and are not available on the CPU backend. (On Metal only 32-bit dtypes are supported - no `i64` / `u64` / `f64`; `PrefixSumExecutor` is CUDA / Vulkan only.) The `*_scratch_slots` helpers are plain integer arithmetic, so they also run on the host / CPU. CSR SpMM has separate CPU/Metal qualification and uses ordinary contiguous `qd.ndarray` storage.
 
 ## Composable `@qd.func` ops
 
-Every algorithm is a composable `@qd.func` (e.g. `reduce_add`, `sort`): call it at the **top level** of your own `@qd.kernel`, so the op is captured into the same kernel / graph as your surrounding phases. The function is annotated with `requires_top_level=True`, so attempting to use it outside of top level will throw an exception at compile time. Note that within a `qd.loop_do_while` counts as being at top-level [FIXME: add qd.checkpoint here too, once/when we merge qd.checkpoint].
+The reductions, scans, selection, sort, and reduce-by-key functions are composable `@qd.func` operations (e.g. `reduce_add`, `sort`): call them at the **top level** of your own `@qd.kernel`. These functions are annotated with `requires_top_level=True`, so attempting to use them outside of top level will throw an exception at compile time. Note that within a `qd.loop_do_while` counts as being at top-level [FIXME: add qd.checkpoint here too, once/when we merge qd.checkpoint]. CSR SpMM also enforces its top-level calling contract with `requires_top_level=True`.
+
+## CSR sparse matrix multiplication
+
+See [CSR sparse matrix multiplication](csr_spmm.md) for its runnable example, shape and ownership requirements, batching, and numerical behavior. The remaining sizing, scratch, and multi-phase conventions on this page apply to the reductions, scans, selection, sort, and reduce-by-key functions rather than CSR SpMM.
 
 ## Key sizing parameters
 
@@ -71,7 +76,7 @@ Size `scratch` with the **same** `log256_max_n` you compile the op for - `reduce
 
 ## Scratch space
 
-The algorithms need scratch space in order to run. This is temporary space used by the algorithms. The caller owns the scratch space. It does not need to be initialized in any way. It does need to exist, and be correctly sized, and typed. Every algorithm takes a mandatory `scratch` argument, to receive the scratch space.
+The reductions, scans, selection, sort, and reduce-by-key functions need scratch space in order to run. This is temporary space used by the algorithms. The caller owns the scratch space. It does not need to be initialized in any way. It does need to exist, and be correctly sized, and typed. These functions take a mandatory `scratch` argument. CSR SpMM takes no scratch argument.
 
 **Ask first, then allocate.** Each algorithm ships a companion `*_scratch_slots(N)` function - branch-free integer arithmetic, no device round-trip - that returns the minimum number of slots needed for a length-`N` input. Allocate at least that many; allocating more is fine. These functions are both **host- and kernel-callable**: pass a Python `int` to size an allocation up front, or call the same function inside a `@qd.kernel` on a device-read `N` to recompute the requirement on-device and validate it against `scratch.shape[0]` without ever reading `N` back to the host..
 
@@ -426,7 +431,7 @@ No explicit fence is required between a kernel that writes the input and the sub
 
 ## Under the hood
 
-Implementation detail for the curious - not needed to *use* the ops. In every case the func emits a fixed-depth (`log256_max_n`) staircase of phases inside your kernel; each phase is a separate offloaded launch, so correctness relies on the same launch-boundary serialization as your surrounding top-level loops. `BLOCK_DIM = 256` throughout. Each op is implemented from scratch in Quadrants; the classical design it follows is cited in its subsection.
+Implementation detail for the curious - not needed to *use* the ops. The reductions, scans, selection, sort, and reduce-by-key functions emit a fixed-depth (`log256_max_n`) staircase of phases inside your kernel; each phase is a separate offloaded launch, so correctness relies on the same launch-boundary serialization as your surrounding top-level loops. `BLOCK_DIM = 256` throughout these functions. Each op is implemented from scratch in Quadrants; the classical design it follows is cited in its subsection. CSR SpMM instead uses one output-element loop, with a private float32 accumulator and one writer per output entry.
 
 ### `reduce_{add,min,max}`
 

@@ -64,6 +64,7 @@ tile
 :titlesonly:
 
 algorithms
+csr_spmm
 ```
 
 ```{toctree}
