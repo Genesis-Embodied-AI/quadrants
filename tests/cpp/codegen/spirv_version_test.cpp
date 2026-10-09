@@ -105,7 +105,7 @@ TEST(SpirvVersion, ValidatesBuffersAndGlobalInterfaces) {
       switch (version) {
         case 0x10500: env = SPV_ENV_VULKAN_1_2; break;
         case 0x10600: env = SPV_ENV_VULKAN_1_3; break;
-        default: FAIL() << "Unexpected SPIR-V version: " << version;
+        default: GTEST_FAIL() << "Unexpected SPIR-V version: " << version;
       }
       // clang-format on
       spvtools::SpirvTools tools(env);
