@@ -80,9 +80,9 @@ TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
       }
       ir.commit_kernel_function(/* func= */ main, /* name= */ "main", /* args= */ entry_point_args,
                                 /* local_size= */ {1, 1, 1});
-      auto binary = ir.finalize();
-      ASSERT_GT(binary.size(), 5);
-      EXPECT_EQ(binary[1], version);
+      auto spirv_module = ir.finalize();
+      ASSERT_GT(spirv_module.size(), 5);
+      EXPECT_EQ(spirv_module[1], version);
 
       auto env = version == 0x10300 ? SPV_ENV_VULKAN_1_1
                                     : (version == 0x10400 ? SPV_ENV_VULKAN_1_1_SPIRV_1_4 : SPV_ENV_VULKAN_1_2);
@@ -92,7 +92,7 @@ TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
         diagnostics += message;
         diagnostics += '\n';
       });
-      EXPECT_TRUE(tools.Validate(binary)) << diagnostics;
+      EXPECT_TRUE(tools.Validate(spirv_module)) << diagnostics;
     }
   }
 }
