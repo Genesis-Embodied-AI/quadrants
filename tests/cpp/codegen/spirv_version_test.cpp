@@ -20,6 +20,17 @@ TEST(SpirvVersion, RejectsOlderTargets) {
 
 // Verify that the buffer code retained after dropping SPIR-V <1.3 still generates valid shaders.
 TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
+  // Conceptual layout and behavior, not compilable C++.
+  // All buffers are in descriptor set 0.
+  // StorageBuffer binding_0 { uint32_t elements[]; } array;
+  // StorageBuffer binding_1 { uint32_t value; } storage;
+  // UniformBuffer binding_2 { uint32_t value; } uniform;
+  //
+  // void main() {
+  //     uint32_t v = uniform.value;
+  //     array.elements[0] = v;
+  //     storage.value = v;
+  // }
   for (auto arch : {Arch::vulkan, Arch::metal}) {
     for (uint32_t version : {0x10300u, 0x10400u, 0x10500u}) {
       SCOPED_TRACE(version);
