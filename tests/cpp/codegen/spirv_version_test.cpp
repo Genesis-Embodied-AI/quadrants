@@ -53,7 +53,7 @@ TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
 
       auto main = ir.new_function();
       ir.start_function(main);
-      auto zero = ir.uint_immediate_number(/* dtype= */ ir.u32_type(), /* value= */ 0);
+      auto zero = ir.uint_immediate_number(ir.u32_type(), 0);
       auto uniform_ptr = ir.make_value(/* op= */ spv::OpAccessChain, /* out_type= */ uniform_ptr_type, uniform, zero);
       auto value = ir.load_variable(uniform_ptr, ir.u32_type());
       ir.store_variable(ir.struct_array_access(ir.u32_type(), array, zero), value);
