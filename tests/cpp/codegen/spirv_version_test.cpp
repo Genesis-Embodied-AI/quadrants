@@ -22,17 +22,27 @@ TEST(SpirvVersion, RejectsOlderTargets) {
   }
 }
 
-// Verify that the buffer code retained after dropping SPIR-V <1.5 still generates valid shaders.
+// Verify that SPIR-V 1.5+ shaders include the buffers, built-in inputs, and private/workgroup globals they use.
+// Validate generated modules and, in Metal builds, translate them to MSL; this test does not execute the shaders.
 TEST(SpirvVersion, ValidatesBuffersAndGlobalInterfaces) {
-  // Vulkan GLSL illustration of the buffer accesses; the test also exercises built-ins, RNG, and workgroup memory.
+  // Vulkan GLSL illustration; next_random() represents the builder's RNG, whose implementation is omitted here.
   // #version 450
+  // #extension GL_KHR_shader_subgroup_basic : require
   // layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
   // layout(std430, set = 0, binding = 0) buffer ArrayBuffer { uint elements[]; } array_buffer;
   // layout(std430, set = 0, binding = 1) buffer ScalarBuffer { uint value; } scalar_buffer;
   // layout(std140, set = 0, binding = 2) uniform ScalarUniform { uint value; } scalar_uniform;
+  // shared uint shared_values[1];
+  // uint next_random();  // Uses private per-invocation state and array_buffer for initialization.
   //
   // void main() {
   //     uint v = scalar_uniform.value;  // Exercise reading a uniform-buffer member.
+  //     v += gl_GlobalInvocationID.x;   // Exercise the registered entry-point input path.
+  //     v += gl_LocalInvocationID.x;
+  //     v += gl_SubgroupInvocationID;   // Exercise the input tracked through global_values.
+  //     v += next_random();            // Exercise private globals tracked through global_values.
+  //     shared_values[0] = v;          // Exercise a workgroup-memory store and load.
+  //     v = shared_values[0];
   //     array_buffer.elements[0] = v;   // Exercise writing a storage-buffer array element.
   //     scalar_buffer.value = v;       // Exercise writing a storage-buffer struct member.
   // }
@@ -59,6 +69,7 @@ TEST(SpirvVersion, ValidatesBuffersAndGlobalInterfaces) {
       Value scalar_uniform =
           ir.uniform_struct_argument(/* struct_type= */ ir.create_struct_type(struct_members),
                                      /* descriptor_set= */ 0, /* binding= */ 2, /* name= */ "scalar_uniform");
+      // shared uint shared_values[1];
       Value shared = ir.alloca_workgroup_array(ir.get_function_array_type(ir.u32_type(), 1));
       SType storage_ptr_type = ir.get_storage_pointer_type(ir.u32_type());
       SType uniform_ptr_type = ir.get_pointer_type(ir.u32_type(), spv::StorageClassUniform);
@@ -73,14 +84,20 @@ TEST(SpirvVersion, ValidatesBuffersAndGlobalInterfaces) {
       Value uniform_ptr = ir.make_value(/* op= */ spv::OpAccessChain, /* out_type= */ uniform_ptr_type,
                                         /* base= */ scalar_uniform, /* member_index= */ zero);
       Value v = ir.load_variable(uniform_ptr, ir.u32_type());
-      // Exercise both input-registration paths and the private globals used by the random-number generator.
+      // v += gl_GlobalInvocationID.x;  // Registers the input through entry_point_inputs_.
       v = ops.add(v, ops.get_global_invocation_id(0));
+      // v += gl_LocalInvocationID.x;  // Registers another input through entry_point_inputs_.
       v = ops.add(v, ops.get_local_invocation_id(0));
+      // v += gl_SubgroupInvocationID;  // Registers this input through global_values instead.
       v = ops.add(v, ops.get_subgroup_invocation_id());
+      // v += next_random();  // Adds private RNG state to global_values; array_buffer supplies initialization data.
       v = ops.add(v, ops.rand_u32(array_buffer));
+
+      // shared_values[0] = v;
       SType shared_ptr_type = ir.get_pointer_type(ir.u32_type(), spv::StorageClassWorkgroup);
       Value shared_ptr = ir.make_value(spv::OpAccessChain, shared_ptr_type, shared, zero);
       ir.store_variable(shared_ptr, v);
+      // v = shared_values[0];
       v = ir.load_variable(shared_ptr, ir.u32_type());
 
       // array_buffer.elements[0] = v;
@@ -95,6 +112,7 @@ TEST(SpirvVersion, ValidatesBuffersAndGlobalInterfaces) {
       ir.make_inst(spv::OpFunctionEnd);
 
       // SPIR-V 1.5+ entry-point interfaces include the buffers and workgroup variable used by this function.
+      // commit_kernel_function also appends the built-ins and private RNG state registered by the operations above.
       std::vector<Value> entry_point_args = {array_buffer, scalar_buffer, scalar_uniform, shared};
       ir.commit_kernel_function(/* func= */ main, /* name= */ "main", /* args= */ entry_point_args,
                                 /* local_size= */ {1, 1, 1});
@@ -124,10 +142,12 @@ TEST(SpirvVersion, ValidatesBuffersAndGlobalInterfaces) {
         spirv_cross::CompilerMSL compiler(spirv_module);
         spirv_cross::CompilerMSL::Options options;
         options.enable_decoration_binding = true;
+        // MSL 2.1 supports this fixture's subgroup input; runtime MSL selection remains device-dependent.
         options.set_msl_version(2, 1, 0);
         compiler.set_msl_options(options);
         std::string msl = compiler.compile();
         EXPECT_FALSE(msl.empty());
+        // Check that translation retains both storage-buffer resources and the uniform-buffer resource.
         spirv_cross::ShaderResources resources = compiler.get_shader_resources();
         EXPECT_EQ(resources.storage_buffers.size(), 2);
         EXPECT_EQ(resources.uniform_buffers.size(), 1);
