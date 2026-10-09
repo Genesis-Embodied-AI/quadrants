@@ -34,7 +34,7 @@ TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
     for (uint32_t version : {0x10300u, 0x10400u, 0x10500u}) {
       SCOPED_TRACE(version);
       DeviceCapabilityConfig caps;
-      caps.set(/* cap= */ DeviceCapability::spirv_version, /* level= */ version);
+      caps.set(DeviceCapability::spirv_version, version);
       IRBuilder ir(arch, &caps);
       ir.init_header();
 
