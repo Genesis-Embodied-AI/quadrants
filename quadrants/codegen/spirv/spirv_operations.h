@@ -34,6 +34,7 @@ class SpirvOperations {
 
   void set_work_group_size(const std::array<int, 3> group_size);
   Value get_num_work_groups(uint32_t dim_index);
+  Value get_work_group_id(uint32_t dim_index);
   Value get_local_invocation_id(uint32_t dim_index);
   Value get_global_invocation_id(uint32_t dim_index);
   Value get_subgroup_invocation_id();
@@ -57,6 +58,9 @@ class SpirvOperations {
   Value gl_work_group_size_;
   Value subgroup_local_invocation_id_;
   Value debug_printf_;
+
+  // Cached ID and type information for the imported GLSL function.
+  Value get_work_group_id_fn_id_;
 
   bool init_rand_{false};
   Value rand_x_;

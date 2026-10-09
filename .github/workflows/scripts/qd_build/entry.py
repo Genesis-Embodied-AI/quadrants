@@ -13,11 +13,13 @@ from . import misc
 from .alter import handle_alternate_actions
 from .cmake import cmake_args
 from .compiler import setup_clang, setup_msvc
+from .glslang import setup_glslang
 from .llvm import setup_llvm
 from .misc import banner, path_prepend
 from .ospkg import setup_os_pkgs
 from .sccache import setup_sccache
 from .tinysh import Command, CommandFailed, nice, sh
+from .vulkan import setup_vulkan
 
 
 # -- code --
@@ -62,18 +64,17 @@ def setup_basic_build_env():
         setup_msvc()
 
     setup_llvm()
-    if u.system in ("Linux", "Darwin"):
-        # Linux: validation layers + SPIR-V tools (shader debug printf support).
-        # macOS: the SDK bundles a current MoltenVK that advertises `VK_KHR_buffer_device_address`, which
-        # the adstack sizer shader needs for `ExternalTensorRead` via Physical Storage Buffer addressing.
-        # The Vulkan-Taichi-assets pin at `quadrants/rhi/CMakeLists.txt:40` is too old for PSB; wiring
-        # `setup_vulkan()` here lets the CMake glue pick up `$VULKAN_SDK/lib/libMoltenVK.dylib` (the flat
-        # layout LunarG's macOS SDK uses - see the layout note in `vulkan.py::setup_vulkan`) and ship
-        # that in the wheel instead.
-        from .vulkan import setup_vulkan
+    # Windows and macOS: the SDK supplies glslang for compiling GLSL helpers.
+    # Linux: validation layers + SPIR-V tools (shader debug printf support).
+    # macOS: the SDK bundles a current MoltenVK that advertises `VK_KHR_buffer_device_address`, which
+    # the adstack sizer shader needs for `ExternalTensorRead` via Physical Storage Buffer addressing.
+    # The Vulkan-Taichi-assets pin at `quadrants/rhi/CMakeLists.txt:40` is too old for PSB; wiring
+    # `setup_vulkan()` here lets the CMake glue pick up `$VULKAN_SDK/lib/libMoltenVK.dylib` (the flat
+    # layout LunarG's macOS SDK uses - see the layout note in `vulkan.py::setup_vulkan`) and ship
+    # that in the wheel instead.
+    setup_vulkan()
 
-        setup_vulkan()
-
+    setup_glslang()
     sccache = setup_sccache()
     python = sh.bake(sys.executable)
     return sccache, python
