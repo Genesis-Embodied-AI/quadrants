@@ -20,13 +20,15 @@ TEST(SpirvVersion, RejectsOlderTargets) {
 
 // Verify that the buffer code retained after dropping SPIR-V <1.3 still generates valid shaders.
 TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
-  // Conceptual layout and behavior, not compilable C++.
-  // StorageBuffer binding_0 { uint32_t elements[]; } array;
-  // StorageBuffer binding_1 { uint32_t value; } storage;
-  // UniformBuffer binding_2 { uint32_t value; } uniform;
+  // Equivalent Vulkan GLSL compute shader:
+  // #version 450
+  // layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+  // layout(std430, set = 0, binding = 0) buffer ArrayBuffer { uint elements[]; } array;
+  // layout(std430, set = 0, binding = 1) buffer StorageBuffer { uint value; } storage;
+  // layout(std140, set = 0, binding = 2) uniform UniformBuffer { uint value; } params;
   //
   // void main() {
-  //     uint32_t v = uniform.value;
+  //     uint v = params.value;
   //     array.elements[0] = v;
   //     storage.value = v;
   // }
