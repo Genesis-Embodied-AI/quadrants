@@ -32,7 +32,7 @@ TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
   //     array_buffer.elements[0] = v;   // Exercise writing a storage-buffer array element.
   //     scalar_buffer.value = v;       // Exercise writing a storage-buffer struct member.
   // }
-  for (auto arch : {Arch::vulkan, Arch::metal}) {
+  for (Arch arch : {Arch::vulkan, Arch::metal}) {
     for (uint32_t version : {0x10300u, 0x10400u, 0x10500u}) {
       SCOPED_TRACE(version);
       DeviceCapabilityConfig caps;
@@ -40,35 +40,35 @@ TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
       IRBuilder ir(arch, &caps);
       ir.init_header();
 
-      auto array_buffer = ir.buffer_argument(/* value_type= */ ir.u32_type(), /* descriptor_set= */ 0,
+      Value array_buffer = ir.buffer_argument(/* value_type= */ ir.u32_type(), /* descriptor_set= */ 0,
                                              /* binding= */ 0, /* name= */ "array_buffer");
       // Each tuple contains the member's SPIR-V type, name, and byte offset within the struct.
       std::vector<std::tuple<SType, std::string, size_t>> minimal_test_struct_members = {{ir.u32_type(), "value", 0}};
-      auto scalar_buffer =
+      Value scalar_buffer =
           ir.buffer_struct_argument(/* struct_type= */ ir.create_struct_type(minimal_test_struct_members),
                                     /* descriptor_set= */ 0, /* binding= */ 1, /* name= */ "scalar_buffer");
-      auto uniform = ir.uniform_struct_argument(/* struct_type= */ ir.create_struct_type(minimal_test_struct_members),
+      Value uniform = ir.uniform_struct_argument(/* struct_type= */ ir.create_struct_type(minimal_test_struct_members),
                                                 /* descriptor_set= */ 0, /* binding= */ 2, /* name= */ "uniform");
-      auto storage_ptr_type = ir.get_storage_pointer_type(ir.u32_type());
-      auto uniform_ptr_type = ir.get_pointer_type(ir.u32_type(), spv::StorageClassUniform);
+      SType storage_ptr_type = ir.get_storage_pointer_type(ir.u32_type());
+      SType uniform_ptr_type = ir.get_pointer_type(ir.u32_type(), spv::StorageClassUniform);
       EXPECT_EQ(storage_ptr_type.storage_class, spv::StorageClassStorageBuffer);
       EXPECT_EQ(uniform.stype.storage_class, spv::StorageClassUniform);
 
-      auto main = ir.new_function();
+      Value main = ir.new_function();
       ir.start_function(main);
-      auto zero = ir.uint_immediate_number(ir.u32_type(), 0);
+      Value zero = ir.uint_immediate_number(ir.u32_type(), 0);
 
       // uint v = scalar_uniform.value;
-      auto uniform_ptr = ir.make_value(/* op= */ spv::OpAccessChain, /* out_type= */ uniform_ptr_type,
+      Value uniform_ptr = ir.make_value(/* op= */ spv::OpAccessChain, /* out_type= */ uniform_ptr_type,
                                        /* base= */ uniform, /* member_index= */ zero);
-      auto value = ir.load_variable(uniform_ptr, ir.u32_type());
+      Value value = ir.load_variable(uniform_ptr, ir.u32_type());
 
       // array_buffer.elements[0] = v;
       ir.store_variable(
           ir.struct_array_access(/* res_type= */ ir.u32_type(), /* buffer= */ array_buffer, /* index= */ zero), value);
 
       // scalar_buffer.value = v;
-      auto scalar_ptr = ir.make_value(/* op= */ spv::OpAccessChain, /* out_type= */ storage_ptr_type, scalar_buffer, zero);
+      Value scalar_ptr = ir.make_value(/* op= */ spv::OpAccessChain, /* out_type= */ storage_ptr_type, scalar_buffer, zero);
       ir.store_variable(scalar_ptr, value);
       ir.make_inst(spv::OpReturn);
       ir.make_inst(spv::OpFunctionEnd);
@@ -80,12 +80,13 @@ TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
       }
       ir.commit_kernel_function(/* func= */ main, /* name= */ "main", /* args= */ entry_point_args,
                                 /* local_size= */ {1, 1, 1});
-      auto spirv_module = ir.finalize();
+      std::vector<uint32_t> spirv_module = ir.finalize();
       ASSERT_GT(spirv_module.size(), 5);
       EXPECT_EQ(spirv_module[1], version);
 
-      auto env = version == 0x10300 ? SPV_ENV_VULKAN_1_1
-                                    : (version == 0x10400 ? SPV_ENV_VULKAN_1_1_SPIRV_1_4 : SPV_ENV_VULKAN_1_2);
+      spv_target_env env = version == 0x10300
+                               ? SPV_ENV_VULKAN_1_1
+                               : (version == 0x10400 ? SPV_ENV_VULKAN_1_1_SPIRV_1_4 : SPV_ENV_VULKAN_1_2);
       spvtools::SpirvTools tools(env);
       std::string diagnostics;
       tools.SetMessageConsumer([&](spv_message_level_t, const char *, const spv_position_t &, const char *message) {
