@@ -50,8 +50,9 @@ TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
           ir.buffer_struct_argument(/* struct_type= */ ir.create_struct_type(struct_members),
                                     /* descriptor_set= */ 0, /* binding= */ 1, /* name= */ "scalar_buffer");
       // layout(std140, set = 0, binding = 2) uniform ScalarUniform { uint value; } scalar_uniform;
-      Value scalar_uniform = ir.uniform_struct_argument(/* struct_type= */ ir.create_struct_type(struct_members),
-                                                /* descriptor_set= */ 0, /* binding= */ 2, /* name= */ "scalar_uniform");
+      Value scalar_uniform =
+          ir.uniform_struct_argument(/* struct_type= */ ir.create_struct_type(struct_members),
+                                     /* descriptor_set= */ 0, /* binding= */ 2, /* name= */ "scalar_uniform");
       SType storage_ptr_type = ir.get_storage_pointer_type(ir.u32_type());
       SType uniform_ptr_type = ir.get_pointer_type(ir.u32_type(), spv::StorageClassUniform);
       EXPECT_EQ(storage_ptr_type.storage_class, spv::StorageClassStorageBuffer);
