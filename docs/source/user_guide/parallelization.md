@@ -56,7 +56,7 @@ def fill(a: qd.Template) -> None:
         a[I] = I[0] + I[1] + I[2]
 ```
 
-`I` is a `qd.Vector` with one element per dimension.
+`I` is a [`qd.Vector`](matrix_vector.md) with one element per dimension.
 
 ### Controlling iteration order with `axes=`
 
