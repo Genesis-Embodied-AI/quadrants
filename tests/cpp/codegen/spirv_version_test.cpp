@@ -59,8 +59,8 @@ TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
       ir.store_variable(ir.struct_array_access(ir.u32_type(), array, zero), value);
       auto storage_ptr = ir.make_value(/* op= */ spv::OpAccessChain, /* out_type= */ storage_ptr_type, storage, zero);
       ir.store_variable(storage_ptr, value);
-      ir.make_inst(/* op= */ spv::OpReturn);
-      ir.make_inst(/* op= */ spv::OpFunctionEnd);
+      ir.make_inst(spv::OpReturn);
+      ir.make_inst(spv::OpFunctionEnd);
 
       // SPIR-V 1.3 entry-point interfaces contain only Input/Output variables; 1.4 also requires the buffers.
       std::vector<Value> entry_point_args;
