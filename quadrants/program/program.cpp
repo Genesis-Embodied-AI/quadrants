@@ -513,8 +513,8 @@ Program::~Program() {
 }
 
 DeviceCapabilityConfig translate_devcaps(const std::vector<std::string> &device_caps) {
-  // Each device capability assignment uses an encoded integer, e.g. `spirv_version=66816`, or a flag, e.g.
-  // `spirv_has_int8`.
+  // Each device capability assignment uses an encoded integer (e.g. 0x10500 for SPIR-V 1.5, passed as decimal text),
+  // or a flag such as `spirv_has_int8`.
   DeviceCapabilityConfig cfg{};
   for (const std::string &cap : device_caps) {
     std::string_view key;
