@@ -95,7 +95,7 @@ TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
         case 0x10300: env = SPV_ENV_VULKAN_1_1; break;
         case 0x10400: env = SPV_ENV_VULKAN_1_1_SPIRV_1_4; break;
         case 0x10500: env = SPV_ENV_VULKAN_1_2; break;
-        default: FAIL() << "Unexpected SPIR-V version: " << version;
+        default: GTEST_FAIL() << "Unexpected SPIR-V version: " << version;
       }
       // clang-format on
       spvtools::SpirvTools tools(env);
