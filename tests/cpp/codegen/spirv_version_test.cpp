@@ -90,17 +90,10 @@ TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
 
       spv_target_env env;
       switch (version) {
-        case 0x10300:
-          env = SPV_ENV_VULKAN_1_1;
-          break;
-        case 0x10400:
-          env = SPV_ENV_VULKAN_1_1_SPIRV_1_4;
-          break;
-        case 0x10500:
-          env = SPV_ENV_VULKAN_1_2;
-          break;
-        default:
-          FAIL() << "Unexpected SPIR-V version: " << version;
+        case 0x10300: env = SPV_ENV_VULKAN_1_1; break;
+        case 0x10400: env = SPV_ENV_VULKAN_1_1_SPIRV_1_4; break;
+        case 0x10500: env = SPV_ENV_VULKAN_1_2; break;
+        default: FAIL() << "Unexpected SPIR-V version: " << version;
       }
       spvtools::SpirvTools tools(env);
       std::string diagnostics;
