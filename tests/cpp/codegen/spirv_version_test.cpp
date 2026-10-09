@@ -24,13 +24,13 @@ TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
   // #version 450
   // layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
   // layout(std430, set = 0, binding = 0) buffer ArrayBuffer { uint elements[]; } array;
-  // layout(std430, set = 0, binding = 1) buffer StorageBuffer { uint value; } storage;
+  // layout(std430, set = 0, binding = 1) buffer ScalarBuffer { uint value; } scalar;
   // layout(std140, set = 0, binding = 2) uniform UniformBuffer { uint value; } params;
   //
   // void main() {
   //     uint v = params.value;
   //     array.elements[0] = v;
-  //     storage.value = v;
+  //     scalar.value = v;
   // }
   for (auto arch : {Arch::vulkan, Arch::metal}) {
     for (uint32_t version : {0x10300u, 0x10400u, 0x10500u}) {
@@ -44,8 +44,8 @@ TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
                                       /* binding= */ 0, /* name= */ "array");
       // Each tuple contains the member's SPIR-V type, name, and byte offset within the struct.
       std::vector<std::tuple<SType, std::string, size_t>> minimal_test_struct_members = {{ir.u32_type(), "value", 0}};
-      auto storage = ir.buffer_struct_argument(/* struct_type= */ ir.create_struct_type(minimal_test_struct_members),
-                                               /* descriptor_set= */ 0, /* binding= */ 1, /* name= */ "storage");
+      auto scalar = ir.buffer_struct_argument(/* struct_type= */ ir.create_struct_type(minimal_test_struct_members),
+                                               /* descriptor_set= */ 0, /* binding= */ 1, /* name= */ "scalar");
       auto uniform = ir.uniform_struct_argument(/* struct_type= */ ir.create_struct_type(minimal_test_struct_members),
                                                 /* descriptor_set= */ 0, /* binding= */ 2, /* name= */ "uniform");
       auto storage_ptr_type = ir.get_storage_pointer_type(ir.u32_type());
@@ -61,15 +61,15 @@ TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
       auto value = ir.load_variable(uniform_ptr, ir.u32_type());
       ir.store_variable(
           ir.struct_array_access(/* res_type= */ ir.u32_type(), /* buffer= */ array, /* index= */ zero), value);
-      auto storage_ptr = ir.make_value(/* op= */ spv::OpAccessChain, /* out_type= */ storage_ptr_type, storage, zero);
-      ir.store_variable(storage_ptr, value);
+      auto scalar_ptr = ir.make_value(/* op= */ spv::OpAccessChain, /* out_type= */ storage_ptr_type, scalar, zero);
+      ir.store_variable(scalar_ptr, value);
       ir.make_inst(spv::OpReturn);
       ir.make_inst(spv::OpFunctionEnd);
 
       // SPIR-V 1.3 entry-point interfaces contain only Input/Output variables; 1.4 also requires the buffers.
       std::vector<Value> entry_point_args;
       if (version >= 0x10400) {
-        entry_point_args = {array, storage, uniform};
+        entry_point_args = {array, scalar, uniform};
       }
       ir.commit_kernel_function(/* func= */ main, /* name= */ "main", /* args= */ entry_point_args,
                                 /* local_size= */ {1, 1, 1});
