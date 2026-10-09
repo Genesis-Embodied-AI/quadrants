@@ -2,7 +2,9 @@
 
 #include "gtest/gtest.h"
 #include "spirv-tools/libspirv.hpp"
+#ifdef QD_WITH_METAL
 #include "spirv_msl.hpp"
+#endif
 #include "quadrants/codegen/spirv/spirv_ir_builder.h"
 #include "quadrants/codegen/spirv/spirv_operations.h"
 
@@ -116,9 +118,9 @@ TEST(SpirvVersion, ValidatesBuffersAndGlobalInterfaces) {
       });
       EXPECT_TRUE(tools.Validate(spirv_module)) << diagnostics;
 
+#ifdef QD_WITH_METAL
       if (arch == Arch::metal) {
-        // SPIRV-Cross hides globals omitted from a 1.4+ interface. Validate the actual Metal translation as well
-        // as the binary, including on Linux hosts where the native Metal runtime is unavailable.
+        // SPIRV-Cross hides globals omitted from a 1.4+ interface. Check Metal translation in Metal-enabled builds.
         spirv_cross::CompilerMSL compiler(spirv_module);
         spirv_cross::CompilerMSL::Options options;
         options.enable_decoration_binding = true;
@@ -130,6 +132,7 @@ TEST(SpirvVersion, ValidatesBuffersAndGlobalInterfaces) {
         EXPECT_EQ(resources.storage_buffers.size(), 2);
         EXPECT_EQ(resources.uniform_buffers.size(), 1);
       }
+#endif
     }
   }
 }
