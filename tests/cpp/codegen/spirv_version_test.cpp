@@ -65,15 +65,15 @@ TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
       // uint v = scalar_uniform.value;
       Value uniform_ptr = ir.make_value(/* op= */ spv::OpAccessChain, /* out_type= */ uniform_ptr_type,
                                        /* base= */ scalar_uniform, /* member_index= */ zero);
-      Value value = ir.load_variable(uniform_ptr, ir.u32_type());
+      Value v = ir.load_variable(uniform_ptr, ir.u32_type());
 
       // array_buffer.elements[0] = v;
       ir.store_variable(
-          ir.struct_array_access(/* res_type= */ ir.u32_type(), /* buffer= */ array_buffer, /* index= */ zero), value);
+          ir.struct_array_access(/* res_type= */ ir.u32_type(), /* buffer= */ array_buffer, /* index= */ zero), v);
 
       // scalar_buffer.value = v;
       Value scalar_ptr = ir.make_value(/* op= */ spv::OpAccessChain, /* out_type= */ storage_ptr_type, scalar_buffer, zero);
-      ir.store_variable(scalar_ptr, value);
+      ir.store_variable(scalar_ptr, v);
       ir.make_inst(spv::OpReturn);
       ir.make_inst(spv::OpFunctionEnd);
 
