@@ -181,14 +181,10 @@ void GraphManager::resolve_ctx_ndarray_ptrs(LaunchContextBuilder &ctx,
       auto data_ptr = ctx.array_ptrs[data_ptr_idx];
       auto grad_ptr = ctx.array_ptrs[grad_ptr_idx];
 
-      QD_ERROR_IF(grad_ptr != nullptr,
-                  "graph does not support autograd; "
-                  "ndarray arg {} has a non-null gradient pointer",
-                  arg_id);
-
       // Raw device pointer to the array data, resolved from either an
       // external array (raw pointer) or a DeviceAllocation handle.
       void *resolved_data = nullptr;
+      void *resolved_grad = nullptr;
 
       if (ctx.device_allocation_type[arg_id] == LaunchContextBuilder::DevAllocType::kNone) {
         QD_ERROR_IF(!on_cuda_device(data_ptr),
@@ -196,13 +192,17 @@ void GraphManager::resolve_ctx_ndarray_ptrs(LaunchContextBuilder &ctx,
                     "ndarray arg {} is host-resident",
                     arg_id);
         resolved_data = data_ptr;
+        resolved_grad = grad_ptr;
       } else if (arr_sz > 0) {
         DeviceAllocation *ptr = static_cast<DeviceAllocation *>(data_ptr);
         resolved_data = executor->get_device_alloc_info_ptr(*ptr);
+        if (grad_ptr != nullptr) {
+          resolved_grad = executor->get_device_alloc_info_ptr(*static_cast<DeviceAllocation *>(grad_ptr));
+        }
       }
 
       if (resolved_data) {
-        ctx.set_ndarray_ptrs(arg_id, (uint64)resolved_data, (uint64) nullptr);
+        ctx.set_ndarray_ptrs(arg_id, (uint64)resolved_data, (uint64)resolved_grad);
         // Resolve every graph_do_while level whose condition ndarray is this arg (multi-level table).
         ctx.resolve_graph_do_while_flag(arg_id, resolved_data);
         // Mirror the resolution for every `qd.checkpoint(yield_on=foo)` -- walk the per-cp_id arg-id table and stash
@@ -672,9 +672,8 @@ bool GraphManager::try_launch(int launch_id,
   // accordingly); both kernels are baked into the graph so the host never gets a chance to run in between.
   // For graph-compatible, statically-bounded adstack kernels, codegen still sets
   // `static_num_threads = grid_dim * block_dim` and we could size the heap once at graph build, but that
-  // path is not exercised today and the existing `grad_ptr != nullptr` guard below rejects the standard
-  // autograd entry points that would hit it. Fail loudly instead of silently running with a nullptr
-  // `runtime->adstack_heap_buffer`.
+  // path is not exercised today and this check alone covers it, since reverse-mode (adjoint) kernels never
+  // carry `use_graph`. Fail loudly instead of silently running with a nullptr `runtime->adstack_heap_buffer`.
   for (const auto &task : offloaded_tasks) {
     QD_ERROR_IF(!task.ad_stack.allocas.empty(),
                 "graph=True is not supported for kernels that use the reverse-mode autodiff stack "
