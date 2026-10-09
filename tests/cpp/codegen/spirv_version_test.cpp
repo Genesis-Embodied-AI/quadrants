@@ -74,7 +74,7 @@ TEST(SpirvVersion, ValidatesBuffersAndGlobalInterfaces) {
           ir.uniform_struct_argument(/* struct_type= */ ir.create_struct_type(struct_members),
                                      /* descriptor_set= */ 0, /* binding= */ 2, /* name= */ "scalar_uniform");
       // shared uint shared_values[1];
-      Value shared = ir.alloca_workgroup_array(ir.get_function_array_type(ir.u32_type(), 1));
+      Value shared_values = ir.alloca_workgroup_array(ir.get_function_array_type(ir.u32_type(), 1));
       SType storage_ptr_type = ir.get_storage_pointer_type(ir.u32_type());
       SType uniform_ptr_type = ir.get_pointer_type(ir.u32_type(), spv::StorageClassUniform);
       EXPECT_EQ(storage_ptr_type.storage_class, spv::StorageClassStorageBuffer);
@@ -99,7 +99,7 @@ TEST(SpirvVersion, ValidatesBuffersAndGlobalInterfaces) {
 
       // shared_values[0] = v;
       SType shared_ptr_type = ir.get_pointer_type(ir.u32_type(), spv::StorageClassWorkgroup);
-      Value shared_ptr = ir.make_value(spv::OpAccessChain, shared_ptr_type, shared, zero);
+      Value shared_ptr = ir.make_value(spv::OpAccessChain, shared_ptr_type, shared_values, zero);
       ir.store_variable(shared_ptr, v);
       // v = shared_values[0];
       v = ir.load_variable(shared_ptr, ir.u32_type());
@@ -117,7 +117,7 @@ TEST(SpirvVersion, ValidatesBuffersAndGlobalInterfaces) {
 
       // SPIR-V 1.5+ entry-point interfaces include the buffers and workgroup variable used by this function.
       // commit_kernel_function also appends the built-ins and private RNG state registered by the operations above.
-      std::vector<Value> entry_point_args = {array_buffer, scalar_buffer, scalar_uniform, shared};
+      std::vector<Value> entry_point_args = {array_buffer, scalar_buffer, scalar_uniform, shared_values};
       ir.commit_kernel_function(/* func= */ main, /* name= */ "main", /* args= */ entry_point_args,
                                 /* local_size= */ {1, 1, 1});
       std::vector<uint32_t> spirv_module = ir.finalize();
