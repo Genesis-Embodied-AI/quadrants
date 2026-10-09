@@ -42,7 +42,7 @@ TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
 
       // layout(std430, set = 0, binding = 0) buffer ArrayBuffer { uint elements[]; } array_buffer;
       Value array_buffer = ir.buffer_argument(/* value_type= */ ir.u32_type(), /* descriptor_set= */ 0,
-                                             /* binding= */ 0, /* name= */ "array_buffer");
+                                              /* binding= */ 0, /* name= */ "array_buffer");
       // Each tuple contains the member's SPIR-V type, name, and byte offset within the struct.
       std::vector<std::tuple<SType, std::string, size_t>> struct_members = {{ir.u32_type(), "value", 0}};
       // layout(std430, set = 0, binding = 1) buffer ScalarBuffer { uint value; } scalar_buffer;
@@ -64,7 +64,7 @@ TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
 
       // uint v = scalar_uniform.value;
       Value uniform_ptr = ir.make_value(/* op= */ spv::OpAccessChain, /* out_type= */ uniform_ptr_type,
-                                       /* base= */ scalar_uniform, /* member_index= */ zero);
+                                        /* base= */ scalar_uniform, /* member_index= */ zero);
       Value v = ir.load_variable(uniform_ptr, ir.u32_type());
 
       // array_buffer.elements[0] = v;
@@ -72,7 +72,8 @@ TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
           ir.struct_array_access(/* res_type= */ ir.u32_type(), /* buffer= */ array_buffer, /* index= */ zero), v);
 
       // scalar_buffer.value = v;
-      Value scalar_ptr = ir.make_value(/* op= */ spv::OpAccessChain, /* out_type= */ storage_ptr_type, scalar_buffer, zero);
+      Value scalar_ptr =
+          ir.make_value(/* op= */ spv::OpAccessChain, /* out_type= */ storage_ptr_type, scalar_buffer, zero);
       ir.store_variable(scalar_ptr, v);
       ir.make_inst(spv::OpReturn);
       ir.make_inst(spv::OpFunctionEnd);
@@ -89,12 +90,14 @@ TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
       EXPECT_EQ(spirv_module[1], version);
 
       spv_target_env env;
+      // clang-format off
       switch (version) {
         case 0x10300: env = SPV_ENV_VULKAN_1_1; break;
         case 0x10400: env = SPV_ENV_VULKAN_1_1_SPIRV_1_4; break;
         case 0x10500: env = SPV_ENV_VULKAN_1_2; break;
         default: FAIL() << "Unexpected SPIR-V version: " << version;
       }
+      // clang-format on
       spvtools::SpirvTools tools(env);
       std::string diagnostics;
       tools.SetMessageConsumer([&](spv_message_level_t, const char *, const spv_position_t &, const char *message) {
