@@ -25,10 +25,10 @@ TEST(SpirvVersion, ValidatesStorageAndUniformBuffers) {
   // layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
   // layout(std430, set = 0, binding = 0) buffer ArrayBuffer { uint elements[]; } array_buffer;
   // layout(std430, set = 0, binding = 1) buffer ScalarBuffer { uint value; } scalar_buffer;
-  // layout(std140, set = 0, binding = 2) uniform UniformBuffer { uint value; } params;
+  // layout(std140, set = 0, binding = 2) uniform ScalarUniform { uint value; } scalar_uniform;
   //
   // void main() {
-  //     uint v = params.value;
+  //     uint v = scalar_uniform.value;
   //     array_buffer.elements[0] = v;
   //     scalar_buffer.value = v;
   // }
