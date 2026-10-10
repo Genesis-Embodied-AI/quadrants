@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Supported systems &#8212; Quadrants 1.3.4 documentation</title>
+    <title>Supported systems &#8212; Quadrants 1.4.0 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../_static/documentation_options.js?v=e358f374"></script>
+    <script src="../_static/documentation_options.js?v=9172181d"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Getting started" href="getting_started.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.3.4" />
+  <meta name="docsearch:version" content="1.4.0" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.3.4 documentation</p>
+    <p class="title logo__title">Quadrants 1.4.0 documentation</p>
   
 </a></div>
     
@@ -456,7 +456,7 @@
 <li><p>NVIDIA GPUs with compute capability 6.0 (<code class="docutils literal notranslate"><span class="pre">sm_60</span></code>, Pascal) through 12.0 (<code class="docutils literal notranslate"><span class="pre">sm_120</span></code>, Blackwell / Thor). Compute capability identifies the GPU features supported by an NVIDIA architecture; <code class="docutils literal notranslate"><span class="pre">sm_60</span></code> and <code class="docutils literal notranslate"><span class="pre">sm_120</span></code> are CUDA’s codes for these versions.</p></li>
 <li><p>Metal GPUs</p></li>
 <li><p>AMD GPUs</p></li>
-<li><p>GPUs with Vulkan 1.1 or newer drivers (e.g. Intel Arc)</p></li>
+<li><p>GPUs with Vulkan 1.2 or newer drivers (e.g. Intel Arc)</p></li>
 </ul>
 <p>If you have a newer NVIDIA GPU (above <code class="docutils literal notranslate"><span class="pre">sm_120</span></code>), please <a class="reference external" href="https://github.com/Genesis-Embodied-AI/quadrants/issues">open an issue on the Quadrants repo</a>.</p>
 </section>
@@ -517,7 +517,8 @@
 <li><p><code class="docutils literal notranslate"><span class="pre">qd.cuda</span></code> requires an NVIDIA driver and CUDA runtime installed on the host. NVIDIA ships CUDA for Linux ARM64 and Windows ARM64, but quadrants does not support them yet.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">qd.amdgpu</span></code> requires HIP 6.0 or newer (HIP is AMD’s GPU programming interface) and currently wires up the Linux x64 ROCm path only. AMD’s GPU toolchain also ships on Windows and on some Linux ARM64 targets, but quadrants does not support them yet. On AMD GPUs, a subgroup is always 64 threads wide, so <a class="reference internal" href="subgroup.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup</span></code></span></a> primitives operate over 64 lanes on both CDNA (Instinct) and RDNA (Radeon) hardware.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">qd.metal</span></code> is only available on Apple hardware and is the recommended GPU backend there.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.vulkan</span></code> requires Vulkan 1.1 or newer. Quadrants generates shaders in SPIR-V (an intermediate format for GPU programs), version 1.3 or newer; older targets are unsupported.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.vulkan</span></code> requires Vulkan 1.2 or newer. The Vulkan and Metal backends generate shaders in SPIR-V (an intermediate format for GPU programs), version 1.5 or newer; older targets are unsupported.</p></li>
+<li><p>Quadrants normally detects GPU features and selects the shader format automatically. The <code class="docutils literal notranslate"><span class="pre">qd.types.DeviceCapability</span></code> class provides named constants for GPU features and shader-format versions when code specifies these choices explicitly. If your code uses its removed <code class="docutils literal notranslate"><span class="pre">spirv_version_1_3</span></code> or <code class="docutils literal notranslate"><span class="pre">spirv_version_1_4</span></code> constants, replace them with <code class="docutils literal notranslate"><span class="pre">qd.types.DeviceCapability.spirv_version_1_5</span></code> to select SPIR-V 1.5.</p></li>
 <li><p>Quadrants selects the Vulkan API version automatically. The <code class="docutils literal notranslate"><span class="pre">vk_api_version</span></code> argument to <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> has been removed; omit it from existing calls.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">qd.vulkan</span></code> on macOS bundles a copy of MoltenVK (a Vulkan-to-Metal translation layer) inside the wheel, so no separate install is required.</p></li>
 </ul>
