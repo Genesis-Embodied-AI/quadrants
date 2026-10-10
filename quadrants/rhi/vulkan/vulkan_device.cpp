@@ -1444,7 +1444,7 @@ VulkanDevice::VulkanDevice()
   DeviceCapabilityConfig caps{};
   // Keep the initial target at the compiler's minimum supported SPIR-V version.
   // VulkanDeviceCreator replaces these defaults when it configures the physical device.
-  caps.set(DeviceCapability::spirv_version, 0x10300);
+  caps.set(DeviceCapability::spirv_version, 0x10500);
   set_caps(std::move(caps));
 }
 

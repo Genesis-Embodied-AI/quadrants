@@ -9,7 +9,7 @@ namespace quadrants::lang::spirv {
 
 TEST(WorkgroupShader, LinksAndValidatesAcrossTargets) {
   for (Arch arch : {Arch::vulkan, Arch::metal}) {
-    for (int version : {0x10300, 0x10600}) {
+    for (int version : {0x10500, 0x10600}) {
       for (bool physical : {false, true}) {
         if (physical && arch == Arch::metal) {
           continue;
@@ -37,7 +37,7 @@ TEST(WorkgroupShader, LinksAndValidatesAcrossTargets) {
                                   /* local_size= */ {1, 1, 1});
         std::vector<uint32_t> spirv_module = ir.finalize();
         EXPECT_EQ(spirv_module[1], version);
-        spv_target_env environment = version >= 0x10600 ? SPV_ENV_VULKAN_1_3 : SPV_ENV_VULKAN_1_1;
+        spv_target_env environment = version >= 0x10600 ? SPV_ENV_VULKAN_1_3 : SPV_ENV_VULKAN_1_2;
         spvtools::SpirvTools tools(environment);
         std::string diagnostics;
         spvtools::MessageConsumer append_to_diagnostics = [&](spv_message_level_t, const char *, const spv_position_t &,
@@ -69,7 +69,7 @@ TEST(WorkgroupShader, LinksAndValidatesAcrossTargets) {
 
 TEST(WorkgroupShader, UnusedHelperIsNotLinked) {
   DeviceCapabilityConfig caps;
-  caps.set(DeviceCapability::spirv_version, 0x10300);
+  caps.set(DeviceCapability::spirv_version, 0x10500);
   IRBuilder ir(Arch::vulkan, &caps);
   ir.init_header();
   auto main = ir.new_function();
@@ -78,7 +78,7 @@ TEST(WorkgroupShader, UnusedHelperIsNotLinked) {
   ir.make_inst(spv::OpFunctionEnd);
   ir.commit_kernel_function(/* func= */ main, /* name= */ "main", /* args= */ {}, /* local_size= */ {1, 1, 1});
   auto spirv_module = ir.finalize();
-  spvtools::SpirvTools tools(SPV_ENV_VULKAN_1_1);
+  spvtools::SpirvTools tools(SPV_ENV_VULKAN_1_2);
   ASSERT_TRUE(tools.Validate(spirv_module));
   std::string disassembly;
   ASSERT_TRUE(tools.Disassemble(spirv_module, &disassembly));
