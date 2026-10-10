@@ -3273,6 +3273,7 @@ KernelCodegen::KernelCodegen(const Params &params) : params_(params), ctx_attrib
   QD_ASSERT(params.ir_root);
 
   uint32_t spirv_version = params.caps.get(DeviceCapability::spirv_version);
+  QD_ASSERT_INFO(spirv_version >= 0x10300, "SPIR-V 1.3 or newer is required");
 
   spv_target_env target_env;
   if (spirv_version >= 0x10600) {
@@ -3281,10 +3282,8 @@ KernelCodegen::KernelCodegen(const Params &params) : params_(params), ctx_attrib
     target_env = SPV_ENV_VULKAN_1_2;
   } else if (spirv_version >= 0x10400) {
     target_env = SPV_ENV_VULKAN_1_1_SPIRV_1_4;
-  } else if (spirv_version >= 0x10300) {
-    target_env = SPV_ENV_VULKAN_1_1;
   } else {
-    target_env = SPV_ENV_VULKAN_1_0;
+    target_env = SPV_ENV_VULKAN_1_1;
   }
 
   spirv_opt_ = std::make_unique<spvtools::Optimizer>(target_env);
