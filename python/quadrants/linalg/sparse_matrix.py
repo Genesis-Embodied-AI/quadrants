@@ -1,6 +1,7 @@
 # type: ignore
 
 from functools import reduce
+from numbers import Integral
 
 import numpy as np
 
@@ -9,7 +10,13 @@ from quadrants.lang._ndarray import Ndarray, ScalarNdarray
 from quadrants.lang.exception import QuadrantsRuntimeError
 from quadrants.lang.field import Field
 from quadrants.lang.impl import get_runtime
+from quadrants.linalg._csr import CSRMatrix
 from quadrants.types import f32
+
+
+def _reject_csr_operand(other):
+    if isinstance(other, CSRMatrix):
+        raise QuadrantsRuntimeError("Native SparseMatrix arithmetic does not support CSRMatrix operands.")
 
 
 class SparseMatrix:
@@ -34,12 +41,28 @@ class SparseMatrix:
             self.m = sm.num_cols()
             self.matrix = sm
 
+    @staticmethod
+    def from_csr(row_ptr, col_idx, values, *, shape) -> CSRMatrix:
+        """Return a buffer-backed ``CSRMatrix`` borrowing the three native ndarrays.
+
+        ``shape`` is ``(rows, columns)``. Multiply a dense ndarray into caller-owned output with
+        ``(A @ X).write_to(Y)`` on the host or at the top level of a kernel.
+        """
+        if not isinstance(shape, tuple) or len(shape) != 2:
+            raise ValueError("shape must be a tuple of two positive integers")
+        if any(isinstance(size, bool) or not isinstance(size, Integral) for size in shape):
+            raise TypeError("shape must contain two positive integers")
+        if any(size <= 0 for size in shape):
+            raise ValueError("shape must contain two positive integers")
+        return CSRMatrix(row_ptr=row_ptr, col_idx=col_idx, values=values, rows=int(shape[0]), columns=int(shape[1]))
+
     def __iadd__(self, other):
         """Addition operation for sparse matrix.
 
         Returns:
             The result sparse matrix of the addition.
         """
+        _reject_csr_operand(other)
         assert (
             self.n == other.n and self.m == other.m
         ), f"Dimension mismatch between sparse matrices ({self.n}, {self.m}) and ({other.n}, {other.m})"
@@ -52,6 +75,7 @@ class SparseMatrix:
         Returns:
             The result sparse matrix of the addition.
         """
+        _reject_csr_operand(other)
         assert (
             self.n == other.n and self.m == other.m
         ), f"Dimension mismatch between sparse matrices ({self.n}, {self.m}) and ({other.n}, {other.m})"
@@ -64,6 +88,7 @@ class SparseMatrix:
         Returns:
              The result sparse matrix of the subtraction.
         """
+        _reject_csr_operand(other)
         assert (
             self.n == other.n and self.m == other.m
         ), f"Dimension mismatch between sparse matrices ({self.n}, {self.m}) and ({other.n}, {other.m})"
@@ -76,6 +101,7 @@ class SparseMatrix:
         Returns:
              The result sparse matrix of the subtraction.
         """
+        _reject_csr_operand(other)
         assert (
             self.n == other.n and self.m == other.m
         ), f"Dimension mismatch between sparse matrices ({self.n}, {self.m}) and ({other.n}, {other.m})"
@@ -90,6 +116,7 @@ class SparseMatrix:
         Returns:
             The result of multiplication.
         """
+        _reject_csr_operand(other)
         if isinstance(other, float):
             sm = other * self.matrix
             return SparseMatrix(sm=sm)
@@ -110,6 +137,7 @@ class SparseMatrix:
         Returns:
             The result of multiplication.
         """
+        _reject_csr_operand(other)
         if isinstance(other, float):
             sm = self.matrix * other
             return SparseMatrix(sm=sm)

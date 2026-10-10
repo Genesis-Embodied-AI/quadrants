@@ -863,6 +863,12 @@ class ASTTransformer(Builder):
 
     @staticmethod
     def build_BinOp(ctx: ASTTransformerFuncContext, node: ast.BinOp):
+        if isinstance(node.op, ast.MatMult):
+            # pylint: disable=import-outside-toplevel
+            from quadrants.linalg._csr import _lower_matmul
+
+            if _lower_matmul(ctx, node, build_stmt):
+                return node.ptr
         build_stmt(ctx, node.left)
         build_stmt(ctx, node.right)
         # pylint: disable-msg=C0415

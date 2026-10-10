@@ -1,7 +1,6 @@
 # type: ignore
 
 from ._algorithms import *
-from ._csr import csr_spmm
 from ._radix_sort import (
     sort,
     sort_scratch_slots,
@@ -26,7 +25,6 @@ from ._select import select, select_scratch_slots
 
 __all__ = [
     "PrefixSumExecutor",
-    "csr_spmm",
     "exclusive_scan_add",
     "exclusive_scan_max",
     "exclusive_scan_min",
