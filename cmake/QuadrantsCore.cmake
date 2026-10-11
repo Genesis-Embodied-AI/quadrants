@@ -115,6 +115,8 @@ target_include_directories(${CORE_LIBRARY_NAME} PRIVATE external/FP16/include)
 
 target_link_libraries(${CORE_LIBRARY_NAME} PUBLIC qd_device_api)
 
+include(cmake/QuadrantsMimalloc.cmake)
+
 if(QD_WITH_LLVM)
     if(DEFINED ENV{LLVM_DIR})
         set(LLVM_DIR $ENV{LLVM_DIR})

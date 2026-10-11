@@ -63,3 +63,6 @@
 [submodule "external/dlpack"]
 	path = external/dlpack
 	url = https://github.com/dmlc/dlpack.git
+[submodule "external/mimalloc"]
+	path = external/mimalloc
+	url = https://github.com/microsoft/mimalloc
