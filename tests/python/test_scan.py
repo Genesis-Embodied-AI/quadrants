@@ -1,3 +1,5 @@
+import warnings
+
 import pytest
 
 import quadrants as qd
@@ -23,7 +25,10 @@ def test_scan():
         # only one exectutor is needed for a specified sorting length.
         executor = qd.algorithms.PrefixSumExecutor(N)
 
-        executor.run(arr)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            executor.run(arr)
+        assert not any("Casting range_for boundary values" in str(item.message) for item in caught)
 
         cur_sum = 0
         for i in range(N):

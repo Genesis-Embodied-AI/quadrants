@@ -28,7 +28,7 @@ bool VulkanLoader::check_vulkan_device() {
   app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
   app_info.pEngineName = "No Engine";
   app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-  app_info.apiVersion = VK_API_VERSION_1_0;
+  app_info.apiVersion = VK_API_VERSION_1_1;
 
   VkInstanceCreateInfo create_info{};
   create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -58,6 +58,11 @@ bool VulkanLoader::check_vulkan_device() {
 
     for (int i = 0; i < devices.size(); i++) {
       const auto &physical_device = devices[i];
+      VkPhysicalDeviceProperties properties{};
+      vkGetPhysicalDeviceProperties(physical_device, &properties);
+      if (properties.apiVersion < VK_API_VERSION_1_1) {
+        continue;
+      }
 
       uint32_t queue_family_count = 0;
       vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, nullptr);

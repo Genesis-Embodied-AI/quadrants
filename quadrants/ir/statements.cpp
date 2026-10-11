@@ -415,6 +415,7 @@ std::unique_ptr<Stmt> OffloadedStmt::clone() const {
   new_stmt->graph_parallel_region_id = graph_parallel_region_id;
   new_stmt->checkpoint_id = checkpoint_id;
   new_stmt->graph_do_while_level_id = graph_do_while_level_id;
+  new_stmt->task_index = task_index;
   new_stmt->loop_name = loop_name;
   // Shared-pointer copy: the captured trip-count `SizeExpr` is read-only after `determine_ad_stack_size`
   // populates it in `compile_to_offloads`, and LLVM codegen clones each offload at `codegen.cpp:68`

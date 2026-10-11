@@ -223,6 +223,9 @@ STRUCT_FIELD_ARRAY(PhysicalCoordinates, val);
 STRUCT_FIELD(RuntimeContext, runtime);
 STRUCT_FIELD(RuntimeContext, result_buffer)
 STRUCT_FIELD(RuntimeContext, cpu_assert_failed)
+STRUCT_FIELD(RuntimeContext, cpu_block_idx)
+STRUCT_FIELD(RuntimeContext, checkpoint_resume_point_ptr)
+STRUCT_FIELD(RuntimeContext, checkpoint_yield_signal_ptr)
 
 #include "quadrants/runtime/llvm/runtime_module/atomic.h"
 
@@ -734,6 +737,10 @@ Ptr LLVMRuntime::allocate_aligned(PreallocatedMemoryChunk &memory_chunk,
   return (Ptr)host_allocator(memory_pool, size, alignment);
 }
 
+bool LLVMRuntime::sized_by_device_memory_config(const PreallocatedMemoryChunk &memory_chunk) const {
+  return &memory_chunk == &runtime_memory_chunk;
+}
+
 // [ONLY ON DEVICE] CUDA/AMDGPU backend
 Ptr LLVMRuntime::allocate_from_reserved_memory(PreallocatedMemoryChunk &memory_chunk,
                                                std::size_t size,
@@ -759,12 +766,21 @@ Ptr LLVMRuntime::allocate_from_reserved_memory(PreallocatedMemoryChunk &memory_c
     // Here unfortunately we have to rely on a native CUDA assert failure to
     // halt the whole grid. Using a quadrants_assert_runtime will not finish the
     // whole kernel execution immediately.
-    __assertfail(
-        "Out of CUDA pre-allocated memory.\n"
-        "Consider using qd.init(device_memory_fraction=0.9) or "
-        "qd.init(device_memory_GB=4) to allocate more"
-        " GPU memory",
-        "Quadrants JIT", 0, "allocate_from_reserved_memory", 1);
+    if (sized_by_device_memory_config(memory_chunk)) {
+      __assertfail(
+          "Out of CUDA pre-allocated memory.\n"
+          "Consider using qd.init(device_memory_fraction=0.9) or "
+          "qd.init(device_memory_GB=4) to allocate more"
+          " GPU memory",
+          "Quadrants JIT", 0, "allocate_from_reserved_memory", 1);
+    } else {
+      __assertfail(
+          "Out of CUDA pre-allocated memory for runtime objects.\n"
+          "This chunk is sized from the runtime's own requirements: "
+          "qd.init(device_memory_fraction=...) and qd.init(device_memory_GB=...) "
+          "size a different chunk and will not help",
+          "Quadrants JIT", 0, "allocate_from_reserved_memory", 1);
+    }
 #endif
   }
   quadrants_assert_runtime(this, success, "Out of pre-allocated memory");
@@ -1621,11 +1637,11 @@ struct cpu_block_task_helper_context {
 // TODO: TLS should be directly passed to the scheduler, so that it lives
 // with the threads (instead of blocks).
 
-void cpu_struct_for_block_helper(void *ctx_, int thread_id, int i) {
+void cpu_struct_for_block_helper(void *ctx_, int thread_id, int task_id) {
   auto ctx = (cpu_block_task_helper_context *)(ctx_);
-  int element_id = i / ctx->element_split;
+  int element_id = task_id / ctx->element_split;
   int part_size = ctx->element_size / ctx->element_split;
-  int part_id = i % ctx->element_split;
+  int part_id = task_id % ctx->element_split;
   auto &e = ctx->list->get<Element>(element_id);
   int lower = e.loop_bounds[0] + part_id * part_size;
   int upper = e.loop_bounds[0] + (part_id + 1) * part_size;
@@ -1637,6 +1653,7 @@ void cpu_struct_for_block_helper(void *ctx_, int thread_id, int i) {
 
   RuntimeContext this_thread_context = *ctx->context;
   this_thread_context.cpu_thread_id = thread_id;
+  this_thread_context.cpu_block_idx = task_id;
   this_thread_context.cpu_assert_failed = 0;
 
   if (lower < upper) {
@@ -1695,60 +1712,61 @@ using mesh_for_xlogue = void (*)(RuntimeContext *,
                                  /*TLS*/ char *tls_base,
                                  uint32_t patch_idx);
 
-struct range_task_helper_context {
+struct RangeTaskContext {
   RuntimeContext *context;
   range_for_xlogue prologue{nullptr};
-  RangeForTaskFunc *body{nullptr};
+  RangeForBodyFn *body{nullptr};
   range_for_xlogue epilogue{nullptr};
   std::size_t tls_size{1};
   int begin;
   int end;
-  int block_size;
+  int body_loop_size;
   int step;
 };
 
 void cpu_parallel_range_for_task(void *range_context, int thread_id, int task_id) {
-  auto ctx = *(range_task_helper_context *)range_context;
+  auto range_task_context = *(RangeTaskContext *)range_context;
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wvla-cxx-extension"
-  alignas(8) char tls_buffer[ctx.tls_size];
+  alignas(8) char tls_buffer[range_task_context.tls_size];
 #pragma clang diagnostic pop
   auto tls_ptr = &tls_buffer[0];
 
-  RuntimeContext this_thread_context = *ctx.context;
+  RuntimeContext this_thread_context = *range_task_context.context;
   this_thread_context.cpu_thread_id = thread_id;
+  this_thread_context.cpu_block_idx = task_id;
   this_thread_context.cpu_assert_failed = 0;
 
-  if (ctx.prologue) {
-    ctx.prologue(&this_thread_context, tls_ptr);
+  if (range_task_context.prologue) {
+    range_task_context.prologue(&this_thread_context, tls_ptr);
     if (this_thread_context.cpu_assert_failed) {
-      ctx.context->cpu_assert_failed = 1;
+      range_task_context.context->cpu_assert_failed = 1;
       return;
     }
   }
 
-  if (ctx.step == 1) {
-    int block_start = ctx.begin + task_id * ctx.block_size;
-    int block_end = std::min(block_start + ctx.block_size, ctx.end);
-    for (int i = block_start; i < block_end; i++) {
-      ctx.body(&this_thread_context, tls_ptr, i);
+  if (range_task_context.step == 1) {
+    int body_loop_start = range_task_context.begin + task_id * range_task_context.body_loop_size;
+    int body_loop_end = std::min(body_loop_start + range_task_context.body_loop_size, range_task_context.end);
+    for (int body_loop_idx = body_loop_start; body_loop_idx < body_loop_end; body_loop_idx++) {
+      range_task_context.body(&this_thread_context, tls_ptr, body_loop_idx);
       if (this_thread_context.cpu_assert_failed)
         break;
     }
-  } else if (ctx.step == -1) {
-    int block_start = ctx.end - task_id * ctx.block_size;
-    int block_end = std::max(ctx.begin, block_start - ctx.block_size);
-    for (int i = block_start - 1; i >= block_end; i--) {
-      ctx.body(&this_thread_context, tls_ptr, i);
+  } else if (range_task_context.step == -1) {
+    int body_loop_start = range_task_context.end - task_id * range_task_context.body_loop_size;
+    int body_loop_end = std::max(range_task_context.begin, body_loop_start - range_task_context.body_loop_size);
+    for (int body_loop_idx = body_loop_start - 1; body_loop_idx >= body_loop_end; body_loop_idx--) {
+      range_task_context.body(&this_thread_context, tls_ptr, body_loop_idx);
       if (this_thread_context.cpu_assert_failed)
         break;
     }
   }
 
-  if (!this_thread_context.cpu_assert_failed && ctx.epilogue)
-    ctx.epilogue(&this_thread_context, tls_ptr);
+  if (!this_thread_context.cpu_assert_failed && range_task_context.epilogue)
+    range_task_context.epilogue(&this_thread_context, tls_ptr);
   if (this_thread_context.cpu_assert_failed)
-    ctx.context->cpu_assert_failed = 1;
+    range_task_context.context->cpu_assert_failed = 1;
 }
 
 void cpu_parallel_range_for(RuntimeContext *context,
@@ -1758,33 +1776,33 @@ void cpu_parallel_range_for(RuntimeContext *context,
                             int step,
                             int block_dim,
                             range_for_xlogue prologue,
-                            RangeForTaskFunc *body,
+                            RangeForBodyFn *body,
                             range_for_xlogue epilogue,
                             std::size_t tls_size) {
-  range_task_helper_context ctx;
-  ctx.context = context;
-  ctx.prologue = prologue;
-  ctx.tls_size = tls_size;
-  ctx.body = body;
-  ctx.epilogue = epilogue;
-  ctx.begin = begin;
-  ctx.end = end;
-  ctx.step = step;
+  RangeTaskContext range_task_context;
+  range_task_context.context = context;
+  range_task_context.prologue = prologue;
+  range_task_context.tls_size = tls_size;
+  range_task_context.body = body;
+  range_task_context.epilogue = epilogue;
+  range_task_context.begin = begin;
+  range_task_context.end = end;
+  range_task_context.step = step;
   if (step != 1 && step != -1) {
     quadrants_printf(context->runtime, "step must not be %d\n", step);
     exit(-1);
   }
-  ctx.block_size = block_dim;
+  range_task_context.body_loop_size = block_dim;
   auto runtime = context->runtime;
-  runtime->parallel_for(runtime->thread_pool, (end - begin + block_dim - 1) / block_dim, num_threads, &ctx,
-                        cpu_parallel_range_for_task);
+  runtime->parallel_for(runtime->thread_pool, (end - begin + block_dim - 1) / block_dim, num_threads,
+                        &range_task_context, cpu_parallel_range_for_task);
 }
 
 void gpu_parallel_range_for(RuntimeContext *context,
                             int begin,
                             int end,
                             range_for_xlogue prologue,
-                            RangeForTaskFunc *func,
+                            RangeForBodyFn *func,
                             range_for_xlogue epilogue,
                             const std::size_t tls_size) {
   int idx = thread_idx() + block_dim() * block_idx() + begin;
@@ -1812,7 +1830,7 @@ void gpu_parallel_range_for(RuntimeContext *context,
 struct mesh_task_helper_context {
   RuntimeContext *context;
   mesh_for_xlogue prologue{nullptr};
-  RangeForTaskFunc *body{nullptr};
+  RangeForBodyFn *body{nullptr};
   mesh_for_xlogue epilogue{nullptr};
   std::size_t tls_size{1};
   int num_patches;
@@ -1829,6 +1847,7 @@ void cpu_parallel_mesh_for_task(void *range_context, int thread_id, int task_id)
 
   RuntimeContext this_thread_context = *ctx.context;
   this_thread_context.cpu_thread_id = thread_id;
+  this_thread_context.cpu_block_idx = task_id;
   this_thread_context.cpu_assert_failed = 0;
 
   int block_start = task_id * ctx.block_size;
@@ -1858,7 +1877,7 @@ void cpu_parallel_mesh_for(RuntimeContext *context,
                            int num_patches,
                            int block_dim,
                            mesh_for_xlogue prologue,
-                           RangeForTaskFunc *body,
+                           RangeForBodyFn *body,
                            mesh_for_xlogue epilogue,
                            std::size_t tls_size) {
   mesh_task_helper_context ctx;
@@ -1904,6 +1923,14 @@ void gpu_parallel_mesh_for(RuntimeContext *context,
     if (epilogue)
       epilogue(context, tls_ptr, idx);
   }
+}
+
+i32 global_block_idx(RuntimeContext *context) {
+#if ARCH_cuda || ARCH_amdgpu
+  return block_idx();
+#else
+  return context->cpu_block_idx;
+#endif
 }
 
 i32 linear_thread_idx(RuntimeContext *context) {

@@ -168,6 +168,118 @@ def test_tensor_layouts_keep_separate_cache_entries():
     assert len(k._primal.mapper.mapping) == 2
 
 
+# ----------------------------------------------------------------------------
+# Alternating values at a qd.Tensor slot
+# ----------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("later_kind", ["none", "bare"])
+@test_utils.test()
+def test_tensor_slot_cached_wrapper_accepts_none_or_bare_impl(later_kind):
+    out = qd.ndarray(qd.f32, shape=(4,))
+    bias = qd.ndarray(qd.f32, shape=(4,))
+    bias.from_numpy(np.full(4, 100.0, dtype=np.float32))
+
+    @qd.kernel
+    def add_bias(out: qd.types.NDArray[qd.f32, 1], bias: qd.Tensor):
+        for i in range(out.shape[0]):
+            if qd.static(bias is not None):
+                out[i] = qd.f32(i) + bias[i]
+            else:
+                out[i] = qd.f32(i)
+
+    bias_wrapper = qd.wrap(bias)
+    add_bias(out, bias_wrapper)
+    later = None if later_kind == "none" else bias
+    add_bias(out, later)
+
+    expected = np.arange(4, dtype=np.float32)
+    if later is not None:
+        expected += 100.0
+    np.testing.assert_array_equal(out.to_numpy(), expected)
+
+    add_bias(out, bias_wrapper)
+    np.testing.assert_array_equal(out.to_numpy(), np.arange(4, dtype=np.float32) + 100.0)
+    assert len(add_bias._primal.mapper.mapping) == (2 if later is None else 1)
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.metal], require=qd.extension.adstack)
+def test_tensor_slot_none_then_wrapper_survives_tape_replay():
+    bias = qd.ndarray(qd.f32, shape=(4,), needs_grad=True)
+    loss = qd.ndarray(qd.f32, shape=(), needs_grad=True)
+    bias.from_numpy(np.array([3.0, 0.0, 0.0, 0.0], dtype=np.float32))
+
+    @qd.kernel
+    def pick_first(loss: qd.types.NDArray[qd.f32, None], bias: qd.Tensor):
+        if qd.static(bias is not None):
+            loss[None] = bias[0] * 2.0
+
+    bias_wrapper = qd.wrap(bias)
+
+    with qd.ad.Tape(loss=loss):
+        pick_first(loss, None)
+        pick_first(loss, bias_wrapper)
+        pick_first(loss, None)
+
+    np.testing.assert_allclose(loss.to_numpy(), 6.0)
+    np.testing.assert_allclose(bias.grad.to_numpy(), [2.0, 0.0, 0.0, 0.0])
+    assert len(pick_first._primal.mapper.mapping) == 2
+
+
+@test_utils.test()
+def test_tensor_slot_later_wrapper_uses_impl_identity_cache():
+    out = qd.ndarray(qd.f32, shape=(4,))
+    bias = qd.ndarray(qd.f32, shape=(4,))
+    bias_wrapper = qd.wrap(bias)
+
+    @qd.kernel
+    def copy(out: qd.types.NDArray[qd.f32, 1], bias: qd.Tensor):
+        for i in range(out.shape[0]):
+            out[i] = bias[i]
+
+    copy(out, bias)
+    cache_size = len(copy._primal.mapper._mapping_cache)
+    copy(out, bias_wrapper)
+
+    assert len(copy._primal.mapper._mapping_cache) == cache_size
+
+
+@test_utils.test()
+def test_none_argument_populates_spec_key_cache():
+    """A ``None`` in a ``qd.Tensor`` slot must land in the template mapper's spec-key cache.
+
+    ``TemplateMapper.lookup`` skips ``weakref``-tracking any argument whose type is in ``_primitive_types``.
+    ``NoneType`` is in that set, so ``weakref.ref(None)`` - which raises ``TypeError`` - is never attempted and the
+    entry is stored. Were ``NoneType`` absent, the ``TypeError`` would drop the entry and every ``None`` launch would
+    re-run full spec-key extraction instead of hitting the cache.
+    """
+    n = 4
+    a = qd.ndarray(qd.f32, shape=(n,))
+    a.from_numpy(np.arange(n, dtype=np.float32))
+    b = qd.ndarray(qd.f32, shape=(n,))
+    b.from_numpy(np.full(n, 100.0, dtype=np.float32))
+    c = qd.ndarray(qd.f32, shape=(n,))
+
+    @qd.kernel
+    def k(a: qd.types.NDArray[qd.f32, 1], b: qd.Tensor, c: qd.types.NDArray[qd.f32, 1]):
+        for i in range(a.shape[0]):
+            if qd.static(b is not None):
+                c[i] = a[i] + b[i]
+            else:
+                c[i] = a[i]
+
+    # A single launch with the optional slot absent must leave a cache entry behind.
+    k(a, None, c)
+    np.testing.assert_array_equal(c.to_numpy(), np.arange(n, dtype=np.float32))
+    assert len(k._primal.mapper._mapping_cache) == 1
+
+    # The present branch still works and specializes separately; the absent-branch entry is retained.
+    k(a, b, c)
+    np.testing.assert_array_equal(c.to_numpy(), np.arange(n, dtype=np.float32) + 100.0)
+    assert len(k._primal.mapper.mapping) == 2
+    assert len(k._primal.mapper._mapping_cache) == 2
+
+
 # Vector / matrix element types: qd.Tensor must dispatch the compound-element tensors built by qd.Vector.tensor /
 # qd.Matrix.tensor on both backends.
 
@@ -369,3 +481,91 @@ def test_qd_tensor_across_reset_and_reinit(req_arch, req_options):
     fill_2d(a_nd)
     np.testing.assert_array_equal(a_nd.to_numpy(), expected)
     # The autouse fixture's teardown will reset() again on the way out.
+
+
+# ----------------------------------------------------------------------------
+# External arrays (numpy / torch) at a qd.Tensor slot.
+# ----------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_tensor_accepts_numpy():
+    out = qd.ndarray(qd.f32, shape=(4,))
+
+    @qd.kernel
+    def copy(out: qd.types.NDArray[qd.f32, 1], t: qd.Tensor):
+        for i in range(out.shape[0]):
+            out[i] = t[i]
+
+    copy(out, np.array([5, 6, 7, 8], dtype=np.float32))
+    np.testing.assert_array_equal(out.to_numpy(), [5, 6, 7, 8])
+
+
+@test_utils.test(arch=qd.cpu)
+def test_tensor_accepts_torch():
+    torch = pytest.importorskip("torch")
+    out = qd.ndarray(qd.f32, shape=(4,))
+
+    @qd.kernel
+    def copy(out: qd.types.NDArray[qd.f32, 1], t: qd.Tensor):
+        for i in range(out.shape[0]):
+            out[i] = t[i]
+
+    copy(out, torch.tensor([5.0, 6.0, 7.0, 8.0], dtype=torch.float32))
+    np.testing.assert_array_equal(out.to_numpy(), [5, 6, 7, 8])
+
+
+@test_utils.test(arch=qd.cpu)
+def test_tensor_numpy_collapses_to_one_spec():
+    """Two different numpy arrays of the same dtype/ndim share one specialization (not one per instance), and numpy
+    no longer raises ``unhashable type: 'numpy.ndarray'``."""
+    out = qd.ndarray(qd.f32, shape=(4,))
+
+    @qd.kernel
+    def copy(out: qd.types.NDArray[qd.f32, 1], t: qd.Tensor):
+        for i in range(out.shape[0]):
+            out[i] = t[i]
+
+    copy(out, np.array([1, 2, 3, 4], dtype=np.float32))
+    copy(out, np.array([5, 6, 7, 8], dtype=np.float32))
+    np.testing.assert_array_equal(out.to_numpy(), [5, 6, 7, 8])
+    assert len(copy._primal.mapper.mapping) == 1
+
+
+@test_utils.test(arch=qd.cpu)
+def test_tensor_torch_collapses_to_one_spec():
+    torch = pytest.importorskip("torch")
+    out = qd.ndarray(qd.f32, shape=(4,))
+
+    @qd.kernel
+    def copy(out: qd.types.NDArray[qd.f32, 1], t: qd.Tensor):
+        for i in range(out.shape[0]):
+            out[i] = t[i]
+
+    copy(out, torch.tensor([1.0, 2.0, 3.0, 4.0], dtype=torch.float32))
+    copy(out, torch.tensor([5.0, 6.0, 7.0, 8.0], dtype=torch.float32))
+    np.testing.assert_array_equal(out.to_numpy(), [5, 6, 7, 8])
+    assert len(copy._primal.mapper.mapping) == 1
+
+
+@test_utils.test(arch=qd.cpu)
+def test_tensor_external_array_does_not_reroute_field():
+    """Widening qd.Tensor to external arrays must not divert Field (which also exposes ``.shape`` / ``.dtype``) off
+    the template path. A field and a numpy array through the same slot produce two distinct specializations, and both
+    yield correct values."""
+    out = qd.ndarray(qd.f32, shape=(4,))
+    f = qd.field(qd.f32, shape=(4,))
+    for i in range(4):
+        f[i] = 11.0
+
+    @qd.kernel
+    def copy(out: qd.types.NDArray[qd.f32, 1], t: qd.Tensor):
+        for i in range(out.shape[0]):
+            out[i] = t[i]
+
+    copy(out, f)
+    np.testing.assert_array_equal(out.to_numpy(), [11, 11, 11, 11])
+    copy(out, np.array([5, 6, 7, 8], dtype=np.float32))
+    np.testing.assert_array_equal(out.to_numpy(), [5, 6, 7, 8])
+    # field -> template path (field marker), numpy -> ndarray path: two distinct specializations.
+    assert len(copy._primal.mapper.mapping) == 2

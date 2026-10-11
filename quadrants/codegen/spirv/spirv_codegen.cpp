@@ -104,6 +104,7 @@ TaskCodegen::TaskCodegen(const Params &params)
 
   fill_snode_to_root();
   ir_ = std::make_shared<spirv::IRBuilder>(arch_, caps_);
+  ops_ = std::make_unique<spirv::SpirvOperations>(*ir_);
   // Workaround for Metal/MoltenVK shader compiler bug: the compiler
   // incorrectly hoists storage buffer loads out of loops (LICM), causing
   // stale reads when a buffer is written and re-read within the same loop.
@@ -280,7 +281,7 @@ void TaskCodegen::visit(Block *stmt) {
   // `get_ad_stack_heap_thread_base_float()` reads it and produces the same per-thread addressing the int heap uses.
   if (stmt == ad_stack_lca_block_float_ && ad_stack_lca_block_float_ != nullptr &&
       !task_attribs_.ad_stack.bound_expr.has_value()) {
-    spirv::Value invoc_id = ir_->get_global_invocation_id(0);
+    spirv::Value invoc_id = ops_->get_global_invocation_id(0);
     ir_->store_variable(ad_stack_row_id_var_float_, invoc_id);
   } else if (stmt == ad_stack_lca_block_float_ && ad_stack_lca_block_float_ != nullptr) {
     if (ad_stack_row_counter_buffer_.id == 0) {
@@ -326,14 +327,14 @@ void TaskCodegen::visit(Block *stmt) {
     // == 0, 0, capacity - 1)`.
     spirv::Value zero_u32 = ir_->uint_immediate_number(ir_->u32_type(), 0);
     spirv::Value one_u32 = ir_->uint_immediate_number(ir_->u32_type(), 1);
-    spirv::Value capacity_is_zero = ir_->eq(capacity, zero_u32);
-    spirv::Value capacity_minus_one_raw = ir_->sub(capacity, one_u32);
-    spirv::Value clamp_upper = ir_->select(capacity_is_zero, zero_u32, capacity_minus_one_raw);
+    spirv::Value capacity_is_zero = ops_->eq(capacity, zero_u32);
+    spirv::Value capacity_minus_one_raw = ops_->sub(capacity, one_u32);
+    spirv::Value clamp_upper = ops_->select(capacity_is_zero, zero_u32, capacity_minus_one_raw);
     spirv::Value clamped_row = ir_->call_glsl450(ir_->u32_type(), GLSLstd450UMin, claimed_row, clamp_upper);
     ir_->store_variable(ad_stack_row_id_var_float_, clamped_row);
     spirv::Value overflow_signal =
-        ir_->select(ir_->ge(claimed_row, capacity), ir_->uint_immediate_number(ir_->u32_type(), UINT32_MAX),
-                    ir_->uint_immediate_number(ir_->u32_type(), 0));
+        ops_->select(ops_->ge(claimed_row, capacity), ir_->uint_immediate_number(ir_->u32_type(), UINT32_MAX),
+                     ir_->uint_immediate_number(ir_->u32_type(), 0));
     spirv::Value overflow_buf = get_buffer_value(BufferType::AdStackOverflow, PrimitiveType::u32);
     spirv::Value overflow_ptr =
         ir_->struct_array_access(ir_->u32_type(), overflow_buf, ir_->uint_immediate_number(ir_->i32_type(), 0));
@@ -398,7 +399,7 @@ void TaskCodegen::visit(PrintStmt *stmt) {
       formats += sanitize_format_string(arg_str);
     }
   }
-  ir_->call_debugprintf(formats, vals);
+  ops_->call_debugprintf(formats, vals);
 }
 
 void TaskCodegen::visit(ConstStmt *const_stmt) {
@@ -498,14 +499,14 @@ void TaskCodegen::visit(MatrixPtrStmt *stmt) {
       }
     } else if (stmt->origin->is<GlobalTemporaryStmt>()) {
       spirv::Value dt_bytes = ir_->int_immediate_number(ir_->i32_type(), ir_->get_primitive_type_size(dt), false);
-      spirv::Value offset_bytes = ir_->mul(dt_bytes, offset_val);
-      ptr_val = ir_->add(origin_val, offset_bytes);
+      spirv::Value offset_bytes = ops_->mul(dt_bytes, offset_val);
+      ptr_val = ops_->add(origin_val, offset_bytes);
       ptr_to_buffers_[stmt] = ptr_to_buffers_[stmt->origin];
     } else {
       QD_NOT_IMPLEMENTED;
     }
   } else {  // offset used as bytes
-    ptr_val = ir_->add(origin_val, ir_->cast(origin_val.stype, offset_val));
+    ptr_val = ops_->add(origin_val, ops_->cast(origin_val.stype, offset_val));
     ptr_to_buffers_[stmt] = ptr_to_buffers_[stmt->origin];
   }
   ir_->register_value(stmt->raw_name(), ptr_val);
@@ -552,7 +553,7 @@ void TaskCodegen::visit(GetChStmt *stmt) {
 
   spirv::Value input_ptr_val = ir_->query_value(stmt->input_ptr->raw_name());
   spirv::Value offset = make_pointer(desc.mem_offset_in_parent_cell);
-  spirv::Value val = ir_->add(input_ptr_val, offset);
+  spirv::Value val = ops_->add(input_ptr_val, offset);
   ir_->register_value(stmt->raw_name(), val);
 
   if (out_snode->is_place()) {
@@ -581,8 +582,8 @@ spirv::Value TaskCodegen::bitmasked_activation(ActivationOp op,
   auto buffer = get_buffer_value(BufferInfo(BufferType::Root, root_id), PrimitiveType::u32);
   auto bitmask_word_ptr = ir_->make_value(spv::OpShiftLeftLogical, ptr_dt, bitmask_word_index,
                                           ir_->uint_immediate_number(ir_->u32_type(), 2));
-  bitmask_word_ptr = ir_->add(bitmask_word_ptr, make_pointer(desc.cell_stride * desc.snode->num_cells_per_container));
-  bitmask_word_ptr = ir_->add(parent_ptr, bitmask_word_ptr);
+  bitmask_word_ptr = ops_->add(bitmask_word_ptr, make_pointer(desc.cell_stride * desc.snode->num_cells_per_container));
+  bitmask_word_ptr = ops_->add(parent_ptr, bitmask_word_ptr);
   bitmask_word_ptr = ir_->make_value(spv::OpShiftRightLogical, ir_->u32_type(), bitmask_word_ptr,
                                      ir_->uint_immediate_number(ir_->u32_type(), 2));
   bitmask_word_ptr = ir_->struct_array_access(ir_->u32_type(), buffer, bitmask_word_ptr);
@@ -610,11 +611,11 @@ void TaskCodegen::visit(SNodeOpStmt *stmt) {
   spirv::Value parent_val = ir_->query_value(parent);
 
   if (stmt->snode->type == SNodeType::bitmasked) {
-    spirv::Value input_index_val = ir_->cast(parent_val.stype, ir_->query_value(stmt->val->raw_name()));
+    spirv::Value input_index_val = ops_->cast(parent_val.stype, ir_->query_value(stmt->val->raw_name()));
 
     if (stmt->op_type == SNodeOpType::is_active) {
       auto is_active = bitmasked_activation(ActivationOp::query, parent_val, root_id, stmt->snode, input_index_val);
-      is_active = ir_->cast(ir_->get_primitive_type(stmt->ret_type), is_active);
+      is_active = ops_->cast(ir_->get_primitive_type(stmt->ret_type), is_active);
       is_active = ir_->make_value(spv::OpSNegate, is_active.stype, is_active);
       ir_->register_value(stmt->raw_name(), is_active);
     } else if (stmt->op_type == SNodeOpType::deactivate) {
@@ -663,10 +664,10 @@ void TaskCodegen::visit(SNodeLookupStmt *stmt) {
     const auto &snode_descs = compiled_structs_[root_id].snode_descriptors;
     const auto &desc = snode_descs.at(sn->id);
 
-    spirv::Value input_index_val = ir_->cast(parent_val.stype, ir_->query_value(stmt->input_index->raw_name()));
+    spirv::Value input_index_val = ops_->cast(parent_val.stype, ir_->query_value(stmt->input_index->raw_name()));
     spirv::Value stride = make_pointer(desc.cell_stride);
-    spirv::Value offset = ir_->mul(input_index_val, stride);
-    val = ir_->add(parent_val, offset);
+    spirv::Value offset = ops_->mul(input_index_val, stride);
+    val = ops_->add(parent_val, offset);
   }
   ir_->register_value(stmt->raw_name(), val);
 }
@@ -675,14 +676,14 @@ void TaskCodegen::visit(RandStmt *stmt) {
   spirv::Value val;
   spirv::Value global_tmp = get_buffer_value(BufferType::GlobalTmps, PrimitiveType::u32);
   if (stmt->element_type()->is_primitive(PrimitiveTypeID::i32)) {
-    val = ir_->rand_i32(global_tmp);
+    val = ops_->rand_i32(global_tmp);
   } else if (stmt->element_type()->is_primitive(PrimitiveTypeID::u32)) {
-    val = ir_->rand_u32(global_tmp);
+    val = ops_->rand_u32(global_tmp);
   } else if (stmt->element_type()->is_primitive(PrimitiveTypeID::f32)) {
-    val = ir_->rand_f32(global_tmp);
+    val = ops_->rand_f32(global_tmp);
   } else if (stmt->element_type()->is_primitive(PrimitiveTypeID::f16)) {
-    auto highp_val = ir_->rand_f32(global_tmp);
-    val = ir_->cast(ir_->f16_type(), highp_val);
+    auto highp_val = ops_->rand_f32(global_tmp);
+    val = ops_->cast(ir_->f16_type(), highp_val);
   } else {
     QD_ERROR("rand only support 32-bit type");
   }
@@ -694,7 +695,7 @@ void TaskCodegen::visit(LinearizeStmt *stmt) {
   for (size_t i = 0; i < stmt->inputs.size(); ++i) {
     spirv::Value strides_val = ir_->int_immediate_number(ir_->i32_type(), stmt->strides[i]);
     spirv::Value input_val = ir_->query_value(stmt->inputs[i]->raw_name());
-    val = ir_->add(ir_->mul(val, strides_val), input_val);
+    val = ops_->add(ops_->mul(val, strides_val), input_val);
   }
   ir_->register_value(stmt->raw_name(), val);
 }
@@ -706,7 +707,7 @@ void TaskCodegen::visit(LoopIndexStmt *stmt) {
     if (type == OffloadedTaskType::range_for) {
       QD_ASSERT(stmt->index == 0);
       spirv::Value loop_var = ir_->query_value("ii");
-      // spirv::Value val = ir_->add(loop_var, ir_->const_i32_zero_);
+      // spirv::Value val = ops_->add(loop_var, ir_->const_i32_zero_);
       ir_->register_value(stmt_name, loop_var);
     } else {
       QD_NOT_IMPLEMENTED;
@@ -714,7 +715,7 @@ void TaskCodegen::visit(LoopIndexStmt *stmt) {
   } else if (stmt->loop->is<RangeForStmt>()) {
     QD_ASSERT(stmt->index == 0);
     spirv::Value loop_var = ir_->query_value(stmt->loop->raw_name());
-    spirv::Value val = ir_->add(loop_var, ir_->const_i32_zero_);
+    spirv::Value val = ops_->add(loop_var, ir_->const_i32_zero_);
     ir_->register_value(stmt_name, val);
   } else {
     QD_NOT_IMPLEMENTED;
@@ -799,7 +800,7 @@ void TaskCodegen::visit(ReturnStmt *stmt) {
     spirv::Value val = ir_->query_value(stmt->values[index]->raw_name());
     // Extend u1 values to i32 to be passed to the host.
     if (dt->is_primitive(PrimitiveTypeID::u1))
-      val = ir_->select(val, ir_->const_i32_one_, ir_->const_i32_zero_);
+      val = ops_->select(val, ir_->const_i32_one_, ir_->const_i32_zero_);
     ir_->store_variable(buffer_val, val);
   };
   // Function to traverse struct tree in depth-first order recursively to
@@ -890,8 +891,8 @@ void TaskCodegen::visit(ExternalPtrStmt *stmt) {
         size_var = ir_->query_value(size_var_names[size_var_names_idx++]);
       }
       spirv::Value indices = ir_->query_value(stmt->indices[i]->raw_name());
-      linear_offset = ir_->mul(linear_offset, size_var);
-      linear_offset = ir_->add(linear_offset, indices);
+      linear_offset = ops_->mul(linear_offset, size_var);
+      linear_offset = ops_->add(linear_offset, indices);
     }
     size_t type_size = ir_->get_primitive_type_size(stmt->ret_type.ptr_removed());
     linear_offset = ir_->make_value(spv::OpShiftLeftLogical, ir_->i32_type(), linear_offset,
@@ -908,7 +909,7 @@ void TaskCodegen::visit(ExternalPtrStmt *stmt) {
     spirv::Value addr_ptr = ir_->make_access_chain(ir_->get_pointer_type(ir_->u64_type(), spv::StorageClassUniform),
                                                    get_buffer_value(BufferType::Args, PrimitiveType::i32), indices);
     spirv::Value base_addr = ir_->load_variable(addr_ptr, ir_->u64_type());
-    spirv::Value addr = ir_->add(base_addr, ir_->make_value(spv::OpSConvert, ir_->u64_type(), linear_offset));
+    spirv::Value addr = ops_->add(base_addr, ir_->make_value(spv::OpSConvert, ir_->u64_type(), linear_offset));
     ir_->register_value(stmt->raw_name(), addr);
 
     // Save decomposed base pointer and element index so at_buffer() can
@@ -969,9 +970,9 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
     } else {
       QD_NOT_IMPLEMENTED
     }
-    val = ir_->cast(dst_type, ir_->eq(operand_val, zero));
+    val = ops_->cast(dst_type, ops_->eq(operand_val, zero));
   } else if (stmt->op_type == UnaryOpType::neg) {
-    operand_val = ir_->cast(dst_type, operand_val);
+    operand_val = ops_->cast(dst_type, operand_val);
     if (is_integral(dst_dt)) {
       if (is_signed(dst_dt)) {
         val = ir_->make_value(spv::OpSNegate, dst_type, operand_val);
@@ -987,7 +988,7 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
     const uint32_t InverseSqrt_id = 32;
     if (is_real(src_dt)) {
       val = ir_->call_glsl450(src_type, InverseSqrt_id, operand_val);
-      val = ir_->cast(dst_type, val);
+      val = ops_->cast(dst_type, val);
     } else {
       QD_NOT_IMPLEMENTED
     }
@@ -1005,16 +1006,16 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
     } else {
       QD_NOT_IMPLEMENTED
     }
-    val = ir_->cast(dst_type, val);
+    val = ops_->cast(dst_type, val);
   } else if (stmt->op_type == UnaryOpType::bit_not) {
-    operand_val = ir_->cast(dst_type, operand_val);
+    operand_val = ops_->cast(dst_type, operand_val);
     if (is_integral(dst_dt)) {
       val = ir_->make_value(spv::OpNot, dst_type, operand_val);
     } else {
       QD_NOT_IMPLEMENTED
     }
   } else if (stmt->op_type == UnaryOpType::cast_value) {
-    val = ir_->cast(dst_type, operand_val);
+    val = ops_->cast(dst_type, operand_val);
   } else if (stmt->op_type == UnaryOpType::cast_bits) {
     if (data_type_bits(src_dt) == data_type_bits(dst_dt)) {
       val = ir_->make_value(spv::OpBitcast, dst_type, operand_val);
@@ -1041,7 +1042,7 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
     }
   } else if (stmt->op_type == UnaryOpType::inv) {
     if (is_real(dst_dt)) {
-      val = ir_->div(ir_->float_immediate_number(dst_type, 1), operand_val);
+      val = ops_->div(ir_->float_immediate_number(dst_type, 1), operand_val);
     } else {
       QD_NOT_IMPLEMENTED
     }
@@ -1054,7 +1055,7 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
     // OpBitCount returns the operand's type, so for a u64 input it produces a u64 result. type_check normalises
     // the stmt's ret_type to i32 across every backend (CUDA / AMDGPU already do this in hardware), so we cast
     // the OpBitCount result down to dst_type (== i32) here. For an i32 / u32 input the cast is a free OpBitcast.
-    val = ir_->cast(dst_type, ir_->popcnt(operand_val));
+    val = ops_->cast(dst_type, ops_->popcnt(operand_val));
   } else if (stmt->op_type == UnaryOpType::clz) {
     // Use FindUMsb (75) rather than FindSMsb (74): clz() must count leading zeros over the unsigned bit pattern,
     // i.e. clz(0xFFFFFFFF) == 0. FindSMsb returns -1 for negative inputs (it finds the MSB of the absolute value's
@@ -1077,33 +1078,33 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
       //   hi == 0, lo != 0 -> 32 + (31 - FindUMsb(lo))
       //   hi != 0          -> 31 - FindUMsb(hi)
       auto u64_t = ir_->u64_type();
-      auto val_u64 = ir_->cast(u64_t, operand_val);
+      auto val_u64 = ops_->cast(u64_t, operand_val);
       auto thirty_two_u64 = ir_->uint_immediate_number(u64_t, 32);
       auto hi_u64 = ir_->make_value(spv::OpShiftRightLogical, u64_t, val_u64, thirty_two_u64);
-      auto hi = ir_->cast(i32_t, hi_u64);
-      auto lo = ir_->cast(i32_t, val_u64);
+      auto hi = ops_->cast(i32_t, hi_u64);
+      auto lo = ops_->cast(i32_t, val_u64);
       auto hi_msb = ir_->call_glsl450(i32_t, FindUMsb_id, hi);
       auto lo_msb = ir_->call_glsl450(i32_t, FindUMsb_id, lo);
       auto bit31 = ir_->int_immediate_number(i32_t, 31);
       auto bit63 = ir_->int_immediate_number(i32_t, 63);
       auto zero_i32 = ir_->int_immediate_number(i32_t, 0);
-      auto hi_clz = ir_->sub(bit31, hi_msb);
-      auto lo_clz_full = ir_->sub(bit63, lo_msb);
-      auto hi_zero = ir_->eq(hi, zero_i32);
-      clz_i32 = ir_->select(hi_zero, lo_clz_full, hi_clz);
+      auto hi_clz = ops_->sub(bit31, hi_msb);
+      auto lo_clz_full = ops_->sub(bit63, lo_msb);
+      auto hi_zero = ops_->eq(hi, zero_i32);
+      clz_i32 = ops_->select(hi_zero, lo_clz_full, hi_clz);
     } else if (data_type_bits(src_dt) == 32) {
       // Cast operand to i32 so FindUMsb's result type matches our i32 arithmetic. For i32 input this is a
       // no-op; for u32 input cast() emits an OpBitcast.
-      auto val_i32 = ir_->cast(i32_t, operand_val);
+      auto val_i32 = ops_->cast(i32_t, operand_val);
       auto msb = ir_->call_glsl450(i32_t, FindUMsb_id, val_i32);
       auto bit31 = ir_->int_immediate_number(i32_t, 31);
-      clz_i32 = ir_->sub(bit31, msb);
+      clz_i32 = ops_->sub(bit31, msb);
     } else {
       QD_NOT_IMPLEMENTED
     }
     // dst_type is i32 across every backend (set by type_check for popcnt / clz / ffs), so this cast is a
-    // no-op for the i32 result we just computed; ir_->cast() returns the value unchanged when types match.
-    val = ir_->cast(dst_type, clz_i32);
+    // no-op for the i32 result we just computed; ops_->cast() returns the value unchanged when types match.
+    val = ops_->cast(dst_type, clz_i32);
   } else if (stmt->op_type == UnaryOpType::ffs) {
     // ffs(x): 1-indexed position of the lowest set bit in x; 0 when x == 0 (CUDA __ffs convention).
     // GLSL.std.450 FindILsb (id 73) returns the 0-indexed lowest set bit, or -1 on a zero input. We map:
@@ -1119,35 +1120,35 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
     spirv::Value ffs_i32;
     if (data_type_bits(src_dt) == 64) {
       auto u64_t = ir_->u64_type();
-      auto val_u64 = ir_->cast(u64_t, operand_val);
+      auto val_u64 = ops_->cast(u64_t, operand_val);
       auto thirty_two_u64 = ir_->uint_immediate_number(u64_t, 32);
       auto hi_u64 = ir_->make_value(spv::OpShiftRightLogical, u64_t, val_u64, thirty_two_u64);
-      auto hi = ir_->cast(i32_t, hi_u64);
-      auto lo = ir_->cast(i32_t, val_u64);
+      auto hi = ops_->cast(i32_t, hi_u64);
+      auto lo = ops_->cast(i32_t, val_u64);
       auto lo_lsb = ir_->call_glsl450(i32_t, FindILsb_id, lo);
       auto hi_lsb = ir_->call_glsl450(i32_t, FindILsb_id, hi);
       auto thirty_three_i32 = ir_->int_immediate_number(i32_t, 33);
-      auto lo_plus_one = ir_->add(lo_lsb, one_i32);
-      auto hi_plus_thirty_three = ir_->add(hi_lsb, thirty_three_i32);
-      auto lo_zero = ir_->eq(lo, zero_i32);
-      auto hi_zero = ir_->eq(hi, zero_i32);
-      auto both_zero = ir_->logical_and(lo_zero, hi_zero);
-      auto half_pos = ir_->select(lo_zero, hi_plus_thirty_three, lo_plus_one);
-      ffs_i32 = ir_->select(both_zero, zero_i32, half_pos);
+      auto lo_plus_one = ops_->add(lo_lsb, one_i32);
+      auto hi_plus_thirty_three = ops_->add(hi_lsb, thirty_three_i32);
+      auto lo_zero = ops_->eq(lo, zero_i32);
+      auto hi_zero = ops_->eq(hi, zero_i32);
+      auto both_zero = ops_->logical_and(lo_zero, hi_zero);
+      auto half_pos = ops_->select(lo_zero, hi_plus_thirty_three, lo_plus_one);
+      ffs_i32 = ops_->select(both_zero, zero_i32, half_pos);
     } else if (data_type_bits(src_dt) == 32) {
       // Cast operand to i32 so FindILsb's result type matches our i32 arithmetic. For i32 input this is a
       // no-op; for u32 input cast() emits an OpBitcast.
-      auto val_i32 = ir_->cast(i32_t, operand_val);
+      auto val_i32 = ops_->cast(i32_t, operand_val);
       auto lsb = ir_->call_glsl450(i32_t, FindILsb_id, val_i32);
-      auto lsb_plus_one = ir_->add(lsb, one_i32);
-      auto is_zero = ir_->eq(val_i32, zero_i32);
-      ffs_i32 = ir_->select(is_zero, zero_i32, lsb_plus_one);
+      auto lsb_plus_one = ops_->add(lsb, one_i32);
+      auto is_zero = ops_->eq(val_i32, zero_i32);
+      ffs_i32 = ops_->select(is_zero, zero_i32, lsb_plus_one);
     } else {
       QD_NOT_IMPLEMENTED
     }
     // dst_type is i32 across every backend (set by type_check for popcnt / clz / ffs), so this cast is a
     // no-op for the i32 result we just computed.
-    val = ir_->cast(dst_type, ffs_i32);
+    val = ops_->cast(dst_type, ffs_i32);
   }
 #define UNARY_OP_TO_SPIRV(op, instruction, instruction_id, max_bits)                           \
   else if (stmt->op_type == UnaryOpType::op) {                                                 \
@@ -1179,7 +1180,7 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
 }
 
 void TaskCodegen::generate_overflow_branch(const spirv::Value &cond_v, const std::string &op, const std::string &tb) {
-  spirv::Value cond = ir_->ne(cond_v, ir_->cast(cond_v.stype, ir_->const_i32_zero_));
+  spirv::Value cond = ops_->ne(cond_v, ops_->cast(cond_v.stype, ir_->const_i32_zero_));
   spirv::Label then_label = ir_->new_label();
   spirv::Label merge_label = ir_->new_label();
   ir_->make_inst(spv::OpSelectionMerge, merge_label, spv::SelectionControlMaskNone);
@@ -1210,7 +1211,7 @@ void TaskCodegen::generate_overflow_branch(const spirv::Value &cond_v, const std
       safe_tb += c;
     }
   }
-  ir_->call_debugprintf(op + " overflow detected in " + safe_tb, {});
+  ops_->call_debugprintf(op + " overflow detected in " + safe_tb, {});
   ir_->make_inst(spv::OpBranch, merge_label);
   // merge label
   ir_->start_label(merge_label);
@@ -1295,15 +1296,15 @@ spirv::Value TaskCodegen::generate_smul_overflow(const spirv::Value &a, const sp
   auto minus_one = ir_->int_immediate_number(a.stype, -1);
   auto a_sign = ir_->make_value(spv::OpSLessThan, ir_->bool_type(), a, zero);
   auto b_sign = ir_->make_value(spv::OpSLessThan, ir_->bool_type(), b, zero);
-  auto a_not_zero = ir_->ne(a, zero);
-  auto b_not_zero = ir_->ne(b, zero);
+  auto a_not_zero = ops_->ne(a, zero);
+  auto b_not_zero = ops_->ne(b, zero);
   auto a_b_not_zero = ir_->make_value(spv::OpLogicalAnd, ir_->bool_type(), a_not_zero, b_not_zero);
   auto low_sign = ir_->make_value(spv::OpSLessThan, ir_->bool_type(), low, zero);
   auto expected_sign = ir_->make_value(spv::OpLogicalNotEqual, ir_->bool_type(), a_sign, b_sign);
   expected_sign = ir_->make_value(spv::OpLogicalAnd, ir_->bool_type(), expected_sign, a_b_not_zero);
-  auto not_expected_sign = ir_->ne(low_sign, expected_sign);
-  auto expected_high = ir_->select(expected_sign, minus_one, zero);
-  auto not_expected_high = ir_->ne(high, expected_high);
+  auto not_expected_sign = ops_->ne(low_sign, expected_sign);
+  auto expected_high = ops_->select(expected_sign, minus_one, zero);
+  auto not_expected_high = ops_->ne(high, expected_high);
   auto overflow = ir_->make_value(spv::OpLogicalOr, ir_->bool_type(), not_expected_high, not_expected_sign);
   generate_overflow_branch(overflow, "Multiplication", tb);
   return low;
@@ -1313,7 +1314,7 @@ spirv::Value TaskCodegen::generate_ushl_overflow(const spirv::Value &a, const sp
   // overflow iff a << b >> b != a
   auto result = ir_->make_value(spv::OpShiftLeftLogical, a.stype, a, b);
   auto restore = ir_->make_value(spv::OpShiftRightLogical, a.stype, result, b);
-  auto overflow = ir_->ne(a, restore);
+  auto overflow = ops_->ne(a, restore);
   generate_overflow_branch(overflow, "Shift left", tb);
   return result;
 }
@@ -1322,7 +1323,7 @@ spirv::Value TaskCodegen::generate_sshl_overflow(const spirv::Value &a, const sp
   // overflow iff a << b >> b != a
   auto result = ir_->make_value(spv::OpShiftLeftLogical, a.stype, a, b);
   auto restore = ir_->make_value(spv::OpShiftRightArithmetic, a.stype, result, b);
-  auto overflow = ir_->ne(a, restore);
+  auto overflow = ops_->ne(a, restore);
   generate_overflow_branch(overflow, "Shift left", tb);
   return result;
 }
@@ -1349,26 +1350,26 @@ void TaskCodegen::visit(BinaryOpStmt *bin) {
     } else {
       bin_value = generate_sadd_overflow(lhs_value, rhs_value, bin->get_tb());
     }
-    bin_value = ir_->cast(dst_type, bin_value);
+    bin_value = ops_->cast(dst_type, bin_value);
   } else if (debug && op_type == BinaryOpType::sub && is_integral(dst_type.dt)) {
     if (is_unsigned(dst_type.dt)) {
       bin_value = generate_usub_overflow(lhs_value, rhs_value, bin->get_tb());
     } else {
       bin_value = generate_ssub_overflow(lhs_value, rhs_value, bin->get_tb());
     }
-    bin_value = ir_->cast(dst_type, bin_value);
+    bin_value = ops_->cast(dst_type, bin_value);
   } else if (debug && op_type == BinaryOpType::mul && is_integral(dst_type.dt)) {
     if (is_unsigned(dst_type.dt)) {
       bin_value = generate_umul_overflow(lhs_value, rhs_value, bin->get_tb());
     } else {
       bin_value = generate_smul_overflow(lhs_value, rhs_value, bin->get_tb());
     }
-    bin_value = ir_->cast(dst_type, bin_value);
+    bin_value = ops_->cast(dst_type, bin_value);
   }
-#define BINARY_OP_TO_SPIRV_ARTHIMATIC(op, func)  \
-  else if (op_type == BinaryOpType::op) {        \
-    bin_value = ir_->func(lhs_value, rhs_value); \
-    bin_value = ir_->cast(dst_type, bin_value);  \
+#define BINARY_OP_TO_SPIRV_ARTHIMATIC(op, func)   \
+  else if (op_type == BinaryOpType::op) {         \
+    bin_value = ops_->func(lhs_value, rhs_value); \
+    bin_value = ops_->cast(dst_type, bin_value);  \
   }
 
   BINARY_OP_TO_SPIRV_ARTHIMATIC(add, add)
@@ -1402,10 +1403,10 @@ void TaskCodegen::visit(BinaryOpStmt *bin) {
   }
 #undef BINARY_OP_TO_SPIRV_BITWISE
 
-#define BINARY_OP_TO_SPIRV_LOGICAL(op, func)     \
-  else if (op_type == BinaryOpType::op) {        \
-    bin_value = ir_->func(lhs_value, rhs_value); \
-    bin_value = ir_->cast(dst_type, bin_value);  \
+#define BINARY_OP_TO_SPIRV_LOGICAL(op, func)      \
+  else if (op_type == BinaryOpType::op) {         \
+    bin_value = ops_->func(lhs_value, rhs_value); \
+    bin_value = ops_->cast(dst_type, bin_value);  \
   }
 
   BINARY_OP_TO_SPIRV_LOGICAL(cmp_lt, lt)
@@ -1459,9 +1460,9 @@ void TaskCodegen::visit(BinaryOpStmt *bin) {
   BINARY_OP_TO_SPIRV_FUNC(max, SMax, 42, UMax, 41, FMax, 40)
 #undef BINARY_OP_TO_SPIRV_FUNC
   else if (op_type == BinaryOpType::truediv) {
-    lhs_value = ir_->cast(dst_type, lhs_value);
-    rhs_value = ir_->cast(dst_type, rhs_value);
-    bin_value = ir_->div(lhs_value, rhs_value);
+    lhs_value = ops_->cast(dst_type, lhs_value);
+    rhs_value = ops_->cast(dst_type, rhs_value);
+    bin_value = ops_->div(lhs_value, rhs_value);
   }
   else {QD_NOT_IMPLEMENTED} ir_->register_value(bin_name, bin_value);
 }
@@ -1471,8 +1472,8 @@ void TaskCodegen::visit(TernaryOpStmt *tri) {
   spirv::Value op1 = ir_->query_value(tri->op1->raw_name());
   spirv::Value op2 = ir_->query_value(tri->op2->raw_name());
   spirv::Value op3 = ir_->query_value(tri->op3->raw_name());
-  spirv::Value tri_val =
-      ir_->cast(ir_->get_primitive_type(tri->element_type()), ir_->select(ir_->cast(ir_->bool_type(), op1), op2, op3));
+  spirv::Value tri_val = ops_->cast(ir_->get_primitive_type(tri->element_type()),
+                                    ops_->select(ops_->cast(ir_->bool_type(), op1), op2, op3));
   ir_->register_value(tri->raw_name(), tri_val);
 }
 
@@ -1509,10 +1510,12 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
                    ir_->int_immediate_number(ir_->i32_type(), spv::MemorySemanticsWorkgroupMemoryMask |
                                                                   spv::MemorySemanticsAcquireReleaseMask));
     val = ir_->const_i32_zero_;
+  } else if (stmt->func_name == "workgroupId") {
+    val = ops_->cast(ir_->i32_type(), ops_->get_work_group_id(0));
   } else if (stmt->func_name == "localInvocationId") {
-    val = ir_->cast(ir_->i32_type(), ir_->get_local_invocation_id(0));
+    val = ops_->cast(ir_->i32_type(), ops_->get_local_invocation_id(0));
   } else if (stmt->func_name == "globalInvocationId") {
-    val = ir_->cast(ir_->i32_type(), ir_->get_global_invocation_id(0));
+    val = ops_->cast(ir_->i32_type(), ops_->get_global_invocation_id(0));
   } else if (stmt->func_name == "workgroupMemoryBarrier") {
     ir_->make_inst(spv::OpMemoryBarrier, ir_->int_immediate_number(ir_->i32_type(), spv::ScopeWorkgroup),
                    ir_->int_immediate_number(ir_->i32_type(), spv::MemorySemanticsWorkgroupMemoryMask |
@@ -1533,7 +1536,7 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
   } else if (stmt->func_name == "subgroupElect") {
     val = ir_->make_value(spv::OpGroupNonUniformElect, ir_->bool_type(),
                           ir_->int_immediate_number(ir_->i32_type(), spv::ScopeSubgroup));
-    val = ir_->cast(ir_->i32_type(), val);
+    val = ops_->cast(ir_->i32_type(), val);
   } else if (stmt->func_name == "subgroupBarrier") {
     ir_->make_inst(spv::OpControlBarrier, ir_->int_immediate_number(ir_->i32_type(), spv::ScopeSubgroup),
                    ir_->int_immediate_number(ir_->i32_type(), spv::ScopeSubgroup), ir_->const_i32_zero_);
@@ -1550,7 +1553,7 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
                                                                   spv::MemorySemanticsAcquireReleaseMask));
     val = ir_->const_i32_zero_;
   } else if (stmt->func_name == "subgroupInvocationId") {
-    val = ir_->cast(ir_->i32_type(), ir_->get_subgroup_invocation_id());
+    val = ops_->cast(ir_->i32_type(), ops_->get_subgroup_invocation_id());
   } else if (stmt->func_name == "subgroupBroadcast") {
     auto value = ir_->query_value(stmt->args[0]->raw_name());
     auto index = ir_->query_value(stmt->args[1]->raw_name());
@@ -1577,8 +1580,8 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
                                       ir_->int_immediate_number(ir_->i32_type(), spv::ScopeSubgroup), pred_bool);
     auto lo = ir_->make_value(spv::OpCompositeExtract, ir_->u32_type(), ballot_vec, 0);
     auto hi = ir_->make_value(spv::OpCompositeExtract, ir_->u32_type(), ballot_vec, 1);
-    auto lo64 = ir_->cast(ir_->u64_type(), lo);
-    auto hi64 = ir_->cast(ir_->u64_type(), hi);
+    auto lo64 = ops_->cast(ir_->u64_type(), lo);
+    auto hi64 = ops_->cast(ir_->u64_type(), hi);
     auto shift = ir_->uint_immediate_number(ir_->u64_type(), 32u);
     auto hi_shifted = ir_->make_value(spv::OpShiftLeftLogical, ir_->u64_type(), hi64, shift);
     val = ir_->make_value(spv::OpBitwiseOr, ir_->u64_type(), lo64, hi_shifted);
@@ -1671,7 +1674,7 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
   spirv::Label merge_label;
 
   if (use_subgroup_reduction) {
-    spirv::Value subgroup_id = ir_->get_subgroup_invocation_id();
+    spirv::Value subgroup_id = ops_->get_subgroup_invocation_id();
     spirv::Value cond = ir_->make_value(spv::OpIEqual, ir_->bool_type(), subgroup_id, ir_->const_i32_zero_);
 
     then_label = ir_->new_label();
@@ -1776,7 +1779,7 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
       QD_ASSERT_INFO(stmt->op_type != AtomicOpType::xchg,
                      "atomic_exchange on shared (workgroup) float arrays is not yet implemented for SPIR-V; would "
                      "need uint-backing analogous to the shared float-add CAS path");
-      val = shared_float_atomic(*ir_, stmt->op_type, addr_ptr, data, dt);
+      val = shared_float_atomic(*ir_, *ops_, stmt->op_type, addr_ptr, data, dt);
     } else {
       // Global f16 xchg falls through here because the uint-bitcast xchg branch above explicitly excludes f16
       // (it would need a width-mismatched bitcast, same as the f16 atomic-add CAS path). float_atomic itself has
@@ -1784,7 +1787,7 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
       QD_ASSERT_INFO(stmt->op_type != AtomicOpType::xchg,
                      "atomic_exchange on f16 (global memory) is not yet implemented for SPIR-V; would need a "
                      "width-mismatched uint-backed bitcast analogous to the f16 atomic-add CAS path");
-      val = ir_->float_atomic(stmt->op_type, addr_ptr, data, dt);
+      val = ops_->float_atomic(stmt->op_type, addr_ptr, data, dt);
     }
   } else if (is_integral(dt)) {
     if (stmt->op_type == AtomicOpType::cas) {
@@ -1814,7 +1817,7 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
       // dest_is_ptr guard needed here too - at_buffer would crash on shared
       // integer arrays (same reason as the float branches above).
       addr_ptr = dest_is_ptr ? dest_val : at_buffer(stmt->dest, ir_->get_quadrants_uint_type(dt));
-      val = ir_->integer_atomic(stmt->op_type, addr_ptr, data, dt);
+      val = ops_->integer_atomic(stmt->op_type, addr_ptr, data, dt);
       use_native_atomics = false;
     } else if (stmt->op_type == AtomicOpType::min) {
       op = is_signed(dt) ? spv::OpAtomicSMin : spv::OpAtomicUMin;
@@ -1882,8 +1885,8 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
 }
 
 void TaskCodegen::visit(IfStmt *if_stmt) {
-  spirv::Value cond_v = ir_->cast(ir_->bool_type(), ir_->query_value(if_stmt->cond->raw_name()));
-  spirv::Value cond = ir_->ne(cond_v, ir_->cast(ir_->bool_type(), ir_->const_i32_zero_));
+  spirv::Value cond_v = ops_->cast(ir_->bool_type(), ir_->query_value(if_stmt->cond->raw_name()));
+  spirv::Value cond = ops_->ne(cond_v, ops_->cast(ir_->bool_type(), ir_->const_i32_zero_));
   spirv::Label then_label = ir_->new_label();
   spirv::Label merge_label = ir_->new_label();
   spirv::Label else_label = ir_->new_label();
@@ -1933,7 +1936,7 @@ void TaskCodegen::visit(RangeForStmt *for_stmt) {
     extent_value = end_;
   } else {
     // reversed for loop
-    init_value = ir_->sub(end_, ir_->const_i32_one_);
+    init_value = ops_->sub(end_, ir_->const_i32_one_);
     extent_value = begin_;
   }
   ir_->make_inst(spv::OpBranch, head_label);
@@ -1944,9 +1947,9 @@ void TaskCodegen::visit(RangeForStmt *for_stmt) {
   loop_var.set_incoming(0, init_value, init_label);
   spirv::Value loop_cond;
   if (!for_stmt->reversed) {
-    loop_cond = ir_->lt(loop_var, extent_value);
+    loop_cond = ops_->lt(loop_var, extent_value);
   } else {
-    loop_cond = ir_->ge(loop_var, extent_value);
+    loop_cond = ops_->ge(loop_var, extent_value);
   }
   ir_->make_inst(spv::OpLoopMerge, merge_label, continue_label, spv::LoopControlMaskNone);
   ir_->make_inst(spv::OpBranchConditional, loop_cond, body_label, merge_label);
@@ -1963,9 +1966,9 @@ void TaskCodegen::visit(RangeForStmt *for_stmt) {
   ir_->start_label(continue_label);
   spirv::Value next_value;
   if (!for_stmt->reversed) {
-    next_value = ir_->add(loop_var, ir_->const_i32_one_);
+    next_value = ops_->add(loop_var, ir_->const_i32_one_);
   } else {
-    next_value = ir_->sub(loop_var, ir_->const_i32_one_);
+    next_value = ops_->sub(loop_var, ir_->const_i32_one_);
   }
   loop_var.set_incoming(1, next_value, ir_->current_label());
   ir_->make_inst(spv::OpBranch, head_label);
@@ -2001,8 +2004,8 @@ void TaskCodegen::visit(WhileStmt *stmt) {
 }
 
 void TaskCodegen::visit(WhileControlStmt *stmt) {
-  spirv::Value cond_v = ir_->cast(ir_->bool_type(), ir_->query_value(stmt->cond->raw_name()));
-  spirv::Value cond = ir_->eq(cond_v, ir_->cast(ir_->bool_type(), ir_->const_i32_zero_));
+  spirv::Value cond_v = ops_->cast(ir_->bool_type(), ir_->query_value(stmt->cond->raw_name()));
+  spirv::Value cond = ops_->eq(cond_v, ops_->cast(ir_->bool_type(), ir_->const_i32_zero_));
   spirv::Label then_label = ir_->new_label();
   spirv::Label merge_label = ir_->new_label();
 
@@ -2040,7 +2043,7 @@ void TaskCodegen::emit_headers() {
   }
   */
   std::array<int, 3> group_size = {task_attribs_.advisory_num_threads_per_group, 1, 1};
-  ir_->set_work_group_size(group_size);
+  ops_->set_work_group_size(group_size);
   std::vector<spirv::Value> buffers;
   if (caps_->get(DeviceCapability::spirv_version) > 0x10300) {
     buffers = shared_array_binds_;
@@ -2081,8 +2084,8 @@ void TaskCodegen::generate_serial_kernel(OffloadedStmt *stmt) {
   // every push site and the task-end read. See `ensure_any_overflow_signal_var` doc for details.
   ensure_any_overflow_signal_var();
   preload_ad_stack_metadata_strides();
-  spirv::Value cond = ir_->eq(ir_->get_global_invocation_id(0),
-                              ir_->uint_immediate_number(ir_->u32_type(), 0));  // if (gl_GlobalInvocationID.x > 0)
+  spirv::Value cond = ops_->eq(ops_->get_global_invocation_id(0),
+                               ir_->uint_immediate_number(ir_->u32_type(), 0));  // if (gl_GlobalInvocationID.x > 0)
   spirv::Label then_label = ir_->new_label();
   spirv::Label merge_label = ir_->new_label();
   kernel_return_label_ = merge_label;
@@ -2178,7 +2181,7 @@ void TaskCodegen::generate_range_for_kernel(OffloadedStmt *stmt) {
         end_expr_value = ir_->int_immediate_number(ir_->i32_type(), stmt->end_value, true);
       }
     }
-    total_elems = ir_->sub(end_expr_value, begin_expr_value);
+    total_elems = ops_->sub(end_expr_value, begin_expr_value);
     task_attribs_.advisory_total_num_threads = kMaxNumThreadsGridStrideLoop;
 
     // Try to extract `end_stmt` as a product of ExternalTensorShapeAlongAxisStmt so the runtime can compute the
@@ -2242,9 +2245,9 @@ void TaskCodegen::generate_range_for_kernel(OffloadedStmt *stmt) {
   ir_->debug_name(spv::OpName, begin_expr_value, "begin_expr_value");
   ir_->debug_name(spv::OpName, total_elems, total_elems_name);
 
-  spirv::Value begin_ = ir_->add(ir_->cast(ir_->i32_type(), ir_->get_global_invocation_id(0)), begin_expr_value);
+  spirv::Value begin_ = ops_->add(ops_->cast(ir_->i32_type(), ops_->get_global_invocation_id(0)), begin_expr_value);
   ir_->debug_name(spv::OpName, begin_, "begin_");
-  spirv::Value end_ = ir_->add(total_elems, begin_expr_value);
+  spirv::Value end_ = ops_->add(total_elems, begin_expr_value);
   ir_->debug_name(spv::OpName, end_, "end_");
   const std::string total_invocs_name = "total_invocs";
   // For now, |total_invocs_name| is equal to |total_elems|. Once we support
@@ -2252,10 +2255,10 @@ void TaskCodegen::generate_range_for_kernel(OffloadedStmt *stmt) {
   // https://www.khronos.org/opengl/wiki/Compute_Shader#Inputs
 
   // HLSL & WGSL cross compilers do not support this builtin
-  spirv::Value total_invocs = ir_->cast(
+  spirv::Value total_invocs = ops_->cast(
       ir_->i32_type(),
-      ir_->mul(ir_->get_num_work_groups(0),
-               ir_->uint_immediate_number(ir_->u32_type(), task_attribs_.advisory_num_threads_per_group, true)));
+      ops_->mul(ops_->get_num_work_groups(0),
+                ir_->uint_immediate_number(ir_->u32_type(), task_attribs_.advisory_num_threads_per_group, true)));
   /*
   const int group_x = (task_attribs_.advisory_total_num_threads +
                         task_attribs_.advisory_num_threads_per_group - 1) /
@@ -2280,7 +2283,7 @@ void TaskCodegen::generate_range_for_kernel(OffloadedStmt *stmt) {
   spirv::PhiValue loop_var = ir_->make_phi(begin_.stype, 2);
   ir_->register_value("ii", loop_var);
   loop_var.set_incoming(0, begin_, init_label);
-  spirv::Value loop_cond = ir_->lt(loop_var, end_);
+  spirv::Value loop_cond = ops_->lt(loop_var, end_);
   ir_->make_inst(spv::OpLoopMerge, merge_label, continue_label, spv::LoopControlMaskNone);
   ir_->make_inst(spv::OpBranchConditional, loop_cond, body_label, merge_label);
 
@@ -2295,7 +2298,7 @@ void TaskCodegen::generate_range_for_kernel(OffloadedStmt *stmt) {
 
   // loop continue
   ir_->start_label(continue_label);
-  spirv::Value next_value = ir_->add(loop_var, total_invocs);
+  spirv::Value next_value = ops_->add(loop_var, total_invocs);
   loop_var.set_incoming(1, next_value, ir_->current_label());
   ir_->make_inst(spv::OpBranch, head_label);
 
@@ -2327,7 +2330,7 @@ void TaskCodegen::generate_struct_for_kernel(OffloadedStmt *stmt) {
   auto listgen_count_ptr = ir_->struct_array_access(ir_->u32_type(), listgen_buffer, ir_->const_i32_zero_);
   auto listgen_count = ir_->load_variable(listgen_count_ptr, ir_->u32_type());
 
-  auto invoc_index = ir_->get_global_invocation_id(0);
+  auto invoc_index = ops_->get_global_invocation_id(0);
 
   spirv::Label loop_head = ir_->new_label();
   spirv::Label loop_body = ir_->new_label();
@@ -2347,7 +2350,7 @@ void TaskCodegen::generate_struct_for_kernel(OffloadedStmt *stmt) {
   {
     ir_->start_label(loop_body);
     auto listgen_index_ptr = ir_->struct_array_access(
-        ir_->u32_type(), listgen_buffer, ir_->add(ir_->uint_immediate_number(ir_->u32_type(), 1), loop_index));
+        ir_->u32_type(), listgen_buffer, ops_->add(ir_->uint_immediate_number(ir_->u32_type(), 1), loop_index));
     auto listgen_index = ir_->load_variable(listgen_index_ptr, ir_->u32_type());
 
     // kernel
@@ -2355,11 +2358,11 @@ void TaskCodegen::generate_struct_for_kernel(OffloadedStmt *stmt) {
     stmt->body->accept(this);
 
     // continue
-    spirv::Value total_invocs = ir_->cast(
+    spirv::Value total_invocs = ops_->cast(
         ir_->u32_type(),
-        ir_->mul(ir_->get_num_work_groups(0),
-                 ir_->uint_immediate_number(ir_->u32_type(), task_attribs_.advisory_num_threads_per_group, true)));
-    auto next_index = ir_->add(loop_index, total_invocs);
+        ops_->mul(ops_->get_num_work_groups(0),
+                  ir_->uint_immediate_number(ir_->u32_type(), task_attribs_.advisory_num_threads_per_group, true)));
+    auto next_index = ops_->add(loop_index, total_invocs);
     ir_->store_variable(loop_index_var, next_index);
     ir_->make_inst(spv::OpBranch, loop_head);
   }
@@ -2468,7 +2471,7 @@ spirv::Value TaskCodegen::load_buffer(const Stmt *ptr, DataType dt, bool is_vola
   auto val_bits = is_volatile ? ir_->load_variable_volatile(buf_ptr, ir_->get_primitive_type(qd_buffer_type))
                               : ir_->load_variable(buf_ptr, ir_->get_primitive_type(qd_buffer_type));
   if (dt->is_primitive(PrimitiveTypeID::u1))
-    return ir_->cast(ir_->bool_type(), val_bits);
+    return ops_->cast(ir_->bool_type(), val_bits);
   return qd_buffer_type == dt ? val_bits : ir_->make_value(spv::OpBitcast, ir_->get_primitive_type(dt), val_bits);
 }
 
@@ -2490,11 +2493,11 @@ void TaskCodegen::store_buffer(const Stmt *ptr, spirv::Value val) {
     // `OpBitcast %char %bool_val` for a `u1` field / ndarray store would validate as `Expected input to be a pointer or
     // int or float vector or scalar: Bitcast`; most drivers ignore that and crash inside the pipeline compiler
     // (observed on Mesa RADV: a hard SIGSEGV inside `libvulkan_radeon.so::create_compute_pipeline` the moment the
-    // offending kernel is registered). Route through `IRBuilder::cast`, which lowers `bool -> int` to `OpSelect`
+    // offending kernel is registered). Route through `SpirvOperations::cast`, which lowers `bool -> int` to `OpSelect`
     // picking `1` or `0` of the target type - the canonical spec-compliant way to widen a bool, matching what
     // `load_buffer` already does on the reverse path and keeping the "bool serialises as 0 / 1" behaviour every user of
     // `to_numpy()` / `from_numpy()` depends on.
-    val_bits = ir_->cast(ir_->get_primitive_type(qd_buffer_type), val);
+    val_bits = ops_->cast(ir_->get_primitive_type(qd_buffer_type), val);
   } else {
     val_bits = ir_->make_value(spv::OpBitcast, ir_->get_primitive_type(qd_buffer_type), val);
   }
@@ -2777,15 +2780,15 @@ spirv::Value TaskCodegen::get_ad_stack_heap_thread_base_float() {
   spirv::Value row_id = ir_->load_variable(ad_stack_row_id_var_float_, ir_->u32_type());
   spirv::Value stride_u32 = get_ad_stack_metadata_stride_float();
   if (caps_->get(DeviceCapability::spirv_has_int64)) {
-    // `make_value(OpUConvert, ...)` directly rather than `ir_->cast()`: `cast()` between two unsigned integer types of
+    // `make_value(OpUConvert, ...)` directly rather than `ops_->cast()`: `cast()` between two unsigned integer types of
     // different widths emits `OpUConvert` followed by `OpBitcast` to `dst_type`, and with widening u32->u64 both sides
     // are already unsigned, so the trailing `OpBitcast(u64, u64)` has identical operand and result types - which SPIR-V
     // section 3.42.16 forbids; `spirv-val` rejects the shader and MoltenVK may silently refuse to compile it.
     spirv::Value row_id_u64 = ir_->make_value(spv::OpUConvert, ir_->u64_type(), row_id);
     spirv::Value stride_u64 = ir_->make_value(spv::OpUConvert, ir_->u64_type(), stride_u32);
-    return ir_->mul(row_id_u64, stride_u64);
+    return ops_->mul(row_id_u64, stride_u64);
   }
-  return ir_->mul(row_id, stride_u32);
+  return ops_->mul(row_id, stride_u32);
 }
 
 spirv::Value TaskCodegen::ad_stack_heap_float_ptr(spirv::Value slot_offset, spirv::Value count) {
@@ -2798,7 +2801,7 @@ spirv::Value TaskCodegen::ad_stack_heap_float_ptr(spirv::Value slot_offset, spir
                                 : slot_offset;
   spirv::Value count_idx =
       caps_->get(DeviceCapability::spirv_has_int64) ? ir_->make_value(spv::OpUConvert, idx_type, count) : count;
-  spirv::Value heap_index = ir_->add(ir_->add(base, offset_idx), count_idx);
+  spirv::Value heap_index = ops_->add(ops_->add(base, offset_idx), count_idx);
   return ir_->struct_array_access(ir_->f32_type(), get_ad_stack_heap_buffer_float(), heap_index);
 }
 
@@ -2819,14 +2822,14 @@ spirv::Value TaskCodegen::get_ad_stack_heap_thread_base_int() {
   // int strides typically stay in the tens of i32 entries, two orders of magnitude below the float strides whose
   // worst-case footprint motivated this change). The same u64 widening rule applies for the same wrap-aliasing reason
   // as the float counterpart.
-  spirv::Value row_id = ir_->get_global_invocation_id(0);
+  spirv::Value row_id = ops_->get_global_invocation_id(0);
   spirv::Value stride_u32 = get_ad_stack_metadata_stride_int();
   if (caps_->get(DeviceCapability::spirv_has_int64)) {
     spirv::Value row_id_u64 = ir_->make_value(spv::OpUConvert, ir_->u64_type(), row_id);
     spirv::Value stride_u64 = ir_->make_value(spv::OpUConvert, ir_->u64_type(), stride_u32);
-    return ir_->mul(row_id_u64, stride_u64);
+    return ops_->mul(row_id_u64, stride_u64);
   }
-  return ir_->mul(row_id, stride_u32);
+  return ops_->mul(row_id, stride_u32);
 }
 
 spirv::Value TaskCodegen::ad_stack_heap_int_ptr(spirv::Value slot_offset, spirv::Value count) {
@@ -2837,7 +2840,7 @@ spirv::Value TaskCodegen::ad_stack_heap_int_ptr(spirv::Value slot_offset, spirv:
                                 : slot_offset;
   spirv::Value count_idx =
       caps_->get(DeviceCapability::spirv_has_int64) ? ir_->make_value(spv::OpUConvert, idx_type, count) : count;
-  spirv::Value heap_index = ir_->add(ir_->add(base, offset_idx), count_idx);
+  spirv::Value heap_index = ops_->add(ops_->add(base, offset_idx), count_idx);
   return ir_->struct_array_access(ir_->i32_type(), get_ad_stack_heap_buffer_int(), heap_index);
 }
 
@@ -2879,7 +2882,7 @@ void TaskCodegen::emit_adstack_task_end_overflow_check() {
   }
   spirv::Value zero = ir_->uint_immediate_number(ir_->u32_type(), 0);
   spirv::Value cur = ir_->load_variable(any_overflow_signal_var_, ir_->u32_type());
-  spirv::Value has_overflow = ir_->ne(cur, zero);
+  spirv::Value has_overflow = ops_->ne(cur, zero);
   spirv::Label then_label = ir_->new_label();
   spirv::Label merge_label = ir_->new_label();
   ir_->make_inst(spv::OpSelectionMerge, merge_label, spv::SelectionControlMaskNone);
@@ -2926,7 +2929,7 @@ void TaskCodegen::ensure_ad_stack_metadata_loaded(AdStackSpirv &info) {
   info.offset_val = ir_->load_variable(off_ptr, ir_->u32_type());
   info.max_size_val = ir_->load_variable(max_ptr, ir_->u32_type());
   if (info.heap_kind == AdStackHeapKind::heap_float) {
-    info.adjoint_offset_val = ir_->add(info.offset_val, info.max_size_val);
+    info.adjoint_offset_val = ops_->add(info.offset_val, info.max_size_val);
   }
 }
 
@@ -3015,7 +3018,7 @@ spirv::Value TaskCodegen::ad_stack_count_ptr(uint32_t stack_id) {
 // Resolve the primal- or adjoint-slot pointer for `info` at index `idx`. The returned pointer is typed after the
 // adstack's backing storage (f32 for heap_float, i32 for heap_int) - which is the same as `info.elem_type` except
 // for u1 adstacks on the int heap, where backing is i32. Callers must explicitly convert between u1 and i32 via
-// `ir_->cast(...)` at store/load sites in that single special case. `primal=true` selects the primal half of the
+// `ops_->cast(...)` at store/load sites in that single special case. `primal=true` selects the primal half of the
 // slice, `false` selects the adjoint half. The per-alloca `offset` and (for f32 only) `adjoint_offset = offset +
 // max_size` come from the `AdStackMetadata` buffer via `ensure_ad_stack_metadata_loaded`; int-heap adstacks have
 // no adjoint slice and hit `QD_ASSERT(primal)` in that path.
@@ -3047,7 +3050,7 @@ void TaskCodegen::visit(AdStackPushStmt *stmt) {
   spirv::SType backing_type = ad_stack_backing_type(info);
   spirv::Value val = ir_->query_value(stmt->v->raw_name());
   if (info.elem_type.id != backing_type.id) {
-    val = ir_->cast(backing_type, val);  // u1 -> i32 for the heap_int path
+    val = ops_->cast(backing_type, val);  // u1 -> i32 for the heap_int path
   }
   spirv::Value one = ir_->uint_immediate_number(ir_->u32_type(), 1);
 
@@ -3060,7 +3063,7 @@ void TaskCodegen::visit(AdStackPushStmt *stmt) {
   // mutates `count_var`. Limited to the pre-pass-recognized bootstrap set so non-bootstrap const pushes (e.g.
   // const-folded payloads at deeper sites) keep their slot stores.
   if (info.heap_kind != AdStackHeapKind::heap_int && ad_stack_bootstrap_pushes_.count(stmt) != 0) {
-    ir_->store_variable(info.count_var, ir_->add(count, one));
+    ir_->store_variable(info.count_var, ops_->add(count, one));
     return;
   }
 
@@ -3076,13 +3079,13 @@ void TaskCodegen::visit(AdStackPushStmt *stmt) {
     spirv::Value adjoint_ptr = ad_stack_slot_ptr(info, count, /*primal=*/false);
     ir_->store_variable(adjoint_ptr, ir_->get_zero(backing_type));
   }
-  ir_->store_variable(info.count_var, ir_->add(count, one));
+  ir_->store_variable(info.count_var, ops_->add(count, one));
   // Update the per-task overflow-signal accumulator. `signal = (count >= max) ? stack_id + 1 : 0`; running max
   // across all push sites in this thread. No global memory access.
   spirv::Value any_overflow_var = ensure_any_overflow_signal_var();
   spirv::Value overflow_signal =
-      ir_->select(ir_->ge(count, max_val), ir_->uint_immediate_number(ir_->u32_type(), info.stack_id + 1),
-                  ir_->uint_immediate_number(ir_->u32_type(), 0));
+      ops_->select(ops_->ge(count, max_val), ir_->uint_immediate_number(ir_->u32_type(), info.stack_id + 1),
+                   ir_->uint_immediate_number(ir_->u32_type(), 0));
   spirv::Value prev = ir_->load_variable(any_overflow_var, ir_->u32_type());
   spirv::Value updated = ir_->call_glsl450(ir_->u32_type(), GLSLstd450UMax, prev, overflow_signal);
   ir_->store_variable(any_overflow_var, updated);
@@ -3098,7 +3101,7 @@ void TaskCodegen::visit(AdStackPopStmt *stmt) {
   auto &info = ad_stacks_.at(stmt->stack);
   spirv::Value count = ir_->load_variable(info.count_var, ir_->u32_type());
   spirv::Value one = ir_->uint_immediate_number(ir_->u32_type(), 1);
-  ir_->store_variable(info.count_var, ir_->sub(count, one));
+  ir_->store_variable(info.count_var, ops_->sub(count, one));
 }
 
 // `idx = min(count - 1, max_size - 1)` as a u32 when `clamp_to_max_size` is set. On the overflow path count can
@@ -3110,15 +3113,16 @@ void TaskCodegen::visit(AdStackPopStmt *stmt) {
 // LoadTop emit. `max_size` is a runtime value loaded from AdStackMetadata, so `max_size - 1` becomes an OpISub
 // rather than a compile-time immediate when clamping is requested.
 static spirv::Value ad_stack_top_index(spirv::IRBuilder *ir,
+                                       spirv::SpirvOperations &ops_,
                                        spirv::Value count,
                                        spirv::Value max_size_val,
                                        bool clamp_to_max_size) {
   spirv::Value one = ir->uint_immediate_number(ir->u32_type(), 1);
-  spirv::Value idx = ir->sub(count, one);
+  spirv::Value idx = ops_.sub(count, one);
   if (!clamp_to_max_size) {
     return idx;
   }
-  spirv::Value cap = ir->sub(max_size_val, one);
+  spirv::Value cap = ops_.sub(max_size_val, one);
   return ir->call_glsl450(ir->u32_type(), GLSLstd450UMin, idx, cap);
 }
 
@@ -3139,12 +3143,12 @@ void TaskCodegen::visit(AdStackLoadTopStmt *stmt) {
   ensure_ad_stack_metadata_loaded(info);
   spirv::Value count = ir_->load_variable(info.count_var, ir_->u32_type());
   spirv::Value idx =
-      ad_stack_top_index(ir_.get(), count, info.max_size_val, compile_config_ && (compile_config_->debug));
+      ad_stack_top_index(ir_.get(), *ops_, count, info.max_size_val, compile_config_ && (compile_config_->debug));
   spirv::Value ptr = ad_stack_slot_ptr(info, idx, /*primal=*/true);
   spirv::SType backing_type = ad_stack_backing_type(info);
   spirv::Value loaded = ir_->load_variable(ptr, backing_type);
   if (info.elem_type.id != backing_type.id) {
-    loaded = ir_->cast(info.elem_type, loaded);  // i32 -> u1 for the heap_int path
+    loaded = ops_->cast(info.elem_type, loaded);  // i32 -> u1 for the heap_int path
   }
   ir_->register_value(stmt->raw_name(), loaded);
 }
@@ -3162,7 +3166,7 @@ void TaskCodegen::visit(AdStackLoadTopAdjStmt *stmt) {
   // unconditionally, so any cast would be a no-op.
   spirv::Value count = ir_->load_variable(info.count_var, ir_->u32_type());
   spirv::Value idx =
-      ad_stack_top_index(ir_.get(), count, info.max_size_val, compile_config_ && (compile_config_->debug));
+      ad_stack_top_index(ir_.get(), *ops_, count, info.max_size_val, compile_config_ && (compile_config_->debug));
   spirv::Value ptr = ad_stack_slot_ptr(info, idx, /*primal=*/false);
   spirv::Value loaded = ir_->load_variable(ptr, info.elem_type);
   ir_->register_value(stmt->raw_name(), loaded);
@@ -3176,11 +3180,11 @@ void TaskCodegen::visit(AdStackAccAdjointStmt *stmt) {
   // See the note in `AdStackLoadTopAdjStmt`: no cast is needed because heap_int is excluded by the assert above.
   spirv::Value count = ir_->load_variable(info.count_var, ir_->u32_type());
   spirv::Value idx =
-      ad_stack_top_index(ir_.get(), count, info.max_size_val, compile_config_ && (compile_config_->debug));
+      ad_stack_top_index(ir_.get(), *ops_, count, info.max_size_val, compile_config_ && (compile_config_->debug));
   spirv::Value ptr = ad_stack_slot_ptr(info, idx, /*primal=*/false);
   spirv::Value old_val = ir_->load_variable(ptr, info.elem_type);
   spirv::Value incr = ir_->query_value(stmt->v->raw_name());
-  spirv::Value new_val = ir_->add(old_val, incr);
+  spirv::Value new_val = ops_->add(old_val, incr);
   ir_->store_variable(ptr, new_val);
 }
 
@@ -3269,6 +3273,7 @@ KernelCodegen::KernelCodegen(const Params &params) : params_(params), ctx_attrib
   QD_ASSERT(params.ir_root);
 
   uint32_t spirv_version = params.caps.get(DeviceCapability::spirv_version);
+  QD_ASSERT_INFO(spirv_version >= 0x10300, "SPIR-V 1.3 or newer is required");
 
   spv_target_env target_env;
   if (spirv_version >= 0x10600) {
@@ -3277,10 +3282,8 @@ KernelCodegen::KernelCodegen(const Params &params) : params_(params), ctx_attrib
     target_env = SPV_ENV_VULKAN_1_2;
   } else if (spirv_version >= 0x10400) {
     target_env = SPV_ENV_VULKAN_1_1_SPIRV_1_4;
-  } else if (spirv_version >= 0x10300) {
-    target_env = SPV_ENV_VULKAN_1_1;
   } else {
-    target_env = SPV_ENV_VULKAN_1_0;
+    target_env = SPV_ENV_VULKAN_1_1;
   }
 
   spirv_opt_ = std::make_unique<spvtools::Optimizer>(target_env);

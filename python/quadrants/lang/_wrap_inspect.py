@@ -19,6 +19,7 @@ import atexit
 import inspect
 import os
 import tempfile
+import tokenize
 from typing import Callable
 
 import dill
@@ -148,22 +149,45 @@ def _REPL_findsource(obj):
     return dill.source.findsource(obj)
 
 
+def _direct_file_findsource(obj):
+    # Fallback for when linecache.getlines() transiently returns [] for a readable file (MemoryError ->
+    # linecache.clearcache(), or a transient os.stat/open failure), which would otherwise abort kernel compilation.
+    # Returns (lines, lineno) like inspect.findsource.
+    code = getattr(obj, "__code__", None)
+    if code is None:
+        raise IOError(f"No __code__ to locate source for {obj}")
+    file = _builtin_getfile(obj)
+    with tokenize.open(file) as fp:
+        lines = fp.readlines()
+    if not lines:
+        raise IOError(f"Empty or unreadable source file for {obj}: {file}")
+    return lines, code.co_firstlineno - 1
+
+
 def _custom_findsource(obj):
     try:
         return _Python_IPython_findsource(obj)
     except IOError:
-        try:
-            return _REPL_findsource(obj)
-        except:
-            try:
-                return _blender_findsource(obj)
-            except:
-                raise IOError(
-                    f"Cannot find source code for Object: {obj}, this \
-is possibly because of you are running Quadrants in an environment that Quadrants's own \
-inspect module cannot find the source. Please report an issue to help us fix: \
-https://github.com/Genesis-Embodied-AI/quadrants/issues"
-                )
+        pass
+    try:
+        return _REPL_findsource(obj)
+    except Exception:
+        pass
+    try:
+        return _blender_findsource(obj)
+    except Exception:
+        pass
+    # Last resort: re-read the file directly, recovering from a transient linecache miss.
+    try:
+        return _direct_file_findsource(obj)
+    except Exception:
+        pass
+    raise IOError(
+        f"Cannot find source code for Object: {obj}, this is possibly because of "
+        "you are running Quadrants in an environment that Quadrants's own inspect "
+        "module cannot find the source. Please report an issue to help us fix: "
+        "https://github.com/Genesis-Embodied-AI/quadrants/issues"
+    )
 
 
 class _InspectContextManager:

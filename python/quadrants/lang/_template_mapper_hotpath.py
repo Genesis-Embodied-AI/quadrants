@@ -26,9 +26,12 @@ a consequence of inlining 'is_dataclass' and 'fields'.
 """
 
 import dataclasses
+import sys
 import weakref
 from dataclasses import _FIELD, _FIELDS
 from typing import Any, Union
+
+import numpy as np
 
 from quadrants import _tensor_wrapper
 from quadrants._lib import core as _qd_core
@@ -39,6 +42,11 @@ from quadrants._tensor import (
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang._dataclass_util import create_flat_name
+from quadrants.lang._final_dataclass_fields import (
+    final_field_names,
+    final_scalar_key,
+    subtree_has_final_fields,
+)
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.buffer_view import BufferView as BufferViewInstance
@@ -71,46 +79,44 @@ AnnotationType = Union[
 ]
 
 
+def annotation_has_final_subtree(annotation: Any) -> bool:
+    """True iff ``annotation`` is a dataclass type whose transitive subtree declares a ``Final`` field. The ``_FIELDS``
+    probe is needed because ``subtree_has_final_fields`` would raise on the non-dataclass annotation shapes a kernel
+    arg can carry. ``TemplateMapper.lookup`` uses it to disable its instance-keyed cache for a Final-bearing mapper.
+    """
+    return getattr(annotation, _FIELDS, None) is not None and subtree_has_final_fields(annotation)
+
+
 _ExprCxx = _qd_core.ExprCxx
 _composite_mutable_types = {list, dict, set}
-_primitive_types = {int, float, bool}
+# ``type(None)`` belongs here so ``None`` arguments are treated like other primitives and excluded from the
+# weakref-based spec-key cache tracker in ``TemplateMapper.lookup``: ``weakref.ref(None)`` raises ``TypeError``, and
+# ``None`` is an immortal singleton that never needs lifetime tracking. Without it, the spec-key cache entry for a
+# ``None`` argument is dropped and every such launch re-runs full spec-key extraction.
+_primitive_types = {int, float, bool, type(None)}
+_np_ndarray = np.ndarray
 
 
-# Per-instance ndarray-path cache, stored OFF-instance in a module-level ``id(arg) -> list[paths]`` dict and cleaned
-# up via ``weakref.finalize``. We can't stash it on ``arg.__dict__`` because the fastcache args walker iterates
-# every key in ``__dict__`` and rejects any unsupported type (``list`` isn't whitelisted) — that disabled the L1
-# cache for ~10 Genesis kernels and broke the ``test_static`` / ``test_num_envs`` / ``test_ndarray_no_compile``
-# subprocess tests.
-#
-# Per-instance (not per-class) caching is correctness-load-bearing: ``@qd.data_oriented`` and ``qd.Tensor``
-# containers can have polymorphic attribute structures across instances of the same class — Genesis ``DataManager``
-# only allocates ``*_adjoint_cache`` ndarrays when ``requires_grad=True``, and a ``qd.Tensor`` field can wrap an
-# ``Ndarray`` on one instance and a ``MatrixField`` on another. A per-class cache populated from the first-walked
-# instance reused those paths on a sibling and crashed ``_collect_struct_nd_descriptors`` (reading ``element_type``
-# off a ``MatrixField``) — affecting ~60 Genesis tests under the ndarray backend.
-#
-# ``_struct_nd_paths_cache`` (per-class) remains as a fallback for objects that don't support ``weakref.finalize``
-# (e.g. ``__slots__`` classes without ``__weakref__``). Genesis containers all support weakrefs so the fast path
-# below is what runs in practice.
+def _is_external_array(arg: Any) -> bool:
+    if isinstance(arg, _np_ndarray):
+        return True
+    torch = sys.modules.get("torch")
+    if torch is not None:
+        return isinstance(arg, torch.Tensor)
+    return False
+
+
+# Fallback for ``__slots__`` classes, which have no ``__dict__`` to hold the per-instance path cache that
+# ``_struct_nd_paths_for`` normally stashes. Per-class caching cannot express an attribute structure that differs per
+# instance, so such classes keep that limitation.
 _struct_nd_paths_cache: dict[type, list[tuple]] = {}
-_struct_nd_paths_instance_cache: dict[int, list[tuple]] = {}
 
 
-def _drop_instance_paths(arg_id: int) -> None:
-    _struct_nd_paths_instance_cache.pop(arg_id, None)
-
-
-def _build_struct_nd_paths(obj: Any, prefix: tuple, out: list, _seen: set | None = None) -> None:
-    # Cycle protection: real Genesis containers form attribute graphs with shared references and back-pointers (e.g.
-    # ``sim.rigid_solver.sim is sim``). Without ``_seen`` this recurses infinitely on the back-edge and blows the
-    # Python stack on first launch. Tracked by ``id(obj)`` so we don't accidentally rely on ``__hash__`` for arbitrary
-    # user types — and so primitives like equal-but-distinct dataclass instances are still walked independently.
+def _build_struct_nd_paths(obj: Any, prefix: tuple, out: list, _seen: "set[int] | None" = None) -> None:
+    # ``_seen`` is required, not defensive: Genesis object graphs have cross-references (``solver -> scene -> sim ->
+    # solver``).
     if _seen is None:
-        _seen = set()
-    obj_id = id(obj)
-    if obj_id in _seen:
-        return
-    _seen.add(obj_id)
+        _seen = {id(obj)}
     if is_dataclass_instance(obj):
         children = ((f.name, getattr(obj, f.name)) for f in dataclasses.fields(obj))
     else:
@@ -130,24 +136,30 @@ def _build_struct_nd_paths(obj: Any, prefix: tuple, out: list, _seen: set | None
         if issubclass(v_type, Ndarray):
             out.append(chain)
         elif is_data_oriented(v) or is_dataclass_instance(v):
+            v_id = id(v)
+            if v_id in _seen:
+                continue
+            _seen.add(v_id)
             _build_struct_nd_paths(v, chain, out, _seen)
 
 
 def _struct_nd_paths_for(arg: Any) -> list[tuple]:
-    """Return the cached attribute paths (each a tuple of attr-name strings) at which ``Ndarray`` instances are
-    reachable from ``arg``. First call for an *instance* walks ``arg`` once via ``_build_struct_nd_paths`` and
-    caches the path list in ``_struct_nd_paths_instance_cache`` keyed by ``id(arg)``; ``weakref.finalize`` evicts
-    the entry when ``arg`` is garbage-collected. Subsequent calls are a dict lookup keyed by ``id(arg)``.
+    """Return the attribute paths (tuples of attr names) at which ``Ndarray`` instances are reachable from ``arg``,
+    caching them on the instance itself as ``_qd_nd_paths``.
 
-    Per-instance (not per-class) caching is correctness-load-bearing — see the module-level comment on
-    ``_struct_nd_paths_instance_cache``. Objects that don't support ``weakref.finalize`` (e.g. ``__slots__`` classes
-    without ``__weakref__``) fall back to the legacy per-class cache; Genesis containers all support weakrefs so
-    the per-instance branch is the one that runs in practice.
+    The cache has to be per instance: ``@qd.data_oriented`` classes can have different attribute sets across
+    instances of one class (Genesis ``DataManager`` with vs without ``requires_grad``), and a ``qd.Tensor`` member
+    can swap backends within one instance's lifetime.
+
+    Limitation: an ndarray attribute attached *after* the instance's first kernel call is not tracked until the cache
+    is dropped (``del arg.__dict__['_qd_nd_paths']``).
     """
-    arg_id = id(arg)
-    paths = _struct_nd_paths_instance_cache.get(arg_id)
-    if paths is not None:
-        return paths
+    # ``__dict__[...]`` rather than ``getattr``: some third-party metaclasses (e.g. Pydantic) recurse infinitely on
+    # probe-style ``getattr`` of an unknown name.
+    try:
+        return arg.__dict__["_qd_nd_paths"]
+    except (AttributeError, KeyError):
+        pass
     cls = type(arg)
     paths = _struct_nd_paths_cache.get(cls)
     if paths is not None:
@@ -155,11 +167,10 @@ def _struct_nd_paths_for(arg: Any) -> list[tuple]:
     paths = []
     _build_struct_nd_paths(arg, (), paths)
     try:
-        weakref.finalize(arg, _drop_instance_paths, arg_id)
-    except TypeError:
+        object.__setattr__(arg, "_qd_nd_paths", paths)
+    except AttributeError:
+        # No ``__dict__`` to stash in - degrade to per-class caching.
         _struct_nd_paths_cache[cls] = paths
-    else:
-        _struct_nd_paths_instance_cache[arg_id] = paths
     return paths
 
 
@@ -191,13 +202,9 @@ def _collect_struct_nd_descriptors(arg: Any, out: list) -> None:
     """Emit per-ndarray shape descriptors ``(joined-path, element_type, ndim, needs_grad, layout)`` for every ndarray
     reachable from ``arg``. Used by the template-mapper to refine the spec key for ``@qd.data_oriented`` args holding
     ndarrays — see the data_oriented branch in ``_extract_arg``.
-
-    The path cache is per-instance (see ``_struct_nd_paths_for``) so polymorphic-instance attribute structure is
-    handled correctly. Within a single instance's lifetime, a cached path's leaf may still cease to be an ``Ndarray``
-    (e.g. a ``qd.Tensor`` member swapped from an ``Ndarray``-backed impl to a ``MatrixField``-backed one); when that
-    happens we silently skip the descriptor — the spec key still includes ``weakref(arg)`` so cache discrimination
-    remains correct.
     """
+    # A cached path's leaf can stop being an ``Ndarray`` mid-lifetime (a ``qd.Tensor`` impl swapped for a
+    # ``MatrixField``), hence the skip below rather than reading Ndarray-only accessors off it.
     for chain in _struct_nd_paths_for(arg):
         v = arg
         for a in chain:
@@ -206,6 +213,7 @@ def _collect_struct_nd_descriptors(arg: Any, out: list) -> None:
             v = v._unwrap()
         if not isinstance(v, Ndarray):
             continue
+        # ``shape`` is legitimately ``None`` for an uninitialised ``_physical_shape``.
         shape = v.shape
         if shape is None:
             continue
@@ -239,7 +247,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         if type(arg) in _TENSOR_WRAPPER_TYPES:
             arg = arg._unwrap()
         arg_type = type(arg)
-        if issubclass(arg_type, (Ndarray, AnyArray)):
+        if issubclass(arg_type, (Ndarray, AnyArray)) or _is_external_array(arg):
             return (_TENSOR_T_NDARRAY_MARKER,) + tuple(
                 _extract_arg(
                     raise_on_templated_floats,
@@ -287,6 +295,8 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
             #
             # Containers with no ndarrays keep the original short-path (one spec per instance via weakref) so this is
             # a no-op for the existing data_oriented + qd.field workloads (genesis field-backend).
+            if type(arg).__dict__.get("_qd_stable_members"):
+                return weakref.ref(arg)
             nd_descriptors: list = []
             _collect_struct_nd_descriptors(arg, nd_descriptors)
             if nd_descriptors:
@@ -388,33 +398,85 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         # is hashable, but a user can enforce a dataclass to be consider frozen for a user perspective without being
         # truly frozen by specifying 'unsafe_hash=True'. If a user is doing this on purpose, it makes sense to honor it.
         is_frozen = annotation.__hash__ is not None
-        if is_frozen:
+        # Serve the ``_qd_spec_key`` cache only in the default (non-strict) mode: the cached key is
+        # setting-independent, but the ``Final[float]`` guard below is not, and an early return would also skip the
+        # recursion that runs it on nested frozen dataclasses. A Final-bearing subtree is never served either - the
+        # write below refuses to store one, so this read falls through and re-runs validation each launch.
+        #
+        # Keyed by ``id(annotation)`` so a subclass extracted against different ancestor annotations caches a separate
+        # key per view; the stored annotation is identity-checked on read, so a metaclass-equal ancestor or a recycled
+        # ``id`` cannot return the wrong key.
+        if is_frozen and not raise_on_templated_floats:
             try:
-                # Note that it is necessary to store the key at instance-level instead of class-level because because
-                # multiple instances of the same class may have different memory layout (although unusual).
-                # One limitation is that storing '_key' is then impossible for dataclasses enforcing 'slots=True',
-                # but this not the default option and almost never used in practice because of other limitations.
-                return arg._key
+                # Instance-level (not class-level): instances of one class may differ in memory layout. The reserved
+                # ``_qd_`` prefix avoids collision with a user field named ``_key``. Absent under ``slots=True``.
+                _key_hit = arg._qd_spec_key.get(id(annotation))
             except AttributeError:
-                pass
-        key = tuple(
-            [
-                _extract_arg(
-                    raise_on_templated_floats,
-                    getattr(arg, field.name),
-                    field.type,
-                    create_flat_name(arg_name, field.name),
-                )
-                for field in annotation_fields.values()
-                if field._field_type is _FIELD
-            ]
-        )
-        if is_frozen:
+                _key_hit = None
+            if _key_hit is not None and _key_hit[0] is annotation:
+                return _key_hit[1]
+        # ``Final[T]`` fields drive the key by *value*; other fields keep the recursive ``_extract_arg``. PERF: with no
+        # Final fields (the common case) we take the original comprehension verbatim.
+        final_names = final_field_names(annotation)
+        if final_names:
+            key_parts = []
+            for field in annotation_fields.values():
+                if field._field_type is not _FIELD:
+                    continue
+                field_value = getattr(arg, field.name)
+                if field.name in final_names:
+                    # A ``Final[float]`` drives specialisation, so honour ``raise_on_templated_floats`` like a
+                    # ``qd.template()`` float. The ``isinstance`` runs only in strict mode; ``bool`` is not a ``float``.
+                    if raise_on_templated_floats and (
+                        type(field_value) is float or isinstance(field_value, (float, np.floating))
+                    ):
+                        raise ValueError(
+                            f"Floats not allowed as templated types: {annotation.__name__}.{field.name} is "
+                            f"``Final[float]``, so its value is baked into the compiled kernel and each distinct "
+                            f"value compiles a separate kernel. Drop the ``Final`` to make it an ordinary runtime "
+                            f"field, or unset ``raise_on_templated_floats``."
+                        )
+                    # ``live=True``: in-process key, so a subclass/enum is keyed by class identity. The offline
+                    # fastcache passes ``live=False`` (see ``final_scalar_key`` / ``args_hasher``).
+                    key_parts.append(final_scalar_key(field_value, live=True))
+                else:
+                    key_parts.append(
+                        _extract_arg(
+                            raise_on_templated_floats,
+                            field_value,
+                            field.type,
+                            create_flat_name(arg_name, field.name),
+                        )
+                    )
+            key = tuple(key_parts)
+        else:
+            key = tuple(
+                [
+                    _extract_arg(
+                        raise_on_templated_floats,
+                        getattr(arg, field.name),
+                        field.type,
+                        create_flat_name(arg_name, field.name),
+                    )
+                    for field in annotation_fields.values()
+                    if field._field_type is _FIELD
+                ]
+            )
+        # Store the cache only for a ``Final``-free subtree; a Final-bearing one must revalidate every launch, so we
+        # never store one (making the read above fall through).
+        if is_frozen and not subtree_has_final_fields(annotation):
             try:
-                object.__setattr__(arg, "_key", key)
+                _key_map = arg._qd_spec_key
             except AttributeError:
-                # Impossible to store _key at instance-level if 'slots=True'. It will be recomputed systematically.
-                pass
+                _key_map = None
+            if _key_map is None:
+                try:
+                    object.__setattr__(arg, "_qd_spec_key", {id(annotation): (annotation, key)})
+                except AttributeError:
+                    # Impossible to store _qd_spec_key at instance-level if 'slots=True'. It is recomputed each time.
+                    pass
+            else:
+                _key_map[id(annotation)] = (annotation, key)
         return key
     if annotation_type is sparse_matrix_builder:
         return arg.dtype

@@ -1,7 +1,8 @@
 """Pytest plugin that auto-enables kernel coverage when pytest-cov is active.
 
-Registered via the ``pytest11`` entry point so it loads automatically when quadrants is installed.
-Opt out by setting ``QD_KERNEL_COVERAGE=0`` explicitly.
+Registered via the ``pytest11`` entry point so it loads automatically when quadrants is installed. The package is kept
+independent of quadrants so pytest startup neither imports the runtime nor initializes optional dependencies before
+downstream conftest hooks configure them. Opt out by setting ``QD_KERNEL_COVERAGE=0`` explicitly.
 """
 
 import os

@@ -42,10 +42,14 @@ bool cfg_optimization(const CompileConfig &config,
                       const std::optional<ControlFlowGraph::LiveVarAnalysisConfig> &lva_config_opt = std::nullopt,
                       const std::string &kernel_name = "unknown",
                       const std::string &phase = "");
+
 bool alg_simp(IRNode *root, const CompileConfig &config);
 bool demote_operations(IRNode *root, const CompileConfig &config);
 bool binary_op_simplify(IRNode *root, const CompileConfig &config);
 bool whole_kernel_cse(IRNode *root);
+bool per_task_cse(IRNode *root);
+bool merge_global_ptrs(IRNode *root);
+bool cse_offloaded_tasks(IRNode *root);
 bool extract_constant(IRNode *root, const CompileConfig &config);
 bool unreachable_code_elimination(IRNode *root);
 bool loop_invariant_code_motion(IRNode *root, const CompileConfig &config);

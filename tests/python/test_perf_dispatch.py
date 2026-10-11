@@ -6,6 +6,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang import _perf_dispatch
 from quadrants.lang._perf_dispatch import (
+    DEFAULT_REPEAT_AFTER_COUNT,
     NUM_FIRST_WARMUP,
     PerformanceDispatcher,
     _parse_force_map,
@@ -444,6 +445,51 @@ def test_perf_dispatch_default_warmup_values() -> None:
         my_func(a)
     assert len(called) == 2
     assert set(called) == {"a", "b"}
+
+
+@test_utils.test()
+def test_perf_dispatch_default_repeat_triggers() -> None:
+    """When neither repeat_after_* is passed, perf_dispatch defaults to count-based re-eval with no time trigger."""
+
+    @qd.perf_dispatch(get_geometry_hash=lambda a: hash(a.shape))
+    def my_func(a: qd.types.NDArray[qd.i32, 1]): ...
+
+    @my_func.register
+    def impl_a(a: qd.types.NDArray[qd.i32, 1]) -> None: ...
+
+    speed_checker = cast(PerformanceDispatcher, my_func)
+    assert speed_checker.repeat_after_count == DEFAULT_REPEAT_AFTER_COUNT
+    assert speed_checker.repeat_after_seconds is None
+
+
+@test_utils.test()
+def test_perf_dispatch_repeat_count_only_leaves_seconds_unset() -> None:
+    """Passing only repeat_after_count leaves the time-based trigger unset (no hidden per-second re-eval)."""
+
+    @qd.perf_dispatch(get_geometry_hash=lambda a: hash(a.shape), repeat_after_count=50)
+    def my_func(a: qd.types.NDArray[qd.i32, 1]): ...
+
+    @my_func.register
+    def impl_a(a: qd.types.NDArray[qd.i32, 1]) -> None: ...
+
+    speed_checker = cast(PerformanceDispatcher, my_func)
+    assert speed_checker.repeat_after_count == 50
+    assert speed_checker.repeat_after_seconds is None
+
+
+@test_utils.test()
+def test_perf_dispatch_repeat_seconds_only_leaves_count_unset() -> None:
+    """Passing only repeat_after_seconds leaves the count-based trigger unset (default 300 is not injected)."""
+
+    @qd.perf_dispatch(get_geometry_hash=lambda a: hash(a.shape), repeat_after_seconds=30.0)
+    def my_func(a: qd.types.NDArray[qd.i32, 1]): ...
+
+    @my_func.register
+    def impl_a(a: qd.types.NDArray[qd.i32, 1]) -> None: ...
+
+    speed_checker = cast(PerformanceDispatcher, my_func)
+    assert speed_checker.repeat_after_seconds == 30.0
+    assert speed_checker.repeat_after_count is None
 
 
 @test_utils.test()

@@ -69,21 +69,3 @@ def test_loop_config_serial_for():
         return a
 
     assert foo() == 50
-
-
-@test_utils.test(arch=[qd.cpu])
-def test_loop_config_block_dim_adaptive():
-    n = 4096
-    val = qd.field(qd.i32, shape=(n))
-
-    @qd.kernel
-    def fill():
-        qd.loop_config(block_dim_adaptive=False)
-        for i in range(n):
-            val[i] = i
-
-    fill()
-    # To speed up
-    val_np = val.to_numpy()
-    for i in range(n):
-        assert val_np[i] == i

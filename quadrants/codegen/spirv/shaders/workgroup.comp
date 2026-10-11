@@ -1,0 +1,5 @@
+#version 450
+
+uint get_work_group_id(uint dim_index) {
+    return gl_WorkGroupID[dim_index];
+}

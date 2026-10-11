@@ -246,6 +246,19 @@ class IRBuilder {
     return ib_.begin(op).add_seq(std::forward<Args>(args)...).commit(&function_);
   }
 
+  // Place an instruction at the start of the generated function, before its main body.
+  // Used to initialize random-number state before the body uses it.
+  template <typename... Args>
+  Instr make_function_header_inst(spv::Op op, Args &&...args) {
+    return ib_.begin(op).add_seq(std::forward<Args>(args)...).commit(&func_header_);
+  }
+
+  // Record an input, such as the global thread ID, for the kernel's SPIR-V entry-point declaration.
+  // SPIR-V requires that declaration to list the input variables the kernel uses.
+  void register_entry_point_input(Value input) {
+    entry_point_inputs_.push_back(input);
+  }
+
   // Initialize header
   void init_header();
   // Initialize the predefined contents
@@ -256,7 +269,7 @@ class IRBuilder {
 
   Value ext_inst_import(const std::string &name) {
     Value val = new_value(SType(), ValueKind::kExtInst);
-    ib_.begin(spv::OpExtInstImport).add_seq(val, name).commit(&header_);
+    ib_.begin(spv::OpExtInstImport).add_seq(val, name).commit(&capabilities_extensions_imports_);
     return val;
   }
 
@@ -379,19 +392,8 @@ class IRBuilder {
         ib_.add(v);
       }
     }
-    if (gl_global_invocation_id_.id != 0) {
-      ib_.add(gl_global_invocation_id_);
-    }
-    if (gl_local_invocation_id_.id != 0) {
-      // Mirror `gl_global_invocation_id_` above. `get_local_invocation_id()` declares the `BuiltIn LocalInvocationId`
-      // Input variable lazily on first use but does NOT push it into `global_values`, so it is missed by both the
-      // pre-1.4 (no global_values iteration) and the post-1.4 path (global_values doesn't contain it). Without this,
-      // SPIR-V validation fails with `VUID-VkShaderModuleCreateInfo-pCode-08737` once any kernel calls
-      // `qd.simt.block.thread_idx()` on Vulkan / Metal.
-      ib_.add(gl_local_invocation_id_);
-    }
-    if (gl_num_work_groups_.id != 0) {
-      ib_.add(gl_num_work_groups_);
+    for (const auto &input : entry_point_inputs_) {
+      ib_.add(input);
     }
     ib_.commit(&entry_);
     ib_.begin(spv::OpExecutionMode)
@@ -409,34 +411,8 @@ class IRBuilder {
     curr_label_ = start_label;
   }
 
-  // Declare gl compute shader related methods
-  void set_work_group_size(const std::array<int, 3> group_size);
-  Value get_work_group_size(uint32_t dim_index);
-  Value get_num_work_groups(uint32_t dim_index);
-  Value get_local_invocation_id(uint32_t dim_index);
-  Value get_global_invocation_id(uint32_t dim_index);
-  Value get_subgroup_invocation_id();
-
-  // Expressions
-  Value add(Value a, Value b);
-  Value sub(Value a, Value b);
-  Value mul(Value a, Value b);
-  Value div(Value a, Value b);
-  Value mod(Value a, Value b);
-  Value eq(Value a, Value b);
-  Value ne(Value a, Value b);
-  Value lt(Value a, Value b);
-  Value le(Value a, Value b);
-  Value gt(Value a, Value b);
-  Value ge(Value a, Value b);
-  Value logical_and(Value a, Value b);
-  Value logical_or(Value a, Value b);
-  Value bit_field_extract(Value base, Value offset, Value count);
-  Value select(Value cond, Value a, Value b);
-  Value popcnt(Value x);
-
-  // Create a cast that cast value to dst_type
-  Value cast(const SType &dst_type, Value value);
+  // Import and call a GLSL uint(uint) helper, caching its declaration in ref_to_imported_function_declaration.
+  Value call_glsl_u32_to_u32(Value &ref_to_imported_function_declaration, const char *name, uint32_t argument_value);
 
   // Create a GLSL450 call
   template <typename... Args>
@@ -447,23 +423,6 @@ class IRBuilder {
         .add_seq(std::forward<Args>(args)...)
         .commit(&function_);
     return val;
-  }
-
-  // Create a debugPrintf call
-  void call_debugprintf(std::string formats, const std::vector<Value> &args) {
-    // Lazy import: see the explanatory comment in `IRBuilder::init_pre_defs`. We only emit
-    // `OpExtInstImport "NonSemantic.DebugPrintf"` the first time a printf / debug-assert call site actually
-    // needs it so kernels with no debug traffic stay MoltenVK-compatible.
-    if (!debug_printf_.id) {
-      debug_printf_ = ext_inst_import("NonSemantic.DebugPrintf");
-    }
-    Value format_str = debug_string(formats);
-    Value val = new_value(t_void_, ValueKind::kNormal);
-    ib_.begin(spv::OpExtInst).add_seq(t_void_, val, debug_printf_, 1, format_str);
-    for (const auto &arg : args) {
-      ib_.add(arg);
-    }
-    ib_.commit(&function_);
   }
 
   // Local allocate, load, store methods
@@ -511,6 +470,12 @@ class IRBuilder {
   SType f32_type() const {
     return t_fp32_;
   }
+  SType void_type() const {
+    return t_void_;
+  }
+  SType v3_u32_type() const {
+    return t_v3_uint_;
+  }
   SType v4_u32_type() const {
     return t_v4_uint_;
   }
@@ -540,19 +505,32 @@ class IRBuilder {
   Value const_i32_zero_;
   Value const_i32_one_;
 
-  // Use force-inline float atomic helper function
-  Value float_atomic(AtomicOpType op_type, Value addr_ptr, Value data, const DataType &dt);
-  Value integer_atomic(AtomicOpType op_type, Value addr_ptr, Value data, const DataType &dt);
-  Value atomic_operation(Value addr_ptr, Value data, std::function<Value(Value, Value)> op, const DataType &dt);
-  Value rand_u32(Value global_tmp_);
-  Value rand_f32(Value global_tmp_);
-  Value rand_i32(Value global_tmp_);
-
  private:
+  // Link the kernel with the supplied GLSL libraries and return the combined SPIR-V module.
+  static std::vector<uint32_t> link_shader_helpers(const std::vector<uint32_t> &kernel,
+                                                   std::vector<std::vector<uint32_t>> libraries);
+
+  // Read the addressing model, defaulting to Logical if OpMemoryModel is absent.
+  static uint32_t get_module_addressing_model(const std::vector<uint32_t> &spirv_module);
+  // Update the addressing model if OpMemoryModel is present.
+  static void set_module_addressing_model(std::vector<uint32_t> &spirv_module, uint32_t addressing_model);
+
+  // Read a zero-based operand, using default_value if the instruction is absent.
+  static uint32_t get_instruction_operand(const std::vector<uint32_t> &spirv_module,
+                                          spv::Op opcode,
+                                          size_t operand_index,
+                                          uint32_t default_value);
+  // Update a zero-based operand if the instruction exists.
+  static void set_instruction_operand(std::vector<uint32_t> &spirv_module,
+                                      spv::Op opcode,
+                                      size_t operand_index,
+                                      uint32_t value);
+
+  // Return the first matching instruction's word index, or spirv_module.size() if absent.
+  static size_t find_instruction(const std::vector<uint32_t> &spirv_module, spv::Op opcode);
+
   Value get_const(const SType &dtype, const uint64_t *pvalue, bool cache);
   SType declare_primitive_type(DataType dt);
-
-  void init_random_function(Value global_tmp_);
 
   Arch arch_;
   const DeviceCapabilityConfig *caps_;
@@ -566,9 +544,6 @@ class IRBuilder {
 
   // glsl 450 extension
   Value ext_glsl450_;
-
-  // debugprint extension
-  Value debug_printf_;
 
   SType t_bool_;
   SType t_int8_;
@@ -592,19 +567,6 @@ class IRBuilder {
   SType t_v4_fp32_;
   SType t_v3_fp32_;
   SType t_v2_fp32_;
-  Value gl_global_invocation_id_;
-  Value gl_local_invocation_id_;
-  Value gl_num_work_groups_;
-  Value gl_work_group_size_;
-  Value subgroup_local_invocation_id_;
-
-  // Random function and variables
-  bool init_rand_{false};
-  Value rand_x_;
-  Value rand_y_;
-  Value rand_z_;
-  Value rand_w_;  // per-thread local variable
-
   // map from value to its pointer type
   std::map<std::pair<uint32_t, spv::StorageClass>, SType> pointer_type_tbl_;
 
@@ -613,8 +575,12 @@ class IRBuilder {
   // map from raw_name(string) to Value
   std::unordered_map<std::string, Value> value_name_tbl_;
 
-  // Header segment, include import
+  std::vector<Value> entry_point_inputs_;
+
+  // Five-word SPIR-V module header.
   std::vector<uint32_t> header_;
+  // Required capabilities, extensions, and extended-instruction-set imports.
+  std::vector<uint32_t> capabilities_extensions_imports_;
   // engtry point segment
   std::vector<uint32_t> entry_;
   // Header segment
@@ -635,6 +601,7 @@ class IRBuilder {
   std::vector<uint32_t> decorate_;
   // Global segment: types, variables, types
   std::vector<uint32_t> global_;
+  std::vector<uint32_t> imported_glsl_function_declarations_;
   // Function header segment
   std::vector<uint32_t> func_header_;
   // Main Function segment

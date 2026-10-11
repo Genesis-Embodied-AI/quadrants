@@ -307,8 +307,16 @@ def _make_tile_class(N: int, dtype):
         def cholesky_(self, eps):
             """In-place NxN Cholesky factorization via subgroup shuffles.
 
-            On return, the lower triangle holds L such that A = L @ L^T.  Diagonal clamped to sqrt(max(value, eps)) for
-            numerical stability.
+            On return, the lower triangle holds L such that A = L @ L^T.  Each pivot is floored as
+            sqrt(max(value, eps)) for numerical stability.
+
+            ``eps`` may be uniform or per-lane.  It is read only on the single lane that owns pivot ``k`` (the
+            ``tid == k`` branch below), so passing a thread-varying value floors pivot ``k`` with lane ``k``'s own
+            ``eps`` at no extra cost (no shuffle, no broadcast).  A caller that wants the floor relative to each row's
+            original diagonal should pass ``eps_rel * A_orig[k]`` per lane, where ``A_orig[k]`` is the ORIGINAL
+            diagonal it supplies: in a blocked factorization ``self.r[k]`` here is the Schur complement of the diagonal
+            block, not the original A[k][k], so flooring against it would instead give a floor relative to the Schur
+            complement.
             """
             # ``k`` and ``j`` are wrapped in qd.static so the ``if k > j`` predicate folds at compile time and the
             # ``self.r[k]`` / ``self.r[j]`` accesses resolve to a single unpacked-register slot per use (no runtime

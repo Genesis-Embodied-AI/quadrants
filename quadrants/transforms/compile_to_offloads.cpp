@@ -131,6 +131,17 @@ void compile_to_offloads(IRNode *ir,
     irpass::analysis::verify_if_debug(ir, config);
   }
 
+  // Merge a global's separate read/write GlobalPtrStmts (same address) into one shared, activate=true pointer BEFORE
+  // this first flag_access, so flag_access cannot stamp a read-only (activate=false) copy that the CSE eliminability
+  // rule then refuses to re-merge with the in-loop write. Without it, cache_loop_invariant_global_vars sees a split
+  // read/write and cannot cache conditional/in-if stores -> the -88% solver break-flag bug + the lost duck_in_box
+  // optimization. On main this fell out of whole_kernel_cse running inside every full_simplify fixpoint; per-task CSE
+  // does no pre-offload whole-kernel CSE, so we do this one cheap, pointers-only pass here instead (arithmetic is
+  // already canonical after simplify_I, so a single call is enough; running it in the fixpoint was a +12-22s
+  // compile regression for no extra benefit).
+  irpass::merge_global_ptrs(ir);
+  irpass::analysis::verify_if_debug(ir, config);
+
   irpass::flag_access(ir);
   irpass::analysis::verify_if_debug(ir, config);
 
@@ -141,6 +152,18 @@ void compile_to_offloads(IRNode *ir,
   irpass::analysis::verify_if_debug(ir, config);
 
   dump_ir("after_offload");
+
+  // Full per-task CSE now, before flag_access #2 splits a global's read/write pointers by access flag and before
+  // simplify_III's LICM hoists the read pointer out of the loop. This restores the pointer-unification that main
+  // gets from whole_kernel_cse running inside the post-offload full_simplify (per-task CSE otherwise defers to the
+  // codegen workers, which run after cache_loop_invariant_global_vars). Needed for ndarrays, which only become
+  // ExternalPtrStmts during offload and so cannot be reached by the pre-offload merge_global_ptrs. See the pass.
+  // Gated on opt_level like all other CSE (per_task_cse / upstream whole_kernel_cse): at opt_level 0 there is no CSE
+  // to require pointer unification, matching upstream behaviour.
+  if (config.opt_level > 0) {
+    irpass::cse_offloaded_tasks(ir);
+  }
+
   // NOTE: There was an additional CFG pass here, removed in
   // https://github.com/taichi-dev/taichi/pull/8691
   irpass::flag_access(ir);

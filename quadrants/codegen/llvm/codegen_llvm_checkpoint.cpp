@@ -37,23 +37,10 @@ namespace quadrants::lang {
 // Metal) codegen path also does not call this -- those use indirect dispatch with a SPIR-V gate shader that writes
 // per-kernel `dim3` buffers, not a per-thread early-return inside the body kernel.
 void TaskCodeGenLLVM::emit_checkpoint_gate_prologue(int cp_id) {
-  auto *runtime_context_type = get_runtime_type("RuntimeContext");
-  // Field indices into RuntimeContext: 0=arg_buffer, 1=runtime, 2=cpu_thread_id, 3=result_buffer, 4=cpu_assert_failed,
-  // 5=checkpoint_resume_point_ptr, 6=checkpoint_yield_signal_ptr. The runtime LLVM bitcode is rebuilt whenever
-  // `context.h` changes; the indices here must mirror the field order in that struct.
-  constexpr unsigned kFieldCheckpointResumePoint = 5;
-  constexpr unsigned kFieldCheckpointYieldSignal = 6;
+  // Read fields through compiled C++ accessors. Clang can insert explicit padding into the LLVM struct, so its
+  // element indices need not match the C++ field positions.
   auto *i32_ty = llvm::Type::getInt32Ty(*llvm_context);
   auto *i32_ptr_ty = llvm::PointerType::get(i32_ty, 0);
-  auto *zero_i32 = tlctx->get_constant(0);
-
-  auto load_rt_ctx_ptr = [&](unsigned field_idx) -> llvm::Value * {
-    auto *field_ptr =
-        builder->CreateGEP(runtime_context_type, get_context(), {zero_i32, tlctx->get_constant((int)field_idx)});
-    // The field is `int32_t*`; the GEP'd pointer is `int32_t**`. Cast and load.
-    auto *field_ptr_ptr = builder->CreatePointerCast(field_ptr, llvm::PointerType::get(i32_ptr_ty, 0));
-    return builder->CreateLoad(i32_ptr_ty, field_ptr_ptr);
-  };
 
   auto *cp_id_const = tlctx->get_constant(cp_id);
   auto *neg_one = tlctx->get_constant(-1);
@@ -64,7 +51,7 @@ void TaskCodeGenLLVM::emit_checkpoint_gate_prologue(int cp_id) {
 
   // Stage 1: resume_point check. Null pointer -> non-gating launcher; treat as "no skip".
   {
-    auto *rp_ptr = load_rt_ctx_ptr(kFieldCheckpointResumePoint);
+    auto *rp_ptr = call("RuntimeContext_get_checkpoint_resume_point_ptr", get_context());
     auto *rp_is_null = builder->CreateICmpEQ(rp_ptr, llvm::ConstantPointerNull::get(i32_ptr_ty));
     auto *rp_load_bb = llvm::BasicBlock::Create(*llvm_context, "qd_ckpt_rp_load", func);
     builder->CreateCondBr(rp_is_null, check_yield_bb, rp_load_bb);
@@ -78,7 +65,7 @@ void TaskCodeGenLLVM::emit_checkpoint_gate_prologue(int cp_id) {
   // checkpoint, so the launcher only populated resume_point).
   builder->SetInsertPoint(check_yield_bb);
   {
-    auto *ys_ptr = load_rt_ctx_ptr(kFieldCheckpointYieldSignal);
+    auto *ys_ptr = call("RuntimeContext_get_checkpoint_yield_signal_ptr", get_context());
     auto *ys_is_null = builder->CreateICmpEQ(ys_ptr, llvm::ConstantPointerNull::get(i32_ptr_ty));
     auto *ys_load_bb = llvm::BasicBlock::Create(*llvm_context, "qd_ckpt_ys_load", func);
     builder->CreateCondBr(ys_is_null, body_bb, ys_load_bb);

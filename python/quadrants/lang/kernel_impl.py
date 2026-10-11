@@ -320,7 +320,7 @@ class _BoundedDifferentiableMethod:
         return self._adjoint(self._kernel_owner, *args, **kwargs)
 
 
-def data_oriented(cls=None, *, template_primitives: bool = True):
+def data_oriented(cls=None, *, stable_members: bool = False, template_primitives: bool = True):
     """Marks a class as Quadrants compatible.
 
     To allow for modularized code, Quadrants provides this decorator so that
@@ -344,7 +344,15 @@ def data_oriented(cls=None, *, template_primitives: bool = True):
         >>> a.inc()
 
     Args:
-        cls (Class): the class to be decorated
+        cls (Class): the class to be decorated.
+        stable_members (bool): launch-context perf hint - if ``True``, declares that the class's ndarray-typed members
+            are allocated once and never reassigned between kernel calls. Quadrants will skip the per-call ndarray-
+            reference walk that ``Kernel.launch_kernel`` uses to detect ndarray reassignment on mutable containers
+            (~1-2 us/call savings on Genesis-style containers with dozens of ndarray attrs). Reassigning a member on
+            a ``stable_members`` class is undefined behaviour - the previously-compiled kernel will be reused even if
+            the new ndarray has different dtype/ndim/layout. May also be set as a class-level attribute
+            ``_qd_stable_members = True`` (equivalent). Has no effect on fastcache keys. See
+            ``docs/source/user_guide/compound_types.md``.
         template_primitives (bool): controls how the primitive (``int`` / ``float`` / ``bool``)
             members of instances of this class are treated when an instance is passed into a kernel
             as a ``qd.template()`` argument (including as the implicit ``self`` of a member kernel).
@@ -357,46 +365,59 @@ def data_oriented(cls=None, *, template_primitives: bool = True):
             ``QuadrantsSyntaxError``), since that context requires a compile-time constant.
 
     Returns:
-        The decorated class.
+        The decorated class (or, when called with arguments, a decorator).
     """
-
-    def decorate(cls):
-        def make_kernel_indirect(fun, is_property):
-            @wraps(fun)
-            def _kernel_indirect(self, *args, **kwargs):
-                nonlocal fun
-                ret = _BoundedDifferentiableMethod(self, fun)
-                ret.__name__ = fun.__name__  # type: ignore
-                return ret(*args, **kwargs)
-
-            ret = QuadrantsCallable(fun, _kernel_indirect)
-            if is_property:
-                ret = property(ret)
-            return ret
-
-        # Iterate over all the attributes of the class to wrap member kernels in a way to ensure that they will be
-        # called through _BoundedDifferentiableMethod. This extra layer of indirection is necessary to transparently
-        # forward the owning instance to the primal function and its adjoint for auto-differentiation gradient
-        # computation. There is a special treatment for properties, as they may actually hide kernels under the hood.
-        # In such a case, the underlying function is extracted, wrapped as any member function, then wrapped again as a
-        # new property. Note that all the other attributes can be left untouched.
-        for name, attr in cls.__dict__.items():
-            attr_type = type(attr)
-            is_property = attr_type is property
-            fun = attr.fget if is_property else attr
-            if isinstance(fun, (BoundQuadrantsCallable, QuadrantsCallable)):
-                if fun._is_wrapped_kernel:
-                    if fun._is_classkernel and attr_type is not staticmethod:
-                        setattr(cls, name, make_kernel_indirect(fun, is_property))
-        cls._data_oriented = True
-        cls._qd_template_primitives = template_primitives
-
-        return cls
-
-    # Support both the bare ``@qd.data_oriented`` form and the called ``@qd.data_oriented(...)`` form.
     if cls is None:
-        return decorate
-    return decorate(cls)
+        return lambda c: data_oriented(c, stable_members=stable_members, template_primitives=template_primitives)
+
+    def make_kernel_indirect(fun, is_property, attr_name):
+        # Capture the primal at decoration time so a call skips ``fun``'s ``wrapped_classkernel`` -> ``wrapped_func``
+        # pair. That pair is also where the owner check lives, hence the copy of it below - an unbound
+        # ``Klass.step(not_an_instance)`` reaches this closure directly.
+        primal = fun._primal
+
+        @wraps(fun)
+        def _kernel_indirect(self, *args, **kwargs):
+            if not getattr(self, "_data_oriented", False):
+                raise QuadrantsSyntaxError(f"Please decorate class {type(self).__name__} with @qd.data_oriented")
+            try:
+                return primal(self, *args, **kwargs)
+            except (QuadrantsCompilationError, QuadrantsRuntimeError) as e:
+                if impl.get_runtime().print_full_traceback:
+                    raise e
+                raise type(e)("\n" + str(e)) from None
+
+        ret = QuadrantsCallable(fun, _kernel_indirect)
+        # ``QuadrantsCallable.__init__`` ends with ``update_wrapper(self, fun)``, which copies ``fun``'s own ``wrapper``
+        # over the one just passed to the constructor.
+        ret.wrapper = _kernel_indirect
+        # setattr-after-class doesn't trigger __set_name__; set the name explicitly so QuadrantsCallable.__get__ can
+        # cache the BoundQuadrantsCallable on instance.__dict__.
+        ret._attr_name = attr_name
+        if is_property:
+            ret = property(ret)
+        return ret
+
+    # Iterate over all the attributes of the class to wrap member kernels in a way to ensure that they will be called
+    # through _BoundedDifferentiableMethod. This extra layer of indirection is necessary to transparently forward the
+    # owning instance to the primal function and its adjoint for auto-differentiation gradient computation. There is a
+    # special treatment for properties, as they may actually hide kernels under the hood. In such a case, the underlying
+    # function is extracted, wrapped as any member function, then wrapped again as a new property. Note that all the
+    # other attributes can be left untouched.
+    for name, attr in cls.__dict__.items():
+        attr_type = type(attr)
+        is_property = attr_type is property
+        fun = attr.fget if is_property else attr
+        if isinstance(fun, (BoundQuadrantsCallable, QuadrantsCallable)):
+            if fun._is_wrapped_kernel:
+                if fun._is_classkernel and attr_type is not staticmethod:
+                    setattr(cls, name, make_kernel_indirect(fun, is_property, name))
+    cls._data_oriented = True
+    if stable_members:
+        cls._qd_stable_members = True
+    cls._qd_template_primitives = template_primitives
+
+    return cls
 
 
 __all__ = ["data_oriented", "func", "kernel", "pyfunc", "real_func"]

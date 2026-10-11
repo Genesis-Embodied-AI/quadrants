@@ -4,6 +4,8 @@
 #include "quadrants/rhi/impl_support.h"
 #include "spirv_msl.hpp"
 
+#include <cstdlib>
+
 namespace quadrants::lang {
 namespace metal {
 
@@ -115,6 +117,14 @@ MetalPipeline *MetalPipeline::create_compute_pipeline(const MetalDevice &device,
   if (feature_64_bit_integer_math) {
     options.set_msl_version(2, 3, 0);
   }
+  // OpAtomicFAddEXT -> SPIRV-Cross emits `atomic_float` / atomic_fetch_add_explicit, which require
+  // Metal Shading Language 3.0. Without this (and a matching MTLCompileOptions languageVersion in
+  // get_mtl_library), newLibraryWithSource fails with "unknown type name 'atomic_float'" and the
+  // subsequent nil computeFunction triggers an ObjC assert (Abort trap: 6).
+  if (caps.contains(DeviceCapability::spirv_has_atomic_float_add) ||
+      caps.contains(DeviceCapability::spirv_has_atomic_float)) {
+    options.set_msl_version(3, 0, 0);
+  }
 
   compiler.set_msl_options(options);
 
@@ -135,8 +145,16 @@ MetalPipeline *MetalPipeline::create_compute_pipeline(const MetalDevice &device,
   }
 
   MTLLibrary_id mtl_library = device.get_mtl_library(msl);
+  if (mtl_library == nil) {
+    return nullptr;
+  }
 
   MTLFunction_id mtl_function = device.get_mtl_function(mtl_library, std::string("main0"));
+  if (mtl_function == nil) {
+    // Avoid -[MTLComputePipelineDescriptorInternal setComputeFunction:]: `computeFunction must not
+    // be nil` which hard-aborts the process (Abort trap: 6) instead of returning RhiResult::error.
+    return nullptr;
+  }
 
   MTLComputePipelineState_id mtl_compute_pipeline_state = nil;
   {
@@ -1086,11 +1104,8 @@ DeviceCapabilityConfig collect_metal_device_caps(MTLDevice_id mtl_device) {
     caps.set(DeviceCapability::spirv_has_atomic_int64, 1);
   }
   if (feature_floating_point_atomics) {
-    // FIXME: (penguinliong) For some reason floating point atomics doesn't
-    // work and breaks the FEM99/FEM128 examples. Should consider add them back
-    // figured out why.
-    // caps.set(DeviceCapability::spirv_has_atomic_float, 1);
-    // caps.set(DeviceCapability::spirv_has_atomic_float_add, 1);
+    caps.set(DeviceCapability::spirv_has_atomic_float, 1);
+    caps.set(DeviceCapability::spirv_has_atomic_float_add, 1);
   }
   if (feature_simd_scoped_permute_operations || feature_quad_scoped_permute_operations) {
     caps.set(DeviceCapability::spirv_has_subgroup_vote, 1);
@@ -1501,7 +1516,19 @@ MTLLibrary_id MetalDevice::get_mtl_library(const std::string &source) const {
   MTLLibrary_id mtl_library = nil;
   NSError *err = nil;
   NSString *msl_ns = [[NSString alloc] initWithUTF8String:source.c_str()];
-  mtl_library = [mtl_device_ newLibraryWithSource:msl_ns options:nil error:&err];
+  // Match SPIRV-Cross's MSL version. `atomic_float` (from OpAtomicFAddEXT) is only valid under
+  // MTLLanguageVersion3_0+; compiling with options:nil rejects it as "unknown type name".
+  MTLCompileOptions *compile_opts = nil;
+  DeviceCapabilityConfig caps = get_caps();
+  if (caps.contains(DeviceCapability::spirv_has_atomic_float_add) ||
+      caps.contains(DeviceCapability::spirv_has_atomic_float)) {
+    compile_opts = [[MTLCompileOptions alloc] init];
+    if (@available(macOS 13.0, iOS 16.0, *)) {
+      compile_opts.languageVersion = MTLLanguageVersion3_0;
+    }
+  }
+  mtl_library = [mtl_device_ newLibraryWithSource:msl_ns options:compile_opts error:&err];
+  [compile_opts release];
   [msl_ns release];
 
   if (mtl_library == nil) {

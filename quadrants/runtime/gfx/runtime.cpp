@@ -37,6 +37,9 @@ namespace gfx {
 
 namespace {
 
+constexpr uint32_t kExtArrReadWrite =
+    uint32_t(irpass::ExternalPtrAccess::READ) | uint32_t(irpass::ExternalPtrAccess::WRITE);
+
 class HostDeviceContextBlitter {
  public:
   HostDeviceContextBlitter(const KernelContextAttributes *ctx_attribs,
@@ -75,7 +78,7 @@ class HostDeviceContextBlitter {
                                         [indices](const auto &pair) -> bool { return pair.first == indices; });
           QD_ASSERT(access_it != ctx_attribs_->arr_access.end());
           uint32_t access = uint32_t(access_it->second);
-          if (access & uint32_t(irpass::ExternalPtrAccess::READ)) {
+          if (access & kExtArrReadWrite) {
             DeviceAllocation buffer = ext_arrays.at(arg_id);
             void *device_arr_ptr{nullptr};
             // `QD_ERROR_IF` (not `QD_ASSERT`) so the failure message names what was being mapped; a bare
@@ -107,10 +110,8 @@ class HostDeviceContextBlitter {
                                              [indices](const auto &pair) -> bool { return pair.first == indices; });
           uint32_t grad_access =
               (grad_access_it != ctx_attribs_->grad_arr_access.end()) ? uint32_t(grad_access_it->second) : 0;
-          constexpr uint32_t kGradReadWrite =
-              uint32_t(irpass::ExternalPtrAccess::READ) | uint32_t(irpass::ExternalPtrAccess::WRITE);
           auto grad_it = ext_array_grads.find(arg_id);
-          if (grad_it != ext_array_grads.end() && (grad_access & kGradReadWrite)) {
+          if (grad_it != ext_array_grads.end() && (grad_access & kExtArrReadWrite)) {
             DeviceAllocation grad_buffer = grad_it->second;
             void *device_grad_ptr{nullptr};
             QD_ERROR_IF(device_->map(grad_buffer, &device_grad_ptr) != RhiResult::success,
@@ -508,7 +509,10 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
           uint32_t access = uint32_t(access_it->second);
           // Alloc ext arr
           size_t alloc_size = std::max(size_t(32), ext_array_size.at(arg_id));
-          bool host_write = access & uint32_t(irpass::ExternalPtrAccess::READ);
+          // Must match the h2d gate in `HostDeviceContextBlitter::host_to_device`: the blit maps this allocation, and
+          // `map()` requires host_write (or host_read) on every backend. `host_read` can stay false because the d2h
+          // readback goes through `Device::readback_data`, which brings its own host-readable staging buffer.
+          bool host_write = access & kExtArrReadWrite;
           auto [allocated, res] = device_->allocate_memory_unique(
               {alloc_size, host_write, false, /*export_sharing=*/false, AllocUsage::Storage});
           QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate ext arr buffer");
@@ -1236,17 +1240,27 @@ void GfxRuntime::submit_current_cmdlist_if_timeout() {
 
 void GfxRuntime::init_nonroot_buffers() {
   {
-    auto [buf, res] = device_->allocate_memory_unique({kGtmpBufferSize,
-                                                       /*host_write=*/false, /*host_read=*/false,
-                                                       /*export_sharing=*/false, AllocUsage::Storage});
+    Device::AllocParams params{kGtmpBufferSize,
+                               /*host_write=*/false, /*host_read=*/false,
+                               /*export_sharing=*/false, AllocUsage::Storage};
+#ifdef __APPLE__
+    // MoltenVK hang: VMA-backed 1MB+32MB DEVICE_LOCAL STORAGE+BDA churn under per-cycle device recreate; plain
+    // vkAllocateMemory of the same sizes does not hang (standalone repro).
+    params.bypass_pooled_allocator = true;
+#endif
+    auto [buf, res] = device_->allocate_memory_unique(params);
     QD_ASSERT_INFO(res == RhiResult::success, "gtmp allocation failed");
     global_tmps_buffer_ = std::move(buf);
   }
 
   {
-    auto [buf, res] = device_->allocate_memory_unique({kListGenBufferSize,
-                                                       /*host_write=*/false, /*host_read=*/false,
-                                                       /*export_sharing=*/false, AllocUsage::Storage});
+    Device::AllocParams params{kListGenBufferSize,
+                               /*host_write=*/false, /*host_read=*/false,
+                               /*export_sharing=*/false, AllocUsage::Storage};
+#ifdef __APPLE__
+    params.bypass_pooled_allocator = true;
+#endif
+    auto [buf, res] = device_->allocate_memory_unique(params);
     QD_ASSERT_INFO(res == RhiResult::success, "listgen allocation failed");
     listgen_buffer_ = std::move(buf);
   }

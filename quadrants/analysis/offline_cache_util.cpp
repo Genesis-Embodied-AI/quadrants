@@ -57,7 +57,6 @@ static std::vector<std::uint8_t> get_offline_cache_key_of_compile_config(const C
     serializer(config.cpu_max_num_threads);
   } else if (arch_is_gpu(config.arch)) {
     serializer(config.default_gpu_block_dim);
-    serializer(config.gpu_max_reg);
     serializer(config.saturating_grid_dim);
     serializer(config.cpu_max_num_threads);
     // Mix the per-arch subgroup / warp / wave size into the cache key so cached kernels are invalidated whenever the
@@ -194,6 +193,16 @@ std::string get_hashed_offline_cache_key(const CompileConfig &config,
   hasher.process(autodiff_mode.begin(), autodiff_mode.end());
   hasher.finish();
 
+  auto res = picosha2::get_hash_hex_string(hasher);
+  res.insert(res.begin(), 'T');  // The key must start with a letter
+  return res;
+}
+
+std::string get_hashed_offline_cache_key_of_device_caps(const DeviceCapabilityConfig &caps) {
+  auto device_caps_key = get_offline_cache_key_of_device_caps(caps);
+  picosha2::hash256_one_by_one hasher;
+  hasher.process(device_caps_key.begin(), device_caps_key.end());
+  hasher.finish();
   auto res = picosha2::get_hash_hex_string(hasher);
   res.insert(res.begin(), 'T');  // The key must start with a letter
   return res;

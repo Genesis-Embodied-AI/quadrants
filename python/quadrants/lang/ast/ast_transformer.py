@@ -16,6 +16,7 @@ import numpy as np
 from quadrants._lib import core as _qd_core
 from quadrants.lang import exception, expr, impl, matrix, mesh
 from quadrants.lang import ops as qd_ops
+from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._ndrange import _Ndrange
 from quadrants.lang._unpacked import _UnpackedVectorRef
 from quadrants.lang.ast.ast_transformer_utils import (
@@ -94,13 +95,20 @@ class ASTTransformer(Builder):
         pruning = ctx.global_context.pruning
         if not pruning.enforcing and not ctx.expanding_dataclass_call_parameters and node.id.startswith("__qd_"):
             ctx.global_context.pruning.mark_used(ctx.func.func_id, node.id)
+        # Seed the chain annotation that ``build_Attribute`` extends and records in pruning. Only non-flattened
+        # parameters need it - a data_oriented kernel arg (``self``), or a ``qd.template()`` func param; dataclass args
+        # arrive here already flattened and are handled by ``mark_used`` above.
+        if not node.id.startswith("__qd_") and (node.id in ctx.kernel_args or node.id in ctx.fn_param_names):
+            node._qd_arg_chain = node.id  # type: ignore[attr-defined]
+        else:
+            node._qd_arg_chain = None  # type: ignore[attr-defined]
         node.violates_pure, node.ptr, node.violates_pure_reason = ctx.get_var_by_name(node.id)
         # Flattened struct fields (``__qd_foo__qd_bar``) injected by ``populate_global_vars_from_dataclass`` are raw
         # ``Ndarray`` instances.  ``build_Attribute`` already promotes these via ``_promote_ndarray_if_declared`` but
         # the flattened-name path bypasses ``build_Attribute`` entirely, so we must promote here too.
         node.ptr = ASTTransformer._promote_ndarray_if_declared(ctx, node.ptr)
         if isinstance(node, (ast.stmt, ast.expr)) and isinstance(node.ptr, Expr):
-            node.ptr.dbg_info = _qd_core.DebugInfo(ctx.get_pos_info(node))
+            node.ptr.dbg_info = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
             node.ptr.ptr.set_dbg_info(node.ptr.dbg_info)
         # ``qd.static`` is intentionally NOT a purity escape hatch: a captured module global is still flagged inside
         # a static scope, since its value never enters the fastcache key regardless of static wrapping.
@@ -626,7 +634,7 @@ class ASTTransformer(Builder):
                     raise QuadrantsSyntaxError("The return type is not supported now!")
             ctx.ast_builder.create_kernel_exprgroup_return(
                 expr.make_expr_group(return_exprs),
-                _qd_core.DebugInfo(ctx.get_pos_info(node)),
+                _qd_core.DebugInfo(ctx.memoized_get_pos_info(node)),
             )
         else:
             ctx.return_data = node.value.ptr
@@ -683,14 +691,32 @@ class ASTTransformer(Builder):
     @staticmethod
     def _promote_ndarray_if_declared(ctx: ASTTransformerFuncContext, value: Any) -> Any:
         """If *value* is a bare ``Ndarray`` that was pre-declared as a kernel arg (in ``_predeclare_struct_ndarrays``),
-        return the ``AnyArray`` proxy from the cache. Otherwise return *value* unchanged."""
+        return the ``AnyArray`` proxy from the cache. Otherwise return *value* unchanged.
+
+        Also records the source ndarray id in ``pruning.used_struct_ndarray_ids`` on the non-enforcing first pass, so
+        that the enforcing pass can skip ndarrays the kernel never accesses. An already-promoted ``AnyArray`` (tagged
+        with ``_qd_source_ndarray_id``) counts too: that is how accesses inside an inlined ``@qd.func`` body arrive.
+        """
         from quadrants.lang._ndarray import Ndarray  # pylint: disable=C0415
 
-        if not isinstance(value, Ndarray):
+        pruning = ctx.global_context.pruning
+        # Same gate as ``build_Name``'s mark_used: the callee body's own accesses are what count, not the synthetic
+        # per-leaf expansion of a ``@qd.func`` call's arguments.
+        should_mark = not pruning.enforcing and not ctx.expanding_dataclass_call_parameters
+        if isinstance(value, Ndarray):
+            cache = ctx.global_context.ndarray_to_any_array
+            key = id(value)
+            arr = cache.get(key)
+            if arr is not None:
+                if should_mark:
+                    pruning.used_struct_ndarray_ids.add(key)
+                return arr
             return value
-        cache = ctx.global_context.ndarray_to_any_array
-        arr = cache.get(id(value))
-        return arr if arr is not None else value
+        if should_mark:
+            src_id = getattr(value, "_qd_source_ndarray_id", None)
+            if src_id is not None:
+                pruning.used_struct_ndarray_ids.add(src_id)
+        return value
 
     @staticmethod
     def build_Attribute(ctx: ASTTransformerFuncContext, node: ast.Attribute):
@@ -820,6 +846,19 @@ class ASTTransformer(Builder):
                             warnings.warn(message)
                         else:
                             raise exception.QuadrantsCompilationError(message)
+        # Extend the chain annotation seeded by ``build_Name`` (``self`` -> ``__qd_self__qd_x`` -> ...) and record it.
+        # Not via ``mark_used``: ``used_vars_by_func_id`` becomes ``struct_locals`` on the enforcing pass, where
+        # ``FlattenAttributeNameTransformer`` would rewrite ``self.x`` to a ``Name('__qd_self__qd_x')`` that no scope
+        # defines. ``Pruning.fold_kernel_arg_chain_paths`` merges the two sets once both passes are done.
+        parent_chain = getattr(node.value, "_qd_arg_chain", None)
+        if parent_chain is not None:
+            flat = create_flat_name(parent_chain, node.attr)
+            node._qd_arg_chain = flat  # type: ignore[attr-defined]
+            pruning = ctx.global_context.pruning
+            if not pruning.enforcing and not ctx.expanding_dataclass_call_parameters:
+                pruning.mark_kernel_arg_chain_used(ctx.func.func_id, flat)
+        else:
+            node._qd_arg_chain = None  # type: ignore[attr-defined]
         return node.ptr
 
     @staticmethod
@@ -934,13 +973,16 @@ class ASTTransformer(Builder):
         ops_static = {
             ast.In: lambda l, r: l in r,
             ast.NotIn: lambda l, r: l not in r,
+            ast.Is: lambda l, r: l is r,
+            ast.IsNot: lambda l, r: l is not r,
         }
         if ctx.is_in_static_scope():
             ops = {**ops, **ops_static}
         operands = [node.left.ptr] + [comparator.ptr for comparator in node.comparators]
+        operand_nodes = (node.left, *node.comparators)
         val = True
         for i, node_op in enumerate(node.ops):
-            if isinstance(node_op, (ast.Is, ast.IsNot)):
+            if not ctx.is_in_static_scope() and isinstance(node_op, (ast.Is, ast.IsNot)):
                 name = "is" if isinstance(node_op, ast.Is) else "is not"
                 raise QuadrantsSyntaxError(f'Operator "{name}" in Quadrants scope is not supported.')
             l = operands[i]
@@ -952,6 +994,36 @@ class ASTTransformer(Builder):
                     raise QuadrantsSyntaxError(f'"{type(node_op).__name__}" is only supported inside `qd.static`.')
                 else:
                     raise QuadrantsSyntaxError(f'"{type(node_op).__name__}" is not supported in Quadrants kernels.')
+            if isinstance(node_op, (ast.Is, ast.IsNot)):
+                name = "is" if isinstance(node_op, ast.Is) else "is not"
+                l_node, r_node = operand_nodes[i : i + 2]
+                if isinstance(r_node, ast.Constant) and r_node.value is None:
+                    template_node = l_node
+                    template_side = "left"
+                elif isinstance(l_node, ast.Constant) and l_node.value is None:
+                    template_node = r_node
+                    template_side = "right"
+                else:
+                    template_node = None
+                    template_side = None
+                template_arg_names = {ctx.func.arg_metas[index].name for index in ctx.template_slot_locations}
+                if (
+                    not ctx.is_kernel
+                    or not isinstance(template_node, ast.Name)
+                    or template_node.id.startswith("__qd_")
+                    or any(template_node.id in scope for scope in ctx.local_scopes[1:])
+                    or template_node.id not in template_arg_names
+                    or template_node.id not in ctx.template_vars
+                ):
+                    raise QuadrantsSyntaxError(
+                        f'Operator "{name}" inside `qd.static` compares a direct kernel argument against `None`. '
+                        "The argument must be annotated `qd.Tensor | None`, `qd.types.Template | None`, "
+                        "or `qd.types.NDArray[...] | None`."
+                    )
+                if template_side == "left":
+                    l = ctx.template_vars[template_node.id]
+                else:
+                    r = ctx.template_vars[template_node.id]
             val = qd_ops.logical_and(val, op(l, r))
         if not isinstance(val, (bool, np.bool_)):
             val = qd_ops.cast(val, primitive_types.u1)
@@ -1071,7 +1143,7 @@ class ASTTransformer(Builder):
                 begin = qd_ops.cast(expr.Expr(0), primitive_types.i32)
                 end = qd_ops.cast(end_expr, primitive_types.i32)
 
-            for_di = _qd_core.DebugInfo(ctx.get_pos_info(node))
+            for_di = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
             ctx.ast_builder.begin_frontend_range_for(loop_var.ptr, begin.ptr, end.ptr, for_di)
             ctx.loop_depth += 1
             build_stmts(ctx, node.body)
@@ -1089,7 +1161,7 @@ class ASTTransformer(Builder):
                 primitive_types.i32,
             )
             ndrange_loop_var = expr.Expr(ctx.ast_builder.make_id_expr(""))
-            for_di = _qd_core.DebugInfo(ctx.get_pos_info(node))
+            for_di = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
             ctx.ast_builder.begin_frontend_range_for(ndrange_loop_var.ptr, ndrange_begin.ptr, ndrange_end.ptr, for_di)
             I = impl.expr_init(ndrange_loop_var)
             targets = ASTTransformer.get_for_loop_targets(node)
@@ -1142,7 +1214,7 @@ class ASTTransformer(Builder):
                 primitive_types.i32,
             )
             ndrange_loop_var = expr.Expr(ctx.ast_builder.make_id_expr(""))
-            for_di = _qd_core.DebugInfo(ctx.get_pos_info(node))
+            for_di = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
             ctx.ast_builder.begin_frontend_range_for(ndrange_loop_var.ptr, ndrange_begin.ptr, ndrange_end.ptr, for_di)
 
             targets = ASTTransformer.get_for_loop_targets(node)
@@ -1279,7 +1351,7 @@ class ASTTransformer(Builder):
             ctx.create_variable(loop_name, loop_var)
             begin = expr.Expr(0)
             end = qd_ops.cast(node.iter.ptr.size, primitive_types.i32)
-            for_di = _qd_core.DebugInfo(ctx.get_pos_info(node))
+            for_di = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
             ctx.ast_builder.begin_frontend_range_for(loop_var.ptr, begin.ptr, end.ptr, for_di)
             entry_expr = _qd_core.get_relation_access(
                 ctx.mesh.mesh_ptr,
@@ -1465,7 +1537,7 @@ class ASTTransformer(Builder):
             return None
 
         with ctx.loop_scope_guard():
-            stmt_dbg_info = _qd_core.DebugInfo(ctx.get_pos_info(node))
+            stmt_dbg_info = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
             ctx.ast_builder.begin_frontend_while(expr.Expr(1, dtype=primitive_types.i32).ptr, stmt_dbg_info)
             while_cond = build_stmt(ctx, node.test)
             impl.begin_frontend_if(ctx.ast_builder, while_cond, stmt_dbg_info)
@@ -1491,7 +1563,7 @@ class ASTTransformer(Builder):
             return node
 
         with ctx.non_static_if_guard(node):
-            stmt_dbg_info = _qd_core.DebugInfo(ctx.get_pos_info(node))
+            stmt_dbg_info = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
             impl.begin_frontend_if(ctx.ast_builder, node.test.ptr, stmt_dbg_info)
             ctx.ast_builder.begin_frontend_if_true()
             build_stmts(ctx, node.body)
@@ -1612,7 +1684,7 @@ class ASTTransformer(Builder):
         else:
             msg = unparse(node.test)
         test = build_stmt(ctx, node.test)
-        impl.qd_assert(test, msg.strip(), extra_args, _qd_core.DebugInfo(ctx.get_pos_info(node)))
+        impl.qd_assert(test, msg.strip(), extra_args, _qd_core.DebugInfo(ctx.memoized_get_pos_info(node)))
         return None
 
     @staticmethod
@@ -1620,7 +1692,7 @@ class ASTTransformer(Builder):
         if ctx.is_in_static_for():
             nearest_non_static_if = ctx.current_loop_scope().nearest_non_static_if
             if nearest_non_static_if:
-                msg = ctx.get_pos_info(nearest_non_static_if.test)
+                msg = ctx.memoized_get_pos_info(nearest_non_static_if.test)
                 msg += (
                     "You are trying to `break` a static `for` loop, "
                     "but the `break` statement is inside a non-static `if`. "
@@ -1628,7 +1700,7 @@ class ASTTransformer(Builder):
                 raise QuadrantsSyntaxError(msg)
             ctx.set_loop_status(LoopStatus.Break)
         else:
-            ctx.ast_builder.insert_break_stmt(_qd_core.DebugInfo(ctx.get_pos_info(node)))
+            ctx.ast_builder.insert_break_stmt(_qd_core.DebugInfo(ctx.memoized_get_pos_info(node)))
         return None
 
     @staticmethod
@@ -1636,7 +1708,7 @@ class ASTTransformer(Builder):
         if ctx.is_in_static_for():
             nearest_non_static_if = ctx.current_loop_scope().nearest_non_static_if
             if nearest_non_static_if:
-                msg = ctx.get_pos_info(nearest_non_static_if.test)
+                msg = ctx.memoized_get_pos_info(nearest_non_static_if.test)
                 msg += (
                     "You are trying to `continue` a static `for` loop, "
                     "but the `continue` statement is inside a non-static `if`. "
@@ -1644,7 +1716,7 @@ class ASTTransformer(Builder):
                 raise QuadrantsSyntaxError(msg)
             ctx.set_loop_status(LoopStatus.Continue)
         else:
-            ctx.ast_builder.insert_continue_stmt(_qd_core.DebugInfo(ctx.get_pos_info(node)))
+            ctx.ast_builder.insert_continue_stmt(_qd_core.DebugInfo(ctx.memoized_get_pos_info(node)))
         return None
 
     @staticmethod

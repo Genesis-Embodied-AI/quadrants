@@ -49,6 +49,7 @@ autodiff
 :maxdepth: 1
 :titlesonly:
 
+gpu_execution_model
 atomics
 block
 grid

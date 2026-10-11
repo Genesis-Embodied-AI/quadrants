@@ -230,6 +230,8 @@ struct DeviceObjVkBuffer : public DeviceObj {
   VkBufferUsageFlags usage{0};
   VmaAllocator allocator{nullptr};
   VmaAllocation allocation{nullptr};
+  // Non-VMA ownership (bypass_pooled_allocator). Mutually exclusive with `allocation`.
+  VkDeviceMemory device_memory{VK_NULL_HANDLE};
   ~DeviceObjVkBuffer() override;
 };
 using IVkBuffer = std::shared_ptr<DeviceObjVkBuffer>;
@@ -238,6 +240,13 @@ IVkBuffer create_buffer(VkDevice device,
                         VmaAllocator allocator,
                         VkBufferCreateInfo *buffer_info,
                         VmaAllocationCreateInfo *alloc_info);
+// Allocate buffer with a dedicated vkAllocateMemory (no VMA). Owns buffer + device_memory.
+IVkBuffer create_buffer_unpooled(VkDevice device,
+                                 VkPhysicalDevice physical_device,
+                                 VkBufferCreateInfo *buffer_info,
+                                 VkMemoryPropertyFlags required_flags,
+                                 VkMemoryPropertyFlags preferred_flags,
+                                 VmaAllocationInfo *out_alloc_info);
 // Importing external buffer
 IVkBuffer create_buffer(VkDevice device, VkBuffer buffer, VkBufferUsageFlags usage);
 

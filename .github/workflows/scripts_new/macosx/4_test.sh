@@ -28,8 +28,7 @@ fi
 python tests/run_tests.py -v -r 1 --arch "${MAC_TEST_ARCH}" -m "not needs_torch"
 
 # Phase 2: install torch, run only torch tests
-# TODO: revert to stable torch after 2.9.2 release
-pip install --pre --upgrade torch --index-url https://download.pytorch.org/whl/nightly/cpu
+pip install --upgrade torch
 python tests/run_tests.py -v -r 1 --arch "${MAC_TEST_ARCH}" -m needs_torch
 
 if [ -f "$QD_FILE_TIMING_OUTPUT" ]; then

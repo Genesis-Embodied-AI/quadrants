@@ -178,12 +178,17 @@ VulkanQueueFamilyIndices find_queue_families(VkPhysicalDevice device, VkSurfaceK
   return indices;
 }
 
+// Rank physical devices for selection. Returns 0 to exclude a device; otherwise returns a positive score, with higher
+// scores preferred.
 size_t get_device_score(VkPhysicalDevice device, VkSurfaceKHR surface) {
   auto indices = find_queue_families(device, surface);
   VkPhysicalDeviceFeatures features{};
   vkGetPhysicalDeviceFeatures(device, &features);
   VkPhysicalDeviceProperties properties{};
   vkGetPhysicalDeviceProperties(device, &properties);
+  if (properties.apiVersion < VK_API_VERSION_1_1) {
+    return 0;
+  }
 
   size_t score = 0;
 
@@ -210,22 +215,7 @@ VulkanDeviceCreator::VulkanDeviceCreator(const VulkanDeviceCreator::Params &para
   }
 
   qd_device_ = std::make_unique<VulkanDevice>();
-  uint32_t vk_api_version;
-  bool manual_create;
-  if (params_.api_version.has_value()) {
-    // The version client specified to use
-    //
-    // If the user provided an API version then the device creation process is
-    // totally directed by the information provided externally.
-    vk_api_version = params_.api_version.value();
-    manual_create = true;
-  } else {
-    // The highest version designed to use
-    vk_api_version = VulkanEnvSettings::k_api_version();
-    manual_create = false;
-  }
-
-  create_instance(vk_api_version, manual_create);
+  create_instance();
   setup_debug_messenger();
   VkSurfaceKHR test_surface = VK_NULL_HANDLE;
   if (params_.is_for_ui) {
@@ -233,7 +223,7 @@ VulkanDeviceCreator::VulkanDeviceCreator(const VulkanDeviceCreator::Params &para
     RHI_ASSERT((test_surface != VK_NULL_HANDLE) && "failed to create window surface!");
   }
   pick_physical_device(test_surface);
-  create_logical_device(manual_create);
+  create_logical_device();
 
   {
     VulkanDevice::Params params;
@@ -281,10 +271,9 @@ VulkanDeviceCreator::~VulkanDeviceCreator() {
 // Phase 3 — First-time VkInstance creation (first qd.init() only).  Builds
 //   VkInstanceCreateInfo with app info, optional validation layers and debug
 //   printf, collects required + supported instance extensions, calls
-//   vkCreateInstance (with a Vulkan 1.0 fallback on
-//   VK_ERROR_INCOMPATIBLE_DRIVER), and stores the new instance in the
-//   VulkanLoader singleton for future reuse.
-void VulkanDeviceCreator::create_instance(uint32_t vk_api_version, bool manual_create) {
+//   vkCreateInstance, and stores the new instance in the VulkanLoader singleton for future reuse.
+void VulkanDeviceCreator::create_instance() {
+  const uint32_t vk_api_version = VulkanEnvSettings::k_api_version();
   // Discover instance extensions and set capability flags on qd_device_.
   // This must run every cycle because qd_device_ is freshly created.
   uint32_t num_instance_extensions = 0;
@@ -337,7 +326,7 @@ void VulkanDeviceCreator::create_instance(uint32_t vk_api_version, bool manual_c
   app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
   app_info.pEngineName = "No Engine";
   app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-  app_info.apiVersion = VulkanEnvSettings::k_api_version();
+  app_info.apiVersion = vk_api_version;
 
   VkInstanceCreateInfo create_info{};
   create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -399,20 +388,12 @@ void VulkanDeviceCreator::create_instance(uint32_t vk_api_version, bool manual_c
   VkResult res = vkCreateInstance(&create_info, kNoVkAllocCallbacks, &instance_);
 
   if (res == VK_ERROR_INCOMPATIBLE_DRIVER) {
-    // https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VkApplicationInfo.html
-    // Vulkan 1.0 implementation will return this when api version is not 1.0
-    // Vulkan 1.1+ implementation will work with maximum version set
-    qd_device_->vk_caps().vk_api_version = VK_API_VERSION_1_0;
-    app_info.apiVersion = VK_API_VERSION_1_0;
-
-    res = vkCreateInstance(&create_info, kNoVkAllocCallbacks, &instance_);
-  } else {
-    qd_device_->vk_caps().vk_api_version = vk_api_version;
+    throw std::runtime_error("Vulkan 1.1 or newer is required for SPIR-V 1.3");
   }
-
   if (res != VK_SUCCESS) {
     throw std::runtime_error("failed to create instance");
   }
+  qd_device_->vk_caps().vk_api_version = vk_api_version;
 
   VulkanLoader::instance().load_instance(instance_);
 }
@@ -456,9 +437,16 @@ void VulkanDeviceCreator::pick_physical_device(VkSurfaceKHR test_surface) {
       snprintf(msg_buf, sizeof(msg_buf), "QD_VISIBLE_DEVICE=%d is not valid, found %d devices available", id,
                device_count);
       RHI_LOG_ERROR(msg_buf);
-    } else if (get_device_score(devices[id], test_surface)) {
-      physical_device_ = devices[id];
-      has_visible_device = true;
+    } else {
+      VkPhysicalDeviceProperties properties{};
+      vkGetPhysicalDeviceProperties(devices[id], &properties);
+      if (properties.apiVersion < VK_API_VERSION_1_1) {
+        throw std::runtime_error("QD_VISIBLE_DEVICE requires a Vulkan 1.1 or newer device for SPIR-V 1.3");
+      }
+      if (get_device_score(devices[id], test_surface)) {
+        physical_device_ = devices[id];
+        has_visible_device = true;
+      }
     }
   }
 
@@ -473,12 +461,14 @@ void VulkanDeviceCreator::pick_physical_device(VkSurfaceKHR test_surface) {
       }
     }
   }
-  RHI_ASSERT(physical_device_ != VK_NULL_HANDLE && "failed to find a suitable GPU");
+  if (physical_device_ == VK_NULL_HANDLE) {
+    throw std::runtime_error("failed to find a suitable GPU with Vulkan 1.1 or newer for SPIR-V 1.3");
+  }
 
   queue_family_indices_ = find_queue_families(physical_device_, test_surface);
 }
 
-void VulkanDeviceCreator::create_logical_device(bool manual_create) {
+void VulkanDeviceCreator::create_logical_device() {
   DeviceCapabilityConfig caps{};
 
   std::vector<VkDeviceQueueCreateInfo> queue_create_infos;
@@ -521,26 +511,21 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
     RHI_LOG_DEBUG(msg_buf);
   }
 
-  // (penguinliong) The actual logical device is created with lastest version of
-  // Vulkan but we use the device like it has a lower version (if the user
-  // wanted a lower version device).
   uint32_t vk_api_version = physical_device_properties.apiVersion;
   qd_device_->vk_caps().vk_api_version = vk_api_version;
   if (vk_api_version >= VK_API_VERSION_1_3) {
     caps.set(DeviceCapability::spirv_version, 0x10500);
   } else if (vk_api_version >= VK_API_VERSION_1_2) {
     caps.set(DeviceCapability::spirv_version, 0x10500);
-  } else if (vk_api_version >= VK_API_VERSION_1_1) {
-    caps.set(DeviceCapability::spirv_version, 0x10300);
   } else {
-    caps.set(DeviceCapability::spirv_version, 0x10000);
+    // Device selection requires Vulkan 1.1 or newer, which guarantees support for SPIR-V 1.3.
+    caps.set(DeviceCapability::spirv_version, 0x10300);
   }
 
   // Detect extensions
   std::vector<const char *> enabled_extensions;
 
   uint32_t extension_count = 0;
-  // FIXME: (penguinliong) This was NOT called when `manual_create` is true.
   vkEnumerateDeviceExtensionProperties(physical_device_, nullptr, &extension_count, nullptr);
   std::vector<VkExtensionProperties> extension_properties(extension_count);
   vkEnumerateDeviceExtensionProperties(physical_device_, nullptr, &extension_count, extension_properties.data());

@@ -600,9 +600,9 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
     AMDGPUDriver::get_instance().stream_synchronize(active_stream);
   }
   char *host_result_buffer = (char *)ctx.get_context().result_buffer;
-  if (ctx.result_buffer_size > 0) {
-    ctx.get_context().result_buffer = (uint64 *)device_result_buffer;
-  }
+  // Pin result_buffer to the persistent device buffer: result kernels need writes to land there for the DtoH below,
+  // and pinning unconditionally keeps RuntimeContext byte-stable for the skip-H2D cache below.
+  ctx.get_context().result_buffer = (uint64 *)device_result_buffer;
   // Same explicit-stream race avoidance as the CUDA launcher: when active_stream != nullptr, allocate per-call
   // ephemeral buffers so concurrent launches on different streams can't clobber each other.
   const bool use_persistent_scratch = (active_stream == nullptr);
@@ -626,6 +626,10 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
     AMDGPUDriver::get_instance().memcpy_host_to_device_async(device_arg_buffer, ctx.get_context().arg_buffer,
                                                              ctx.arg_buffer_size, active_stream);
     ctx.get_context().arg_buffer = device_arg_buffer;
+  } else {
+    // Arg-less kernels never dereference arg_buffer; pin to nullptr (as with result_buffer above) to keep the struct
+    // byte-stable for the skip-H2D cache.
+    ctx.get_context().arg_buffer = nullptr;
   }
   int arg_size = sizeof(RuntimeContext *);
   void *ephemeral_context_ptr = nullptr;
@@ -644,8 +648,28 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   // slot contents. No-op for kernels without checkpoints.
   prepare_streaming_checkpoint_state(ctx, launcher_ctx, offloaded_tasks);
 
-  AMDGPUDriver::get_instance().memcpy_host_to_device_async(context_pointer, &ctx.get_context(), sizeof(RuntimeContext),
-                                                           active_stream);
+  // Per-launch RuntimeContext HtoD. A cache skips the copy when the struct bytes match the last upload.
+  //
+  // Only skip on the default-stream fast path. The cache is not thread-safe, and only this path serializes
+  // same-handle launches on the host and orders them on the null stream. Other paths always upload.
+  //
+  // The byte compare requires RuntimeContext to be value-initialized. A stale compare only costs a redundant upload.
+  const auto *ctx_bytes = reinterpret_cast<const uint8_t *>(&ctx.get_context());
+  if (use_persistent_scratch) {
+    const bool cache_hit =
+        default_stream_path && launcher_ctx.cached_runtime_context_ptr == context_pointer &&
+        launcher_ctx.cached_runtime_context.size() == sizeof(RuntimeContext) &&
+        std::memcmp(launcher_ctx.cached_runtime_context.data(), ctx_bytes, sizeof(RuntimeContext)) == 0;
+    if (!cache_hit) {
+      AMDGPUDriver::get_instance().memcpy_host_to_device_async(context_pointer, &ctx.get_context(),
+                                                               sizeof(RuntimeContext), active_stream);
+      launcher_ctx.cached_runtime_context.assign(ctx_bytes, ctx_bytes + sizeof(RuntimeContext));
+      launcher_ctx.cached_runtime_context_ptr = context_pointer;
+    }
+  } else {
+    AMDGPUDriver::get_instance().memcpy_host_to_device_async(context_pointer, &ctx.get_context(),
+                                                             sizeof(RuntimeContext), active_stream);
+  }
 
   // Adstack-cache invalidation bump - see `bump_writes_for_kernel_llvm` in `program/adstack_size_expr_eval.{h,cpp}`.
   bump_writes_for_kernel_llvm(executor->get_program(), &ctx, offloaded_tasks);

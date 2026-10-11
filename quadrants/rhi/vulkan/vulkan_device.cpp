@@ -1442,7 +1442,9 @@ VulkanDevice::VulkanDevice()
     : compute_streams_(std::make_unique<ThreadLocalStreams>()),
       graphics_streams_(std::make_unique<ThreadLocalStreams>()) {
   DeviceCapabilityConfig caps{};
-  caps.set(DeviceCapability::spirv_version, 0x10000);
+  // Keep the initial target at the compiler's minimum supported SPIR-V version.
+  // VulkanDeviceCreator replaces these defaults when it configures the physical device.
+  caps.set(DeviceCapability::spirv_version, 0x10300);
   set_caps(std::move(caps));
 }
 
@@ -1641,13 +1643,23 @@ RhiResult VulkanDevice::allocate_memory(const AllocParams &params, DeviceAllocat
     buffer_info.usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT_KHR;
   }
 
-  alloc.buffer =
-      vkapi::create_buffer(device_, export_sharing ? allocator_export_ : allocator_, &buffer_info, &alloc_info);
-  if (alloc.buffer == nullptr) {
-    return RhiResult::out_of_memory;
-  }
+  if (params.bypass_pooled_allocator) {
+    // Dedicated vkAllocateMemory path (no VMA). Used on Darwin for gtmp/listgen: the standalone MoltenVK repro hangs
+    // when those two DEVICE_LOCAL sizes go through VMA, but not when the same sizes use plain vkAllocateMemory.
+    alloc.buffer = vkapi::create_buffer_unpooled(device_, physical_device_, &buffer_info, alloc_info.requiredFlags,
+                                                 alloc_info.preferredFlags, &alloc.alloc_info);
+    if (alloc.buffer == nullptr) {
+      return RhiResult::out_of_memory;
+    }
+  } else {
+    alloc.buffer =
+        vkapi::create_buffer(device_, export_sharing ? allocator_export_ : allocator_, &buffer_info, &alloc_info);
+    if (alloc.buffer == nullptr) {
+      return RhiResult::out_of_memory;
+    }
 
-  vmaGetAllocationInfo(alloc.buffer->allocator, alloc.buffer->allocation, &alloc.alloc_info);
+    vmaGetAllocationInfo(alloc.buffer->allocator, alloc.buffer->allocation, &alloc.alloc_info);
+  }
 
   if (get_caps().get(DeviceCapability::spirv_has_physical_storage_buffer) &&
       (buffer_info.usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT_KHR)) {
