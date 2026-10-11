@@ -1,4 +1,4 @@
-import inspect
+import linecache
 import re
 import sys
 import typing
@@ -141,16 +141,15 @@ _KERNEL_CLASS_STACKFRAME_STMT_RES = [
 def _inside_class(level_of_class_stackframe: int) -> bool:
     try:
         maybe_class_frame = sys._getframe(level_of_class_stackframe)
-        statement_list = inspect.getframeinfo(maybe_class_frame)[3]
-        if statement_list is None:
-            return False
-        first_statment = statement_list[0].strip()
-        for pat in _KERNEL_CLASS_STACKFRAME_STMT_RES:
-            if pat.match(first_statment):
-                return True
-    except:
-        pass
-    return False
+    except ValueError:
+        return False
+    # Read the source line through linecache directly. For a function defined at module level, the inspected frame
+    # belongs to the import machinery and has no source file on disk, so inspect.getframeinfo falls back to
+    # inspect.getmodule, which iterates over all of sys.modules on every such call.
+    first_statement = linecache.getline(
+        maybe_class_frame.f_code.co_filename, maybe_class_frame.f_lineno, maybe_class_frame.f_globals
+    ).strip()
+    return any(pat.match(first_statement) for pat in _KERNEL_CLASS_STACKFRAME_STMT_RES)
 
 
 def _kernel_impl(
