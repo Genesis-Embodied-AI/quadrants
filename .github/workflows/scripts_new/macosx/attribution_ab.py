@@ -6,6 +6,7 @@ Workload mode holds the October binary fixed and compares the common tests with 
 Snapshots mode compares the complete matching tests and binary from each historical commit.
 Dataclass-ablation mode removes only the added dataclass tests from PRs #842 and #867, keeping the October binary.
 Expanded-binary mode retains unchanged test definitions from modified files, with the August test source fixed.
+Pydantic mode holds the October binary and full tests fixed and exchanges only Pydantic and pydantic-core versions.
 """
 import argparse
 import ast
@@ -29,11 +30,13 @@ def main():
         parser.add_argument('--' + name, type=Path, required=True)
     parser.add_argument('--comparison',
                         choices=('binary', 'expanded-binary', 'workload', 'snapshots', 'gc-profile',
-                                 'dataclass-ablation'),
+                                 'dataclass-ablation', 'pydantic'),
                         default='binary')
     parser.add_argument('--requirements', type=Path, help='Optional historically recorded dependency versions')
     parser.add_argument('--order', required=True)
     args = parser.parse_args()
+    if args.comparison == 'pydantic' and not args.requirements:
+        parser.error('Pydantic comparison requires the historical October dependency pins.')
     expected = {'common', 'full'} if args.comparison == 'workload' else {'old', 'new'}
     if args.comparison == 'gc-profile':
         expected = {'new'}
@@ -115,6 +118,8 @@ def main():
         env = work / ('venv-' + label)
         command(['uv', 'venv', '--python', '3.10', '--seed', env])
         pythons[label] = env / 'bin/python'
+    if args.comparison == 'pydantic':
+        wheels['old'] = wheels['new']
     install = ['uv', 'pip', 'install', '--python', pythons['old'], '--group', f'{old}/pyproject.toml:test']
     if args.requirements:
         install += ['-r', args.requirements.resolve()]
@@ -130,18 +135,33 @@ def main():
         actual = '\n'.join(line for line in frozen.splitlines() if not line.lower().startswith('quadrants')) + '\n'
         if actual != deps.read_text():
             raise RuntimeError(f'{label}: dependency versions differ; comparison is invalid.')
+    if args.comparison == 'pydantic':
+        versions = {'old': {'pydantic': '2.13.4', 'pydantic-core': '2.46.4'},
+                    'new': {'pydantic': '2.13.5', 'pydantic-core': '2.46.5'}}
+        command(['uv', 'pip', 'install', '--python', pythons['old'], '--no-deps',
+                 *(f'{name}=={version}' for name, version in versions['old'].items())])
+        baseline = dict(line.split('==', 1) for line in deps.read_text().splitlines() if line)
+        for label, python in pythons.items():
+            command(['uv', 'pip', 'check', '--python', python])
+            frozen = subprocess.check_output(['uv', 'pip', 'freeze', '--python', str(python)], text=True)
+            actual = dict(line.split('==', 1) for line in frozen.splitlines()
+                          if line and not line.lower().startswith('quadrants'))
+            if actual != {**baseline, **versions[label]}:
+                raise RuntimeError(f'{label}: packages differ beyond the requested Pydantic pair.')
+            (output / f'{label}-dependencies.txt').write_text(frozen)
+        (output / 'pydantic_versions.json').write_text(json.dumps(versions, indent=2) + '\n')
     metadata = {label: dict(wheel=path.name, sha256=hashlib.sha256(path.read_bytes()).hexdigest())
                 for label, path in wheels.items()}
     (output / 'wheels.json').write_text(json.dumps(metadata, indent=2) + '\n')
 
     results = []
     for label in labels:
-        binary = 'new' if args.comparison in ('workload', 'dataclass-ablation') else label
+        binary = 'new' if args.comparison in ('workload', 'dataclass-ablation', 'pydantic') else label
         test_root = (new if label == 'full' or
                      (args.comparison in ('snapshots', 'gc-profile') and label == 'new') else old)
-        if args.comparison == 'dataclass-ablation':
+        if args.comparison in ('dataclass-ablation', 'pydantic'):
             test_root = new
-        python = pythons[binary]
+        python = pythons[label] if args.comparison == 'pydantic' else pythons[binary]
         env = dict(os.environ, PATH=f'{python.parent}:{os.environ["PATH"]}', VIRTUAL_ENV=str(python.parent.parent),
                    PYTHONHASHSEED='0', QD_TEST_THREADS='3', QD_FILE_TIMING='1',
                    QD_FILE_TIMING_OUTPUT=str(output / f'{label}-file-timing.md'))
