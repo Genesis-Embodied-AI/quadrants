@@ -32,7 +32,8 @@ void reverse_segments(IRNode *root) {
   std::vector<std::vector<pStmt>> statement_blocks(1);
   bool has_for = false;
   bool has_non_for = false;
-  for (auto &&s : block->statements) {
+  auto statements = block->extract_statements();
+  for (auto &&s : statements) {
     if (s->is<FrontendForStmt>()) {
       has_for = true;
       statement_blocks.emplace_back();
@@ -43,7 +44,6 @@ void reverse_segments(IRNode *root) {
       statement_blocks.back().push_back(std::move(s));
     }
   }
-  block->statements.clear();
   std::reverse(statement_blocks.begin(), statement_blocks.end());
   /*
   for (auto &b : statement_blocks) {
@@ -75,7 +75,7 @@ void reverse_segments(IRNode *root) {
   }
   for (auto &sblock : statement_blocks) {
     for (auto &&s : sblock) {
-      block->statements.push_back(std::move(s));
+      block->insert(std::move(s));
     }
   }
 }

@@ -106,7 +106,7 @@ class UnreachableCodeEliminator : public BasicStmtVisitor {
       if (if_stmt->cond->as<ConstStmt>()->val.equal_value(0)) {
         // if (0)
         if (if_stmt->false_statements) {
-          modifier.insert_before(if_stmt, VecStatement(std::move(if_stmt->false_statements->statements)));
+          modifier.insert_before(if_stmt, VecStatement(if_stmt->false_statements->extract_statements()));
         }
         modifier.erase(if_stmt);
         modified = true;
@@ -114,7 +114,7 @@ class UnreachableCodeEliminator : public BasicStmtVisitor {
       } else {
         // if (1)
         if (if_stmt->true_statements) {
-          modifier.insert_before(if_stmt, VecStatement(std::move(if_stmt->true_statements->statements)));
+          modifier.insert_before(if_stmt, VecStatement(if_stmt->true_statements->extract_statements()));
         }
         modifier.erase(if_stmt);
         modified = true;

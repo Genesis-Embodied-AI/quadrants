@@ -69,8 +69,7 @@ class Offloader {
     OffloadedRanges offloaded_ranges;
 
     auto root_block = dynamic_cast<Block *>(root);
-    auto root_statements = std::move(root_block->statements);
-    root_block->statements.clear();
+    auto root_statements = root_block->extract_statements();
     const auto arch = config.arch;
     Kernel *kernel = dynamic_cast<Kernel *>(root_block->parent_callable());
     QD_ASSERT(kernel);
@@ -190,9 +189,7 @@ class Offloader {
 
         offloaded->num_cpu_threads = std::min(s->num_cpu_threads, config.cpu_max_num_threads);
         replace_all_usages_with(s, s, offloaded.get());
-        for (int j = 0; j < (int)s->body->statements.size(); j++) {
-          offloaded->body->insert(std::move(s->body->statements[j]));
-        }
+        offloaded->body->insert(VecStatement(s->body->extract_statements()));
         offloaded->range_hint = s->range_hint;
         offloaded->stream_parallel_group_id = s->stream_parallel_group_id;
         offloaded->graph_parallel_region_id = s->graph_parallel_region_id;
@@ -216,9 +213,7 @@ class Offloader {
         }
         offloaded->num_cpu_threads = std::min(st->num_cpu_threads, config.cpu_max_num_threads);
         replace_all_usages_with(st, st, offloaded.get());
-        for (int j = 0; j < (int)st->body->statements.size(); j++) {
-          offloaded->body->insert(std::move(st->body->statements[j]));
-        }
+        offloaded->body->insert(VecStatement(st->body->extract_statements()));
         offloaded->mesh = st->mesh;
         offloaded->major_from_type = std::move(st->major_from_type);
         offloaded->major_to_types = std::move(st->major_to_types);
@@ -306,9 +301,7 @@ class Offloader {
 
     replace_all_usages_with(for_stmt, for_stmt, offloaded_struct_for.get());
 
-    for (int i = 0; i < (int)for_stmt->body->statements.size(); i++) {
-      offloaded_struct_for->body->insert(std::move(for_stmt->body->statements[i]));
-    }
+    offloaded_struct_for->body->insert(VecStatement(for_stmt->body->extract_statements()));
 
     offloaded_struct_for->snode = for_stmt->snode;
     offloaded_struct_for->is_bit_vectorized = for_stmt->is_bit_vectorized;
