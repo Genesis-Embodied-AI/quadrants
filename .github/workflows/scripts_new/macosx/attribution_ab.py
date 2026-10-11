@@ -4,8 +4,10 @@ The workflow runs old/new and new/old on separate VMs to expose order effects. T
 source-version versus environment discriminator, not a bisect or proof that a specific PR is causal.
 Workload mode holds the October binary fixed and compares the common tests with the full October suite.
 Snapshots mode compares the complete matching tests and binary from each historical commit.
+Dataclass-ablation mode removes only the added dataclass tests from PRs #842 and #867, keeping the October binary.
 """
 import argparse
+import ast
 import hashlib
 import json
 import os
@@ -24,13 +26,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('old', 'new', 'old-wheels', 'new-wheels', 'work'):
         parser.add_argument('--' + name, type=Path, required=True)
-    parser.add_argument('--comparison', choices=('binary', 'workload', 'snapshots', 'gc-profile'), default='binary')
+    parser.add_argument('--comparison', choices=('binary', 'workload', 'snapshots', 'gc-profile', 'dataclass-ablation'),
+                        default='binary')
     parser.add_argument('--requirements', type=Path, help='Optional historically recorded dependency versions')
     parser.add_argument('--order', required=True)
     args = parser.parse_args()
     expected = {'common', 'full'} if args.comparison == 'workload' else {'old', 'new'}
     if args.comparison == 'gc-profile':
         expected = {'new'}
+    if args.comparison == 'dataclass-ablation':
+        expected = {'pruned', 'full'}
     labels = args.order.split('-')
     if len(labels) != len(expected) or set(labels) != expected:
         parser.error(f'--order must contain each of {sorted(expected)} exactly once')
@@ -59,6 +64,22 @@ def main():
     if 'tests/python/test_simt.py' not in common:
         raise RuntimeError('SIMT tests are not identical between source snapshots.')
     (output / 'test_manifest.json').write_text(json.dumps(dict(common=common, ignored=ignored), indent=2) + '\n')
+    deselected = []
+    if args.comparison == 'dataclass-ablation':
+        mapping = json.loads(Path(__file__).with_name('dataclass_test_additions.json').read_text())
+        added = {name for pr in mapping for name in pr['added_test_functions']}
+        function_sets = []
+        for root in (old, new):
+            module = ast.parse((root / 'tests/python/test_py_dataclass.py').read_text())
+            function_sets.append({node.name for node in module.body
+                                  if isinstance(node, ast.FunctionDef) and node.name.startswith('test_')})
+        old_functions, new_functions = function_sets
+        if len(added) != 69 or new_functions - old_functions != added or old_functions - new_functions:
+            raise RuntimeError('The proposed ablation does not exactly match the added dataclass test functions.')
+        if any(old_name.startswith(name) for old_name in old_functions for name in added):
+            raise RuntimeError('A deselection prefix would also exclude an older test.')
+        deselected = [f'python/test_py_dataclass.py::{name}' for name in sorted(added)]
+        (output / 'dataclass_ablation.json').write_text(json.dumps(mapping, indent=2) + '\n')
 
     # Resolve all dependencies once, then install that exact environment with only the wheel exchanged.
     pythons, wheels = {}, {}
@@ -91,14 +112,18 @@ def main():
 
     results = []
     for label in labels:
-        binary = 'new' if args.comparison == 'workload' else label
+        binary = 'new' if args.comparison in ('workload', 'dataclass-ablation') else label
         test_root = new if label == 'full' or (args.comparison in ('snapshots', 'gc-profile') and label == 'new') else old
+        if args.comparison == 'dataclass-ablation':
+            test_root = new
         python = pythons[binary]
         env = dict(os.environ, PATH=f'{python.parent}:{os.environ["PATH"]}', VIRTUAL_ENV=str(python.parent.parent),
                    PYTHONHASHSEED='0', QD_TEST_THREADS='3', QD_FILE_TIMING='1',
                    QD_FILE_TIMING_OUTPUT=str(output / f'{label}-file-timing.md'))
         subset = args.comparison == 'binary' or label == 'common'
         options = [f'--ignore={rel}' for rel in ignored] if subset else []
+        if args.comparison == 'dataclass-ablation' and label == 'pruned':
+            options += [f'--deselect={nodeid}' for nodeid in deselected]
         options += [f'--basetemp={work / (label + "-pytest-tmp")}', f'--junitxml={output / (label + ".xml")}']
         if args.comparison == 'gc-profile':
             options += ['-p', 'gc_profile']
