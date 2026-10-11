@@ -38,6 +38,8 @@ jobs:
           echo "PYTHON_CP_VERSION=${cp}"
           echo "PYTHON_CP_VERSION=${cp}" >> $GITHUB_OUTPUT
       - name: Mac OS X prerequisites
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_PAT }}
         run: |
           bash .github/workflows/scripts_new/macosx/1_prerequisites.sh
       - name: Mac OS X build
