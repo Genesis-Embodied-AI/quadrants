@@ -5,6 +5,7 @@ source-version versus environment discriminator, not a bisect or proof that a sp
 Workload mode holds the October binary fixed and compares the common tests with the full October suite.
 Snapshots mode compares the complete matching tests and binary from each historical commit.
 Dataclass-ablation mode removes only the added dataclass tests from PRs #842 and #867, keeping the October binary.
+Expanded-binary mode retains unchanged test definitions from modified files, with the August test source fixed.
 """
 import argparse
 import ast
@@ -26,7 +27,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('old', 'new', 'old-wheels', 'new-wheels', 'work'):
         parser.add_argument('--' + name, type=Path, required=True)
-    parser.add_argument('--comparison', choices=('binary', 'workload', 'snapshots', 'gc-profile', 'dataclass-ablation'),
+    parser.add_argument('--comparison',
+                        choices=('binary', 'expanded-binary', 'workload', 'snapshots', 'gc-profile', 'dataclass-ablation'),
                         default='binary')
     parser.add_argument('--requirements', type=Path, help='Optional historically recorded dependency versions')
     parser.add_argument('--order', required=True)
@@ -64,6 +66,27 @@ def main():
     if 'tests/python/test_simt.py' not in common:
         raise RuntimeError('SIMT tests are not identical between source snapshots.')
     (output / 'test_manifest.json').write_text(json.dumps(dict(common=common, ignored=ignored), indent=2) + '\n')
+    expanded = None
+    if args.comparison == 'expanded-binary':
+        expanded = json.loads(Path(__file__).with_name('common_test_nodes.json').read_text())
+        if {entry['path'] for entry in expanded['files']} != set(ignored):
+            raise RuntimeError('Expanded test manifest does not cover exactly the changed test files.')
+        for label, root in [('old', old), ('new', new)]:
+            actual_ref = subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip()
+            if actual_ref != expanded[label + '_ref']:
+                raise RuntimeError(f'{label}: source commit does not match the expanded test manifest.')
+            for entry in expanded['files']:
+                path = root / entry['path']
+                expected_blob = entry[label + '_blob']
+                if expected_blob is None:
+                    if path.exists():
+                        raise RuntimeError(f'Expected deleted file: {path}')
+                    continue
+                contents = path.read_bytes()
+                actual_blob = hashlib.sha1(f'blob {len(contents)}\0'.encode() + contents).hexdigest()
+                if actual_blob != expected_blob:
+                    raise RuntimeError(f'Source content does not match expanded test manifest: {path}')
+        (output / 'expanded_binary_selection.json').write_text(json.dumps(expanded, indent=2) + '\n')
     deselected = []
     if args.comparison == 'dataclass-ablation':
         mapping = json.loads(Path(__file__).with_name('dataclass_test_additions.json').read_text())
@@ -113,7 +136,8 @@ def main():
     results = []
     for label in labels:
         binary = 'new' if args.comparison in ('workload', 'dataclass-ablation') else label
-        test_root = new if label == 'full' or (args.comparison in ('snapshots', 'gc-profile') and label == 'new') else old
+        test_root = (new if label == 'full' or
+                     (args.comparison in ('snapshots', 'gc-profile') and label == 'new') else old)
         if args.comparison == 'dataclass-ablation':
             test_root = new
         python = pythons[binary]
@@ -122,6 +146,9 @@ def main():
                    QD_FILE_TIMING_OUTPUT=str(output / f'{label}-file-timing.md'))
         subset = args.comparison == 'binary' or label == 'common'
         options = [f'--ignore={rel}' for rel in ignored] if subset else []
+        if expanded is not None:
+            options += [f'--ignore={rel}' for rel in expanded['ignored_files']]
+            options += [f'--deselect={nodeid}' for nodeid in expanded['deselected_nodes']]
         if args.comparison == 'dataclass-ablation' and label == 'pruned':
             options += [f'--deselect={nodeid}' for nodeid in deselected]
         options += [f'--basetemp={work / (label + "-pytest-tmp")}', f'--junitxml={output / (label + ".xml")}']

@@ -1,0 +1,530 @@
+{
+  "old_ref": "dd3e0850998cbcced148bda94afa145013075d0f",
+  "new_ref": "aa2fd7c30e5f0cd174c8e8b45e0bed05d3515546",
+  "files": [
+    {
+      "path": "tests/python/quadrants/lang/ast/test_function_def_transformer.py",
+      "old_blob": "a46d5e2cbcafbcd8f950e1e87e086da69c524a44",
+      "new_blob": "20b422b20b33b0eaced1713455057dc05e5a2385",
+      "old_definitions": 1,
+      "new_definitions": 1,
+      "changed": [
+        "test_process_func_arg"
+      ],
+      "unchanged": [],
+      "prefix_collisions": []
+    },
+    {
+      "path": "tests/python/quadrants/lang/fast_caching/test_args_hasher.py",
+      "old_blob": "210f2aba6afe38c63d0c1fd3615ff7185ae42248",
+      "new_blob": "a38ecd7a3bce827bf44aaf72fdde31db249322b0",
+      "old_definitions": 24,
+      "new_definitions": 25,
+      "changed": [],
+      "unchanged": [
+        "test_args_hasher_bool",
+        "test_args_hasher_bool_maybe_template",
+        "test_args_hasher_custom_torch_tensor",
+        "test_args_hasher_data_oriented",
+        "test_args_hasher_data_oriented_template_primitives_nested_value_not_keyed",
+        "test_args_hasher_data_oriented_template_primitives_value_not_keyed",
+        "test_args_hasher_dataclass_field_none_not_collide_with_ndarray",
+        "test_args_hasher_dataclass_with_field_child_returns_none",
+        "test_args_hasher_dataclass_with_ndarray_child_returns_hash",
+        "test_args_hasher_dataclass_with_tensor_field_child_returns_none",
+        "test_args_hasher_field",
+        "test_args_hasher_field_matrix",
+        "test_args_hasher_field_vector",
+        "test_args_hasher_field_vs_ndarray",
+        "test_args_hasher_named_tuple",
+        "test_args_hasher_ndarray",
+        "test_args_hasher_ndarray_matrix",
+        "test_args_hasher_ndarray_vector",
+        "test_args_hasher_none_is_cacheable",
+        "test_args_hasher_numeric",
+        "test_args_hasher_numeric_maybe_template",
+        "test_args_hasher_torch_tensor",
+        "test_cache_values_checked",
+        "test_cache_values_unchecked"
+      ],
+      "prefix_collisions": []
+    },
+    {
+      "path": "tests/python/quadrants/lang/fast_caching/test_fastcache_field_warnings.py",
+      "old_blob": "a4bda2a1b12ca46266426c8d3928f58a70ca4192",
+      "new_blob": "9c942e03f7c4b7e9fcdbe252c3cb8d29e8b17f1b",
+      "old_definitions": 7,
+      "new_definitions": 7,
+      "changed": [
+        "test_fastcache_field_warnings_warn_struct_template_field"
+      ],
+      "unchanged": [
+        "test_fastcache_field_warnings_no_warning_for_field_via_tensor",
+        "test_fastcache_field_warnings_no_warning_for_mixed_field_ndarray",
+        "test_fastcache_field_warnings_no_warning_for_ndarray_via_tensor",
+        "test_fastcache_field_warnings_no_warning_non_pure_kernel",
+        "test_fastcache_field_warnings_no_warning_top_level_tensor",
+        "test_fastcache_field_warnings_warn_top_level_template"
+      ],
+      "prefix_collisions": []
+    },
+    {
+      "path": "tests/python/quadrants/lang/fast_caching/test_src_hasher.py",
+      "old_blob": "3f00c3096843441c22288b11331c09f4329e2156",
+      "new_blob": "bdf73271b7cde0d43472b8fb2fd244a356e1e188",
+      "old_definitions": 8,
+      "new_definitions": 8,
+      "changed": [
+        "test_src_hasher_create_cache_key_varies_with_device_caps",
+        "test_src_hasher_create_cache_key_vary_config",
+        "test_src_hasher_intenum_qualname_round_trip",
+        "test_src_hasher_store_validate",
+        "test_src_hasher_store_validate_round_trips_schema_v3_metadata"
+      ],
+      "unchanged": [
+        "test_src_hasher_print_non_pure",
+        "test_src_hasher_validate_hashed_function_infos",
+        "test_src_hasher_vary_kernel_func"
+      ],
+      "prefix_collisions": []
+    },
+    {
+      "path": "tests/python/quadrants/lang/fast_caching/test_src_ll_cache.py",
+      "old_blob": "453ec5621e7299f79ccc38d40b3afcef9eecf57d",
+      "new_blob": "89da71e289b24bb8bdd7d4157d73b27a95d93e26",
+      "old_definitions": 10,
+      "new_definitions": 16,
+      "changed": [
+        "test_src_ll_cache_arg_warnings"
+      ],
+      "unchanged": [
+        "test_src_ll_cache1",
+        "test_src_ll_cache_dupe_kernels",
+        "test_src_ll_cache_flag",
+        "test_src_ll_cache_has_return",
+        "test_src_ll_cache_modify_sub_func",
+        "test_src_ll_cache_repeat_after_load",
+        "test_src_ll_cache_self_arg_checked",
+        "test_src_ll_cache_template_params",
+        "test_src_ll_cache_with_corruption"
+      ],
+      "prefix_collisions": []
+    },
+    {
+      "path": "tests/python/quadrants/lang/test_kernel_impl.py",
+      "old_blob": "78e85f2bca05eeda56cb4e638a6c4189871da6ba",
+      "new_blob": "926e7034bc726e15bb4b775872fec43354897ab0",
+      "old_definitions": 4,
+      "new_definitions": 5,
+      "changed": [],
+      "unchanged": [
+        "test_ensure_compiled_reports_function",
+        "test_fastcache_kernel_parameter",
+        "test_fe_ll_observations",
+        "test_pure_kernel_parameter"
+      ],
+      "prefix_collisions": []
+    },
+    {
+      "path": "tests/python/test_all_field_shortcut.py",
+      "old_blob": "9bbf021a1620058b5a078cd7bcc04554c8be25e2",
+      "new_blob": "249bca1f1ea931b157ca47611926b92a65641ab4",
+      "old_definitions": 11,
+      "new_definitions": 11,
+      "changed": [
+        "test_all_field_struct_passed_as_ndarray_param_raises",
+        "test_all_field_struct_wrong_annotation_raises",
+        "test_mixed_field_and_ndarray_not_skipped",
+        "test_ndarray_struct_not_skipped",
+        "test_tensor_wrapping_ndarray_not_skipped"
+      ],
+      "unchanged": [
+        "test_all_field_flag_survives_reset",
+        "test_all_field_struct_multiple_kernels",
+        "test_all_field_struct_tensor_basic",
+        "test_mixed_field_and_scalar_not_skipped",
+        "test_nested_frozen_dc_all_field",
+        "test_struct_with_int_field_not_skipped"
+      ],
+      "prefix_collisions": []
+    },
+    {
+      "path": "tests/python/test_api.py",
+      "old_blob": "e2003b075509488f207394ee25fd7844ebdeb7aa",
+      "new_blob": "f6a019aea9359e405fe57cf499111f69996975e9",
+      "old_definitions": 1,
+      "new_definitions": 1,
+      "changed": [],
+      "unchanged": [
+        "test_api"
+      ],
+      "prefix_collisions": []
+    },
+    {
+      "path": "tests/python/test_atomic.py",
+      "old_blob": "e0835f3e355eadfd19132ab8a28c3c0fd1e35a66",
+      "new_blob": "59ab29fac42ff1b25a38213abe846a268abbd01c",
+      "old_definitions": 45,
+      "new_definitions": 45,
+      "changed": [
+        "test_atomic_float_ops"
+      ],
+      "unchanged": [
+        "test_atomic_add_demoted",
+        "test_atomic_add_expr_evaled",
+        "test_atomic_add_global_f32",
+        "test_atomic_add_global_i32",
+        "test_atomic_add_int_contention",
+        "test_atomic_add_matrix_field_fanout",
+        "test_atomic_add_vector_field_fanout",
+        "test_atomic_add_with_if_simplify",
+        "test_atomic_add_with_local_store_simplify1",
+        "test_atomic_add_with_local_store_simplify2",
+        "test_atomic_and_expr_evaled",
+        "test_atomic_bitwise_int_widths",
+        "test_atomic_bitwise_on_float_field_raises",
+        "test_atomic_cas_contention_single_winner",
+        "test_atomic_cas_demoted",
+        "test_atomic_cas_expected_int_literal_widens_to_i64",
+        "test_atomic_cas_expected_signed_int_literal_casts_to_unsigned",
+        "test_atomic_cas_loop_increment_matches_atomic_add",
+        "test_atomic_cas_on_float_field_raises",
+        "test_atomic_cas_on_ndarray",
+        "test_atomic_cas_on_vector_field_raises",
+        "test_atomic_cas_on_vector_field_scalar_component",
+        "test_atomic_cas_raw_field_raises_clear_error",
+        "test_atomic_cas_returns_old_value",
+        "test_atomic_exchange_demoted",
+        "test_atomic_exchange_matrix_field_fanout",
+        "test_atomic_exchange_returns_old_value",
+        "test_atomic_exchange_swap_under_contention",
+        "test_atomic_exchange_vector_field_fanout",
+        "test_atomic_max_expr_evaled",
+        "test_atomic_max_f32",
+        "test_atomic_min_expr_evaled",
+        "test_atomic_min_max_nan_arg",
+        "test_atomic_min_max_nan_seed",
+        "test_atomic_min_max_uint",
+        "test_atomic_min_rvalue_as_frist_op",
+        "test_atomic_mul_contention",
+        "test_atomic_mul_expr_evaled",
+        "test_atomic_mul_f32",
+        "test_atomic_or_expr_evaled",
+        "test_atomic_sub_expr_evaled",
+        "test_atomic_sub_with_type_promotion",
+        "test_atomic_xor_expr_evaled",
+        "test_local_atomic_with_if"
+      ],
+      "prefix_collisions": []
+    },
+    {
+      "path": "tests/python/test_compare.py",
+      "old_blob": "0aacc45cb4028ac121fa90e72c3fbeae73995085",
+      "new_blob": "76d9377a3fed466c61563afecc58db8ae95b5bfd",
+      "old_definitions": 13,
+      "new_definitions": 14,
+      "changed": [
+        "test_static_is_rejects_non_none_identity",
+        "test_static_is_rejects_runtime_operands"
+      ],
+      "unchanged": [
+        "test_chain_compare",
+        "test_compare_basics",
+        "test_compare_equality",
+        "test_compare_ret_type",
+        "test_no_duplicate_eval",
+        "test_no_duplicate_eval_func",
+        "test_non_static_in",
+        "test_python_scope_compare",
+        "test_static_in",
+        "test_static_is",
+        "test_static_is_accepts_tensor_presence"
+      ],
+      "prefix_collisions": []
+    },
+    {
+      "path": "tests/python/test_data_oriented_ndarray.py",
+      "old_blob": "fb8137cfc91b39814420972c0ae5bb6f0a8b532c",
+      "new_blob": "bcb53ddec96bd11bc9cc8fc638aac9b4a5c0109e",
+      "old_definitions": 28,
+      "new_definitions": 38,
+      "changed": [
+        "test_data_oriented_attribute_cycle_does_not_recurse_infinitely"
+      ],
+      "unchanged": [
+        "test_data_oriented_distinct_instances",
+        "test_data_oriented_field_disables_fastcache_but_runs",
+        "test_data_oriented_field_only_no_speckey_change",
+        "test_data_oriented_holding_dataclass_with_ndarray",
+        "test_data_oriented_mixed_field_and_ndarray",
+        "test_data_oriented_multiple_ndarrays",
+        "test_data_oriented_ndarray_fastcache_cross_init",
+        "test_data_oriented_ndarray_fastcache_dtype_key_distinct",
+        "test_data_oriented_ndarray_fastcache_eligible",
+        "test_data_oriented_ndarray_pure",
+        "test_data_oriented_ndarray_reassign_different_dtype",
+        "test_data_oriented_ndarray_reassign_different_ndim",
+        "test_data_oriented_ndarray_reassign_same_shape",
+        "test_data_oriented_ndarray_via_func",
+        "test_data_oriented_ndarray_wrapper",
+        "test_data_oriented_nested",
+        "test_data_oriented_nested_ndarray_fastcache_cross_init",
+        "test_data_oriented_nested_ndarray_reassign",
+        "test_data_oriented_nested_ndarray_reassign_different_dtype",
+        "test_data_oriented_single_ndarray",
+        "test_data_oriented_three_level_nesting",
+        "test_data_oriented_two_kernels_same_instance",
+        "test_data_oriented_vector_ndarray",
+        "test_dataclass_holding_data_oriented_with_ndarray",
+        "test_dataclass_ndarray_sanity",
+        "test_frozen_outer_mutable_inner_ndarray_reassign",
+        "test_typed_dataclass_with_data_oriented_field_raises_clear_error"
+      ],
+      "prefix_collisions": []
+    },
+    {
+      "path": "tests/python/test_div.py",
+      "old_blob": "5920d5353bdf727ea620e38120253e41039c9aeb",
+      "new_blob": "5d640084ee486539316f79025f6ccf53f840449b",
+      "old_definitions": 4,
+      "new_definitions": 6,
+      "changed": [],
+      "unchanged": [
+        "test_div_default_ip",
+        "test_floor_div",
+        "test_floor_div_pythonic",
+        "test_true_div"
+      ],
+      "prefix_collisions": []
+    },
+    {
+      "path": "tests/python/test_frozen_dc_dispatch_cache.py",
+      "old_blob": "c0a710e0e98d5f183b2c19e6f1aae88c298d6bef",
+      "new_blob": "a5478998a54585860331c85e9cedbf8309f64a49",
+      "old_definitions": 10,
+      "new_definitions": 13,
+      "changed": [
+        "test_frozen_dc_unwrapped_cache_populated"
+      ],
+      "unchanged": [
+        "test_frozen_dc_cache_basic_ndarray",
+        "test_frozen_dc_cache_many_fields",
+        "test_frozen_dc_cache_multi_field",
+        "test_frozen_dc_cache_multiple_kernels",
+        "test_frozen_dc_cache_separate_instances",
+        "test_frozen_dc_kernel_correct_after_reset",
+        "test_frozen_dc_plan_id_reuse_guard",
+        "test_frozen_dc_plans_cleared_on_reset",
+        "test_grouped_on_struct_ndarray_after_field_to_ndarray_switch"
+      ],
+      "prefix_collisions": []
+    },
+    {
+      "path": "tests/python/test_mod.py",
+      "old_blob": "e4d10266d22ca98806caab698ea21811fc43cd4f",
+      "new_blob": "c62e65e8f02c23bb8cf271428cc3f24f5b579a65",
+      "old_definitions": 5,
+      "new_definitions": 6,
+      "changed": [],
+      "unchanged": [
+        "test_c_style_mod",
+        "test_mod_scan",
+        "test_py_style_float_const_mod_one",
+        "test_py_style_mod",
+        "test_py_style_unsigned_mod"
+      ],
+      "prefix_collisions": []
+    },
+    {
+      "path": "tests/python/test_parallel_range_for.py",
+      "old_blob": "c0a6260c5a64d6e6fe1ef33fd2a2586d0bfd2e25",
+      "new_blob": "a65730bb136f75c947794557c04d3b1989b37f5d",
+      "old_definitions": 5,
+      "new_definitions": 4,
+      "changed": [
+        "test_loop_config_block_dim_adaptive"
+      ],
+      "unchanged": [
+        "test_loop_config_parallel_range_for",
+        "test_loop_config_serial_for",
+        "test_parallel_range_for",
+        "test_serial_for"
+      ],
+      "prefix_collisions": []
+    },
+    {
+      "path": "tests/python/test_per_offload_cache.py",
+      "old_blob": "23c8270a1f15701aef7eb85ca3e8d1472cccb9d7",
+      "new_blob": null,
+      "old_definitions": 22,
+      "new_definitions": 0,
+      "changed": [
+        "test_per_construct_frontend_split_correct_with_shared_serial_def",
+        "test_per_construct_frontend_split_dump_ir_observation_only",
+        "test_per_construct_frontend_split_dump_simplify_observation_only",
+        "test_per_construct_frontend_split_enumerates_all_constructs",
+        "test_per_construct_frontend_split_fallback_append_result_shared",
+        "test_per_construct_frontend_split_fallback_carried_rmw_local",
+        "test_per_construct_frontend_split_fallback_dump_cfg",
+        "test_per_construct_frontend_split_fallback_effectful_producer",
+        "test_per_construct_frontend_split_fallback_external_func_write",
+        "test_per_construct_frontend_split_fallback_field_load_shadowed",
+        "test_per_construct_frontend_split_fallback_not_recompute_safe",
+        "test_per_construct_frontend_split_fallback_random_producer",
+        "test_per_construct_frontend_split_fallback_realfunc_ref_read",
+        "test_per_construct_frontend_split_fallback_realfunc_ref_write",
+        "test_per_construct_frontend_split_fallback_sparse_deactivate_shadow",
+        "test_per_construct_frontend_split_fallback_stream_parallel",
+        "test_per_construct_frontend_split_fallback_volatile_load",
+        "test_per_construct_frontend_split_graph_do_while_correct",
+        "test_per_construct_frontend_split_observations_reset_on_cached_relaunch",
+        "test_per_construct_frontend_split_print_ir_observation_only",
+        "test_per_construct_frontend_split_scalar_reassigned_between_constructs",
+        "test_per_construct_frontend_split_struct_member_recomputed"
+      ],
+      "unchanged": [],
+      "prefix_collisions": []
+    },
+    {
+      "path": "tests/python/test_py_dataclass.py",
+      "old_blob": "f0c143fcef914e23eda68a3882d091b0492f30d7",
+      "new_blob": "7b3a42a569663cd23362e036563290012eb1842c",
+      "old_definitions": 55,
+      "new_definitions": 124,
+      "changed": [],
+      "unchanged": [
+        "test_data_oriented_with_template_does_not_emit_deprecation_warning",
+        "test_dataclass_with_template_emits_deprecation_warning",
+        "test_field_struct_nested_field",
+        "test_field_struct_nested_field_kwargs",
+        "test_ndarray_struct",
+        "test_ndarray_struct_diverse_params",
+        "test_ndarray_struct_kwargs",
+        "test_ndarray_struct_multiple_child_structs_field",
+        "test_ndarray_struct_multiple_child_structs_ndarray",
+        "test_ndarray_struct_nested_ndarray",
+        "test_ndarray_struct_primitives",
+        "test_print_used_parameters",
+        "test_prune_used_parameters1",
+        "test_prune_used_parameters2",
+        "test_prune_used_parameters_fastcache1",
+        "test_prune_used_parameters_fastcache2",
+        "test_prune_used_parameters_fastcache_dead_static_branch",
+        "test_prune_used_parameters_fastcache_dead_static_branch_kwargs",
+        "test_prune_used_parameters_fastcache_dead_static_branch_nested",
+        "test_prune_used_parameters_fastcache_dead_static_branch_reversed_order",
+        "test_prune_used_parameters_fastcache_forward_same_name_same_call_two_slots",
+        "test_prune_used_parameters_fastcache_forward_same_name_swapped_slots",
+        "test_prune_used_parameters_fastcache_forward_same_name_swapped_slots_same_caller",
+        "test_prune_used_parameters_fastcache_no_used",
+        "test_pruning_bound_callable_args",
+        "test_pruning_bound_callable_kwargs",
+        "test_pruning_func_return_star_to_another",
+        "test_pruning_func_return_star_to_another_explicit_vars",
+        "test_pruning_func_return_star_to_another_two_step",
+        "test_pruning_iterate_function",
+        "test_pruning_iterate_function_no_iterate",
+        "test_pruning_kwargs_same_param_names_diff_names",
+        "test_pruning_kwargs_swap_order",
+        "test_pruning_kwargs_swap_order_bound_callable",
+        "test_pruning_pass_element_of_tensor_of_dataclass",
+        "test_pruning_reuse_func_across_kernels",
+        "test_pruning_reuse_func_diff_kernel_parameters",
+        "test_pruning_reuse_func_same_kernel_call_l1",
+        "test_pruning_reuse_func_same_kernel_call_l2",
+        "test_pruning_reuse_func_same_kernel_diff_call",
+        "test_pruning_star_args",
+        "test_pruning_star_args_error_not_at_end_another_arg",
+        "test_pruning_star_args_error_not_at_end_kwargs",
+        "test_pruning_with_arg_kwargs_rename",
+        "test_pruning_with_arg_rename",
+        "test_pruning_with_keyword_rename",
+        "test_pruning_with_recursive_func",
+        "test_substruct_deep_nesting",
+        "test_substruct_inside_func",
+        "test_substruct_passed_to_func",
+        "test_substruct_passed_to_func_kwargs",
+        "test_substruct_pruning",
+        "test_substruct_scalar_leaf",
+        "test_template_mapper_cache",
+        "test_typed_dataclass_does_not_emit_deprecation_warning"
+      ],
+      "prefix_collisions": []
+    },
+    {
+      "path": "tests/python/test_runtime.py",
+      "old_blob": "a62b0ef7bef84edf0c1ef3a1114c9bc1039aa93f",
+      "new_blob": "327e0b1822881825dfafebbacc86084127585b0b",
+      "old_definitions": 7,
+      "new_definitions": 9,
+      "changed": [],
+      "unchanged": [
+        "test_init_arch",
+        "test_init_arg",
+        "test_init_bad_arg",
+        "test_init_bad_require_version",
+        "test_init_require_version",
+        "test_supported_log_levels",
+        "test_xdg_basedir"
+      ],
+      "prefix_collisions": []
+    },
+    {
+      "path": "tests/python/test_stable_gtmp_offsets.py",
+      "old_blob": "b16a3985aa40b161073c52206df517a786acfa7d",
+      "new_blob": null,
+      "old_definitions": 4,
+      "new_definitions": 0,
+      "changed": [
+        "test_gtmp_offset_stable_under_unrelated_insertion",
+        "test_stable_gtmp_offsets_are_content_keyed",
+        "test_stable_gtmp_offsets_distinguish_op_type",
+        "test_stable_gtmp_offsets_same_typed_locals_are_content_keyed"
+      ],
+      "unchanged": [],
+      "prefix_collisions": []
+    },
+    {
+      "path": "tests/python/test_template_typing.py",
+      "old_blob": "69e9ee990bed7f21c467ab0c1fd79095f85d3691",
+      "new_blob": "9fd60f1ac65cf23a5743e7d9f03b5e5a5a165277",
+      "old_definitions": 4,
+      "new_definitions": 4,
+      "changed": [
+        "test_template_raise_on_data_oriented_floats"
+      ],
+      "unchanged": [
+        "test_template_no_braces",
+        "test_template_raise_on_floats",
+        "test_template_raise_on_global_floats"
+      ],
+      "prefix_collisions": []
+    }
+  ],
+  "deselected_nodes": [
+    "python/quadrants/lang/ast/test_function_def_transformer.py::test_process_func_arg",
+    "python/quadrants/lang/fast_caching/test_fastcache_field_warnings.py::test_fastcache_field_warnings_warn_struct_template_field",
+    "python/quadrants/lang/fast_caching/test_src_hasher.py::test_src_hasher_create_cache_key_varies_with_device_caps",
+    "python/quadrants/lang/fast_caching/test_src_hasher.py::test_src_hasher_create_cache_key_vary_config",
+    "python/quadrants/lang/fast_caching/test_src_hasher.py::test_src_hasher_intenum_qualname_round_trip",
+    "python/quadrants/lang/fast_caching/test_src_hasher.py::test_src_hasher_store_validate",
+    "python/quadrants/lang/fast_caching/test_src_hasher.py::test_src_hasher_store_validate_round_trips_schema_v3_metadata",
+    "python/quadrants/lang/fast_caching/test_src_ll_cache.py::test_src_ll_cache_arg_warnings",
+    "python/test_all_field_shortcut.py::test_all_field_struct_passed_as_ndarray_param_raises",
+    "python/test_all_field_shortcut.py::test_all_field_struct_wrong_annotation_raises",
+    "python/test_all_field_shortcut.py::test_mixed_field_and_ndarray_not_skipped",
+    "python/test_all_field_shortcut.py::test_ndarray_struct_not_skipped",
+    "python/test_all_field_shortcut.py::test_tensor_wrapping_ndarray_not_skipped",
+    "python/test_atomic.py::test_atomic_float_ops",
+    "python/test_compare.py::test_static_is_rejects_non_none_identity",
+    "python/test_compare.py::test_static_is_rejects_runtime_operands",
+    "python/test_data_oriented_ndarray.py::test_data_oriented_attribute_cycle_does_not_recurse_infinitely",
+    "python/test_frozen_dc_dispatch_cache.py::test_frozen_dc_unwrapped_cache_populated",
+    "python/test_parallel_range_for.py::test_loop_config_block_dim_adaptive",
+    "python/test_template_typing.py::test_template_raise_on_data_oriented_floats"
+  ],
+  "ignored_files": [
+    "tests/python/test_per_offload_cache.py",
+    "tests/python/test_stable_gtmp_offsets.py"
+  ]
+}

@@ -5,7 +5,7 @@ on:
       comparison:
         description: Shared-test binaries, common/full October workloads, or complete historical snapshots
         type: choice
-        options: [binary, workload, snapshots, gc-profile, dataclass-ablation]
+        options: [binary, expanded-binary, workload, snapshots, gc-profile, dataclass-ablation]
         default: binary
 permissions:
   contents: read
