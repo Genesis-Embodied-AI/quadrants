@@ -20,12 +20,6 @@ pip install numpy
 brew install llvm@22
 
 git submodule
-git config --global credential.https://gitlab.com.helper \
-  '!f() {
-    if [ "$1" = get ] && [ -n "$GITLAB_PAT" ]; then
-      printf "%s\n" "username=oauth2" "password=$GITLAB_PAT"
-    fi
-  }; f'
 git submodule update --init --recursive
 
 brew install pybind11

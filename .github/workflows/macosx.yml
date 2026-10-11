@@ -41,6 +41,12 @@ jobs:
         env:
           GITLAB_PAT: ${{ secrets.GITLAB_PAT }}
         run: |
+          git config --global credential.https://gitlab.com.helper \
+            '!f() {
+              if [ "$1" = get ] && [ -n "$GITLAB_PAT" ]; then
+                printf "%s\n" "username=oauth2" "password=$GITLAB_PAT"
+              fi
+            }; f'
           bash .github/workflows/scripts_new/macosx/1_prerequisites.sh
       - name: Mac OS X build
         run: |

@@ -8,12 +8,6 @@ pip install --group dev
 yum install -y git wget
 # Note: following depends on the name of the repo:
 git config --global --add safe.directory /__w/quadrants/quadrants
-git config --global credential.https://gitlab.com.helper \
-  '!f() {
-    if [ "$1" = get ] && [ -n "$GITLAB_PAT" ]; then
-      printf "%s\n" "username=oauth2" "password=$GITLAB_PAT"
-    fi
-  }; f'
 git submodule update --init --jobs 2
 
 LLVM_DIR=$(python download_llvm.py | tail -n 1)
