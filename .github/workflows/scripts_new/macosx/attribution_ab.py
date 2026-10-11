@@ -58,7 +58,7 @@ def main():
             raise RuntimeError(f'Expected one archived wheel in {folder}, found {len(found)}.')
         wheels[label] = found[0]
         env = work / ('venv-' + label)
-        command(['uv', 'venv', '--python', '3.10', env])
+        command(['uv', 'venv', '--python', '3.10', '--seed', env])
         pythons[label] = env / 'bin/python'
     command(['uv', 'pip', 'install', '--python', pythons['old'],
              '--group', f'{old}/pyproject.toml:test', wheels['old']])
