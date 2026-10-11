@@ -28,7 +28,8 @@ def main():
     for name in ('old', 'new', 'old-wheels', 'new-wheels', 'work'):
         parser.add_argument('--' + name, type=Path, required=True)
     parser.add_argument('--comparison',
-                        choices=('binary', 'expanded-binary', 'workload', 'snapshots', 'gc-profile', 'dataclass-ablation'),
+                        choices=('binary', 'expanded-binary', 'workload', 'snapshots', 'gc-profile',
+                                 'dataclass-ablation'),
                         default='binary')
     parser.add_argument('--requirements', type=Path, help='Optional historically recorded dependency versions')
     parser.add_argument('--order', required=True)
