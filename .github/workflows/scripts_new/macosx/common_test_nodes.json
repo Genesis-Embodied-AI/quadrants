@@ -521,10 +521,21 @@
     "python/test_data_oriented_ndarray.py::test_data_oriented_attribute_cycle_does_not_recurse_infinitely",
     "python/test_frozen_dc_dispatch_cache.py::test_frozen_dc_unwrapped_cache_populated",
     "python/test_parallel_range_for.py::test_loop_config_block_dim_adaptive",
-    "python/test_template_typing.py::test_template_raise_on_data_oriented_floats"
+    "python/test_template_typing.py::test_template_raise_on_data_oriented_floats",
+    "python/test_runtime.py::test_init_arg[arch=vulkan-verbose-values5]",
+    "python/test_runtime.py::test_init_arg[arch=vulkan-simplify_before_lower_access-values8]",
+    "python/test_runtime.py::test_init_arg[arch=vulkan-simplify_after_lower_access-values9]"
   ],
   "ignored_files": [
     "tests/python/test_per_offload_cache.py",
     "tests/python/test_stable_gtmp_offsets.py"
-  ]
+  ],
+  "compatibility_exclusions": {
+    "reason": "Compiler options removed from the October binary",
+    "cases": [
+      "python/test_runtime.py::test_init_arg[arch=vulkan-verbose-values5]",
+      "python/test_runtime.py::test_init_arg[arch=vulkan-simplify_before_lower_access-values8]",
+      "python/test_runtime.py::test_init_arg[arch=vulkan-simplify_after_lower_access-values9]"
+    ]
+  }
 }
