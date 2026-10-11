@@ -1,7 +1,8 @@
-"""Compare archived binaries on the same unchanged test files and installed dependencies.
+"""Compare archived binaries or test workloads with matched installed dependencies.
 
 The workflow runs old/new and new/old on separate VMs to expose order effects. This is a
 source-version versus environment discriminator, not a bisect or proof that a specific PR is causal.
+Workload mode holds the October binary fixed and compares the common tests with the full October suite.
 """
 import argparse
 import hashlib
@@ -22,8 +23,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('old', 'new', 'old-wheels', 'new-wheels', 'work'):
         parser.add_argument('--' + name, type=Path, required=True)
-    parser.add_argument('--order', choices=('old-new', 'new-old'), required=True)
+    parser.add_argument('--comparison', choices=('binary', 'workload'), default='binary')
+    parser.add_argument('--requirements', type=Path, help='Optional historically recorded dependency versions')
+    parser.add_argument('--order', required=True)
     args = parser.parse_args()
+    expected = {'old', 'new'} if args.comparison == 'binary' else {'common', 'full'}
+    labels = args.order.split('-')
+    if len(labels) != 2 or set(labels) != expected:
+        parser.error(f'--order must contain each of {sorted(expected)} exactly once')
     old, new, work = args.old.resolve(), args.new.resolve(), args.work.resolve()
     output = work / 'output'
     output.mkdir(parents=True, exist_ok=True)
@@ -60,8 +67,11 @@ def main():
         env = work / ('venv-' + label)
         command(['uv', 'venv', '--python', '3.10', '--seed', env])
         pythons[label] = env / 'bin/python'
-    command(['uv', 'pip', 'install', '--python', pythons['old'],
-             '--group', f'{old}/pyproject.toml:test', wheels['old']])
+    install = ['uv', 'pip', 'install', '--python', pythons['old'], '--group', f'{old}/pyproject.toml:test']
+    if args.requirements:
+        install += ['-r', args.requirements.resolve()]
+        (output / 'requested-dependencies.txt').write_text(args.requirements.read_text())
+    command(install + [wheels['old']])
     frozen = subprocess.check_output(['uv', 'pip', 'freeze', '--python', str(pythons['old'])], text=True)
     deps = output / 'dependencies.txt'
     deps.write_text('\n'.join(line for line in frozen.splitlines()
@@ -77,29 +87,32 @@ def main():
     (output / 'wheels.json').write_text(json.dumps(metadata, indent=2) + '\n')
 
     results = []
-    for label in args.order.split('-'):
-        python = pythons[label]
+    for label in labels:
+        binary = label if args.comparison == 'binary' else 'new'
+        test_root = new if label == 'full' else old
+        python = pythons[binary]
         env = dict(os.environ, PATH=f'{python.parent}:{os.environ["PATH"]}', VIRTUAL_ENV=str(python.parent.parent),
                    PYTHONHASHSEED='0', QD_TEST_THREADS='3', QD_FILE_TIMING='1',
                    QD_FILE_TIMING_OUTPUT=str(output / f'{label}-file-timing.md'))
-        options = [f'--ignore={rel}' for rel in ignored]
+        options = [f'--ignore={rel}' for rel in ignored] if label != 'full' else []
         options += [f'--basetemp={work / (label + "-pytest-tmp")}', f'--junitxml={output / (label + ".xml")}']
         env['PYTEST_ADDOPTS'] = shlex.join(options)
         env['QD_LIB_DIR'] = subprocess.check_output(
             [str(python), '-c', 'import quadrants; print(quadrants.__path__[0] + "/_lib/runtime")'],
-            text=True, env=env, cwd=old).splitlines()[-1]
+            text=True, env=env, cwd=test_root).splitlines()[-1]
         invocation = [str(python), 'tests/run_tests.py', '-v', '-r', '1', '--arch', 'vulkan',
                       '-t', '3', '-m', 'not needs_torch']
-        print(f'ARM {label}: {shlex.join(invocation)}', flush=True)
+        print(f'ARM {label}: binary={binary}, tests={test_root}; {shlex.join(invocation)}', flush=True)
         start = time.monotonic()
         with (output / f'{label}.log').open('w') as log:
-            proc = subprocess.Popen(invocation, cwd=old, env=env, stdout=subprocess.PIPE,
+            proc = subprocess.Popen(invocation, cwd=test_root, env=env, stdout=subprocess.PIPE,
                                     stderr=subprocess.STDOUT, text=True, bufsize=1)
             for line in proc.stdout:
                 print(line, end='', flush=True)
                 log.write(line)
             code = proc.wait()
-        results.append(dict(arm=label, seconds=time.monotonic() - start, returncode=code))
+        results.append(dict(arm=label, binary=binary, test_source='new' if test_root == new else 'old',
+                            seconds=time.monotonic() - start, returncode=code))
         (output / 'results.json').write_text(json.dumps(results, indent=2) + '\n')
     print(json.dumps(results, indent=2), flush=True)
     if any(r['returncode'] for r in results):
