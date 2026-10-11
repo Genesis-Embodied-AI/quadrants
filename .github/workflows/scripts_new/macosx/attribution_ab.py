@@ -3,6 +3,7 @@
 The workflow runs old/new and new/old on separate VMs to expose order effects. This is a
 source-version versus environment discriminator, not a bisect or proof that a specific PR is causal.
 Workload mode holds the October binary fixed and compares the common tests with the full October suite.
+Snapshots mode compares the complete matching tests and binary from each historical commit.
 """
 import argparse
 import hashlib
@@ -23,11 +24,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('old', 'new', 'old-wheels', 'new-wheels', 'work'):
         parser.add_argument('--' + name, type=Path, required=True)
-    parser.add_argument('--comparison', choices=('binary', 'workload'), default='binary')
+    parser.add_argument('--comparison', choices=('binary', 'workload', 'snapshots'), default='binary')
     parser.add_argument('--requirements', type=Path, help='Optional historically recorded dependency versions')
     parser.add_argument('--order', required=True)
     args = parser.parse_args()
-    expected = {'old', 'new'} if args.comparison == 'binary' else {'common', 'full'}
+    expected = {'common', 'full'} if args.comparison == 'workload' else {'old', 'new'}
     labels = args.order.split('-')
     if len(labels) != 2 or set(labels) != expected:
         parser.error(f'--order must contain each of {sorted(expected)} exactly once')
@@ -88,13 +89,14 @@ def main():
 
     results = []
     for label in labels:
-        binary = label if args.comparison == 'binary' else 'new'
-        test_root = new if label == 'full' else old
+        binary = 'new' if args.comparison == 'workload' else label
+        test_root = new if label == 'full' or (args.comparison == 'snapshots' and label == 'new') else old
         python = pythons[binary]
         env = dict(os.environ, PATH=f'{python.parent}:{os.environ["PATH"]}', VIRTUAL_ENV=str(python.parent.parent),
                    PYTHONHASHSEED='0', QD_TEST_THREADS='3', QD_FILE_TIMING='1',
                    QD_FILE_TIMING_OUTPUT=str(output / f'{label}-file-timing.md'))
-        options = [f'--ignore={rel}' for rel in ignored] if label != 'full' else []
+        subset = args.comparison == 'binary' or label == 'common'
+        options = [f'--ignore={rel}' for rel in ignored] if subset else []
         options += [f'--basetemp={work / (label + "-pytest-tmp")}', f'--junitxml={output / (label + ".xml")}']
         env['PYTEST_ADDOPTS'] = shlex.join(options)
         env['QD_LIB_DIR'] = subprocess.check_output(
@@ -111,7 +113,8 @@ def main():
                 print(line, end='', flush=True)
                 log.write(line)
             code = proc.wait()
-        results.append(dict(arm=label, binary=binary, test_source='new' if test_root == new else 'old',
+        results.append(dict(arm=label, comparison=args.comparison, binary=binary,
+                            test_source='new' if test_root == new else 'old',
                             seconds=time.monotonic() - start, returncode=code))
         (output / 'results.json').write_text(json.dumps(results, indent=2) + '\n')
     print(json.dumps(results, indent=2), flush=True)

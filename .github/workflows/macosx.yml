@@ -3,9 +3,9 @@ on:
   workflow_dispatch:
     inputs:
       comparison:
-        description: Compare binaries on common tests, or common/full tests on the October binary
+        description: Shared-test binaries, common/full October workloads, or complete historical snapshots
         type: choice
-        options: [binary, workload]
+        options: [binary, workload, snapshots]
         default: binary
 permissions:
   contents: read
@@ -58,7 +58,7 @@ jobs:
           AB_COMPARISON: ${{ inputs.comparison || 'binary' }}
         run: |
           pinned=()
-          if [[ "$AB_COMPARISON" == workload ]]; then
+          if [[ "$AB_COMPARISON" != binary ]]; then
             pinned=(--requirements control/.github/workflows/scripts_new/macosx/october_2026_requirements.txt)
           fi
           python control/.github/workflows/scripts_new/macosx/attribution_ab.py \
