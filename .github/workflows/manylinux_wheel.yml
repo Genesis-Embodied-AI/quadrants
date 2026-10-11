@@ -44,6 +44,8 @@ jobs:
           ls /opt/python/
           df -h
       - name: manylinux wheel prerequisites
+        env:
+          GITLAB_PAT: ${{ secrets.GITLAB_PAT }}
         run: |
           export PATH=/opt/python/${{ matrix.PYTHON_CP_VERSION }}-${{ matrix.PYTHON_CP_VERSION }}/bin:$PATH
           python -V
