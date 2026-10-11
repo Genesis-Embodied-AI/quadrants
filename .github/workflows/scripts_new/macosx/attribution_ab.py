@@ -24,13 +24,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('old', 'new', 'old-wheels', 'new-wheels', 'work'):
         parser.add_argument('--' + name, type=Path, required=True)
-    parser.add_argument('--comparison', choices=('binary', 'workload', 'snapshots'), default='binary')
+    parser.add_argument('--comparison', choices=('binary', 'workload', 'snapshots', 'gc-profile'), default='binary')
     parser.add_argument('--requirements', type=Path, help='Optional historically recorded dependency versions')
     parser.add_argument('--order', required=True)
     args = parser.parse_args()
     expected = {'common', 'full'} if args.comparison == 'workload' else {'old', 'new'}
+    if args.comparison == 'gc-profile':
+        expected = {'new'}
     labels = args.order.split('-')
-    if len(labels) != 2 or set(labels) != expected:
+    if len(labels) != len(expected) or set(labels) != expected:
         parser.error(f'--order must contain each of {sorted(expected)} exactly once')
     old, new, work = args.old.resolve(), args.new.resolve(), args.work.resolve()
     output = work / 'output'
@@ -90,7 +92,7 @@ def main():
     results = []
     for label in labels:
         binary = 'new' if args.comparison == 'workload' else label
-        test_root = new if label == 'full' or (args.comparison == 'snapshots' and label == 'new') else old
+        test_root = new if label == 'full' or (args.comparison in ('snapshots', 'gc-profile') and label == 'new') else old
         python = pythons[binary]
         env = dict(os.environ, PATH=f'{python.parent}:{os.environ["PATH"]}', VIRTUAL_ENV=str(python.parent.parent),
                    PYTHONHASHSEED='0', QD_TEST_THREADS='3', QD_FILE_TIMING='1',
@@ -98,6 +100,10 @@ def main():
         subset = args.comparison == 'binary' or label == 'common'
         options = [f'--ignore={rel}' for rel in ignored] if subset else []
         options += [f'--basetemp={work / (label + "-pytest-tmp")}', f'--junitxml={output / (label + ".xml")}']
+        if args.comparison == 'gc-profile':
+            options += ['-p', 'gc_profile']
+            env['PYTHONPATH'] = str(Path(__file__).resolve().parent) + os.pathsep + env.get('PYTHONPATH', '')
+            env['QD_GC_PROFILE_DIR'] = str(output)
         env['PYTEST_ADDOPTS'] = shlex.join(options)
         env['QD_LIB_DIR'] = subprocess.check_output(
             [str(python), '-c', 'import quadrants; print(quadrants.__path__[0] + "/_lib/runtime")'],

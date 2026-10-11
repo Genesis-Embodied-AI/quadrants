@@ -5,7 +5,7 @@ on:
       comparison:
         description: Shared-test binaries, common/full October workloads, or complete historical snapshots
         type: choice
-        options: [binary, workload, snapshots]
+        options: [binary, workload, snapshots, gc-profile]
         default: binary
 permissions:
   contents: read
@@ -19,7 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         order: >-
-          ${{ fromJSON(inputs.comparison == 'workload' &&
+          ${{ fromJSON(inputs.comparison == 'gc-profile' && '["new"]' || inputs.comparison == 'workload' &&
           '["common-full","full-common"]' || '["old-new","new-old"]') }}
     steps:
       - uses: actions/checkout@v4
