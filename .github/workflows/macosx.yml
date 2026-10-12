@@ -14,6 +14,7 @@ on:
           - dataclass-ablation
           - pydantic
           - process-batches
+          - process-batches-candidate
           - owner-guard
           - owner-guard-candidate
           - gc-freeze-candidate
@@ -30,7 +31,8 @@ jobs:
       fail-fast: false
       matrix:
         order: >-
-          ${{ fromJSON(inputs.comparison == 'gc-freeze-candidate' && '["frozen"]' ||
+          ${{ fromJSON(inputs.comparison == 'process-batches-candidate' && '["batched"]' ||
+          inputs.comparison == 'gc-freeze-candidate' && '["frozen"]' ||
           inputs.comparison == 'owner-guard-candidate' && '["guarded"]' ||
           inputs.comparison == 'owner-guard' && '["guarded-full","full-guarded"]' ||
           inputs.comparison == 'process-batches' && '["batched-full","full-batched"]' ||
@@ -69,7 +71,7 @@ jobs:
           github-token: ${{ github.token }}
           path: wheels-new
       - name: Download completed full-suite coverage reference
-        if: inputs.comparison == 'owner-guard-candidate' || inputs.comparison == 'gc-freeze-candidate'
+        if: endsWith(inputs.comparison, '-candidate')
         uses: actions/download-artifact@v4
         with:
           name: vulkan-attribution-full-pruned
@@ -85,7 +87,7 @@ jobs:
           if [[ "$AB_COMPARISON" != binary ]]; then
             pinned=(--requirements control/.github/workflows/scripts_new/macosx/october_2026_requirements.txt)
           fi
-          if [[ "$AB_COMPARISON" == owner-guard-candidate || "$AB_COMPARISON" == gc-freeze-candidate ]]; then
+          if [[ "$AB_COMPARISON" == *-candidate ]]; then
             pinned+=(--reference reference)
           fi
           python control/.github/workflows/scripts_new/macosx/attribution_ab.py \

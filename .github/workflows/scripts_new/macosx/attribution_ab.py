@@ -35,17 +35,17 @@ def main():
     parser.add_argument('--comparison',
                         choices=('binary', 'expanded-binary', 'workload', 'snapshots', 'gc-profile',
                                  'dataclass-ablation', 'pydantic', 'process-batches', 'owner-guard',
-                                 'owner-guard-candidate', 'gc-freeze-candidate'),
+                                 'owner-guard-candidate', 'gc-freeze-candidate', 'process-batches-candidate'),
                         default='binary')
     parser.add_argument('--requirements', type=Path, help='Optional historically recorded dependency versions')
     parser.add_argument('--reference', type=Path, help='Completed full-suite artifact for candidate coverage checks')
     parser.add_argument('--order', required=True)
     args = parser.parse_args()
-    candidate_only = args.comparison in ('owner-guard-candidate', 'gc-freeze-candidate')
+    candidate_only = args.comparison in ('owner-guard-candidate', 'gc-freeze-candidate', 'process-batches-candidate')
     if candidate_only:
         if not args.reference or not args.requirements:
             parser.error('Candidate-only mode requires a completed reference artifact and historical dependency pins')
-        args.comparison = 'owner-guard' if args.comparison == 'owner-guard-candidate' else 'gc-freeze'
+        args.comparison = args.comparison.removesuffix('-candidate')
     if args.comparison == 'pydantic' and not args.requirements:
         parser.error('Pydantic comparison requires the historical October dependency pins.')
     expected = {'common', 'full'} if args.comparison == 'workload' else {'old', 'new'}
@@ -54,7 +54,7 @@ def main():
     if args.comparison == 'dataclass-ablation':
         expected = {'pruned', 'full'}
     if args.comparison == 'process-batches':
-        expected = {'full', 'batched'}
+        expected = {'batched'} if candidate_only else {'full', 'batched'}
     if args.comparison == 'owner-guard':
         expected = {'guarded'} if candidate_only else {'full', 'guarded'}
     if args.comparison == 'gc-freeze':
