@@ -1,11 +1,15 @@
 """Direct MoltenVK device creation/destruction, without Quadrants runtime allocations or shaders.
 
 Vulkan 1.0 ABI layouts follow Khronos Vulkan-Headers v1.3.290/include/vulkan/vulkan_core.h.
-One instance/physical device survives the loop. Each iteration creates one compute queue/device, optionally allocates two device-local buffers and fills them,
+One instance/physical device survives the loop. Each iteration creates one compute queue/device, optionally
+allocates two device-local buffers and fills them,
 waits idle, and destroys its resources/device. Host modes bind two four-byte buffers into one shared allocation,
 map/write/unmap, fill on GPU, use a transfer-to-host barrier, wait, and verify mapped readback. The shared allocation
 is 32MiB in host mode and at least one 16KiB page in host-small. Private/private-small use the same sizes and
-bindings with device-local memory, GPU fills, and no host mapping or readback. No application shader or pipeline is created. The caller owns the surrounding retained-graph/GC diagnostic and closes the instance.
+bindings with device-local memory, GPU fills, and no host mapping or readback. The private-bda variants request
+Vulkan 1.2, enable bufferDeviceAddress, add matching allocation/usage flags and query nonzero buffer addresses.
+No application shader or pipeline is created. The caller owns the surrounding retained-graph/GC diagnostic and
+closes the instance.
 """
 
 import ctypes as C
@@ -65,6 +69,20 @@ class DeviceInfo(C.Structure):
     ]
 
 
+class BufferAddressFeatures(C.Structure):
+    _fields_ = [
+        ("sType", U32),
+        ("pNext", Ptr),
+        ("bufferDeviceAddress", U32),
+        ("bufferDeviceAddressCaptureReplay", U32),
+        ("bufferDeviceAddressMultiDevice", U32),
+    ]
+
+
+class Features2(C.Structure):
+    _fields_ = [("sType", U32), ("pNext", Ptr), ("features", U32 * 55)]
+
+
 class Extension(C.Structure):
     _fields_ = [("extensionName", C.c_char * 256), ("specVersion", U32)]
 
@@ -119,6 +137,14 @@ class AllocateInfo(C.Structure):
     _fields_ = [("sType", U32), ("pNext", Ptr), ("allocationSize", U64), ("memoryTypeIndex", U32)]
 
 
+class AllocateFlags(C.Structure):
+    _fields_ = [("sType", U32), ("pNext", Ptr), ("flags", U32), ("deviceMask", U32)]
+
+
+class BufferAddressInfo(C.Structure):
+    _fields_ = [("sType", U32), ("pNext", Ptr), ("buffer", U64)]
+
+
 class PoolInfo(C.Structure):
     _fields_ = [("sType", U32), ("pNext", Ptr), ("flags", U32), ("queueFamilyIndex", U32)]
 
@@ -156,8 +182,19 @@ def check(result, name):
 
 class RawVulkanDevice:
     def __init__(self, library_path, work="device"):
-        assert work in ("device", "buffers", "fill", "host", "host-small", "private", "private-small")
+        assert work in (
+            "device",
+            "buffers",
+            "fill",
+            "host",
+            "host-small",
+            "private",
+            "private-small",
+            "private-bda",
+            "private-bda-small",
+        )
         self.work = work
+        self.address_enabled = "-bda" in work
         self.buffer_records = []
         assert C.sizeof(Ptr) == 8
         self.library = C.CDLL(str(library_path))
@@ -172,7 +209,11 @@ class RawVulkanDevice:
             names = self.extension_names(enumerate_extensions, None)
             portability = b"VK_KHR_portability_enumeration"
             enabled = (C.c_char_p * 1)(portability) if portability in names else None
-            application = Application(sType=0, pApplicationName=b"raw-device-cycle-control", apiVersion=1 << 22)
+            application = Application(
+                sType=0,
+                pApplicationName=b"raw-device-cycle-control",
+                apiVersion=(1 << 22) | ((2 << 12) if self.address_enabled else 0),
+            )
             info = InstanceInfo(
                 sType=1,
                 flags=1 if enabled is not None else 0,
@@ -207,6 +248,15 @@ class RawVulkanDevice:
             self.create_device = self.bind("vkCreateDevice", C.c_int32, Ptr, C.POINTER(DeviceInfo), Ptr, C.POINTER(Ptr))
             self.destroy_device = self.bind("vkDestroyDevice", None, Ptr, Ptr)
             self.wait_idle = self.bind("vkDeviceWaitIdle", C.c_int32, Ptr)
+            if self.address_enabled:
+                queried = BufferAddressFeatures(sType=1000257000)
+                features = Features2(sType=1000059000, pNext=C.cast(C.pointer(queried), Ptr))
+                self.bind("vkGetPhysicalDeviceFeatures2", None, Ptr, C.POINTER(Features2))(
+                    self.physical, C.byref(features)
+                )
+                assert queried.bufferDeviceAddress, "bufferDeviceAddress not supported"
+                self.address_features = BufferAddressFeatures(sType=1000257000, bufferDeviceAddress=1)
+                self.buffer_address = self.bind("vkGetBufferDeviceAddress", U64, Ptr, C.POINTER(BufferAddressInfo))
             if self.work != "device":
                 self.bind_buffer_functions()
             self.metadata = dict(
@@ -215,7 +265,8 @@ class RawVulkanDevice:
                 queue_family=self.queue_index,
                 instance_portability_enabled=enabled is not None,
                 device_portability_enabled=self.extensions is not None,
-                api_version="1.0",
+                api_version="1.2" if self.address_enabled else "1.0",
+                buffer_device_address_enabled=self.address_enabled,
                 work=self.work,
                 application_buffer_bytes=(
                     []
@@ -249,6 +300,7 @@ class RawVulkanDevice:
         )
         info = DeviceInfo(
             sType=3,
+            pNext=C.cast(C.pointer(self.address_features), Ptr) if self.address_enabled else None,
             queueCreateInfoCount=1,
             pQueueCreateInfos=C.pointer(queue),
             enabledExtensionCount=1 if self.extensions is not None else 0,
@@ -279,7 +331,7 @@ class RawVulkanDevice:
         )
         self.free_memory = self.bind("vkFreeMemory", None, Ptr, U64, Ptr)
         self.bind_memory = self.bind("vkBindBufferMemory", C.c_int32, Ptr, U64, U64, U64)
-        if self.work in ("fill", "host", "host-small", "private", "private-small"):
+        if self.work == "fill" or self.work.startswith(("host", "private")):
             self.create_pool = self.bind(
                 "vkCreateCommandPool", C.c_int32, Ptr, C.POINTER(PoolInfo), Ptr, C.POINTER(U64)
             )
@@ -320,7 +372,7 @@ class RawVulkanDevice:
         try:
             for _ in range(2):
                 buffer = U64()
-                info = BufferInfo(sType=12, size=4, usage=0x33)
+                info = BufferInfo(sType=12, size=4, usage=0x20033 if self.address_enabled else 0x33)
                 check(self.create_buffer(device, C.byref(info), None, C.byref(buffer)), "vkCreateBuffer(shared)")
                 buffers.append(buffer)
                 requirement = MemoryRequirements()
@@ -338,7 +390,13 @@ class RawVulkanDevice:
                 for i in range(self.memory.memoryTypeCount)
                 if bits & (1 << i) and self.memory.memoryTypes[i].propertyFlags & required_flags == required_flags
             )
-            info = AllocateInfo(sType=5, allocationSize=allocation_size, memoryTypeIndex=memory_type)
+            address_flags = AllocateFlags(sType=1000060000, flags=2)
+            info = AllocateInfo(
+                sType=5,
+                allocationSize=allocation_size,
+                memoryTypeIndex=memory_type,
+                pNext=C.cast(C.pointer(address_flags), Ptr) if self.address_enabled else None,
+            )
             check(self.allocate_memory(device, C.byref(info), None, C.byref(memory)), "vkAllocateMemory(shared)")
             offsets = (0, offset)
             for buffer, binding_offset in zip(buffers, offsets):
@@ -356,6 +414,14 @@ class RawVulkanDevice:
                     )
                     for binding_offset in offsets
                 )
+            if self.address_enabled:
+                for buffer in buffers:
+                    address_info = BufferAddressInfo(sType=1000244001, buffer=buffer)
+                    assert self.buffer_address(device, C.byref(address_info)), "vkGetBufferDeviceAddress returned zero"
+                for record in self.buffer_records:
+                    record["buffer_address_verified_nonzero"] = True
+                    record["memory_allocate_flags"] = 2
+                    record["buffer_usage"] = 0x20033
             if host_access:
                 check(self.map_memory(device, memory, 0, (1 << 64) - 1, 0, C.byref(mapped)), "vkMapMemory(write)")
                 assert mapped.value
