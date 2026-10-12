@@ -92,6 +92,7 @@ class NativeMetalHeap:
             work=work,
             library_sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
             api="Metal",
+            validation_environment={key: os.environ.get(key) for key in ("MTL_DEBUG_LAYER", "MTL_SHADER_VALIDATION")},
             application_shaders=0,
             probe_compute_shaders=1 if self.runtime else 0,
             runtime_pattern=self.runtime,
