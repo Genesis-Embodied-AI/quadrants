@@ -59,6 +59,7 @@ def _measure(item, phase):
     if _stream is None:
         yield
         return
+    previous_node, previous_phase = _node, _phase
     _node, _phase = item.nodeid, phase
     wall, cpu = time.perf_counter(), time.process_time()
     try:
@@ -66,6 +67,7 @@ def _measure(item, phase):
     finally:
         _write(dict(kind='phase', wall_seconds=time.perf_counter() - wall,
                     cpu_seconds=time.process_time() - cpu))
+        _node, _phase = previous_node, previous_phase
 
 
 @pytest.hookimpl(hookwrapper=True)

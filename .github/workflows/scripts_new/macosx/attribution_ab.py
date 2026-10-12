@@ -35,17 +35,17 @@ def main():
     parser.add_argument('--comparison',
                         choices=('binary', 'expanded-binary', 'workload', 'snapshots', 'gc-profile',
                                  'dataclass-ablation', 'pydantic', 'process-batches', 'owner-guard',
-                                 'owner-guard-candidate'),
+                                 'owner-guard-candidate', 'gc-freeze-candidate'),
                         default='binary')
     parser.add_argument('--requirements', type=Path, help='Optional historically recorded dependency versions')
     parser.add_argument('--reference', type=Path, help='Completed full-suite artifact for candidate coverage checks')
     parser.add_argument('--order', required=True)
     args = parser.parse_args()
-    candidate_only = args.comparison == 'owner-guard-candidate'
+    candidate_only = args.comparison in ('owner-guard-candidate', 'gc-freeze-candidate')
     if candidate_only:
         if not args.reference or not args.requirements:
             parser.error('Candidate-only mode requires a completed reference artifact and historical dependency pins')
-        args.comparison = 'owner-guard'
+        args.comparison = 'owner-guard' if args.comparison == 'owner-guard-candidate' else 'gc-freeze'
     if args.comparison == 'pydantic' and not args.requirements:
         parser.error('Pydantic comparison requires the historical October dependency pins.')
     expected = {'common', 'full'} if args.comparison == 'workload' else {'old', 'new'}
@@ -57,6 +57,8 @@ def main():
         expected = {'full', 'batched'}
     if args.comparison == 'owner-guard':
         expected = {'guarded'} if candidate_only else {'full', 'guarded'}
+    if args.comparison == 'gc-freeze':
+        expected = {'frozen'}
     labels = args.order.split('-')
     if len(labels) != len(expected) or set(labels) != expected:
         parser.error(f'--order must contain each of {sorted(expected)} exactly once')
@@ -183,11 +185,11 @@ def main():
     results = []
     for label in labels:
         fixed_binary = args.comparison in (
-            'workload', 'dataclass-ablation', 'pydantic', 'process-batches', 'owner-guard')
+            'workload', 'dataclass-ablation', 'pydantic', 'process-batches', 'owner-guard', 'gc-freeze')
         binary = 'new' if fixed_binary else label
         test_root = (new if label == 'full' or
                      (args.comparison in ('snapshots', 'gc-profile') and label == 'new') else old)
-        if args.comparison in ('dataclass-ablation', 'pydantic', 'process-batches', 'owner-guard'):
+        if args.comparison in ('dataclass-ablation', 'pydantic', 'process-batches', 'owner-guard', 'gc-freeze'):
             test_root = new
         python = pythons[label] if args.comparison == 'pydantic' else pythons[binary]
         env = dict(os.environ, PATH=f'{python.parent}:{os.environ["PATH"]}', VIRTUAL_ENV=str(python.parent.parent),
@@ -201,12 +203,14 @@ def main():
         if args.comparison == 'dataclass-ablation' and label == 'pruned':
             options += [f'--deselect={nodeid}' for nodeid in deselected]
         options += [f'--basetemp={work / (label + "-pytest-tmp")}', f'--junitxml={output / (label + ".xml")}']
-        if args.comparison in ('gc-profile', 'process-batches', 'owner-guard'):
+        if args.comparison in ('gc-profile', 'process-batches', 'owner-guard', 'gc-freeze'):
             options += ['-p', 'gc_profile']
             env['PYTHONPATH'] = str(Path(__file__).resolve().parent) + os.pathsep + env.get('PYTHONPATH', '')
             env['QD_GC_PROFILE_DIR'] = str(output if args.comparison == 'gc-profile' else output / (label + '-gc'))
         if label == 'guarded':
             options += ['-p', 'ndarray_owner_guard']
+        if label == 'frozen':
+            options += ['-p', 'gc_freeze_baseline']
         env['PYTEST_ADDOPTS'] = shlex.join(options)
         env['QD_LIB_DIR'] = subprocess.check_output(
             [str(python), '-c', 'import quadrants; print(quadrants.__path__[0] + "/_lib/runtime")'],
@@ -241,10 +245,10 @@ def main():
         from process_batches import verify_coverage
 
         verify_coverage(output)
-    if args.comparison == 'owner-guard':
+    if args.comparison in ('owner-guard', 'gc-freeze'):
         from process_batches import verify_coverage
 
-        verify_coverage(output, 'guarded')
+        verify_coverage(output, 'frozen' if args.comparison == 'gc-freeze' else 'guarded')
     if any(r['returncode'] for r in results):
         raise SystemExit('An arm failed: inspect logs and test counts before interpreting durations.')
 
