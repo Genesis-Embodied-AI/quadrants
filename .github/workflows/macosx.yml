@@ -52,6 +52,11 @@ on:
         description: Direct MoltenVK device churn without Quadrants Vulkan runtime buffers or shaders
         type: boolean
         default: false
+      raw_device_work:
+        description: Direct Vulkan control resource and command work (requires raw_device_cycles)
+        type: choice
+        options: [device, buffers, fill]
+        default: device
       skip_target_kernel:
         description: Initialize/reset the target backend without a kernel call
         type: boolean
@@ -145,6 +150,7 @@ jobs:
           QD_CYCLE_RECOVERY: ${{ inputs.recovery_on_slow_gc && '1' || '0' }}
           QD_CYCLE_SKIP_TARGET_KERNEL: ${{ inputs.skip_target_kernel && '1' || '0' }}
           QD_CYCLE_RAW_DEVICE: ${{ inputs.raw_device_cycles && '1' || '0' }}
+          QD_RAW_DEVICE_WORK: ${{ inputs.raw_device_work || 'device' }}
           QD_CYCLE_TARGET: ${{ inputs.cycle_backend || 'vulkan' }}
           QD_CYCLE_VULKAN_COUNT: ${{ inputs.vulkan_cycles || 300 }}
           AB_ORDER: ${{ matrix.order }}

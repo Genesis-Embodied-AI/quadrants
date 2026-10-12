@@ -1,8 +1,8 @@
 """Direct MoltenVK device creation/destruction, without Quadrants runtime allocations or shaders.
 
 Vulkan 1.0 ABI layouts follow Khronos Vulkan-Headers v1.3.290/include/vulkan/vulkan_core.h.
-One instance/physical device survives the loop. Each iteration creates one compute queue/device, waits idle,
-and destroys the device. The caller owns the surrounding retained-graph/GC diagnostic and closes the instance.
+One instance/physical device survives the loop. Each iteration creates one compute queue/device, optionally allocates two device-local buffers and fills them,
+waits idle, and destroys its resources/device. No application shader or pipeline is created. The caller owns the surrounding retained-graph/GC diagnostic and closes the instance.
 """
 
 import ctypes as C
@@ -75,13 +75,83 @@ class QueueProperties(C.Structure):
     ]
 
 
+U64 = C.c_uint64
+
+
+class MemoryType(C.Structure):
+    _fields_ = [("propertyFlags", U32), ("heapIndex", U32)]
+
+
+class MemoryHeap(C.Structure):
+    _fields_ = [("size", U64), ("flags", U32)]
+
+
+class MemoryProperties(C.Structure):
+    _fields_ = [
+        ("memoryTypeCount", U32),
+        ("memoryTypes", MemoryType * 32),
+        ("memoryHeapCount", U32),
+        ("memoryHeaps", MemoryHeap * 16),
+    ]
+
+
+class BufferInfo(C.Structure):
+    _fields_ = [
+        ("sType", U32),
+        ("pNext", Ptr),
+        ("flags", U32),
+        ("size", U64),
+        ("usage", U32),
+        ("sharingMode", U32),
+        ("queueFamilyIndexCount", U32),
+        ("pQueueFamilyIndices", C.POINTER(U32)),
+    ]
+
+
+class MemoryRequirements(C.Structure):
+    _fields_ = [("size", U64), ("alignment", U64), ("memoryTypeBits", U32)]
+
+
+class AllocateInfo(C.Structure):
+    _fields_ = [("sType", U32), ("pNext", Ptr), ("allocationSize", U64), ("memoryTypeIndex", U32)]
+
+
+class PoolInfo(C.Structure):
+    _fields_ = [("sType", U32), ("pNext", Ptr), ("flags", U32), ("queueFamilyIndex", U32)]
+
+
+class CommandAllocateInfo(C.Structure):
+    _fields_ = [("sType", U32), ("pNext", Ptr), ("commandPool", U64), ("level", U32), ("commandBufferCount", U32)]
+
+
+class BeginInfo(C.Structure):
+    _fields_ = [("sType", U32), ("pNext", Ptr), ("flags", U32), ("pInheritanceInfo", Ptr)]
+
+
+class SubmitInfo(C.Structure):
+    _fields_ = [
+        ("sType", U32),
+        ("pNext", Ptr),
+        ("waitSemaphoreCount", U32),
+        ("pWaitSemaphores", C.POINTER(U64)),
+        ("pWaitDstStageMask", C.POINTER(U32)),
+        ("commandBufferCount", U32),
+        ("pCommandBuffers", C.POINTER(Ptr)),
+        ("signalSemaphoreCount", U32),
+        ("pSignalSemaphores", C.POINTER(U64)),
+    ]
+
+
 def check(result, name):
     if result != 0:
         raise RuntimeError(f"{name}: VkResult {result}")
 
 
 class RawVulkanDevice:
-    def __init__(self, library_path):
+    def __init__(self, library_path, work="device"):
+        assert work in ("device", "buffers", "fill")
+        self.work = work
+        self.buffer_records = []
         assert C.sizeof(Ptr) == 8
         self.library = C.CDLL(str(library_path))
         self.get_proc = self.library.vkGetInstanceProcAddr
@@ -130,6 +200,8 @@ class RawVulkanDevice:
             self.create_device = self.bind("vkCreateDevice", C.c_int32, Ptr, C.POINTER(DeviceInfo), Ptr, C.POINTER(Ptr))
             self.destroy_device = self.bind("vkDestroyDevice", None, Ptr, Ptr)
             self.wait_idle = self.bind("vkDeviceWaitIdle", C.c_int32, Ptr)
+            if self.work != "device":
+                self.bind_buffer_functions()
             self.metadata = dict(
                 library_sha256=hashlib.sha256(library_path.read_bytes()).hexdigest(),
                 physical_devices=physical_count,
@@ -137,7 +209,8 @@ class RawVulkanDevice:
                 instance_portability_enabled=enabled is not None,
                 device_portability_enabled=self.extensions is not None,
                 api_version="1.0",
-                application_buffers=0,
+                work=self.work,
+                application_buffer_bytes=[] if self.work == "device" else [1 << 20, 32 << 20],
                 application_shaders=0,
             )
         except BaseException:
@@ -173,9 +246,98 @@ class RawVulkanDevice:
         device = Ptr()
         check(self.create_device(self.physical, C.byref(info), None, C.byref(device)), "vkCreateDevice")
         try:
+            if self.work != "device":
+                self.buffer_cycle(device)
             check(self.wait_idle(device), "vkDeviceWaitIdle")
         finally:
             self.destroy_device(device, None)
+
+    def bind_buffer_functions(self):
+        self.memory = MemoryProperties()
+        self.bind("vkGetPhysicalDeviceMemoryProperties", None, Ptr, C.POINTER(MemoryProperties))(
+            self.physical, C.byref(self.memory)
+        )
+        assert 0 < self.memory.memoryTypeCount <= 32 and 0 < self.memory.memoryHeapCount <= 16
+        self.create_buffer = self.bind("vkCreateBuffer", C.c_int32, Ptr, C.POINTER(BufferInfo), Ptr, C.POINTER(U64))
+        self.destroy_buffer = self.bind("vkDestroyBuffer", None, Ptr, U64, Ptr)
+        self.requirements = self.bind("vkGetBufferMemoryRequirements", None, Ptr, U64, C.POINTER(MemoryRequirements))
+        self.allocate_memory = self.bind(
+            "vkAllocateMemory", C.c_int32, Ptr, C.POINTER(AllocateInfo), Ptr, C.POINTER(U64)
+        )
+        self.free_memory = self.bind("vkFreeMemory", None, Ptr, U64, Ptr)
+        self.bind_memory = self.bind("vkBindBufferMemory", C.c_int32, Ptr, U64, U64, U64)
+        if self.work == "fill":
+            self.create_pool = self.bind(
+                "vkCreateCommandPool", C.c_int32, Ptr, C.POINTER(PoolInfo), Ptr, C.POINTER(U64)
+            )
+            self.destroy_pool = self.bind("vkDestroyCommandPool", None, Ptr, U64, Ptr)
+            self.allocate_commands = self.bind(
+                "vkAllocateCommandBuffers", C.c_int32, Ptr, C.POINTER(CommandAllocateInfo), C.POINTER(Ptr)
+            )
+            self.begin_commands = self.bind("vkBeginCommandBuffer", C.c_int32, Ptr, C.POINTER(BeginInfo))
+            self.end_commands = self.bind("vkEndCommandBuffer", C.c_int32, Ptr)
+            self.fill_buffer = self.bind("vkCmdFillBuffer", None, Ptr, U64, U64, U64, U32)
+            self.get_queue = self.bind("vkGetDeviceQueue", None, Ptr, U32, U32, C.POINTER(Ptr))
+            self.submit = self.bind("vkQueueSubmit", C.c_int32, Ptr, U32, C.POINTER(SubmitInfo), U64)
+            self.queue_wait = self.bind("vkQueueWaitIdle", C.c_int32, Ptr)
+
+    def buffer_cycle(self, device):
+        allocations = []
+        try:
+            for size in (1 << 20, 32 << 20):
+                buffer, memory = U64(), U64()
+                info = BufferInfo(sType=12, size=size, usage=0x22)
+                check(self.create_buffer(device, C.byref(info), None, C.byref(buffer)), "vkCreateBuffer")
+                allocations.append((buffer, memory))
+                requirements = MemoryRequirements()
+                self.requirements(device, buffer, C.byref(requirements))
+                memory_type = next(
+                    i
+                    for i in range(self.memory.memoryTypeCount)
+                    if requirements.memoryTypeBits & (1 << i) and self.memory.memoryTypes[i].propertyFlags & 1
+                )
+                if len(self.buffer_records) < 2:
+                    self.buffer_records.append(
+                        dict(
+                            requested_bytes=size,
+                            allocation_bytes=requirements.size,
+                            memory_type_bits=requirements.memoryTypeBits,
+                            memory_type_index=memory_type,
+                            property_flags=self.memory.memoryTypes[memory_type].propertyFlags,
+                        )
+                    )
+                allocation = AllocateInfo(sType=5, allocationSize=requirements.size, memoryTypeIndex=memory_type)
+                check(self.allocate_memory(device, C.byref(allocation), None, C.byref(memory)), "vkAllocateMemory")
+                check(self.bind_memory(device, buffer, memory, 0), "vkBindBufferMemory")
+            if self.work == "fill":
+                self.fill_cycle(device, allocations)
+        finally:
+            for buffer, memory in reversed(allocations):
+                self.destroy_buffer(device, buffer, None)
+                if memory.value:
+                    self.free_memory(device, memory, None)
+
+    def fill_cycle(self, device, allocations):
+        pool = U64()
+        info = PoolInfo(sType=39, flags=1, queueFamilyIndex=self.queue_index)
+        check(self.create_pool(device, C.byref(info), None, C.byref(pool)), "vkCreateCommandPool")
+        try:
+            command = Ptr()
+            allocate = CommandAllocateInfo(sType=40, commandPool=pool.value, level=0, commandBufferCount=1)
+            check(self.allocate_commands(device, C.byref(allocate), C.byref(command)), "vkAllocateCommandBuffers")
+            begin = BeginInfo(sType=42, flags=1)
+            check(self.begin_commands(command, C.byref(begin)), "vkBeginCommandBuffer")
+            for buffer, _ in allocations:
+                self.fill_buffer(command, buffer, 0, (1 << 64) - 1, 0)
+            check(self.end_commands(command), "vkEndCommandBuffer")
+            queue = Ptr()
+            self.get_queue(device, self.queue_index, 0, C.byref(queue))
+            assert queue.value
+            submit = SubmitInfo(sType=4, commandBufferCount=1, pCommandBuffers=C.pointer(command))
+            check(self.submit(queue, 1, C.byref(submit), 0), "vkQueueSubmit")
+            check(self.queue_wait(queue), "vkQueueWaitIdle")
+        finally:
+            self.destroy_pool(device, pool, None)
 
     def close(self):
         if self.instance and self.destroy_instance:

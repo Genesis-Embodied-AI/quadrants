@@ -151,7 +151,10 @@ def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_bac
                 if raw_device_cycles and stage == middle_stage:
                     from raw_vulkan_device import RawVulkanDevice
 
-                    raw_device = RawVulkanDevice(Path(qd.__file__).parent / "_lib/runtime/libMoltenVK.dylib")
+                    raw_device = RawVulkanDevice(
+                        Path(qd.__file__).parent / "_lib/runtime/libMoltenVK.dylib",
+                        work=os.environ.get("QD_RAW_DEVICE_WORK", "device"),
+                    )
                     write(dict(kind="raw_device_setup", **raw_device.metadata))
                 if allocation:
                     qd.init(arch=active_backend, enable_fallback=False, offline_cache=False, cpu_max_num_threads=1)
@@ -166,6 +169,8 @@ def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_bac
                             del array
                     elif raw_device_cycles and stage == middle_stage:
                         raw_device.cycle()
+                        if cycle == 0:
+                            write(dict(kind="raw_device_buffers", allocations=raw_device.buffer_records))
                     else:
                         qd.init(arch=backend, enable_fallback=False, offline_cache=False, cpu_max_num_threads=1)
                         assert impl.current_cfg().arch == backend
