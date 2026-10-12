@@ -91,6 +91,66 @@ static PyObject *cold(PyObject *self, PyObject *unused) {
                          "counter_status", counter_status[0], counter_status[1], counter_status[2]);
 }
 
+/* A fixed private graph independent of Python objects and Vulkan. Retained for this process lifetime. */
+typedef struct MemoryNode {
+    struct MemoryNode *volatile next;
+    unsigned char padding[64 - sizeof(void *)];
+} MemoryNode;
+_Static_assert(sizeof(MemoryNode) == 64, "Control nodes must have a fixed stride");
+static MemoryNode *memory_nodes = NULL, *memory_head = NULL, *memory_expected = NULL;
+
+static PyObject *memory_control(PyObject *self, PyObject *unused) {
+    const uint32_t count = 1u << 20, visits = 1u << 18;
+    if (!memory_nodes) {
+        MemoryNode *nodes = PyMem_RawMalloc((size_t)count * sizeof(MemoryNode));
+        uint32_t *order = PyMem_RawMalloc((size_t)count * sizeof(uint32_t));
+        if (!nodes || !order) {
+            PyMem_RawFree(nodes);
+            PyMem_RawFree(order);
+            return PyErr_NoMemory();
+        }
+        for (uint32_t i = 0; i < count; i++) order[i] = i;
+        uint64_t state = 42;
+        for (uint32_t i = count - 1; i > 0; i--) {
+            state = state * UINT64_C(6364136223846793005) + 1;
+            uint32_t j = (uint32_t)(state >> 32) % (i + 1);
+            uint32_t temporary = order[i];
+            order[i] = order[j];
+            order[j] = temporary;
+        }
+        for (uint32_t i = 0; i < count; i++) nodes[order[i]].next = &nodes[order[(i + 1) % count]];
+        memory_nodes = nodes;
+        memory_head = &nodes[order[0]];
+        memory_expected = &nodes[order[visits]];
+        PyMem_RawFree(order);
+    }
+    double wall[4], cpu[4];
+    uint64_t checksums[2];
+    for (int pass = 0; pass < 4; pass++) {
+        double w = now(CLOCK_MONOTONIC), c = now(CLOCK_THREAD_CPUTIME_ID);
+        if (pass == 0 || pass == 3) {
+            checksums[pass / 3] = arithmetic();
+        } else {
+            MemoryNode *node = memory_head;
+            for (uint32_t i = 0; i < visits; i++) node = node->next;
+            if (node != memory_expected) {
+                PyErr_SetString(PyExc_RuntimeError, "Fixed memory control checksum mismatch");
+                return NULL;
+            }
+        }
+        cpu[pass] = now(CLOCK_THREAD_CPUTIME_ID) - c;
+        wall[pass] = now(CLOCK_MONOTONIC) - w;
+    }
+    if (checksums[0] != checksums[1]) {
+        PyErr_SetString(PyExc_RuntimeError, "Memory-control arithmetic checksum mismatch");
+        return NULL;
+    }
+    return Py_BuildValue("{s:i,s:i,s:i,s:(dddd),s:(dddd)}", "nodes", (int)count,
+                         "visits", (int)visits, "bytes", (int)(count * sizeof(MemoryNode)),
+                         "wall_seconds", wall[0], wall[1], wall[2], wall[3],
+                         "thread_cpu_seconds", cpu[0], cpu[1], cpu[2], cpu[3]);
+}
+
 static PyObject *measure(PyObject *self, PyObject *objects) {
     if (!PyList_CheckExact(objects) || !PyList_GET_SIZE(objects)) {
         PyErr_SetString(PyExc_ValueError, "Expected a nonempty gc.get_objects(2) list");
@@ -145,6 +205,7 @@ static PyObject *measure(PyObject *self, PyObject *objects) {
 }
 
 static PyMethodDef methods[] = {
+    {"memory", memory_control, METH_NOARGS, "Time a fixed private 64-MiB pointer graph, independent of the GC heap."},
     {"measure", measure, METH_O, "Read-only list and header timing."},
     {"cold", cold, METH_NOARGS, "Read generation-2 links before any diagnostic object scan."},
     {NULL}

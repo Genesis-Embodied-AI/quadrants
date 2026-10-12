@@ -36,7 +36,7 @@ def main():
                         choices=('binary', 'expanded-binary', 'workload', 'snapshots', 'gc-profile',
                                  'dataclass-ablation', 'pydantic', 'process-batches', 'owner-guard',
                                  'owner-guard-candidate', 'gc-freeze-candidate', 'process-batches-candidate',
-                                 'production-batches-candidate', 'import-batch', 'import-batch-census', 'runtime-growth', 'kernel-registry', 'kernel-lifetime', 'gc-native', 'gc-walk', 'simt-only', 'python-gc', 'gc-order', 'gc-cpu'),
+                                 'production-batches-candidate', 'import-batch', 'import-batch-census', 'runtime-growth', 'kernel-registry', 'kernel-lifetime', 'gc-native', 'gc-walk', 'simt-only', 'python-gc', 'gc-order', 'gc-cpu', 'gc-memory'),
                         default='binary')
     parser.add_argument('--requirements', type=Path, help='Optional historically recorded dependency versions')
     parser.add_argument('--reference', type=Path, help='Completed full-suite artifact for candidate coverage checks')
@@ -44,10 +44,11 @@ def main():
     args = parser.parse_args()
     cpu_gc = args.comparison == 'gc-cpu'
     order_gc = args.comparison == 'gc-order'
-    walk_gc = args.comparison == 'gc-walk'
+    memory_gc = args.comparison == 'gc-memory'
+    walk_gc = args.comparison in ('gc-walk', 'gc-memory')
     python_gc = args.comparison == 'python-gc'
     simt_only = args.comparison == 'simt-only'
-    native_gc = args.comparison in ('gc-native', 'gc-walk', 'simt-only', 'gc-order', 'gc-cpu')
+    native_gc = args.comparison in ('gc-native', 'gc-walk', 'simt-only', 'gc-order', 'gc-cpu', 'gc-memory')
     if native_gc or python_gc:
         args.comparison = 'runtime-growth'
     lifetime_only = args.comparison == 'kernel-lifetime'
@@ -256,6 +257,8 @@ def main():
             env['QD_GC_NATIVE'] = '1'
         if order_gc:
             options += ['-p', 'gc_order_control']
+        if memory_gc:
+            env['QD_GC_MEMORY'] = '1'
         if walk_gc:
             env['QD_GC_WALK'] = '1'
             command([python, Path(__file__).with_name('gc_walk_probe.py').resolve()], env=env, cwd=test_root)
@@ -290,6 +293,10 @@ def main():
         print(f'ARM {label}: binary={binary}, tests={test_root}; {shlex.join(invocation)}', flush=True)
         start = time.monotonic()
         with ExitStack() as stack:
+            if memory_gc:
+                from memory_latency_watch import memory_watch
+
+                stack.enter_context(memory_watch(python, output / 'memory-control', env))
             if native_gc:
                 from native_gc_watch import NativeGCWatch
 
