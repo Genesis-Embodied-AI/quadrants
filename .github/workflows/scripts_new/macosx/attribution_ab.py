@@ -36,7 +36,7 @@ def main():
                         choices=('binary', 'expanded-binary', 'workload', 'snapshots', 'gc-profile',
                                  'dataclass-ablation', 'pydantic', 'process-batches', 'owner-guard',
                                  'owner-guard-candidate', 'gc-freeze-candidate', 'process-batches-candidate',
-                                 'production-batches-candidate'),
+                                 'production-batches-candidate', 'import-batch', 'import-batch-census'),
                         default='binary')
     parser.add_argument('--requirements', type=Path, help='Optional historically recorded dependency versions')
     parser.add_argument('--reference', type=Path, help='Completed full-suite artifact for candidate coverage checks')
@@ -61,6 +61,8 @@ def main():
         expected = {'guarded'} if candidate_only else {'full', 'guarded'}
     if args.comparison == 'gc-freeze':
         expected = {'frozen'}
+    if args.comparison.startswith('import-batch'):
+        expected = {'small', 'all'}
     labels = args.order.split('-')
     if len(labels) != len(expected) or set(labels) != expected:
         parser.error(f'--order must contain each of {sorted(expected)} exactly once')
@@ -187,11 +189,13 @@ def main():
     results = []
     for label in labels:
         fixed_binary = args.comparison in (
-            'workload', 'dataclass-ablation', 'pydantic', 'process-batches', 'owner-guard', 'gc-freeze')
+            'workload', 'dataclass-ablation', 'pydantic', 'process-batches', 'owner-guard', 'gc-freeze',
+            'import-batch', 'import-batch-census')
         binary = 'new' if fixed_binary else label
         test_root = (new if label == 'full' or
                      (args.comparison in ('snapshots', 'gc-profile') and label == 'new') else old)
-        if args.comparison in ('dataclass-ablation', 'pydantic', 'process-batches', 'owner-guard', 'gc-freeze'):
+        if args.comparison in ('dataclass-ablation', 'pydantic', 'process-batches', 'owner-guard', 'gc-freeze',
+                               'import-batch', 'import-batch-census'):
             test_root = new
         python = pythons[label] if args.comparison == 'pydantic' else pythons[binary]
         env = dict(os.environ, PATH=f'{python.parent}:{os.environ["PATH"]}', VIRTUAL_ENV=str(python.parent.parent),
@@ -205,10 +209,16 @@ def main():
         if args.comparison == 'dataclass-ablation' and label == 'pruned':
             options += [f'--deselect={nodeid}' for nodeid in deselected]
         options += [f'--basetemp={work / (label + "-pytest-tmp")}', f'--junitxml={output / (label + ".xml")}']
-        if args.comparison in ('gc-profile', 'process-batches', 'owner-guard', 'gc-freeze'):
+        if args.comparison in ('gc-profile', 'process-batches', 'owner-guard', 'gc-freeze',
+                               'import-batch', 'import-batch-census'):
             options += ['-p', 'gc_profile']
             env['PYTHONPATH'] = str(Path(__file__).resolve().parent) + os.pathsep + env.get('PYTHONPATH', '')
             env['QD_GC_PROFILE_DIR'] = str(output if args.comparison == 'gc-profile' else output / (label + '-gc'))
+        if args.comparison.startswith('import-batch'):
+            from import_batch import prepare
+
+            prepare(test_root, output, label, env, args.comparison.endswith('-census'))
+            options += ['-p', 'import_batch']
         if label == 'guarded':
             options += ['-p', 'ndarray_owner_guard']
         if label == 'frozen':
@@ -256,6 +266,10 @@ def main():
         from process_batches import verify_coverage
 
         verify_coverage(output, 'frozen' if args.comparison == 'gc-freeze' else 'guarded')
+    if args.comparison.startswith('import-batch'):
+        from import_batch import verify
+
+        verify(output)
     if any(r['returncode'] for r in results):
         raise SystemExit('An arm failed: inspect logs and test counts before interpreting durations.')
 
