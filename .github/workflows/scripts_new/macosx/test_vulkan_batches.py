@@ -5,18 +5,21 @@ import subprocess
 import sys
 import xml.etree.ElementTree as ET
 from collections import Counter
+from pathlib import Path
+
+import pytest
 
 import vulkan_batches
 
 
-def make_project(root):
+def make_project(root: Path) -> None:
     tests = root / "tests/python"
     tests.mkdir(parents=True)
     (root / "tests/run_tests.py").write_text(
         "import pytest, sys\nraise SystemExit(pytest.main(['tests/python', *sys.argv[1:]]))\n"
     )
     (tests / "conftest.py").write_text(
-        "import pytest\n@pytest.fixture(autouse=True)\ndef fixture_ran(monkeypatch):\n"
+        "import pytest\n@pytest.fixture(autouse=True)\ndef fixture_ran(monkeypatch: pytest.MonkeyPatch) -> None:\n"
         "    monkeypatch.setenv('BATCH_FIXTURE_RAN', 'yes')\n"
     )
     for index in range(13):
@@ -28,20 +31,20 @@ def make_project(root):
             "if 'QD_BATCH_SELECTION' in os.environ:\n"
             "    assert str(Path(__file__).resolve()) in "
             "json.loads(Path(os.environ['QD_BATCH_SELECTION']).read_text())\n"
-            "@pytest.mark.parametrize('value', [0, 1])\ndef test_case(value):\n"
+            "@pytest.mark.parametrize('value', [0, 1])\ndef test_case(value: int) -> None:\n"
             "    assert os.environ.get('BATCH_FIXTURE_RAN') == 'yes'\n"
-            "@pytest.mark.skip(reason='expected')\ndef test_skip():\n    pass\n"
+            "@pytest.mark.skip(reason='expected')\ndef test_skip() -> None:\n    pass\n"
         )
 
 
-def cases(path):
+def cases(path: Path) -> Counter[tuple[str | None, str | None, tuple[str, ...]]]:
     return Counter(
         (case.get("classname"), case.get("name"), tuple(child.tag for child in case))
         for case in ET.parse(path).iter("testcase")
     )
 
 
-def test_complete_case_outcomes_and_fresh_selection(tmp_path, monkeypatch):
+def test_complete_case_outcomes_and_fresh_selection(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     make_project(tmp_path)
     monkeypatch.setenv("PYTEST_DISABLE_PLUGIN_AUTOLOAD", "1")
     monkeypatch.setenv("PYTEST_ADDOPTS", "-q -p xdist.plugin -n 3")
@@ -59,11 +62,11 @@ def test_complete_case_outcomes_and_fresh_selection(tmp_path, monkeypatch):
     assert [len(group) for group in manifest] == [12, 1]
 
 
-def test_failure_is_not_hidden_by_later_success(tmp_path, monkeypatch):
+def test_failure_is_not_hidden_by_later_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     make_project(tmp_path)
     monkeypatch.setenv("PYTEST_DISABLE_PLUGIN_AUTOLOAD", "1")
     monkeypatch.setenv("PYTEST_ADDOPTS", "-q -p xdist.plugin -n 3")
-    (tmp_path / "tests/python/nested/nested_test.py").write_text("def test_failure():\n    assert False\n")
+    (tmp_path / "tests/python/nested/nested_test.py").write_text("def test_failure() -> None:\n    assert False\n")
     output = tmp_path / "batches"
     assert vulkan_batches.run_batches(tmp_path, output, []) == 1
     records = json.loads((output / "results.json").read_text())

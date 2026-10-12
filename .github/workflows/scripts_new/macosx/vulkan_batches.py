@@ -5,6 +5,8 @@ collection small avoids this in the measured runs while retaining the normal fix
 This module also acts as a pytest plugin to select files before importing their test modules.
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import os
@@ -14,24 +16,28 @@ import sys
 import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pytest import Config
 
 _selected = None
 
 
-def pytest_configure(config):
+def pytest_configure(config: Config) -> None:
     global _selected
     _selected = {Path(path) for path in json.loads(Path(os.environ["QD_BATCH_SELECTION"]).read_text())}
     if not _selected or any(not path.is_file() for path in _selected):
         raise RuntimeError("Batch selection is empty or references missing files")
 
 
-def pytest_ignore_collect(collection_path, config):
+def pytest_ignore_collect(collection_path: Path, config: Config) -> bool | None:
     if collection_path.is_file() and collection_path.suffix in (".py", ".ipynb"):
         return collection_path.resolve() not in _selected
     return None
 
 
-def run_batches(root, output, runner_args, batch_size=12):
+def run_batches(root: Path, output: Path, runner_args: list[str], batch_size: int = 12) -> int:
     root, output = root.resolve(), output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     test_root = root / "tests/python"
@@ -76,7 +82,7 @@ def run_batches(root, output, runner_args, batch_size=12):
     return int(failed)
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("runner_args", nargs=argparse.REMAINDER)
