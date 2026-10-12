@@ -59,6 +59,8 @@ class NativeGCWatch:
                     "swap": ["/usr/sbin/sysctl", "vm.swapusage"],
                     "process": ["/bin/ps", "-p", str(pid), "-o", "pid,ppid,%cpu,rss,vsz,state,time,command"],
                     "threads": ["/bin/ps", "-M", "-p", str(pid)],
+                    "system-processes": ["/bin/ps", "-axo", "pid,ppid,%cpu,rss,state,time,comm"],
+                    "system-threads": ["/bin/ps", "-eM"],
                 }
                 for name, command in commands.items():
                     metadata["commands"][name] = self.capture(command, folder / f"{name}-command.txt")

@@ -17,6 +17,7 @@ _stream = None
 _node = None
 _phase = 'session'
 _start = None
+_native_start = None
 
 
 def _write(record):
@@ -25,17 +26,30 @@ def _write(record):
 
 
 def _gc_callback(event, info):
-    global _start
+    global _start, _native_start
     if event == 'start':
         if info['generation'] == 2 and os.environ.get('QD_GC_NATIVE') == '1':
             _write(dict(kind='gc_begin', generation=2))
+            _native_start = (time.thread_time(), resource.getrusage(resource.RUSAGE_SELF))
+        else:
+            _native_start = None
         _start = (time.perf_counter(), time.process_time())
     elif event == 'stop' and _start is not None:
         wall, cpu = time.perf_counter() - _start[0], time.process_time() - _start[1]
+        native = {}
+        if _native_start is not None:
+            thread, before = _native_start
+            after = resource.getrusage(resource.RUSAGE_SELF)
+            native = dict(thread_cpu_seconds=time.thread_time() - thread,
+                          resource_delta={name: getattr(after, name) - getattr(before, name)
+                                          for name in ('ru_utime', 'ru_stime', 'ru_minflt', 'ru_majflt',
+                                                       'ru_nvcsw', 'ru_nivcsw', 'ru_inblock', 'ru_oublock')})
         if info['generation'] == 2 or wall >= 0.1:
             _write(dict(kind='gc', wall_seconds=wall, cpu_seconds=cpu, **info,
-                        load1=os.getloadavg()[0], maxrss=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss))
+                        load1=os.getloadavg()[0], maxrss=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
+                        **native))
         _start = None
+        _native_start = None
 
 
 def pytest_configure(config):
