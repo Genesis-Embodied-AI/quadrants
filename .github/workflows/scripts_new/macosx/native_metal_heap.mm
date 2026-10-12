@@ -46,9 +46,13 @@ extern "C" int native_metal_cycle(uint64_t bytes, int use_heap, ProbeStats *stat
       heap = [device newHeapWithDescriptor:descriptor];
       if (!heap)
         return 4;
+      stats->allocation_bytes = heap.size;
+      if (use_heap == 3) {
+        stats->command_status = 0;
+        return 0;
+      }
       first = [heap newBufferWithLength:4 options:options offset:0];
       second = [heap newBufferWithLength:4 options:options offset:offset];
-      stats->allocation_bytes = heap.size;
     } else {
       first = [device newBufferWithLength:bytes options:options];
       second = first;
@@ -56,6 +60,10 @@ extern "C" int native_metal_cycle(uint64_t bytes, int use_heap, ProbeStats *stat
     }
     if (!first || !second || first.gpuAddress == 0 || second.gpuAddress == 0)
       return 5;
+    if (use_heap == 2) {
+      stats->command_status = 0;
+      return 0;
+    }
     id<MTLCommandQueue> queue = [device newCommandQueue];
     if (!queue)
       return 6;

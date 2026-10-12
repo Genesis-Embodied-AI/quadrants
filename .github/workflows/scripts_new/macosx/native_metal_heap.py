@@ -67,6 +67,8 @@ class NativeMetalHeap:
             "metal-runtime-buffer",
             "metal-heap-large",
             "metal-buffer-large",
+            "metal-heap-large-no-submit",
+            "metal-heap-large-empty",
         )
         path = Path(os.environ["QD_NATIVE_METAL_LIBRARY"])
         self.library = C.CDLL(str(path))
@@ -81,8 +83,10 @@ class NativeMetalHeap:
         )
         self.call.restype = C.c_int
         self.work = work
-        self.bytes = 16384 if work == "metal-heap-small" else (128 << 20 if work.endswith("-large") else 32 << 20)
+        self.bytes = 16384 if work == "metal-heap-small" else (128 << 20 if "-large" in work else 32 << 20)
         self.use_heap = work not in ("metal-buffer", "metal-runtime-buffer", "metal-buffer-large")
+        self.no_submit = work in ("metal-heap-large-no-submit", "metal-heap-large-empty")
+        self.heap_mode = 3 if work.endswith("-empty") else (2 if self.no_submit else int(self.use_heap))
         self.buffer_records = []
         self.metadata = dict(
             work=work,
@@ -93,6 +97,8 @@ class NativeMetalHeap:
             runtime_pattern=self.runtime,
             allocation_bytes=self.bytes,
             placement_heap=self.use_heap,
+            gpu_submissions=not self.no_submit,
+            empty_heap=work.endswith("-empty"),
             device_acquisition=(
                 "MTLCopyAllDevices cached per process" if self.runtime else "MTLCopyAllDevices each cycle"
             ),
@@ -106,10 +112,10 @@ class NativeMetalHeap:
         result = (
             self.call(self.use_heap, C.byref(stats))
             if self.runtime
-            else self.call(self.bytes, self.use_heap, C.byref(stats))
+            else self.call(self.bytes, self.heap_mode, C.byref(stats))
         )
         assert result == 0, f"Native Metal probe failed at stage {result}"
-        assert stats.allocation_bytes >= self.bytes and stats.command_status == 4
+        assert stats.allocation_bytes >= self.bytes and stats.command_status == (0 if self.no_submit else 4)
         if not self.buffer_records:
             self.buffer_records = [{key: getattr(stats, key) for key, _ in stats._fields_}]
 
