@@ -191,7 +191,9 @@ class RawVulkanDevice:
     def __init__(self, library_path, work="device"):
         self.library_path, self.mode = library_path, work
         self.recreate_instance = work.endswith("-instance")
-        work = work.removesuffix("-instance")
+        self.runtime_pattern = "-runtime" in work
+        self.runtime_root = "-bare" not in work
+        work = work.removesuffix("-instance").replace("-runtime", "").replace("-bare", "")
         assert work in (
             "device",
             "buffers",
@@ -279,10 +281,16 @@ class RawVulkanDevice:
                 buffer_device_address_enabled=self.address_enabled,
                 work=self.mode,
                 recreate_instance=self.recreate_instance,
+                runtime_pattern=self.runtime_pattern,
+                runtime_root=self.runtime_root if self.runtime_pattern else None,
                 application_buffer_bytes=(
-                    []
-                    if self.work == "device"
-                    else [4, 4] if self.work.startswith(("host", "private")) else [1 << 20, 32 << 20]
+                    ([1 << 20, 32 << 20, 4] + ([4] if self.runtime_root else []))
+                    if self.runtime_pattern
+                    else (
+                        []
+                        if self.work == "device"
+                        else [4, 4] if self.work.startswith(("host", "private")) else [1 << 20, 32 << 20]
+                    )
                 ),
                 application_shaders=0,
             )
@@ -323,7 +331,11 @@ class RawVulkanDevice:
         device = Ptr()
         check(self.create_device(self.physical, C.byref(info), None, C.byref(device)), "vkCreateDevice")
         try:
-            if self.work.startswith(("host", "private")):
+            if self.runtime_pattern:
+                from raw_vulkan_runtime import runtime_cycle
+
+                runtime_cycle(self, device)
+            elif self.work.startswith(("host", "private")):
                 self.shared_cycle(device)
             elif self.work != "device":
                 self.buffer_cycle(device)
