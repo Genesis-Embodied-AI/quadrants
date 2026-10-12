@@ -84,14 +84,15 @@ def run_batches(root: Path, output: Path, runner_args: list[str], batch_size: in
         print(f"Batch {index + 1}/{len(file_groups)}: {manifest_contents[index]}", flush=True)
         start = time.monotonic()
         result = subprocess.run([sys.executable, "tests/run_tests.py", *runner_args], cwd=root, env=env)
-        failed |= result.returncode != 0
-        if not failed:
+        batch_failed = result.returncode != 0
+        if not batch_failed:
             record = dict(batch=index, seconds=time.monotonic() - start, returncode=result.returncode)
             results.append(record)
             (output / "results.json").write_text(json.dumps(results, indent=2) + "\n")
             print("Batch result:", json.dumps(record), flush=True)
-            failed |= not batch_test_output_path.exists()
-        if not failed:
+            batch_failed |= not batch_test_output_path.exists()
+        failed |= batch_failed
+        if not batch_failed:
             report = ET.parse(batch_test_output_path).getroot()
             if report.tag == "testsuite":
                 suites_xml_nodes.append(report)

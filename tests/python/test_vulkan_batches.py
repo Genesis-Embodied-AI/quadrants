@@ -79,8 +79,9 @@ def test_failure_is_not_hidden_by_later_success(tmp_path: Path) -> None:
     (tmp_path / "tests" / "python" / "nested" / "nested_test.py").write_text("def test_failure() -> None:\n    assert False\n")
     output = tmp_path / "batches"
     assert vulkan_batches.run_batches(tmp_path, output, []) == 1
-    assert not (output / "results.json").exists()
-    assert not list(ET.parse(output / "results.xml").iter("testcase"))
+    records = json.loads((output / "results.json").read_text())
+    assert [(record["batch"], record["returncode"]) for record in records] == [(1, 0)]
+    assert cases(output / "results.xml") == cases(output / "batch-01.xml")
     assert len(list(ET.parse(output / "batch-00.xml").iter("failure"))) == 1
     later_report = ET.parse(output / "batch-01.xml")
     assert len(list(later_report.iter("testcase"))) == 3
