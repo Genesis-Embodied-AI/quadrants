@@ -88,3 +88,18 @@ def test_failure_is_not_hidden_by_later_success(tmp_path: Path) -> None:
     later_report = ET.parse(output / "batch-01.xml")
     assert len(list(later_report.iter("testcase"))) == 3
     assert not list(later_report.iter("failure"))
+
+
+@pytest.mark.parametrize("ignore_option", ["--ignore", "--ignore-glob"])
+def test_selected_files_respect_pytest_ignore_options(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, ignore_option: str
+) -> None:
+    make_project(tmp_path)
+    ignored = tmp_path / "tests" / "python" / "test_case_00.py"
+    ignored.write_text("raise AssertionError('Ignored test module must not be imported')\n")
+    monkeypatch.setenv("PYTEST_ADDOPTS", f"-q -p xdist.plugin -n 3 {ignore_option}=tests/python/test_case_00.py")
+    output = tmp_path / "batches"
+    assert vulkan_batches.run_batches(tmp_path, output, []) == 0
+    report = ET.parse(output / "results.xml")
+    assert len(list(report.iter("testcase"))) == 36
+    assert all("test_case_00" not in case.get("classname", "") for case in report.iter("testcase"))

@@ -45,7 +45,9 @@ def pytest_configure(config: Config) -> None:
 
 def pytest_ignore_collect(collection_path: Path, config: Config) -> bool | None:
     if collection_path.is_file() and collection_path.suffix in (".py", ".ipynb"):
-        return collection_path.resolve() not in _SELECTED_TEST_PATHS
+        if collection_path.resolve() not in _SELECTED_TEST_PATHS:
+            return True
+    # Let pytest and other plugins apply their own exclusion rules to selected files.
     return None
 
 
