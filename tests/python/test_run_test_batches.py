@@ -22,7 +22,7 @@ def isolate_nested_pytest(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PYTEST_ADDOPTS", "-q -p xdist.plugin -n 3")
 
 
-def make_project(root: Path) -> None:
+def make_fake_tests_project(root: Path) -> None:
     tests_path = root / "tests" / "python"
     tests_path.mkdir(parents=True)
     (root / "tests" / "run_tests.py").write_text(
@@ -73,7 +73,7 @@ def cases(path: Path) -> Counter[tuple[str | None, str | None, tuple[str, ...]]]
 
 
 def test_complete_case_outcomes_and_fresh_selection(tmp_path: Path) -> None:
-    make_project(tmp_path)
+    make_fake_tests_project(tmp_path)
     baseline = tmp_path / "full.xml"
     subprocess.run(
         [sys.executable, "tests/run_tests.py", f"--junitxml={baseline}", f"--basetemp={tmp_path / 'full-tmp'}"],
@@ -89,7 +89,7 @@ def test_complete_case_outcomes_and_fresh_selection(tmp_path: Path) -> None:
 
 
 def test_failure_is_not_hidden_by_later_success(tmp_path: Path) -> None:
-    make_project(tmp_path)
+    make_fake_tests_project(tmp_path)
     (tmp_path / "tests" / "python" / "nested" / "nested_test.py").write_text(
         "def test_failure() -> None:\n    assert False\n"
     )
@@ -108,7 +108,7 @@ def test_failure_is_not_hidden_by_later_success(tmp_path: Path) -> None:
 def test_selected_files_respect_pytest_ignore_options(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, ignore_option: str
 ) -> None:
-    make_project(tmp_path)
+    make_fake_tests_project(tmp_path)
     ignored = tmp_path / "tests" / "python" / "test_case_00.py"
     ignored.write_text("raise AssertionError('Ignored test module must not be imported')\n")
     monkeypatch.setenv("PYTEST_ADDOPTS", f"-q -p xdist.plugin -n 3 {ignore_option}=tests/python/test_case_00.py")
