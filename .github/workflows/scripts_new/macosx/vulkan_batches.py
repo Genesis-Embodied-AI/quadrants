@@ -84,6 +84,7 @@ def run_batches(root: Path, output: Path, runner_args: list[str], batch_size: in
         print(f"Batch {index + 1}/{len(file_groups)}: {manifest_contents[index]}", flush=True)
         start = time.monotonic()
         result = subprocess.run([sys.executable, "tests/run_tests.py", *runner_args], cwd=root, env=env)
+        failed |= result.returncode != 0
         record = dict(batch=index, seconds=time.monotonic() - start, returncode=result.returncode)
         results.append(record)
         (output / "results.json").write_text(json.dumps(results, indent=2) + "\n")
@@ -96,7 +97,6 @@ def run_batches(root: Path, output: Path, runner_args: list[str], batch_size: in
                 suites_xml_nodes.extend(report)
         else:
             failed = True
-        failed |= result.returncode != 0
     ET.ElementTree(suites_xml_nodes).write(output / "results.xml", encoding="utf-8", xml_declaration=True)
     return int(failed)
 
