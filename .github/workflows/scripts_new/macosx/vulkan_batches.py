@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pytest import Config
 
-_SELECTED = None
+_SELECTED: set[Path] | None = None
 
 
 def pytest_configure(config: Config) -> None:
