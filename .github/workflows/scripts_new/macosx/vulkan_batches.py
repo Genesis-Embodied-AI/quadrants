@@ -50,9 +50,7 @@ def pytest_ignore_collect(collection_path: Path, config: Config) -> bool | None:
 
 
 def run_batches(root: Path, output: Path, runner_args: list[str], batch_size: int = 12) -> int:
-    # Write reports under output:
-    # - manifest.json lists the test files in each batch; batch-NN-selection.json supplies absolute paths to pytest.
-    # - batch-NN.xml is the JUnit XML report written by pytest for that batch, when available.
+    # Write final reports under output:
     # - results.json records timings and return codes for batches whose subprocess exited successfully.
     # - results.xml merges the JUnit XML reports from batches that passed the failure checks.
     root, output = root.resolve(), output.resolve()
