@@ -189,6 +189,10 @@ def loaded_library(path):
 
 class RawVulkanDevice:
     def __init__(self, library_path, work="device"):
+        if work == "private-bda-runtime-no-fill":
+            from native_crash_trace import install
+
+            install()
         self.library_path, self.mode = library_path, work
         self.recreate_instance = work.endswith("-instance")
         self.runtime_pattern = "-runtime" in work

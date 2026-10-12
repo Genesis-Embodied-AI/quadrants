@@ -5,7 +5,7 @@
 #include <unistd.h>
 
 static void native_crash_trace(int signal_number) {
-  constexpr char message[] = "Native Metal probe fatal signal; native stack follows:\n";
+  constexpr char message[] = "Native diagnostic fatal signal; native stack follows:\n";
   (void)write(STDERR_FILENO, message, sizeof(message) - 1);
   void *frames[96];
   int count = backtrace(frames, 96);

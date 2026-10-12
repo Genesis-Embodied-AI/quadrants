@@ -283,6 +283,10 @@ def main():
             [str(python), '-c', 'import quadrants; print(quadrants.__path__[0] + "/_lib/runtime")'],
             text=True, env=env, cwd=test_root).splitlines()[-1]
         if runtime_cycles:
+            if env.get('QD_CYCLE_RAW_DEVICE') == '1' and env.get('QD_RAW_DEVICE_WORK') == 'private-bda-runtime-no-fill':
+                from native_crash_trace import build
+
+                build(output / 'native-crash', env)
             if env.get('QD_CYCLE_RAW_DEVICE') == '1' and env.get('QD_RAW_DEVICE_WORK', '').startswith('metal-'):
                 from native_metal_heap import build
 
