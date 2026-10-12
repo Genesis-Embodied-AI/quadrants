@@ -25,7 +25,9 @@ def make_project(root: Path) -> None:
     tests_path = root / "tests" / "python"
     tests_path.mkdir(parents=True)
     (root / "tests" / "run_tests.py").write_text(
-        "import pytest, sys\nraise SystemExit(pytest.main(['tests/python', *sys.argv[1:]]))\n"
+        """import pytest, sys
+raise SystemExit(pytest.main(['tests/python', *sys.argv[1:]]))
+"""
     )
     (tests_path / "conftest.py").write_text(
         "import pytest\n@pytest.fixture(autouse=True)\ndef fixture_ran(monkeypatch: pytest.MonkeyPatch) -> None:\n"
