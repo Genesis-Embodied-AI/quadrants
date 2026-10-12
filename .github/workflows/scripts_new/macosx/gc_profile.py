@@ -50,6 +50,17 @@ def _gc_callback(event, info):
                         **native))
         _start = None
         _native_start = None
+        if info['generation'] == 2 and wall >= 3 and os.environ.get('QD_GC_WALK') == '1':
+            from gc_walk_probe import capture
+
+            capture('after_long_gc', dict(wall_seconds=wall, cpu_seconds=cpu, **native))
+
+
+def pytest_collection_finish(session):
+    if _stream is not None and os.environ.get('QD_GC_WALK') == '1':
+        from gc_walk_probe import capture
+
+        capture('after_collection')
 
 
 def pytest_configure(config):

@@ -36,13 +36,14 @@ def main():
                         choices=('binary', 'expanded-binary', 'workload', 'snapshots', 'gc-profile',
                                  'dataclass-ablation', 'pydantic', 'process-batches', 'owner-guard',
                                  'owner-guard-candidate', 'gc-freeze-candidate', 'process-batches-candidate',
-                                 'production-batches-candidate', 'import-batch', 'import-batch-census', 'runtime-growth', 'kernel-registry', 'kernel-lifetime', 'gc-native'),
+                                 'production-batches-candidate', 'import-batch', 'import-batch-census', 'runtime-growth', 'kernel-registry', 'kernel-lifetime', 'gc-native', 'gc-walk'),
                         default='binary')
     parser.add_argument('--requirements', type=Path, help='Optional historically recorded dependency versions')
     parser.add_argument('--reference', type=Path, help='Completed full-suite artifact for candidate coverage checks')
     parser.add_argument('--order', required=True)
     args = parser.parse_args()
-    native_gc = args.comparison == 'gc-native'
+    walk_gc = args.comparison == 'gc-walk'
+    native_gc = args.comparison in ('gc-native', 'gc-walk')
     if native_gc:
         args.comparison = 'runtime-growth'
     lifetime_only = args.comparison == 'kernel-lifetime'
@@ -245,6 +246,9 @@ def main():
             options += ['-p', 'gc_freeze_baseline']
         if native_gc:
             env['QD_GC_NATIVE'] = '1'
+        if walk_gc:
+            env['QD_GC_WALK'] = '1'
+            command([python, Path(__file__).with_name('gc_walk_probe.py').resolve()], env=env, cwd=test_root)
         env['PYTEST_ADDOPTS'] = shlex.join(options)
         env['QD_LIB_DIR'] = subprocess.check_output(
             [str(python), '-c', 'import quadrants; print(quadrants.__path__[0] + "/_lib/runtime")'],

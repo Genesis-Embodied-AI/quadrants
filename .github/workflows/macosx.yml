@@ -13,6 +13,7 @@ on:
           - kernel-registry
           - kernel-lifetime
           - gc-native
+          - gc-walk
           - expanded-binary
           - workload
           - snapshots
@@ -38,7 +39,8 @@ jobs:
       fail-fast: false
       matrix:
         order: >-
-          ${{ fromJSON(inputs.comparison == 'gc-native' && '["growth"]' ||
+          ${{ fromJSON(inputs.comparison == 'gc-walk' && '["growth"]' ||
+          inputs.comparison == 'gc-native' && '["growth"]' ||
           inputs.comparison == 'kernel-lifetime' && '["strong-weak"]' ||
           inputs.comparison == 'kernel-registry' && '["weak-strong","strong-weak"]' ||
           inputs.comparison == 'runtime-growth' && '["growth"]' ||
