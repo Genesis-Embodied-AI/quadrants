@@ -57,7 +57,15 @@ def build(output, env):
 
 class NativeMetalHeap:
     def __init__(self, work):
-        assert work in ("metal-heap", "metal-heap-small", "metal-buffer", "metal-runtime-heap", "metal-runtime-buffer")
+        assert work in (
+            "metal-heap",
+            "metal-heap-small",
+            "metal-buffer",
+            "metal-runtime-heap",
+            "metal-runtime-buffer",
+            "metal-heap-large",
+            "metal-buffer-large",
+        )
         path = Path(os.environ["QD_NATIVE_METAL_LIBRARY"])
         self.library = C.CDLL(str(path))
         self.runtime = work.startswith("metal-runtime-")
@@ -67,8 +75,8 @@ class NativeMetalHeap:
         )
         self.call.restype = C.c_int
         self.work = work
-        self.bytes = 16384 if work == "metal-heap-small" else 32 << 20
-        self.use_heap = work not in ("metal-buffer", "metal-runtime-buffer")
+        self.bytes = 16384 if work == "metal-heap-small" else (128 << 20 if work.endswith("-large") else 32 << 20)
+        self.use_heap = work not in ("metal-buffer", "metal-runtime-buffer", "metal-buffer-large")
         self.buffer_records = []
         self.metadata = dict(
             work=work,
