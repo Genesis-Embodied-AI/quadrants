@@ -4,6 +4,9 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
+#include <initializer_list>
+
+#include "native_crash_trace.h"
 
 struct ProbeStats {
   uint64_t allocation_bytes;

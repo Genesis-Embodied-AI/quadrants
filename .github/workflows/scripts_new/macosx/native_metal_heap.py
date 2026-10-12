@@ -23,6 +23,7 @@ def build(output, env):
         "clang++",
         "-std=c++17",
         "-O2",
+        "-g",
         "-fobjc-arc",
         "-dynamiclib",
         "-Wall",
@@ -47,6 +48,7 @@ def build(output, env):
                 runtime_header_sha256=hashlib.sha256(
                     source.with_name("native_metal_runtime.h").read_bytes()
                 ).hexdigest(),
+                crash_header_sha256=hashlib.sha256(source.with_name("native_crash_trace.h").read_bytes()).hexdigest(),
                 library_sha256=hashlib.sha256(library.read_bytes()).hexdigest(),
             ),
             indent=2,
@@ -68,6 +70,10 @@ class NativeMetalHeap:
         )
         path = Path(os.environ["QD_NATIVE_METAL_LIBRARY"])
         self.library = C.CDLL(str(path))
+        install = self.library.native_install_crash_trace
+        install.argtypes = []
+        install.restype = C.c_int
+        assert install() == 0
         self.runtime = work.startswith("metal-runtime-")
         self.call = self.library.native_metal_runtime_cycle if self.runtime else self.library.native_metal_cycle
         self.call.argtypes = (
@@ -91,6 +97,8 @@ class NativeMetalHeap:
                 "MTLCopyAllDevices cached per process" if self.runtime else "MTLCopyAllDevices each cycle"
             ),
             autorelease_pool="per cycle",
+            command_resource_references="retained",
+            fatal_signal_trace="best-effort native unwind then exit 128+signal",
         )
 
     def cycle(self):

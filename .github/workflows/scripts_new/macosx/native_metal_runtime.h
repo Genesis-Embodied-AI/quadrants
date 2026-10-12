@@ -72,7 +72,7 @@ extern "C" int native_metal_runtime_cycle(int use_heaps, ProbeStats *stats) {
     auto listgen = runtime_buffer(device, 32 << 20, 32 << 20, use_heaps);
     if (!gtmp.buffer || !listgen.buffer || !gtmp.buffer.gpuAddress || !listgen.buffer.gpuAddress)
       return 22;
-    id<MTLCommandBuffer> initial = [queue commandBufferWithUnretainedReferences];
+    id<MTLCommandBuffer> initial = [queue commandBuffer];
     id<MTLComputeCommandEncoder> encoder = [initial computeCommandEncoder];
     if (!encoder)
       return 23;
@@ -108,7 +108,7 @@ extern "C" int native_metal_runtime_cycle(int use_heaps, ProbeStats *stats) {
     }
     if (!seed)
       return 27;
-    id<MTLCommandBuffer> upload = [queue commandBufferWithUnretainedReferences];
+    id<MTLCommandBuffer> upload = [queue commandBuffer];
     id<MTLBlitCommandEncoder> blit = [upload blitCommandEncoder];
     if (!blit)
       return 28;
@@ -116,7 +116,7 @@ extern "C" int native_metal_runtime_cycle(int use_heaps, ProbeStats *stats) {
     [blit endEncoding];
     if (!runtime_complete(upload))
       return 29;
-    // All commands have completed and use unretained resource references. Retain the host mapping and heap.
+    // All commands have completed. Drop the upload command and retain the host mapping and heap.
     blit = nil;
     upload = nil;
     seed = nil;
@@ -124,7 +124,7 @@ extern "C" int native_metal_runtime_cycle(int use_heaps, ProbeStats *stats) {
     auto root = runtime_buffer(device, 4, 32 << 20, use_heaps);
     if (!root.buffer || !root.buffer.gpuAddress)
       return 30;
-    id<MTLCommandBuffer> clear_root = [queue commandBufferWithUnretainedReferences];
+    id<MTLCommandBuffer> clear_root = [queue commandBuffer];
     encoder = [clear_root computeCommandEncoder];
     if (!encoder)
       return 31;
