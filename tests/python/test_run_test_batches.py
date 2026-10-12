@@ -30,21 +30,28 @@ raise SystemExit(pytest.main(['tests/python', *sys.argv[1:]]))
 """
     )
     (tests_path / "conftest.py").write_text(
-        "import pytest\n@pytest.fixture(autouse=True)\ndef fixture_ran(monkeypatch: pytest.MonkeyPatch) -> None:\n"
-        "    monkeypatch.setenv('BATCH_FIXTURE_RAN', 'yes')\n"
+        """import pytest
+@pytest.fixture(autouse=True)
+def fixture_ran(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv('BATCH_FIXTURE_RAN', 'yes')
+"""
     )
     for index in range(13):
         folder = tests_path if index < 12 else tests_path / "nested"
         folder.mkdir(exist_ok=True)
         name = f"test_case_{index:02d}.py" if index < 12 else "nested_test.py"
         (folder / name).write_text(
-            "import json, os, pytest\nfrom pathlib import Path\n"
-            "if 'QD_BATCH_SELECTION' in os.environ:\n"
-            "    assert str(Path(__file__).resolve()) in "
-            "json.loads(Path(os.environ['QD_BATCH_SELECTION']).read_text())\n"
-            "@pytest.mark.parametrize('value', [0, 1])\ndef test_case(value: int) -> None:\n"
-            "    assert os.environ.get('BATCH_FIXTURE_RAN') == 'yes'\n"
-            "@pytest.mark.skip(reason='expected')\ndef test_skip() -> None:\n    pass\n"
+            """import json, os, pytest
+from pathlib import Path
+if 'QD_BATCH_SELECTION' in os.environ:
+    assert str(Path(__file__).resolve()) in json.loads(Path(os.environ['QD_BATCH_SELECTION']).read_text())
+@pytest.mark.parametrize('value', [0, 1])
+def test_case(value: int) -> None:
+    assert os.environ.get('BATCH_FIXTURE_RAN') == 'yes'
+@pytest.mark.skip(reason='expected')
+def test_skip() -> None:
+    pass
+"""
         )
 
 
