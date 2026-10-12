@@ -30,6 +30,8 @@ def worker(folder, index, barrier, library, work, count, recovery_event):
     stage, cycle = "baseline", -1
     active = None
     raw = None
+    exit_on_slow = os.environ.get("QD_REPRO_EXIT_ON_SLOW") == "1"
+    close_on_slow = os.environ.get("QD_REPRO_CLOSE_ON_SLOW") == "1"
     with (folder / f"cycles-{index}.jsonl").open("w", buffering=1) as stream:
 
         def write(**record):
@@ -83,7 +85,7 @@ def worker(folder, index, barrier, library, work, count, recovery_event):
             )
 
         stages = dict(cpu_before=300, vulkan=count, cpu_after=300)
-        if recovery_event is not None:
+        if exit_on_slow:
             del stages["cpu_after"]
         write(
             kind="start",
@@ -98,7 +100,11 @@ def worker(folder, index, barrier, library, work, count, recovery_event):
             automatic_gc=gc.isenabled(),
             unique_compile_constants=False,
             recovery_on_slow_gc=recovery_event is not None,
-            recovery_action="exit all workers" if recovery_event is not None else None,
+            recovery_action=(
+                ("exit all workers" if exit_on_slow else "close instance; keep process")
+                if recovery_event is not None
+                else None
+            ),
             moltenvk_environment={
                 key: os.environ.get(key) for key in ("MVK_CONFIG_USE_MTLHEAP", "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS")
             },
@@ -133,6 +139,9 @@ def worker(folder, index, barrier, library, work, count, recovery_event):
                         stopped_early = True
                         break
                 write(kind="stage_end", cycles_completed=cycle + 1, stopped_early=stopped_early)
+                if stage == "vulkan" and close_on_slow:
+                    raw.close()
+                    write(kind="instance_closed", quadrants_imported=False)
             raw.close()
             write(kind="end", quadrants_imported=False, automatic_gc=gc.isenabled())
         finally:
@@ -156,7 +165,11 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     context = multiprocessing.get_context("spawn")
     barrier = context.Barrier(3)
-    recovery_event = context.Event() if os.environ.get("QD_REPRO_EXIT_ON_SLOW") == "1" else None
+    recovery_event = (
+        context.Event()
+        if any(os.environ.get(key) == "1" for key in ("QD_REPRO_EXIT_ON_SLOW", "QD_REPRO_CLOSE_ON_SLOW"))
+        else None
+    )
     children = [
         context.Process(
             target=worker, args=(args.output, i, barrier, args.library, args.work, args.cycles, recovery_event)
