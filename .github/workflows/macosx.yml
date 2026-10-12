@@ -48,6 +48,10 @@ on:
         description: Discard only the separate RHI pipeline-cache file in runtime cycle diagnostics
         type: boolean
         default: false
+      skip_target_kernel:
+        description: Initialize/reset the target backend without a kernel call
+        type: boolean
+        default: false
       recovery_on_slow_gc:
         description: Stop target backend after a >=3s GC and measure CPU recovery
         type: boolean
@@ -135,6 +139,7 @@ jobs:
           QD_CYCLE_DISCARD_PIPELINE_CACHE: ${{ inputs.discard_pipeline_cache && '1' || '0' }}
           QD_MEMORY_PREPAGE_CONTROL: ${{ inputs.prepage_control && '1' || '0' }}
           QD_CYCLE_RECOVERY: ${{ inputs.recovery_on_slow_gc && '1' || '0' }}
+          QD_CYCLE_SKIP_TARGET_KERNEL: ${{ inputs.skip_target_kernel && '1' || '0' }}
           QD_CYCLE_TARGET: ${{ inputs.cycle_backend || 'vulkan' }}
           QD_CYCLE_VULKAN_COUNT: ${{ inputs.vulkan_cycles || 300 }}
           AB_ORDER: ${{ matrix.order }}
