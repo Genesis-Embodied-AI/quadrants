@@ -39,6 +39,9 @@ def install_trace(runtime_folder, output, env):
             dict(
                 original_sha256=digest,
                 source_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
+                metal_header_sha256=hashlib.sha256(
+                    source.with_name("vulkan_metal_stats.h").read_bytes()
+                ).hexdigest(),
                 wrapper_sha256=hashlib.sha256(forwarding.read_bytes()).hexdigest(),
                 command=command,
                 controller_pid=os.getpid(),

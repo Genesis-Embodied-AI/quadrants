@@ -109,17 +109,35 @@ static void record(const char *format, ...) {
   std::fputc('\n', stream);
 }
 
+#include "vulkan_metal_stats.h"
+
 static Result create_device(Ptr physical, const void *info, const void *callbacks, Ptr *device) {
   static auto fn = original<Result (*)(Ptr, const void *, const void *, Ptr *)>("vkCreateDevice");
+  Ptr metal = metal_stats::physical_device(physical);
+  auto before = metal_stats::snapshot(metal);
   Result result = fn(physical, info, callbacks, device);
-  record("{\"call\":\"create_device\",\"result\":%d,\"device\":%llu}", result,
-         result == 0 ? (unsigned long long)(uintptr_t)*device : 0ULL);
+  auto after = metal_stats::snapshot(metal);
+  auto config = metal_stats::configuration();
+  if (result == 0)
+    metal_stats::remember(*device, metal);
+  record(
+      "{\"call\":\"create_device\",\"result\":%d,\"device\":%llu,"
+      "\"metal_allocated_before\":%llu,\"metal_allocated_after\":%llu,\"metal_recommended\":%llu,"
+      "\"global_use_mtlheap\":%u,\"global_use_argument_buffers\":%u}",
+      result, result == 0 ? (unsigned long long)(uintptr_t)*device : 0ULL, (unsigned long long)before.allocated,
+      (unsigned long long)after.allocated, (unsigned long long)after.recommended, config[0], config[1]);
   return result;
 }
 static void destroy_device(Ptr device, const void *callbacks) {
   static auto fn = original<void (*)(Ptr, const void *)>("vkDestroyDevice");
-  record("{\"call\":\"destroy_device\",\"device\":%llu}", (unsigned long long)(uintptr_t)device);
+  Ptr metal = metal_stats::forget(device);
+  auto before = metal_stats::snapshot(metal);
   fn(device, callbacks);
+  auto after = metal_stats::snapshot(metal);
+  record(
+      "{\"call\":\"destroy_device\",\"device\":%llu,"
+      "\"metal_allocated_before\":%llu,\"metal_allocated_after\":%llu}",
+      (unsigned long long)(uintptr_t)device, (unsigned long long)before.allocated, (unsigned long long)after.allocated);
 }
 static Result create_buffer(Ptr device, const BufferInfo *info, const void *callbacks, U64 *buffer) {
   static auto fn = original<Result (*)(Ptr, const BufferInfo *, const void *, U64 *)>("vkCreateBuffer");
