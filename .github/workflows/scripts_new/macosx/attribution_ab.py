@@ -215,7 +215,7 @@ def main():
             env['PYTHONPATH'] = str(Path(__file__).resolve().parent) + os.pathsep + env.get('PYTHONPATH', '')
             env['QD_GC_PROFILE_DIR'] = str(output if args.comparison == 'gc-profile' else output / (label + '-gc'))
         if args.comparison.startswith('import-batch'):
-            from import_batch import prepare
+            from import_batch_control import prepare
 
             prepare(test_root, output, label, env, args.comparison.endswith('-census'))
             options += ['-p', 'import_batch']
@@ -244,7 +244,7 @@ def main():
 
                 code = run_batched(invocation, test_root, env, output, work)
             elif args.comparison.startswith('import-batch'):
-                from import_batch import run_bounded
+                from import_batch_control import run_bounded
 
                 code = run_bounded(invocation, test_root, env, output, label)
             else:
@@ -271,7 +271,7 @@ def main():
 
         verify_coverage(output, 'frozen' if args.comparison == 'gc-freeze' else 'guarded')
     if args.comparison.startswith('import-batch'):
-        from import_batch import verify
+        from import_batch_control import verify
 
         verify(output)
     if any(r['returncode'] for r in results):

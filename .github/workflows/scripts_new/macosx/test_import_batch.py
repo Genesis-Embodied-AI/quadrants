@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-import import_batch
+import import_batch_control as import_batch
 import pytest
 
 
@@ -93,3 +93,8 @@ def test_import_scope_and_outcomes(tmp_path, census):
         "small": [],
         "all": [{"name": "python.test_skip_outside", "outcome": "skipped"}],
     }
+
+
+def test_controller_import_without_site_packages():
+    env = dict(os.environ, PYTHONPATH=str(Path(import_batch.__file__).parent))
+    subprocess.run([sys.executable, "-S", "-c", "import import_batch_control"], env=env, check=True)
