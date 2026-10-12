@@ -14,21 +14,31 @@ import sysconfig
 import time
 
 _count = 0
+_thresholds = (3, 10, 30)
+_next_threshold = 0
 
 
 def capture(stage, triggering_gc=None):
-    global _count
+    global _count, _next_threshold
     if _count >= 4:
         return
+    if triggering_gc is not None:
+        if _next_threshold >= len(_thresholds) or triggering_gc["wall_seconds"] < _thresholds[_next_threshold]:
+            return
+        _next_threshold += 1
+    _count += 1
     import _gc_walk
 
     enabled = gc.isenabled()
     gc.disable()
     try:
+        cold = _gc_walk.cold()
         snapshot_start = time.perf_counter()
         objects = gc.get_objects(2)
         snapshot_wall = time.perf_counter() - snapshot_start
         result = _gc_walk.measure(objects)
+        if cold["objects"] != result["objects"]:
+            raise RuntimeError("Direct generation-2 count differs from object snapshot")
         del objects
     finally:
         if enabled:
@@ -39,8 +49,8 @@ def capture(stage, triggering_gc=None):
     with path.open("a") as stream:
         stream.write(json.dumps(dict(stage=stage, timestamp=time.time(), triggering_gc=triggering_gc,
                                      snapshot_wall=snapshot_wall, scans=["linked", "array", "sorted_array"],
+                                     cold=cold, cold_scans=["arithmetic_before", "linked", "arithmetic_after"],
                                      **result)) + "\n")
-    _count += 1
 
 
 def build():
