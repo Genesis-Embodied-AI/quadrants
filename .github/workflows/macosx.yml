@@ -42,7 +42,7 @@ on:
       cycle_backend:
         description: Middle-stage backend for runtime cycle diagnostics
         type: choice
-        options: [vulkan, cpu]
+        options: [vulkan, cpu, metal]
         default: vulkan
       discard_pipeline_cache:
         description: Discard only the separate RHI pipeline-cache file in runtime cycle diagnostics
