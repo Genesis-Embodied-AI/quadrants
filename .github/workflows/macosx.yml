@@ -56,7 +56,7 @@ on:
       raw_device_work:
         description: Direct Vulkan control resource and command work (requires raw_device_cycles)
         type: choice
-        options: [device, buffers, fill, host, host-small]
+        options: [device, buffers, fill, host, host-small, private, private-small]
         default: device
       compile_only:
         description: Compile the target scalar kernel through Program.compile_kernel without launch

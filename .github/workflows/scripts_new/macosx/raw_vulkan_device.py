@@ -4,7 +4,8 @@ Vulkan 1.0 ABI layouts follow Khronos Vulkan-Headers v1.3.290/include/vulkan/vul
 One instance/physical device survives the loop. Each iteration creates one compute queue/device, optionally allocates two device-local buffers and fills them,
 waits idle, and destroys its resources/device. Host modes bind two four-byte buffers into one shared allocation,
 map/write/unmap, fill on GPU, use a transfer-to-host barrier, wait, and verify mapped readback. The shared allocation
-is 32MiB in host mode and at least one 16KiB page in host-small. No application shader or pipeline is created. The caller owns the surrounding retained-graph/GC diagnostic and closes the instance.
+is 32MiB in host mode and at least one 16KiB page in host-small. Private/private-small use the same sizes and
+bindings with device-local memory, GPU fills, and no host mapping or readback. No application shader or pipeline is created. The caller owns the surrounding retained-graph/GC diagnostic and closes the instance.
 """
 
 import ctypes as C
@@ -155,7 +156,7 @@ def check(result, name):
 
 class RawVulkanDevice:
     def __init__(self, library_path, work="device"):
-        assert work in ("device", "buffers", "fill", "host", "host-small")
+        assert work in ("device", "buffers", "fill", "host", "host-small", "private", "private-small")
         self.work = work
         self.buffer_records = []
         assert C.sizeof(Ptr) == 8
@@ -217,7 +218,9 @@ class RawVulkanDevice:
                 api_version="1.0",
                 work=self.work,
                 application_buffer_bytes=(
-                    [] if self.work == "device" else [4, 4] if self.work.startswith("host") else [1 << 20, 32 << 20]
+                    []
+                    if self.work == "device"
+                    else [4, 4] if self.work.startswith(("host", "private")) else [1 << 20, 32 << 20]
                 ),
                 application_shaders=0,
             )
@@ -254,8 +257,8 @@ class RawVulkanDevice:
         device = Ptr()
         check(self.create_device(self.physical, C.byref(info), None, C.byref(device)), "vkCreateDevice")
         try:
-            if self.work.startswith("host"):
-                self.host_cycle(device)
+            if self.work.startswith(("host", "private")):
+                self.shared_cycle(device)
             elif self.work != "device":
                 self.buffer_cycle(device)
             check(self.wait_idle(device), "vkDeviceWaitIdle")
@@ -276,7 +279,7 @@ class RawVulkanDevice:
         )
         self.free_memory = self.bind("vkFreeMemory", None, Ptr, U64, Ptr)
         self.bind_memory = self.bind("vkBindBufferMemory", C.c_int32, Ptr, U64, U64, U64)
-        if self.work in ("fill", "host", "host-small"):
+        if self.work in ("fill", "host", "host-small", "private", "private-small"):
             self.create_pool = self.bind(
                 "vkCreateCommandPool", C.c_int32, Ptr, C.POINTER(PoolInfo), Ptr, C.POINTER(U64)
             )
@@ -309,14 +312,16 @@ class RawVulkanDevice:
                 Ptr,
             )
 
-    def host_cycle(self, device):
+    def shared_cycle(self, device):
         buffers, requirements = [], []
         memory, mapped = U64(), Ptr()
+        host_access = self.work.startswith("host")
+        required_flags = 15 if host_access else 1
         try:
             for _ in range(2):
                 buffer = U64()
                 info = BufferInfo(sType=12, size=4, usage=0x33)
-                check(self.create_buffer(device, C.byref(info), None, C.byref(buffer)), "vkCreateBuffer(host)")
+                check(self.create_buffer(device, C.byref(info), None, C.byref(buffer)), "vkCreateBuffer(shared)")
                 buffers.append(buffer)
                 requirement = MemoryRequirements()
                 self.requirements(device, buffer, C.byref(requirement))
@@ -325,19 +330,19 @@ class RawVulkanDevice:
             alignment = requirements[1].alignment
             offset = ((requirements[0].size + alignment - 1) // alignment) * alignment
             minimum_size = offset + requirements[1].size
-            allocation_size = max(minimum_size, 16384) if self.work == "host-small" else 32 << 20
+            allocation_size = max(minimum_size, 16384) if self.work.endswith("small") else 32 << 20
             assert minimum_size <= allocation_size
             bits = requirements[0].memoryTypeBits & requirements[1].memoryTypeBits
             memory_type = next(
                 i
                 for i in range(self.memory.memoryTypeCount)
-                if bits & (1 << i) and self.memory.memoryTypes[i].propertyFlags & 15 == 15
+                if bits & (1 << i) and self.memory.memoryTypes[i].propertyFlags & required_flags == required_flags
             )
             info = AllocateInfo(sType=5, allocationSize=allocation_size, memoryTypeIndex=memory_type)
-            check(self.allocate_memory(device, C.byref(info), None, C.byref(memory)), "vkAllocateMemory(host)")
+            check(self.allocate_memory(device, C.byref(info), None, C.byref(memory)), "vkAllocateMemory(shared)")
             offsets = (0, offset)
             for buffer, binding_offset in zip(buffers, offsets):
-                check(self.bind_memory(device, buffer, memory, binding_offset), "vkBindBufferMemory(host)")
+                check(self.bind_memory(device, buffer, memory, binding_offset), "vkBindBufferMemory(shared)")
             if not self.buffer_records:
                 self.buffer_records.extend(
                     dict(
@@ -351,17 +356,21 @@ class RawVulkanDevice:
                     )
                     for binding_offset in offsets
                 )
-            check(self.map_memory(device, memory, 0, (1 << 64) - 1, 0, C.byref(mapped)), "vkMapMemory(write)")
-            assert mapped.value
-            for binding_offset in offsets:
-                C.c_uint32.from_address(mapped.value + binding_offset).value = 0xDEADBEEF
-            self.unmap_memory(device, memory)
-            mapped = Ptr()
+            if host_access:
+                check(self.map_memory(device, memory, 0, (1 << 64) - 1, 0, C.byref(mapped)), "vkMapMemory(write)")
+                assert mapped.value
+                for binding_offset in offsets:
+                    C.c_uint32.from_address(mapped.value + binding_offset).value = 0xDEADBEEF
+                self.unmap_memory(device, memory)
+                mapped = Ptr()
             self.fill_cycle(device, [(buffer, memory) for buffer in buffers])
-            check(self.map_memory(device, memory, 0, (1 << 64) - 1, 0, C.byref(mapped)), "vkMapMemory(read)")
-            assert mapped.value
-            for binding_offset in offsets:
-                assert C.c_uint32.from_address(mapped.value + binding_offset).value == 0, "GPU fill/readback mismatch"
+            if host_access:
+                check(self.map_memory(device, memory, 0, (1 << 64) - 1, 0, C.byref(mapped)), "vkMapMemory(read)")
+                assert mapped.value
+                for binding_offset in offsets:
+                    assert (
+                        C.c_uint32.from_address(mapped.value + binding_offset).value == 0
+                    ), "GPU fill/readback mismatch"
         finally:
             if mapped.value:
                 self.unmap_memory(device, memory)
