@@ -19,7 +19,7 @@ from multiprocessing.connection import wait
 from pathlib import Path
 
 
-def worker(folder, index, barrier, unique, allocation, vulkan_cycles):
+def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_backend):
     import _gc_walk
 
     import quadrants as qd
@@ -35,6 +35,8 @@ def worker(folder, index, barrier, unique, allocation, vulkan_cycles):
         return value + offset
 
     kernel_identity = id(retained._primal)
+    middle_stage = "vulkan" if target_backend == "vulkan" else "cpu_middle"
+    middle_backend = qd.vulkan if target_backend == "vulkan" else qd.cpu
     stage, cycle = "baseline", -1
     active = None
     path = folder / f"cycles-{index}.jsonl"
@@ -96,7 +98,8 @@ def worker(folder, index, barrier, unique, allocation, vulkan_cycles):
                 pid=os.getpid(),
                 nodes=len(nodes),
                 payload_bytes=256,
-                stage_cycles={"cpu_before": 300, "vulkan": vulkan_cycles, "cpu_after": 300},
+                stage_cycles={"cpu_before": 300, middle_stage: vulkan_cycles, "cpu_after": 300},
+                target_backend=target_backend,
                 automatic_gc=gc.isenabled(),
                 kernel_identity=kernel_identity,
                 unique_compile_constants=unique,
@@ -109,9 +112,9 @@ def worker(folder, index, barrier, unique, allocation, vulkan_cycles):
             for _ in range(10):
                 gc.collect()
             census()
-            for stage, backend in (("cpu_before", qd.cpu), ("vulkan", qd.vulkan), ("cpu_after", qd.cpu)):
+            for stage, backend in (("cpu_before", qd.cpu), (middle_stage, middle_backend), ("cpu_after", qd.cpu)):
                 cycle = -1
-                count = vulkan_cycles if stage == "vulkan" else 300
+                count = vulkan_cycles if stage == middle_stage else 300
                 barrier.wait(timeout=1800)
                 active_backend = qd.cpu if allocation and index != 0 else backend
                 write(dict(kind="stage_begin", backend=str(active_backend)))
@@ -166,8 +169,13 @@ def main():
     vulkan_cycles = int(os.environ.get("QD_CYCLE_VULKAN_COUNT", "300"))
     if not 1 <= vulkan_cycles <= 1500 or (allocation and vulkan_cycles != 300):
         raise ValueError("Vulkan cycles must be 1..1500; allocation mode requires 300")
+    target_backend = os.environ.get("QD_CYCLE_TARGET", "vulkan")
+    if target_backend not in ("cpu", "vulkan") or (allocation and target_backend != "vulkan"):
+        raise ValueError("Target backend must be cpu or vulkan; allocation mode requires vulkan")
     children = [
-        context.Process(target=worker, args=(args.output, index, barrier, unique, allocation, vulkan_cycles))
+        context.Process(
+            target=worker, args=(args.output, index, barrier, unique, allocation, vulkan_cycles, target_backend)
+        )
         for index in range(3)
     ]
     for child in children:
