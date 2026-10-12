@@ -40,7 +40,7 @@ def pytest_ignore_collect(collection_path: Path, config: Config) -> bool | None:
 def run_batches(root: Path, output: Path, runner_args: list[str], batch_size: int = 12) -> int:
     root, output = root.resolve(), output.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    test_root = root / "tests/python"
+    test_root = root / "tests" / "python"
     files = sorted({*test_root.rglob("test_*.py"), *test_root.rglob("*_test.py"), *test_root.rglob("*.ipynb")})
     if not files or batch_size < 1:
         raise ValueError("A nonempty test manifest and positive batch size are required")
