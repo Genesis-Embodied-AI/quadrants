@@ -6,6 +6,7 @@ import sys
 import xml.etree.ElementTree as ET
 from collections import Counter
 from pathlib import Path
+from textwrap import dedent
 
 import pytest
 
@@ -25,33 +26,42 @@ def make_project(root: Path) -> None:
     tests_path = root / "tests" / "python"
     tests_path.mkdir(parents=True)
     (root / "tests" / "run_tests.py").write_text(
-        """import pytest, sys
-raise SystemExit(pytest.main(['tests/python', *sys.argv[1:]]))
-"""
+        dedent(
+            """\
+            import pytest, sys
+            raise SystemExit(pytest.main(['tests/python', *sys.argv[1:]]))
+            """
+        )
     )
     (tests_path / "conftest.py").write_text(
-        """import pytest
-@pytest.fixture(autouse=True)
-def fixture_ran(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv('BATCH_FIXTURE_RAN', 'yes')
-"""
+        dedent(
+            """\
+            import pytest
+            @pytest.fixture(autouse=True)
+            def fixture_ran(monkeypatch: pytest.MonkeyPatch) -> None:
+                monkeypatch.setenv('BATCH_FIXTURE_RAN', 'yes')
+            """
+        )
     )
     for index in range(13):
         folder = tests_path if index < 12 else tests_path / "nested"
         folder.mkdir(exist_ok=True)
         name = f"test_case_{index:02d}.py" if index < 12 else "nested_test.py"
         (folder / name).write_text(
-            """import json, os, pytest
-from pathlib import Path
-if 'QD_BATCH_SELECTION' in os.environ:
-    assert str(Path(__file__).resolve()) in json.loads(Path(os.environ['QD_BATCH_SELECTION']).read_text())
-@pytest.mark.parametrize('value', [0, 1])
-def test_case(value: int) -> None:
-    assert os.environ.get('BATCH_FIXTURE_RAN') == 'yes'
-@pytest.mark.skip(reason='expected')
-def test_skip() -> None:
-    pass
-"""
+            dedent(
+                """\
+                import json, os, pytest
+                from pathlib import Path
+                if 'QD_BATCH_SELECTION' in os.environ:
+                    assert str(Path(__file__).resolve()) in json.loads(Path(os.environ['QD_BATCH_SELECTION']).read_text())
+                @pytest.mark.parametrize('value', [0, 1])
+                def test_case(value: int) -> None:
+                    assert os.environ.get('BATCH_FIXTURE_RAN') == 'yes'
+                @pytest.mark.skip(reason='expected')
+                def test_skip() -> None:
+                    pass
+                """
+            )
         )
 
 
