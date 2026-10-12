@@ -49,6 +49,7 @@ def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_bac
     skip_target_kernel = os.environ.get("QD_CYCLE_SKIP_TARGET_KERNEL") == "1"
     compile_only = os.environ.get("QD_CYCLE_COMPILE_ONLY") == "1"
     materialize_only = os.environ.get("QD_CYCLE_MATERIALIZE_ONLY") == "1"
+    skip_empty_root = os.environ.get("QD_CYCLE_SKIP_EMPTY_ROOT") == "1"
     raw_device_cycles = os.environ.get("QD_CYCLE_RAW_DEVICE") == "1"
     raw_device = None
     kernel_identity = id(retained._primal)
@@ -139,6 +140,7 @@ def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_bac
                 raw_device_cycles=raw_device_cycles,
                 compile_only=compile_only,
                 materialize_only=materialize_only,
+                skip_empty_root=skip_empty_root,
                 moltenvk_environment={
                     key: os.environ.get(key)
                     for key in ("MVK_CONFIG_USE_MTLHEAP", "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS")
@@ -191,6 +193,11 @@ def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_bac
                     else:
                         qd.init(arch=backend, enable_fallback=False, offline_cache=False, cpu_max_num_threads=1)
                         assert impl.current_cfg().arch == backend
+                        if skip_empty_root and stage == middle_stage:
+                            assert backend == qd.vulkan and impl.root.empty and not impl.root.finalized
+                            # Diagnostic only: suppress first-call empty-root finalization for this field-free scalar.
+                            # CPU stages retain normal materialization; checked kernel compilation/launch still run.
+                            impl.get_runtime().materialized = True
                         offset = index * max(300, vulkan_cycles) + cycle + 1 if unique else 1
                         if materialize_only and stage == middle_stage:
                             impl.get_runtime().materialize()
@@ -199,6 +206,8 @@ def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_bac
                             compile_without_launch(retained._primal, cycle, offset, impl)
                         elif not skip_target_kernel or stage != middle_stage:
                             assert retained(cycle, offset) == cycle + offset
+                        if skip_empty_root and stage == middle_stage:
+                            assert impl.root.empty and not impl.root.finalized
                         if cycle == 0 and stage == middle_stage:
                             from quadrants._lib import core
 
@@ -272,6 +281,20 @@ def main():
         or os.environ.get("QD_CYCLE_RAW_DEVICE") == "1"
     ):
         raise ValueError("Compile-only mode cannot combine with allocation, skip-kernel or raw-device modes")
+    if os.environ.get("QD_CYCLE_SKIP_EMPTY_ROOT") == "1" and (
+        target_backend != "vulkan"
+        or allocation
+        or any(
+            os.environ.get(key) == "1"
+            for key in (
+                "QD_CYCLE_SKIP_TARGET_KERNEL",
+                "QD_CYCLE_RAW_DEVICE",
+                "QD_CYCLE_COMPILE_ONLY",
+                "QD_CYCLE_MATERIALIZE_ONLY",
+            )
+        )
+    ):
+        raise ValueError("Empty-root bypass requires the checked field-free Vulkan scalar workload")
     if os.environ.get("QD_CYCLE_MATERIALIZE_ONLY") == "1" and (
         allocation
         or any(

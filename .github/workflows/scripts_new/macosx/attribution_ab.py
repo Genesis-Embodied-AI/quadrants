@@ -36,7 +36,7 @@ def main():
                         choices=('binary', 'expanded-binary', 'workload', 'snapshots', 'gc-profile',
                                  'dataclass-ablation', 'pydantic', 'process-batches', 'owner-guard',
                                  'owner-guard-candidate', 'gc-freeze-candidate', 'process-batches-candidate',
-                                 'production-batches-candidate', 'import-batch', 'import-batch-census', 'runtime-growth', 'kernel-registry', 'kernel-lifetime', 'gc-native', 'gc-walk', 'simt-only', 'python-gc', 'gc-order', 'gc-cpu', 'gc-memory', 'runtime-cycles', 'runtime-unique-cycles', 'runtime-allocation-cycles', 'runtime-materialize-cycles', 'runtime-no-mtlheap-cycles', 'runtime-no-argument-buffers-cycles', 'runtime-api-trace-cycles'),
+                                 'production-batches-candidate', 'import-batch', 'import-batch-census', 'runtime-growth', 'kernel-registry', 'kernel-lifetime', 'gc-native', 'gc-walk', 'simt-only', 'python-gc', 'gc-order', 'gc-cpu', 'gc-memory', 'runtime-cycles', 'runtime-unique-cycles', 'runtime-allocation-cycles', 'runtime-materialize-cycles', 'runtime-no-mtlheap-cycles', 'runtime-no-argument-buffers-cycles', 'runtime-api-trace-cycles', 'runtime-no-root-cycles', 'runtime-no-root-trace-cycles'),
                         default='binary')
     parser.add_argument('--requirements', type=Path, help='Optional historically recorded dependency versions')
     parser.add_argument('--reference', type=Path, help='Completed full-suite artifact for candidate coverage checks')
@@ -46,11 +46,11 @@ def main():
     materialize_cycles = args.comparison == 'runtime-materialize-cycles'
     allocation_cycles = args.comparison == 'runtime-allocation-cycles'
     unique_cycles = args.comparison == 'runtime-unique-cycles'
-    runtime_cycles = args.comparison in ('runtime-cycles', 'runtime-unique-cycles', 'runtime-allocation-cycles', 'runtime-materialize-cycles', 'runtime-no-mtlheap-cycles', 'runtime-no-argument-buffers-cycles', 'runtime-api-trace-cycles')
+    runtime_cycles = args.comparison in ('runtime-cycles', 'runtime-unique-cycles', 'runtime-allocation-cycles', 'runtime-materialize-cycles', 'runtime-no-mtlheap-cycles', 'runtime-no-argument-buffers-cycles', 'runtime-api-trace-cycles', 'runtime-no-root-cycles', 'runtime-no-root-trace-cycles')
     cpu_gc = args.comparison == 'gc-cpu'
     order_gc = args.comparison == 'gc-order'
-    memory_gc = args.comparison in ('gc-memory', 'runtime-cycles', 'runtime-unique-cycles', 'runtime-allocation-cycles', 'runtime-materialize-cycles', 'runtime-no-mtlheap-cycles', 'runtime-no-argument-buffers-cycles', 'runtime-api-trace-cycles')
-    walk_gc = args.comparison in ('gc-walk', 'gc-memory', 'runtime-cycles', 'runtime-unique-cycles', 'runtime-allocation-cycles', 'runtime-materialize-cycles', 'runtime-no-mtlheap-cycles', 'runtime-no-argument-buffers-cycles', 'runtime-api-trace-cycles')
+    memory_gc = args.comparison in ('gc-memory', 'runtime-cycles', 'runtime-unique-cycles', 'runtime-allocation-cycles', 'runtime-materialize-cycles', 'runtime-no-mtlheap-cycles', 'runtime-no-argument-buffers-cycles', 'runtime-api-trace-cycles', 'runtime-no-root-cycles', 'runtime-no-root-trace-cycles')
+    walk_gc = args.comparison in ('gc-walk', 'gc-memory', 'runtime-cycles', 'runtime-unique-cycles', 'runtime-allocation-cycles', 'runtime-materialize-cycles', 'runtime-no-mtlheap-cycles', 'runtime-no-argument-buffers-cycles', 'runtime-api-trace-cycles', 'runtime-no-root-cycles', 'runtime-no-root-trace-cycles')
     python_gc = args.comparison == 'python-gc'
     simt_only = args.comparison == 'simt-only'
     native_gc = args.comparison in ('gc-native', 'gc-walk', 'simt-only', 'gc-order', 'gc-cpu', 'gc-memory')
@@ -283,7 +283,7 @@ def main():
             [str(python), '-c', 'import quadrants; print(quadrants.__path__[0] + "/_lib/runtime")'],
             text=True, env=env, cwd=test_root).splitlines()[-1]
         if runtime_cycles:
-            if cycle_comparison == 'runtime-api-trace-cycles':
+            if cycle_comparison in ('runtime-api-trace-cycles', 'runtime-no-root-trace-cycles'):
                 from vulkan_api_trace import install_trace
 
                 install_trace(env['QD_LIB_DIR'], output / 'vulkan-api-trace', env)
@@ -291,6 +291,7 @@ def main():
                 env['MVK_CONFIG_USE_MTLHEAP'] = '0'
             elif cycle_comparison == 'runtime-no-argument-buffers-cycles':
                 env['MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS'] = '0'
+            env['QD_CYCLE_SKIP_EMPTY_ROOT'] = '1' if cycle_comparison in ('runtime-no-root-cycles', 'runtime-no-root-trace-cycles') else '0'
             env['QD_CYCLE_MATERIALIZE_ONLY'] = '1' if materialize_cycles else '0'
             env['QD_CYCLE_UNIQUE'] = '1' if unique_cycles else '0'
             env['QD_CYCLE_ALLOCATIONS'] = '1' if allocation_cycles else '0'
