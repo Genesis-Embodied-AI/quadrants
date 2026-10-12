@@ -7,7 +7,10 @@ are separate diagnostic runs: walking the heap can perturb memory access and is 
 import gc
 import json
 import os
+import signal
+import subprocess
 import sys
+import threading
 import time
 import xml.etree.ElementTree as ET
 from collections import Counter
@@ -34,6 +37,41 @@ _retained = ()
 _seen_items = 0
 _finished = 0
 _stream = None
+
+
+def run_bounded(invocation, root, env, output, label, timeout=1800):
+    """Keep a stalled arm from preventing artifact upload; a timed-out arm is explicitly invalid/censored."""
+    with (output / f"{label}.log").open("w") as log:
+        proc = subprocess.Popen(
+            invocation,
+            cwd=root,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            start_new_session=True,
+        )
+
+        def terminate():
+            if proc.poll() is None:
+                (output / f"{label}-timeout.json").write_text(json.dumps(dict(timeout_seconds=timeout)) + "\n")
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+
+        timer = threading.Timer(timeout, terminate)
+        timer.daemon = True
+        timer.start()
+        try:
+            for line in proc.stdout:
+                print(line, end="", flush=True)
+                log.write(line)
+            return proc.wait()
+        finally:
+            timer.cancel()
+            timer.join()
 
 
 def prepare(root, output, label, env, census):

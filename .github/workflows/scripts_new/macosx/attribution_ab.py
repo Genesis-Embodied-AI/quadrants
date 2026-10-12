@@ -243,6 +243,10 @@ def main():
                 from process_batches import run_batched
 
                 code = run_batched(invocation, test_root, env, output, work)
+            elif args.comparison.startswith('import-batch'):
+                from import_batch import run_bounded
+
+                code = run_bounded(invocation, test_root, env, output, label)
             else:
                 with (output / f'{label}.log').open('w') as log:
                     proc = subprocess.Popen(invocation, cwd=test_root, env=env, stdout=subprocess.PIPE,

@@ -10,6 +10,19 @@ import import_batch
 import pytest
 
 
+def test_timeout_is_recorded_as_failure(tmp_path):
+    code = import_batch.run_bounded(
+        [sys.executable, "-c", "import time; time.sleep(30)"],
+        tmp_path,
+        dict(os.environ),
+        tmp_path,
+        "stalled",
+        timeout=0.1,
+    )
+    assert code < 0
+    assert json.loads((tmp_path / "stalled-timeout.json").read_text())["timeout_seconds"] == 0.1
+
+
 @pytest.mark.parametrize("census", [False, True])
 def test_import_scope_and_outcomes(tmp_path, census):
     root = tmp_path / "project"
