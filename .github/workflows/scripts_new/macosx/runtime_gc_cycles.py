@@ -17,7 +17,7 @@ from multiprocessing.connection import wait
 from pathlib import Path
 
 
-def worker(folder, index, barrier):
+def worker(folder, index, barrier, unique):
     import _gc_walk
 
     import quadrants as qd
@@ -29,8 +29,8 @@ def worker(folder, index, barrier):
     identities = tuple(id(node) for node in nodes)
 
     @qd.kernel
-    def retained(value: qd.i32) -> qd.i32:
-        return value + 1
+    def retained(value: qd.i32, offset: qd.template()) -> qd.i32:
+        return value + offset
 
     kernel_identity = id(retained._primal)
     stage, cycle = "baseline", -1
@@ -97,6 +97,7 @@ def worker(folder, index, barrier):
                 cycles_per_stage=300,
                 automatic_gc=gc.isenabled(),
                 kernel_identity=kernel_identity,
+                unique_compile_constants=unique,
             )
         )
         gc.callbacks.append(callback)
@@ -112,7 +113,8 @@ def worker(folder, index, barrier):
                     start = time.perf_counter()
                     qd.init(arch=backend, enable_fallback=False, offline_cache=False, cpu_max_num_threads=1)
                     assert impl.current_cfg().arch == backend
-                    assert retained(cycle) == cycle + 1
+                    offset = index * 300 + cycle + 1 if unique else 1
+                    assert retained(cycle, offset) == cycle + offset
                     qd.reset()
                     runtime_wall = time.perf_counter() - start
                     gc.collect()
@@ -135,7 +137,8 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     context = multiprocessing.get_context("spawn")
     barrier = context.Barrier(3)
-    children = [context.Process(target=worker, args=(args.output, index, barrier)) for index in range(3)]
+    unique = os.environ.get("QD_CYCLE_UNIQUE") == "1"
+    children = [context.Process(target=worker, args=(args.output, index, barrier, unique)) for index in range(3)]
     for child in children:
         child.start()
     pending = list(children)

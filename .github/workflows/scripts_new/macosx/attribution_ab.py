@@ -36,17 +36,18 @@ def main():
                         choices=('binary', 'expanded-binary', 'workload', 'snapshots', 'gc-profile',
                                  'dataclass-ablation', 'pydantic', 'process-batches', 'owner-guard',
                                  'owner-guard-candidate', 'gc-freeze-candidate', 'process-batches-candidate',
-                                 'production-batches-candidate', 'import-batch', 'import-batch-census', 'runtime-growth', 'kernel-registry', 'kernel-lifetime', 'gc-native', 'gc-walk', 'simt-only', 'python-gc', 'gc-order', 'gc-cpu', 'gc-memory', 'runtime-cycles'),
+                                 'production-batches-candidate', 'import-batch', 'import-batch-census', 'runtime-growth', 'kernel-registry', 'kernel-lifetime', 'gc-native', 'gc-walk', 'simt-only', 'python-gc', 'gc-order', 'gc-cpu', 'gc-memory', 'runtime-cycles', 'runtime-unique-cycles'),
                         default='binary')
     parser.add_argument('--requirements', type=Path, help='Optional historically recorded dependency versions')
     parser.add_argument('--reference', type=Path, help='Completed full-suite artifact for candidate coverage checks')
     parser.add_argument('--order', required=True)
     args = parser.parse_args()
-    runtime_cycles = args.comparison == 'runtime-cycles'
+    unique_cycles = args.comparison == 'runtime-unique-cycles'
+    runtime_cycles = args.comparison in ('runtime-cycles', 'runtime-unique-cycles')
     cpu_gc = args.comparison == 'gc-cpu'
     order_gc = args.comparison == 'gc-order'
-    memory_gc = args.comparison in ('gc-memory', 'runtime-cycles')
-    walk_gc = args.comparison in ('gc-walk', 'gc-memory', 'runtime-cycles')
+    memory_gc = args.comparison in ('gc-memory', 'runtime-cycles', 'runtime-unique-cycles')
+    walk_gc = args.comparison in ('gc-walk', 'gc-memory', 'runtime-cycles', 'runtime-unique-cycles')
     python_gc = args.comparison == 'python-gc'
     simt_only = args.comparison == 'simt-only'
     native_gc = args.comparison in ('gc-native', 'gc-walk', 'simt-only', 'gc-order', 'gc-cpu', 'gc-memory')
@@ -278,6 +279,7 @@ def main():
             [str(python), '-c', 'import quadrants; print(quadrants.__path__[0] + "/_lib/runtime")'],
             text=True, env=env, cwd=test_root).splitlines()[-1]
         if runtime_cycles:
+            env['QD_CYCLE_UNIQUE'] = '1' if unique_cycles else '0'
             from import_batch_control import run_bounded
             from memory_latency_watch import memory_watch
 
@@ -286,7 +288,7 @@ def main():
             start = time.monotonic()
             with memory_watch(python, output / 'memory-control', env):
                 code = run_bounded(invocation, test_root, env, output, label)
-            results.append(dict(arm=label, comparison='runtime-cycles', seconds=time.monotonic() - start,
+            results.append(dict(arm=label, comparison='runtime-unique-cycles' if unique_cycles else 'runtime-cycles', seconds=time.monotonic() - start,
                                 returncode=code))
             (output / 'results.json').write_text(json.dumps(results, indent=2) + '\n')
             continue

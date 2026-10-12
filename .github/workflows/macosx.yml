@@ -18,6 +18,7 @@ on:
           - gc-cpu
           - gc-memory
           - runtime-cycles
+          - runtime-unique-cycles
           - simt-only
           - python-gc
           - expanded-binary
@@ -47,6 +48,7 @@ jobs:
         order: >-
           ${{ fromJSON(inputs.comparison == 'python-gc' && '["synthetic"]' ||
           inputs.comparison == 'simt-only' && '["simt"]' ||
+          inputs.comparison == 'runtime-unique-cycles' && '["growth"]' ||
           inputs.comparison == 'runtime-cycles' && '["growth"]' ||
           inputs.comparison == 'gc-memory' && '["growth"]' ||
           inputs.comparison == 'gc-cpu' && '["cpu"]' ||
