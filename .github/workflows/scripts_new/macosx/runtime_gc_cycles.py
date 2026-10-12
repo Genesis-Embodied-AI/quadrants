@@ -38,6 +38,8 @@ def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_bac
     cache_path = Path(qd._lib.core.get_repo_dir()) / "rhi_cache.bin"
     discard_cache = os.environ.get("QD_CYCLE_DISCARD_PIPELINE_CACHE") == "1"
     skip_target_kernel = os.environ.get("QD_CYCLE_SKIP_TARGET_KERNEL") == "1"
+    raw_device_cycles = os.environ.get("QD_CYCLE_RAW_DEVICE") == "1"
+    raw_device = None
     kernel_identity = id(retained._primal)
     middle_stage = "cpu_middle" if target_backend == "cpu" else target_backend
     middle_backend = {"cpu": qd.cpu, "vulkan": qd.vulkan, "metal": qd.metal}[target_backend]
@@ -123,6 +125,7 @@ def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_bac
                 target_backend=target_backend,
                 recovery_on_slow_gc=recovery_event is not None,
                 skip_target_kernel=skip_target_kernel,
+                raw_device_cycles=raw_device_cycles,
                 discard_pipeline_cache=discard_cache,
                 automatic_gc=gc.isenabled(),
                 kernel_identity=kernel_identity,
@@ -141,7 +144,15 @@ def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_bac
                 count = vulkan_cycles if stage == middle_stage else 300
                 barrier.wait(timeout=1800)
                 active_backend = qd.cpu if allocation and index != 0 else backend
-                write(dict(kind="stage_begin", backend=str(active_backend)))
+                actual_backend = (
+                    "raw-vulkan-device" if raw_device_cycles and stage == middle_stage else str(active_backend)
+                )
+                write(dict(kind="stage_begin", backend=actual_backend))
+                if raw_device_cycles and stage == middle_stage:
+                    from raw_vulkan_device import RawVulkanDevice
+
+                    raw_device = RawVulkanDevice(Path(qd.__file__).parent / "_lib/runtime/libMoltenVK.dylib")
+                    write(dict(kind="raw_device_setup", **raw_device.metadata))
                 if allocation:
                     qd.init(arch=active_backend, enable_fallback=False, offline_cache=False, cpu_max_num_threads=1)
                     assert impl.current_cfg().arch == active_backend
@@ -153,6 +164,8 @@ def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_bac
                         if index == 0:
                             array = qd.ndarray(dtype=qd.f32, shape=(8192, 8192))
                             del array
+                    elif raw_device_cycles and stage == middle_stage:
+                        raw_device.cycle()
                     else:
                         qd.init(arch=backend, enable_fallback=False, offline_cache=False, cpu_max_num_threads=1)
                         assert impl.current_cfg().arch == backend
@@ -180,9 +193,13 @@ def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_bac
                         print(index, stage, "allocation batch completed", flush=True)
                     qd.reset()
                 write(dict(kind="stage_end", cycles_completed=cycle + 1, stopped_early=stopped_early))
+            if raw_device is not None:
+                raw_device.close()
             write(dict(kind="end", automatic_gc=gc.isenabled()))
         finally:
             gc.callbacks.remove(callback)
+            if raw_device is not None:
+                raw_device.close()
 
 
 def main():
@@ -207,6 +224,10 @@ def main():
     target_backend = os.environ.get("QD_CYCLE_TARGET", "vulkan")
     if target_backend not in ("cpu", "vulkan", "metal") or (allocation and target_backend != "vulkan"):
         raise ValueError("Target backend must be cpu, vulkan or metal; allocation mode requires vulkan")
+    if os.environ.get("QD_CYCLE_RAW_DEVICE") == "1" and (
+        target_backend != "vulkan" or allocation or os.environ.get("QD_CYCLE_SKIP_TARGET_KERNEL") == "1"
+    ):
+        raise ValueError("Raw device mode requires Vulkan runtime cycles without skip-target-kernel mode")
     recovery_event = context.Event() if os.environ.get("QD_CYCLE_RECOVERY") == "1" else None
     if recovery_event is not None and allocation:
         raise ValueError("Recovery mode requires runtime cycles, not allocation mode")

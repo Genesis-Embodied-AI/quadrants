@@ -48,6 +48,10 @@ on:
         description: Discard only the separate RHI pipeline-cache file in runtime cycle diagnostics
         type: boolean
         default: false
+      raw_device_cycles:
+        description: Direct MoltenVK device churn without Quadrants Vulkan runtime buffers or shaders
+        type: boolean
+        default: false
       skip_target_kernel:
         description: Initialize/reset the target backend without a kernel call
         type: boolean
@@ -140,6 +144,7 @@ jobs:
           QD_MEMORY_PREPAGE_CONTROL: ${{ inputs.prepage_control && '1' || '0' }}
           QD_CYCLE_RECOVERY: ${{ inputs.recovery_on_slow_gc && '1' || '0' }}
           QD_CYCLE_SKIP_TARGET_KERNEL: ${{ inputs.skip_target_kernel && '1' || '0' }}
+          QD_CYCLE_RAW_DEVICE: ${{ inputs.raw_device_cycles && '1' || '0' }}
           QD_CYCLE_TARGET: ${{ inputs.cycle_backend || 'vulkan' }}
           QD_CYCLE_VULKAN_COUNT: ${{ inputs.vulkan_cycles || 300 }}
           AB_ORDER: ${{ matrix.order }}
