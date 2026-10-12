@@ -57,6 +57,10 @@ on:
         type: choice
         options: [device, buffers, fill]
         default: device
+      compile_only:
+        description: Compile the target scalar kernel through Program.compile_kernel without launch
+        type: boolean
+        default: false
       skip_target_kernel:
         description: Initialize/reset the target backend without a kernel call
         type: boolean
@@ -151,6 +155,7 @@ jobs:
           QD_CYCLE_SKIP_TARGET_KERNEL: ${{ inputs.skip_target_kernel && '1' || '0' }}
           QD_CYCLE_RAW_DEVICE: ${{ inputs.raw_device_cycles && '1' || '0' }}
           QD_RAW_DEVICE_WORK: ${{ inputs.raw_device_work || 'device' }}
+          QD_CYCLE_COMPILE_ONLY: ${{ inputs.compile_only && '1' || '0' }}
           QD_CYCLE_TARGET: ${{ inputs.cycle_backend || 'vulkan' }}
           QD_CYCLE_VULKAN_COUNT: ${{ inputs.vulkan_cycles || 300 }}
           AB_ORDER: ${{ matrix.order }}

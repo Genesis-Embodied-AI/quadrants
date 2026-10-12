@@ -20,6 +20,15 @@ from multiprocessing.connection import wait
 from pathlib import Path
 
 
+def compile_without_launch(kernel, value, offset, impl):
+    kernel.raise_on_templated_floats = False
+    key = kernel.ensure_compiled(value, offset)
+    native = kernel.materialized_kernels[key]
+    program = impl.get_runtime().prog
+    result = program.compile_kernel(program.config(), program.get_device_caps(), native)
+    assert result.compiled_kernel_data is not None
+
+
 def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_backend, recovery_event):
     import _gc_walk
 
@@ -38,6 +47,7 @@ def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_bac
     cache_path = Path(qd._lib.core.get_repo_dir()) / "rhi_cache.bin"
     discard_cache = os.environ.get("QD_CYCLE_DISCARD_PIPELINE_CACHE") == "1"
     skip_target_kernel = os.environ.get("QD_CYCLE_SKIP_TARGET_KERNEL") == "1"
+    compile_only = os.environ.get("QD_CYCLE_COMPILE_ONLY") == "1"
     raw_device_cycles = os.environ.get("QD_CYCLE_RAW_DEVICE") == "1"
     raw_device = None
     kernel_identity = id(retained._primal)
@@ -126,6 +136,7 @@ def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_bac
                 recovery_on_slow_gc=recovery_event is not None,
                 skip_target_kernel=skip_target_kernel,
                 raw_device_cycles=raw_device_cycles,
+                compile_only=compile_only,
                 discard_pipeline_cache=discard_cache,
                 automatic_gc=gc.isenabled(),
                 kernel_identity=kernel_identity,
@@ -175,7 +186,9 @@ def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_bac
                         qd.init(arch=backend, enable_fallback=False, offline_cache=False, cpu_max_num_threads=1)
                         assert impl.current_cfg().arch == backend
                         offset = index * max(300, vulkan_cycles) + cycle + 1 if unique else 1
-                        if not skip_target_kernel or stage != middle_stage:
+                        if compile_only and stage == middle_stage:
+                            compile_without_launch(retained._primal, cycle, offset, impl)
+                        elif not skip_target_kernel or stage != middle_stage:
                             assert retained(cycle, offset) == cycle + offset
                         qd.reset()
                     runtime_wall = time.perf_counter() - start
@@ -233,6 +246,12 @@ def main():
         target_backend != "vulkan" or allocation or os.environ.get("QD_CYCLE_SKIP_TARGET_KERNEL") == "1"
     ):
         raise ValueError("Raw device mode requires Vulkan runtime cycles without skip-target-kernel mode")
+    if os.environ.get("QD_CYCLE_COMPILE_ONLY") == "1" and (
+        allocation
+        or os.environ.get("QD_CYCLE_SKIP_TARGET_KERNEL") == "1"
+        or os.environ.get("QD_CYCLE_RAW_DEVICE") == "1"
+    ):
+        raise ValueError("Compile-only mode cannot combine with allocation, skip-kernel or raw-device modes")
     recovery_event = context.Event() if os.environ.get("QD_CYCLE_RECOVERY") == "1" else None
     if recovery_event is not None and allocation:
         raise ValueError("Recovery mode requires runtime cycles, not allocation mode")
