@@ -37,6 +37,7 @@ def make_fake_tests_project(root: Path) -> None:
         dedent(
             """\
             import pytest
+
             # Set a marker so tests can verify that conftest fixtures still run when tests are batched.
             @pytest.fixture(autouse=True)
             def fixture_ran(monkeypatch: pytest.MonkeyPatch) -> None:
