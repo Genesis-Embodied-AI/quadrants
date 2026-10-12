@@ -7,6 +7,7 @@ Snapshots mode compares the complete matching tests and binary from each histori
 Dataclass-ablation mode removes only the added dataclass tests from PRs #842 and #867, keeping the October binary.
 Expanded-binary mode retains unchanged test definitions from modified files, with the August test source fixed.
 Pydantic mode holds the October binary and full tests fixed and exchanges only Pydantic and pydantic-core versions.
+Process-batches mode holds the October binary/tests fixed and restarts pytest after each group of 12 test files.
 """
 import argparse
 import ast
@@ -30,7 +31,7 @@ def main():
         parser.add_argument('--' + name, type=Path, required=True)
     parser.add_argument('--comparison',
                         choices=('binary', 'expanded-binary', 'workload', 'snapshots', 'gc-profile',
-                                 'dataclass-ablation', 'pydantic'),
+                                 'dataclass-ablation', 'pydantic', 'process-batches'),
                         default='binary')
     parser.add_argument('--requirements', type=Path, help='Optional historically recorded dependency versions')
     parser.add_argument('--order', required=True)
@@ -42,6 +43,8 @@ def main():
         expected = {'new'}
     if args.comparison == 'dataclass-ablation':
         expected = {'pruned', 'full'}
+    if args.comparison == 'process-batches':
+        expected = {'full', 'batched'}
     labels = args.order.split('-')
     if len(labels) != len(expected) or set(labels) != expected:
         parser.error(f'--order must contain each of {sorted(expected)} exactly once')
@@ -156,10 +159,11 @@ def main():
 
     results = []
     for label in labels:
-        binary = 'new' if args.comparison in ('workload', 'dataclass-ablation', 'pydantic') else label
+        fixed_binary = args.comparison in ('workload', 'dataclass-ablation', 'pydantic', 'process-batches')
+        binary = 'new' if fixed_binary else label
         test_root = (new if label == 'full' or
                      (args.comparison in ('snapshots', 'gc-profile') and label == 'new') else old)
-        if args.comparison in ('dataclass-ablation', 'pydantic'):
+        if args.comparison in ('dataclass-ablation', 'pydantic', 'process-batches'):
             test_root = new
         python = pythons[label] if args.comparison == 'pydantic' else pythons[binary]
         env = dict(os.environ, PATH=f'{python.parent}:{os.environ["PATH"]}', VIRTUAL_ENV=str(python.parent.parent),
@@ -173,10 +177,10 @@ def main():
         if args.comparison == 'dataclass-ablation' and label == 'pruned':
             options += [f'--deselect={nodeid}' for nodeid in deselected]
         options += [f'--basetemp={work / (label + "-pytest-tmp")}', f'--junitxml={output / (label + ".xml")}']
-        if args.comparison == 'gc-profile':
+        if args.comparison in ('gc-profile', 'process-batches'):
             options += ['-p', 'gc_profile']
             env['PYTHONPATH'] = str(Path(__file__).resolve().parent) + os.pathsep + env.get('PYTHONPATH', '')
-            env['QD_GC_PROFILE_DIR'] = str(output)
+            env['QD_GC_PROFILE_DIR'] = str(output if args.comparison == 'gc-profile' else output / (label + '-gc'))
         env['PYTEST_ADDOPTS'] = shlex.join(options)
         env['QD_LIB_DIR'] = subprocess.check_output(
             [str(python), '-c', 'import quadrants; print(quadrants.__path__[0] + "/_lib/runtime")'],
@@ -185,18 +189,27 @@ def main():
                       '-t', '3', '-m', 'not needs_torch']
         print(f'ARM {label}: binary={binary}, tests={test_root}; {shlex.join(invocation)}', flush=True)
         start = time.monotonic()
-        with (output / f'{label}.log').open('w') as log:
-            proc = subprocess.Popen(invocation, cwd=test_root, env=env, stdout=subprocess.PIPE,
-                                    stderr=subprocess.STDOUT, text=True, bufsize=1)
-            for line in proc.stdout:
-                print(line, end='', flush=True)
-                log.write(line)
-            code = proc.wait()
+        if label == 'batched':
+            from process_batches import run_batched
+
+            code = run_batched(invocation, test_root, env, output, work)
+        else:
+            with (output / f'{label}.log').open('w') as log:
+                proc = subprocess.Popen(invocation, cwd=test_root, env=env, stdout=subprocess.PIPE,
+                                        stderr=subprocess.STDOUT, text=True, bufsize=1)
+                for line in proc.stdout:
+                    print(line, end='', flush=True)
+                    log.write(line)
+                code = proc.wait()
         results.append(dict(arm=label, comparison=args.comparison, binary=binary,
                             test_source='new' if test_root == new else 'old',
                             seconds=time.monotonic() - start, returncode=code))
         (output / 'results.json').write_text(json.dumps(results, indent=2) + '\n')
     print(json.dumps(results, indent=2), flush=True)
+    if args.comparison == 'process-batches':
+        from process_batches import verify_coverage
+
+        verify_coverage(output)
     if any(r['returncode'] for r in results):
         raise SystemExit('An arm failed: inspect logs and test counts before interpreting durations.')
 
