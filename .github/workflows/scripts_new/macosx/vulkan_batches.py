@@ -91,13 +91,13 @@ def run_batches(root: Path, output: Path, runner_args: list[str], batch_size: in
             (output / "results.json").write_text(json.dumps(results, indent=2) + "\n")
             print("Batch result:", json.dumps(record), flush=True)
             batch_failed |= not batch_test_output_path.exists()
-        failed |= batch_failed
         if not batch_failed:
             report = ET.parse(batch_test_output_path).getroot()
             if report.tag == "testsuite":
                 suites_xml_nodes.append(report)
             else:
                 suites_xml_nodes.extend(report)
+        failed |= batch_failed
     ET.ElementTree(suites_xml_nodes).write(output / "results.xml", encoding="utf-8", xml_declaration=True)
     return int(failed)
 
