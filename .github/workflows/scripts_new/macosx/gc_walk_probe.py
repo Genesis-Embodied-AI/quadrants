@@ -72,6 +72,12 @@ def build():
 
         memory = _gc_walk.memory()
         assert len(memory["resources"]) == 4
+        chunks = memory["chunks"]
+        assert len(chunks) == 64 and sum(c["visits"] for c in chunks) == memory["visits"]
+        assert 1 <= sum(c["new_pages"] for c in chunks) <= memory["residency_before"]["pages"]
+        assert all(0 <= c["new_pages"] <= c["visits"] for c in chunks)
+        for pass_index in (0, 1):
+            assert sum(c["thread_cpu_seconds"][pass_index] for c in chunks) <= memory["thread_cpu_seconds"][pass_index + 1]
         assert all(r["minor_faults"] >= 0 and r["major_faults"] >= 0 for r in memory["resources"])
         for name in ("residency_before", "residency_after"):
             assert memory[name]["status"] == 0 and memory[name]["pages"] > 0

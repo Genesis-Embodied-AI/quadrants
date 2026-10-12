@@ -138,6 +138,9 @@ typedef struct MemoryNode {
 } MemoryNode;
 _Static_assert(sizeof(MemoryNode) == 64, "Control nodes must have a fixed stride");
 static MemoryNode *memory_nodes = NULL, *memory_head = NULL, *memory_expected = NULL;
+#define MEMORY_CHUNKS 64
+static unsigned memory_chunk_new_pages[MEMORY_CHUNKS];
+static long memory_page_size;
 
 /* Guest residency query: does not establish residency or scheduling on the hypervisor host. */
 static PyObject *memory_residency(void) {
@@ -194,6 +197,27 @@ static PyObject *memory_control(PyObject *self, PyObject *unused) {
         memory_nodes = nodes;
         memory_head = &nodes[order[0]];
         memory_expected = &nodes[order[visits]];
+#ifdef __APPLE__
+        memory_page_size = sysconf(_SC_PAGESIZE);
+#else
+        memory_page_size = 4096;
+#endif
+        if (memory_page_size <= 0) return PyErr_SetFromErrno(PyExc_OSError);
+        uintptr_t first_page = (uintptr_t)nodes / memory_page_size;
+        size_t page_count = ((uintptr_t)(nodes + count) - 1) / memory_page_size - first_page + 1;
+        unsigned char *seen = calloc(page_count, 1);
+        if (!seen) {
+            PyMem_RawFree(order);
+            return PyErr_NoMemory();
+        }
+        for (uint32_t i = 0; i < visits; i++) {
+            size_t page = (uintptr_t)&nodes[order[i]] / memory_page_size - first_page;
+            if (!seen[page]) {
+                seen[page] = 1;
+                memory_chunk_new_pages[i / (visits / MEMORY_CHUNKS)]++;
+            }
+        }
+        free(seen);
         PyMem_RawFree(order);
     }
     PyObject *residency_before = memory_residency();
@@ -204,6 +228,7 @@ static PyObject *memory_control(PyObject *self, PyObject *unused) {
         return NULL;
     }
     double wall[4], cpu[4];
+    double chunk_wall[2][MEMORY_CHUNKS], chunk_cpu[2][MEMORY_CHUNKS];
     uint64_t checksums[2];
     for (int pass = 0; pass < 4; pass++) {
         struct rusage before, after;
@@ -216,7 +241,12 @@ static PyObject *memory_control(PyObject *self, PyObject *unused) {
             checksums[pass / 3] = arithmetic();
         } else {
             MemoryNode *node = memory_head;
-            for (uint32_t i = 0; i < visits; i++) node = node->next;
+            for (unsigned chunk = 0; chunk < MEMORY_CHUNKS; chunk++) {
+                double cw = now(CLOCK_MONOTONIC), cc = now(CLOCK_THREAD_CPUTIME_ID);
+                for (uint32_t i = 0; i < visits / MEMORY_CHUNKS; i++) node = node->next;
+                chunk_cpu[pass - 1][chunk] = now(CLOCK_THREAD_CPUTIME_ID) - cc;
+                chunk_wall[pass - 1][chunk] = now(CLOCK_MONOTONIC) - cw;
+            }
             if (node != memory_expected) {
                 PyErr_SetString(PyExc_RuntimeError, "Fixed memory control checksum mismatch");
                 goto failed;
@@ -246,12 +276,30 @@ static PyObject *memory_control(PyObject *self, PyObject *unused) {
     }
     PyObject *residency_after = memory_residency();
     if (!residency_after) goto failed;
-    return Py_BuildValue("{s:i,s:i,s:i,s:(dddd),s:(dddd),s:N,s:N,s:N}", "nodes", (int)count,
+    PyObject *chunks = PyList_New(MEMORY_CHUNKS);
+    if (!chunks) {
+        Py_DECREF(residency_after);
+        goto failed;
+    }
+    for (unsigned chunk = 0; chunk < MEMORY_CHUNKS; chunk++) {
+        PyObject *item = Py_BuildValue("{s:i,s:i,s:i,s:(dd),s:(dd)}", "index", (int)chunk,
+                                      "visits", (int)(visits / MEMORY_CHUNKS),
+                                      "new_pages", (int)memory_chunk_new_pages[chunk],
+                                      "wall_seconds", chunk_wall[0][chunk], chunk_wall[1][chunk],
+                                      "thread_cpu_seconds", chunk_cpu[0][chunk], chunk_cpu[1][chunk]);
+        if (!item) {
+            Py_DECREF(chunks);
+            Py_DECREF(residency_after);
+            goto failed;
+        }
+        PyList_SET_ITEM(chunks, chunk, item);
+    }
+    return Py_BuildValue("{s:i,s:i,s:i,s:(dddd),s:(dddd),s:N,s:N,s:N,s:N,s:l}", "nodes", (int)count,
                          "visits", (int)visits, "bytes", (int)(count * sizeof(MemoryNode)),
                          "wall_seconds", wall[0], wall[1], wall[2], wall[3],
                          "thread_cpu_seconds", cpu[0], cpu[1], cpu[2], cpu[3],
                          "resources", resources, "residency_before", residency_before,
-                         "residency_after", residency_after);
+                         "residency_after", residency_after, "chunks", chunks, "chunk_page_size", memory_page_size);
 failed:
     Py_DECREF(resources);
     Py_DECREF(residency_before);
