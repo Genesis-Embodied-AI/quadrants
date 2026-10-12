@@ -1,4 +1,4 @@
-"""Run Mac Vulkan test files in small groups with fresh pytest controllers and workers.
+"""Run test files in small groups with fresh pytest controllers and workers.
 
 Long-lived Mac Vulkan workers can spend minutes in individual full garbage collections. Keeping each process's
 collection small avoids this in the measured runs while retaining the normal fixtures and interpreter shutdown.
@@ -81,7 +81,7 @@ def run_batches(root: Path, output: Path, runner_args: list[str], batch_size: in
         options = shlex.split(env.get("PYTEST_ADDOPTS", ""))
         options += [
             "-p",
-            "vulkan_batches",
+            "run_test_batches",
             f"--basetemp={output / (batch_label + '-tmp')}",
             f"--junitxml={batch_test_output_path}",
         ]

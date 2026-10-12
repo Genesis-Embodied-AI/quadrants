@@ -10,11 +10,11 @@ from pathlib import Path
 
 import pytest
 
-_runner_path = Path(__file__).resolve().parents[1] / "vulkan_batches.py"
-_spec = importlib.util.spec_from_file_location("vulkan_batches", _runner_path)
+_runner_path = Path(__file__).resolve().parents[1] / "run_test_batches.py"
+_spec = importlib.util.spec_from_file_location("run_test_batches", _runner_path)
 assert _spec is not None and _spec.loader is not None
-vulkan_batches = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(vulkan_batches)
+run_test_batches = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(run_test_batches)
 
 
 @pytest.fixture(autouse=True)
@@ -67,7 +67,7 @@ def test_complete_case_outcomes_and_fresh_selection(tmp_path: Path) -> None:
         check=True,
     )
     output = tmp_path / "batches"
-    assert vulkan_batches.run_batches(tmp_path, output, []) == 0
+    assert run_test_batches.run_batches(tmp_path, output, []) == 0
     assert cases(output / "results.xml") == cases(baseline)
     assert sum(cases(baseline).values()) == 39
     manifest_contents = json.loads((output / "manifest.json").read_text())
@@ -80,7 +80,7 @@ def test_failure_is_not_hidden_by_later_success(tmp_path: Path) -> None:
         "def test_failure() -> None:\n    assert False\n"
     )
     output = tmp_path / "batches"
-    assert vulkan_batches.run_batches(tmp_path, output, []) == 1
+    assert run_test_batches.run_batches(tmp_path, output, []) == 1
     records = json.loads((output / "results.json").read_text())
     assert [(record["batch"], record["returncode"]) for record in records] == [(1, 0)]
     assert cases(output / "results.xml") == cases(output / "batch-01.xml")
@@ -99,7 +99,7 @@ def test_selected_files_respect_pytest_ignore_options(
     ignored.write_text("raise AssertionError('Ignored test module must not be imported')\n")
     monkeypatch.setenv("PYTEST_ADDOPTS", f"-q -p xdist.plugin -n 3 {ignore_option}=tests/python/test_case_00.py")
     output = tmp_path / "batches"
-    assert vulkan_batches.run_batches(tmp_path, output, []) == 0
+    assert run_test_batches.run_batches(tmp_path, output, []) == 0
     report = ET.parse(output / "results.xml")
     assert len(list(report.iter("testcase"))) == 36
     assert all("test_case_00" not in case.get("classname", "") for case in report.iter("testcase"))

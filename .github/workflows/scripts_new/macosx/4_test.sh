@@ -27,7 +27,7 @@ fi
 # Phase 1: run all tests except torch-dependent ones
 if [ "${MAC_TEST_ARCH}" = "vulkan" ]; then
   # Run batches of up to 12 files sequentially, with fresh pytest-xdist workers running tests in parallel per batch.
-  python tests/vulkan_batches.py \
+  python tests/run_test_batches.py \
     --output "${RUNNER_TEMP}/vulkan-batches" -- -v -r 1 --arch vulkan -m "not needs_torch"
 else
   python tests/run_tests.py -v -r 1 --arch "${MAC_TEST_ARCH}" -m "not needs_torch"
