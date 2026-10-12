@@ -4,9 +4,9 @@ import json
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
-from collections import Counter
 from pathlib import Path
 from textwrap import dedent
+from typing import Literal
 
 import pytest
 
@@ -73,11 +73,20 @@ def make_fake_tests_project(root: Path) -> None:
         )
 
 
-def cases(path: Path) -> Counter[tuple[str | None, str | None, tuple[str, ...]]]:
-    return Counter(
-        (case.get("classname"), case.get("name"), tuple(child.tag for child in case))
-        for case in ET.parse(path).iter("testcase")
-    )
+def cases(path: Path) -> dict[tuple[str | None, str | None], Literal["pass", "fail", "skip", "error"]]:
+    outcomes: dict[tuple[str | None, str | None], Literal["pass", "fail", "skip", "error"]] = {}
+    for case in ET.parse(path).iter("testcase"):
+        key = (case.get("classname"), case.get("name"))
+        assert key not in outcomes, f"Duplicate test case in {path}: {key}"
+        if case.find("error") is not None:
+            outcomes[key] = "error"
+        elif case.find("failure") is not None:
+            outcomes[key] = "fail"
+        elif case.find("skipped") is not None:
+            outcomes[key] = "skip"
+        else:
+            outcomes[key] = "pass"
+    return outcomes
 
 
 def test_complete_case_outcomes_and_fresh_selection(tmp_path: Path) -> None:
@@ -91,7 +100,7 @@ def test_complete_case_outcomes_and_fresh_selection(tmp_path: Path) -> None:
     output = tmp_path / "batches"
     assert run_test_batches.run_batches(tmp_path, output, []) == 0
     assert cases(output / "results.xml") == cases(baseline)
-    assert sum(cases(baseline).values()) == 39
+    assert len(cases(baseline)) == 39
     manifest_contents = json.loads((output / "manifest.json").read_text())
     assert [len(group) for group in manifest_contents] == [12, 1]
 
