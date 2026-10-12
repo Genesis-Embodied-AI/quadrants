@@ -45,8 +45,8 @@ def run_batches(root: Path, output: Path, runner_args: list[str], batch_size: in
     if not files or batch_size < 1:
         raise ValueError("A nonempty test manifest and positive batch size are required")
     file_groups = [files[start : start + batch_size] for start in range(0, len(files), batch_size)]
-    manifest = [[str(path.relative_to(root)) for path in group] for group in file_groups]
-    (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    manifest_contents = [[str(path.relative_to(root)) for path in group] for group in file_groups]
+    (output / "manifest.json").write_text(json.dumps(manifest_contents, indent=2) + "\n")
     results = []
     suites = ET.Element("testsuites")
     failed = False
@@ -62,7 +62,7 @@ def run_batches(root: Path, output: Path, runner_args: list[str], batch_size: in
         options = shlex.split(env.get("PYTEST_ADDOPTS", ""))
         options += ["-p", "vulkan_batches", f"--basetemp={output / (label + '-tmp')}", f"--junitxml={xml}"]
         env["PYTEST_ADDOPTS"] = shlex.join(options)
-        print(f"Batch {index + 1}/{len(file_groups)}: {manifest[index]}", flush=True)
+        print(f"Batch {index + 1}/{len(file_groups)}: {manifest_contents[index]}", flush=True)
         start = time.monotonic()
         result = subprocess.run([sys.executable, "tests/run_tests.py", *runner_args], cwd=root, env=env)
         record = dict(batch=index, seconds=time.monotonic() - start, returncode=result.returncode)

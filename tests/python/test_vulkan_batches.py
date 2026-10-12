@@ -70,8 +70,8 @@ def test_complete_case_outcomes_and_fresh_selection(tmp_path: Path) -> None:
     assert vulkan_batches.run_batches(tmp_path, output, []) == 0
     assert cases(output / "results.xml") == cases(baseline)
     assert sum(cases(baseline).values()) == 39
-    manifest = json.loads((output / "manifest.json").read_text())
-    assert [len(group) for group in manifest] == [12, 1]
+    manifest_contents = json.loads((output / "manifest.json").read_text())
+    assert [len(group) for group in manifest_contents] == [12, 1]
 
 
 def test_failure_is_not_hidden_by_later_success(tmp_path: Path) -> None:
