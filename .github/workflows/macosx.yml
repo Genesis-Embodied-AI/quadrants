@@ -44,6 +44,10 @@ on:
         type: choice
         options: [vulkan, cpu]
         default: vulkan
+      discard_pipeline_cache:
+        description: Discard only the separate RHI pipeline-cache file in runtime cycle diagnostics
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -120,6 +124,7 @@ jobs:
           path: reference
       - name: Run controlled comparison
         env:
+          QD_CYCLE_DISCARD_PIPELINE_CACHE: ${{ inputs.discard_pipeline_cache && '1' || '0' }}
           QD_CYCLE_TARGET: ${{ inputs.cycle_backend || 'vulkan' }}
           QD_CYCLE_VULKAN_COUNT: ${{ inputs.vulkan_cycles || 300 }}
           AB_ORDER: ${{ matrix.order }}

@@ -1,6 +1,7 @@
 """Bounded minimal Mac runtime-cycle diagnostic with a retained synthetic graph and one kernel per worker.
 
-Three workers run CPU/Vulkan/CPU stages on the same VM, retaining the same graph and kernel identities throughout.
+Three workers run CPU/target/CPU stages on the same VM, retaining the same graph and kernel identities throughout.
+The target defaults to Vulkan; a CPU-only control selects CPU explicitly.
 This is a trigger search, not a full-suite benchmark or an order-independent backend comparison. No registry patch,
 GC suppression, heap reordering, or process recycling is applied. Native memory controls are read-only.
 Allocation mode instead keeps one runtime per stage and lets only worker zero allocate/free 300 256-MiB ndarrays;
@@ -34,6 +35,8 @@ def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_bac
     def retained(value: qd.i32, offset: qd.template()) -> qd.i32:
         return value + offset
 
+    cache_path = Path(qd._lib.core.get_repo_dir()) / "rhi_cache.bin"
+    discard_cache = os.environ.get("QD_CYCLE_DISCARD_PIPELINE_CACHE") == "1"
     kernel_identity = id(retained._primal)
     middle_stage = "vulkan" if target_backend == "vulkan" else "cpu_middle"
     middle_backend = qd.vulkan if target_backend == "vulkan" else qd.cpu
@@ -71,6 +74,18 @@ def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_bac
                     )
                 )
 
+        def cache_record():
+            try:
+                with cache_path.open("rb") as cache:
+                    header = cache.read(64)
+                result = dict(path=str(cache_path), bytes=cache_path.stat().st_size, header_hex=header.hex())
+            except FileNotFoundError:
+                result = dict(path=str(cache_path), absent=True)
+            if discard_cache:
+                assert cache_path.is_symlink() and cache_path.resolve() == Path("/dev/null")
+                assert result.get("bytes") == 0 and result.get("header_hex") == ""
+            return result
+
         def census():
             assert id(retained._primal) == kernel_identity
             assert len(nodes) == len(identities) and all(
@@ -89,6 +104,7 @@ def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_bac
                     graph_edges_sampled=True,
                     memory=_gc_walk.memory(),
                     maxrss=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
+                    pipeline_cache=cache_record(),
                 )
             )
 
@@ -100,6 +116,7 @@ def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_bac
                 payload_bytes=256,
                 stage_cycles={"cpu_before": 300, middle_stage: vulkan_cycles, "cpu_after": 300},
                 target_backend=target_backend,
+                discard_pipeline_cache=discard_cache,
                 automatic_gc=gc.isenabled(),
                 kernel_identity=kernel_identity,
                 unique_compile_constants=unique,
@@ -162,6 +179,12 @@ def main():
     args = parser.parse_args()
     assert sys.platform == "darwin" and sys.version_info[:2] == (3, 10)
     args.output.mkdir(parents=True, exist_ok=True)
+    if os.environ.get("QD_CYCLE_DISCARD_PIPELINE_CACHE") == "1":
+        cache_root = (args.output / "discarded-pipeline-cache").resolve()
+        cache_folder = cache_root / "quadrants"
+        cache_folder.mkdir(parents=True, exist_ok=True)
+        (cache_folder / "rhi_cache.bin").symlink_to("/dev/null")
+        os.environ["XDG_CACHE_HOME"] = str(cache_root)
     context = multiprocessing.get_context("spawn")
     barrier = context.Barrier(3)
     unique = os.environ.get("QD_CYCLE_UNIQUE") == "1"
