@@ -21,19 +21,20 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pytest import Config
 
-_selected = None
+_SELECTED = None
 
 
 def pytest_configure(config: Config) -> None:
-    global _selected
-    _selected = {Path(path) for path in json.loads(Path(os.environ["QD_BATCH_SELECTION"]).read_text())}
-    if not _selected or any(not path.is_file() for path in _selected):
+    # Load and validate this batch's selected test files before pytest starts collecting tests.
+    global _SELECTED
+    _SELECTED = {Path(path) for path in json.loads(Path(os.environ["QD_BATCH_SELECTION"]).read_text())}
+    if not _SELECTED or any(not path.is_file() for path in _SELECTED):
         raise RuntimeError("Batch selection is empty or references missing files")
 
 
 def pytest_ignore_collect(collection_path: Path, config: Config) -> bool | None:
     if collection_path.is_file() and collection_path.suffix in (".py", ".ipynb"):
-        return collection_path.resolve() not in _selected
+        return collection_path.resolve() not in _SELECTED
     return None
 
 
