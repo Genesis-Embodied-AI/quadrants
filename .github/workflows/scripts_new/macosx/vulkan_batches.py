@@ -85,18 +85,19 @@ def run_batches(root: Path, output: Path, runner_args: list[str], batch_size: in
         start = time.monotonic()
         result = subprocess.run([sys.executable, "tests/run_tests.py", *runner_args], cwd=root, env=env)
         failed |= result.returncode != 0
-        record = dict(batch=index, seconds=time.monotonic() - start, returncode=result.returncode)
-        results.append(record)
-        (output / "results.json").write_text(json.dumps(results, indent=2) + "\n")
-        print("Batch result:", json.dumps(record), flush=True)
-        if batch_test_output_path.exists():
-            report = ET.parse(batch_test_output_path).getroot()
-            if report.tag == "testsuite":
-                suites_xml_nodes.append(report)
+        if not failed:
+            record = dict(batch=index, seconds=time.monotonic() - start, returncode=result.returncode)
+            results.append(record)
+            (output / "results.json").write_text(json.dumps(results, indent=2) + "\n")
+            print("Batch result:", json.dumps(record), flush=True)
+            if batch_test_output_path.exists():
+                report = ET.parse(batch_test_output_path).getroot()
+                if report.tag == "testsuite":
+                    suites_xml_nodes.append(report)
+                else:
+                    suites_xml_nodes.extend(report)
             else:
-                suites_xml_nodes.extend(report)
-        else:
-            failed = True
+                failed = True
     ET.ElementTree(suites_xml_nodes).write(output / "results.xml", encoding="utf-8", xml_declaration=True)
     return int(failed)
 
