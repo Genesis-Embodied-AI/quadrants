@@ -35,17 +35,19 @@ def main():
     parser.add_argument('--comparison',
                         choices=('binary', 'expanded-binary', 'workload', 'snapshots', 'gc-profile',
                                  'dataclass-ablation', 'pydantic', 'process-batches', 'owner-guard',
-                                 'owner-guard-candidate', 'gc-freeze-candidate', 'process-batches-candidate'),
+                                 'owner-guard-candidate', 'gc-freeze-candidate', 'process-batches-candidate',
+                                 'production-batches-candidate'),
                         default='binary')
     parser.add_argument('--requirements', type=Path, help='Optional historically recorded dependency versions')
     parser.add_argument('--reference', type=Path, help='Completed full-suite artifact for candidate coverage checks')
     parser.add_argument('--order', required=True)
     args = parser.parse_args()
-    candidate_only = args.comparison in ('owner-guard-candidate', 'gc-freeze-candidate', 'process-batches-candidate')
+    production_batches = args.comparison == 'production-batches-candidate'
+    candidate_only = args.comparison.endswith('-candidate')
     if candidate_only:
         if not args.reference or not args.requirements:
             parser.error('Candidate-only mode requires a completed reference artifact and historical dependency pins')
-        args.comparison = args.comparison.removesuffix('-candidate')
+        args.comparison = 'process-batches' if production_batches else args.comparison.removesuffix('-candidate')
     if args.comparison == 'pydantic' and not args.requirements:
         parser.error('Pydantic comparison requires the historical October dependency pins.')
     expected = {'common', 'full'} if args.comparison == 'workload' else {'old', 'new'}
@@ -217,6 +219,9 @@ def main():
             text=True, env=env, cwd=test_root).splitlines()[-1]
         invocation = [str(python), 'tests/run_tests.py', '-v', '-r', '1', '--arch', 'vulkan',
                       '-t', '3', '-m', 'not needs_torch']
+        if production_batches:
+            invocation = [str(python), str(Path(__file__).with_name('vulkan_batches.py').resolve()),
+                          '--output', str(output / 'production-batches'), '--', *invocation[2:]]
         print(f'ARM {label}: binary={binary}, tests={test_root}; {shlex.join(invocation)}', flush=True)
         start = time.monotonic()
         with ExitStack() as stack:
@@ -224,7 +229,7 @@ def main():
                 from ndarray_owner_guard import without_forced_collections
 
                 stack.enter_context(without_forced_collections(test_root, output))
-            if label == 'batched':
+            if label == 'batched' and not production_batches:
                 from process_batches import run_batched
 
                 code = run_batched(invocation, test_root, env, output, work)
@@ -236,6 +241,8 @@ def main():
                         print(line, end='', flush=True)
                         log.write(line)
                     code = proc.wait()
+        if production_batches:
+            shutil.copy2(output / 'production-batches/results.xml', output / 'batched.xml')
         results.append(dict(arm=label, comparison=args.comparison, binary=binary,
                             test_source='new' if test_root == new else 'old',
                             seconds=time.monotonic() - start, returncode=code))

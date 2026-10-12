@@ -15,6 +15,7 @@ on:
           - pydantic
           - process-batches
           - process-batches-candidate
+          - production-batches-candidate
           - owner-guard
           - owner-guard-candidate
           - gc-freeze-candidate
@@ -31,7 +32,8 @@ jobs:
       fail-fast: false
       matrix:
         order: >-
-          ${{ fromJSON(inputs.comparison == 'process-batches-candidate' && '["batched"]' ||
+          ${{ fromJSON(inputs.comparison == 'production-batches-candidate' && '["batched"]' ||
+          inputs.comparison == 'process-batches-candidate' && '["batched"]' ||
           inputs.comparison == 'gc-freeze-candidate' && '["frozen"]' ||
           inputs.comparison == 'owner-guard-candidate' && '["guarded"]' ||
           inputs.comparison == 'owner-guard' && '["guarded-full","full-guarded"]' ||
