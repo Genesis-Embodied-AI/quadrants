@@ -18,6 +18,7 @@ on:
           - gc-cpu
           - gc-memory
           - runtime-materialize-cycles
+          - runtime-materialize-trace-cycles
           - runtime-no-root-cycles
           - runtime-no-root-trace-cycles
           - runtime-api-trace-cycles
@@ -100,6 +101,7 @@ jobs:
           inputs.comparison == 'runtime-api-trace-cycles' && '["growth"]' ||
           inputs.comparison == 'runtime-no-mtlheap-cycles' && '["growth"]' ||
           inputs.comparison == 'runtime-no-argument-buffers-cycles' && '["growth"]' ||
+          inputs.comparison == 'runtime-materialize-trace-cycles' && '["growth"]' ||
           inputs.comparison == 'runtime-materialize-cycles' && '["growth"]' ||
           inputs.comparison == 'runtime-cycles' && '["growth"]' ||
           inputs.comparison == 'gc-memory' && '["growth"]' ||
