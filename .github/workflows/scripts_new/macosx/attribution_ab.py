@@ -261,6 +261,7 @@ def main():
             options += ['-p', 'gc_order_control']
         if memory_gc:
             env['QD_GC_MEMORY'] = '1'
+            env['PYTHONFAULTHANDLER'] = '1'
         if walk_gc:
             env['QD_GC_WALK'] = '1'
             command([python, Path(__file__).with_name('gc_walk_probe.py').resolve()], env=env, cwd=test_root)
@@ -309,6 +310,10 @@ def main():
         print(f'ARM {label}: binary={binary}, tests={test_root}; {shlex.join(invocation)}', flush=True)
         start = time.monotonic()
         with ExitStack() as stack:
+            if memory_gc:
+                from crash_reports import crash_reports
+
+                stack.enter_context(crash_reports(output / 'crash-reports'))
             if memory_gc:
                 from memory_latency_watch import memory_watch
 

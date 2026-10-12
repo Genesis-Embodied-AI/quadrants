@@ -3,12 +3,14 @@
 #include <Python.h>
 #include <internal/pycore_gc.h>
 #include <internal/pycore_interp.h>
+#include <errno.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <time.h>
+#include <sys/resource.h>
 #ifdef __APPLE__
 #include <libproc.h>
-#include <sys/resource.h>
+#include <sys/mman.h>
 #include <unistd.h>
 #endif
 
@@ -137,6 +139,38 @@ typedef struct MemoryNode {
 _Static_assert(sizeof(MemoryNode) == 64, "Control nodes must have a fixed stride");
 static MemoryNode *memory_nodes = NULL, *memory_head = NULL, *memory_expected = NULL;
 
+/* Guest residency query: does not establish residency or scheduling on the hypervisor host. */
+static PyObject *memory_residency(void) {
+#ifdef __APPLE__
+    long page_size = sysconf(_SC_PAGESIZE);
+    if (page_size <= 0) return PyErr_SetFromErrno(PyExc_OSError);
+    uintptr_t begin = (uintptr_t)memory_nodes & ~((uintptr_t)page_size - 1);
+    uintptr_t end = ((uintptr_t)memory_nodes + (1u << 20) * sizeof(MemoryNode) + page_size - 1)
+                    & ~((uintptr_t)page_size - 1);
+    size_t pages = (end - begin) / page_size;
+    char *vector = calloc(pages, 1);
+    if (!vector) return PyErr_NoMemory();
+    int status = mincore((void *)begin, end - begin, vector), saved_errno = status ? errno : 0;
+    size_t resident = 0, paged_out = 0;
+    if (!status) {
+        for (size_t i = 0; i < pages; i++) {
+            resident += !!(vector[i] & MINCORE_INCORE);
+            paged_out += !!(vector[i] & MINCORE_PAGED_OUT);
+        }
+    }
+    free(vector);
+    return Py_BuildValue("{s:i,s:i,s:l,s:n,s:n,s:n}", "status", status, "errno", saved_errno,
+                         "page_size", page_size, "pages", (Py_ssize_t)pages,
+                         "resident", (Py_ssize_t)resident, "paged_out", (Py_ssize_t)paged_out);
+#else
+    Py_RETURN_NONE;
+#endif
+}
+
+static double usage_seconds(struct timeval value) {
+    return value.tv_sec + value.tv_usec * 1e-6;
+}
+
 static PyObject *memory_control(PyObject *self, PyObject *unused) {
     const uint32_t count = 1u << 20, visits = 1u << 18;
     if (!memory_nodes) {
@@ -162,9 +196,21 @@ static PyObject *memory_control(PyObject *self, PyObject *unused) {
         memory_expected = &nodes[order[visits]];
         PyMem_RawFree(order);
     }
+    PyObject *residency_before = memory_residency();
+    if (!residency_before) return NULL;
+    PyObject *resources = PyList_New(0);
+    if (!resources) {
+        Py_DECREF(residency_before);
+        return NULL;
+    }
     double wall[4], cpu[4];
     uint64_t checksums[2];
     for (int pass = 0; pass < 4; pass++) {
+        struct rusage before, after;
+        if (getrusage(RUSAGE_SELF, &before)) {
+            PyErr_SetFromErrno(PyExc_OSError);
+            goto failed;
+        }
         double w = now(CLOCK_MONOTONIC), c = now(CLOCK_THREAD_CPUTIME_ID);
         if (pass == 0 || pass == 3) {
             checksums[pass / 3] = arithmetic();
@@ -173,20 +219,43 @@ static PyObject *memory_control(PyObject *self, PyObject *unused) {
             for (uint32_t i = 0; i < visits; i++) node = node->next;
             if (node != memory_expected) {
                 PyErr_SetString(PyExc_RuntimeError, "Fixed memory control checksum mismatch");
-                return NULL;
+                goto failed;
             }
         }
         cpu[pass] = now(CLOCK_THREAD_CPUTIME_ID) - c;
         wall[pass] = now(CLOCK_MONOTONIC) - w;
+        if (getrusage(RUSAGE_SELF, &after)) {
+            PyErr_SetFromErrno(PyExc_OSError);
+            goto failed;
+        }
+        PyObject *delta = Py_BuildValue("{s:l,s:l,s:l,s:l,s:d,s:d}",
+                                       "minor_faults", after.ru_minflt - before.ru_minflt,
+                                       "major_faults", after.ru_majflt - before.ru_majflt,
+                                       "voluntary_switches", after.ru_nvcsw - before.ru_nvcsw,
+                                       "involuntary_switches", after.ru_nivcsw - before.ru_nivcsw,
+                                       "user_cpu", usage_seconds(after.ru_utime) - usage_seconds(before.ru_utime),
+                                       "system_cpu", usage_seconds(after.ru_stime) - usage_seconds(before.ru_stime));
+        if (!delta) goto failed;
+        int append_status = PyList_Append(resources, delta);
+        Py_DECREF(delta);
+        if (append_status) goto failed;
     }
     if (checksums[0] != checksums[1]) {
         PyErr_SetString(PyExc_RuntimeError, "Memory-control arithmetic checksum mismatch");
-        return NULL;
+        goto failed;
     }
-    return Py_BuildValue("{s:i,s:i,s:i,s:(dddd),s:(dddd)}", "nodes", (int)count,
+    PyObject *residency_after = memory_residency();
+    if (!residency_after) goto failed;
+    return Py_BuildValue("{s:i,s:i,s:i,s:(dddd),s:(dddd),s:N,s:N,s:N}", "nodes", (int)count,
                          "visits", (int)visits, "bytes", (int)(count * sizeof(MemoryNode)),
                          "wall_seconds", wall[0], wall[1], wall[2], wall[3],
-                         "thread_cpu_seconds", cpu[0], cpu[1], cpu[2], cpu[3]);
+                         "thread_cpu_seconds", cpu[0], cpu[1], cpu[2], cpu[3],
+                         "resources", resources, "residency_before", residency_before,
+                         "residency_after", residency_after);
+failed:
+    Py_DECREF(resources);
+    Py_DECREF(residency_before);
+    return NULL;
 }
 
 static PyObject *measure(PyObject *self, PyObject *objects) {

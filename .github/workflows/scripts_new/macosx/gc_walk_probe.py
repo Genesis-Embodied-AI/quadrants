@@ -70,6 +70,13 @@ def build():
     if os.environ.get("QD_GC_MEMORY") == "1":
         import _gc_walk
 
+        memory = _gc_walk.memory()
+        assert len(memory["resources"]) == 4
+        assert all(r["minor_faults"] >= 0 and r["major_faults"] >= 0 for r in memory["resources"])
+        for name in ("residency_before", "residency_after"):
+            assert memory[name]["status"] == 0 and memory[name]["pages"] > 0
+            assert 0 <= memory[name]["resident"] <= memory[name]["pages"]
+        print("Memory residency/resource smoke passed", memory["residency_after"], flush=True)
         enabled = gc.isenabled()
         gc.disable()
         try:
