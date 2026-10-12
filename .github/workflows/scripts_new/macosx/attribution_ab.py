@@ -36,14 +36,15 @@ def main():
                         choices=('binary', 'expanded-binary', 'workload', 'snapshots', 'gc-profile',
                                  'dataclass-ablation', 'pydantic', 'process-batches', 'owner-guard',
                                  'owner-guard-candidate', 'gc-freeze-candidate', 'process-batches-candidate',
-                                 'production-batches-candidate', 'import-batch', 'import-batch-census', 'runtime-growth', 'kernel-registry', 'kernel-lifetime', 'gc-native', 'gc-walk'),
+                                 'production-batches-candidate', 'import-batch', 'import-batch-census', 'runtime-growth', 'kernel-registry', 'kernel-lifetime', 'gc-native', 'gc-walk', 'simt-only'),
                         default='binary')
     parser.add_argument('--requirements', type=Path, help='Optional historically recorded dependency versions')
     parser.add_argument('--reference', type=Path, help='Completed full-suite artifact for candidate coverage checks')
     parser.add_argument('--order', required=True)
     args = parser.parse_args()
     walk_gc = args.comparison == 'gc-walk'
-    native_gc = args.comparison in ('gc-native', 'gc-walk')
+    simt_only = args.comparison == 'simt-only'
+    native_gc = args.comparison in ('gc-native', 'gc-walk', 'simt-only')
     if native_gc:
         args.comparison = 'runtime-growth'
     lifetime_only = args.comparison == 'kernel-lifetime'
@@ -71,7 +72,7 @@ def main():
     if args.comparison.startswith('import-batch'):
         expected = {'small', 'all'}
     if args.comparison == 'runtime-growth':
-        expected = {'growth'}
+        expected = {'simt'} if simt_only else {'growth'}
     if args.comparison == 'kernel-registry':
         expected = {'strong', 'weak'}
     labels = args.order.split('-')
@@ -236,6 +237,10 @@ def main():
             from import_batch_control import prepare_growth
 
             prepare_growth(test_root, output, env)
+            if simt_only:
+                selection = output / 'simt-selection.json'
+                selection.write_text(json.dumps([str(test_root / 'tests/python/test_simt.py')]) + '\n')
+                env['QD_BATCH_SELECTION'] = str(selection)
             options += ['-p', 'import_batch']
         if args.comparison == 'kernel-registry':
             env['QD_KERNEL_REGISTRY'] = label

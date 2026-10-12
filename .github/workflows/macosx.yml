@@ -14,6 +14,7 @@ on:
           - kernel-lifetime
           - gc-native
           - gc-walk
+          - simt-only
           - expanded-binary
           - workload
           - snapshots
@@ -39,7 +40,8 @@ jobs:
       fail-fast: false
       matrix:
         order: >-
-          ${{ fromJSON(inputs.comparison == 'gc-walk' && '["growth"]' ||
+          ${{ fromJSON(inputs.comparison == 'simt-only' && '["simt"]' ||
+          inputs.comparison == 'gc-walk' && '["growth"]' ||
           inputs.comparison == 'gc-native' && '["growth"]' ||
           inputs.comparison == 'kernel-lifetime' && '["strong-weak"]' ||
           inputs.comparison == 'kernel-registry' && '["weak-strong","strong-weak"]' ||
