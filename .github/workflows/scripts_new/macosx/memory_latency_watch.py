@@ -15,7 +15,7 @@ from pathlib import Path
 
 
 @contextmanager
-def memory_watch(python, folder, env):
+def memory_watch(python, folder, env, recovery_seconds=0):
     folder.mkdir(parents=True, exist_ok=True)
     with (folder / "sidecar.log").open("w") as stream:
         process = subprocess.Popen(
@@ -25,6 +25,16 @@ def memory_watch(python, folder, env):
         try:
             yield
         finally:
+            if recovery_seconds:
+                boundary = dict(workload_ended_at=time.time(), recovery_seconds=recovery_seconds)
+                print(
+                    "Workload exited; observing independent memory recovery for",
+                    recovery_seconds,
+                    "seconds",
+                    flush=True,
+                )
+                (folder / "recovery-window.json").write_text(json.dumps(boundary) + "\n")
+                time.sleep(recovery_seconds)
             already_exited = process.poll() is not None
             if not already_exited:
                 process.terminate()

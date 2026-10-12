@@ -20,6 +20,7 @@ on:
           - runtime-materialize-cycles
           - runtime-materialize-trace-cycles
           - runtime-standalone-cycles
+          - runtime-standalone-exit-cycles
           - runtime-no-root-cycles
           - runtime-no-root-trace-cycles
           - runtime-api-trace-cycles
@@ -103,6 +104,7 @@ jobs:
           inputs.comparison == 'runtime-no-mtlheap-cycles' && '["growth"]' ||
           inputs.comparison == 'runtime-no-argument-buffers-cycles' && '["growth"]' ||
           inputs.comparison == 'runtime-standalone-cycles' && '["growth"]' ||
+          inputs.comparison == 'runtime-standalone-exit-cycles' && '["growth"]' ||
           inputs.comparison == 'runtime-materialize-trace-cycles' && '["growth"]' ||
           inputs.comparison == 'runtime-materialize-cycles' && '["growth"]' ||
           inputs.comparison == 'runtime-cycles' && '["growth"]' ||

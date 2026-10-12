@@ -36,7 +36,7 @@ def main():
                         choices=('binary', 'expanded-binary', 'workload', 'snapshots', 'gc-profile',
                                  'dataclass-ablation', 'pydantic', 'process-batches', 'owner-guard',
                                  'owner-guard-candidate', 'gc-freeze-candidate', 'process-batches-candidate',
-                                 'production-batches-candidate', 'import-batch', 'import-batch-census', 'runtime-growth', 'kernel-registry', 'kernel-lifetime', 'gc-native', 'gc-walk', 'simt-only', 'python-gc', 'gc-order', 'gc-cpu', 'gc-memory', 'runtime-cycles', 'runtime-unique-cycles', 'runtime-allocation-cycles', 'runtime-materialize-cycles', 'runtime-standalone-cycles', 'runtime-materialize-trace-cycles', 'runtime-no-mtlheap-cycles', 'runtime-no-argument-buffers-cycles', 'runtime-api-trace-cycles', 'runtime-no-root-cycles', 'runtime-no-root-trace-cycles'),
+                                 'production-batches-candidate', 'import-batch', 'import-batch-census', 'runtime-growth', 'kernel-registry', 'kernel-lifetime', 'gc-native', 'gc-walk', 'simt-only', 'python-gc', 'gc-order', 'gc-cpu', 'gc-memory', 'runtime-cycles', 'runtime-unique-cycles', 'runtime-allocation-cycles', 'runtime-materialize-cycles', 'runtime-standalone-cycles', 'runtime-standalone-exit-cycles', 'runtime-materialize-trace-cycles', 'runtime-no-mtlheap-cycles', 'runtime-no-argument-buffers-cycles', 'runtime-api-trace-cycles', 'runtime-no-root-cycles', 'runtime-no-root-trace-cycles'),
                         default='binary')
     parser.add_argument('--requirements', type=Path, help='Optional historically recorded dependency versions')
     parser.add_argument('--reference', type=Path, help='Completed full-suite artifact for candidate coverage checks')
@@ -46,11 +46,11 @@ def main():
     materialize_cycles = args.comparison in ('runtime-materialize-cycles', 'runtime-materialize-trace-cycles')
     allocation_cycles = args.comparison == 'runtime-allocation-cycles'
     unique_cycles = args.comparison == 'runtime-unique-cycles'
-    runtime_cycles = args.comparison in ('runtime-cycles', 'runtime-unique-cycles', 'runtime-allocation-cycles', 'runtime-materialize-cycles', 'runtime-standalone-cycles', 'runtime-materialize-trace-cycles', 'runtime-no-mtlheap-cycles', 'runtime-no-argument-buffers-cycles', 'runtime-api-trace-cycles', 'runtime-no-root-cycles', 'runtime-no-root-trace-cycles')
+    runtime_cycles = args.comparison in ('runtime-cycles', 'runtime-unique-cycles', 'runtime-allocation-cycles', 'runtime-materialize-cycles', 'runtime-standalone-cycles', 'runtime-standalone-exit-cycles', 'runtime-materialize-trace-cycles', 'runtime-no-mtlheap-cycles', 'runtime-no-argument-buffers-cycles', 'runtime-api-trace-cycles', 'runtime-no-root-cycles', 'runtime-no-root-trace-cycles')
     cpu_gc = args.comparison == 'gc-cpu'
     order_gc = args.comparison == 'gc-order'
-    memory_gc = args.comparison in ('gc-memory', 'runtime-cycles', 'runtime-unique-cycles', 'runtime-allocation-cycles', 'runtime-materialize-cycles', 'runtime-standalone-cycles', 'runtime-materialize-trace-cycles', 'runtime-no-mtlheap-cycles', 'runtime-no-argument-buffers-cycles', 'runtime-api-trace-cycles', 'runtime-no-root-cycles', 'runtime-no-root-trace-cycles')
-    walk_gc = args.comparison in ('gc-walk', 'gc-memory', 'runtime-cycles', 'runtime-unique-cycles', 'runtime-allocation-cycles', 'runtime-materialize-cycles', 'runtime-standalone-cycles', 'runtime-materialize-trace-cycles', 'runtime-no-mtlheap-cycles', 'runtime-no-argument-buffers-cycles', 'runtime-api-trace-cycles', 'runtime-no-root-cycles', 'runtime-no-root-trace-cycles')
+    memory_gc = args.comparison in ('gc-memory', 'runtime-cycles', 'runtime-unique-cycles', 'runtime-allocation-cycles', 'runtime-materialize-cycles', 'runtime-standalone-cycles', 'runtime-standalone-exit-cycles', 'runtime-materialize-trace-cycles', 'runtime-no-mtlheap-cycles', 'runtime-no-argument-buffers-cycles', 'runtime-api-trace-cycles', 'runtime-no-root-cycles', 'runtime-no-root-trace-cycles')
+    walk_gc = args.comparison in ('gc-walk', 'gc-memory', 'runtime-cycles', 'runtime-unique-cycles', 'runtime-allocation-cycles', 'runtime-materialize-cycles', 'runtime-standalone-cycles', 'runtime-standalone-exit-cycles', 'runtime-materialize-trace-cycles', 'runtime-no-mtlheap-cycles', 'runtime-no-argument-buffers-cycles', 'runtime-api-trace-cycles', 'runtime-no-root-cycles', 'runtime-no-root-trace-cycles')
     python_gc = args.comparison == 'python-gc'
     simt_only = args.comparison == 'simt-only'
     native_gc = args.comparison in ('gc-native', 'gc-walk', 'simt-only', 'gc-order', 'gc-cpu', 'gc-memory')
@@ -306,13 +306,16 @@ def main():
             from import_batch_control import run_bounded
             from memory_latency_watch import memory_watch
 
-            cycle_script = 'raw_runtime_repro.py' if cycle_comparison == 'runtime-standalone-cycles' else 'runtime_gc_cycles.py'
+            exit_recovery = cycle_comparison == 'runtime-standalone-exit-cycles'
+            env['QD_REPRO_EXIT_ON_SLOW'] = '1' if exit_recovery else '0'
+            cycle_script = 'raw_runtime_repro.py' if cycle_comparison.startswith('runtime-standalone-') else 'runtime_gc_cycles.py'
             invocation = [str(python), str(Path(__file__).with_name(cycle_script).resolve()),
                           str(output / 'runtime-cycles')]
             start = time.monotonic()
             from crash_reports import crash_reports
 
-            with crash_reports(output / 'crash-reports'), memory_watch(python, output / 'memory-control', env):
+            with crash_reports(output / 'crash-reports'), memory_watch(
+                    python, output / 'memory-control', env, recovery_seconds=180 if exit_recovery else 0):
                 code = run_bounded(invocation, test_root, env, output, label)
             results.append(dict(arm=label, comparison=cycle_comparison, seconds=time.monotonic() - start,
                                 returncode=code))

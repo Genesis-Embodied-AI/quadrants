@@ -19,7 +19,7 @@ from pathlib import Path
 from raw_vulkan_device import RawVulkanDevice
 
 
-def worker(folder, index, barrier, library, work, count):
+def worker(folder, index, barrier, library, work, count, recovery_event):
     import _gc_walk
 
     assert "quadrants" not in sys.modules
@@ -58,6 +58,9 @@ def worker(folder, index, barrier, library, work, count):
                         for key in ("ru_minflt", "ru_majflt", "ru_utime", "ru_stime", "ru_nvcsw", "ru_nivcsw")
                     },
                 )
+                if recovery_event is not None and stage == "vulkan" and wall >= 3:
+                    write(kind="recovery_trigger", wall_seconds=wall, thread_cpu_seconds=cpu)
+                    recovery_event.set()
 
         def census():
             assert "quadrants" not in sys.modules
@@ -80,6 +83,8 @@ def worker(folder, index, barrier, library, work, count):
             )
 
         stages = dict(cpu_before=300, vulkan=count, cpu_after=300)
+        if recovery_event is not None:
+            del stages["cpu_after"]
         write(
             kind="start",
             pid=os.getpid(),
@@ -92,6 +97,8 @@ def worker(folder, index, barrier, library, work, count):
             cpu_stage_work="two full collections only",
             automatic_gc=gc.isenabled(),
             unique_compile_constants=False,
+            recovery_on_slow_gc=recovery_event is not None,
+            recovery_action="exit all workers" if recovery_event is not None else None,
             moltenvk_environment={
                 key: os.environ.get(key) for key in ("MVK_CONFIG_USE_MTLHEAP", "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS")
             },
@@ -108,6 +115,7 @@ def worker(folder, index, barrier, library, work, count):
                     raw = RawVulkanDevice(library, work)
                     write(kind="raw_device_setup", **raw.metadata)
                 write(kind="stage_begin", actual_backend="raw-vulkan-device" if stage == "vulkan" else "python-only")
+                stopped_early = False
                 for cycle in range(stage_count):
                     started = time.perf_counter()
                     if stage == "vulkan":
@@ -121,7 +129,10 @@ def worker(folder, index, barrier, library, work, count):
                     if cycle % 25 == 0 or cycle == stage_count - 1:
                         census()
                         print(index, stage, cycle, "runtime", elapsed, flush=True)
-                write(kind="stage_end", cycles_completed=stage_count, stopped_early=False)
+                    if stage == "vulkan" and recovery_event is not None and recovery_event.is_set():
+                        stopped_early = True
+                        break
+                write(kind="stage_end", cycles_completed=cycle + 1, stopped_early=stopped_early)
             raw.close()
             write(kind="end", quadrants_imported=False, automatic_gc=gc.isenabled())
         finally:
@@ -145,8 +156,11 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     context = multiprocessing.get_context("spawn")
     barrier = context.Barrier(3)
+    recovery_event = context.Event() if os.environ.get("QD_REPRO_EXIT_ON_SLOW") == "1" else None
     children = [
-        context.Process(target=worker, args=(args.output, i, barrier, args.library, args.work, args.cycles))
+        context.Process(
+            target=worker, args=(args.output, i, barrier, args.library, args.work, args.cycles, recovery_event)
+        )
         for i in range(3)
     ]
     for child in children:
