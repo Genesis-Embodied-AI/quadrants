@@ -43,7 +43,7 @@ on:
           - gc-freeze-candidate
         default: binary
       vulkan_cycles:
-        description: Target backend iterations per worker for runtime cycle diagnostics (1 to 1500)
+        description: Target backend iterations per worker for runtime cycle diagnostics (1 to 2000)
         type: number
         default: 300
       cycle_backend:

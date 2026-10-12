@@ -277,8 +277,8 @@ def main():
     unique = os.environ.get("QD_CYCLE_UNIQUE") == "1"
     allocation = os.environ.get("QD_CYCLE_ALLOCATIONS") == "1"
     vulkan_cycles = int(os.environ.get("QD_CYCLE_VULKAN_COUNT", "300"))
-    if not 1 <= vulkan_cycles <= 1500 or (allocation and vulkan_cycles != 300):
-        raise ValueError("Vulkan cycles must be 1..1500; allocation mode requires 300")
+    if not 1 <= vulkan_cycles <= 2000 or (allocation and vulkan_cycles != 300):
+        raise ValueError("Vulkan cycles must be 1..2000; allocation mode requires 300")
     target_backend = os.environ.get("QD_CYCLE_TARGET", "vulkan")
     if target_backend not in ("cpu", "vulkan", "metal") or (allocation and target_backend != "vulkan"):
         raise ValueError("Target backend must be cpu, vulkan or metal; allocation mode requires vulkan")
