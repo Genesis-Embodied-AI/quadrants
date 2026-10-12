@@ -61,7 +61,7 @@ def run_batched(invocation, test_root, env, output, work):
     return int(any(record['returncode'] or not record['xml_exists'] for record in records))
 
 
-def verify_coverage(output):
+def verify_coverage(output, candidate='batched'):
     def cases(label):
         counts = Counter()
         for case in ET.parse(output / (label + '.xml')).iter('testcase'):
@@ -69,10 +69,12 @@ def verify_coverage(output):
             counts[(case.get('classname'), case.get('name'), outcome)] += 1
         return counts
 
-    full, batched = cases('full'), cases('batched')
-    differences = [dict(case=key, full=full[key], batched=batched[key])
+    full, batched = cases('full'), cases(candidate)
+    differences = [dict(case=key, full=full[key], **{candidate: batched[key]})
                    for key in sorted(full.keys() | batched.keys()) if full[key] != batched[key]]
-    (output / 'batch_coverage.json').write_text(json.dumps(dict(
-        full_cases=sum(full.values()), batched_cases=sum(batched.values()), differences=differences), indent=2) + '\n')
+    name = 'batch_coverage.json' if candidate == 'batched' else candidate + '_coverage.json'
+    summary = dict(full_cases=sum(full.values()), differences=differences,
+                   **{candidate + '_cases': sum(batched.values())})
+    (output / name).write_text(json.dumps(summary, indent=2) + '\n')
     if not full or differences:
-        raise RuntimeError('Batched/full outcomes differ; inspect batch_coverage.json before interpreting timings.')
+        raise RuntimeError(f'{candidate}/full outcomes differ; inspect the coverage JSON before interpreting timings.')

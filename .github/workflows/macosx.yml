@@ -5,7 +5,16 @@ on:
       comparison:
         description: Shared-test binaries, common/full October workloads, or complete historical snapshots
         type: choice
-        options: [binary, expanded-binary, workload, snapshots, gc-profile, dataclass-ablation, pydantic, process-batches]
+        options:
+          - binary
+          - expanded-binary
+          - workload
+          - snapshots
+          - gc-profile
+          - dataclass-ablation
+          - pydantic
+          - process-batches
+          - owner-guard
         default: binary
 permissions:
   contents: read
@@ -19,7 +28,8 @@ jobs:
       fail-fast: false
       matrix:
         order: >-
-          ${{ fromJSON(inputs.comparison == 'process-batches' && '["batched-full","full-batched"]' ||
+          ${{ fromJSON(inputs.comparison == 'owner-guard' && '["guarded-full","full-guarded"]' ||
+          inputs.comparison == 'process-batches' && '["batched-full","full-batched"]' ||
           inputs.comparison == 'dataclass-ablation' && '["pruned-full","full-pruned"]' ||
           inputs.comparison == 'gc-profile' && '["new"]' || inputs.comparison == 'workload' &&
           '["common-full","full-common"]' || '["old-new","new-old"]') }}

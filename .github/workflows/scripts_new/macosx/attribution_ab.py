@@ -8,9 +8,11 @@ Dataclass-ablation mode removes only the added dataclass tests from PRs #842 and
 Expanded-binary mode retains unchanged test definitions from modified files, with the August test source fixed.
 Pydantic mode holds the October binary and full tests fixed and exchanges only Pydantic and pydantic-core versions.
 Process-batches mode holds the October binary/tests fixed and restarts pytest after each group of 12 test files.
+Owner-guard mode protects ndarray deletion across runtime resets and removes the two forced collections per test.
 """
 import argparse
 import ast
+from contextlib import ExitStack
 import hashlib
 import json
 import os
@@ -31,7 +33,7 @@ def main():
         parser.add_argument('--' + name, type=Path, required=True)
     parser.add_argument('--comparison',
                         choices=('binary', 'expanded-binary', 'workload', 'snapshots', 'gc-profile',
-                                 'dataclass-ablation', 'pydantic', 'process-batches'),
+                                 'dataclass-ablation', 'pydantic', 'process-batches', 'owner-guard'),
                         default='binary')
     parser.add_argument('--requirements', type=Path, help='Optional historically recorded dependency versions')
     parser.add_argument('--order', required=True)
@@ -45,6 +47,8 @@ def main():
         expected = {'pruned', 'full'}
     if args.comparison == 'process-batches':
         expected = {'full', 'batched'}
+    if args.comparison == 'owner-guard':
+        expected = {'full', 'guarded'}
     labels = args.order.split('-')
     if len(labels) != len(expected) or set(labels) != expected:
         parser.error(f'--order must contain each of {sorted(expected)} exactly once')
@@ -159,11 +163,12 @@ def main():
 
     results = []
     for label in labels:
-        fixed_binary = args.comparison in ('workload', 'dataclass-ablation', 'pydantic', 'process-batches')
+        fixed_binary = args.comparison in (
+            'workload', 'dataclass-ablation', 'pydantic', 'process-batches', 'owner-guard')
         binary = 'new' if fixed_binary else label
         test_root = (new if label == 'full' or
                      (args.comparison in ('snapshots', 'gc-profile') and label == 'new') else old)
-        if args.comparison in ('dataclass-ablation', 'pydantic', 'process-batches'):
+        if args.comparison in ('dataclass-ablation', 'pydantic', 'process-batches', 'owner-guard'):
             test_root = new
         python = pythons[label] if args.comparison == 'pydantic' else pythons[binary]
         env = dict(os.environ, PATH=f'{python.parent}:{os.environ["PATH"]}', VIRTUAL_ENV=str(python.parent.parent),
@@ -177,10 +182,12 @@ def main():
         if args.comparison == 'dataclass-ablation' and label == 'pruned':
             options += [f'--deselect={nodeid}' for nodeid in deselected]
         options += [f'--basetemp={work / (label + "-pytest-tmp")}', f'--junitxml={output / (label + ".xml")}']
-        if args.comparison in ('gc-profile', 'process-batches'):
+        if args.comparison in ('gc-profile', 'process-batches', 'owner-guard'):
             options += ['-p', 'gc_profile']
             env['PYTHONPATH'] = str(Path(__file__).resolve().parent) + os.pathsep + env.get('PYTHONPATH', '')
             env['QD_GC_PROFILE_DIR'] = str(output if args.comparison == 'gc-profile' else output / (label + '-gc'))
+        if label == 'guarded':
+            options += ['-p', 'ndarray_owner_guard']
         env['PYTEST_ADDOPTS'] = shlex.join(options)
         env['QD_LIB_DIR'] = subprocess.check_output(
             [str(python), '-c', 'import quadrants; print(quadrants.__path__[0] + "/_lib/runtime")'],
@@ -189,18 +196,23 @@ def main():
                       '-t', '3', '-m', 'not needs_torch']
         print(f'ARM {label}: binary={binary}, tests={test_root}; {shlex.join(invocation)}', flush=True)
         start = time.monotonic()
-        if label == 'batched':
-            from process_batches import run_batched
+        with ExitStack() as stack:
+            if label == 'guarded':
+                from ndarray_owner_guard import without_forced_collections
 
-            code = run_batched(invocation, test_root, env, output, work)
-        else:
-            with (output / f'{label}.log').open('w') as log:
-                proc = subprocess.Popen(invocation, cwd=test_root, env=env, stdout=subprocess.PIPE,
-                                        stderr=subprocess.STDOUT, text=True, bufsize=1)
-                for line in proc.stdout:
-                    print(line, end='', flush=True)
-                    log.write(line)
-                code = proc.wait()
+                stack.enter_context(without_forced_collections(test_root, output))
+            if label == 'batched':
+                from process_batches import run_batched
+
+                code = run_batched(invocation, test_root, env, output, work)
+            else:
+                with (output / f'{label}.log').open('w') as log:
+                    proc = subprocess.Popen(invocation, cwd=test_root, env=env, stdout=subprocess.PIPE,
+                                            stderr=subprocess.STDOUT, text=True, bufsize=1)
+                    for line in proc.stdout:
+                        print(line, end='', flush=True)
+                        log.write(line)
+                    code = proc.wait()
         results.append(dict(arm=label, comparison=args.comparison, binary=binary,
                             test_source='new' if test_root == new else 'old',
                             seconds=time.monotonic() - start, returncode=code))
@@ -210,6 +222,10 @@ def main():
         from process_batches import verify_coverage
 
         verify_coverage(output)
+    if args.comparison == 'owner-guard':
+        from process_batches import verify_coverage
+
+        verify_coverage(output, 'guarded')
     if any(r['returncode'] for r in results):
         raise SystemExit('An arm failed: inspect logs and test counts before interpreting durations.')
 
