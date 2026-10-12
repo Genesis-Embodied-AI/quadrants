@@ -35,6 +35,10 @@ on:
           - owner-guard-candidate
           - gc-freeze-candidate
         default: binary
+      vulkan_cycles:
+        description: Vulkan iterations per worker for runtime cycle diagnostics (1 to 1500)
+        type: number
+        default: 300
 permissions:
   contents: read
   actions: read
@@ -111,6 +115,7 @@ jobs:
           path: reference
       - name: Run controlled comparison
         env:
+          QD_CYCLE_VULKAN_COUNT: ${{ inputs.vulkan_cycles || 300 }}
           AB_ORDER: ${{ matrix.order }}
           AB_COMPARISON: ${{ inputs.comparison || 'binary' }}
         run: |
