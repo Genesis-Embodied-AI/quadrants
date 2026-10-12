@@ -57,6 +57,7 @@ def run_batches(root: Path, output: Path, runner_args: list[str], batch_size: in
         batch_test_output_path = output / f"{batch_label}.xml"
         batch_test_output_path.unlink(missing_ok=True)
         env = dict(os.environ, QD_BATCH_SELECTION=str(selection_path))
+        # Add this script's parent directory to PYTHONPATH so pytest can find it as a plugin.
         env["PYTHONPATH"] = str(Path(__file__).resolve().parent) + os.pathsep + env.get("PYTHONPATH", "")
         # Each subprocess needs its own temporary directory and test report. Other pytest settings are preserved.
         options = shlex.split(env.get("PYTEST_ADDOPTS", ""))
