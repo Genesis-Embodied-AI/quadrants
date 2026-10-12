@@ -20,7 +20,7 @@ from multiprocessing.connection import wait
 from pathlib import Path
 
 
-def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_backend):
+def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_backend, recovery_event):
     import _gc_walk
 
     import quadrants as qd
@@ -74,6 +74,10 @@ def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_bac
                     )
                 )
 
+                if recovery_event is not None and stage == middle_stage and wall >= 3:
+                    write(dict(kind="recovery_trigger", wall_seconds=wall))
+                    recovery_event.set()
+
         def cache_record():
             try:
                 with cache_path.open("rb") as cache:
@@ -116,6 +120,7 @@ def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_bac
                 payload_bytes=256,
                 stage_cycles={"cpu_before": 300, middle_stage: vulkan_cycles, "cpu_after": 300},
                 target_backend=target_backend,
+                recovery_on_slow_gc=recovery_event is not None,
                 discard_pipeline_cache=discard_cache,
                 automatic_gc=gc.isenabled(),
                 kernel_identity=kernel_identity,
@@ -139,6 +144,7 @@ def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_bac
                     qd.init(arch=active_backend, enable_fallback=False, offline_cache=False, cpu_max_num_threads=1)
                     assert impl.current_cfg().arch == active_backend
                     assert retained(7, 1) == 8
+                stopped_early = False
                 for cycle in range(count):
                     start = time.perf_counter()
                     if allocation:
@@ -159,6 +165,9 @@ def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_bac
                     if (not allocation or index != 0) and (cycle % 25 == 0 or cycle == count - 1):
                         census()
                         print(index, stage, cycle, "runtime", runtime_wall, flush=True)
+                    if stage == middle_stage and recovery_event is not None and recovery_event.is_set():
+                        stopped_early = True
+                        break
                 if allocation:
                     if index == 0:
                         write(dict(kind="post_allocation_gc_begin"))
@@ -167,7 +176,7 @@ def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_bac
                         census()
                         print(index, stage, "allocation batch completed", flush=True)
                     qd.reset()
-                write(dict(kind="stage_end"))
+                write(dict(kind="stage_end", cycles_completed=cycle + 1, stopped_early=stopped_early))
             write(dict(kind="end", automatic_gc=gc.isenabled()))
         finally:
             gc.callbacks.remove(callback)
@@ -195,9 +204,13 @@ def main():
     target_backend = os.environ.get("QD_CYCLE_TARGET", "vulkan")
     if target_backend not in ("cpu", "vulkan", "metal") or (allocation and target_backend != "vulkan"):
         raise ValueError("Target backend must be cpu, vulkan or metal; allocation mode requires vulkan")
+    recovery_event = context.Event() if os.environ.get("QD_CYCLE_RECOVERY") == "1" else None
+    if recovery_event is not None and allocation:
+        raise ValueError("Recovery mode requires runtime cycles, not allocation mode")
     children = [
         context.Process(
-            target=worker, args=(args.output, index, barrier, unique, allocation, vulkan_cycles, target_backend)
+            target=worker,
+            args=(args.output, index, barrier, unique, allocation, vulkan_cycles, target_backend, recovery_event),
         )
         for index in range(3)
     ]
