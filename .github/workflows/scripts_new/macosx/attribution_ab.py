@@ -36,12 +36,15 @@ def main():
                         choices=('binary', 'expanded-binary', 'workload', 'snapshots', 'gc-profile',
                                  'dataclass-ablation', 'pydantic', 'process-batches', 'owner-guard',
                                  'owner-guard-candidate', 'gc-freeze-candidate', 'process-batches-candidate',
-                                 'production-batches-candidate', 'import-batch', 'import-batch-census', 'runtime-growth', 'kernel-registry'),
+                                 'production-batches-candidate', 'import-batch', 'import-batch-census', 'runtime-growth', 'kernel-registry', 'kernel-lifetime'),
                         default='binary')
     parser.add_argument('--requirements', type=Path, help='Optional historically recorded dependency versions')
     parser.add_argument('--reference', type=Path, help='Completed full-suite artifact for candidate coverage checks')
     parser.add_argument('--order', required=True)
     args = parser.parse_args()
+    lifetime_only = args.comparison == 'kernel-lifetime'
+    if lifetime_only:
+        args.comparison = 'kernel-registry'
     production_batches = args.comparison == 'production-batches-candidate'
     candidate_only = args.comparison.endswith('-candidate')
     if candidate_only:
@@ -247,8 +250,14 @@ def main():
             invocation = [str(python), str(Path(__file__).with_name('vulkan_batches.py').resolve()),
                           '--output', str(output / 'production-batches'), '--', *invocation[2:]]
         if args.comparison == 'kernel-registry':
+            probe_start = time.monotonic()
             command([python, Path(__file__).with_name('kernel_registry_probe.py').resolve(),
                      output / f'{label}-lifetime.json'], env=env, cwd=test_root)
+            if lifetime_only:
+                results.append(dict(arm=label, comparison='kernel-lifetime', seconds=time.monotonic() - probe_start,
+                                    returncode=0))
+                (output / 'results.json').write_text(json.dumps(results, indent=2) + '\n')
+                continue
         print(f'ARM {label}: binary={binary}, tests={test_root}; {shlex.join(invocation)}', flush=True)
         start = time.monotonic()
         with ExitStack() as stack:
@@ -291,7 +300,7 @@ def main():
         from import_batch_control import verify
 
         verify(output)
-    if args.comparison == 'kernel-registry':
+    if args.comparison == 'kernel-registry' and not lifetime_only:
         from process_batches import verify_coverage
 
         for result in results:

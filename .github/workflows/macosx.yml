@@ -11,6 +11,7 @@ on:
           - import-batch-census
           - runtime-growth
           - kernel-registry
+          - kernel-lifetime
           - expanded-binary
           - workload
           - snapshots
@@ -36,7 +37,8 @@ jobs:
       fail-fast: false
       matrix:
         order: >-
-          ${{ fromJSON(inputs.comparison == 'kernel-registry' && '["weak-strong","strong-weak"]' ||
+          ${{ fromJSON(inputs.comparison == 'kernel-lifetime' && '["strong-weak"]' ||
+          inputs.comparison == 'kernel-registry' && '["weak-strong","strong-weak"]' ||
           inputs.comparison == 'runtime-growth' && '["growth"]' ||
           startsWith(inputs.comparison, 'import-batch') && '["small-all","all-small"]' ||
           inputs.comparison == 'production-batches-candidate' && '["batched"]' ||
@@ -80,7 +82,7 @@ jobs:
           github-token: ${{ github.token }}
           path: wheels-new
       - name: Download completed full-suite coverage reference
-        if: endsWith(inputs.comparison, '-candidate') || inputs.comparison == 'kernel-registry'
+        if: endsWith(inputs.comparison, '-candidate') || startsWith(inputs.comparison, 'kernel-')
         uses: actions/download-artifact@v4
         with:
           name: vulkan-attribution-full-pruned
@@ -96,7 +98,7 @@ jobs:
           if [[ "$AB_COMPARISON" != binary ]]; then
             pinned=(--requirements control/.github/workflows/scripts_new/macosx/october_2026_requirements.txt)
           fi
-          if [[ "$AB_COMPARISON" == *-candidate || "$AB_COMPARISON" == kernel-registry ]]; then
+          if [[ "$AB_COMPARISON" == *-candidate || "$AB_COMPARISON" == kernel-* ]]; then
             pinned+=(--reference reference)
           fi
           python control/.github/workflows/scripts_new/macosx/attribution_ab.py \
