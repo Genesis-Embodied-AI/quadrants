@@ -41,6 +41,7 @@ def capture(stage, triggering_gc=None):
             raise RuntimeError(f"Direct generation-2 count {cold['objects']} differs from snapshot {result['objects']}")
         memory_started_at = time.time()
         memory = _gc_walk.memory() if os.environ.get("QD_GC_MEMORY") == "1" else None
+        references = _gc_walk.references(objects) if memory is not None else None
         del objects
     finally:
         if enabled:
@@ -51,7 +52,7 @@ def capture(stage, triggering_gc=None):
     with path.open("a") as stream:
         stream.write(json.dumps(dict(stage=stage, timestamp=time.time(), triggering_gc=triggering_gc,
                                      snapshot_wall=snapshot_wall, scans=["linked", "array", "sorted_array"],
-                                     memory_started_at=memory_started_at, memory=memory, cold=cold, cold_scans=["arithmetic_before", "linked", "arithmetic_after"],
+                                     references=references, memory_started_at=memory_started_at, memory=memory, cold=cold, cold_scans=["arithmetic_before", "linked", "arithmetic_after"],
                                      **result)) + "\n")
 
 

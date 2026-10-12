@@ -204,7 +204,52 @@ static PyObject *measure(PyObject *self, PyObject *objects) {
                          "thread_cpu_seconds", cpu[0], cpu[1], cpu[2]);
 }
 
+typedef struct ReferenceCounts {
+    Py_ssize_t total;
+    Py_ssize_t tracked;
+} ReferenceCounts;
+
+static int count_reference(PyObject *obj, void *argument) {
+    ReferenceCounts *counts = argument;
+    counts->total++;
+    counts->tracked += PyObject_GC_IsTracked(obj) != 0;
+    return 0;
+}
+
+static PyObject *references(PyObject *self, PyObject *objects) {
+    if (!PyList_CheckExact(objects)) {
+        PyErr_SetString(PyExc_ValueError, "Expected a retained GC snapshot");
+        return NULL;
+    }
+    ReferenceCounts counts = {0, 0};
+    Py_ssize_t maximum = 0, size = PyList_GET_SIZE(objects);
+    const char *maximum_type = "";
+    double w = now(CLOCK_MONOTONIC), c = now(CLOCK_THREAD_CPUTIME_ID);
+    for (Py_ssize_t i = 0; i < size; i++) {
+        PyObject *obj = PyList_GET_ITEM(objects, i);
+        traverseproc traverse = Py_TYPE(obj)->tp_traverse;
+        if (!traverse) {
+            PyErr_SetString(PyExc_RuntimeError, "Tracked object has no traverse function");
+            return NULL;
+        }
+        Py_ssize_t before = counts.total;
+        if (traverse(obj, count_reference, &counts)) {
+            if (!PyErr_Occurred()) PyErr_SetString(PyExc_RuntimeError, "Reference-count visitor unexpectedly failed");
+            return NULL;
+        }
+        if (counts.total - before > maximum) {
+            maximum = counts.total - before;
+            maximum_type = Py_TYPE(obj)->tp_name;
+        }
+    }
+    double cpu = now(CLOCK_THREAD_CPUTIME_ID) - c, wall = now(CLOCK_MONOTONIC) - w;
+    return Py_BuildValue("{s:n,s:n,s:n,s:n,s:s,s:d,s:d}", "objects", size, "references", counts.total,
+                         "tracked_references", counts.tracked, "max_object_references", maximum,
+                         "max_object_type", maximum_type, "wall_seconds", wall, "thread_cpu_seconds", cpu);
+}
+
 static PyMethodDef methods[] = {
+    {"references", references, METH_O, "Read-only tp_traverse visit counts for a retained object snapshot."},
     {"memory", memory_control, METH_NOARGS, "Time a fixed private 64-MiB pointer graph, independent of the GC heap."},
     {"measure", measure, METH_O, "Read-only list and header timing."},
     {"cold", cold, METH_NOARGS, "Read generation-2 links before any diagnostic object scan."},
