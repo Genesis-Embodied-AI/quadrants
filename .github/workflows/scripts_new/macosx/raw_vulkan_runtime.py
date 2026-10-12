@@ -130,7 +130,8 @@ def runtime_cycle(raw, device):
         seed[0] = U64()
         if raw.runtime_root:
             root = allocate(4, 32 << 20, 0, 0x20023)
-            submit(fills=(root[0],))
+            if raw.runtime_root_fill:
+                submit(fills=(root[0],))
         if not raw.buffer_records:
             raw.buffer_records = records
     finally:

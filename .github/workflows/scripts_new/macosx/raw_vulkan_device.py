@@ -193,7 +193,8 @@ class RawVulkanDevice:
         self.recreate_instance = work.endswith("-instance")
         self.runtime_pattern = "-runtime" in work
         self.runtime_root = "-bare" not in work
-        work = work.removesuffix("-instance").replace("-runtime", "").replace("-bare", "")
+        self.runtime_root_fill = "-no-fill" not in work
+        work = work.removesuffix("-instance").replace("-runtime", "").replace("-bare", "").replace("-no-fill", "")
         assert work in (
             "device",
             "buffers",
@@ -283,6 +284,7 @@ class RawVulkanDevice:
                 recreate_instance=self.recreate_instance,
                 runtime_pattern=self.runtime_pattern,
                 runtime_root=self.runtime_root if self.runtime_pattern else None,
+                runtime_root_fill=self.runtime_root_fill if self.runtime_pattern else None,
                 application_buffer_bytes=(
                     ([1 << 20, 32 << 20, 4] + ([4] if self.runtime_root else []))
                     if self.runtime_pattern
