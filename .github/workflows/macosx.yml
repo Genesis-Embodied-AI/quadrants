@@ -113,6 +113,14 @@ jobs:
           MAC_TEST_ARCH: ${{ matrix.ARCH }}
         run: |
           bash .github/workflows/scripts_new/macosx/4_test.sh
+      - name: Upload Vulkan batch reports
+        if: always() && matrix.ARCH == 'vulkan'
+        uses: actions/upload-artifact@v4
+        with:
+          name: vulkan-batches-${{ matrix.MAC_OS_VERSION }}-${{ matrix.PYTHON_VERSION }}
+          path: |
+            ${{ runner.temp }}/vulkan-batches/*.json
+            ${{ runner.temp }}/vulkan-batches/*.xml
   publish_pypi:
     uses: ./.github/workflows/publish_pypi.yml
     if: github.event_name == 'release'
