@@ -1,6 +1,5 @@
 """GPU-free integration checks for file selection and failure propagation through fresh xdist sessions."""
 
-import importlib.util
 import json
 import subprocess
 import sys
@@ -10,11 +9,7 @@ from pathlib import Path
 
 import pytest
 
-_runner_path = Path(__file__).resolve().parents[1] / "run_test_batches.py"
-_spec = importlib.util.spec_from_file_location("run_test_batches", _runner_path)
-assert _spec is not None and _spec.loader is not None
-run_test_batches = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(run_test_batches)
+from tests import run_test_batches
 
 
 @pytest.fixture(autouse=True)
