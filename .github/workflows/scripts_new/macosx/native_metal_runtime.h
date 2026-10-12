@@ -42,7 +42,7 @@ static void runtime_fill(id<MTLComputeCommandEncoder> encoder, id<MTLComputePipe
   [encoder setBuffer:buffer offset:0 atIndex:0];
   [encoder setBytes:&zero length:sizeof(zero) atIndex:1];
   NSUInteger words = bytes / 4;
-  NSUInteger width = std::min(pipeline.maxTotalThreadsPerThreadgroup, (NSUInteger)1024);
+  NSUInteger width = std::min(pipeline.maxTotalThreadsPerThreadgroup, pipeline.device.maxThreadsPerThreadgroup.width);
   if (words >= width)
     [encoder dispatchThreadgroups:MTLSizeMake(words / width, 1, 1) threadsPerThreadgroup:MTLSizeMake(width, 1, 1)];
   if (words % width) {
