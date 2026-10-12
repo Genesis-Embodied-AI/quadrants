@@ -79,7 +79,9 @@ class NativeMetalHeap:
             runtime_pattern=self.runtime,
             allocation_bytes=self.bytes,
             placement_heap=self.use_heap,
-            device_acquisition="MTLCopyAllDevices cached per process" if self.runtime else "MTLCopyAllDevices each cycle",
+            device_acquisition=(
+                "MTLCopyAllDevices cached per process" if self.runtime else "MTLCopyAllDevices each cycle"
+            ),
             autorelease_pool="per cycle",
         )
 
