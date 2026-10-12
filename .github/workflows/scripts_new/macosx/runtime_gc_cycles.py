@@ -3,6 +3,8 @@
 Three workers run CPU/Vulkan/CPU stages on the same VM, retaining the same graph and kernel identities throughout.
 This is a trigger search, not a full-suite benchmark or an order-independent backend comparison. No registry patch,
 GC suppression, heap reordering, or process recycling is applied. Native memory controls are read-only.
+Allocation mode instead keeps one runtime per stage and lets only worker zero allocate/free 300 256-MiB ndarrays;
+the other workers keep collecting on CPU. No forced collection or census is inserted inside that allocation loop.
 """
 
 import argparse
@@ -17,7 +19,7 @@ from multiprocessing.connection import wait
 from pathlib import Path
 
 
-def worker(folder, index, barrier, unique):
+def worker(folder, index, barrier, unique, allocation):
     import _gc_walk
 
     import quadrants as qd
@@ -98,6 +100,8 @@ def worker(folder, index, barrier, unique):
                 automatic_gc=gc.isenabled(),
                 kernel_identity=kernel_identity,
                 unique_compile_constants=unique,
+                allocation_churn=allocation,
+                allocating_worker=allocation and index == 0,
             )
         )
         gc.callbacks.append(callback)
@@ -108,21 +112,40 @@ def worker(folder, index, barrier, unique):
             for stage, backend in (("cpu_before", qd.cpu), ("vulkan", qd.vulkan), ("cpu_after", qd.cpu)):
                 cycle = -1
                 barrier.wait(timeout=1800)
-                write(dict(kind="stage_begin", backend=str(backend)))
+                active_backend = qd.cpu if allocation and index != 0 else backend
+                write(dict(kind="stage_begin", backend=str(active_backend)))
+                if allocation:
+                    qd.init(arch=active_backend, enable_fallback=False, offline_cache=False, cpu_max_num_threads=1)
+                    assert impl.current_cfg().arch == active_backend
+                    assert retained(7, 1) == 8
                 for cycle in range(300):
                     start = time.perf_counter()
-                    qd.init(arch=backend, enable_fallback=False, offline_cache=False, cpu_max_num_threads=1)
-                    assert impl.current_cfg().arch == backend
-                    offset = index * 300 + cycle + 1 if unique else 1
-                    assert retained(cycle, offset) == cycle + offset
-                    qd.reset()
+                    if allocation:
+                        if index == 0:
+                            array = qd.ndarray(dtype=qd.f32, shape=(8192, 8192))
+                            del array
+                    else:
+                        qd.init(arch=backend, enable_fallback=False, offline_cache=False, cpu_max_num_threads=1)
+                        assert impl.current_cfg().arch == backend
+                        offset = index * 300 + cycle + 1 if unique else 1
+                        assert retained(cycle, offset) == cycle + offset
+                        qd.reset()
                     runtime_wall = time.perf_counter() - start
-                    gc.collect()
-                    gc.collect()
+                    if not allocation or index != 0:
+                        gc.collect()
+                        gc.collect()
                     write(dict(kind="cycle", runtime_wall_seconds=runtime_wall))
-                    if cycle % 25 == 0 or cycle == 299:
+                    if (not allocation or index != 0) and (cycle % 25 == 0 or cycle == 299):
                         census()
                         print(index, stage, cycle, "runtime", runtime_wall, flush=True)
+                if allocation:
+                    if index == 0:
+                        write(dict(kind="post_allocation_gc_begin"))
+                        for _ in range(20):
+                            gc.collect()
+                        census()
+                        print(index, stage, "allocation batch completed", flush=True)
+                    qd.reset()
                 write(dict(kind="stage_end"))
             write(dict(kind="end", automatic_gc=gc.isenabled()))
         finally:
@@ -138,7 +161,10 @@ def main():
     context = multiprocessing.get_context("spawn")
     barrier = context.Barrier(3)
     unique = os.environ.get("QD_CYCLE_UNIQUE") == "1"
-    children = [context.Process(target=worker, args=(args.output, index, barrier, unique)) for index in range(3)]
+    allocation = os.environ.get("QD_CYCLE_ALLOCATIONS") == "1"
+    children = [
+        context.Process(target=worker, args=(args.output, index, barrier, unique, allocation)) for index in range(3)
+    ]
     for child in children:
         child.start()
     pending = list(children)
