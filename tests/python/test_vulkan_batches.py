@@ -76,7 +76,9 @@ def test_complete_case_outcomes_and_fresh_selection(tmp_path: Path) -> None:
 
 def test_failure_is_not_hidden_by_later_success(tmp_path: Path) -> None:
     make_project(tmp_path)
-    (tmp_path / "tests" / "python" / "nested" / "nested_test.py").write_text("def test_failure() -> None:\n    assert False\n")
+    (tmp_path / "tests" / "python" / "nested" / "nested_test.py").write_text(
+        "def test_failure() -> None:\n    assert False\n"
+    )
     output = tmp_path / "batches"
     assert vulkan_batches.run_batches(tmp_path, output, []) == 1
     records = json.loads((output / "results.json").read_text())
