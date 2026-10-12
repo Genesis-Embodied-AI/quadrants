@@ -22,17 +22,17 @@ def isolate_nested_pytest(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def make_project(root: Path) -> None:
-    tests = root / "tests" / "python"
-    tests.mkdir(parents=True)
+    tests_path = root / "tests" / "python"
+    tests_path.mkdir(parents=True)
     (root / "tests" / "run_tests.py").write_text(
         "import pytest, sys\nraise SystemExit(pytest.main(['tests/python', *sys.argv[1:]]))\n"
     )
-    (tests / "conftest.py").write_text(
+    (tests_path / "conftest.py").write_text(
         "import pytest\n@pytest.fixture(autouse=True)\ndef fixture_ran(monkeypatch: pytest.MonkeyPatch) -> None:\n"
         "    monkeypatch.setenv('BATCH_FIXTURE_RAN', 'yes')\n"
     )
     for index in range(13):
-        folder = tests if index < 12 else tests / "nested"
+        folder = tests_path if index < 12 else tests_path / "nested"
         folder.mkdir(exist_ok=True)
         name = f"test_case_{index:02d}.py" if index < 12 else "nested_test.py"
         (folder / name).write_text(
