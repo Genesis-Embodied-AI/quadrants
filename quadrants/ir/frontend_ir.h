@@ -1125,6 +1125,13 @@ class ASTBuilder {
     current_graph_do_while_level_id_ = level_id;
   }
 
+  // Return the checkpoint scope currently active on this builder. Inlined @qd.func bodies receive a fresh Python
+  // ASTTransformerFuncContext but share this ASTBuilder with their caller, so this is the authoritative cross-context
+  // source for graph_do_while declarations nested inside a checkpoint.
+  int current_checkpoint_id() const {
+    return current_checkpoint_id_;
+  }
+
   // Open a new `qd.checkpoint(...)` scope. Each call advances `checkpoint_counter_` and returns the freshly assigned
   // `cp_id`, which the AST transformer can echo back to the Python kernel for cross-checking against
   // `kernel.checkpoint_yield_on_args[cp_id]`. All for-loops emitted between this call and the matching
