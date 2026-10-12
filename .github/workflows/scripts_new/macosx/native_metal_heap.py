@@ -44,6 +44,9 @@ def build(output, env):
             dict(
                 command=command,
                 source_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
+                runtime_header_sha256=hashlib.sha256(
+                    source.with_name("native_metal_runtime.h").read_bytes()
+                ).hexdigest(),
                 library_sha256=hashlib.sha256(library.read_bytes()).hexdigest(),
             ),
             indent=2,
@@ -54,30 +57,39 @@ def build(output, env):
 
 class NativeMetalHeap:
     def __init__(self, work):
-        assert work in ("metal-heap", "metal-heap-small", "metal-buffer")
+        assert work in ("metal-heap", "metal-heap-small", "metal-buffer", "metal-runtime-heap", "metal-runtime-buffer")
         path = Path(os.environ["QD_NATIVE_METAL_LIBRARY"])
         self.library = C.CDLL(str(path))
-        self.call = self.library.native_metal_cycle
-        self.call.argtypes = [C.c_uint64, C.c_int, C.POINTER(ProbeStats)]
+        self.runtime = work.startswith("metal-runtime-")
+        self.call = self.library.native_metal_runtime_cycle if self.runtime else self.library.native_metal_cycle
+        self.call.argtypes = (
+            [C.c_int, C.POINTER(ProbeStats)] if self.runtime else [C.c_uint64, C.c_int, C.POINTER(ProbeStats)]
+        )
         self.call.restype = C.c_int
         self.work = work
         self.bytes = 16384 if work == "metal-heap-small" else 32 << 20
-        self.use_heap = work != "metal-buffer"
+        self.use_heap = work not in ("metal-buffer", "metal-runtime-buffer")
         self.buffer_records = []
         self.metadata = dict(
             work=work,
             library_sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
             api="Metal",
             application_shaders=0,
+            probe_compute_shaders=1 if self.runtime else 0,
+            runtime_pattern=self.runtime,
             allocation_bytes=self.bytes,
             placement_heap=self.use_heap,
-            device_acquisition="MTLCopyAllDevices each cycle",
+            device_acquisition="MTLCopyAllDevices cached per process" if self.runtime else "MTLCopyAllDevices each cycle",
             autorelease_pool="per cycle",
         )
 
     def cycle(self):
         stats = ProbeStats()
-        result = self.call(self.bytes, self.use_heap, C.byref(stats))
+        result = (
+            self.call(self.use_heap, C.byref(stats))
+            if self.runtime
+            else self.call(self.bytes, self.use_heap, C.byref(stats))
+        )
         assert result == 0, f"Native Metal probe failed at stage {result}"
         assert stats.allocation_bytes >= self.bytes and stats.command_status == 4
         if not self.buffer_records:

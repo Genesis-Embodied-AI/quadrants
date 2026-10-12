@@ -1,6 +1,7 @@
 // Direct Metal allocation/blit control. No Vulkan, VMA, shader source, or Quadrants API calls.
 #import <Foundation/Foundation.h>
 #import <Metal/Metal.h>
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 
@@ -73,3 +74,5 @@ extern "C" int native_metal_cycle(uint64_t bytes, int use_heap, ProbeStats *stat
     return 0;
   }
 }
+
+#include "native_metal_runtime.h"
