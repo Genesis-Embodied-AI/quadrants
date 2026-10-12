@@ -9,11 +9,13 @@ is 32MiB in host mode and at least one 16KiB page in host-small. Private/private
 bindings with device-local memory, GPU fills, and no host mapping or readback. The private-bda variants request
 Vulkan 1.2, enable bufferDeviceAddress, add matching allocation/usage flags and query nonzero buffer addresses.
 No application shader or pipeline is created. The caller owns the surrounding retained-graph/GC diagnostic and
-closes the instance.
+closes the instance. Modes ending in -instance also destroy/recreate the instance each cycle; the loaded library
+and its verified digest remain cached in the process.
 """
 
 import ctypes as C
 import hashlib
+from functools import lru_cache
 
 U32, Ptr, Strings = C.c_uint32, C.c_void_p, C.POINTER(C.c_char_p)
 
@@ -180,8 +182,16 @@ def check(result, name):
         raise RuntimeError(f"{name}: VkResult {result}")
 
 
+@lru_cache(maxsize=1)
+def loaded_library(path):
+    return C.CDLL(str(path)), hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 class RawVulkanDevice:
     def __init__(self, library_path, work="device"):
+        self.library_path, self.mode = library_path, work
+        self.recreate_instance = work.endswith("-instance")
+        work = work.removesuffix("-instance")
         assert work in (
             "device",
             "buffers",
@@ -197,7 +207,7 @@ class RawVulkanDevice:
         self.address_enabled = "-bda" in work
         self.buffer_records = []
         assert C.sizeof(Ptr) == 8
-        self.library = C.CDLL(str(library_path))
+        self.library, library_digest = loaded_library(library_path)
         self.get_proc = self.library.vkGetInstanceProcAddr
         self.get_proc.argtypes, self.get_proc.restype = [Ptr, C.c_char_p], Ptr
         self.instance = Ptr()
@@ -260,14 +270,15 @@ class RawVulkanDevice:
             if self.work != "device":
                 self.bind_buffer_functions()
             self.metadata = dict(
-                library_sha256=hashlib.sha256(library_path.read_bytes()).hexdigest(),
+                library_sha256=library_digest,
                 physical_devices=physical_count,
                 queue_family=self.queue_index,
                 instance_portability_enabled=enabled is not None,
                 device_portability_enabled=self.extensions is not None,
                 api_version="1.2" if self.address_enabled else "1.0",
                 buffer_device_address_enabled=self.address_enabled,
-                work=self.work,
+                work=self.mode,
+                recreate_instance=self.recreate_instance,
                 application_buffer_bytes=(
                     []
                     if self.work == "device"
@@ -294,6 +305,9 @@ class RawVulkanDevice:
         return {extension.extensionName for extension in extensions[: count.value]}
 
     def cycle(self):
+        if not self.instance:
+            assert self.recreate_instance
+            self.__init__(self.library_path, self.mode)
         priority = C.c_float(1)
         queue = QueueInfo(
             sType=2, queueFamilyIndex=self.queue_index, queueCount=1, pQueuePriorities=C.pointer(priority)
@@ -316,6 +330,8 @@ class RawVulkanDevice:
             check(self.wait_idle(device), "vkDeviceWaitIdle")
         finally:
             self.destroy_device(device, None)
+            if self.recreate_instance:
+                self.close()
 
     def bind_buffer_functions(self):
         self.memory = MemoryProperties()
