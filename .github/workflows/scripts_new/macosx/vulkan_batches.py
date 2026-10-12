@@ -52,11 +52,11 @@ def run_batches(root: Path, output: Path, runner_args: list[str], batch_size: in
     failed = False
     for index, group in enumerate(file_groups):
         batch_label = f"batch-{index:02d}"
-        selection = output / f"{batch_label}-selection.json"
-        selection.write_text(json.dumps([str(path) for path in group]) + "\n")
+        selection_path = output / f"{batch_label}-selection.json"
+        selection_path.write_text(json.dumps([str(path) for path in group]) + "\n")
         xml = output / f"{batch_label}.xml"
         xml.unlink(missing_ok=True)
-        env = dict(os.environ, QD_BATCH_SELECTION=str(selection))
+        env = dict(os.environ, QD_BATCH_SELECTION=str(selection_path))
         env["PYTHONPATH"] = str(Path(__file__).resolve().parent) + os.pathsep + env.get("PYTHONPATH", "")
         # Each subprocess needs its own temporary directory and test report. Other pytest settings are preserved.
         options = shlex.split(env.get("PYTEST_ADDOPTS", ""))
