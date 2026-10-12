@@ -164,16 +164,27 @@ def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_bac
                 barrier.wait(timeout=1800)
                 active_backend = qd.cpu if allocation and index != 0 else backend
                 actual_backend = (
-                    "raw-vulkan-device" if raw_device_cycles and stage == middle_stage else str(active_backend)
+                    (
+                        "raw-metal-resource"
+                        if os.environ.get("QD_RAW_DEVICE_WORK", "").startswith("metal-")
+                        else "raw-vulkan-device"
+                    )
+                    if raw_device_cycles and stage == middle_stage
+                    else str(active_backend)
                 )
                 write(dict(kind="stage_begin", backend=actual_backend))
                 if raw_device_cycles and stage == middle_stage:
                     from raw_vulkan_device import RawVulkanDevice
 
-                    raw_device = RawVulkanDevice(
-                        Path(qd.__file__).parent / "_lib/runtime/libMoltenVK.dylib",
-                        work=os.environ.get("QD_RAW_DEVICE_WORK", "device"),
-                    )
+                    raw_work = os.environ.get("QD_RAW_DEVICE_WORK", "device")
+                    if raw_work.startswith("metal-"):
+                        from native_metal_heap import NativeMetalHeap
+
+                        raw_device = NativeMetalHeap(raw_work)
+                    else:
+                        raw_device = RawVulkanDevice(
+                            Path(qd.__file__).parent / "_lib/runtime/libMoltenVK.dylib", work=raw_work
+                        )
                     write(dict(kind="raw_device_setup", **raw_device.metadata))
                 if allocation:
                     qd.init(arch=active_backend, enable_fallback=False, offline_cache=False, cpu_max_num_threads=1)
