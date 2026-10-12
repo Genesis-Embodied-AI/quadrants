@@ -25,11 +25,18 @@ _SELECTED = None
 
 
 def pytest_configure(config: Config) -> None:
-    # Pytest calls this startup hook after parsing options and before collecting tests. Read QD_BATCH_SELECTION
-    # to locate the selection JSON file, load its paths into _SELECTED, and reject empty selections or missing files.
-    # Later, pytest_ignore_collect() uses _SELECTED to decide which test files to skip. Each pytest process,
-    # including each xdist worker, runs this setup for itself. The config argument is pytest's configuration object;
-    # this implementation does not use it.
+    # pytest_configure is a pytest startup hook. Pytest calls it automatically after parsing options and before
+    # collecting tests.
+    #
+    # In this plugin, it:
+    # 1. Reads QD_BATCH_SELECTION to locate the selection JSON file.
+    # 2. Loads its file paths into the global _SELECTED set.
+    # 3. Raises an error if the selection is empty or references missing files.
+    #
+    # Later, pytest_ignore_collect() uses _SELECTED to decide which test files to skip.
+    #
+    # config is pytest's configuration object; this implementation does not use it. Each xdist worker runs this
+    # setup for itself.
     global _SELECTED
     _SELECTED = {Path(path) for path in json.loads(Path(os.environ["QD_BATCH_SELECTION"]).read_text())}
     if not _SELECTED or any(not path.is_file() for path in _SELECTED):
