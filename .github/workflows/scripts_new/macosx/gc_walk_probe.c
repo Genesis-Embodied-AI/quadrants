@@ -91,6 +91,44 @@ static PyObject *cold(PyObject *self, PyObject *unused) {
                          "counter_status", counter_status[0], counter_status[1], counter_status[2]);
 }
 
+/* Pin the same generation-2 list under one uninterrupted GIL hold, before returning to Python bytecode. */
+static PyObject *snapshot(PyObject *self, PyObject *unused) {
+    if (PyGC_IsEnabled()) {
+        PyErr_SetString(PyExc_RuntimeError, "Atomic snapshot requires automatic GC disabled");
+        return NULL;
+    }
+    PyObject *timings = cold(self, unused);
+    if (!timings) return NULL;
+    Py_ssize_t count = PyLong_AsSsize_t(PyDict_GetItemString(timings, "objects"));
+    if (count < 0) {
+        Py_DECREF(timings);
+        return NULL;
+    }
+    double start = now(CLOCK_MONOTONIC);
+    PyObject *objects = PyList_New(count);
+    if (!objects) {
+        Py_DECREF(timings);
+        return NULL;
+    }
+    PyGC_Head *head = &PyThreadState_Get()->interp->gc.generations[2].head;
+    PyGC_Head *node = _PyGCHead_NEXT(head);
+    for (Py_ssize_t i = 0; i < count; i++) {
+        if (node == head) goto mismatch;
+        PyObject *obj = (PyObject *)(node + 1);
+        Py_INCREF(obj);
+        PyList_SET_ITEM(objects, i, obj);
+        node = _PyGCHead_NEXT(node);
+    }
+    if (node != head) goto mismatch;
+    return Py_BuildValue("(NNd)", timings, objects, now(CLOCK_MONOTONIC) - start);
+
+mismatch:
+    Py_DECREF(objects);
+    Py_DECREF(timings);
+    PyErr_SetString(PyExc_RuntimeError, "Generation-2 count changed inside atomic snapshot");
+    return NULL;
+}
+
 /* A fixed private graph independent of Python objects and Vulkan. Retained for this process lifetime. */
 typedef struct MemoryNode {
     struct MemoryNode *volatile next;
@@ -249,6 +287,7 @@ static PyObject *references(PyObject *self, PyObject *objects) {
 }
 
 static PyMethodDef methods[] = {
+    {"snapshot", snapshot, METH_NOARGS, "Direct-head measurement and pinned snapshot under one GIL hold."},
     {"references", references, METH_O, "Read-only tp_traverse visit counts for a retained object snapshot."},
     {"memory", memory_control, METH_NOARGS, "Time a fixed private 64-MiB pointer graph, independent of the GC heap."},
     {"measure", measure, METH_O, "Read-only list and header timing."},

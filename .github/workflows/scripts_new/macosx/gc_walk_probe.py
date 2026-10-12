@@ -32,10 +32,13 @@ def capture(stage, triggering_gc=None):
     enabled = gc.isenabled()
     gc.disable()
     try:
-        cold = _gc_walk.cold()
-        snapshot_start = time.perf_counter()
-        objects = gc.get_objects(2)
-        snapshot_wall = time.perf_counter() - snapshot_start
+        if os.environ.get("QD_GC_MEMORY") == "1":
+            cold, objects, snapshot_wall = _gc_walk.snapshot()
+        else:
+            cold = _gc_walk.cold()
+            snapshot_start = time.perf_counter()
+            objects = gc.get_objects(2)
+            snapshot_wall = time.perf_counter() - snapshot_start
         result = _gc_walk.measure(objects)
         if cold["objects"] != result["objects"]:
             raise RuntimeError(f"Direct generation-2 count {cold['objects']} differs from snapshot {result['objects']}")
@@ -64,6 +67,19 @@ def build():
     print("Built", destination, flush=True)
     gc.collect()
     capture("smoke")
+    if os.environ.get("QD_GC_MEMORY") == "1":
+        import _gc_walk
+
+        enabled = gc.isenabled()
+        gc.disable()
+        try:
+            public = gc.get_objects(2)
+            _, pinned, _ = _gc_walk.snapshot()
+            assert len(public) == len(pinned) and all(a is b for a, b in zip(public, pinned))
+        finally:
+            if enabled:
+                gc.enable()
+        print("Public/atomic snapshot identity check passed", flush=True)
     print("Read-only traversal smoke passed", flush=True)
 
 
