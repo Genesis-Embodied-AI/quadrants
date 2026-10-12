@@ -18,6 +18,8 @@ on:
           - gc-cpu
           - gc-memory
           - runtime-materialize-cycles
+          - runtime-no-mtlheap-cycles
+          - runtime-no-argument-buffers-cycles
           - runtime-cycles
           - runtime-unique-cycles
           - runtime-allocation-cycles
@@ -90,6 +92,8 @@ jobs:
           inputs.comparison == 'simt-only' && '["simt"]' ||
           inputs.comparison == 'runtime-allocation-cycles' && '["growth"]' ||
           inputs.comparison == 'runtime-unique-cycles' && '["growth"]' ||
+          inputs.comparison == 'runtime-no-mtlheap-cycles' && '["growth"]' ||
+          inputs.comparison == 'runtime-no-argument-buffers-cycles' && '["growth"]' ||
           inputs.comparison == 'runtime-materialize-cycles' && '["growth"]' ||
           inputs.comparison == 'runtime-cycles' && '["growth"]' ||
           inputs.comparison == 'gc-memory' && '["growth"]' ||

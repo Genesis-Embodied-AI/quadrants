@@ -139,6 +139,10 @@ def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_bac
                 raw_device_cycles=raw_device_cycles,
                 compile_only=compile_only,
                 materialize_only=materialize_only,
+                moltenvk_environment={
+                    key: os.environ.get(key)
+                    for key in ("MVK_CONFIG_USE_MTLHEAP", "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS")
+                },
                 discard_pipeline_cache=discard_cache,
                 automatic_gc=gc.isenabled(),
                 kernel_identity=kernel_identity,
@@ -195,6 +199,17 @@ def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_bac
                             compile_without_launch(retained._primal, cycle, offset, impl)
                         elif not skip_target_kernel or stage != middle_stage:
                             assert retained(cycle, offset) == cycle + offset
+                        if cycle == 0 and stage == middle_stage:
+                            from quadrants._lib import core
+
+                            write(
+                                dict(
+                                    kind="device_capabilities",
+                                    spirv_has_physical_storage_buffer=impl.get_runtime()
+                                    .prog.get_device_caps()
+                                    .get(core.DeviceCapability.spirv_has_physical_storage_buffer),
+                                )
+                            )
                         qd.reset()
                     runtime_wall = time.perf_counter() - start
                     if not allocation or index != 0:
