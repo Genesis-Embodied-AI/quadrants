@@ -54,13 +54,18 @@ def run_batches(root: Path, output: Path, runner_args: list[str], batch_size: in
         batch_label = f"batch-{index:02d}"
         selection_path = output / f"{batch_label}-selection.json"
         selection_path.write_text(json.dumps([str(path) for path in group]) + "\n")
-        xml = output / f"{batch_label}.xml"
-        xml.unlink(missing_ok=True)
+        batch_test_output_path = output / f"{batch_label}.xml"
+        batch_test_output_path.unlink(missing_ok=True)
         env = dict(os.environ, QD_BATCH_SELECTION=str(selection_path))
         env["PYTHONPATH"] = str(Path(__file__).resolve().parent) + os.pathsep + env.get("PYTHONPATH", "")
         # Each subprocess needs its own temporary directory and test report. Other pytest settings are preserved.
         options = shlex.split(env.get("PYTEST_ADDOPTS", ""))
-        options += ["-p", "vulkan_batches", f"--basetemp={output / (batch_label + '-tmp')}", f"--junitxml={xml}"]
+        options += [
+            "-p",
+            "vulkan_batches",
+            f"--basetemp={output / (batch_label + '-tmp')}",
+            f"--junitxml={batch_test_output_path}",
+        ]
         env["PYTEST_ADDOPTS"] = shlex.join(options)
         print(f"Batch {index + 1}/{len(file_groups)}: {manifest_contents[index]}", flush=True)
         start = time.monotonic()
@@ -69,8 +74,8 @@ def run_batches(root: Path, output: Path, runner_args: list[str], batch_size: in
         results.append(record)
         (output / "results.json").write_text(json.dumps(results, indent=2) + "\n")
         print("Batch result:", json.dumps(record), flush=True)
-        if xml.exists():
-            report = ET.parse(xml).getroot()
+        if batch_test_output_path.exists():
+            report = ET.parse(batch_test_output_path).getroot()
             if report.tag == "testsuite":
                 suites_xml_nodes.append(report)
             else:
