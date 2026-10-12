@@ -1,4 +1,4 @@
-"""Direct MoltenVK reset reproducer: worker processes never import Quadrants.
+"""Direct MoltenVK or native Metal reproducer: worker processes never import Quadrants.
 
 Requires Python 3.10 on macOS, raw_vulkan_device.py/raw_vulkan_runtime.py, the pinned MoltenVK dylib, and the
 _gc_walk extension built by gc_walk_probe.py. CPU stages only collect the retained graph; they create no runtimes.
@@ -118,9 +118,15 @@ def worker(folder, index, barrier, library, work, count, recovery_event):
                 cycle = -1
                 barrier.wait(timeout=1800)
                 if stage == "vulkan":
-                    raw = RawVulkanDevice(library, work)
+                    if work.startswith("metal-"):
+                        from native_metal_heap import NativeMetalHeap
+
+                        raw = NativeMetalHeap(work)
+                    else:
+                        raw = RawVulkanDevice(library, work)
                     write(kind="raw_device_setup", **raw.metadata)
-                write(kind="stage_begin", actual_backend="raw-vulkan-device" if stage == "vulkan" else "python-only")
+                backend = "native-metal" if work.startswith("metal-") else "raw-vulkan-device"
+                write(kind="stage_begin", actual_backend=backend if stage == "vulkan" else "python-only")
                 stopped_early = False
                 for cycle in range(stage_count):
                     started = time.perf_counter()
@@ -160,7 +166,18 @@ def main():
     args = parser.parse_args()
     assert sys.platform == "darwin" and sys.version_info[:2] == (3, 10)
     assert args.library.is_file() and 1 <= args.cycles <= 2000
-    assert args.work in ("private-bda-runtime", "private-bda-runtime-bare", "private-bda-runtime-smallroot")
+    assert args.work in (
+        "private-bda-runtime",
+        "private-bda-runtime-bare",
+        "private-bda-runtime-smallroot",
+        "metal-heap-large",
+        "metal-buffer-large",
+        "metal-runtime-heap",
+        "metal-runtime-buffer",
+        "metal-heap-large-no-submit",
+        "metal-heap-large-empty",
+    )
+    assert not (args.work.startswith("metal-") and os.environ.get("QD_REPRO_CLOSE_ON_SLOW") == "1")
     assert "quadrants" not in sys.modules
     args.output.mkdir(parents=True, exist_ok=True)
     context = multiprocessing.get_context("spawn")
