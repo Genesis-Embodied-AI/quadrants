@@ -150,7 +150,7 @@ def main():
                         other.terminate()
                     for other in pending:
                         other.join()
-                    raise SystemExit(f'Runtime-cycle worker failed: {child.exitcode}')
+                    raise SystemExit(f"Runtime-cycle worker failed: {child.exitcode}")
     codes = [child.exitcode for child in children]
     if any(codes):
         raise SystemExit(f"Runtime-cycle worker failed: {codes}")
