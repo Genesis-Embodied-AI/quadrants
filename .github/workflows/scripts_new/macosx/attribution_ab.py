@@ -36,7 +36,7 @@ def main():
                         choices=('binary', 'expanded-binary', 'workload', 'snapshots', 'gc-profile',
                                  'dataclass-ablation', 'pydantic', 'process-batches', 'owner-guard',
                                  'owner-guard-candidate', 'gc-freeze-candidate', 'process-batches-candidate',
-                                 'production-batches-candidate', 'import-batch', 'import-batch-census', 'runtime-growth'),
+                                 'production-batches-candidate', 'import-batch', 'import-batch-census', 'runtime-growth', 'kernel-registry'),
                         default='binary')
     parser.add_argument('--requirements', type=Path, help='Optional historically recorded dependency versions')
     parser.add_argument('--reference', type=Path, help='Completed full-suite artifact for candidate coverage checks')
@@ -65,6 +65,8 @@ def main():
         expected = {'small', 'all'}
     if args.comparison == 'runtime-growth':
         expected = {'growth'}
+    if args.comparison == 'kernel-registry':
+        expected = {'strong', 'weak'}
     labels = args.order.split('-')
     if len(labels) != len(expected) or set(labels) != expected:
         parser.error(f'--order must contain each of {sorted(expected)} exactly once')
@@ -176,7 +178,9 @@ def main():
     metadata = {label: dict(wheel=path.name, sha256=hashlib.sha256(path.read_bytes()).hexdigest())
                 for label, path in wheels.items()}
     (output / 'wheels.json').write_text(json.dumps(metadata, indent=2) + '\n')
-    if candidate_only:
+    if candidate_only or args.comparison == 'kernel-registry':
+        if not args.reference:
+            parser.error('Kernel registry comparison requires a full-suite reference')
         reference = args.reference.resolve()
         reference_wheels = json.loads((reference / 'wheels.json').read_text())
         reference_results = json.loads((reference / 'results.json').read_text())
@@ -192,12 +196,12 @@ def main():
     for label in labels:
         fixed_binary = args.comparison in (
             'workload', 'dataclass-ablation', 'pydantic', 'process-batches', 'owner-guard', 'gc-freeze',
-            'import-batch', 'import-batch-census', 'runtime-growth')
+            'import-batch', 'import-batch-census', 'runtime-growth', 'kernel-registry')
         binary = 'new' if fixed_binary else label
         test_root = (new if label == 'full' or
                      (args.comparison in ('snapshots', 'gc-profile') and label == 'new') else old)
         if args.comparison in ('dataclass-ablation', 'pydantic', 'process-batches', 'owner-guard', 'gc-freeze',
-                               'import-batch', 'import-batch-census', 'runtime-growth'):
+                               'import-batch', 'import-batch-census', 'runtime-growth', 'kernel-registry'):
             test_root = new
         python = pythons[label] if args.comparison == 'pydantic' else pythons[binary]
         env = dict(os.environ, PATH=f'{python.parent}:{os.environ["PATH"]}', VIRTUAL_ENV=str(python.parent.parent),
@@ -212,7 +216,7 @@ def main():
             options += [f'--deselect={nodeid}' for nodeid in deselected]
         options += [f'--basetemp={work / (label + "-pytest-tmp")}', f'--junitxml={output / (label + ".xml")}']
         if args.comparison in ('gc-profile', 'process-batches', 'owner-guard', 'gc-freeze',
-                               'import-batch', 'import-batch-census', 'runtime-growth'):
+                               'import-batch', 'import-batch-census', 'runtime-growth', 'kernel-registry'):
             options += ['-p', 'gc_profile']
             env['PYTHONPATH'] = str(Path(__file__).resolve().parent) + os.pathsep + env.get('PYTHONPATH', '')
             env['QD_GC_PROFILE_DIR'] = str(output if args.comparison == 'gc-profile' else output / (label + '-gc'))
@@ -221,11 +225,14 @@ def main():
 
             prepare(test_root, output, label, env, args.comparison.endswith('-census'))
             options += ['-p', 'import_batch']
-        if args.comparison == 'runtime-growth':
+        if args.comparison in ('runtime-growth', 'kernel-registry'):
             from import_batch_control import prepare_growth
 
             prepare_growth(test_root, output, env)
             options += ['-p', 'import_batch']
+        if args.comparison == 'kernel-registry':
+            env['QD_KERNEL_REGISTRY'] = label
+            options += ['-p', 'kernel_registry_probe']
         if label == 'guarded':
             options += ['-p', 'ndarray_owner_guard']
         if label == 'frozen':
@@ -239,6 +246,9 @@ def main():
         if production_batches:
             invocation = [str(python), str(Path(__file__).with_name('vulkan_batches.py').resolve()),
                           '--output', str(output / 'production-batches'), '--', *invocation[2:]]
+        if args.comparison == 'kernel-registry':
+            command([python, Path(__file__).with_name('kernel_registry_probe.py').resolve(),
+                     output / f'{label}-lifetime.json'], env=env, cwd=test_root)
         print(f'ARM {label}: binary={binary}, tests={test_root}; {shlex.join(invocation)}', flush=True)
         start = time.monotonic()
         with ExitStack() as stack:
@@ -250,7 +260,7 @@ def main():
                 from process_batches import run_batched
 
                 code = run_batched(invocation, test_root, env, output, work)
-            elif args.comparison.startswith('import-batch') or args.comparison == 'runtime-growth':
+            elif args.comparison.startswith('import-batch') or args.comparison in ('runtime-growth', 'kernel-registry'):
                 from import_batch_control import run_bounded
 
                 code = run_bounded(invocation, test_root, env, output, label)
@@ -281,6 +291,12 @@ def main():
         from import_batch_control import verify
 
         verify(output)
+    if args.comparison == 'kernel-registry':
+        from process_batches import verify_coverage
+
+        for result in results:
+            if result['returncode'] == 0:
+                verify_coverage(output, result['arm'])
     if any(r['returncode'] for r in results):
         raise SystemExit('An arm failed: inspect logs and test counts before interpreting durations.')
 
