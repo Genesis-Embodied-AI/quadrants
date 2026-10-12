@@ -56,9 +56,11 @@ def make_fake_tests_project(root: Path) -> None:
                 # Verify at import time that this file belongs to the current batch; skip for the unbatched baseline.
                 if 'QD_BATCH_SELECTION' in os.environ:
                     assert str(Path(__file__).resolve()) in json.loads(Path(os.environ['QD_BATCH_SELECTION']).read_text())
+                # Create two distinct cases to verify that batching preserves parametrized tests without loss or duplication.
                 @pytest.mark.parametrize('value', [0, 1])
                 def test_case(value: int) -> None:
                     assert os.environ.get('BATCH_FIXTURE_RAN') == 'yes'
+                # Include a skipped case to verify that batching preserves skipped tests and their reported outcomes.
                 @pytest.mark.skip(reason='expected')
                 def test_skip() -> None:
                     pass
