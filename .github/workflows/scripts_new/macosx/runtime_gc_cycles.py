@@ -48,6 +48,7 @@ def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_bac
     discard_cache = os.environ.get("QD_CYCLE_DISCARD_PIPELINE_CACHE") == "1"
     skip_target_kernel = os.environ.get("QD_CYCLE_SKIP_TARGET_KERNEL") == "1"
     compile_only = os.environ.get("QD_CYCLE_COMPILE_ONLY") == "1"
+    materialize_only = os.environ.get("QD_CYCLE_MATERIALIZE_ONLY") == "1"
     raw_device_cycles = os.environ.get("QD_CYCLE_RAW_DEVICE") == "1"
     raw_device = None
     kernel_identity = id(retained._primal)
@@ -137,6 +138,7 @@ def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_bac
                 skip_target_kernel=skip_target_kernel,
                 raw_device_cycles=raw_device_cycles,
                 compile_only=compile_only,
+                materialize_only=materialize_only,
                 discard_pipeline_cache=discard_cache,
                 automatic_gc=gc.isenabled(),
                 kernel_identity=kernel_identity,
@@ -186,7 +188,10 @@ def worker(folder, index, barrier, unique, allocation, vulkan_cycles, target_bac
                         qd.init(arch=backend, enable_fallback=False, offline_cache=False, cpu_max_num_threads=1)
                         assert impl.current_cfg().arch == backend
                         offset = index * max(300, vulkan_cycles) + cycle + 1 if unique else 1
-                        if compile_only and stage == middle_stage:
+                        if materialize_only and stage == middle_stage:
+                            impl.get_runtime().materialize()
+                            assert impl.get_runtime().materialized
+                        elif compile_only and stage == middle_stage:
                             compile_without_launch(retained._primal, cycle, offset, impl)
                         elif not skip_target_kernel or stage != middle_stage:
                             assert retained(cycle, offset) == cycle + offset
@@ -252,6 +257,16 @@ def main():
         or os.environ.get("QD_CYCLE_RAW_DEVICE") == "1"
     ):
         raise ValueError("Compile-only mode cannot combine with allocation, skip-kernel or raw-device modes")
+    if os.environ.get("QD_CYCLE_MATERIALIZE_ONLY") == "1" and (
+        allocation
+        or any(
+            os.environ.get(key) == "1"
+            for key in ("QD_CYCLE_SKIP_TARGET_KERNEL", "QD_CYCLE_RAW_DEVICE", "QD_CYCLE_COMPILE_ONLY")
+        )
+    ):
+        raise ValueError(
+            "Materialize-only mode cannot combine with allocation, skip-kernel, raw-device or compile modes"
+        )
     recovery_event = context.Event() if os.environ.get("QD_CYCLE_RECOVERY") == "1" else None
     if recovery_event is not None and allocation:
         raise ValueError("Recovery mode requires runtime cycles, not allocation mode")
