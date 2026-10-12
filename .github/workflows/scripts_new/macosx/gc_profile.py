@@ -27,6 +27,8 @@ def _write(record):
 def _gc_callback(event, info):
     global _start
     if event == 'start':
+        if info['generation'] == 2 and os.environ.get('QD_GC_NATIVE') == '1':
+            _write(dict(kind='gc_begin', generation=2))
         _start = (time.perf_counter(), time.process_time())
     elif event == 'stop' and _start is not None:
         wall, cpu = time.perf_counter() - _start[0], time.process_time() - _start[1]
