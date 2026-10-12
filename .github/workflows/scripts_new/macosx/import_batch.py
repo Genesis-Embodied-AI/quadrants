@@ -70,12 +70,15 @@ def _census(stage):
     finally:
         if enabled:
             gc.enable()
+    impl = sys.modules.get("quadrants.lang.impl")
+    runtime_kernels = len(impl.get_runtime().kernels) if impl is not None else None
     _write(
         dict(
             kind="census",
             stage=stage,
             generation_counts=counts,
             total_tracked=sum(counts),
+            runtime_kernels=runtime_kernels,
             wall_seconds=time.perf_counter() - start,
             cpu_seconds=time.process_time() - cpu,
             automatic_gc_restored=gc.isenabled() == enabled,

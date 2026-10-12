@@ -74,6 +74,21 @@ def prepare(root, output, label, env, census):
     )
 
 
+def prepare_growth(root, output, env):
+    test_root = root / "tests/python"
+    files = sorted({*test_root.rglob("test_*.py"), *test_root.rglob("*_test.py"), *test_root.rglob("*.ipynb")})
+    if not files:
+        raise RuntimeError("Empty full-suite diagnostic selection")
+    selection = output / "import-batch-selection.json"
+    selection.write_text(json.dumps([str(path.resolve()) for path in files], indent=2) + "\n")
+    env.update(
+        QD_BATCH_SELECTION=str(selection),
+        QD_IMPORT_SCOPE="all",
+        QD_OBJECT_CENSUS="1",
+        QD_IMPORT_TEST_ROOT=str(test_root),
+    )
+
+
 def verify(output):
     selection = json.loads((output / "import-batch-selection.json").read_text())
     modules = {"python." + Path(path).stem for path in selection}

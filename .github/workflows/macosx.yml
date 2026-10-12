@@ -9,6 +9,7 @@ on:
           - binary
           - import-batch
           - import-batch-census
+          - runtime-growth
           - expanded-binary
           - workload
           - snapshots
@@ -34,7 +35,8 @@ jobs:
       fail-fast: false
       matrix:
         order: >-
-          ${{ fromJSON(startsWith(inputs.comparison, 'import-batch') && '["small-all","all-small"]' ||
+          ${{ fromJSON(inputs.comparison == 'runtime-growth' && '["growth"]' ||
+          startsWith(inputs.comparison, 'import-batch') && '["small-all","all-small"]' ||
           inputs.comparison == 'production-batches-candidate' && '["batched"]' ||
           inputs.comparison == 'process-batches-candidate' && '["batched"]' ||
           inputs.comparison == 'gc-freeze-candidate' && '["frozen"]' ||
