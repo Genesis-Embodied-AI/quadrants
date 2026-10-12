@@ -78,12 +78,10 @@ def parse_test_results(path: Path) -> dict[tuple[str | None, str | None], Litera
     for case in ET.parse(path).iter("testcase"):
         key = (case.get("classname"), case.get("name"))
         assert key not in outcomes, f"Duplicate test case in {path}: {key}"
-        if case.find("error") is not None:
-            outcomes[key] = "error"
-        elif case.find("failure") is not None:
-            outcomes[key] = "fail"
-        elif case.find("skipped") is not None:
-            outcomes[key] = "skip"
+        for tag, status in (("error", "error"), ("failure", "fail"), ("skipped", "skip")):
+            if case.find(tag) is not None:
+                outcomes[key] = status
+                break
         else:
             outcomes[key] = "pass"
     return outcomes
