@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pytest import Config
 
-_SELECTED: set[Path] | None = None
+_SELECTED_TEST_PATHS: set[Path] | None = None
 
 
 def pytest_configure(config: Config) -> None:
@@ -30,22 +30,22 @@ def pytest_configure(config: Config) -> None:
     #
     # In this plugin, it:
     # 1. Reads QD_BATCH_SELECTION to locate the selection JSON file.
-    # 2. Loads its file paths into the global _SELECTED set.
+    # 2. Loads its file paths into the global _SELECTED_TEST_PATHS set.
     # 3. Raises an error if the selection is empty or references missing files.
     #
-    # Later, pytest_ignore_collect() uses _SELECTED to decide which test files to skip.
+    # Later, pytest_ignore_collect() uses _SELECTED_TEST_PATHS to decide which test files to skip.
     #
     # config is pytest's configuration object; this implementation does not use it. Each xdist worker runs this
     # setup for itself.
-    global _SELECTED
-    _SELECTED = {Path(path) for path in json.loads(Path(os.environ["QD_BATCH_SELECTION"]).read_text())}
-    if not _SELECTED or any(not path.is_file() for path in _SELECTED):
+    global _SELECTED_TEST_PATHS
+    _SELECTED_TEST_PATHS = {Path(path) for path in json.loads(Path(os.environ["QD_BATCH_SELECTION"]).read_text())}
+    if not _SELECTED_TEST_PATHS or any(not path.is_file() for path in _SELECTED_TEST_PATHS):
         raise RuntimeError("Batch selection is empty or references missing files")
 
 
 def pytest_ignore_collect(collection_path: Path, config: Config) -> bool | None:
     if collection_path.is_file() and collection_path.suffix in (".py", ".ipynb"):
-        return collection_path.resolve() not in _SELECTED
+        return collection_path.resolve() not in _SELECTED_TEST_PATHS
     return None
 
 
