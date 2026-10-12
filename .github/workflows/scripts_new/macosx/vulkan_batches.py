@@ -48,7 +48,7 @@ def run_batches(root: Path, output: Path, runner_args: list[str], batch_size: in
     manifest_contents = [[str(path.relative_to(root)) for path in group] for group in file_groups]
     (output / "manifest.json").write_text(json.dumps(manifest_contents, indent=2) + "\n")
     results = []
-    suites = ET.Element("testsuites")
+    suites_xml_nodes = ET.Element("testsuites")
     failed = False
     for index, group in enumerate(file_groups):
         label = f"batch-{index:02d}"
@@ -72,13 +72,13 @@ def run_batches(root: Path, output: Path, runner_args: list[str], batch_size: in
         if xml.exists():
             report = ET.parse(xml).getroot()
             if report.tag == "testsuite":
-                suites.append(report)
+                suites_xml_nodes.append(report)
             else:
-                suites.extend(report)
+                suites_xml_nodes.extend(report)
         else:
             failed = True
         failed |= result.returncode != 0
-    ET.ElementTree(suites).write(output / "results.xml", encoding="utf-8", xml_declaration=True)
+    ET.ElementTree(suites_xml_nodes).write(output / "results.xml", encoding="utf-8", xml_declaration=True)
     return int(failed)
 
 
