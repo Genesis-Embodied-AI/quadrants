@@ -73,14 +73,16 @@ def make_fake_tests_project(root: Path) -> None:
         )
 
 
-def parse_test_results(path: Path) -> dict[tuple[str | None, str | None], Literal["pass", "fail", "skip", "error"]]:
-    outcomes: dict[tuple[str | None, str | None], Literal["pass", "fail", "skip", "error"]] = {}
+def parse_test_results(
+    path: Path,
+) -> dict[tuple[str | None, str | None], Literal["pass", "failure", "skipped", "error"]]:
+    outcomes: dict[tuple[str | None, str | None], Literal["pass", "failure", "skipped", "error"]] = {}
     for case in ET.parse(path).iter("testcase"):
         key = (case.get("classname"), case.get("name"))
         assert key not in outcomes, f"Duplicate test case in {path}: {key}"
-        for tag, status in (("error", "error"), ("failure", "fail"), ("skipped", "skip")):
+        for tag in ("error", "failure", "skipped"):
             if case.find(tag) is not None:
-                outcomes[key] = status
+                outcomes[key] = tag
                 break
         else:
             outcomes[key] = "pass"
