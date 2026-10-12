@@ -15,6 +15,7 @@ on:
           - gc-native
           - gc-walk
           - gc-order
+          - gc-cpu
           - simt-only
           - python-gc
           - expanded-binary
@@ -44,6 +45,7 @@ jobs:
         order: >-
           ${{ fromJSON(inputs.comparison == 'python-gc' && '["synthetic"]' ||
           inputs.comparison == 'simt-only' && '["simt"]' ||
+          inputs.comparison == 'gc-cpu' && '["cpu"]' ||
           inputs.comparison == 'gc-order' && '["growth"]' ||
           inputs.comparison == 'gc-walk' && '["growth"]' ||
           inputs.comparison == 'gc-native' && '["growth"]' ||

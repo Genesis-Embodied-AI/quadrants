@@ -36,17 +36,18 @@ def main():
                         choices=('binary', 'expanded-binary', 'workload', 'snapshots', 'gc-profile',
                                  'dataclass-ablation', 'pydantic', 'process-batches', 'owner-guard',
                                  'owner-guard-candidate', 'gc-freeze-candidate', 'process-batches-candidate',
-                                 'production-batches-candidate', 'import-batch', 'import-batch-census', 'runtime-growth', 'kernel-registry', 'kernel-lifetime', 'gc-native', 'gc-walk', 'simt-only', 'python-gc', 'gc-order'),
+                                 'production-batches-candidate', 'import-batch', 'import-batch-census', 'runtime-growth', 'kernel-registry', 'kernel-lifetime', 'gc-native', 'gc-walk', 'simt-only', 'python-gc', 'gc-order', 'gc-cpu'),
                         default='binary')
     parser.add_argument('--requirements', type=Path, help='Optional historically recorded dependency versions')
     parser.add_argument('--reference', type=Path, help='Completed full-suite artifact for candidate coverage checks')
     parser.add_argument('--order', required=True)
     args = parser.parse_args()
+    cpu_gc = args.comparison == 'gc-cpu'
     order_gc = args.comparison == 'gc-order'
     walk_gc = args.comparison == 'gc-walk'
     python_gc = args.comparison == 'python-gc'
     simt_only = args.comparison == 'simt-only'
-    native_gc = args.comparison in ('gc-native', 'gc-walk', 'simt-only', 'gc-order')
+    native_gc = args.comparison in ('gc-native', 'gc-walk', 'simt-only', 'gc-order', 'gc-cpu')
     if native_gc or python_gc:
         args.comparison = 'runtime-growth'
     lifetime_only = args.comparison == 'kernel-lifetime'
@@ -74,7 +75,7 @@ def main():
     if args.comparison.startswith('import-batch'):
         expected = {'small', 'all'}
     if args.comparison == 'runtime-growth':
-        expected = {'synthetic'} if python_gc else {'simt'} if simt_only else {'growth'}
+        expected = {'cpu'} if cpu_gc else {'synthetic'} if python_gc else {'simt'} if simt_only else {'growth'}
     if args.comparison == 'kernel-registry':
         expected = {'strong', 'weak'}
     labels = args.order.split('-')
@@ -272,7 +273,7 @@ def main():
         env['QD_LIB_DIR'] = subprocess.check_output(
             [str(python), '-c', 'import quadrants; print(quadrants.__path__[0] + "/_lib/runtime")'],
             text=True, env=env, cwd=test_root).splitlines()[-1]
-        invocation = [str(python), 'tests/run_tests.py', '-v', '-r', '1', '--arch', 'vulkan',
+        invocation = [str(python), 'tests/run_tests.py', '-v', '-r', '1', '--arch', 'cpu' if cpu_gc else 'vulkan',
                       '-t', '3', '-m', 'not needs_torch']
         if production_batches:
             invocation = [str(python), str(Path(__file__).with_name('vulkan_batches.py').resolve()),
@@ -315,7 +316,7 @@ def main():
                     code = proc.wait()
         if production_batches:
             shutil.copy2(output / 'production-batches/results.xml', output / 'batched.xml')
-        results.append(dict(arm=label, comparison=args.comparison, binary=binary,
+        results.append(dict(arm=label, comparison='gc-cpu' if cpu_gc else args.comparison, binary=binary,
                             test_source='new' if test_root == new else 'old',
                             seconds=time.monotonic() - start, returncode=code))
         (output / 'results.json').write_text(json.dumps(results, indent=2) + '\n')
