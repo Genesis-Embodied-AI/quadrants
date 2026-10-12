@@ -73,7 +73,7 @@ def make_fake_tests_project(root: Path) -> None:
         )
 
 
-def cases(path: Path) -> dict[tuple[str | None, str | None], Literal["pass", "fail", "skip", "error"]]:
+def parse_test_results(path: Path) -> dict[tuple[str | None, str | None], Literal["pass", "fail", "skip", "error"]]:
     outcomes: dict[tuple[str | None, str | None], Literal["pass", "fail", "skip", "error"]] = {}
     for case in ET.parse(path).iter("testcase"):
         key = (case.get("classname"), case.get("name"))
@@ -99,8 +99,8 @@ def test_complete_case_outcomes_and_fresh_selection(tmp_path: Path) -> None:
     )
     output = tmp_path / "batches"
     assert run_test_batches.run_batches(tmp_path, output, []) == 0
-    assert cases(output / "results.xml") == cases(baseline)
-    assert len(cases(baseline)) == 39
+    assert parse_test_results(output / "results.xml") == parse_test_results(baseline)
+    assert len(parse_test_results(baseline)) == 39
     manifest_contents = json.loads((output / "manifest.json").read_text())
     assert [len(group) for group in manifest_contents] == [12, 1]
 
@@ -114,7 +114,7 @@ def test_failure_is_not_hidden_by_later_success(tmp_path: Path) -> None:
     assert run_test_batches.run_batches(tmp_path, output, []) == 1
     records = json.loads((output / "results.json").read_text())
     assert [(record["batch"], record["returncode"]) for record in records] == [(1, 0)]
-    assert cases(output / "results.xml") == cases(output / "batch-01.xml")
+    assert parse_test_results(output / "results.xml") == parse_test_results(output / "batch-01.xml")
     assert len(list(ET.parse(output / "batch-00.xml").iter("failure"))) == 1
     later_report = ET.parse(output / "batch-01.xml")
     assert len(list(later_report.iter("testcase"))) == 3
