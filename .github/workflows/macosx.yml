@@ -15,6 +15,7 @@ on:
           - pydantic
           - process-batches
           - owner-guard
+          - owner-guard-candidate
         default: binary
 permissions:
   contents: read
@@ -28,7 +29,8 @@ jobs:
       fail-fast: false
       matrix:
         order: >-
-          ${{ fromJSON(inputs.comparison == 'owner-guard' && '["guarded-full","full-guarded"]' ||
+          ${{ fromJSON(inputs.comparison == 'owner-guard-candidate' && '["guarded"]' ||
+          inputs.comparison == 'owner-guard' && '["guarded-full","full-guarded"]' ||
           inputs.comparison == 'process-batches' && '["batched-full","full-batched"]' ||
           inputs.comparison == 'dataclass-ablation' && '["pruned-full","full-pruned"]' ||
           inputs.comparison == 'gc-profile' && '["new"]' || inputs.comparison == 'workload' &&
@@ -64,6 +66,14 @@ jobs:
           run-id: 37518349285
           github-token: ${{ github.token }}
           path: wheels-new
+      - name: Download completed full-suite coverage reference
+        if: inputs.comparison == 'owner-guard-candidate'
+        uses: actions/download-artifact@v4
+        with:
+          name: vulkan-attribution-full-pruned
+          run-id: 38180133761
+          github-token: ${{ github.token }}
+          path: reference
       - name: Run controlled comparison
         env:
           AB_ORDER: ${{ matrix.order }}
@@ -72,6 +82,9 @@ jobs:
           pinned=()
           if [[ "$AB_COMPARISON" != binary ]]; then
             pinned=(--requirements control/.github/workflows/scripts_new/macosx/october_2026_requirements.txt)
+          fi
+          if [[ "$AB_COMPARISON" == owner-guard-candidate ]]; then
+            pinned+=(--reference reference)
           fi
           python control/.github/workflows/scripts_new/macosx/attribution_ab.py \
             --old old --new new --old-wheels wheels-old --new-wheels wheels-new \

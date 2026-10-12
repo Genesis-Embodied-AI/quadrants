@@ -18,6 +18,7 @@ import json
 import os
 from pathlib import Path
 import shlex
+import shutil
 import subprocess
 import time
 
@@ -33,11 +34,18 @@ def main():
         parser.add_argument('--' + name, type=Path, required=True)
     parser.add_argument('--comparison',
                         choices=('binary', 'expanded-binary', 'workload', 'snapshots', 'gc-profile',
-                                 'dataclass-ablation', 'pydantic', 'process-batches', 'owner-guard'),
+                                 'dataclass-ablation', 'pydantic', 'process-batches', 'owner-guard',
+                                 'owner-guard-candidate'),
                         default='binary')
     parser.add_argument('--requirements', type=Path, help='Optional historically recorded dependency versions')
+    parser.add_argument('--reference', type=Path, help='Completed full-suite artifact for candidate coverage checks')
     parser.add_argument('--order', required=True)
     args = parser.parse_args()
+    candidate_only = args.comparison == 'owner-guard-candidate'
+    if candidate_only:
+        if not args.reference or not args.requirements:
+            parser.error('Candidate-only mode requires a completed reference artifact and historical dependency pins')
+        args.comparison = 'owner-guard'
     if args.comparison == 'pydantic' and not args.requirements:
         parser.error('Pydantic comparison requires the historical October dependency pins.')
     expected = {'common', 'full'} if args.comparison == 'workload' else {'old', 'new'}
@@ -48,7 +56,7 @@ def main():
     if args.comparison == 'process-batches':
         expected = {'full', 'batched'}
     if args.comparison == 'owner-guard':
-        expected = {'full', 'guarded'}
+        expected = {'guarded'} if candidate_only else {'full', 'guarded'}
     labels = args.order.split('-')
     if len(labels) != len(expected) or set(labels) != expected:
         parser.error(f'--order must contain each of {sorted(expected)} exactly once')
@@ -160,6 +168,17 @@ def main():
     metadata = {label: dict(wheel=path.name, sha256=hashlib.sha256(path.read_bytes()).hexdigest())
                 for label, path in wheels.items()}
     (output / 'wheels.json').write_text(json.dumps(metadata, indent=2) + '\n')
+    if candidate_only:
+        reference = args.reference.resolve()
+        reference_wheels = json.loads((reference / 'wheels.json').read_text())
+        reference_results = json.loads((reference / 'results.json').read_text())
+        full = next(result for result in reference_results if result['arm'] == 'full')
+        if (reference_wheels['new'] != metadata['new'] or
+                (reference / 'dependencies.txt').read_bytes() != deps.read_bytes() or
+                full['returncode'] != 0 or full['binary'] != 'new' or full['test_source'] != 'new'):
+            raise RuntimeError('Reference is not a passing full October suite with the same wheel and dependencies')
+        shutil.copy2(reference / 'full.xml', output / 'full.xml')
+        (output / 'reference_result.json').write_text(json.dumps(full, indent=2) + '\n')
 
     results = []
     for label in labels:
