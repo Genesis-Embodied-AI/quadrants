@@ -72,6 +72,7 @@ def run_batches(root: Path, output: Path, runner_args: list[str], batch_size: in
         # Add this script's parent directory to PYTHONPATH so pytest can find it as a plugin.
         env["PYTHONPATH"] = str(Path(__file__).resolve().parent) + os.pathsep + env.get("PYTHONPATH", "")
         # Each subprocess needs its own temporary directory and test report. Other pytest settings are preserved.
+        # Insert new options into existing PYTEST_ADDOPTS.
         options = shlex.split(env.get("PYTEST_ADDOPTS", ""))
         options += [
             "-p",
