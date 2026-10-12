@@ -53,6 +53,7 @@ def make_fake_tests_project(root: Path) -> None:
                 """\
                 import json, os, pytest
                 from pathlib import Path
+                # Verify at import time that this file belongs to the current batch; skip for the unbatched baseline.
                 if 'QD_BATCH_SELECTION' in os.environ:
                     assert str(Path(__file__).resolve()) in json.loads(Path(os.environ['QD_BATCH_SELECTION']).read_text())
                 @pytest.mark.parametrize('value', [0, 1])
