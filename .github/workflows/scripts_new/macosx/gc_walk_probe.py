@@ -83,6 +83,11 @@ def build():
             assert memory[name]["status"] == 0 and memory[name]["pages"] > 0
             assert 0 <= memory[name]["resident"] <= memory[name]["pages"]
         print("Memory residency/resource smoke passed", memory["residency_after"], flush=True)
+        prepared = _gc_walk.memory(True)
+        assert prepared["prepage"] is not None and memory["prepage"] is None
+        assert 1 <= prepared["prepage"]["reads"] <= prepared["residency_before"]["pages"]
+        assert prepared["prepage"]["thread_cpu_seconds"] >= 0
+        print("One-word-per-page control smoke passed", prepared["prepage"], flush=True)
         enabled = gc.isenabled()
         gc.disable()
         try:

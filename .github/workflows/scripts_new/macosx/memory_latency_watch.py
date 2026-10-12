@@ -47,6 +47,8 @@ def main():
     assert "quadrants" not in sys.modules
     folder = Path(sys.argv[1])
     running = True
+    prepage_control = os.environ.get("QD_MEMORY_PREPAGE_CONTROL") == "1"
+    iteration = 0
 
     def stop(signum, frame):
         nonlocal running
@@ -55,12 +57,27 @@ def main():
     signal.signal(signal.SIGTERM, stop)
     with (folder / "memory-sidecar.jsonl").open("w", buffering=1) as stream:
         stream.write(
-            json.dumps(dict(kind="start", timestamp=time.time(), pid=os.getpid(), quadrants_imported=False)) + "\n"
+            json.dumps(
+                dict(
+                    kind="start",
+                    timestamp=time.time(),
+                    pid=os.getpid(),
+                    quadrants_imported=False,
+                    prepage_control=prepage_control,
+                )
+            )
+            + "\n"
         )
         while running:
             start = time.time()
-            result = _gc_walk.memory()
-            stream.write(json.dumps(dict(kind="memory", timestamp=time.time(), started_at=start, **result)) + "\n")
+            requested = prepage_control and iteration % 2 == 1
+            result = _gc_walk.memory(requested)
+            assert (result["prepage"] is not None) == requested
+            stream.write(
+                json.dumps(dict(kind="memory", timestamp=time.time(), started_at=start, iteration=iteration, **result))
+                + "\n"
+            )
+            iteration += 1
             time.sleep(5)
         assert "quadrants" not in sys.modules
         stream.write(json.dumps(dict(kind="end", timestamp=time.time(), quadrants_imported=False)) + "\n")

@@ -141,6 +141,20 @@ static MemoryNode *memory_nodes = NULL, *memory_head = NULL, *memory_expected = 
 #define MEMORY_CHUNKS 64
 static unsigned memory_chunk_new_pages[MEMORY_CHUNKS];
 static long memory_page_size;
+static uintptr_t memory_page_checksum;
+
+/* Read one owned pointer field per page, without writing or retaining any new memory. */
+static uintptr_t memory_page_sweep(unsigned *reads) {
+    uintptr_t checksum = (uintptr_t)memory_nodes[0].next;
+    *reads = 1;
+    size_t offset = (uintptr_t)memory_nodes % memory_page_size;
+    size_t first = (memory_page_size - offset + sizeof(MemoryNode) - 1) / sizeof(MemoryNode);
+    for (size_t i = first; i < (1u << 20); i += memory_page_size / sizeof(MemoryNode)) {
+        checksum ^= (uintptr_t)memory_nodes[i].next;
+        (*reads)++;
+    }
+    return checksum;
+}
 
 /* Guest residency query: does not establish residency or scheduling on the hypervisor host. */
 static PyObject *memory_residency(void) {
@@ -174,7 +188,19 @@ static double usage_seconds(struct timeval value) {
     return value.tv_sec + value.tv_usec * 1e-6;
 }
 
-static PyObject *memory_control(PyObject *self, PyObject *unused) {
+static PyObject *usage_delta(struct rusage before, struct rusage after) {
+    return Py_BuildValue("{s:l,s:l,s:l,s:l,s:d,s:d}",
+                         "minor_faults", after.ru_minflt - before.ru_minflt,
+                         "major_faults", after.ru_majflt - before.ru_majflt,
+                         "voluntary_switches", after.ru_nvcsw - before.ru_nvcsw,
+                         "involuntary_switches", after.ru_nivcsw - before.ru_nivcsw,
+                         "user_cpu", usage_seconds(after.ru_utime) - usage_seconds(before.ru_utime),
+                         "system_cpu", usage_seconds(after.ru_stime) - usage_seconds(before.ru_stime));
+}
+
+static PyObject *memory_control(PyObject *self, PyObject *args) {
+    int prepage_requested = 0;
+    if (!PyArg_ParseTuple(args, "|p", &prepage_requested)) return NULL;
     const uint32_t count = 1u << 20, visits = 1u << 18;
     if (!memory_nodes) {
         MemoryNode *nodes = PyMem_RawMalloc((size_t)count * sizeof(MemoryNode));
@@ -219,6 +245,8 @@ static PyObject *memory_control(PyObject *self, PyObject *unused) {
         }
         free(seen);
         PyMem_RawFree(order);
+        unsigned page_reads;
+        memory_page_checksum = memory_page_sweep(&page_reads);
     }
     PyObject *residency_before = memory_residency();
     if (!residency_before) return NULL;
@@ -226,6 +254,35 @@ static PyObject *memory_control(PyObject *self, PyObject *unused) {
     if (!resources) {
         Py_DECREF(residency_before);
         return NULL;
+    }
+    PyObject *prepage = NULL;
+    if (prepage_requested) {
+        struct rusage before, after;
+        if (getrusage(RUSAGE_SELF, &before)) {
+            PyErr_SetFromErrno(PyExc_OSError);
+            goto failed;
+        }
+        unsigned page_reads;
+        double w = now(CLOCK_MONOTONIC), c = now(CLOCK_THREAD_CPUTIME_ID);
+        uintptr_t checksum = memory_page_sweep(&page_reads);
+        double page_cpu = now(CLOCK_THREAD_CPUTIME_ID) - c;
+        double page_wall = now(CLOCK_MONOTONIC) - w;
+        if (getrusage(RUSAGE_SELF, &after)) {
+            PyErr_SetFromErrno(PyExc_OSError);
+            goto failed;
+        }
+        if (checksum != memory_page_checksum) {
+            PyErr_SetString(PyExc_RuntimeError, "Page sweep checksum mismatch");
+            goto failed;
+        }
+        PyObject *delta = usage_delta(before, after);
+        if (!delta) goto failed;
+        prepage = Py_BuildValue("{s:i,s:d,s:d,s:N}", "reads", (int)page_reads,
+                                "wall_seconds", page_wall, "thread_cpu_seconds", page_cpu, "resources", delta);
+        if (!prepage) goto failed;
+    } else {
+        Py_INCREF(Py_None);
+        prepage = Py_None;
     }
     double wall[4], cpu[4];
     double chunk_wall[2][MEMORY_CHUNKS], chunk_cpu[2][MEMORY_CHUNKS];
@@ -258,13 +315,7 @@ static PyObject *memory_control(PyObject *self, PyObject *unused) {
             PyErr_SetFromErrno(PyExc_OSError);
             goto failed;
         }
-        PyObject *delta = Py_BuildValue("{s:l,s:l,s:l,s:l,s:d,s:d}",
-                                       "minor_faults", after.ru_minflt - before.ru_minflt,
-                                       "major_faults", after.ru_majflt - before.ru_majflt,
-                                       "voluntary_switches", after.ru_nvcsw - before.ru_nvcsw,
-                                       "involuntary_switches", after.ru_nivcsw - before.ru_nivcsw,
-                                       "user_cpu", usage_seconds(after.ru_utime) - usage_seconds(before.ru_utime),
-                                       "system_cpu", usage_seconds(after.ru_stime) - usage_seconds(before.ru_stime));
+        PyObject *delta = usage_delta(before, after);
         if (!delta) goto failed;
         int append_status = PyList_Append(resources, delta);
         Py_DECREF(delta);
@@ -294,13 +345,15 @@ static PyObject *memory_control(PyObject *self, PyObject *unused) {
         }
         PyList_SET_ITEM(chunks, chunk, item);
     }
-    return Py_BuildValue("{s:i,s:i,s:i,s:(dddd),s:(dddd),s:N,s:N,s:N,s:N,s:l}", "nodes", (int)count,
+    return Py_BuildValue("{s:i,s:i,s:i,s:(dddd),s:(dddd),s:N,s:N,s:N,s:N,s:l,s:N}", "nodes", (int)count,
                          "visits", (int)visits, "bytes", (int)(count * sizeof(MemoryNode)),
                          "wall_seconds", wall[0], wall[1], wall[2], wall[3],
                          "thread_cpu_seconds", cpu[0], cpu[1], cpu[2], cpu[3],
                          "resources", resources, "residency_before", residency_before,
-                         "residency_after", residency_after, "chunks", chunks, "chunk_page_size", memory_page_size);
+                         "residency_after", residency_after, "chunks", chunks, "chunk_page_size", memory_page_size,
+                         "prepage", prepage);
 failed:
+    Py_XDECREF(prepage);
     Py_DECREF(resources);
     Py_DECREF(residency_before);
     return NULL;
@@ -406,7 +459,7 @@ static PyObject *references(PyObject *self, PyObject *objects) {
 static PyMethodDef methods[] = {
     {"snapshot", snapshot, METH_NOARGS, "Direct-head measurement and pinned snapshot under one GIL hold."},
     {"references", references, METH_O, "Read-only tp_traverse visit counts for a retained object snapshot."},
-    {"memory", memory_control, METH_NOARGS, "Time a fixed private 64-MiB pointer graph, independent of the GC heap."},
+    {"memory", memory_control, METH_VARARGS, "Time a fixed private graph, optionally reading one word per page first."},
     {"measure", measure, METH_O, "Read-only list and header timing."},
     {"cold", cold, METH_NOARGS, "Read generation-2 links before any diagnostic object scan."},
     {NULL}
