@@ -35,7 +35,12 @@ class FakeTestsProject:
 
 
 def make_fake_tests_project(root: Path, num_test_files: int, passing_cases_per_file: int = 2) -> FakeTestsProject:
-    """Create the requested number of test files and return their paths and case counts, including skipped cases."""
+    """Create a fake test project with the requested number of test files.
+
+    Return a FakeTestsProject containing runner_path (the generated run_tests.py path) and test_case_counts
+    (a mapping from each generated test file path to its number of test cases, including the skipped case).
+    Its total_cases property gives the total number of test cases across those files.
+    """
     tests_path = root / "tests" / "python"
     tests_path.mkdir(parents=True)
     runner_path = root / "tests" / "run_tests.py"
