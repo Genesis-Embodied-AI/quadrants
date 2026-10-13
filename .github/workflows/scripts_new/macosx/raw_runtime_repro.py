@@ -189,6 +189,7 @@ def main():
         "metal-runtime-heap",
         "metal-runtime-buffer",
         "metal-heap-large-no-submit",
+        "metal-heap-large-no-address",
         "metal-heap-large-empty",
     )
     assert not (args.work.startswith("metal-") and os.environ.get("QD_REPRO_CLOSE_ON_SLOW") == "1")

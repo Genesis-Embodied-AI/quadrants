@@ -58,7 +58,13 @@ extern "C" int native_metal_cycle(uint64_t bytes, int use_heap, ProbeStats *stat
       second = first;
       stats->allocation_bytes = first.length;
     }
-    if (!first || !second || first.gpuAddress == 0 || second.gpuAddress == 0)
+    if (!first || !second)
+      return 5;
+    if (use_heap == 4) {
+      stats->command_status = 0;
+      return 0;
+    }
+    if (first.gpuAddress == 0 || second.gpuAddress == 0)
       return 5;
     if (use_heap == 2) {
       stats->command_status = 0;
