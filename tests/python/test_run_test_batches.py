@@ -34,9 +34,8 @@ class FakeTestsProject:
         return sum(self.test_case_counts.values())
 
 
-def make_fake_tests_project(root: Path, batch_sizes: list[int], passing_cases_per_file: int = 2) -> FakeTestsProject:
-    """Create files for the requested batch sizes and return their paths and case counts, including skipped cases."""
-    num_test_files = sum(batch_sizes)
+def make_fake_tests_project(root: Path, num_test_files: int, passing_cases_per_file: int = 2) -> FakeTestsProject:
+    """Create the requested number of test files and return their paths and case counts, including skipped cases."""
     tests_path = root / "tests" / "python"
     tests_path.mkdir(parents=True)
     runner_path = root / "tests" / "run_tests.py"
@@ -110,9 +109,10 @@ def parse_test_results(
 
 
 def test_complete_case_outcomes_and_fresh_selection(tmp_path: Path) -> None:
+    num_test_files = 13
     batch_size = 12
-    batch_sizes = [12, 1]
-    project = make_fake_tests_project(tmp_path, batch_sizes=batch_sizes)
+    expected_batch_sizes = [12, 1]
+    project = make_fake_tests_project(tmp_path, num_test_files=num_test_files)
     results_without_batching = tmp_path / "full.xml"
     # Run tests without batching.
     subprocess.run(
@@ -129,16 +129,16 @@ def test_complete_case_outcomes_and_fresh_selection(tmp_path: Path) -> None:
     assert run_test_batches.run_batches(tmp_path, output_with_batching, [], batch_size=batch_size) == 0
     assert parse_test_results(output_with_batching / "results.xml") == parse_test_results(results_without_batching)
     manifest_contents = json.loads((output_with_batching / "manifest.json").read_text())
-    assert [len(group) for group in manifest_contents] == batch_sizes
+    assert [len(group) for group in manifest_contents] == expected_batch_sizes
     assert sorted(path for group in manifest_contents for path in group) == sorted(
         str(path.relative_to(tmp_path)) for path in project.test_case_counts
     )
 
 
 def test_failure_is_not_hidden_by_later_success(tmp_path: Path) -> None:
+    num_test_files = 13
     batch_size = 12
-    batch_sizes = [12, 1]
-    project = make_fake_tests_project(tmp_path, batch_sizes=batch_sizes)
+    project = make_fake_tests_project(tmp_path, num_test_files=num_test_files)
     test_paths = sorted(project.test_case_counts)
     test_paths[0].write_text("def test_failure() -> None:\n    assert False\n")
     output = tmp_path / "batches"
@@ -157,9 +157,9 @@ def test_failure_is_not_hidden_by_later_success(tmp_path: Path) -> None:
 def test_selected_files_respect_pytest_ignore_options(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, ignore_option: str
 ) -> None:
+    num_test_files = 13
     batch_size = 12
-    batch_sizes = [12, 1]
-    project = make_fake_tests_project(tmp_path, batch_sizes=batch_sizes)
+    project = make_fake_tests_project(tmp_path, num_test_files=num_test_files)
     ignored = sorted(project.test_case_counts)[0]
     ignored.write_text("raise AssertionError('Ignored test module must not be imported')\n")
     monkeypatch.setenv(
