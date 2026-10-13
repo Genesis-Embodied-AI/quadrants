@@ -116,13 +116,13 @@ def test_complete_case_outcomes_and_fresh_selection(tmp_path: Path) -> None:
     num_test_files = 13
     batch_size = 12
     expected_batch_sizes = [12, 1]
-    project = make_fake_tests_project(tmp_path, num_test_files=num_test_files)
+    fake_tests_project = make_fake_tests_project(tmp_path, num_test_files=num_test_files)
     results_without_batching = tmp_path / "full.xml"
     # Run tests without batching.
     subprocess.run(
         [
             sys.executable,
-            str(project.runner_path),
+            str(fake_tests_project.runner_path),
             f"--junitxml={results_without_batching}",
             f"--basetemp={tmp_path / 'full-tmp'}",
         ],
@@ -135,7 +135,7 @@ def test_complete_case_outcomes_and_fresh_selection(tmp_path: Path) -> None:
     manifest_contents = json.loads((output_with_batching / "manifest.json").read_text())
     assert [len(group) for group in manifest_contents] == expected_batch_sizes
     assert sorted(path for group in manifest_contents for path in group) == sorted(
-        str(path.relative_to(tmp_path)) for path in project.test_case_counts
+        str(path.relative_to(tmp_path)) for path in fake_tests_project.test_case_counts
     )
 
 
