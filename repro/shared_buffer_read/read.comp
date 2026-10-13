@@ -1,0 +1,21 @@
+#version 450
+#extension GL_EXT_buffer_reference : require
+
+// One int at a device address. The address is a suballocation of a larger VkDeviceMemory, not its own allocation.
+layout(buffer_reference, std430, buffer_reference_align = 16) readonly buffer Word {
+    int v;
+};
+
+layout(std430, set = 0, binding = 0) readonly buffer Addresses {
+    Word a;
+    Word b;
+};
+
+layout(std430, set = 0, binding = 1) buffer Output {
+    int values[2];
+};
+
+void main() {
+    values[0] = a.v;
+    values[1] = b.v;
+}
