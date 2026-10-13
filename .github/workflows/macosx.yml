@@ -51,6 +51,7 @@ on:
           - owner-guard
           - owner-guard-candidate
           - gc-freeze-candidate
+          - bug-repro
         default: binary
       vulkan_cycles:
         description: Target backend iterations per worker for runtime cycle diagnostics (1 to 2000)
@@ -95,7 +96,7 @@ permissions:
   actions: read
 jobs:
   compare:
-    if: inputs.comparison != 'native-heap-crash' && inputs.comparison != 'native-heap-crash-debug' && inputs.comparison != 'native-heap-queue' && inputs.comparison != 'native-heap-blit'
+    if: inputs.comparison != 'native-heap-crash' && inputs.comparison != 'native-heap-crash-debug' && inputs.comparison != 'native-heap-queue' && inputs.comparison != 'native-heap-blit' && inputs.comparison != 'bug-repro'
     name: Archived Vulkan A/B (${{ matrix.order }})
     runs-on: macos-26
     timeout-minutes: 330
@@ -263,3 +264,60 @@ jobs:
         with:
           name: native-metal-mode-${{ matrix.mode }}
           path: native-output/
+  heap-repro:
+    if: inputs.comparison == 'bug-repro'
+    name: Metal heap mode ${{ matrix.mode }}
+    runs-on: macos-26
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [0, 1]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run placement-heap slowdown repro
+        run: bash repro/heap_slowdown/run.sh ${{ matrix.mode }} 1500 3
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: heap-mode-${{ matrix.mode }}
+          path: repro/heap_slowdown/output/
+  shared-buffer-repro:
+    if: inputs.comparison == 'bug-repro'
+    name: Shared buffer device address
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download MoltenVK 1.3.0
+        run: |
+          curl -fsSL -o /tmp/MoltenVK-macos.tar https://github.com/KhronosGroup/MoltenVK/releases/download/v1.3.0/MoltenVK-macos.tar
+          mkdir -p /tmp/mvk
+          tar -xf /tmp/MoltenVK-macos.tar -C /tmp/mvk
+      - name: Build
+        run: |
+          inc=$(find /tmp/mvk -type d -name include -print -quit)
+          xcrun clang++ -std=c++17 -O2 -Wall -Wextra -Werror -I"$inc" \
+            repro/shared_buffer_read/shared_buffer_read.cpp -o /tmp/shared_buffer_read
+      - name: Read through a shared Metal buffer
+        run: |
+          set +e
+          dylib=$(find /tmp/mvk -name libMoltenVK.dylib -print -quit)
+          /tmp/shared_buffer_read "$dylib" repro/shared_buffer_read/read.spv default > /tmp/bda-default.txt 2>&1
+          default_exit=$?
+          /tmp/shared_buffer_read "$dylib" repro/shared_buffer_read/read.spv 0 > /tmp/bda-off.txt 2>&1
+          off_exit=$?
+          echo "----- default heaps (exit $default_exit) -----"
+          cat /tmp/bda-default.txt
+          echo "----- MVK_CONFIG_USE_MTLHEAP=0 (exit $off_exit) -----"
+          cat /tmp/bda-off.txt
+          echo "default_exit=$default_exit heaps_off_exit=$off_exit"
+          mkdir -p repro/shared_buffer_read/output
+          cp /tmp/bda-default.txt /tmp/bda-off.txt repro/shared_buffer_read/output/
+          if [ "$default_exit" -ne 0 ]; then exit 1; fi
+          exit 0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shared-buffer-read
+          path: repro/shared_buffer_read/output/
