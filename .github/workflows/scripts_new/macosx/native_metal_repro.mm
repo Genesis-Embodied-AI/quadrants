@@ -8,7 +8,10 @@ int main(int argc, char **argv) {
     return 64;
   int mode = std::atoi(argv[1]);
   int cycles = std::atoi(argv[2]);
-  if ((mode != 2 && mode != 3 && mode != 4) || cycles < 1 || cycles > 2000)
+  // 2: buffers and addresses, no queue. 3: empty heap. 4: buffers, no addresses or queue.
+  // 5: buffers, addresses, queue, no command. 6: commit an empty command buffer and wait.
+  // 7: blit encoder with no fills, commit, and wait.
+  if ((mode < 2 || mode > 7) || cycles < 1 || cycles > 2000)
     return 64;
   if (native_install_crash_trace() != 0)
     return 65;
@@ -18,7 +21,8 @@ int main(int argc, char **argv) {
   for (int i = 0; i < cycles; ++i) {
     ProbeStats stats{};
     int result = native_metal_cycle(128ull << 20, mode, &stats);
-    if (result != 0 || stats.allocation_bytes < (128ull << 20) || stats.command_status != 0) {
+    uint64_t expected_status = (mode == 6 || mode == 7) ? 4 : 0;
+    if (result != 0 || stats.allocation_bytes < (128ull << 20) || stats.command_status != expected_status) {
       std::fprintf(stderr, "failed cycle=%d result=%d size=%llu command_status=%llu\n", i, result,
                    static_cast<unsigned long long>(stats.allocation_bytes),
                    static_cast<unsigned long long>(stats.command_status));

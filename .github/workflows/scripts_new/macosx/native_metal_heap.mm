@@ -73,13 +73,25 @@ extern "C" int native_metal_cycle(uint64_t bytes, int use_heap, ProbeStats *stat
     id<MTLCommandQueue> queue = [device newCommandQueue];
     if (!queue)
       return 6;
+    // Mode 5 keeps the queue and releases it with the buffers. It encodes nothing.
+    if (use_heap == 5) {
+      stats->command_status = 0;
+      return 0;
+    }
     id<MTLCommandBuffer> command = [queue commandBuffer];
-    id<MTLBlitCommandEncoder> encoder = [command blitCommandEncoder];
-    if (!command || !encoder)
+    if (!command)
       return 7;
-    [encoder fillBuffer:first range:NSMakeRange(0, 4) value:0];
-    [encoder fillBuffer:second range:NSMakeRange(use_heap ? 0 : offset, 4) value:0];
-    [encoder endEncoding];
+    // Mode 6 commits that buffer with no encoder. Mode 7 encodes no fills. Both wait.
+    if (use_heap != 6) {
+      id<MTLBlitCommandEncoder> encoder = [command blitCommandEncoder];
+      if (!encoder)
+        return 7;
+      if (use_heap != 7) {
+        [encoder fillBuffer:first range:NSMakeRange(0, 4) value:0];
+        [encoder fillBuffer:second range:NSMakeRange(use_heap ? 0 : offset, 4) value:0];
+      }
+      [encoder endEncoding];
+    }
     [command commit];
     [command waitUntilCompleted];
     stats->command_status = command.status;

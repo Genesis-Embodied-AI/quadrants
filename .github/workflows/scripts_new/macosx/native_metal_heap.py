@@ -70,6 +70,9 @@ class NativeMetalHeap:
             "metal-heap-large-no-submit",
             "metal-heap-large-no-address",
             "metal-heap-large-empty",
+            "metal-heap-large-queue",
+            "metal-heap-large-commit-empty",
+            "metal-heap-large-encoder-empty",
         )
         path = Path(os.environ["QD_NATIVE_METAL_LIBRARY"])
         self.library = C.CDLL(str(path))
@@ -86,12 +89,21 @@ class NativeMetalHeap:
         self.work = work
         self.bytes = 16384 if work == "metal-heap-small" else (128 << 20 if "-large" in work else 32 << 20)
         self.use_heap = work not in ("metal-buffer", "metal-runtime-buffer", "metal-buffer-large")
-        self.no_submit = work in ("metal-heap-large-no-submit", "metal-heap-large-empty", "metal-heap-large-no-address")
-        self.heap_mode = (
-            4
-            if work.endswith("-no-address")
-            else (3 if work.endswith("-empty") else (2 if self.no_submit else int(self.use_heap)))
+        self.no_submit = work in (
+            "metal-heap-large-no-submit",
+            "metal-heap-large-empty",
+            "metal-heap-large-no-address",
+            "metal-heap-large-queue",
         )
+        explicit_modes = {
+            "metal-heap-large-no-address": 4,
+            "metal-heap-large-empty": 3,
+            "metal-heap-large-no-submit": 2,
+            "metal-heap-large-queue": 5,
+            "metal-heap-large-commit-empty": 6,
+            "metal-heap-large-encoder-empty": 7,
+        }
+        self.heap_mode = explicit_modes.get(work, int(self.use_heap))
         self.buffer_records = []
         self.metadata = dict(
             work=work,
@@ -105,7 +117,7 @@ class NativeMetalHeap:
             placement_heap=self.use_heap,
             gpu_submissions=not self.no_submit,
             gpu_address_queries=work not in ("metal-heap-large-empty", "metal-heap-large-no-address"),
-            empty_heap=work.endswith("-empty"),
+            empty_heap=work == "metal-heap-large-empty",
             device_acquisition=(
                 "MTLCopyAllDevices cached per process" if self.runtime else "MTLCopyAllDevices each cycle"
             ),

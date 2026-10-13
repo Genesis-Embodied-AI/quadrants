@@ -191,6 +191,9 @@ def main():
         "metal-heap-large-no-submit",
         "metal-heap-large-no-address",
         "metal-heap-large-empty",
+        "metal-heap-large-queue",
+        "metal-heap-large-commit-empty",
+        "metal-heap-large-encoder-empty",
     )
     assert not (args.work.startswith("metal-") and os.environ.get("QD_REPRO_CLOSE_ON_SLOW") == "1")
     assert "quadrants" not in sys.modules
