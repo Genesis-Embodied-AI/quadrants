@@ -147,7 +147,7 @@ def test_complete_case_outcomes_and_fresh_selection(tmp_path: Path) -> None:
     )
 
 
-def test_failure_is_not_hidden_by_later_success(tmp_path: Path) -> None:
+def test_failed_tests(tmp_path: Path) -> None:
     num_test_files = 13
     batch_size = 12
     project = make_fake_tests_project(tmp_path, num_test_files=num_test_files)
