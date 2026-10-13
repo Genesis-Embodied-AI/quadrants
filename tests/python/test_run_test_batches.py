@@ -161,8 +161,8 @@ def test_complete_case_outcomes_and_fresh_selection(tmp_path: Path) -> None:
 def test_failed_tests(tmp_path: Path) -> None:
     num_test_files = 13
     batch_size = 12
-    project = make_fake_tests_project(tmp_path, num_test_files=num_test_files)
-    test_paths = sorted(project.test_case_count_by_test_file_path)
+    fake_tests_project = make_fake_tests_project(tmp_path, num_test_files=num_test_files)
+    test_paths = sorted(fake_tests_project.test_case_count_by_test_file_path)
     test_paths[0].write_text(
         dedent(
             """\
@@ -171,18 +171,25 @@ def test_failed_tests(tmp_path: Path) -> None:
             """
         )
     )
-    output = tmp_path / "batches"
-    assert run_test_batches.run_batches(tmp_path, output, [], batch_size=batch_size) == 1
-    records = json.loads((output / "results.json").read_text())
-    assert [(record["batch"], record["test_runner_exit_code"]) for record in records] == [(0, 1), (1, 0)]
-    first_batch_test_results = parse_test_results(output / "batch-00.xml")
-    second_batch_test_results = parse_test_results(output / "batch-01.xml")
-    assert parse_test_results(output / "results.xml") == first_batch_test_results | second_batch_test_results
-    assert len(list(ET.parse(output / "batch-00.xml").iter("failure"))) == 1
-    later_report = ET.parse(output / "batch-01.xml")
-    expected_later_cases = sum(project.test_case_count_by_test_file_path[path] for path in test_paths[batch_size:])
-    assert len(list(later_report.iter("testcase"))) == expected_later_cases
-    assert not list(later_report.iter("failure"))
+    results_without_batching = tmp_path / "full.xml"
+    # Run tests without batching; a failing test should produce exit code 1.
+    unbatched_process_result = subprocess.run(
+        [
+            sys.executable,
+            str(fake_tests_project.runner_path),
+            f"--junitxml={results_without_batching}",
+            f"--basetemp={tmp_path / 'full-tmp'}",
+        ],
+        cwd=tmp_path,
+        check=False,
+    )
+    assert unbatched_process_result.returncode == 1
+    output_with_batching = tmp_path / "batches"
+    assert (
+        run_test_batches.run_batches(tmp_path, output_with_batching, [], batch_size=batch_size)
+        == unbatched_process_result.returncode
+    )
+    assert parse_test_results(output_with_batching / "results.xml") == parse_test_results(results_without_batching)
 
 
 def test_worker_crash_is_reported_and_later_batch_runs(tmp_path: Path) -> None:
