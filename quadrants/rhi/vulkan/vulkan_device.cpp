@@ -1,3 +1,5 @@
+#include <cstdlib>
+#include <cstring>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -1599,6 +1601,16 @@ RhiResult VulkanDevice::allocate_memory(const AllocParams &params, DeviceAllocat
     alloc_info.flags |= VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
     buffer_info.pNext = &external_mem_buffer_create_info;
   }
+#ifdef __APPLE__
+  // Heaps are off by default (VulkanLoader::init). MoltenVK then backs every VkBuffer in one VkDeviceMemory with a
+  // single MTLBuffer and reaches each buffer by an offset. The adstack sizer's device-address load of that offset
+  // comes back as a loop bound above 2^24. One VkDeviceMemory per VkBuffer gives each buffer its own MTLBuffer. A
+  // caller who sets MVK_CONFIG_USE_MTLHEAP to a non-zero value keeps shared VMA blocks.
+  const char *use_mtl_heap = std::getenv("MVK_CONFIG_USE_MTLHEAP");
+  if (use_mtl_heap == nullptr || std::strcmp(use_mtl_heap, "0") == 0) {
+    alloc_info.flags |= VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+  }
+#endif
 #ifdef __APPLE__
   // weird behavior on apple: these flags are needed even if either read or
   // write is required
