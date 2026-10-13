@@ -91,17 +91,23 @@ def parse_test_results(
 
 def test_complete_case_outcomes_and_fresh_selection(tmp_path: Path) -> None:
     make_fake_tests_project(tmp_path)
-    baseline = tmp_path / "full.xml"
+    results_without_batching = tmp_path / "full.xml"
+    # Run tests without batching.
     subprocess.run(
-        [sys.executable, "tests/run_tests.py", f"--junitxml={baseline}", f"--basetemp={tmp_path / 'full-tmp'}"],
+        [
+            sys.executable,
+            "tests/run_tests.py",
+            f"--junitxml={results_without_batching}",
+            f"--basetemp={tmp_path / 'full-tmp'}",
+        ],
         cwd=tmp_path,
         check=True,
     )
-    output = tmp_path / "batches"
-    assert run_test_batches.run_batches(tmp_path, output, []) == 0
-    assert parse_test_results(output / "results.xml") == parse_test_results(baseline)
-    assert len(parse_test_results(baseline)) == 39
-    manifest_contents = json.loads((output / "manifest.json").read_text())
+    results_with_batching = tmp_path / "batches"
+    assert run_test_batches.run_batches(tmp_path, results_with_batching, []) == 0
+    assert parse_test_results(results_with_batching / "results.xml") == parse_test_results(results_without_batching)
+    assert len(parse_test_results(results_without_batching)) == 39
+    manifest_contents = json.loads((results_with_batching / "manifest.json").read_text())
     assert [len(group) for group in manifest_contents] == [12, 1]
 
 
