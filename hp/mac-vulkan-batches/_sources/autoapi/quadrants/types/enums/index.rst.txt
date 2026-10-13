@@ -39,16 +39,6 @@ Module Contents
 
 .. py:class:: DeviceCapability
 
-   .. py:attribute:: spirv_version_1_3
-      :value: 'spirv_version=66304'
-
-
-
-   .. py:attribute:: spirv_version_1_4
-      :value: 'spirv_version=66560'
-
-
-
    .. py:attribute:: spirv_version_1_5
       :value: 'spirv_version=66816'
 
