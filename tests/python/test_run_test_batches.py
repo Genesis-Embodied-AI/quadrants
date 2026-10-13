@@ -20,7 +20,6 @@ def isolate_nested_pytest(monkeypatch: pytest.MonkeyPatch) -> None:
     # Nested sessions must not inherit the enclosing Vulkan batch selection or xdist worker identity.
     for key in (
         "QD_BATCH_SELECTION",
-        "QD_BATCH_STATUS",
         "PYTEST_XDIST_WORKER",
         "PYTEST_XDIST_WORKER_COUNT",
         "PYTEST_XDIST_TESTRUNUID",
@@ -147,9 +146,11 @@ def test_complete_case_outcomes_and_fresh_selection(tmp_path: Path) -> None:
     assert run_test_batches.run_batches(tmp_path, output_with_batching, [], batch_size=batch_size) == 0
     assert parse_test_results(output_with_batching / "results.xml") == parse_test_results(results_without_batching)
     records = json.loads((output_with_batching / "results.json").read_text())
-    assert all(record["tests_all_passed"] for record in records)
-    assert all(record["test_session_finished"] for record in records)
-    assert not any(record["worker_crashed"] or record["batch_report_error"] for record in records)
+    assert all(record["test_runner_exit_code"] == 0 for record in records)
+    combined_report = ET.parse(output_with_batching / "results.xml").getroot()
+    baseline_suite = ET.parse(results_without_batching).getroot().find("testsuite")
+    for attribute in ("tests", "failures", "errors", "skipped"):
+        assert combined_report.get(attribute) == baseline_suite.get(attribute)
     manifest_contents = json.loads((output_with_batching / "manifest.json").read_text())
     assert [len(group) for group in manifest_contents] == expected_batch_sizes
     assert sorted(path for group in manifest_contents for path in group) == sorted(
@@ -174,9 +175,6 @@ def test_failed_tests(tmp_path: Path) -> None:
     assert run_test_batches.run_batches(tmp_path, output, [], batch_size=batch_size) == 1
     records = json.loads((output / "results.json").read_text())
     assert [(record["batch"], record["test_runner_exit_code"]) for record in records] == [(0, 1), (1, 0)]
-    assert [record["tests_all_passed"] for record in records] == [False, True]
-    assert not any(record["worker_crashed"] for record in records)
-    assert all(record["test_session_finished"] for record in records)
     first_batch_test_results = parse_test_results(output / "batch-00.xml")
     second_batch_test_results = parse_test_results(output / "batch-01.xml")
     assert parse_test_results(output / "results.xml") == first_batch_test_results | second_batch_test_results
@@ -208,9 +206,6 @@ def test_worker_crash_is_reported_and_later_batch_runs(tmp_path: Path) -> None:
         (0, 1),
         (1, 0),
     ]
-    assert [record["tests_all_passed"] for record in batch_execution_records] == [False, True]
-    assert [record["worker_crashed"] for record in batch_execution_records] == [True, False]
-    assert all(record["test_session_finished"] for record in batch_execution_records)
     crashed_batch_test_results = parse_test_results(output / "batch-00.xml")
     later_batch_test_results = parse_test_results(output / "batch-01.xml")
     assert any(outcome in ("failure", "error") for outcome in crashed_batch_test_results.values())
@@ -218,6 +213,15 @@ def test_worker_crash_is_reported_and_later_batch_runs(tmp_path: Path) -> None:
     assert len(later_batch_test_results) == fake_tests_project.test_case_count_by_test_file_path[test_paths[1]]
     assert set(later_batch_test_results.values()) == {"pass", "skipped"}
     assert parse_test_results(output / "results.xml") == crashed_batch_test_results | later_batch_test_results
+    combined_report = ET.parse(output / "results.xml").getroot()
+    assert "crashed while running" in ET.tostring(combined_report, encoding="unicode")
+    for attribute in ("tests", "failures", "errors", "skipped"):
+        batch_total = sum(
+            int(suite.get(attribute))
+            for batch in ("batch-00.xml", "batch-01.xml")
+            for suite in ET.parse(output / batch).iter("testsuite")
+        )
+        assert int(combined_report.get(attribute)) == batch_total
 
 
 @pytest.mark.parametrize("ignore_option", ["--ignore", "--ignore-glob"])
@@ -241,9 +245,7 @@ def test_selected_files_respect_pytest_ignore_options(
 
 
 @pytest.mark.parametrize("use_xdist", [False, True])
-def test_collection_error_is_not_a_worker_crash(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, use_xdist: bool
-) -> None:
+def test_collection_error_is_reported(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, use_xdist: bool) -> None:
     if not use_xdist:
         monkeypatch.setenv("PYTEST_ADDOPTS", "-q")
     fake_tests_project = make_fake_tests_project(tmp_path, num_test_files=1)
@@ -252,14 +254,11 @@ def test_collection_error_is_not_a_worker_crash(
     output = tmp_path / "batches"
     assert run_test_batches.run_batches(tmp_path, output, []) == 1
     record = json.loads((output / "results.json").read_text())[0]
-    assert record["tests_all_passed"] is False
-    assert record["worker_crashed"] is False
-    assert record["test_session_finished"] is True
-    assert record["batch_report_error"] is False
+    assert record["test_runner_exit_code"] != 0
     assert "error" in parse_test_results(output / "results.xml").values()
 
 
-def test_controller_crash_does_not_report_passing_tests(tmp_path: Path) -> None:
+def test_controller_crash_returns_failure(tmp_path: Path) -> None:
     make_fake_tests_project(tmp_path, num_test_files=1)
     conftest_path = tmp_path / "tests" / "python" / "conftest.py"
     conftest_path.write_text(
@@ -277,11 +276,7 @@ def test_controller_crash_does_not_report_passing_tests(tmp_path: Path) -> None:
     assert run_test_batches.run_batches(tmp_path, output, []) == 1
     record = json.loads((output / "results.json").read_text())[0]
     assert record["test_runner_exit_code"] == 3
-    assert record["tests_all_passed"] is False
-    # No worker crash was observed; it was the controller that terminated.
-    assert record["worker_crashed"] is False
-    assert record["test_session_finished"] is False
-    assert record["batch_report_error"] is True
+    assert not parse_test_results(output / "results.xml")
 
 
 @pytest.mark.parametrize("report_contents", [None, "<broken"])
@@ -294,7 +289,7 @@ def test_unusable_report_fails_batch_even_when_tests_pass(tmp_path: Path, report
             from pathlib import Path
 
             exit_code = pytest.main(['tests/python', *sys.argv[1:]])
-            report_path = Path(os.environ['QD_BATCH_STATUS']).with_name('batch-00.xml')
+            report_path = Path(os.environ['QD_BATCH_SELECTION']).with_name('batch-00.xml')
             report_contents = {report_contents!r}
             if report_contents is None:
                 report_path.unlink()
@@ -308,10 +303,7 @@ def test_unusable_report_fails_batch_even_when_tests_pass(tmp_path: Path, report
     assert run_test_batches.run_batches(tmp_path, output, []) == 1
     record = json.loads((output / "results.json").read_text())[0]
     assert record["test_runner_exit_code"] == 0
-    assert record["tests_all_passed"] is True
-    assert record["worker_crashed"] is False
-    assert record["test_session_finished"] is True
-    assert record["batch_report_error"] is True
+    assert not parse_test_results(output / "results.xml")
 
 
 @pytest.mark.parametrize("exit_code", [0, 3])
@@ -320,15 +312,9 @@ def test_runner_exit_before_pytest_is_not_success(tmp_path: Path, exit_code: int
     fake_tests_project.runner_path.write_text(f"raise SystemExit({exit_code})\n")
     output = tmp_path / "batches"
     output.mkdir()
-    # Old success records must not conceal a run that never reached pytest.
-    (output / "batch-00-status.json").write_text(
-        json.dumps(dict(tests_all_passed=True, worker_crashed=False, test_session_finished=True))
-    )
+    # An old report must not conceal a run that never reached pytest.
     (output / "batch-00.xml").write_text('<testsuites><testsuite tests="1" failures="0"/></testsuites>')
     assert run_test_batches.run_batches(tmp_path, output, []) == 1
     record = json.loads((output / "results.json").read_text())[0]
     assert record["test_runner_exit_code"] == exit_code
-    assert record["tests_all_passed"] is False
-    assert record["worker_crashed"] is False
-    assert record["test_session_finished"] is False
-    assert record["batch_report_error"] is True
+    assert not parse_test_results(output / "results.xml")
