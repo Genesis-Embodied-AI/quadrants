@@ -10,6 +10,7 @@ on:
           - native-heap-crash
           - native-heap-crash-debug
           - native-heap-queue
+          - native-heap-blit
           - import-batch
           - import-batch-census
           - runtime-growth
@@ -94,7 +95,7 @@ permissions:
   actions: read
 jobs:
   compare:
-    if: inputs.comparison != 'native-heap-crash' && inputs.comparison != 'native-heap-crash-debug' && inputs.comparison != 'native-heap-queue'
+    if: inputs.comparison != 'native-heap-crash' && inputs.comparison != 'native-heap-crash-debug' && inputs.comparison != 'native-heap-queue' && inputs.comparison != 'native-heap-blit'
     name: Archived Vulkan A/B (${{ matrix.order }})
     runs-on: macos-26
     timeout-minutes: 330
@@ -208,14 +209,14 @@ jobs:
           name: vulkan-attribution-${{ matrix.order }}
           path: ~/ais/misc_slow_vulkan/ab/output/
   native:
-    if: inputs.comparison == 'native-heap-crash' || inputs.comparison == 'native-heap-crash-debug' || inputs.comparison == 'native-heap-queue'
+    if: inputs.comparison == 'native-heap-crash' || inputs.comparison == 'native-heap-crash-debug' || inputs.comparison == 'native-heap-queue' || inputs.comparison == 'native-heap-blit'
     name: Native Metal mode ${{ matrix.mode }}
     runs-on: macos-26
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        mode: ${{ fromJSON(inputs.comparison == 'native-heap-crash-debug' && '[4]' || inputs.comparison == 'native-heap-queue' && '[5,6,7]' || '[2,3,4]') }}
+        mode: ${{ fromJSON(inputs.comparison == 'native-heap-crash-debug' && '[4]' || inputs.comparison == 'native-heap-queue' && '[5,6,7]' || inputs.comparison == 'native-heap-blit' && '[0,1]' || '[2,3,4]') }}
     steps:
       - uses: actions/checkout@v4
       - name: Build standalone Metal executable
