@@ -192,18 +192,13 @@ int main(int argc, char **argv) {
     if (!g.get_instance) die("vkGetInstanceProcAddr");
     g.create_instance = load<PFN_vkCreateInstance>(VK_NULL_HANDLE, "vkCreateInstance");
 
-    const char *instance_extensions[] = {VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME,
-                                         VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME};
     VkApplicationInfo app{};
     app.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     app.pApplicationName = "shared-buffer-read";
     app.apiVersion = VK_API_VERSION_1_2;
     VkInstanceCreateInfo instance_info{};
     instance_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-    instance_info.flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
     instance_info.pApplicationInfo = &app;
-    instance_info.enabledExtensionCount = 2;
-    instance_info.ppEnabledExtensionNames = instance_extensions;
     VkInstance instance = VK_NULL_HANDLE;
     check(g.create_instance(&instance_info, nullptr, &instance), "vkCreateInstance");
 
