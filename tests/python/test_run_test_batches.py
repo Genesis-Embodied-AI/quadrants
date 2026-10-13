@@ -96,6 +96,7 @@ def parse_test_results(
 ) -> dict[tuple[str | None, str | None], Literal["pass", "failure", "skipped", "error"]]:
     # Parse JUnit XML into a mapping from (test module/class, test case name) to outcome;
     # assert and fail the test on duplicate identities.
+    # Each parametrized instance has a distinct test case name, such as test_case[0] and test_case[1].
     outcomes: dict[tuple[str | None, str | None], Literal["pass", "failure", "skipped", "error"]] = {}
     for case in ET.parse(path).iter("testcase"):
         classname = case.get("classname")
