@@ -194,6 +194,9 @@ def test_failed_tests(tmp_path: Path) -> None:
 
 
 def test_intentional_worker_retirement(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Use one xdist worker to test retirement, replacement, and report aggregation without concurrent scheduling.
+    # Multiple workers triggered an intermittent work-stealing error during unmarked-crash experiments; we have
+    # not demonstrated that error with intentional retirement. This precaution leaves concurrent retirement untested.
     fake_tests_project = make_fake_tests_project(tmp_path, num_test_files=3)
     test_paths = sorted(fake_tests_project.test_case_count_by_test_file_path)
     test_paths[0].write_text(
