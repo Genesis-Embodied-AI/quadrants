@@ -18,10 +18,56 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from pytest import ExitCode, hookimpl
+
 if TYPE_CHECKING:
-    from pytest import Config
+    from pytest import Config, Session
 
 _SELECTED_TEST_PATHS: set[Path] | None = None
+
+
+class _BatchStatusPlugin:
+    """Record test completion and observed worker crashes in the controller process only."""
+
+    def __init__(self, status_path: Path) -> None:
+        self.status_path = status_path
+        self.tests_all_passed = False
+        self.worker_crashed = False
+        self.test_session_finished = False
+        self._write_status()
+
+    def _write_status(self) -> None:
+        # Replace atomically so an interrupted controller leaves the last complete status available.
+        temporary_status_path = self.status_path.with_suffix(".tmp")
+        temporary_status_path.write_text(
+            json.dumps(
+                dict(
+                    tests_all_passed=self.tests_all_passed,
+                    worker_crashed=self.worker_crashed,
+                    test_session_finished=self.test_session_finished,
+                )
+            )
+            + "\n"
+        )
+        temporary_status_path.replace(self.status_path)
+
+    @hookimpl(optionalhook=True)
+    def pytest_testnodedown(self, error: object | None) -> None:
+        # Normal test failures do not produce a worker shutdown error.
+        if error is not None:
+            self.worker_crashed = True
+            self._write_status()
+
+    @hookimpl(trylast=True)
+    def pytest_sessionfinish(self, session: Session, exitstatus: int) -> None:
+        self.test_session_finished = True
+        # Like run_tests.py, allow batches with no selected tests; expected skips are also acceptable.
+        self.tests_all_passed = (
+            exitstatus in (ExitCode.OK, ExitCode.NO_TESTS_COLLECTED)
+            and session.testsfailed == 0
+            and not self.worker_crashed
+        )
+        self._write_status()
 
 
 def pytest_configure(config: Config) -> None:
@@ -35,12 +81,14 @@ def pytest_configure(config: Config) -> None:
     #
     # Later, pytest_ignore_collect() uses _SELECTED_TEST_PATHS to decide which test files to skip.
     #
-    # config is pytest's configuration object; this implementation does not use it. Each xdist worker runs this
-    # setup for itself.
+    # Each xdist worker runs the selection setup for itself. Use config to register status tracking only in
+    # the controller, so workers cannot overwrite its record of test completion and worker crashes.
     global _SELECTED_TEST_PATHS
     _SELECTED_TEST_PATHS = {Path(path) for path in json.loads(Path(os.environ["QD_BATCH_SELECTION"]).read_text())}
     if not _SELECTED_TEST_PATHS or any(not path.is_file() for path in _SELECTED_TEST_PATHS):
         raise RuntimeError("Batch selection is empty or references missing files")
+    if "QD_BATCH_STATUS" in os.environ and not hasattr(config, "workerinput"):
+        config.pluginmanager.register(_BatchStatusPlugin(Path(os.environ["QD_BATCH_STATUS"])))
 
 
 def pytest_ignore_collect(collection_path: Path, config: Config) -> bool | None:
@@ -53,7 +101,7 @@ def pytest_ignore_collect(collection_path: Path, config: Config) -> bool | None:
 
 def run_batches(root: Path, output: Path, runner_args: list[str], batch_size: int = 12) -> int:
     # Write final reports under output:
-    # - results.json records timings and subprocess return codes for every completed batch.
+    # - results.json records timings, test outcomes, observed worker crashes, and runner exit codes for each batch.
     # - results.xml merges available JUnit XML reports, including reports containing failed tests.
     root, output = root.resolve(), output.resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -66,15 +114,16 @@ def run_batches(root: Path, output: Path, runner_args: list[str], batch_size: in
     (output / "manifest.json").write_text(json.dumps(manifest_contents, indent=2) + "\n")
     batch_execution_records = []
     suites_xml_nodes = ET.Element("testsuites")
-    any_batch_returned_nonzero = False
-    any_batch_report_missing = False
+    all_batches_passed = True
     for index, group in enumerate(file_groups):
         batch_label = f"batch-{index:02d}"
         selection_path = output / f"{batch_label}-selection.json"
         selection_path.write_text(json.dumps([str(path) for path in group]) + "\n")
         batch_test_output_path = output / f"{batch_label}.xml"
         batch_test_output_path.unlink(missing_ok=True)
-        env = dict(os.environ, QD_BATCH_SELECTION=str(selection_path))
+        batch_status_path = output / f"{batch_label}-status.json"
+        batch_status_path.unlink(missing_ok=True)
+        env = dict(os.environ, QD_BATCH_SELECTION=str(selection_path), QD_BATCH_STATUS=str(batch_status_path))
         # Add this script's parent directory to PYTHONPATH so pytest can find it as a plugin.
         env["PYTHONPATH"] = str(Path(__file__).resolve().parent) + os.pathsep + env.get("PYTHONPATH", "")
         # Each subprocess needs its own temporary directory and test report. Other pytest settings are preserved.
@@ -90,25 +139,39 @@ def run_batches(root: Path, output: Path, runner_args: list[str], batch_size: in
         print(f"Batch {index + 1}/{len(file_groups)}: {manifest_contents[index]}", flush=True)
         start = time.monotonic()
         batch_process_result = subprocess.run([sys.executable, "tests/run_tests.py", *runner_args], cwd=root, env=env)
-        # A nonzero exit may mean failed tests or a runner error; it does not make the report unusable.
-        batch_returned_nonzero = batch_process_result.returncode != 0
-        batch_execution_record = dict(
-            batch=index, seconds=time.monotonic() - start, returncode=batch_process_result.returncode
-        )
-        batch_execution_records.append(batch_execution_record)
-        (output / "results.json").write_text(json.dumps(batch_execution_records, indent=2) + "\n")
-        print("Batch result:", json.dumps(batch_execution_record), flush=True)
-        batch_report_missing = not batch_test_output_path.exists()
-        if not batch_report_missing:
+        batch_status = json.loads(batch_status_path.read_text()) if batch_status_path.exists() else {}
+        test_session_finished = batch_status.get("test_session_finished", False)
+        # This records crashes reported by xdist, not a guess based on the process exit code.
+        worker_crashed = batch_status.get("worker_crashed", False)
+        batch_report_error = False
+        try:
             batch_report_xml_root = ET.parse(batch_test_output_path).getroot()
+            if batch_report_xml_root.tag not in ("testsuite", "testsuites"):
+                raise ValueError("Expected a JUnit testsuite or testsuites root")
+        except (OSError, ET.ParseError, ValueError) as error:
+            batch_report_error = True
+            print(f"Cannot read batch report {batch_test_output_path}: {error}", flush=True)
+        else:
             if batch_report_xml_root.tag == "testsuite":
                 suites_xml_nodes.append(batch_report_xml_root)
             else:
                 suites_xml_nodes.extend(batch_report_xml_root)
-        any_batch_returned_nonzero |= batch_returned_nonzero
-        any_batch_report_missing |= batch_report_missing
+        tests_all_passed = test_session_finished and batch_status.get("tests_all_passed", False) and not worker_crashed
+        batch_execution_record = dict(
+            batch=index,
+            seconds=time.monotonic() - start,
+            test_runner_exit_code=batch_process_result.returncode,
+            tests_all_passed=tests_all_passed,
+            worker_crashed=worker_crashed,
+            test_session_finished=test_session_finished,
+            batch_report_error=batch_report_error,
+        )
+        batch_execution_records.append(batch_execution_record)
+        (output / "results.json").write_text(json.dumps(batch_execution_records, indent=2) + "\n")
+        print("Batch result:", json.dumps(batch_execution_record), flush=True)
+        all_batches_passed &= tests_all_passed and batch_process_result.returncode == 0 and not batch_report_error
     ET.ElementTree(suites_xml_nodes).write(output / "results.xml", encoding="utf-8", xml_declaration=True)
-    return int(any_batch_returned_nonzero or any_batch_report_missing)
+    return int(not all_batches_passed)
 
 
 def main() -> int:
