@@ -22,7 +22,8 @@ def isolate_nested_pytest(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PYTEST_ADDOPTS", "-q -p xdist.plugin -n 3")
 
 
-def make_fake_tests_project(root: Path) -> None:
+def make_fake_tests_project(root: Path, batch_size: int, passing_cases_per_file: int) -> None:
+    """Create batch_size + 1 files, each with parametrized passing cases and one skipped case."""
     tests_path = root / "tests" / "python"
     tests_path.mkdir(parents=True)
     (root / "tests" / "run_tests.py").write_text(
@@ -45,13 +46,13 @@ def make_fake_tests_project(root: Path) -> None:
             """
         )
     )
-    for index in range(13):
-        folder = tests_path if index < 12 else tests_path / "nested"
+    for index in range(batch_size + 1):
+        folder = tests_path if index < batch_size else tests_path / "nested"
         folder.mkdir(exist_ok=True)
-        name = f"test_case_{index:02d}.py" if index < 12 else "nested_test.py"
+        name = f"test_case_{index:02d}.py" if index < batch_size else "nested_test.py"
         (folder / name).write_text(
             dedent(
-                """\
+                f"""\
                 import json, os, pytest
                 from pathlib import Path
 
@@ -59,8 +60,8 @@ def make_fake_tests_project(root: Path) -> None:
                 if 'QD_BATCH_SELECTION' in os.environ:
                     assert str(Path(__file__).resolve()) in json.loads(Path(os.environ['QD_BATCH_SELECTION']).read_text())
 
-                # Create two cases to verify that batching preserves parametrized tests without loss or duplication.
-                @pytest.mark.parametrize('value', [0, 1])
+                # Verify that batching preserves parametrized tests without loss or duplication.
+                @pytest.mark.parametrize('value', {list(range(passing_cases_per_file))!r})
                 def test_case(value: int) -> None:
                     assert os.environ.get('BATCH_FIXTURE_RAN') == 'yes'
 
@@ -90,7 +91,9 @@ def parse_test_results(
 
 
 def test_complete_case_outcomes_and_fresh_selection(tmp_path: Path) -> None:
-    make_fake_tests_project(tmp_path)
+    batch_size = 12
+    passing_cases_per_file = 2
+    make_fake_tests_project(tmp_path, batch_size, passing_cases_per_file)
     results_without_batching = tmp_path / "full.xml"
     # Run tests without batching.
     subprocess.run(
@@ -104,25 +107,28 @@ def test_complete_case_outcomes_and_fresh_selection(tmp_path: Path) -> None:
         check=True,
     )
     output_with_batching = tmp_path / "batches"
-    assert run_test_batches.run_batches(tmp_path, output_with_batching, []) == 0
+    assert run_test_batches.run_batches(tmp_path, output_with_batching, [], batch_size=batch_size) == 0
     assert parse_test_results(output_with_batching / "results.xml") == parse_test_results(results_without_batching)
     manifest_contents = json.loads((output_with_batching / "manifest.json").read_text())
-    assert [len(group) for group in manifest_contents] == [12, 1]
+    assert [len(group) for group in manifest_contents] == [batch_size, 1]
 
 
 def test_failure_is_not_hidden_by_later_success(tmp_path: Path) -> None:
-    make_fake_tests_project(tmp_path)
+    batch_size = 12
+    passing_cases_per_file = 2
+    make_fake_tests_project(tmp_path, batch_size, passing_cases_per_file)
     (tmp_path / "tests" / "python" / "nested" / "nested_test.py").write_text(
         "def test_failure() -> None:\n    assert False\n"
     )
     output = tmp_path / "batches"
-    assert run_test_batches.run_batches(tmp_path, output, []) == 1
+    assert run_test_batches.run_batches(tmp_path, output, [], batch_size=batch_size) == 1
     records = json.loads((output / "results.json").read_text())
     assert [(record["batch"], record["returncode"]) for record in records] == [(1, 0)]
     assert parse_test_results(output / "results.xml") == parse_test_results(output / "batch-01.xml")
     assert len(list(ET.parse(output / "batch-00.xml").iter("failure"))) == 1
     later_report = ET.parse(output / "batch-01.xml")
-    assert len(list(later_report.iter("testcase"))) == 3
+    # The final batch contains one file, with parametrized passing cases and one skipped case.
+    assert len(list(later_report.iter("testcase"))) == passing_cases_per_file + 1
     assert not list(later_report.iter("failure"))
 
 
@@ -130,12 +136,15 @@ def test_failure_is_not_hidden_by_later_success(tmp_path: Path) -> None:
 def test_selected_files_respect_pytest_ignore_options(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, ignore_option: str
 ) -> None:
-    make_fake_tests_project(tmp_path)
+    batch_size = 12
+    passing_cases_per_file = 2
+    make_fake_tests_project(tmp_path, batch_size, passing_cases_per_file)
     ignored = tmp_path / "tests" / "python" / "test_case_00.py"
     ignored.write_text("raise AssertionError('Ignored test module must not be imported')\n")
     monkeypatch.setenv("PYTEST_ADDOPTS", f"-q -p xdist.plugin -n 3 {ignore_option}=tests/python/test_case_00.py")
     output = tmp_path / "batches"
-    assert run_test_batches.run_batches(tmp_path, output, []) == 0
+    assert run_test_batches.run_batches(tmp_path, output, [], batch_size=batch_size) == 0
     report = ET.parse(output / "results.xml")
-    assert len(list(report.iter("testcase"))) == 36
+    # One of the batch_size + 1 files is ignored; each remaining file also has one skipped case.
+    assert len(list(report.iter("testcase"))) == batch_size * (passing_cases_per_file + 1)
     assert all("test_case_00" not in case.get("classname", "") for case in report.iter("testcase"))
