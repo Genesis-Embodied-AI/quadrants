@@ -702,6 +702,25 @@ std::vector<uint8_t> encode_adstack_size_expr_device_bytecode_for_spirv(
       exprs[i] = &a.size_expr;
     }
   }
+  if (const char *dbg = std::getenv("QD_DEBUG_ADSTACK"); dbg != nullptr && dbg[0] != '\0' && dbg[0] != '0') {
+    for (std::size_t i = 0; i < n_stacks; ++i) {
+      const SerializedSizeExpr &tree = *exprs[i];
+      for (std::size_t n = 0; n < tree.nodes.size(); ++n) {
+        const SerializedSizeExprNode &node = tree.nodes[n];
+        if (static_cast<SizeExpr::Kind>(node.kind) != SizeExpr::Kind::MaxOverRange) {
+          continue;
+        }
+        int32_t end_kind = -1;
+        int64_t end_const = 0;
+        if (node.operand_b >= 0 && static_cast<std::size_t>(node.operand_b) < tree.nodes.size()) {
+          end_kind = tree.nodes[static_cast<std::size_t>(node.operand_b)].kind;
+          end_const = tree.nodes[static_cast<std::size_t>(node.operand_b)].const_value;
+        }
+        std::fprintf(stderr, "[sizer-tree] stack=%zu mor=%zu end_kind=%d end_const=%lld\n", i, n, end_kind,
+                     static_cast<long long>(end_const));
+      }
+    }
+  }
   // SPIR-V path: emit `FieldLoad` as `kFieldLoad` device nodes so the sizer shader can PSB-load the field value
   // in place. This avoids `SNodeRwAccessorsBank::Accessors::read_int`, whose nested accessor-kernel launch
   // deadlocks inside MoltenVK's descriptor-set bind path when the outer launch has already opened its command

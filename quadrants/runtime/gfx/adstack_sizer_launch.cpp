@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <unordered_set>
 #include <vector>
@@ -431,6 +432,19 @@ std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
     QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate adstack sizer output buffer (size={})",
                    per_task_metadata_bytes[k]);
     per_task_metadata_allocs[k] = std::move(buf);
+    if (const char *dbg = std::getenv("QD_DEBUG_ADSTACK"); dbg != nullptr && dbg[0] != '\0' && dbg[0] != '0') {
+      void *initial = nullptr;
+      if (device_->map(*per_task_metadata_allocs[k], &initial) == RhiResult::success) {
+        const uint32_t *words = static_cast<const uint32_t *>(initial);
+        const size_t nwords = per_task_metadata_bytes[k] / sizeof(uint32_t);
+        std::fprintf(stderr, "[sizer-metadata] task=%zu words=%zu", adstack_task_indices[k], nwords);
+        for (size_t w = 0; w < nwords; ++w) {
+          std::fprintf(stderr, " %08x", words[w]);
+        }
+        std::fprintf(stderr, "\n");
+        device_->unmap(*per_task_metadata_allocs[k]);
+      }
+    }
   }
 
   // Force visibility of prior device-side writes (accessor-kernel snode writes, user-side ndarray h2d blits,
@@ -474,6 +488,12 @@ std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
     bindings->rw_buffer(3, *adstack_sizer_scratch_i64_buffer_);
     bindings->rw_buffer(4, *adstack_sizer_scratch_i32_buffer_);
 
+    if (const char *dbg = std::getenv("QD_DEBUG_ADSTACK"); dbg != nullptr && dbg[0] != '\0' && dbg[0] != '0') {
+      // The overflow word is only stored when a walk hits the cap. A fresh allocation is not cleared, so a
+      // recycled block can already hold a nonzero word and the host treats that as a cap hit.
+      sizer_cmdlist->buffer_fill(per_task_metadata_allocs[k]->get_ptr(0), per_task_metadata_bytes[k], 0);
+      sizer_cmdlist->buffer_barrier(*per_task_metadata_allocs[k]);
+    }
     sizer_cmdlist->bind_pipeline(adstack_sizer_pipeline_.get());
     RhiResult bind_res = sizer_cmdlist->bind_shader_resources(bindings.get());
     QD_ERROR_IF(bind_res != RhiResult::success, "Sizer resource binding error: RhiResult({})", int(bind_res));

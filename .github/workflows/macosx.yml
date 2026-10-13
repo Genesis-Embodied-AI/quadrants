@@ -6,6 +6,11 @@ on:
       - reopened
       - synchronize
   workflow_dispatch:
+    inputs:
+      only_test:
+        description: pytest -k expression; skips the full matrix
+        type: string
+        default: ""
   release:
     types: [published]
 concurrency:
@@ -13,6 +18,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name != 'release' }}
 jobs:
   build_mac:
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.only_test == ''
     strategy:
       fail-fast: false
       matrix:
@@ -61,6 +67,7 @@ jobs:
           path: build/quadrants_cpp_tests
   test:
     needs: build_mac
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.only_test == ''
     name: Test on Mac
     # Split the previously-combined `--arch metal,vulkan,cpu` run into one job per backend
     # (see MAC_TEST_ARCH in 4_test.sh). Each job then carries only ~1/3 of the suite, which
@@ -113,6 +120,39 @@ jobs:
           MAC_TEST_ARCH: ${{ matrix.ARCH }}
         run: |
           bash .github/workflows/scripts_new/macosx/4_test.sh
+  one_test:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.only_test != ''
+    name: One Vulkan test
+    runs-on: macos-26
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Mac OS X prerequisites
+        env:
+          GITLAB_PAT: ${{ secrets.GITLAB_PAT }}
+        run: |
+          git config --global credential.https://gitlab.com.helper \
+            '!f() {
+              if [ "$1" = get ] && [ -n "$GITLAB_PAT" ]; then
+                printf "%s\n" "username=oauth2" "password=$GITLAB_PAT"
+              fi
+            }; f'
+          bash .github/workflows/scripts_new/macosx/1_prerequisites.sh
+      - name: Mac OS X build
+        run: bash .github/workflows/scripts_new/macosx/2_build.sh
+      - name: Mac OS X install
+        run: bash .github/workflows/scripts_new/macosx/3_install.sh
+      - name: One test
+        env:
+          QD_DEBUG_ADSTACK: '1'
+        run: |
+          pip install --prefer-binary --group test
+          python tests/run_tests.py -v --arch vulkan --keys "${{ github.event.inputs.only_test }}"
   publish_pypi:
     uses: ./.github/workflows/publish_pypi.yml
     if: github.event_name == 'release'

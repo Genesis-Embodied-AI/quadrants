@@ -27,6 +27,8 @@
 #include "quadrants/runtime/gfx/runtime.h"
 
 #include <algorithm>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <vector>
@@ -307,12 +309,16 @@ MaxReducerResultMap GfxRuntime::dispatch_max_reducers(LaunchContextBuilder &host
       std::vector<uint32_t> per_axis_length_v(num_axes, 0);
       std::vector<int64_t> per_axis_begin_v(num_axes, 0);
       bool axes_ok = true;
+      int64_t last_begin = 0;
+      int64_t last_end = 0;
       uint64_t total_length = 1;
       for (std::size_t a = 0; a < num_axes; ++a) {
         const int64_t bv =
             evaluate_adstack_size_expr_at_node(substituted, spec->axis_begin_node_idxs[a], prog, &host_ctx);
         const int64_t ev =
             evaluate_adstack_size_expr_at_node(substituted, spec->axis_end_node_idxs[a], prog, &host_ctx);
+        last_begin = bv;
+        last_end = ev;
         if (bv < 0 || ev < 0 || ev <= bv) {
           axes_ok = false;
           break;
@@ -331,6 +337,10 @@ MaxReducerResultMap GfxRuntime::dispatch_max_reducers(LaunchContextBuilder &host
         }
       }
       if (!axes_ok) {
+        if (const char *dbg = std::getenv("QD_DEBUG_ADSTACK"); dbg != nullptr && dbg[0] != '\0' && dbg[0] != '0') {
+          std::fprintf(stderr, "[mor-drop] stack=%d node=%d begin=%lld end=%lld reason=range\n", pending[k].stack_id,
+                       pending[k].mor_node_idx, static_cast<long long>(last_begin), static_cast<long long>(last_end));
+        }
         pending[k].dropped = true;
         ++dropped_count;
         continue;
@@ -518,6 +528,10 @@ MaxReducerResultMap GfxRuntime::dispatch_max_reducers(LaunchContextBuilder &host
         v = static_cast<int64_t>(value_u32);
       }
       result[pending[k].cache_key] = v;
+      if (const char *dbg = std::getenv("QD_DEBUG_ADSTACK"); dbg != nullptr && dbg[0] != '\0' && dbg[0] != '0') {
+        std::fprintf(stderr, "[mor-result] stack=%d node=%d value=%lld overflow=%u\n", pending[k].stack_id,
+                     pending[k].mor_node_idx, static_cast<long long>(v), overflow_flag);
+      }
       if (cache != nullptr) {
         populate_max_reducer_body_observations(pending[k].reads, &host_ctx, cache);
         cache->record_max_reducer_eval(pending[k].registry_id, pending[k].stack_id, pending[k].mor_node_idx, v,
