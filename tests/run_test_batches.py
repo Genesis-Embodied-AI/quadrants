@@ -53,8 +53,8 @@ def pytest_ignore_collect(collection_path: Path, config: Config) -> bool | None:
 
 def run_batches(root: Path, output: Path, runner_args: list[str], batch_size: int = 12) -> int:
     # Write final reports under output:
-    # - results.json records timings and return codes for batches whose subprocess exited successfully.
-    # - results.xml merges the JUnit XML reports from batches that passed the failure checks.
+    # - results.json records timings and subprocess return codes for every completed batch.
+    # - results.xml merges available JUnit XML reports, including reports containing failed tests.
     root, output = root.resolve(), output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     test_root = root / "tests" / "python"
@@ -64,9 +64,10 @@ def run_batches(root: Path, output: Path, runner_args: list[str], batch_size: in
     file_groups = [files[start : start + batch_size] for start in range(0, len(files), batch_size)]
     manifest_contents = [[str(path.relative_to(root)) for path in group] for group in file_groups]
     (output / "manifest.json").write_text(json.dumps(manifest_contents, indent=2) + "\n")
-    results = []
+    batch_execution_records = []
     suites_xml_nodes = ET.Element("testsuites")
-    failed = False
+    any_batch_returned_nonzero = False
+    any_batch_report_missing = False
     for index, group in enumerate(file_groups):
         batch_label = f"batch-{index:02d}"
         selection_path = output / f"{batch_label}-selection.json"
@@ -88,23 +89,26 @@ def run_batches(root: Path, output: Path, runner_args: list[str], batch_size: in
         env["PYTEST_ADDOPTS"] = shlex.join(options)
         print(f"Batch {index + 1}/{len(file_groups)}: {manifest_contents[index]}", flush=True)
         start = time.monotonic()
-        result = subprocess.run([sys.executable, "tests/run_tests.py", *runner_args], cwd=root, env=env)
-        batch_failed = result.returncode != 0
-        if not batch_failed:
-            record = dict(batch=index, seconds=time.monotonic() - start, returncode=result.returncode)
-            results.append(record)
-            (output / "results.json").write_text(json.dumps(results, indent=2) + "\n")
-            print("Batch result:", json.dumps(record), flush=True)
-            batch_failed |= not batch_test_output_path.exists()
-        if not batch_failed:
-            report = ET.parse(batch_test_output_path).getroot()
-            if report.tag == "testsuite":
-                suites_xml_nodes.append(report)
+        batch_process_result = subprocess.run([sys.executable, "tests/run_tests.py", *runner_args], cwd=root, env=env)
+        # A nonzero exit may mean failed tests or a runner error; it does not make the report unusable.
+        batch_returned_nonzero = batch_process_result.returncode != 0
+        batch_execution_record = dict(
+            batch=index, seconds=time.monotonic() - start, returncode=batch_process_result.returncode
+        )
+        batch_execution_records.append(batch_execution_record)
+        (output / "results.json").write_text(json.dumps(batch_execution_records, indent=2) + "\n")
+        print("Batch result:", json.dumps(batch_execution_record), flush=True)
+        batch_report_missing = not batch_test_output_path.exists()
+        if not batch_report_missing:
+            batch_report_xml_root = ET.parse(batch_test_output_path).getroot()
+            if batch_report_xml_root.tag == "testsuite":
+                suites_xml_nodes.append(batch_report_xml_root)
             else:
-                suites_xml_nodes.extend(report)
-        failed |= batch_failed
+                suites_xml_nodes.extend(batch_report_xml_root)
+        any_batch_returned_nonzero |= batch_returned_nonzero
+        any_batch_report_missing |= batch_report_missing
     ET.ElementTree(suites_xml_nodes).write(output / "results.xml", encoding="utf-8", xml_declaration=True)
-    return int(failed)
+    return int(any_batch_returned_nonzero or any_batch_report_missing)
 
 
 def main() -> int:

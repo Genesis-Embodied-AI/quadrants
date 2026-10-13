@@ -163,13 +163,42 @@ def test_failure_is_not_hidden_by_later_success(tmp_path: Path) -> None:
     output = tmp_path / "batches"
     assert run_test_batches.run_batches(tmp_path, output, [], batch_size=batch_size) == 1
     records = json.loads((output / "results.json").read_text())
-    assert [(record["batch"], record["returncode"]) for record in records] == [(1, 0)]
-    assert parse_test_results(output / "results.xml") == parse_test_results(output / "batch-01.xml")
+    assert [(record["batch"], record["returncode"]) for record in records] == [(0, 1), (1, 0)]
+    first_batch_test_results = parse_test_results(output / "batch-00.xml")
+    second_batch_test_results = parse_test_results(output / "batch-01.xml")
+    assert parse_test_results(output / "results.xml") == first_batch_test_results | second_batch_test_results
     assert len(list(ET.parse(output / "batch-00.xml").iter("failure"))) == 1
     later_report = ET.parse(output / "batch-01.xml")
     expected_later_cases = sum(project.test_case_count_by_test_file_path[path] for path in test_paths[batch_size:])
     assert len(list(later_report.iter("testcase"))) == expected_later_cases
     assert not list(later_report.iter("failure"))
+
+
+def test_worker_crash_is_reported_and_later_batch_runs(tmp_path: Path) -> None:
+    fake_tests_project = make_fake_tests_project(tmp_path, num_test_files=2)
+    test_paths = sorted(fake_tests_project.test_case_count_by_test_file_path)
+    test_paths[0].write_text(
+        dedent(
+            """\
+            import os
+
+            def test_worker_crash() -> None:
+                # Terminate the worker process without raising a normal test assertion failure.
+                os._exit(1)
+            """
+        )
+    )
+    output = tmp_path / "batches"
+    assert run_test_batches.run_batches(tmp_path, output, [], batch_size=1) == 1
+    batch_execution_records = json.loads((output / "results.json").read_text())
+    assert [(record["batch"], record["returncode"]) for record in batch_execution_records] == [(0, 1), (1, 0)]
+    crashed_batch_test_results = parse_test_results(output / "batch-00.xml")
+    later_batch_test_results = parse_test_results(output / "batch-01.xml")
+    assert any(outcome in ("failure", "error") for outcome in crashed_batch_test_results.values())
+    assert "test_worker_crash" in (test_name for _, test_name in crashed_batch_test_results)
+    assert len(later_batch_test_results) == fake_tests_project.test_case_count_by_test_file_path[test_paths[1]]
+    assert set(later_batch_test_results.values()) == {"pass", "skipped"}
+    assert parse_test_results(output / "results.xml") == crashed_batch_test_results | later_batch_test_results
 
 
 @pytest.mark.parametrize("ignore_option", ["--ignore", "--ignore-glob"])
