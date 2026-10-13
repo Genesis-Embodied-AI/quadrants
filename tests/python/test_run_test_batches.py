@@ -152,7 +152,14 @@ def test_failure_is_not_hidden_by_later_success(tmp_path: Path) -> None:
     batch_size = 12
     project = make_fake_tests_project(tmp_path, num_test_files=num_test_files)
     test_paths = sorted(project.test_case_count_by_test_file_path)
-    test_paths[0].write_text("def test_failure() -> None:\n    assert False\n")
+    test_paths[0].write_text(
+        dedent(
+            """\
+            def test_failure() -> None:
+                assert False
+            """
+        )
+    )
     output = tmp_path / "batches"
     assert run_test_batches.run_batches(tmp_path, output, [], batch_size=batch_size) == 1
     records = json.loads((output / "results.json").read_text())
