@@ -31,6 +31,8 @@ def worker(folder, index, barrier, library, work, count, recovery_event):
     active = None
     raw = None
     exit_on_slow = os.environ.get("QD_REPRO_EXIT_ON_SLOW") == "1"
+    idle_after_close = os.environ.get("QD_REPRO_IDLE_AFTER_CLOSE") == "1"
+    assert not idle_after_close or exit_on_slow
     close_on_slow = os.environ.get("QD_REPRO_CLOSE_ON_SLOW") == "1"
     with (folder / f"cycles-{index}.jsonl").open("w", buffering=1) as stream:
 
@@ -101,7 +103,11 @@ def worker(folder, index, barrier, library, work, count, recovery_event):
             unique_compile_constants=False,
             recovery_on_slow_gc=recovery_event is not None,
             recovery_action=(
-                ("exit all workers" if exit_on_slow else "close instance; keep process")
+                (
+                    "idle after close; then exit all workers"
+                    if idle_after_close
+                    else ("exit all workers" if exit_on_slow else "close instance; keep process")
+                )
                 if recovery_event is not None
                 else None
             ),
@@ -149,6 +155,14 @@ def worker(folder, index, barrier, library, work, count, recovery_event):
                     raw.close()
                     write(kind="instance_closed", quadrants_imported=False)
             raw.close()
+            if idle_after_close:
+                stage, cycle = "idle_after_close", -1
+                write(kind="instance_closed", quadrants_imported=False)
+                barrier.wait(timeout=1800)
+                write(kind="idle_begin", requested_seconds=180, quadrants_imported=False)
+                time.sleep(180)
+                write(kind="idle_end", quadrants_imported=False)
+                census()
             write(kind="end", quadrants_imported=False, automatic_gc=gc.isenabled())
         finally:
             gc.callbacks.remove(callback)

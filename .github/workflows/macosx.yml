@@ -21,6 +21,7 @@ on:
           - runtime-materialize-trace-cycles
           - runtime-standalone-cycles
           - runtime-standalone-exit-cycles
+          - runtime-standalone-idle-cycles
           - runtime-standalone-close-cycles
           - runtime-metal-validation-cycles
           - runtime-no-root-cycles
@@ -107,6 +108,7 @@ jobs:
           inputs.comparison == 'runtime-no-argument-buffers-cycles' && '["growth"]' ||
           inputs.comparison == 'runtime-standalone-cycles' && '["growth"]' ||
           inputs.comparison == 'runtime-standalone-exit-cycles' && '["growth"]' ||
+          inputs.comparison == 'runtime-standalone-idle-cycles' && '["growth"]' ||
           inputs.comparison == 'runtime-standalone-close-cycles' && '["growth"]' ||
           inputs.comparison == 'runtime-metal-validation-cycles' && '["growth"]' ||
           inputs.comparison == 'runtime-materialize-trace-cycles' && '["growth"]' ||
