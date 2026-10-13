@@ -92,9 +92,9 @@ int main(void) {
         uintptr_t begin = (uintptr_t)nodes & ~(uintptr_t)(page - 1);
         uintptr_t end = ((uintptr_t)nodes + (size_t)NODES * sizeof(Node) + (size_t)page - 1) & ~(uintptr_t)(page - 1);
         pages = (end - begin) / (size_t)page;
-        unsigned char *vec = calloc(pages, 1);
+        char *vec = calloc(pages, 1);
         if (vec && mincore((void *)begin, end - begin, vec) == 0) {
-            for (size_t i = 0; i < pages; i++) resident += (vec[i] & MINCORE_INCORE) != 0;
+            for (size_t i = 0; i < pages; i++) resident += ((unsigned char)vec[i] & MINCORE_INCORE) != 0;
         }
         free(vec);
 #endif
