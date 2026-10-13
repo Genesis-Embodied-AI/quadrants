@@ -94,7 +94,8 @@ def make_fake_tests_project(root: Path, num_test_files: int, passing_cases_per_f
 def parse_test_results(
     path: Path,
 ) -> dict[tuple[str | None, str | None], Literal["pass", "failure", "skipped", "error"]]:
-    # Parse JUnit XML into a mapping from (classname, test_name) to outcome; fail the test on duplicate identities.
+    # Parse JUnit XML into a mapping from (test module/class, test case name) to outcome;
+    # assert and fail the test on duplicate identities.
     outcomes: dict[tuple[str | None, str | None], Literal["pass", "failure", "skipped", "error"]] = {}
     for case in ET.parse(path).iter("testcase"):
         classname = case.get("classname")
