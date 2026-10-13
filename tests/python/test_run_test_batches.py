@@ -103,11 +103,11 @@ def test_complete_case_outcomes_and_fresh_selection(tmp_path: Path) -> None:
         cwd=tmp_path,
         check=True,
     )
-    results_with_batching = tmp_path / "batches"
-    assert run_test_batches.run_batches(tmp_path, results_with_batching, []) == 0
-    assert parse_test_results(results_with_batching / "results.xml") == parse_test_results(results_without_batching)
+    output_with_batching = tmp_path / "batches"
+    assert run_test_batches.run_batches(tmp_path, output_with_batching, []) == 0
+    assert parse_test_results(output_with_batching / "results.xml") == parse_test_results(results_without_batching)
     assert len(parse_test_results(results_without_batching)) == 39
-    manifest_contents = json.loads((results_with_batching / "manifest.json").read_text())
+    manifest_contents = json.loads((output_with_batching / "manifest.json").read_text())
     assert [len(group) for group in manifest_contents] == [12, 1]
 
 
