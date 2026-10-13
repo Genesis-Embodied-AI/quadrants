@@ -8,6 +8,7 @@ on:
         options:
           - binary
           - native-heap-crash
+          - native-heap-crash-debug
           - import-batch
           - import-batch-census
           - runtime-growth
@@ -92,7 +93,7 @@ permissions:
   actions: read
 jobs:
   compare:
-    if: inputs.comparison != 'native-heap-crash'
+    if: inputs.comparison != 'native-heap-crash' && inputs.comparison != 'native-heap-crash-debug'
     name: Archived Vulkan A/B (${{ matrix.order }})
     runs-on: macos-26
     timeout-minutes: 330
@@ -206,14 +207,14 @@ jobs:
           name: vulkan-attribution-${{ matrix.order }}
           path: ~/ais/misc_slow_vulkan/ab/output/
   native:
-    if: inputs.comparison == 'native-heap-crash'
+    if: inputs.comparison == 'native-heap-crash' || inputs.comparison == 'native-heap-crash-debug'
     name: Native Metal mode ${{ matrix.mode }}
     runs-on: macos-26
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        mode: [2, 3, 4]
+        mode: ${{ fromJSON(inputs.comparison == 'native-heap-crash-debug' && '[4]' || '[2,3,4]') }}
     steps:
       - uses: actions/checkout@v4
       - name: Build standalone Metal executable
@@ -228,6 +229,7 @@ jobs:
       - name: Run three independent native processes
         env:
           PROBE_MODE: ${{ matrix.mode }}
+          PROBE_DEBUG: ${{ inputs.comparison == 'native-heap-crash-debug' && '1' || '0' }}
         run: |
           python3 - <<'PY'
           import json, os, pathlib, subprocess, time
@@ -237,12 +239,16 @@ jobs:
           for i in range(3):
               stream = (root / f'worker-{i}.txt').open('w')
               logs.append(stream)
-              processes.append(subprocess.Popen([str(root / 'repro'), os.environ['PROBE_MODE'], '1500'],
-                                                stdout=stream, stderr=subprocess.STDOUT))
+              command = [str(root / 'repro'), os.environ['PROBE_MODE'], '1500']
+              if i == 0 and os.environ['PROBE_DEBUG'] == '1':
+                  command = ['lldb', '--batch', '-o', 'run', '-k', 'thread backtrace all',
+                             '-k', 'register read', '-k', 'disassemble --frame', '--', *command]
+              processes.append(subprocess.Popen(command, stdout=stream, stderr=subprocess.STDOUT))
           codes = [p.wait() for p in processes]
           for stream in logs:
               stream.close()
-          result = dict(mode=int(os.environ['PROBE_MODE']), cycles_per_worker=1500,
+          result = dict(mode=int(os.environ['PROBE_MODE']), debug_first_worker=os.environ['PROBE_DEBUG']=='1',
+                        cycles_per_worker=1500,
                         seconds=time.monotonic()-started, returncodes=codes)
           (root / 'results.json').write_text(json.dumps(result, indent=2)+'\n')
           print(json.dumps(result))
