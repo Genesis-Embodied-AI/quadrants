@@ -1,5 +1,6 @@
 """GPU-free integration checks for file selection and failure propagation through fresh xdist sessions."""
 
+import ast
 import json
 import shlex
 import subprocess
@@ -190,6 +191,81 @@ def test_failed_tests(tmp_path: Path) -> None:
         == unbatched_process_result.returncode
     )
     assert parse_test_results(output_with_batching / "results.xml") == parse_test_results(results_without_batching)
+
+
+def test_intentional_worker_retirement(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_tests_project = make_fake_tests_project(tmp_path, num_test_files=3)
+    test_paths = sorted(fake_tests_project.test_case_count_by_test_file_path)
+    test_paths[0].write_text(
+        dedent(
+            """\
+            def test_failure() -> None:
+                assert False
+            """
+        )
+    )
+    # Load the real retirement hooks without importing the GPU fixtures in the same conftest.
+    source = (Path(__file__).parent / "conftest.py").read_text()
+    hook_names = {
+        "_exit_marker_dir",
+        "pytest_configure",
+        "pytest_unconfigure",
+        "pytest_runtest_logreport",
+        "pytest_handlecrashitem",
+    }
+    hooks = [node for node in ast.parse(source).body if isinstance(node, ast.FunctionDef) and node.name in hook_names]
+    assert {hook.name for hook in hooks} == hook_names
+    conftest_path = tmp_path / "tests" / "python" / "conftest.py"
+    conftest_path.write_text(
+        dedent(
+            """\
+            import os, tempfile
+            from pathlib import Path
+            """
+        )
+        + conftest_path.read_text()
+        + "\n"
+        + "\n\n".join(ast.unparse(hook) for hook in hooks)
+        + dedent(
+            """
+
+            from xdist.workermanage import WorkerController
+
+            def pytest_testnodedown(node: WorkerController, error: object | None) -> None:
+                # Verify that the worker really exited with an intentional-retirement marker.
+                if error is not None and (Path(_exit_marker_dir()) / node.gateway.id).exists():
+                    with Path('retired_workers.txt').open('a') as retired_workers:
+                        print(node.gateway.id, file=retired_workers)
+            """
+        )
+    )
+    monkeypatch.delenv("_QD_XDIST_EXIT_MARKER_DIR", raising=False)
+    # One xdist worker exercises replacement without introducing a concurrent work-stealing race.
+    monkeypatch.setenv("PYTEST_ADDOPTS", "-q -p xdist.plugin -n 1 --dist=worksteal --max-worker-restart=999999")
+    results_without_batching = tmp_path / "full.xml"
+    # Run tests without batching, including the intentional retirement after the failure.
+    unbatched_process_result = subprocess.run(
+        [
+            sys.executable,
+            str(fake_tests_project.runner_path),
+            f"--junitxml={results_without_batching}",
+            f"--basetemp={tmp_path / 'full-tmp'}",
+        ],
+        cwd=tmp_path,
+        check=False,
+    )
+    assert unbatched_process_result.returncode == 1
+    retired_workers_path = tmp_path / "retired_workers.txt"
+    assert len(retired_workers_path.read_text().splitlines()) == 1
+    output_with_batching = tmp_path / "batches"
+    assert run_test_batches.run_batches(tmp_path, output_with_batching, [], batch_size=2) == 1
+    # One retirement in the unbatched run and one in the batched run.
+    assert len(retired_workers_path.read_text().splitlines()) == 2
+    combined_test_results = parse_test_results(output_with_batching / "results.xml")
+    assert combined_test_results == parse_test_results(results_without_batching)
+    assert list(combined_test_results.values()).count("failure") == 1
+    assert "error" not in combined_test_results.values()
+    assert "crashed while running" not in (output_with_batching / "results.xml").read_text()
 
 
 def test_worker_crash_is_reported_and_later_batch_runs(tmp_path: Path) -> None:
