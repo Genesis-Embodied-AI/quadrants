@@ -27,7 +27,14 @@ _CHILD = textwrap.dedent(
     import quadrants as qd
     from quadrants.lang import impl
 
-    qd.init(arch=qd.vulkan, enable_fallback=False, cfg_optimization=False, print_full_traceback=True)
+    # Match the harness: requiring the adstack extension turns this flag on.
+    qd.init(
+        arch=qd.vulkan,
+        enable_fallback=False,
+        cfg_optimization=False,
+        ad_stack_experimental_enabled=True,
+        print_full_traceback=True,
+    )
 
     N = 4
     x = qd.field(qd.f32, shape=(N,), needs_grad=True)
