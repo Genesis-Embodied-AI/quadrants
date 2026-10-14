@@ -196,33 +196,17 @@ def test_layout_with_needs_grad_allocates_grad(backend):
 
 
 # ----------------------------------------------------------------------------
-# Compound dtype (vector / matrix) + layout= must be rejected
+# Compound dtypes share the scalar layout validation contract.
 # ----------------------------------------------------------------------------
 
 
-def test_layout_rejected_for_vector_dtype():
-    """qd.tensor() with a compound vector dtype must reject layout=."""
-    qd.init(arch=qd.x64)
-    vec3 = qd.types.vector(3, qd.f32)
-    with pytest.raises(TypeError, match="layout.*not supported.*compound"):
-        qd.tensor(vec3, shape=(4,), layout=(0,))
-
-
-def test_layout_rejected_for_matrix_dtype():
-    """qd.tensor() with a compound matrix dtype must reject layout=."""
-    qd.init(arch=qd.x64)
-    mat2x2 = qd.types.matrix(2, 2, qd.f32)
-    with pytest.raises(TypeError, match="layout.*not supported.*compound"):
-        qd.tensor(mat2x2, shape=(4,), layout=(0,))
-
-
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
-def test_layout_rejected_for_vector_dtype_both_backends(backend):
-    """layout= rejection applies to both field and ndarray backends."""
-    qd.init(arch=qd.x64)
-    vec3 = qd.types.vector(3, qd.f32)
-    with pytest.raises(TypeError, match="layout.*not supported.*compound"):
-        qd.tensor(vec3, shape=(5,), backend=backend, layout=(0,))
+@pytest.mark.parametrize("dtype", [qd.types.vector(3, qd.f32), qd.types.matrix(2, 3, qd.f32)])
+@pytest.mark.parametrize("layout", [(0, 1, 2), (0, 0), (0, 2)])
+@test_utils.test(arch=qd.cpu)
+def test_compound_layout_rejects_invalid_permutation(backend, dtype, layout):
+    with pytest.raises(ValueError, match="layout"):
+        qd.tensor(dtype, shape=(4, 5), backend=backend, layout=layout)
 
 
 def test_vector_dtype_without_layout_still_works():
