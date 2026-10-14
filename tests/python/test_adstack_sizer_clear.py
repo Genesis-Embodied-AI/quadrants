@@ -71,12 +71,15 @@ _CHILD = textwrap.dedent(
 )
 
 
-def test_sizer_overflow_word_is_cleared_when_heaps_are_off():
+def test_sizer_overflow_word_is_cleared_when_heaps_are_off(tmp_path):
     if sys.platform != "darwin":
         pytest.skip("MoltenVK placement-heap recycling")
     if qd.vulkan not in test_utils.expected_archs():
         pytest.skip("vulkan is not selected")
+    # The kernel decorator reads the function source. A `python -c` string has none, so the child is a real file.
+    script_path = tmp_path / "sizer_overflow_heaps_off.py"
+    script_path.write_text(_CHILD)
     env = os.environ.copy()
     env["MVK_CONFIG_USE_MTLHEAP"] = "0"
-    proc = subprocess.run([sys.executable, "-c", _CHILD], env=env, capture_output=True, text=True)
+    proc = subprocess.run([sys.executable, str(script_path)], env=env, capture_output=True, text=True)
     assert proc.returncode == 0, proc.stdout + "\n" + proc.stderr
