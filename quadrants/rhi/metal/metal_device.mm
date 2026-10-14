@@ -1083,7 +1083,7 @@ DeviceCapabilityConfig collect_metal_device_caps(MTLDevice_id mtl_device) {
   bool feature_simd_scoped_reduction_operations = family_apple7 | family_mac2;
 
   DeviceCapabilityConfig caps{};
-  caps.set(DeviceCapability::spirv_version, 0x10300);
+  caps.set(DeviceCapability::spirv_version, 0x10500);
   caps.set(DeviceCapability::spirv_has_int8, 1);
   caps.set(DeviceCapability::spirv_has_int16, 1);
   caps.set(DeviceCapability::spirv_has_float16, 1);

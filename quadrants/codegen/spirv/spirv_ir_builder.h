@@ -387,10 +387,8 @@ class IRBuilder {
     for (const auto &arg : args) {
       ib_.add(arg);
     }
-    if (caps_->get(DeviceCapability::spirv_version) >= 0x10400) {
-      for (const auto &v : global_values) {
-        ib_.add(v);
-      }
+    for (const auto &v : global_values) {
+      ib_.add(v);
     }
     for (const auto &input : entry_point_inputs_) {
       ib_.add(input);
@@ -410,6 +408,9 @@ class IRBuilder {
     ib_.begin(spv::OpLabel).add_seq(start_label).commit(&func_header_);
     curr_label_ = start_label;
   }
+
+  // Import and call a GLSL uint(uint) helper, caching its declaration in ref_to_imported_function_declaration.
+  Value call_glsl_u32_to_u32(Value &ref_to_imported_function_declaration, const char *name, uint32_t argument_value);
 
   // Create a GLSL450 call
   template <typename... Args>
@@ -503,6 +504,29 @@ class IRBuilder {
   Value const_i32_one_;
 
  private:
+  // Link the kernel with the supplied GLSL libraries and return the combined SPIR-V module.
+  static std::vector<uint32_t> link_shader_helpers(const std::vector<uint32_t> &kernel,
+                                                   std::vector<std::vector<uint32_t>> libraries);
+
+  // Read the addressing model, defaulting to Logical if OpMemoryModel is absent.
+  static uint32_t get_module_addressing_model(const std::vector<uint32_t> &spirv_module);
+  // Update the addressing model if OpMemoryModel is present.
+  static void set_module_addressing_model(std::vector<uint32_t> &spirv_module, uint32_t addressing_model);
+
+  // Read a zero-based operand, using default_value if the instruction is absent.
+  static uint32_t get_instruction_operand(const std::vector<uint32_t> &spirv_module,
+                                          spv::Op opcode,
+                                          size_t operand_index,
+                                          uint32_t default_value);
+  // Update a zero-based operand if the instruction exists.
+  static void set_instruction_operand(std::vector<uint32_t> &spirv_module,
+                                      spv::Op opcode,
+                                      size_t operand_index,
+                                      uint32_t value);
+
+  // Return the first matching instruction's word index, or spirv_module.size() if absent.
+  static size_t find_instruction(const std::vector<uint32_t> &spirv_module, spv::Op opcode);
+
   Value get_const(const SType &dtype, const uint64_t *pvalue, bool cache);
   SType declare_primitive_type(DataType dt);
 
@@ -575,6 +599,7 @@ class IRBuilder {
   std::vector<uint32_t> decorate_;
   // Global segment: types, variables, types
   std::vector<uint32_t> global_;
+  std::vector<uint32_t> imported_glsl_function_declarations_;
   // Function header segment
   std::vector<uint32_t> func_header_;
   // Main Function segment

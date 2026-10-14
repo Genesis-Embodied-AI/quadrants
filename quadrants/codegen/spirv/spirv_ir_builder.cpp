@@ -1,13 +1,99 @@
 #include "quadrants/codegen/spirv/spirv_ir_builder.h"
 #include "fp16.h"
+#include <cstdint>
+#include <iterator>
+
+#include "spirv-tools/linker.hpp"
+#include "workgroup_spv.h"
 
 namespace quadrants::lang {
 
 namespace spirv {
 
+// Link the kernel with the supplied compiled GLSL helper libraries, resolving imported functions to their
+// implementations. Return the combined SPIR-V module, or report an error if linking fails.
+std::vector<uint32_t> IRBuilder::link_shader_helpers(const std::vector<uint32_t> &kernel,
+                                                     std::vector<std::vector<uint32_t>> libraries) {
+  // These helper libraries use Input and Function pointers. Match their addressing model to the kernel.
+  // Any required physical-storage capability and extension must already be declared by the kernel.
+  uint32_t addressing_model = get_module_addressing_model(kernel);
+  for (auto &library : libraries) {
+    set_module_addressing_model(library, addressing_model);
+  }
+  // Accept inputs through SPIR-V 1.6; SetUseHighestVersion below keeps the output at the highest input version,
+  // so a 1.5 kernel linked with our 1.0 helper stays at 1.5 and does not require a device that supports 1.6.
+  spvtools::Context context(SPV_ENV_UNIVERSAL_1_6);
+  std::string error;
+  context.SetMessageConsumer([&](spv_message_level_t, const char *, const spv_position_t &, const char *message) {
+    error += message;
+    error += '\n';
+  });
+  spvtools::LinkerOptions options;
+  options.SetUseHighestVersion(true);
+  std::vector<uint32_t> linked;
+  libraries.insert(libraries.begin(), kernel);
+  auto result = spvtools::Link(context, libraries, &linked, options);
+  QD_ERROR_IF(result != SPV_SUCCESS, "Failed to link GLSL shader helpers: {}", error);
+  return linked;
+}
+
+// Return the module's addressing model, defaulting to Logical if OpMemoryModel is absent.
+uint32_t IRBuilder::get_module_addressing_model(const std::vector<uint32_t> &spirv_module) {
+  // OpMemoryModel has two operands: 0 is the addressing model (how pointers are represented), and 1 is the memory
+  // model (rules for memory operations). For example, OpMemoryModel Logical GLSL450 uses Logical addressing and
+  // GLSL450 memory rules. Read and update operand 0 to match the libraries' addressing model to the kernel's.
+  return get_instruction_operand(spirv_module, spv::OpMemoryModel, /* operand_index= */ 0,
+                                 /* default_value= */ spv::AddressingModelLogical);
+}
+
+// Update the module's addressing model if OpMemoryModel is present.
+void IRBuilder::set_module_addressing_model(std::vector<uint32_t> &spirv_module, uint32_t addressing_model) {
+  set_instruction_operand(spirv_module, spv::OpMemoryModel, /* operand_index= */ 0, addressing_model);
+}
+
+// Read a zero-based operand of the first matching instruction, or return default_value if the instruction is absent.
+uint32_t IRBuilder::get_instruction_operand(const std::vector<uint32_t> &spirv_module,
+                                            spv::Op opcode,
+                                            size_t operand_index,
+                                            uint32_t default_value) {
+  size_t instruction_index = find_instruction(spirv_module, opcode);
+  if (instruction_index == spirv_module.size()) {
+    return default_value;
+  }
+  // Add one because the instruction's word count includes its first word, which holds the opcode and word count.
+  QD_ASSERT(operand_index + 1 < (spirv_module[instruction_index] >> 16));
+  return spirv_module.at(instruction_index + 1 + operand_index);
+}
+
+// Update a zero-based operand of the first matching instruction; leave the module unchanged if it is absent.
+void IRBuilder::set_instruction_operand(std::vector<uint32_t> &spirv_module,
+                                        spv::Op opcode,
+                                        size_t operand_index,
+                                        uint32_t value) {
+  size_t instruction_index = find_instruction(spirv_module, opcode);
+  if (instruction_index == spirv_module.size()) {
+    return;
+  }
+  // Add one because the instruction's word count includes its first word, which holds the opcode and word count.
+  QD_ASSERT(operand_index + 1 < (spirv_module[instruction_index] >> 16));
+  spirv_module.at(instruction_index + 1 + operand_index) = value;
+}
+
+// Return the word index of the first matching instruction, or spirv_module.size() if it is absent.
+size_t IRBuilder::find_instruction(const std::vector<uint32_t> &spirv_module, spv::Op opcode) {
+  // Skip the five-word module header. Each instruction encodes its word count above its 16-bit opcode.
+  for (size_t i = 5; i < spirv_module.size(); i += spirv_module[i] >> 16) {
+    if ((spirv_module[i] & 0xffff) == opcode) {
+      return i;
+    }
+  }
+  return spirv_module.size();
+}
+
 using cap = DeviceCapability;
 
 void IRBuilder::init_header() {
+  QD_ASSERT_INFO(caps_->get(cap::spirv_version) >= 0x10500, "SPIR-V 1.5 or newer is required");
   QD_ASSERT(header_.size() == 0U);
   header_.push_back(spv::MagicNumber);
 
@@ -206,6 +292,9 @@ std::vector<uint32_t> IRBuilder::finalize() {
   spirv_module.insert(spirv_module.end(), header_.begin(), header_.end());
 
   // 2. Required capabilities, extensions, and extended-instruction-set imports.
+  if (!imported_glsl_function_declarations_.empty()) {
+    spirv_module.insert(spirv_module.end(), {(2u << 16) | spv::OpCapability, spv::CapabilityLinkage});
+  }
   spirv_module.insert(spirv_module.end(), capabilities_extensions_imports_.begin(),
                       capabilities_extensions_imports_.end());
 
@@ -222,8 +311,16 @@ std::vector<uint32_t> IRBuilder::finalize() {
   spirv_module.insert(spirv_module.end(), global_.begin(), global_.end());
 
   // 6. Function declarations without bodies, then function definitions with bodies.
+  spirv_module.insert(spirv_module.end(), imported_glsl_function_declarations_.begin(),
+                      imported_glsl_function_declarations_.end());
   spirv_module.insert(spirv_module.end(), func_header_.begin(), func_header_.end());
   spirv_module.insert(spirv_module.end(), function_.begin(), function_.end());
+
+  // Link the completed module.
+  if (!imported_glsl_function_declarations_.empty()) {
+    std::vector<uint32_t> workgroup_library(std::begin(workgroup_helper_spv), std::end(workgroup_helper_spv));
+    return link_shader_helpers(spirv_module, {std::move(workgroup_library)});
+  }
   return spirv_module;
 }
 
@@ -480,12 +577,7 @@ SType IRBuilder::get_pointer_type(const SType &value_type, spv::StorageClass sto
 }
 
 SType IRBuilder::get_storage_pointer_type(const SType &value_type) {
-  spv::StorageClass storage_class;
-  if (caps_->get(cap::spirv_version) < 0x10300) {
-    storage_class = spv::StorageClassUniform;
-  } else {
-    storage_class = spv::StorageClassStorageBuffer;
-  }
+  const auto storage_class = spv::StorageClassStorageBuffer;
 
   return get_pointer_type(value_type, storage_class);
 }
@@ -560,16 +652,7 @@ SType IRBuilder::get_struct_array_type(const SType &value_type, uint32_t num_ele
   // decorate the array type.
   ib_.begin(spv::OpMemberDecorate).add_seq(struct_type, 0, spv::DecorationOffset, 0).commit(&decorate_);
 
-  if (caps_->get(cap::spirv_version) < 0x10300) {
-    // NOTE: BufferBlock was deprecated in SPIRV 1.3
-    // use StorageClassStorageBuffer instead.
-    // runtime array are always decorated as BufferBlock(shader storage buffer)
-    if (num_elems == 0) {
-      this->decorate(spv::OpDecorate, struct_type, spv::DecorationBufferBlock);
-    }
-  } else {
-    this->decorate(spv::OpDecorate, struct_type, spv::DecorationBlock);
-  }
+  this->decorate(spv::OpDecorate, struct_type, spv::DecorationBlock);
 
   return struct_type;
 }
@@ -601,25 +684,11 @@ Value IRBuilder::buffer_struct_argument(const SType &struct_type,
                                         uint32_t descriptor_set,
                                         uint32_t binding,
                                         const std::string &name) {
-  // NOTE: BufferBlock was deprecated in SPIRV 1.3
-  // use StorageClassStorageBuffer instead.
-  spv::StorageClass storage_class;
-  if (caps_->get(cap::spirv_version) < 0x10300) {
-    storage_class = spv::StorageClassUniform;
-  } else {
-    storage_class = spv::StorageClassStorageBuffer;
-  }
+  const auto storage_class = spv::StorageClassStorageBuffer;
 
   this->debug_name(spv::OpName, struct_type, name + "_t");
 
-  if (caps_->get(cap::spirv_version) < 0x10300) {
-    // NOTE: BufferBlock was deprecated in SPIRV 1.3
-    // use StorageClassStorageBuffer instead.
-    // runtime array are always decorated as BufferBlock(shader storage buffer)
-    this->decorate(spv::OpDecorate, struct_type, spv::DecorationBufferBlock);
-  } else {
-    this->decorate(spv::OpDecorate, struct_type, spv::DecorationBlock);
-  }
+  this->decorate(spv::OpDecorate, struct_type, spv::DecorationBlock);
 
   SType ptr_type = get_pointer_type(struct_type, storage_class);
 
@@ -639,8 +708,6 @@ Value IRBuilder::uniform_struct_argument(const SType &struct_type,
                                          uint32_t descriptor_set,
                                          uint32_t binding,
                                          const std::string &name) {
-  // NOTE: BufferBlock was deprecated in SPIRV 1.3
-  // use StorageClassStorageBuffer instead.
   spv::StorageClass storage_class = spv::StorageClassUniform;
 
   this->debug_name(spv::OpName, struct_type, name + "_t");
@@ -665,14 +732,7 @@ Value IRBuilder::buffer_argument(const SType &value_type,
                                  uint32_t descriptor_set,
                                  uint32_t binding,
                                  const std::string &name) {
-  // NOTE: BufferBlock was deprecated in SPIRV 1.3
-  // use StorageClassStorageBuffer instead.
-  spv::StorageClass storage_class;
-  if (caps_->get(cap::spirv_version) < 0x10300) {
-    storage_class = spv::StorageClassUniform;
-  } else {
-    storage_class = spv::StorageClassStorageBuffer;
-  }
+  const auto storage_class = spv::StorageClassStorageBuffer;
 
   SType sarr_type = get_struct_array_type(value_type, 0);
 
@@ -698,18 +758,72 @@ Value IRBuilder::struct_array_access(const SType &res_type, Value buffer, Value 
   QD_ASSERT(buffer.flag == ValueKind::kStructArrayPtr);
   QD_ASSERT(res_type.flag == TypeKind::kPrimitive);
 
-  spv::StorageClass storage_class;
-  if (caps_->get(cap::spirv_version) < 0x10300) {
-    storage_class = spv::StorageClassUniform;
-  } else {
-    storage_class = spv::StorageClassStorageBuffer;
-  }
+  const auto storage_class = spv::StorageClassStorageBuffer;
 
   SType ptr_type = this->get_pointer_type(res_type, storage_class);
   Value ret = new_value(ptr_type, ValueKind::kVariablePtr);
   ib_.begin(spv::OpAccessChain).add_seq(ptr_type, ret, buffer, const_i32_zero_, index).commit(&function_);
 
   return ret;
+}
+
+// Emit a call to a named GLSL function taking and returning a uint32, and return the value representing its result.
+//
+// glslang represents this GLSL value parameter as a pointer in SPIR-V. SPIR-V also supports value parameters; the
+// pointer representation is glslang's choice. The caller must match the compiled helper. Equivalent C++-style
+// pseudocode:
+//
+// GLSL source, with an illustrative caller:
+//   uint get_work_group_id(uint dim_index) {
+//     return gl_WorkGroupID[dim_index];
+//   }
+//
+//   void caller() {
+//     uint result = get_work_group_id(0);
+//   }
+//
+// Equivalent pointer passing, not literal generated source:
+//   uint get_work_group_id(uint* dim_index_ptr) {
+//     return gl_WorkGroupID[*dim_index_ptr];
+//   }
+//
+//   void caller() {
+//     uint argument = 0;  // Function storage: private to this thread's call.
+//     uint result = get_work_group_id(&argument);
+//   }
+//
+// This method emits the two statements inside caller() into the kernel being compiled; it does not create a separate
+// caller function. On first use, it also declares the imported helper and caches its reference in
+// ref_to_imported_function_declaration. glslang supplies the helper body. The GLSL parameter retains value semantics: a
+// write through the pointer changes only the temporary argument, not the caller's original input.
+Value IRBuilder::call_glsl_u32_to_u32(Value &ref_to_imported_function_declaration,
+                                      const char *name,
+                                      uint32_t argument_value) {
+  // On first use, declare the imported helper and cache its reference in ref_to_imported_function_declaration.
+  if (ref_to_imported_function_declaration.id == 0) {
+    SType p_uint32_type = get_pointer_type(t_uint32_, spv::StorageClassFunction);
+    SType ref_to_function_type_declaration;
+    ref_to_function_type_declaration.id = id_counter_++;
+    // The function type declaration is stored in global_, and ref_to_function_type_declaration holds a reference to it.
+    // A function type declaration is like a function declaration, but is not named.
+    ib_.begin(spv::OpTypeFunction).add_seq(ref_to_function_type_declaration, t_uint32_, p_uint32_type).commit(&global_);
+    ref_to_imported_function_declaration = new_value(ref_to_function_type_declaration, ValueKind::kFunction);
+    decorate(spv::OpDecorate, ref_to_imported_function_declaration, spv::DecorationLinkageAttributes, name,
+             spv::LinkageTypeImport);
+    ib_.begin(spv::OpFunction)
+        .add_seq(/* return_type= */ t_uint32_,
+                 /* result_id= */ ref_to_imported_function_declaration,
+                 /* function_control= */ 0,
+                 /* function_type= */ ref_to_function_type_declaration)
+        .commit(&imported_glsl_function_declarations_);
+    Value parameter = new_value(p_uint32_type, ValueKind::kVariablePtr);
+    ib_.begin(spv::OpFunctionParameter).add_seq(p_uint32_type, parameter).commit(&imported_glsl_function_declarations_);
+    ib_.begin(spv::OpFunctionEnd).commit(&imported_glsl_function_declarations_);
+  }
+  // GLSL passes scalar function arguments through Function-storage pointers.
+  Value argument = alloca_variable(t_uint32_);
+  store_variable(argument, uint_immediate_number(t_uint32_, argument_value));
+  return make_value(spv::OpFunctionCall, t_uint32_, ref_to_imported_function_declaration, argument);
 }
 
 Value IRBuilder::alloca_variable(const SType &type) {

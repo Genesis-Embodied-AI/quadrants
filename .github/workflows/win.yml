@@ -34,8 +34,19 @@ jobs:
       - name: Check Python CP version
         run: |
           echo "PYTHON_CP_VERSION=${{ steps.set_cp_version.outputs.PYTHON_CP_VERSION }}"
+      - name: Configure GitLab Authentication
+        shell: bash
+        run: |
+          git config --global credential.https://gitlab.com.helper \
+            '!f() {
+              if [ "$1" = get ] && [ -n "$GITLAB_PAT" ]; then
+                printf "%s\n" "username=oauth2" "password=$GITLAB_PAT"
+              fi
+            }; f'
       - name: Checkout
         uses: actions/checkout@v4
+        env:
+          GITLAB_PAT: ${{ secrets.GITLAB_PAT }}
         with:
           submodules: true
           fetch-depth: 0

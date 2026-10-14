@@ -10,11 +10,11 @@ Note that adding a non-static `if` over the top of a for-loop will lead to the f
 
 ## Inspecting execution with qd.block_idx()
 
-`qd.block_idx()` returns the current block index as a signed 32-bit integer. Call it inside a kernel or a function called by a kernel. It works on CPU, CUDA, and AMDGPU. Other backends raise an unsupported-platform error.
+`qd.block_idx()` returns the current block index as a signed 32-bit integer. Call it inside a kernel or a function called by a kernel. It works on CPU, CUDA, AMDGPU, Vulkan, and Metal.
 
 On CPU, a block is a group of iterations executed as one runtime task. A task is work assigned to a worker thread. Block indices start at zero for each parallel loop execution. They identify blocks, not worker threads or execution order. A worker can execute several blocks.
 
-On CUDA and AMDGPU, it returns the hardware block index along the x dimension. A block is a group of GPU threads. CPU and GPU iteration assignments can differ for the same kernel.
+On GPUs, it returns the hardware block index along the x dimension. A block is a group of GPU threads. Vulkan and Metal call it a workgroup. CPU and GPU iteration assignments can differ for the same kernel.
 
 Top-level serial execution returns `0`. Nested serial loops and called functions retain the enclosing block's index. Reading an index does not synchronize threads.
 
@@ -56,7 +56,7 @@ def fill(a: qd.Template) -> None:
         a[I] = I[0] + I[1] + I[2]
 ```
 
-`I` is a `qd.Vector` with one element per dimension.
+`I` is a [`qd.Vector`](matrix_vector.md) with one element per dimension.
 
 ### Controlling iteration order with `axes=`
 
@@ -96,7 +96,7 @@ If kernel launch latency is a bottleneck, then you can look into:
 
 Reducing the number and complexity kernel parameters reduces the kernel launch latency. In addition:
 - field args incur less launch latency than ndarray args
-- global fields incur no parameter-related launch latency
+- [global fields](tensor_types.md), accessed through global variables rather than passed as kernel arguments, incur no parameter-related launch latency
 
 For the underlying execution model - what a launch actually involves, where the latency comes from, and when reducing it helps - see [Performance](performance.md).
 
