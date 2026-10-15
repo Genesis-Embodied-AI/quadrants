@@ -55,8 +55,7 @@ void auto_diff(IRNode *root,
 
         std::unordered_set<Stmt *> forward_statements;
         if (count_forward) {
-          for (auto *stmt : analysis::gather_statements(ib, [](Stmt *) { return true; }))
-            forward_statements.insert(stmt);
+          forward_statements = gather_forward_statements(ib);
         }
         make_adjoint(ib, count_forward);
         type_check(root, config);

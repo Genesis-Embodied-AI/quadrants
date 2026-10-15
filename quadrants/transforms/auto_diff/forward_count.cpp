@@ -4,6 +4,24 @@
 namespace quadrants::lang {
 namespace {
 
+class GatherForward : public BasicStmtVisitor {
+ public:
+  using BasicStmtVisitor::visit;
+  std::unordered_set<Stmt *> statements;
+
+  GatherForward() {
+    invoke_default_visitor = true;
+  }
+
+  void visit(Stmt *stmt) override {
+    statements.insert(stmt);
+  }
+
+  void preprocess_container_stmt(Stmt *stmt) override {
+    statements.insert(stmt);
+  }
+};
+
 class KeepForward : public BasicStmtVisitor {
  public:
   using BasicStmtVisitor::visit;
@@ -33,8 +51,14 @@ struct Counter {
 
 }  // namespace
 
+std::unordered_set<Stmt *> gather_forward_statements(IRNode *root) {
+  GatherForward gather;
+  root->accept(&gather);
+  return std::move(gather.statements);
+}
+
 void validate_adstack_counting(IRNode *root) {
-  for (auto *stmt : irpass::analysis::gather_statements(root, [](Stmt *) { return true; })) {
+  for (auto *stmt : gather_forward_statements(root)) {
     QD_ERROR_IF(stmt->is<InternalFuncStmt>() || stmt->is<RandStmt>() || stmt->is<WhileStmt>() ||
                     stmt->is<ContinueStmt>() || stmt->is<ReturnStmt>() || stmt->is<StructForStmt>() ||
                     stmt->is<MeshForStmt>() || stmt->is<GlobalPtrStmt>(),
