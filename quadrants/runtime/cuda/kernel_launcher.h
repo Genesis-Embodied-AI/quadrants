@@ -20,7 +20,6 @@ class KernelLauncher : public LLVM::KernelLauncher {
     std::vector<OffloadedTask> offloaded_tasks;
     void *arg_buffer_dev_ptr{nullptr};
     std::size_t arg_buffer_capacity{0};
-    void *runtime_context_dev_ptr{nullptr};
   };
 
  public:

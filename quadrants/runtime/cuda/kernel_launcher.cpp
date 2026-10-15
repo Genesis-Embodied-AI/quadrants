@@ -338,7 +338,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   } else {
     launch_offloaded_tasks(ctx, cuda_module, offloaded_tasks);
   }
-  // Persistent scratch (default-stream path): no per-launch free for the per-handle `arg_buffer` / `runtime_context`
+  // Persistent scratch (default-stream path): no per-launch free for the per-handle `arg_buffer`
   // or the launcher-global `result_buffer`. All live until launcher destruction; the dtor handles the final
   // `mem_free_async`.  Ephemeral buffers (explicit-stream path) are freed below.
   if (ctx.result_buffer_size > 0) {
@@ -386,9 +386,6 @@ KernelLauncher::~KernelLauncher() {
   for (auto &launcher_ctx : contexts_) {
     if (launcher_ctx.arg_buffer_dev_ptr != nullptr) {
       CUDADriver::get_instance().mem_free_async(launcher_ctx.arg_buffer_dev_ptr, nullptr);
-    }
-    if (launcher_ctx.runtime_context_dev_ptr != nullptr) {
-      CUDADriver::get_instance().mem_free_async(launcher_ctx.runtime_context_dev_ptr, nullptr);
     }
   }
   if (persistent_result_buffer_dev_ptr_ != nullptr) {
