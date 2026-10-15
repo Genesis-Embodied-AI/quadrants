@@ -254,7 +254,7 @@ def test_stack():
     func()
 
 
-@test_utils.test(require=[qd.extension.adstack])
+@test_utils.test(require=[qd.extension.adstack], force_scalarize_matrix=True)
 def test_if_condition_depend_on_for_loop_index():
     scalar = lambda: qd.field(dtype=qd.f32)
     vec = lambda: qd.Vector.field(3, dtype=qd.f32)
