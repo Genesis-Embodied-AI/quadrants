@@ -266,7 +266,7 @@ def test_eliminate_recomputable_pushes_preserves_zero_body_store():
     assert c.grad[None] == pytest.approx(expected_grad, rel=1e-5)
 
 
-@test_utils.test(require=qd.extension.adstack, cfg_optimization=False, ad_stack_experimental_enabled=True)
+@test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
 def test_backup_ssa_load_top_with_subsequent_pushes():
     # Pins `BackupSSA::is_load_top_stable` against the reverse-mode aliasing bug where cloning an
     # `AdStackLoadTopStmt` at the reverse cursor reads the stack's live top - which differs from the original
@@ -290,7 +290,7 @@ def test_backup_ssa_load_top_with_subsequent_pushes():
     #
     # Internal details: `cfg_optimization=False` keeps the compound `if true && (g_mass[i, j] > 0)` form alive
     # (the `&&` lowering inserts the multi-push into the gate stack that the chain analyzer must clone through);
-    # `ad_stack_experimental_enabled=True` is the configuration where the cloned-load_top path actually fires.
+    # Counting enables the stack transformation where the cloned-load_top path fires.
     g_mass = qd.field(qd.f32, shape=(2, 2), needs_grad=True)
     g_in = qd.field(qd.f32, shape=(2, 2), needs_grad=True)
     g_out = qd.field(qd.f32, shape=(2, 2), needs_grad=True)
@@ -304,6 +304,8 @@ def test_backup_ssa_load_top_with_subsequent_pushes():
     g_mass[1, 1] = 2.0
     g_in[1, 1] = 4.0
     g_out.grad[1, 1] = 1.0
+    with qd.adstack:
+        gated_div()
     gated_div.grad()
 
     # Forward: g_out[1, 1] = g_in[1, 1] / g_mass[1, 1] = 2.0; gate is false at every other cell so all other
@@ -328,7 +330,6 @@ def test_backup_ssa_load_top_with_subsequent_pushes():
     require=qd.extension.adstack,
     cfg_optimization=False,
     force_scalarize_matrix=True,
-    ad_stack_experimental_enabled=True,
 )
 def test_eliminate_recomputable_pushes_rejects_mutated_snode_chain_leaf():
     # Pins the `mutated_snodes` guard inside `RecomputableChainAnalyzer::is_recomputable` against the chain-clone
@@ -375,6 +376,11 @@ def test_eliminate_recomputable_pushes_rejects_mutated_snode_chain_leaf():
 
     field[1, 1, 1, 0] = qd.Vector([1.0, 1.0, 1.0])
     data.grad[1] = qd.Vector([1.0, 1.0, 1.0])
+    with qd.adstack:
+        k(data, field)
+    # Restore the initial primal state for the backward replay.
+    field[1, 1, 1, 0] = qd.Vector([1.0, 1.0, 1.0])
+    data[1] = qd.Vector([0.0, 0.0, 0.0])
     k.grad(data, field)
 
     expected = [1.0, 1.0, 1.0]
