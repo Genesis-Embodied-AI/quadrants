@@ -23,6 +23,8 @@ def main():
     parser.add_argument("--envs", type=int, default=2)
     parser.add_argument("--repeats", type=int, default=30)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--kernel", choices=("compute_F_tmp", "p2g", "g2p"))
+    parser.add_argument("--profile", type=Path, help="Write a warmed backward CPU/CUDA trace and Python profile")
     args = parser.parse_args()
     os.environ["QD_AD_STACK_REPLAY_COUNT"] = "0"
     os.environ["GS_ENABLE_NDARRAY"] = "1"
@@ -80,6 +82,8 @@ def main():
         "kernels": {},
     }
     for name, (kernel, kernel_args) in calls.items():
+        if args.kernel and name != args.kernel:
+            continue
         print(f"BENCHMARK {name}", flush=True)
         samples = {False: [], True: []}
         reference = None
@@ -132,6 +136,28 @@ def main():
         result["kernels"][name] = stats
         args.output.write_text(json.dumps(result, indent=2) + "\n")
         print(json.dumps({name: {k: v for k, v in stats.items() if k not in ("legacy", "replay")}}), flush=True)
+        if args.profile:
+            import cProfile
+
+            import torch
+
+            with torch.profiler.profile(
+                activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA]
+            ) as profile:
+                for counted in (False, True):
+                    qd.lang.impl.current_cfg().ad_stack_replay_count = counted
+                    with torch.profiler.record_function("replay" if counted else "legacy"):
+                        for _ in range(10):
+                            kernel.grad(*kernel_args)
+                            qd.sync()
+            profile.export_chrome_trace(str(args.profile.with_suffix(f".{name}.json")))
+            cpu_profile = cProfile.Profile()
+            cpu_profile.enable()
+            for _ in range(30):
+                kernel.grad(*kernel_args)
+                qd.sync()
+            cpu_profile.disable()
+            cpu_profile.dump_stats(str(args.profile.with_suffix(f".{name}.pstats")))
     print(json.dumps(result, indent=2), flush=True)
     gs.destroy()
 
