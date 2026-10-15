@@ -10,15 +10,14 @@
 namespace quadrants::lang {
 
 void LlvmRuntimeExecutor::prepare_counted_adstack(const AdStackSizingInfo &layout,
-                                                 std::size_t workers,
-                                                 LaunchContextBuilder &ctx) {
+                                                  std::size_t workers,
+                                                  LaunchContextBuilder &ctx) {
   if (!layout.per_thread_stride || !workers)
     return;
   const auto capacity = ctx.get_context().adstack_capacity;
   QD_ERROR_IF(!capacity, "Stack-based backward requires a counted forward inside qd.adstack");
   const auto limit = std::numeric_limits<std::size_t>::max();
-  QD_ERROR_IF(capacity > limit / layout.per_thread_stride ||
-                  workers > limit / (capacity * layout.per_thread_stride),
+  QD_ERROR_IF(capacity > limit / layout.per_thread_stride || workers > limit / (capacity * layout.per_thread_stride),
               "Measured adstack allocation size overflow");
   const auto bytes = capacity * layout.per_thread_stride * workers;
   if (bytes <= adstack_heap_bytes_)
@@ -34,8 +33,8 @@ void LlvmRuntimeExecutor::prepare_counted_adstack(const AdStackSizingInfo &layou
   void *ptr = get_device_alloc_info_ptr(*guard);
   if (!adstack_heap_field_) {
     get_runtime_jit_module()->call<void *>("runtime_get_adstack_heap_field_ptr", llvm_runtime_);
-    adstack_heap_field_ = reinterpret_cast<void *>(fetch_result_uint64(quadrants_result_buffer_ret_value_id,
-                                                                     result_buffer_cache_));
+    adstack_heap_field_ =
+        reinterpret_cast<void *>(fetch_result_uint64(quadrants_result_buffer_ret_value_id, result_buffer_cache_));
   }
   if (config_.arch == Arch::cuda) {
 #if defined(QD_WITH_CUDA)
