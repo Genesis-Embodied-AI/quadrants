@@ -3,7 +3,7 @@
 This experimental prototype counts required stack depth during the real forward call, then uses that measurement to allocate storage during backward. Backward still replays forward calculations to record intermediate values before computing gradients. Counting does not copy the input tensors or save their historical contents.
 
 ```python
-qd.init(arch=qd.cuda, offline_cache=False)
+qd.init(arch=qd.cuda)
 
 with qd.adstack:
     compute(x, y, iterations)
@@ -14,9 +14,29 @@ compute.grad(x, y, iterations)
 
 Preserve or restore all input values that backward needs to replay the original computation. If replay needs more stack space than measured, backward raises `RuntimeError`. Some gradients may already have changed: discard or reset the failed backward's results. The runtime does not roll back or retry automatically. Changes that fit the measured capacity can still produce wrong gradients without an overflow.
 
-The prototype supports CUDA, x64, Vulkan, and Metal, range loops over ndarrays or dense fields, dense field iteration, and positional scalar or `qd.ndarray` arguments. It requires `offline_cache=False`. Sparse/quantized fields, random operations, cooperative/internal calls, while loops, continue statements, explicit returns, graph kernels, streams, and nested counting contexts are unsupported.
+The prototype supports CUDA, x64, Vulkan, and Metal, range loops over ndarrays or dense fields, and dense field iteration. Kernel arguments use normal binding, including keyword arguments, supported external arrays (such as NumPy and PyTorch), and template fields. Sparse/quantized fields, random operations, cooperative/internal calls, while loops, continue statements, explicit returns, graph kernels, custom streams, and nested counting contexts are unsupported.
 
-Each counted forward produces a single-use record. Explicit gradient calls must consume the same kernel's records in reverse invocation order with matching arguments. `qd.ad.Tape` can supply that order automatically; put the counting context inside the Tape context. A consumed or failed record cannot be used for a second backward. Records do not detect changes to array or field contents. Dense fields may be captured by the kernel; template field arguments are not supported. Keep their SNode trees alive until backward completes.
+Each counted forward creates an invocation handle. Explicit `.grad(...)` calls consume pending invocations for that kernel in reverse order with matching arguments. `qd.ad.Tape` supplies that order automatically; put the counting context inside the Tape context.
+
+For repeated backwards or a different invocation order, retain the scope and use its handles:
+
+```python
+with qd.adstack as scope:
+    compute(x, y, iterations)
+record = scope.records[0]
+y.grad.fill(1)
+record.backward()
+x.grad.fill(0)
+y.grad.fill(2)
+record.backward()  # Reuses the capacity and bound arguments; seeds a different gradient.
+record.release()  # Removes it from pending calls and drops its argument references.
+```
+
+Handle use removes that invocation from the automatic pending list, but the handle remains reusable until released. `.grad(...)` also leaves a retained handle reusable. Each context entry returns a distinct scope, with `records` and measured `capacities` in forward-call order. Release unused records as well as used ones when finished. A released handle or one from before `qd.reset()`/`qd.init()` cannot run backward.
+
+Records retain arguments, not snapshots of their contents. Preserve or restore inputs before every replay, keep field SNode trees alive, and seed/reset gradients as needed. Gradients accumulate according to normal autodiff rules. After overflow, reset invalid gradients and restore replay inputs before retrying; the handle clears its error flag but does not increase capacity.
+
+Persistent offline caching and `@qd.kernel(fastcache=True)` distinguish ordinary, counting-forward, and measured-backward variants. Measured capacity and error buffers belong to the invocation, not the cached executable.
 
 The initial layout uses the largest measured depth as the capacity for every stack. This can use more memory than separate per-stack capacities. Both forward measurement and backward error reporting synchronize with the device. On overflow, stack counts saturate and stack accesses remain within their allocation. Threads continue executing, including compiler-generated reductions and synchronization; backward then raises and its results must be discarded. Compiler thread-local reduction and block-local optimizations remain enabled. These are prototype tradeoffs to measure, not claims of negligible overhead.
 

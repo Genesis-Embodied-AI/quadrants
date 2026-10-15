@@ -1,14 +1,16 @@
 """Experimental forward measurements for stack-based reverse AD.
 
 Explicit gradient calls consume records in reverse invocation order for each kernel. The initial implementation
-uses the largest measured depth for every stack and supports CPU, CUDA, Vulkan, and Metal with offline caching off.
+uses the largest measured depth for every stack and supports CPU, CUDA, Vulkan, and Metal.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from numbers import Number
+from typing import Any
 
 from quadrants._lib import core
 from quadrants.lang import impl
-from quadrants.lang._ndarray import Ndarray, ScalarNdarray
+from quadrants.lang._ndarray import ScalarNdarray
 from quadrants.types.enums import AutodiffMode
 from quadrants.types.primitive_types import i32, i64
 
@@ -21,21 +23,80 @@ class _Record:
     keepalive: tuple
 
 
+@dataclass
+class _Scope:
+    capacities: list[int] = field(default_factory=list)
+    records: list["_Invocation"] = field(default_factory=list)
+
+
+class _Invocation:
+    """A reusable measured invocation; release it when its arguments are no longer needed."""
+
+    def __init__(self, kernel: Any, record: _Record):
+        self._kernel = kernel
+        self._record: _Record | None = record
+        self._program = impl.get_runtime().prog
+
+    def _remove_pending(self):
+        pending = getattr(self._kernel, "_adstack_pending", [])
+        pending[:] = [item for item in pending if item is not self]
+
+    def backward(self):
+        record = self._record
+        if record is None:
+            raise RuntimeError("This adstack invocation has been released")
+        if impl.get_runtime().prog is not self._program:
+            raise RuntimeError(
+                "Adstack invocations cannot be used after qd.reset() or qd.init()"
+            )
+        if _arguments(record.keepalive) != record.arguments:
+            raise RuntimeError(
+                "Counted invocation argument metadata changed before backward"
+            )
+        if getattr(impl.get_runtime(), "adstack_scope", None) is not None:
+            raise RuntimeError("Run backward outside the qd.adstack context")
+        self._remove_pending()
+        # A previous failed replay must not poison a subsequent attempt after inputs and gradients are restored.
+        record.buffer.arr.write_int([1], 0)
+        variant = _variant(self._kernel, 2)
+        variant.adstack_record = record
+        try:
+            result = variant(*record.keepalive)
+            impl.get_runtime().sync()
+            if int(record.buffer.arr.read_int([1])):
+                raise RuntimeError(
+                    "Adstack capacity exceeded during backward replay. Replay required more stack space than counted "
+                    f"during forward (capacity {record.capacity}). Discard or reset this backward's gradients."
+                )
+            return result
+        finally:
+            variant.adstack_record = None
+
+    def release(self):
+        """Drop the measurement and argument references; subsequent backward calls fail."""
+        self._remove_pending()
+        self._record = None
+        self._kernel = None
+        self._program = None
+
+
 class _AdstackContext:
     def __enter__(self):
         runtime = impl.get_runtime()
         config = impl.current_cfg()
         if config.arch not in (core.cuda, core.x64, core.vulkan, core.metal):
-            raise RuntimeError("qd.adstack prototype supports CUDA, x64, Vulkan, and Metal only")
-        if config.offline_cache:
-            raise RuntimeError("qd.adstack prototype requires qd.init(offline_cache=False)")
+            raise RuntimeError(
+                "qd.adstack prototype supports CUDA, x64, Vulkan, and Metal only"
+            )
         if config.ad_stack_size:
-            raise RuntimeError("qd.adstack prototype requires automatic ad_stack_size=0")
+            raise RuntimeError(
+                "qd.adstack prototype requires automatic ad_stack_size=0"
+            )
         if getattr(runtime, "adstack_scope", None) is not None:
             raise RuntimeError("Nested qd.adstack contexts are not supported")
-        runtime.adstack_scope = self
-        self.capacities = []
-        return self
+        scope = _Scope()
+        runtime.adstack_scope = scope
+        return scope
 
     def __exit__(self, exc_type, exc_value, traceback):
         impl.get_runtime().adstack_scope = None
@@ -45,28 +106,40 @@ adstack = _AdstackContext()
 
 
 def _arguments(args):
-    signature = []
-    for arg in args:
-        if isinstance(arg, Ndarray):
-            signature.append(("ndarray", id(arg), arg.dtype, arg.shape))
-        elif isinstance(arg, (int, float)):
-            signature.append((type(arg), arg))
-        else:
-            raise RuntimeError("qd.adstack prototype accepts qd.ndarray and scalar arguments only")
-    return tuple(signature)
+    # Kernel binding and launch code validate supported types. Only identity/metadata matching belongs here;
+    # comparing array values would perform device work and would not detect loss of historical replay inputs.
+    return tuple(
+        (
+            (type(arg), arg)
+            if isinstance(arg, Number)
+            else (
+                type(arg),
+                id(arg),
+                str(getattr(arg, "dtype", None)),
+                tuple(getattr(arg, "shape", ())),
+            )
+        )
+        for arg in args
+    )
 
 
 def _variant(kernel, mode):
-    # A distinct Kernel object owns its own specialization caches. Both persistent cache layers are bypassed.
+    # A distinct Kernel object owns its specialization caches; persistent keys also distinguish the three modes.
     from quadrants.lang.kernel import Kernel  # pylint: disable=import-outside-toplevel
 
     name = "_adstack_count_variant" if mode == 1 else "_adstack_reverse_variant"
     variant = getattr(kernel, name, None)
     if variant is None:
-        variant = Kernel(kernel.func, kernel.autodiff_mode)
+        variant = Kernel(
+            kernel.func, kernel.autodiff_mode, _is_classkernel=kernel.is_classkernel
+        )
+        variant.quadrants_callable = getattr(
+            kernel, "_adstack_source_callable", kernel.quadrants_callable
+        )
         variant.adstack_mode = mode
         if mode == 1:
             variant.grad = kernel.grad
+            kernel.grad._adstack_source_callable = kernel.quadrants_callable
         setattr(kernel, name, variant)
     return variant
 
@@ -79,8 +152,19 @@ def dispatch(kernel, args, kwargs):
     counting = scope is not None and kernel.autodiff_mode == AutodiffMode.NONE
     if not counting and pending is None:
         return False, None
-    if kwargs or kernel.use_graph or kernel.use_checkpoints:
-        raise RuntimeError("qd.adstack prototype requires positional arguments and non-graph kernels")
+    if (
+        kernel.use_graph
+        or kernel.use_checkpoints
+        or kwargs.get("qd_stream") is not None
+    ):
+        raise RuntimeError(
+            "qd.adstack prototype requires non-graph kernels without custom streams"
+        )
+    kwargs = dict(kwargs)
+    kwargs.pop("qd_stream", None)
+    args = kernel.fuse_args(
+        is_func=False, is_pyfunc=False, py_args=args, kwargs=kwargs, global_context=None
+    )
     signature = _arguments(args)
     if counting:
         assert scope is not None
@@ -88,7 +172,10 @@ def dispatch(kernel, args, kwargs):
         tape = runtime.target_tape
         runtime.target_tape = None
         try:
-            buffer = ScalarNdarray(i32 if impl.current_cfg().arch in (core.vulkan, core.metal) else i64, (2,))
+            buffer = ScalarNdarray(
+                i32 if impl.current_cfg().arch in (core.vulkan, core.metal) else i64,
+                (2,),
+            )
         finally:
             runtime.target_tape = tape
         variant = _variant(kernel, 1)
@@ -96,34 +183,29 @@ def dispatch(kernel, args, kwargs):
         try:
             result = variant(*args)
             runtime.sync()
-            if impl.current_cfg().arch in (core.vulkan, core.metal) and int(buffer.arr.read_int([1])):
-                raise RuntimeError("Measured adstack depth exceeds the backend capacity limit")
+            if impl.current_cfg().arch in (core.vulkan, core.metal) and int(
+                buffer.arr.read_int([1])
+            ):
+                raise RuntimeError(
+                    "Measured adstack depth exceeds the backend capacity limit"
+                )
             capacity = max(1, int(buffer.arr.read_int([0])))
         finally:
             variant.adstack_record = None
         record = _Record(signature, buffer, capacity, args)
         if not hasattr(kernel.grad, "_adstack_pending"):
             kernel.grad._adstack_pending = []
-        kernel.grad._adstack_pending.append(record)
+        invocation = _Invocation(kernel.grad, record)
+        kernel.grad._adstack_pending.append(invocation)
+        scope.records.append(invocation)
         scope.capacities.append(capacity)
         return True, result
 
     if not pending:
         raise RuntimeError("No pending counted forward invocation for this backward")
-    record = pending[-1]
-    if record.arguments != signature:
-        raise RuntimeError("Counted backward calls must match forward arguments in reverse invocation order")
-    pending.pop()  # Records are single-use, including failed backwards.
-    variant = _variant(kernel, 2)
-    variant.adstack_record = record
-    try:
-        result = variant(*args)
-        runtime.sync()
-        if int(record.buffer.arr.read_int([1])):
-            raise RuntimeError(
-                "Adstack capacity exceeded during backward replay. Replay required more stack space than counted "
-                f"during forward (capacity {record.capacity}). Discard or reset this backward's gradients."
-            )
-        return True, result
-    finally:
-        variant.adstack_record = None
+    invocation = pending[-1]
+    if invocation._record.arguments != signature:
+        raise RuntimeError(
+            "Counted backward calls must match forward arguments in reverse invocation order"
+        )
+    return True, invocation.backward()
