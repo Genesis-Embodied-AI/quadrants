@@ -60,7 +60,7 @@ if(NOT QD_WITH_LLVM)
     set(QD_WITH_CUDA_TOOLKIT OFF)
 endif()
 
-file(GLOB QUADRANTS_CORE_SOURCE
+file(GLOB QUADRANTS_CORE_SOURCE CONFIGURE_DEPENDS
     "quadrants/analysis/*.cpp" "quadrants/analysis/*.h"
     "quadrants/ir/*"
     "quadrants/jit/*"
