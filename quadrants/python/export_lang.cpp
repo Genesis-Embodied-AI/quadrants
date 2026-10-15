@@ -676,6 +676,7 @@ void export_lang(nb::module_ &m) {
           nb::rv_policy::reference);
 
   nb::class_<LaunchContextBuilder>(m, "KernelLaunchContext")
+      .def("check_adstack_replay_aliases", &LaunchContextBuilder::check_adstack_replay_aliases)
       .def("set_adstack_measurement", &LaunchContextBuilder::set_adstack_measurement)
       .def("set_adstack_measurement_array", &LaunchContextBuilder::set_adstack_measurement_array)
       .def("copy", &LaunchContextBuilder::copy)

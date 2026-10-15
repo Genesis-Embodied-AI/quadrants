@@ -86,24 +86,38 @@ void lower_adstack_forward_count(Block *block, const std::unordered_set<Stmt *> 
   while (root->get_parent())
     root = root->get_parent();
   std::unordered_set<SNode *> read_fields;
+  std::set<std::vector<int>> read_arrays;
   auto field_pointer = [](Stmt *ptr) -> GlobalPtrStmt * {
     if (auto *matrix = ptr->cast<MatrixPtrStmt>())
       ptr = matrix->origin;
     return ptr->cast<GlobalPtrStmt>();
   };
+  auto array_pointer = [](Stmt *ptr) -> ArgLoadStmt * {
+    if (auto *matrix = ptr->cast<MatrixPtrStmt>())
+      ptr = matrix->origin;
+    if (auto *external = ptr->cast<ExternalPtrStmt>())
+      return external->base_ptr->cast<ArgLoadStmt>();
+    return nullptr;
+  };
   for (auto *stmt : irpass::analysis::gather_statements(root, [](Stmt *) { return true; })) {
-    if (auto *load = stmt->cast<GlobalLoadStmt>()) {
-      if (auto *ptr = field_pointer(load->src))
+    Stmt *source = nullptr;
+    if (auto *load = stmt->cast<GlobalLoadStmt>())
+      source = load->src;
+    if (auto *atomic = stmt->cast<AtomicOpStmt>())
+      source = atomic->dest;
+    if (source) {
+      if (auto *ptr = field_pointer(source))
         read_fields.insert(ptr->snode);
-    }
-    if (auto *atomic = stmt->cast<AtomicOpStmt>()) {
-      if (auto *ptr = field_pointer(atomic->dest))
-        read_fields.insert(ptr->snode);
+      if (auto *ptr = array_pointer(source))
+        read_arrays.insert(ptr->arg_id);
     }
   }
   for (auto *stmt : irpass::analysis::gather_statements(block, [](Stmt *s) { return s->is<GlobalStoreStmt>(); })) {
     auto *store = stmt->as<GlobalStoreStmt>();
-    if (auto *ptr = field_pointer(store->dest); ptr && !read_fields.count(ptr->snode))
+    auto *field = field_pointer(store->dest);
+    auto *array = array_pointer(store->dest);
+    // LaunchContextBuilder checks external aliases before executing a counting kernel, including cached kernels.
+    if ((field && !read_fields.count(field->snode)) || (array && !read_arrays.count(array->arg_id)))
       store->parent->erase(store);
   }
   auto statements = irpass::analysis::gather_statements(block, [](Stmt *) { return true; });
