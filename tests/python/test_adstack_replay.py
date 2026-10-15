@@ -253,3 +253,31 @@ def test_replay_rejects_cross_iteration_output_dependency():
     with pytest.raises(RuntimeError, match="non-differentiable buffer"):
         compute.grad()
     np.testing.assert_array_equal(flags.to_numpy(), np.ones(5))
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda], ad_stack_replay_count=True, ad_stack_experimental_enabled=True)
+def test_replay_torch_arguments_and_overlapping_views():
+    torch = pytest.importorskip("torch")
+    device = "cuda" if qd.lang.impl.current_cfg().arch == qd.cuda else "cpu"
+    x = torch.full((4,), 0.2, device=device, requires_grad=True)
+    y = torch.full((4,), 17.0, device=device, requires_grad=True)
+    n = torch.full((4,), 2, dtype=torch.int32, device=device)
+    scratch = torch.zeros(4, dtype=torch.int32, device=device)
+
+    @qd.kernel
+    def compute(x: qd.types.ndarray(), y: qd.types.ndarray(), n: qd.types.ndarray(), scratch: qd.types.ndarray()):
+        for i in range(4):
+            value = x[i]
+            for j in range(n[i]):
+                value = qd.sin(value)
+            y[i] = value
+            scratch[i] = 1
+
+    y.grad = torch.ones_like(y)
+    compute.grad(scratch=scratch, n=n, y=y, x=x)
+    torch.testing.assert_close(x.grad, torch.full_like(x, math.cos(0.2) * math.cos(math.sin(0.2))))
+    torch.testing.assert_close(y, torch.full_like(y, 17))
+    storage = torch.full((5,), 2, dtype=torch.int32, device=device)
+    with pytest.raises(RuntimeError, match="aliased non-differentiable"):
+        compute.grad(x, y, storage[:4], storage[1:])
+    torch.testing.assert_close(storage, torch.full_like(storage, 2))
