@@ -45,3 +45,5 @@ On the counted-only branch, stack-based reverse mode requires a counted forward.
 The SPIR-V path uses descriptor-bound measurement storage and measured heap metadata; it does not run the symbolic sizer. Its loop-carried stack values are limited to f32, i32, and booleans, as in the existing SPIR-V adstack implementation. Vulkan is validated on the Linux GPU cluster; Metal requires separate validation on Apple hardware.
 
 Vector-valued stacks require `qd.init(force_scalarize_matrix=True)` so the counting transform receives scalar stacks.
+
+Validation on this branch cannot fall back to legacy sizing: that implementation is removed. Use a separate legacy checkout/process for baseline comparisons. The in-process Genesis legacy-versus-counted benchmark belongs to the parent prototype branch and is intentionally absent here.
