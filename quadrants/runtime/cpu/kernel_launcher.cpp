@@ -265,10 +265,7 @@ KernelLauncher::Handle KernelLauncher::register_llvm_kernel(const LLVM::Compiled
       // whether to skip the task on a given launch (based on `ctx.resume_from_checkpoint` and the running
       // `yield_signal`).
       checkpoint_id_per_task.push_back(task.checkpoint_id);
-      // CPU never takes the dynamic_gpu_range_for branch - see `AdStackSizingInfo` - so the precomputed
-      // `static_num_threads` (set by `codegen_cpu.cpp` to `num_cpu_threads` for non-serial tasks and to 1
-      // for serial tasks) is the exact bound, and the launcher never has to resolve anything at dispatch
-      // time.
+      // CPU tasks use one stack row per worker; serial tasks use a single row.
       ad_stacks.push_back(task.ad_stack);
       num_threads_per_task.push_back(task.ad_stack.static_num_threads);
       graph_do_while_level_per_task.push_back(task.graph_do_while_level_id);

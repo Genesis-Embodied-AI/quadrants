@@ -40,7 +40,6 @@ class TaskCodegen : public IRVisitor {
     std::string qd_kernel_name;
     int task_id_in_kernel;
     const CompileConfig *compile_config{nullptr};
-    int adstack_mode{0};
   };
 
   const bool use_64bit_pointers = false;
@@ -146,7 +145,6 @@ class TaskCodegen : public IRVisitor {
   Arch arch_;
   DeviceCapabilityConfig *caps_;
   const CompileConfig *compile_config_;
-  int adstack_mode_;
   int task_id_in_kernel_{0};
 
   struct BufferInfoTypeTupleHasher {

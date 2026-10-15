@@ -78,7 +78,6 @@ TaskCodegen::TaskCodegen(const Params &params)
     : arch_(params.arch),
       caps_(params.caps),
       compile_config_(params.compile_config),
-      adstack_mode_(params.adstack_mode),
       task_id_in_kernel_(params.task_id_in_kernel),
       task_ir_(params.task_ir),
       compiled_structs_(params.compiled_structs),
@@ -3075,7 +3074,6 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
     tp.arch = params_.arch;
     tp.caps = &params_.caps;
     tp.compile_config = params_.compile_config;
-    tp.adstack_mode = params_.kernel->adstack_mode;
 
     TaskCodegen cgen(tp);
     auto task_res = cgen.run();
