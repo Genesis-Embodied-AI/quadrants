@@ -337,6 +337,7 @@
 <span class="sd">uses the largest measured depth for every stack and supports CPU, CUDA, Vulkan, and Metal.</span>
 <span class="sd">"""</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">contextlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">contextmanager</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">numbers</span><span class="w"> </span><span class="kn">import</span> <span class="n">Number</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span>
@@ -360,6 +361,34 @@
 <span class="k">class</span><span class="w"> </span><span class="nc">_Scope</span><span class="p">:</span>
     <span class="n">capacities</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
     <span class="n">records</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="s2">"_Invocation"</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+
+
+<span class="nd">@contextmanager</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_measurement_io</span><span class="p">():</span>
+    <span class="c1"># Portable fills and readbacks launch helper kernels. They must not become counted user invocations.</span>
+    <span class="n">runtime</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span>
+    <span class="n">tape</span><span class="p">,</span> <span class="n">scope</span> <span class="o">=</span> <span class="n">runtime</span><span class="o">.</span><span class="n">target_tape</span><span class="p">,</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">runtime</span><span class="p">,</span> <span class="s2">"adstack_scope"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="n">runtime</span><span class="o">.</span><span class="n">target_tape</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">runtime</span><span class="o">.</span><span class="n">adstack_scope</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">yield</span>
+    <span class="k">finally</span><span class="p">:</span>
+        <span class="n">runtime</span><span class="o">.</span><span class="n">target_tape</span><span class="p">,</span> <span class="n">runtime</span><span class="o">.</span><span class="n">adstack_scope</span> <span class="o">=</span> <span class="n">tape</span><span class="p">,</span> <span class="n">scope</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_clear_measurement</span><span class="p">(</span><span class="n">buffer</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span> <span class="ow">in</span> <span class="p">(</span><span class="n">core</span><span class="o">.</span><span class="n">x64</span><span class="p">,</span> <span class="n">core</span><span class="o">.</span><span class="n">cuda</span><span class="p">):</span>
+        <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">fill_uint</span><span class="p">(</span><span class="n">buffer</span><span class="o">.</span><span class="n">arr</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">with</span> <span class="n">_measurement_io</span><span class="p">():</span>
+            <span class="n">buffer</span><span class="o">.</span><span class="n">fill</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_read_measurement</span><span class="p">(</span><span class="n">buffer</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span> <span class="ow">in</span> <span class="p">(</span><span class="n">core</span><span class="o">.</span><span class="n">x64</span><span class="p">,</span> <span class="n">core</span><span class="o">.</span><span class="n">cuda</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">core</span><span class="o">.</span><span class="n">read_adstack_replay_measurement</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="p">,</span> <span class="n">buffer</span><span class="o">.</span><span class="n">arr</span><span class="p">)</span>
+    <span class="k">with</span> <span class="n">_measurement_io</span><span class="p">():</span>
+        <span class="k">return</span> <span class="n">buffer</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()</span>
 
 
 <span class="k">class</span><span class="w"> </span><span class="nc">_Invocation</span><span class="p">:</span>
@@ -386,13 +415,12 @@
             <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">"Run backward outside the qd.adstack context"</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_remove_pending</span><span class="p">()</span>
         <span class="c1"># A previous failed replay must not poison a subsequent attempt after inputs and gradients are restored.</span>
-        <span class="n">record</span><span class="o">.</span><span class="n">buffer</span><span class="o">.</span><span class="n">arr</span><span class="o">.</span><span class="n">write_int</span><span class="p">([</span><span class="mi">1</span><span class="p">],</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">_clear_measurement</span><span class="p">(</span><span class="n">record</span><span class="o">.</span><span class="n">buffer</span><span class="p">)</span>
         <span class="n">variant</span> <span class="o">=</span> <span class="n">_variant</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_kernel</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
         <span class="n">variant</span><span class="o">.</span><span class="n">adstack_record</span> <span class="o">=</span> <span class="n">record</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="n">result</span> <span class="o">=</span> <span class="n">variant</span><span class="p">(</span><span class="o">*</span><span class="n">record</span><span class="o">.</span><span class="n">keepalive</span><span class="p">)</span>
-            <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>
-            <span class="k">if</span> <span class="nb">int</span><span class="p">(</span><span class="n">record</span><span class="o">.</span><span class="n">buffer</span><span class="o">.</span><span class="n">arr</span><span class="o">.</span><span class="n">read_int</span><span class="p">([</span><span class="mi">1</span><span class="p">])):</span>
+            <span class="k">if</span> <span class="nb">int</span><span class="p">(</span><span class="n">_read_measurement</span><span class="p">(</span><span class="n">record</span><span class="o">.</span><span class="n">buffer</span><span class="p">)[</span><span class="mi">1</span><span class="p">]):</span>
                 <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
                     <span class="s2">"Adstack capacity exceeded during backward replay. Replay required more stack space than counted "</span>
                     <span class="sa">f</span><span class="s2">"during forward (capacity </span><span class="si">{</span><span class="n">record</span><span class="o">.</span><span class="n">capacity</span><span class="si">}</span><span class="s2">). Discard or reset this backward's gradients."</span>
@@ -487,22 +515,26 @@
         <span class="n">tape</span> <span class="o">=</span> <span class="n">runtime</span><span class="o">.</span><span class="n">target_tape</span>
         <span class="n">runtime</span><span class="o">.</span><span class="n">target_tape</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="k">try</span><span class="p">:</span>
-            <span class="n">buffer</span> <span class="o">=</span> <span class="n">ScalarNdarray</span><span class="p">(</span>
-                <span class="n">i32</span> <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span> <span class="ow">in</span> <span class="p">(</span><span class="n">core</span><span class="o">.</span><span class="n">vulkan</span><span class="p">,</span> <span class="n">core</span><span class="o">.</span><span class="n">metal</span><span class="p">)</span> <span class="k">else</span> <span class="n">i64</span><span class="p">,</span>
-                <span class="p">(</span><span class="mi">2</span><span class="p">,),</span>
-            <span class="p">)</span>
+            <span class="n">buffer</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">kernel</span><span class="p">,</span> <span class="s2">"_adstack_count_buffer"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">buffer</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">buffer</span> <span class="o">=</span> <span class="n">ScalarNdarray</span><span class="p">(</span><span class="n">i32</span> <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span> <span class="ow">in</span> <span class="p">(</span><span class="n">core</span><span class="o">.</span><span class="n">vulkan</span><span class="p">,</span> <span class="n">core</span><span class="o">.</span><span class="n">metal</span><span class="p">)</span> <span class="k">else</span> <span class="n">i64</span><span class="p">,</span> <span class="p">(</span><span class="mi">2</span><span class="p">,))</span>
+                <span class="n">kernel</span><span class="o">.</span><span class="n">_adstack_count_buffer</span> <span class="o">=</span> <span class="n">buffer</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">_clear_measurement</span><span class="p">(</span><span class="n">buffer</span><span class="p">)</span>
         <span class="k">finally</span><span class="p">:</span>
             <span class="n">runtime</span><span class="o">.</span><span class="n">target_tape</span> <span class="o">=</span> <span class="n">tape</span>
         <span class="n">variant</span> <span class="o">=</span> <span class="n">_variant</span><span class="p">(</span><span class="n">kernel</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
         <span class="n">variant</span><span class="o">.</span><span class="n">adstack_record</span> <span class="o">=</span> <span class="n">_Record</span><span class="p">(</span><span class="n">signature</span><span class="p">,</span> <span class="n">buffer</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="n">result</span> <span class="o">=</span> <span class="n">variant</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span>
-            <span class="n">runtime</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>
-            <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span> <span class="ow">in</span> <span class="p">(</span><span class="n">core</span><span class="o">.</span><span class="n">vulkan</span><span class="p">,</span> <span class="n">core</span><span class="o">.</span><span class="n">metal</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">int</span><span class="p">(</span><span class="n">buffer</span><span class="o">.</span><span class="n">arr</span><span class="o">.</span><span class="n">read_int</span><span class="p">([</span><span class="mi">1</span><span class="p">])):</span>
+            <span class="n">measurement</span> <span class="o">=</span> <span class="n">_read_measurement</span><span class="p">(</span><span class="n">buffer</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">int</span><span class="p">(</span><span class="n">measurement</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>
                 <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">"Measured adstack depth exceeds the backend capacity limit"</span><span class="p">)</span>
-            <span class="n">capacity</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">buffer</span><span class="o">.</span><span class="n">arr</span><span class="o">.</span><span class="n">read_int</span><span class="p">([</span><span class="mi">0</span><span class="p">])))</span>
+            <span class="n">capacity</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">measurement</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
         <span class="k">finally</span><span class="p">:</span>
             <span class="n">variant</span><span class="o">.</span><span class="n">adstack_record</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="c1"># Readbacks finish each invocation before the scratch is reused. Retained records own their capacities,</span>
+        <span class="c1"># so another forward or backward can clear the shared words without changing an earlier measurement.</span>
         <span class="n">record</span> <span class="o">=</span> <span class="n">_Record</span><span class="p">(</span><span class="n">signature</span><span class="p">,</span> <span class="n">buffer</span><span class="p">,</span> <span class="n">capacity</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">kernel</span><span class="o">.</span><span class="n">grad</span><span class="p">,</span> <span class="s2">"_adstack_pending"</span><span class="p">):</span>
             <span class="n">kernel</span><span class="o">.</span><span class="n">grad</span><span class="o">.</span><span class="n">_adstack_pending</span> <span class="o">=</span> <span class="p">[]</span>
