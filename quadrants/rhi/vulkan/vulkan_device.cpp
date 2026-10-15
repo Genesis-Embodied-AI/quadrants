@@ -1549,8 +1549,10 @@ RhiResult VulkanDevice::create_pipeline(Pipeline **out_pipeline,
 }
 
 RhiResult VulkanDevice::allocate_memory(const AllocParams &params, DeviceAllocation *out_devalloc) {
-  const char *poison_env = std::getenv("QD_TEST_VULKAN_POISON_ALLOCATIONS");
-  const bool poison_allocations = poison_env && std::strcmp(poison_env, "1") == 0;
+  static const bool poison_allocations = [] {
+    const char *poison_env = std::getenv("QD_TEST_VULKAN_POISON_ALLOCATIONS");
+    return poison_env && std::strcmp(poison_env, "1") == 0;
+  }();
   if (poison_allocations && params.size > std::numeric_limits<size_t>::max() - 3) {
     return RhiResult::out_of_memory;
   }
