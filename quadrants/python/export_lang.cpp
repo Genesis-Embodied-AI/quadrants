@@ -16,6 +16,7 @@
 #include "quadrants/ir/frontend_ir.h"
 #include "quadrants/ir/statements.h"
 #include "quadrants/program/adstack_size_expr_eval.h"
+#include "quadrants/program/adstack/replay_measurement.h"
 #include "quadrants/program/extension.h"
 #include "quadrants/program/ndarray.h"
 #include "quadrants/rhi/device_capability.h"
@@ -79,6 +80,7 @@ void export_lang(nb::module_ &m) {
 #undef PER_ARCH
       .export_values();
 
+  m.def("read_adstack_replay_measurement", read_adstack_replay_measurement);
   m.def("arch_name", arch_name);
   m.def("arch_from_name", arch_from_name);
 

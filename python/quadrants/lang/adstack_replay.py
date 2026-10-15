@@ -27,6 +27,12 @@ def _variant(kernel, mode):
     return variant
 
 
+def _read_measurement(runtime, arch, record):
+    if arch in (core.x64, core.cuda):
+        return core.read_adstack_replay_measurement(runtime.prog, record.buffer.arr)
+    return record.buffer.to_numpy()
+
+
 def backward(kernel, args, qd_stream=None):
     runtime = impl.get_runtime()
     arch = impl.current_cfg().arch
@@ -42,13 +48,17 @@ def backward(kernel, args, qd_stream=None):
             record = _Record(ScalarNdarray(i32 if arch in (core.vulkan, core.metal) else i64, (2,)))
             kernel._adstack_replay_scratch = record
         else:
-            record.buffer.fill(0)
+            if arch in (core.x64, core.cuda):
+                # Zero both i64 words via the byte-size-aware u32 fill, without launching a Python fill kernel.
+                runtime.prog.fill_uint(record.buffer.arr, 0)
+            else:
+                record.buffer.fill(0)
             record.capacity = 0
         count = _variant(kernel, 1)
         count.adstack_record = record
         try:
             count(*args)
-            measurement = record.buffer.to_numpy()
+            measurement = _read_measurement(runtime, arch, record)
             if int(measurement[1]):
                 raise RuntimeError("Measured adstack depth exceeds the backend capacity limit")
             record.capacity = max(1, int(measurement[0]))
@@ -58,7 +68,7 @@ def backward(kernel, args, qd_stream=None):
         reverse.adstack_record = record
         try:
             result = reverse(*args)
-            if int(record.buffer.to_numpy()[1]):
+            if int(_read_measurement(runtime, arch, record)[1]):
                 raise RuntimeError(
                     "Adstack capacity exceeded during backward replay. "
                     f"Measured capacity {record.capacity}. Discard or reset this backward's gradients."
