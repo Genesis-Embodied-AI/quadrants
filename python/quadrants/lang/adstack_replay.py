@@ -37,23 +37,28 @@ def backward(kernel, args, qd_stream=None):
     tape = runtime.target_tape
     runtime.target_tape = None
     try:
-        record = _Record(ScalarNdarray(i32 if arch in (core.vulkan, core.metal) else i64, (2,)))
+        record = kernel._adstack_replay_scratch
+        if record is None:
+            record = _Record(ScalarNdarray(i32 if arch in (core.vulkan, core.metal) else i64, (2,)))
+            kernel._adstack_replay_scratch = record
+        else:
+            record.buffer.fill(0)
+            record.capacity = 0
         count = _variant(kernel, 1)
         count.adstack_record = record
         try:
             count(*args)
-            runtime.sync()
-            if int(record.buffer.arr.read_int([1])):
+            measurement = record.buffer.to_numpy()
+            if int(measurement[1]):
                 raise RuntimeError("Measured adstack depth exceeds the backend capacity limit")
-            record.capacity = max(1, int(record.buffer.arr.read_int([0])))
+            record.capacity = max(1, int(measurement[0]))
         finally:
             count.adstack_record = None
         reverse = _variant(kernel, 2)
         reverse.adstack_record = record
         try:
             result = reverse(*args)
-            runtime.sync()
-            if int(record.buffer.arr.read_int([1])):
+            if int(record.buffer.to_numpy()[1]):
                 raise RuntimeError(
                     "Adstack capacity exceeded during backward replay. "
                     f"Measured capacity {record.capacity}. Discard or reset this backward's gradients."

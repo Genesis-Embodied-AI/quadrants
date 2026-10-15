@@ -406,6 +406,7 @@ class Kernel(FuncBase):
     def reset(self) -> None:
         self.runtime = impl.get_runtime()
         self.adstack_record = None
+        self._adstack_replay_scratch: "_Record | None" = None
         for name in ("_adstack_count_variant", "_adstack_reverse_variant"):
             if hasattr(self, name):
                 delattr(self, name)
