@@ -200,7 +200,6 @@ void Program::destroy_snode_tree(SNodeTree *snode_tree) {
 
   program_impl_->destroy_snode_tree(snode_tree);
   free_snode_tree_ids_.push(snode_tree->id());
-  // The destroyed tree's `SNode *`s are about to be freed; cached entries pointing into them must go.
 }
 
 SNodeTree *Program::add_snode_tree(std::unique_ptr<SNode> root, bool compile_only) {
@@ -218,7 +217,6 @@ SNodeTree *Program::add_snode_tree(std::unique_ptr<SNode> root, bool compile_onl
     QD_ASSERT(id == snode_trees_.size());
     snode_trees_.push_back(std::move(tree));
   }
-  // Wipe so any negative `nullptr` entry in the cache does not shadow an snode id newly satisfiable by this tree.
   return snode_trees_[id].get();
 }
 
@@ -255,25 +253,6 @@ int Program::subgroup_size() const {
   auto caps = program_impl_->get_device_caps();
   return static_cast<int>(caps.get(DeviceCapability::spirv_subgroup_size));
 }
-
-namespace {
-
-SNode *find_snode_by_id_recursive(SNode *root, int snode_id) {
-  if (root == nullptr) {
-    return nullptr;
-  }
-  if (root->id == snode_id) {
-    return root;
-  }
-  for (auto &child : root->ch) {
-    if (auto *hit = find_snode_by_id_recursive(child.get(), snode_id)) {
-      return hit;
-    }
-  }
-  return nullptr;
-}
-
-}  // namespace
 
 int Program::get_snode_tree_size() {
   return snode_trees_.size();
@@ -441,9 +420,7 @@ void Program::fill_ndarray_fast_u32(Ndarray *ndarray, uint32_t val) {
   // This is a temporary solution to bypass device api. Should be moved to CommandList once available in CUDA.
   program_impl_->fill_ndarray(ndarray->ndarray_alloc_,
                               ndarray->get_nelement() * ndarray->get_element_size() / sizeof(uint32_t), val);
-  // Host-issued device fill mutates the ndarray contents without going through a quadrants kernel, so
-  // `bump_writes_for_kernel_*` will not cover it. Bump explicitly using the same `&ndarray_alloc_` key the
-  // kernel launchers use, so any cached adstack-sizer metadata depending on this ndarray is evicted.
+
 }
 
 std::pair<const StructType *, size_t> Program::get_struct_type_with_data_layout(const StructType *old_ty,
