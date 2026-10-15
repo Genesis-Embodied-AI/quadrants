@@ -55,7 +55,8 @@ def test_ad_dataclass_ndarray_typed_annotation():
         b[i] = float(i + 1)
 
     state = State(a=a, b=b, p=p)
-    compute(state)
+    with qd.adstack:
+        compute(state)
     np.testing.assert_allclose(p.to_numpy(), 3.0 * np.arange(1, N + 1) + 1.0)
 
     for i in range(N):
@@ -89,7 +90,8 @@ def test_ad_dataclass_ndarray_template():
         b[i] = float(i + 1)
 
     state = State(a=a, b=b, p=p)
-    compute(state)
+    with qd.adstack:
+        compute(state)
     np.testing.assert_allclose(p.to_numpy(), 3.0 * np.arange(1, N + 1) + 1.0)
 
     for i in range(N):
@@ -130,7 +132,8 @@ def test_ad_dataclass_field_template_tape():
             s.loss[None] += s.a[i] * s.b[i]
 
     with qd.ad.Tape(loss):
-        compute(state)
+        with qd.adstack:
+            compute(state)
 
     # loss = sum_i a[i] * b[i]; dloss/da[i] = b[i]
     np.testing.assert_allclose(a.grad.to_numpy(), b.to_numpy())
@@ -167,7 +170,8 @@ def test_ad_dataclass_tensor_ndarray_backend():
         b[i] = float(i + 1)
 
     state = State(a=a, b=b, p=p)
-    compute(state)
+    with qd.adstack:
+        compute(state)
     np.testing.assert_allclose(p.to_numpy(), 3.0 * np.arange(1, N + 1) + 1.0)
 
     for i in range(N):
@@ -209,7 +213,8 @@ def test_ad_dataclass_tensor_field_backend_tape():
             s.loss[None] += s.a[i] * s.b[i]
 
     with qd.ad.Tape(loss._unwrap()):
-        compute(state)
+        with qd.adstack:
+            compute(state)
 
     np.testing.assert_allclose(a.grad.to_numpy(), b.to_numpy())
 
@@ -247,7 +252,8 @@ def test_ad_dataclass_mixed_ndarray_and_tensor_ndarray_backend():
         b[i] = float(i + 1)
 
     state = State(a_nd=a_nd, a_tens=a_tens, b=b, p=p)
-    compute(state)
+    with qd.adstack:
+        compute(state)
     np.testing.assert_allclose(p.to_numpy(), 7.0 * np.arange(1, N + 1))
 
     for i in range(N):
@@ -288,7 +294,8 @@ def test_ad_dataclass_mixed_ndarray_and_field_in_same_class():
         b[i] = float(i + 1)
 
     state = State(a_nd=a_nd, out_field=out_field, b=b, p=p)
-    compute(state)
+    with qd.adstack:
+        compute(state)
     np.testing.assert_allclose(p.to_numpy(), 3.0 * np.arange(1, N + 1))
     np.testing.assert_allclose(out_field.to_numpy(), 3.0 + np.arange(1, N + 1))
 

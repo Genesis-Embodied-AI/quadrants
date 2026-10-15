@@ -148,9 +148,6 @@ class ProgramImpl {
   virtual void finalize() {
   }
 
-  virtual void pre_finalize() {
-  }
-
   virtual uint64 fetch_result_uint64(int i, uint64 *result_buffer) {
     return result_buffer[i];
   }

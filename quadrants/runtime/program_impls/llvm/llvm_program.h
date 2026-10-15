@@ -254,11 +254,6 @@ class LlvmProgramImpl : public ProgramImpl {
   std::size_t num_snode_trees_processed_{0};
   std::unique_ptr<LlvmRuntimeExecutor> runtime_exec_;
   std::unique_ptr<LlvmOfflineCache> cache_data_;
-  // Flipped on by `pre_finalize()` (with a defensive re-assignment in `finalize()`) so the `synchronize()`
-  // override stops polling the adstack-overflow flag during teardown. `Program::finalize()` invokes
-  // `pre_finalize()` before its two teardown syncs, so the flag is already true when those syncs run; moving
-  // the assignment back into `finalize()` alone would silently re-introduce the `std::terminate()` teardown bug
-  // this field was introduced to fix.
 };
 
 LlvmProgramImpl *get_llvm_program(Program *prog);

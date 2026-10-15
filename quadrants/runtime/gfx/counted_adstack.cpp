@@ -19,7 +19,7 @@ std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
     for (auto ti : adstack_task_indices) {
       const auto &allocas = task_attribs[ti].ad_stack.allocas;
       auto &rt = per_task_ad_stack[ti];
-      rt.metadata.assign(3 + 2 * allocas.size(), 0);
+      rt.metadata.assign(2 + 2 * allocas.size(), 0);
       uint64_t float_offset = 0, int_offset = 0;
       for (size_t i = 0; i < allocas.size(); ++i) {
         bool is_float = allocas[i].heap_kind == spirv::TaskAttributes::AdStackAllocaAttribs::HeapKind::Float;

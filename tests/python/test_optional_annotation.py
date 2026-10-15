@@ -260,7 +260,8 @@ def test_ndarray_union_autodiff_present():
         a[i] = 3
         b[i] = i
 
-    compute(a, b, p)
+    with qd.adstack:
+        compute(a, b, p)
     for i in range(N):
         assert p[i] == a[i] * b[i] + 1
         p.grad[i] = 1

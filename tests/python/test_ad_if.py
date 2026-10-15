@@ -22,7 +22,8 @@ def test_ad_if_simple():
     x[None] = 1
     y.grad[None] = 1
 
-    func()
+    with qd.adstack:
+        func()
     func.grad()
 
     assert x.grad[None] == 1
@@ -47,9 +48,11 @@ def test_ad_if():
     y.grad[0] = 1
     y.grad[1] = 1
 
-    func(0)
+    with qd.adstack:
+        func(0)
     func.grad(0)
-    func(1)
+    with qd.adstack:
+        func(1)
     func.grad(1)
 
     assert x.grad[0] == 2
@@ -84,7 +87,8 @@ def test_ad_if_nested():
     for i in range(n):
         x[i] = i % 4
 
-    func()
+    with qd.adstack:
+        func()
     for i in range(n):
         assert y[i] == i % 4
         y.grad[i] = 1
@@ -114,9 +118,11 @@ def test_ad_if_mutable():
     y.grad[0] = 1
     y.grad[1] = 1
 
-    func(0)
+    with qd.adstack:
+        func(0)
     func.grad(0)
-    func(1)
+    with qd.adstack:
+        func(1)
     func.grad(1)
 
     assert x.grad[0] == 2
@@ -144,7 +150,8 @@ def test_ad_if_parallel():
     y.grad[0] = 1
     y.grad[1] = 1
 
-    func()
+    with qd.adstack:
+        func()
     func.grad()
 
     assert x.grad[0] == 2
@@ -172,7 +179,8 @@ def test_ad_if_parallel_f64():
     y.grad[0] = 1
     y.grad[1] = 1
 
-    func()
+    with qd.adstack:
+        func()
     func.grad()
 
     assert x.grad[0] == 2
@@ -200,7 +208,8 @@ def test_ad_if_parallel_complex():
     y.grad[0] = 1
     y.grad[1] = 1
 
-    func()
+    with qd.adstack:
+        func()
     func.grad()
 
     assert x.grad[0] == 0
@@ -228,7 +237,8 @@ def test_ad_if_parallel_complex_f64():
     y.grad[0] = 1
     y.grad[1] = 1
 
-    func()
+    with qd.adstack:
+        func()
     func.grad()
 
     assert x.grad[0] == 0
@@ -272,7 +282,8 @@ def test_if_condition_depend_on_for_loop_index():
             pos[coord] += 1.0 * t
 
     with qd.ad.Tape(loss=loss_n):
-        simulation(5)
+        with qd.adstack:
+            simulation(5)
 
 
 def _run_nested_if_inside_for_loop(qd_dtype):
@@ -359,7 +370,8 @@ def test_ad_nested_if_elif_else_inside_for_loop():
         w[i] = v
     loss[None] = 0.0
     loss.grad[None] = 1.0
-    compute()
+    with qd.adstack:
+        compute()
     compute.grad()
 
     for i, v in enumerate(w_vals):
@@ -405,7 +417,8 @@ def test_ad_nested_for_loops_global_load():
         x[i] = 1.0
     y[None] = 0.0
     y.grad[None] = 1.0
-    compute()
+    with qd.adstack:
+        compute()
     compute.grad()
 
     for i in range(n):
@@ -446,7 +459,8 @@ def test_ad_nested_if_inside_while_loop():
         w[i] = v
     loss[None] = 0.0
     loss.grad[None] = 1.0
-    compute()
+    with qd.adstack:
+        compute()
     compute.grad()
 
     for i, v in enumerate(w_vals):

@@ -2251,7 +2251,7 @@ llvm::Value *TaskCodeGenLLVM::ensure_ad_stack_count_alloca_llvm(const AdStackAll
   return count;
 }
 
-llvm::Value *TaskCodeGenLLVM::emit_ad_stack_top_slot_ptr(const AdStackAllocaStmt *stack,
+llvm::Value *TaskCodeGenLLVM::emit_ad_stack_top_slot_ptr(AdStackAllocaStmt *stack,
                                                          llvm::Value *count,
                                                          std::size_t adjoint_offset_bytes) {
   auto *i64ty = llvm::Type::getInt64Ty(*llvm_context);

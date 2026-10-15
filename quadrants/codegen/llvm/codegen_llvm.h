@@ -363,7 +363,7 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
   // Stack statements
 
   llvm::Value *ensure_ad_stack_count_alloca_llvm(const AdStackAllocaStmt *stack);
-  llvm::Value *emit_ad_stack_top_slot_ptr(const AdStackAllocaStmt *stack,
+  llvm::Value *emit_ad_stack_top_slot_ptr(AdStackAllocaStmt *stack,
                                           llvm::Value *count,
                                           std::size_t adjoint_offset_bytes);
 

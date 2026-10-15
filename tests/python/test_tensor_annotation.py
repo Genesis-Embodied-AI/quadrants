@@ -217,9 +217,12 @@ def test_tensor_slot_none_then_wrapper_survives_tape_replay():
     bias_wrapper = qd.wrap(bias)
 
     with qd.ad.Tape(loss=loss):
-        pick_first(loss, None)
-        pick_first(loss, bias_wrapper)
-        pick_first(loss, None)
+        with qd.adstack:
+            pick_first(loss, None)
+        with qd.adstack:
+            pick_first(loss, bias_wrapper)
+        with qd.adstack:
+            pick_first(loss, None)
 
     np.testing.assert_allclose(loss.to_numpy(), 6.0)
     np.testing.assert_allclose(bias.grad.to_numpy(), [2.0, 0.0, 0.0, 0.0])

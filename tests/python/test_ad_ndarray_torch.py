@@ -185,7 +185,8 @@ def test_tape_torch_tensor_grad_none():
     loss = torch.zeros((1,), device=device, requires_grad=True)
 
     with qd.ad.Tape(loss=loss):
-        test(a, loss)
+        with qd.adstack:
+            test(a, loss)
 
     for i in range(N):
         assert a.grad[i] == 1.0
@@ -209,7 +210,8 @@ def test_tensor_shape():
     loss = torch.zeros((1,), device=device, requires_grad=True)
 
     with qd.ad.Tape(loss=loss):
-        test(a, loss)
+        with qd.adstack:
+            test(a, loss)
 
     # AMDGPU and some Vulkan drivers lose fp32 bit-exactness on the reverse-pass adjoint sum (CUDA and Metal
     # happen to hit exactly 1.0); use allclose on those, exact equality elsewhere.
@@ -236,7 +238,8 @@ def test_torch_needs_grad_false():
     x = torch.rand((N,), dtype=torch.float, requires_grad=True)
     y = torch.rand((1,), dtype=torch.float, requires_grad=True)
 
-    test(x, y)
+    with qd.adstack:
+        test(x, y)
 
     y.grad.fill_(1.0)
     test.grad(x, y)

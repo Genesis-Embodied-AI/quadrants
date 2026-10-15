@@ -352,8 +352,6 @@ void Program::finalize() {
     return;
   }
 
-  program_impl_->pre_finalize();
-
   synchronize();
   QD_TRACE("Program finalizing...");
 

@@ -23,7 +23,8 @@ def test_loop_grad():
 
     for k in range(n):
         x[k, 0] = k
-    func()
+    with qd.adstack:
+        func()
 
     for k in range(n):
         x.grad[k, m - 1] = 1
@@ -57,7 +58,8 @@ def test_loop_grad_complex():
 
     for k in range(n):
         x[k, 0] = k
-    func()
+    with qd.adstack:
+        func()
 
     for k in range(n):
         x.grad[k, m - 1] = 1

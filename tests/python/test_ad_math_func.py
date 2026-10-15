@@ -18,4 +18,5 @@ def test_polar_decompose_2D():
         F_1[None] += r
 
     with qd.ad.Tape(loss=loss):
-        polar_decompose_2D()
+        with qd.adstack:
+            polar_decompose_2D()
