@@ -44,9 +44,6 @@ add_library(spirv_codegen)
 qd_add_shader_helper(spirv_codegen shaders/workgroup.comp workgroup_spv.h workgroup_helper_spv)
 target_sources(spirv_codegen
   PRIVATE
-    adstack_bound_reducer_shader.cpp
-    adstack_max_reducer_shader.cpp
-    adstack_sizer_shader.cpp
     checkpoint_gate_shader.cpp
     checkpoint_yield_check_shader.cpp
     kernel_utils.cpp

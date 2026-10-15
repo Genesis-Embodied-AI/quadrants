@@ -11,7 +11,6 @@ qd.init(
     arch=getattr(qd, arch),
     offline_cache=True,
     offline_cache_file_path=path,
-    ad_stack_experimental_enabled=True,
 )
 
 
@@ -32,7 +31,6 @@ n = qd.ndarray(qd.i32, shape=1)
 n[0] = depth
 compute(x, y, n)
 y.grad.fill(1)
-compute.grad(x, y, n)
 x.grad.fill(0)
 with qd.adstack as scope:
     compute(x, y, n)

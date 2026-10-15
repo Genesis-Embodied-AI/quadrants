@@ -124,7 +124,6 @@ void prepare_counted_adstacks(IRNode *root) {
     auto *stack = stmt->as<AdStackAllocaStmt>();
     // A non-singleton placeholder selects dynamic metadata addressing. The launch record supplies the real capacity.
     stack->max_size = 2;
-    stack->size_expr.reset();
   }
 }
 

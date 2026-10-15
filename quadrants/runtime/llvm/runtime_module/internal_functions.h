@@ -43,60 +43,20 @@ i32 test_internal_func_args(RuntimeContext *context, float32 i, float32 j, int32
 }
 
 i32 test_stack(RuntimeContext *context) {
-  auto *runtime = context->runtime;
-  // Header u64 `n` + max_num_elements * 2 * element_size for primal+adjoint slot pairs. Allocate generously for
-  // the guard-case subtests below. Stack-allocated rather than `new u8[...]` to keep the JIT bitcode free of
-  // `operator new[]` / `operator delete[]` references that some Linux JIT linker configurations cannot resolve.
-  u8 stack_storage[8 + 16 * 2 * 4];
-  u8 *stack = stack_storage;
-  stack_init(stack);
-
-  // Stash any prior overflow-flag pointer the host has installed and point the runtime at a local slot for
-  // the duration of this test. The local slot is host memory in this in-process test fixture, mirroring the
-  // pinned-host slot installed by `LlvmRuntimeExecutor::materialize_runtime` in production.
-  i64 *prev_flag_dev_ptr = runtime->adstack_overflow_flag_dev_ptr;
-  i64 local_flag = 0;
-  runtime->adstack_overflow_flag_dev_ptr = &local_flag;
-
-  // Basic push/pop accounting.
-  stack_push(runtime, stack, 16, 4, 0);
-  stack_push(runtime, stack, 16, 4, 0);
-  stack_push(runtime, stack, 16, 4, 0);
-  stack_push(runtime, stack, 16, 4, 0);
-  QD_TEST_CHECK(*(u64 *)stack == 4, runtime);
-  QD_TEST_CHECK(local_flag == 0, runtime);
-
-  // stack_top_primal must point at slot (n - 1) (here: slot 3) when n > 0.
-  QD_TEST_CHECK(stack_top_primal(stack, 4) == stack + sizeof(u64) + 3 * 2 * 4, runtime);
-
-  stack_pop(stack);
-  stack_pop(stack);
-  stack_pop(stack);
-  stack_pop(stack);
-  QD_TEST_CHECK(*(u64 *)stack == 0, runtime);
-
-  // stack_pop underflow guard: extra pops past n == 0 must not wrap `n` into UINT_MAX. The runtime silently
-  // clamps at 0 instead of trapping, so the reverse pass can over-pop without corrupting subsequent kernels.
-  stack_pop(stack);
-  stack_pop(stack);
-  QD_TEST_CHECK(*(u64 *)stack == 0, runtime);
-
-  // stack_top_primal clamping: on an empty stack the top-of-stack pointer must index slot 0 (not `-1`
-  // * 2 * element_size, which would point into header territory and crash on read).
-  QD_TEST_CHECK(stack_top_primal(stack, 4) == stack + sizeof(u64), runtime);
-
-  // Push past capacity: `n` stops at max_num_elements and the overflow flag flips to 1.
-  for (int i = 0; i < 16; i++) {
-    stack_push(runtime, stack, 16, 4, 0);
-  }
-  QD_TEST_CHECK(*(u64 *)stack == 16, runtime);
-  QD_TEST_CHECK(local_flag == 0, runtime);
-  stack_push(runtime, stack, 16, 4, 0);  // overflow push
-  QD_TEST_CHECK(*(u64 *)stack == 16, runtime);
-  QD_TEST_CHECK(local_flag == 1, runtime);
-
-  // Restore the prior flag pointer so subsequent tests in the same fixture are not poisoned by our local slot.
-  runtime->adstack_overflow_flag_dev_ptr = prev_flag_dev_ptr;
+  i64 measurement[2] = {0, 0};
+  auto *previous = context->adstack_measurement;
+  auto capacity = context->adstack_capacity;
+  context->adstack_measurement = measurement;
+  context->adstack_capacity = 16;
+  QD_TEST_CHECK(adstack_checked_count(context, 16) == 16, context->runtime);
+  QD_TEST_CHECK(measurement[1] == 0, context->runtime);
+  QD_TEST_CHECK(adstack_checked_count(context, 17) == 16, context->runtime);
+  QD_TEST_CHECK(measurement[1] == 1, context->runtime);
+  adstack_measure_peak(context, 5);
+  adstack_measure_peak(context, 2);
+  QD_TEST_CHECK(measurement[0] == 5, context->runtime);
+  context->adstack_measurement = previous;
+  context->adstack_capacity = capacity;
   return 0;
 }
 

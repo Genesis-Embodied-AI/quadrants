@@ -82,8 +82,6 @@ class _AdstackContext:
         config = impl.current_cfg()
         if config.arch not in (core.cuda, core.x64, core.vulkan, core.metal):
             raise RuntimeError("qd.adstack prototype supports CUDA, x64, Vulkan, and Metal only")
-        if config.ad_stack_size:
-            raise RuntimeError("qd.adstack prototype requires automatic ad_stack_size=0")
         if getattr(runtime, "adstack_scope", None) is not None:
             raise RuntimeError("Nested qd.adstack contexts are not supported")
         scope = _Scope()

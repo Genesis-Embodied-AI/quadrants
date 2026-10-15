@@ -1,5 +1,4 @@
 #include "quadrants/runtime/llvm/llvm_runtime_executor.h"
-#include "quadrants/program/adstack_size_expr_eval.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -491,102 +490,9 @@ uint64_t *LlvmRuntimeExecutor::get_device_alloc_info_ptr(const DeviceAllocation 
 
 void LlvmRuntimeExecutor::finalize() {
   profiler_ = nullptr;
-  // Release the host-owned adstack heap before the device teardown below so its `DeviceAllocationGuard` destructor
-  // runs while the RHI device is still valid. The destructor drops the allocation back to the driver memory pool
-  // (or to the host allocator on CPU); deferring past `llvm_device()->clear()` would leak it.
-  runtime_temporaries_cache_ = nullptr;
-  runtime_adstack_heap_buffer_float_field_ptr_ = nullptr;
-  runtime_adstack_heap_size_float_field_ptr_ = nullptr;
-  runtime_adstack_heap_buffer_int_field_ptr_ = nullptr;
-  runtime_adstack_heap_size_int_field_ptr_ = nullptr;
-  adstack_heap_alloc_float_.reset();
-  adstack_heap_size_float_ = 0;
-  adstack_heap_alloc_int_.reset();
-  adstack_heap_size_int_ = 0;
-  runtime_adstack_row_counters_field_ptr_ = nullptr;
-  runtime_adstack_bound_row_capacities_field_ptr_ = nullptr;
-  adstack_row_counters_alloc_.reset();
-  adstack_bound_row_capacities_alloc_.reset();
-  adstack_lazy_claim_capacity_ = 0;
-  adstack_bound_reducer_params_alloc_.reset();
-  adstack_bound_reducer_params_capacity_ = 0;
-  // Release the pinned-host metadata scratch and its completion event. Sequence: first drain the pending in-flight
-  // copy via `event_synchronize` (the next launch's reuse path would have done this lazily, but on shutdown there
-  // is no next launch), then free the host pinning, then destroy the event. Skipping the synchronize before
-  // `mem_free_host` would race the DMA engine's read against the host free; skipping `event_destroy` would leak a
-  // CUDA / HIP event handle.
-  if (pinned_metadata_event_ != nullptr) {
-#if defined(QD_WITH_CUDA)
-    if (config_.arch == Arch::cuda) {
-      if (pinned_metadata_event_pending_) {
-        CUDADriver::get_instance().event_synchronize(pinned_metadata_event_);
-      }
-      CUDADriver::get_instance().event_destroy(pinned_metadata_event_);
-    }
-#endif
-#if defined(QD_WITH_AMDGPU)
-    if (config_.arch == Arch::amdgpu) {
-      if (pinned_metadata_event_pending_) {
-        AMDGPUDriver::get_instance().event_synchronize(pinned_metadata_event_);
-      }
-      AMDGPUDriver::get_instance().event_destroy(pinned_metadata_event_);
-    }
-#endif
-    pinned_metadata_event_ = nullptr;
-    pinned_metadata_event_pending_ = false;
-  }
-  if (pinned_metadata_scratch_ != nullptr) {
-#if defined(QD_WITH_CUDA)
-    if (config_.arch == Arch::cuda) {
-      CUDADriver::get_instance().mem_free_host(pinned_metadata_scratch_);
-    }
-#endif
-#if defined(QD_WITH_AMDGPU)
-    if (config_.arch == Arch::amdgpu) {
-      AMDGPUDriver::get_instance().mem_free_host(pinned_metadata_scratch_);
-    }
-#endif
-    pinned_metadata_scratch_ = nullptr;
-    pinned_metadata_scratch_capacity_ = 0;
-  }
-  // Release the pinned host slot used for the adstack overflow flag. Mirrors the pinned_metadata_scratch
-  // release above. The `LLVMRuntime::adstack_overflow_flag_dev_ptr` field that referenced this slot is in the
-  // runtime struct, which is destroyed below; the dangling reference is harmless because the kernel JIT
-  // module is also being torn down.
-  if (adstack_overflow_flag_host_ptr_ != nullptr) {
-#if defined(QD_WITH_CUDA)
-    if (config_.arch == Arch::cuda) {
-      CUDADriver::get_instance().mem_free_host(adstack_overflow_flag_host_ptr_);
-    }
-#endif
-#if defined(QD_WITH_AMDGPU)
-    if (config_.arch == Arch::amdgpu) {
-      AMDGPUDriver::get_instance().mem_free_host(adstack_overflow_flag_host_ptr_);
-    }
-#endif
-    if (config_.arch != Arch::cuda && config_.arch != Arch::amdgpu) {
-      std::free(adstack_overflow_flag_host_ptr_);
-    }
-    adstack_overflow_flag_host_ptr_ = nullptr;
-    adstack_overflow_flag_dev_ptr_ = nullptr;
-  }
-  if (adstack_overflow_task_id_host_ptr_ != nullptr) {
-#if defined(QD_WITH_CUDA)
-    if (config_.arch == Arch::cuda) {
-      CUDADriver::get_instance().mem_free_host(adstack_overflow_task_id_host_ptr_);
-    }
-#endif
-#if defined(QD_WITH_AMDGPU)
-    if (config_.arch == Arch::amdgpu) {
-      AMDGPUDriver::get_instance().mem_free_host(adstack_overflow_task_id_host_ptr_);
-    }
-#endif
-    if (config_.arch != Arch::cuda && config_.arch != Arch::amdgpu) {
-      std::free(adstack_overflow_task_id_host_ptr_);
-    }
-    adstack_overflow_task_id_host_ptr_ = nullptr;
-    adstack_overflow_task_id_dev_ptr_ = nullptr;
-  }
+  adstack_heap_.reset();
+  adstack_heap_bytes_ = 0;
+  adstack_heap_field_ = nullptr;
   if (config_.arch == Arch::cuda || config_.arch == Arch::amdgpu) {
     preallocated_runtime_objects_allocs_.reset();
     preallocated_runtime_memory_allocs_.reset();
@@ -651,19 +557,6 @@ void *LlvmRuntimeExecutor::preallocate_memory(std::size_t prealloc_size, DeviceA
   void *preallocated_device_buffer = llvm_device()->get_memory_addr(preallocated_device_buffer_alloc);
   devalloc = std::make_unique<DeviceAllocationGuard>(std::move(preallocated_device_buffer_alloc));
   return preallocated_device_buffer;
-}
-
-void *LlvmRuntimeExecutor::get_runtime_temporaries_device_ptr() {
-  if (runtime_temporaries_cache_ != nullptr) {
-    return runtime_temporaries_cache_;
-  }
-  QD_ASSERT(llvm_runtime_ != nullptr);
-  QD_ASSERT(result_buffer_cache_ != nullptr);
-  auto *const runtime_jit = get_runtime_jit_module();
-  runtime_jit->call<void *>("runtime_get_temporaries_ptr", llvm_runtime_);
-  runtime_temporaries_cache_ = quadrants_union_cast_with_different_sizes<void *>(
-      fetch_result_uint64(quadrants_result_buffer_ret_value_id, result_buffer_cache_));
-  return runtime_temporaries_cache_;
 }
 
 void LlvmRuntimeExecutor::preallocate_runtime_memory() {
@@ -819,68 +712,6 @@ void LlvmRuntimeExecutor::materialize_runtime(KernelProfilerBase *profiler, uint
                                       (void *)&KernelProfilerBase::profiler_start);
     runtime_jit->call<void *, void *>("LLVMRuntime_set_profiler_stop", llvm_runtime_,
                                       (void *)&KernelProfilerBase::profiler_stop);
-  }
-
-  // Allocate the pinned host slot for the adstack overflow flag and publish its device-mapped address into the
-  // runtime. The kernel-side `stack_push` writes the overflow signal here via a system-wide atomic; the host polls
-  // the same memory directly via `adstack_overflow_flag_host_ptr_`. CUDA / AMDGPU pinned host memory is already
-  // UVA-mapped so the same pointer is valid from both sides; on CPU the runtime is host-resident and the same
-  // pointer is used unchanged. Required hardware: NVIDIA Compute Capability 6.0+ / AMD GFX9+, the same envelope
-  // the existing pinned-host H2D-async pattern in `llvm_adstack_lazy_claim.cpp` already requires.
-  {
-    void *host_slot = nullptr;
-    if (config_.arch == Arch::cuda) {
-#if defined(QD_WITH_CUDA)
-      CUDADriver::get_instance().mem_alloc_host(&host_slot, sizeof(int64_t));
-#else
-      QD_NOT_IMPLEMENTED;
-#endif
-    } else if (config_.arch == Arch::amdgpu) {
-#if defined(QD_WITH_AMDGPU)
-      AMDGPUDriver::get_instance().mem_alloc_host(&host_slot, sizeof(int64_t), 0u);
-#else
-      QD_NOT_IMPLEMENTED;
-#endif
-    } else {
-      host_slot = std::malloc(sizeof(int64_t));
-    }
-    QD_ASSERT(host_slot != nullptr);
-    adstack_overflow_flag_host_ptr_ = static_cast<int64_t *>(host_slot);
-    *adstack_overflow_flag_host_ptr_ = 0;
-    // CUDA `cuMemAllocHost_v2` and HIP `hipHostMalloc` with default flags both return UVA-mapped memory; the
-    // host pointer is also a valid device pointer on Pascal+ / GFX9+ hardware. On CPU the runtime is in host
-    // memory and the kernel runs as a function call, so the same pointer applies.
-    adstack_overflow_flag_dev_ptr_ = host_slot;
-    runtime_jit->call<void *, void *>("runtime_set_adstack_overflow_flag_dev_ptr", llvm_runtime_,
-                                      adstack_overflow_flag_dev_ptr_);
-  }
-  // Companion task-id slot. Same allocation strategy as the flag above; placed in a separate page so the
-  // codegen-emitted `cmpxchg` does not contend with the flag's `atomic OR` on a shared cache line. Codegen
-  // writes the Program-assigned `adstack_sizing_info_id` here on the first overflowing thread; host reads
-  // the slot during the raise to look up the offending kernel / task in the Program-side registry.
-  {
-    void *host_slot = nullptr;
-    if (config_.arch == Arch::cuda) {
-#if defined(QD_WITH_CUDA)
-      CUDADriver::get_instance().mem_alloc_host(&host_slot, sizeof(int64_t));
-#else
-      QD_NOT_IMPLEMENTED;
-#endif
-    } else if (config_.arch == Arch::amdgpu) {
-#if defined(QD_WITH_AMDGPU)
-      AMDGPUDriver::get_instance().mem_alloc_host(&host_slot, sizeof(int64_t), 0u);
-#else
-      QD_NOT_IMPLEMENTED;
-#endif
-    } else {
-      host_slot = std::malloc(sizeof(int64_t));
-    }
-    QD_ASSERT(host_slot != nullptr);
-    adstack_overflow_task_id_host_ptr_ = static_cast<int64_t *>(host_slot);
-    *adstack_overflow_task_id_host_ptr_ = 0;
-    adstack_overflow_task_id_dev_ptr_ = host_slot;
-    runtime_jit->call<void *, void *>("runtime_set_adstack_overflow_task_id_dev_ptr", llvm_runtime_,
-                                      adstack_overflow_task_id_dev_ptr_);
   }
 }
 
