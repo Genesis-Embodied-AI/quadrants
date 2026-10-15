@@ -1,9 +1,7 @@
-"""Regression: the adstack sizer overflow word must start at zero.
+"""Regression: clear deliberately poisoned adstack metadata before the sizer runs.
 
-The shader stores that word only when a ``MaxOverRange`` walk exceeds its cap. Device allocations are not
-zero-filled. With MoltenVK placement heaps off, a later launch can reuse a block that still holds a nonzero
-word, and the host reports that stale word as a huge range. This process sets ``MVK_CONFIG_USE_MTLHEAP=0``
-before Quadrants loads MoltenVK, then repeats the second reverse launch that hits the recycled word.
+The shader writes the overflow word only when a ``MaxOverRange`` walk exceeds its cap. Poisoning the metadata
+buffer with nonzero words makes a missing clear fail without relying on allocator reuse or a particular platform.
 """
 
 import os
@@ -11,7 +9,6 @@ import subprocess
 import sys
 
 import numpy as np
-import pytest
 
 import quadrants as qd
 from quadrants.lang import impl
@@ -75,18 +72,17 @@ def _sizer_overflow_child(args: list[str]) -> None:
     sys.exit(RET_SUCCESS)
 
 
-@pytest.mark.skipif(sys.platform != "darwin", reason="MoltenVK placement-heap recycling")
-@test_utils.test(arch=qd.vulkan)
-def test_sizer_overflow_word_is_cleared_when_heaps_are_off():
+@test_utils.test(arch=qd.vulkan, require=qd.extension.adstack)
+def test_sizer_overflow_word_is_cleared_after_poisoning():
     env = os.environ.copy()
     env["PYTHONPATH"] = "."
-    # Set this before the child imports Quadrants and loads MoltenVK.
-    env["MVK_CONFIG_USE_MTLHEAP"] = "0"
+    env["QD_TEST_ADSTACK_SIZER_POISON"] = "1"
     proc = subprocess.run(
         [sys.executable, __file__, _sizer_overflow_child.__name__], env=env, capture_output=True, text=True
     )
     assert proc.returncode == RET_SUCCESS, proc.stdout + "\n" + proc.stderr
     assert TEST_RAN in proc.stdout, proc.stdout + "\n" + proc.stderr
+    assert "[adstack_sizer] poisoned metadata buffers" in proc.stderr, proc.stdout + "\n" + proc.stderr
 
 
 if __name__ == "__main__":
