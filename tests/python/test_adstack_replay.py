@@ -101,3 +101,47 @@ def test_backward_only_persistent_cache(tmp_path, fastcache):
             check=True,
             timeout=180,
         )
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], ad_stack_replay_count=True, ad_stack_experimental_enabled=True)
+def test_write_only_array_output_and_alias_guard():
+    x = qd.ndarray(qd.f32, shape=2, needs_grad=True)
+    y = qd.ndarray(qd.f32, shape=2, needs_grad=True)
+    n = qd.ndarray(qd.i32, shape=2)
+    scratch = qd.ndarray(qd.i32, shape=2)
+    x.fill(0.2)
+    n.fill(3)
+    scratch.fill(7)
+
+    @qd.kernel
+    def compute(x: qd.types.ndarray(), y: qd.types.ndarray(), n: qd.types.ndarray(), scratch: qd.types.ndarray()):
+        for i in range(2):
+            value = x[i]
+            for j in range(n[i]):
+                value = qd.sin(value)
+            scratch[i] = 19
+            y[i] = value
+
+    # The count variant must not write even non-differentiable outputs. The normal backward still does.
+    from quadrants.lang.adstack_replay import _Record, _variant
+
+    variant = _variant(compute._adjoint, 1)
+    record = _Record(qd.ndarray(qd.i32 if qd.lang.impl.current_cfg().arch == qd.vulkan else qd.i64, shape=2))
+    variant.adstack_record = record
+    try:
+        variant(x, y, n, scratch)
+        np.testing.assert_array_equal(scratch.to_numpy(), [7, 7])
+    finally:
+        variant.adstack_record = None
+    x.grad.fill(0)
+    y.grad.fill(1)
+    compute.grad(x, y, n, scratch)
+    np.testing.assert_array_equal(scratch.to_numpy(), [19, 19])
+    value, derivative = 0.2, 1.0
+    for _ in range(3):
+        derivative *= math.cos(value)
+        value = math.sin(value)
+    np.testing.assert_allclose(x.grad.to_numpy(), derivative, rtol=2e-5)
+    with pytest.raises(RuntimeError, match="aliased non-differentiable"):
+        compute.grad(x, y, n, n)
+    np.testing.assert_array_equal(n.to_numpy(), [3, 3])
