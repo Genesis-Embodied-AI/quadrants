@@ -132,7 +132,7 @@ def _variant(kernel, mode):
     return variant
 
 
-def dispatch(kernel, args, kwargs):
+def dispatch(kernel, args, qd_stream=None):
     """Return (handled, result); ordinary kernel calls remain on their existing launch path."""
     runtime = impl.get_runtime()
     scope = getattr(runtime, "adstack_scope", None)
@@ -140,11 +140,8 @@ def dispatch(kernel, args, kwargs):
     counting = scope is not None and kernel.autodiff_mode == AutodiffMode.NONE
     if not counting and pending is None:
         return False, None
-    if kernel.use_graph or kernel.use_checkpoints or kwargs.get("qd_stream") is not None:
+    if kernel.use_graph or kernel.use_checkpoints or qd_stream is not None:
         raise RuntimeError("qd.adstack prototype requires non-graph kernels without custom streams")
-    kwargs = dict(kwargs)
-    kwargs.pop("qd_stream", None)
-    args = kernel.fuse_args(is_func=False, is_pyfunc=False, py_args=args, kwargs=kwargs, global_context=None)
     signature = _arguments(args)
     if counting:
         assert scope is not None

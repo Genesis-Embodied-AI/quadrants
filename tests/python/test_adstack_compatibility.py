@@ -217,3 +217,28 @@ def test_counted_record_cannot_cross_reset():
     with pytest.raises(RuntimeError, match="cannot be used after"):
         scope.records[0].backward()
     scope.records[0].release()
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal], offline_cache=False)
+def test_counted_tensor_wrapper_tape():
+    x = qd.ndarray(qd.f32, shape=1, needs_grad=True)
+    loss = qd.ndarray(qd.f32, shape=(), needs_grad=True)
+    x[0] = 0.2
+
+    @qd.kernel
+    def compute(x: qd.types.ndarray(), loss: qd.types.ndarray()):
+        for i in range(1):
+            value = x[i]
+            for j in range(2):
+                value = qd.sin(value)
+            loss[None] += value
+
+    with qd.ad.Tape(loss):
+        with qd.adstack as scope:
+            compute(loss=qd.Tensor(loss), x=qd.Tensor(x))
+    expected = math.cos(0.2) * math.cos(math.sin(0.2))
+    assert x.grad[0] == pytest.approx(expected, rel=2e-5)
+    x.grad.fill(0)
+    loss.grad.fill(1)
+    scope.records[0].backward()
+    assert x.grad[0] == pytest.approx(expected, rel=2e-5)

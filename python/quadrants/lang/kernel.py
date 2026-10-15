@@ -981,16 +981,6 @@ class Kernel(FuncBase):
     # Thus this part needs to be fast. (i.e. < 3us on a 4 GHz x64 CPU)
     @_shell_pop_print
     def __call__(self, *py_args, **kwargs) -> Any:
-        if not self.adstack_mode and (
-            getattr(self.runtime, "adstack_scope", None) is not None or hasattr(self, "_adstack_pending")
-        ):
-            from quadrants.lang.adstack import (
-                dispatch,  # pylint: disable=import-outside-toplevel
-            )
-
-            handled, result = dispatch(self, py_args, kwargs)
-            if handled:
-                return result
         qd_stream = kwargs.pop("qd_stream", None)
         # `use_checkpoints` is the kernel-construction-time flag set by `@qd.kernel(graph=True, checkpoints=True)`. The
         # `_qd_from_checkpoint` kwarg can only be injected by `QuadrantsCallable.resume()`, which is the user-facing
@@ -1054,6 +1044,17 @@ class Kernel(FuncBase):
                         py_args_l[i] = _arg._impl
                 if py_args_l is not None:
                     py_args = tuple(py_args_l)
+
+        if not self.adstack_mode and (
+            getattr(self.runtime, "adstack_scope", None) is not None or hasattr(self, "_adstack_pending")
+        ):
+            from quadrants.lang.adstack import (
+                dispatch,  # pylint: disable=import-outside-toplevel
+            )
+
+            handled, result = dispatch(self, py_args, qd_stream)
+            if handled:
+                return result
 
         # Transform the primal kernel to forward mode grad kernel
         # then recover to primal when exiting the forward mode manager
