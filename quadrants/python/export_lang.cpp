@@ -675,6 +675,7 @@ void export_lang(nb::module_ &m) {
 
   nb::class_<LaunchContextBuilder>(m, "KernelLaunchContext")
       .def("set_adstack_measurement", &LaunchContextBuilder::set_adstack_measurement)
+      .def("set_adstack_measurement_array", &LaunchContextBuilder::set_adstack_measurement_array)
       .def("copy", &LaunchContextBuilder::copy)
       .def("set_arg_int", &LaunchContextBuilder::set_arg_int)
       .def("set_args_int", &LaunchContextBuilder::set_args_int)

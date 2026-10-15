@@ -30,6 +30,7 @@
 #include "quadrants/program/adstack_size_expr_eval.h"
 #include "quadrants/program/launch_context_builder.h"
 #include "quadrants/program/program.h"
+#include "quadrants/program/context.h"
 #include "quadrants/rhi/device.h"
 
 namespace quadrants::lang {
@@ -183,6 +184,28 @@ std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
   for (size_t ti = 0; ti < task_attribs.size(); ++ti) {
     if (!task_attribs[ti].ad_stack.allocas.empty())
       adstack_task_indices.push_back(ti);
+  }
+
+  if (host_ctx.get_context().adstack_capacity != 0) {
+    const uint64_t capacity = host_ctx.get_context().adstack_capacity;
+    QD_ERROR_IF(capacity > INT32_MAX, "Measured SPIR-V adstack capacity exceeds the supported limit");
+    for (auto ti : adstack_task_indices) {
+      const auto &allocas = task_attribs[ti].ad_stack.allocas;
+      auto &rt = per_task_ad_stack[ti];
+      rt.metadata.assign(3 + 2 * allocas.size(), 0);
+      uint64_t float_offset = 0, int_offset = 0;
+      for (size_t i = 0; i < allocas.size(); ++i) {
+        bool is_float = allocas[i].heap_kind == spirv::TaskAttributes::AdStackAllocaAttribs::HeapKind::Float;
+        auto &offset = is_float ? float_offset : int_offset;
+        QD_ERROR_IF(offset + capacity * (is_float ? 2 : 1) > UINT32_MAX, "Measured SPIR-V adstack stride overflow");
+        rt.metadata[2 + 2 * i] = static_cast<uint32_t>(offset);
+        rt.metadata[3 + 2 * i] = static_cast<uint32_t>(capacity);
+        offset += capacity * (is_float ? 2 : 1);
+      }
+      rt.stride_float = rt.metadata[0] = static_cast<uint32_t>(float_offset);
+      rt.stride_int = rt.metadata[1] = static_cast<uint32_t>(int_offset);
+    }
+    return per_task_ad_stack;
   }
 
   if (adstack_task_indices.empty()) {

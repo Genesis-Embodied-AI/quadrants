@@ -154,6 +154,8 @@ class LaunchContextBuilder {
   RuntimeContext &get_context();
 
   void set_adstack_measurement(uint64_t address, uint64_t capacity);
+  void set_adstack_measurement_array(Ndarray *array, uint64_t capacity);
+  DeviceAllocation adstack_measurement_allocation{kDeviceNullAllocation};
 
  private:
   TypedConstant fetch_ret_impl(int offset, const Type *dt);

@@ -14,10 +14,12 @@ compute.grad(x, y, iterations)
 
 Preserve or restore all input values that backward needs to replay the original computation. If replay needs more stack space than measured, backward raises `RuntimeError`. Some gradients may already have changed: discard or reset the failed backward's results. The runtime does not roll back or retry automatically. Changes that fit the measured capacity can still produce wrong gradients without an overflow.
 
-The prototype supports CUDA and x64, ordinary ndarray range loops, and positional scalar or `qd.ndarray` arguments. It requires `offline_cache=False`. Field access, random operations, cooperative/internal calls, while loops, continue statements, explicit returns, graph kernels, streams, and nested counting contexts are unsupported.
+The prototype supports CUDA, x64, Vulkan, and Metal, ordinary ndarray range loops, and positional scalar or `qd.ndarray` arguments. It requires `offline_cache=False`. Field access, random operations, cooperative/internal calls, while loops, continue statements, explicit returns, graph kernels, streams, and nested counting contexts are unsupported.
 
 Each counted forward produces a single-use record. Explicit gradient calls must consume the same kernel's records in reverse invocation order with matching arguments. `qd.ad.Tape` can supply that order automatically; put the counting context inside the Tape context. A consumed or failed record cannot be used for a second backward. Records do not detect changes to array contents.
 
 The initial layout uses the largest measured depth as the capacity for every stack. This can use more memory than separate per-stack capacities. Both forward measurement and backward error reporting synchronize with the device. On overflow, stack counts saturate and stack accesses remain within their allocation. Threads continue executing, including compiler-generated reductions and synchronization; backward then raises and its results must be discarded. Compiler thread-local reduction and block-local optimizations remain enabled. These are prototype tradeoffs to measure, not claims of negligible overhead.
 
 Existing kernels outside the counting context retain the existing sizing path. After using a kernel with counting, its explicit backwards use the pending counted records; an empty record list is an error rather than a silent fallback.
+
+The SPIR-V path uses descriptor-bound measurement storage and measured heap metadata; it does not run the symbolic sizer. Its loop-carried stack values are limited to f32, i32, and booleans, as in the existing SPIR-V adstack implementation. Vulkan is validated on the Linux GPU cluster; Metal requires separate validation on Apple hardware.

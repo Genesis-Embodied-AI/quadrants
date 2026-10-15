@@ -671,10 +671,13 @@ class Kernel(FuncBase):
         callbacks: list[Callable[[], None]] = []
         launch_ctx = t_kernel.make_launch_context()
         if self.adstack_record is not None:
-            launch_ctx.set_adstack_measurement(
-                self.runtime.prog.get_ndarray_data_ptr_as_int(self.adstack_record.buffer.arr),
-                self.adstack_record.capacity,
-            )
+            if impl.current_cfg().arch in (Arch.vulkan, Arch.metal):
+                launch_ctx.set_adstack_measurement_array(self.adstack_record.buffer.arr, self.adstack_record.capacity)
+            else:
+                launch_ctx.set_adstack_measurement(
+                    self.runtime.prog.get_ndarray_data_ptr_as_int(self.adstack_record.buffer.arr),
+                    self.adstack_record.capacity,
+                )
         # Special treatment for primitive types is unecessary and detrimental. See 'TemplateMapper.lookup' for details.
         args_hash: "ArgsHash" = (id(t_kernel), *[id(arg) for arg in args])
         # Stale-cache guard for mutable structs containing ndarrays. Frozen dataclass fields cannot be reassigned, so

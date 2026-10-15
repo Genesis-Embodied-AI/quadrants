@@ -74,6 +74,11 @@ void LaunchContextBuilder::set_adstack_measurement(uint64_t address, uint64_t ca
   ctx_->adstack_capacity = capacity;
 }
 
+void LaunchContextBuilder::set_adstack_measurement_array(Ndarray *array, uint64_t capacity) {
+  adstack_measurement_allocation = array->get_device_allocation();
+  ctx_->adstack_capacity = capacity;
+}
+
 void LaunchContextBuilder::set_arg_float(int arg_id, float64 d) {
   auto dt = kernel_->args_type->get_element_type(std::array{arg_id});
   QD_ASSERT_INFO(dt->is<PrimitiveType>(),

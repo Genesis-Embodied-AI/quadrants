@@ -18,7 +18,7 @@ def _arrays():
 
 
 @pytest.mark.parametrize("debug", [False, True])
-@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal], offline_cache=False)
 def test_counted_adstack_forward_and_gradient(debug):
     qd.lang.impl.current_cfg().debug = debug
     x, y, n = _arrays()
@@ -48,7 +48,7 @@ def test_counted_adstack_forward_and_gradient(debug):
         n[3] += 2
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal], offline_cache=False)
 def test_counted_adstack_nested_conditional_loops():
     x, y, n = _arrays()
 
@@ -78,7 +78,7 @@ def test_counted_adstack_nested_conditional_loops():
         assert x.grad[i] == pytest.approx(derivative, rel=2e-5)
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal], offline_cache=False)
 def test_counted_adstack_primal_dependent_branches():
     x, y, n = _arrays()
     n.fill(8)
@@ -112,7 +112,7 @@ def test_counted_adstack_primal_dependent_branches():
         assert x.grad[i] == pytest.approx(derivative, rel=2e-5)
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal], offline_cache=False)
 def test_counted_adstack_overflow_is_recoverable_exception():
     x, y, n = _arrays()
 
@@ -142,7 +142,7 @@ def test_counted_adstack_overflow_is_recoverable_exception():
     assert x.grad[0] == pytest.approx(math.cos(x[0]) * math.cos(math.sin(x[0])), rel=2e-5)
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal], offline_cache=False)
 def test_counted_adstack_invocation_order():
     x, y, _ = _arrays()
 
@@ -167,7 +167,7 @@ def test_counted_adstack_invocation_order():
     assert x.grad[0] == pytest.approx(1)
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal], offline_cache=False)
 def test_counted_adstack_tape():
     x = qd.ndarray(qd.f32, shape=1, needs_grad=True)
     loss = qd.ndarray(qd.f32, shape=(), needs_grad=True)
@@ -191,7 +191,7 @@ def test_counted_adstack_tape():
 
 
 @pytest.mark.parametrize("debug", [False, True])
-@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal], offline_cache=False)
 def test_counted_adstack_overflow_with_reduction(debug):
     qd.lang.impl.current_cfg().debug = debug
     x = qd.ndarray(qd.f32, shape=(), needs_grad=True)

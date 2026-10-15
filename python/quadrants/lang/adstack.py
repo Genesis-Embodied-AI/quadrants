@@ -1,7 +1,7 @@
 """Experimental forward measurements for stack-based reverse AD.
 
 Explicit gradient calls consume records in reverse invocation order for each kernel. The initial implementation
-uses the largest measured depth for every stack and requires the LLVM CUDA or CPU backend with offline caching off.
+uses the largest measured depth for every stack and supports CPU, CUDA, Vulkan, and Metal with offline caching off.
 """
 
 from dataclasses import dataclass
@@ -10,7 +10,7 @@ from quadrants._lib import core
 from quadrants.lang import impl
 from quadrants.lang._ndarray import Ndarray, ScalarNdarray
 from quadrants.types.enums import AutodiffMode
-from quadrants.types.primitive_types import i64
+from quadrants.types.primitive_types import i32, i64
 
 
 @dataclass
@@ -25,8 +25,8 @@ class _AdstackContext:
     def __enter__(self):
         runtime = impl.get_runtime()
         config = impl.current_cfg()
-        if config.arch not in (core.cuda, core.x64):
-            raise RuntimeError("qd.adstack prototype supports CUDA and x64 only")
+        if config.arch not in (core.cuda, core.x64, core.vulkan, core.metal):
+            raise RuntimeError("qd.adstack prototype supports CUDA, x64, Vulkan, and Metal only")
         if config.offline_cache:
             raise RuntimeError("qd.adstack prototype requires qd.init(offline_cache=False)")
         if config.ad_stack_size:
@@ -88,7 +88,7 @@ def dispatch(kernel, args, kwargs):
         tape = runtime.target_tape
         runtime.target_tape = None
         try:
-            buffer = ScalarNdarray(i64, (2,))
+            buffer = ScalarNdarray(i32 if impl.current_cfg().arch in (core.vulkan, core.metal) else i64, (2,))
         finally:
             runtime.target_tape = tape
         variant = _variant(kernel, 1)
