@@ -21,8 +21,10 @@ def main():
     gs.init(backend=gs.gpu, precision="64", logging_level="warning")
     dt, steps = 1e-4, 3
     scene = gs.Scene(
-        sim_options=gs.options.SimOptions(dt=dt, substeps=1, requires_grad=True, gravity=(0, 0, 0)),
-        fem_options=gs.options.FEMOptions(use_implicit_solver=False),
+        sim_options=gs.options.SimOptions(
+            dt=dt, substeps=1, substeps_local=steps + 1, requires_grad=True, gravity=(0, 0, 0)
+        ),
+        fem_options=gs.options.FEMOptions(use_implicit_solver=False, damping=0.0),
         show_viewer=False,
     )
     entity = scene.add_entity(
