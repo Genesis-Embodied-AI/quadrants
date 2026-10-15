@@ -1515,7 +1515,19 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
   if (stmt->func_name == "adstack_measure_peak") {
     auto buffer = get_buffer_value(BufferType::AdStackMeasurement, PrimitiveType::u32);
     auto ptr = ir_->struct_array_access(ir_->u32_type(), buffer, ir_->const_i32_zero_);
-    auto depth = ops_->cast(ir_->u32_type(), ir_->query_value(stmt->args[0]->raw_name()));
+    auto wide_depth = ir_->query_value(stmt->args[0]->raw_name());
+    auto too_large = ops_->gt(wide_depth, ir_->int_immediate_number(ir_->i64_type(), INT32_MAX));
+    auto error_label = ir_->new_label();
+    auto merge_label = ir_->new_label();
+    ir_->make_inst(spv::OpSelectionMerge, merge_label, spv::SelectionControlMaskNone);
+    ir_->make_inst(spv::OpBranchConditional, too_large, error_label, merge_label);
+    ir_->start_label(error_label);
+    auto error_ptr = ir_->struct_array_access(ir_->u32_type(), buffer, ir_->const_i32_one_);
+    ir_->make_value(spv::OpAtomicUMax, ir_->u32_type(), error_ptr, ir_->const_i32_one_, ir_->const_i32_zero_,
+                    ir_->uint_immediate_number(ir_->u32_type(), 1));
+    ir_->make_inst(spv::OpBranch, merge_label);
+    ir_->start_label(merge_label);
+    auto depth = ops_->cast(ir_->u32_type(), wide_depth);
     ir_->make_value(spv::OpAtomicUMax, ir_->u32_type(), ptr, ir_->const_i32_one_, ir_->const_i32_zero_, depth);
     val = ir_->const_i32_zero_;
   } else if (stmt->func_name == "composite_extract_0") {

@@ -30,6 +30,9 @@ std::string TaskAttributes::buffers_name(BufferInfo b) {
   if (b.type == BufferType::ExtArr) {
     return "ExtArr";
   }
+  if (b.type == BufferType::AdStackMeasurement) {
+    return "AdStackMeasurement";
+  }
   if (b.type == BufferType::AdStackOverflow) {
     return "AdStackOverflow";
   }

@@ -96,6 +96,8 @@ def dispatch(kernel, args, kwargs):
         try:
             result = variant(*args)
             runtime.sync()
+            if impl.current_cfg().arch in (core.vulkan, core.metal) and int(buffer.arr.read_int([1])):
+                raise RuntimeError("Measured adstack depth exceeds the backend capacity limit")
             capacity = max(1, int(buffer.arr.read_int([0])))
         finally:
             variant.adstack_record = None
