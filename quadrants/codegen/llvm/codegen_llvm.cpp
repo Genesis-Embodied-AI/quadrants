@@ -2960,9 +2960,8 @@ void TaskCodeGenLLVM::visit(AdStackPushStmt *stmt) {
     }
     builder->CreateStore(new_count, count_alloca);
     // Measured capacities are at least one, so even a saturated push has a valid top slot.
-    llvm::Value *slot_index = kernel->adstack_mode == 2
-                                  ? builder->CreateSub(new_count, llvm::ConstantInt::get(i64ty, 1))
-                                  : old_count;
+    llvm::Value *slot_index =
+        kernel->adstack_mode == 2 ? builder->CreateSub(new_count, llvm::ConstantInt::get(i64ty, 1)) : old_count;
     std::size_t entry_size = stack->entry_size_in_bytes();
     llvm::Value *slot_offset =
         builder->CreateAdd(llvm::ConstantInt::get(i64ty, sizeof(int64)),
