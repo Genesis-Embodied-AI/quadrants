@@ -43,3 +43,5 @@ The initial layout uses the largest measured depth as the capacity for every sta
 On the counted-only branch, stack-based reverse mode requires a counted forward. The symbolic sizer, sparse stack allocation, mutation-tracking caches, and old overflow diagnostic registry are removed. The old `ad_stack_experimental_enabled`, `ad_stack_size`, and `ad_stack_sparse_threshold_bytes` initialization options are removed. Ordinary non-stack autodiff remains available outside the context. After using a kernel with counting, its explicit backwards use pending counted records; an empty record list is an error.
 
 The SPIR-V path uses descriptor-bound measurement storage and measured heap metadata; it does not run the symbolic sizer. Its loop-carried stack values are limited to f32, i32, and booleans, as in the existing SPIR-V adstack implementation. Vulkan is validated on the Linux GPU cluster; Metal requires separate validation on Apple hardware.
+
+Vector-valued stacks require `qd.init(force_scalarize_matrix=True)` so the counting transform receives scalar stacks.
