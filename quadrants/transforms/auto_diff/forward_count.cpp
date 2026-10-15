@@ -113,11 +113,16 @@ void lower_adstack_forward_count(Block *block, const std::unordered_set<Stmt *> 
                   "Unexpected reverse operation in adstack counting forward");
     }
   }
+  Stmt *maximum = nullptr;
   for (const auto &[stack, counter] : counters) {
     stack->parent->erase(stack);
     auto *peak = block->insert(Stmt::make<LocalLoadStmt>(counter.peak));
-    block->insert(Stmt::make<InternalFuncStmt>("adstack_measure_peak", std::vector<Stmt *>{peak}));
+    maximum = maximum ? block->insert(Stmt::make<BinaryOpStmt>(BinaryOpType::max, maximum, peak)) : peak;
   }
+  // Capacity is shared by all stacks. Combine local peaks before publishing so each iteration only touches
+  // the global measurement once, regardless of how many scalar stacks autodiff produced.
+  if (maximum)
+    block->insert(Stmt::make<InternalFuncStmt>("adstack_measure_peak", std::vector<Stmt *>{maximum}));
 }
 
 }  // namespace quadrants::lang
