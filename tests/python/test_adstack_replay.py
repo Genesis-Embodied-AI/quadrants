@@ -259,6 +259,8 @@ def test_replay_rejects_cross_iteration_output_dependency():
 def test_replay_torch_arguments_and_overlapping_views():
     torch = pytest.importorskip("torch")
     device = "cuda" if qd.lang.impl.current_cfg().arch == qd.cuda else "cpu"
+    if device == "cuda" and not torch.cuda.is_available():
+        pytest.skip("CUDA-enabled PyTorch is unavailable")
     x = torch.full((4,), 0.2, device=device, requires_grad=True)
     y = torch.full((4,), 17.0, device=device, requires_grad=True)
     n = torch.full((4,), 2, dtype=torch.int32, device=device)
