@@ -6,7 +6,7 @@ Automatic differentiation (autodiff) computes the exact gradient of a kernel's o
 
 Quadrants implements autodiff at compile time: when `.grad()` is requested, the compiler emits a companion kernel that runs on the same backend as the forward one and writes gradients into the primal fields' `.grad` companions. There is no Python-side tape, no per-op dispatch overhead, and no dependency on an external AD framework. Forward mode and reverse mode are available on every backend Quadrants targets: x64 / arm64 CPU, CUDA, AMDGPU, Metal, and Vulkan.
 
-**Recommendation.** Reverse-mode AD through dynamic loops (described further down) is currently gated behind an opt-in `ad_stack_experimental_enabled=True` flag at `qd.init`. If you are using autodiff at all, we recommend enabling this flag as it is required for any reverse-mode kernel with a dynamic loop carrying a non-linear primal, and free for every other kernel. See [the cost breakdown](./init_options.md#ad_stack_experimental_enabled) for details.
+**Dynamic loops.** Stack-based reverse mode requires running the forward kernel inside `with qd.adstack:`. The forward measures storage requirements; backward replays the kernel and computes gradients. See [counted adstack](./adstack_counted.md) for supported backends and restrictions.
 
 Three mechanisms are supported:
 
@@ -71,7 +71,7 @@ Notes:
 - `place(x, x.grad)` allocates the adjoint alongside the primal. Without it, `kernel.grad()` raises at first use. Ndarrays take `needs_grad=True` instead.
 - Adjoints must be cleared before each reverse pass; leftover values accumulate. `qd.ad.Tape` (below) does this automatically.
 - `kernel.grad(...)` takes the same arguments as the forward kernel.
-- Reverse-mode AD through a *dynamic* loop (one whose trip count is not known at compile time) needs an opt-in compiler pipeline called the *adstack*, gated behind `ad_stack_experimental_enabled=True` in `qd.init()`. This path will be enabled by default in a future release, once thoroughly tested in production; see [Autodiff with dynamic loops](#autodiff-with-dynamic-loops) and [Under the hood (advanced)](#under-the-hood-advanced) for the current status.
+- Reverse-mode AD through a dynamic loop carrying intermediate values uses [counted adstack](./adstack_counted.md). Wrap its forward invocation in `with qd.adstack:` before calling backward.
 
 **Integer casts stop gradients.** Integers have no meaningful derivative, so the chain rule reads as zero upstream of any cast to integer - no error, just silently-zero gradients. This is a property of differentiation through quantization, not of Quadrants. Rules of thumb:
 
