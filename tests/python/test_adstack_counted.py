@@ -208,10 +208,10 @@ def test_counted_adstack_overflow_with_reduction(debug):
                 value = qd.sin(value)
             y[i] = value
 
-    # All iterations accumulate into the same input gradient, allowing compiler-generated reductions.
+    # All iterations accumulate into the same input gradient with compiler optimizations enabled.
     with qd.adstack:
         compute(x, y, n)
-    # Only one lane overflows; the rest must still complete their cooperative reduction.
+    # Only one lane overflows; the remaining iterations must still complete their accumulation.
     n[0] = 100
     y.grad.fill(1)
     with pytest.raises(RuntimeError, match="Adstack capacity exceeded"):
