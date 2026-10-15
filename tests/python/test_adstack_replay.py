@@ -192,3 +192,64 @@ def test_replay_overflow_with_reduction(monkeypatch, debug):
     y.grad.fill(1)
     compute.grad(x, y, n)
     assert x.grad[None] == pytest.approx(4096 * math.cos(0.2) * math.cos(math.sin(0.2)), rel=2e-4)
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], ad_stack_replay_count=True, ad_stack_experimental_enabled=True)
+def test_replay_disjoint_frame_outputs():
+    x = qd.field(qd.f32, shape=4, needs_grad=True)
+    y = qd.field(qd.f32, shape=4, needs_grad=True)
+    active = qd.field(qd.i32, shape=(3, 4))
+    x.fill(0.2)
+    active.fill(1)
+
+    @qd.kernel
+    def compute(frame: qd.i32):
+        for i in range(4):
+            value = x[i]
+            if active[frame, i]:
+                for j in range(3):
+                    value = qd.sin(value)
+            active[frame + 1, i] = active[frame, i]
+            y[i] = value
+
+    from quadrants.lang.adstack_replay import _Record, _variant
+
+    active[1, 0] = 7
+    variant = _variant(compute._adjoint, 1)
+    variant.adstack_record = _Record(
+        qd.ndarray(qd.i32 if qd.lang.impl.current_cfg().arch == qd.vulkan else qd.i64, shape=2)
+    )
+    try:
+        variant(0)
+        assert active[1, 0] == 7
+    finally:
+        variant.adstack_record = None
+    y.grad.fill(1)
+    compute.grad(0)
+    assert active[1, 0] == 1
+    value, derivative = 0.2, 1.0
+    for _ in range(3):
+        derivative *= math.cos(value)
+        value = math.sin(value)
+    np.testing.assert_allclose(x.grad.to_numpy(), derivative, rtol=2e-5)
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], ad_stack_replay_count=True, ad_stack_experimental_enabled=True)
+def test_replay_rejects_cross_iteration_output_dependency():
+    x = qd.field(qd.f32, shape=4, needs_grad=True)
+    y = qd.field(qd.f32, shape=4, needs_grad=True)
+    flags = qd.field(qd.i32, shape=5)
+    flags.fill(1)
+
+    @qd.kernel
+    def compute():
+        for i in range(4):
+            value = x[i]
+            for j in range(flags[i]):
+                value = qd.sin(value)
+            flags[i + 1] = 7
+            y[i] = value
+
+    with pytest.raises(RuntimeError, match="non-differentiable buffer"):
+        compute.grad()
+    np.testing.assert_array_equal(flags.to_numpy(), np.ones(5))
