@@ -18,6 +18,9 @@ class QD_DLL_EXPORT Kernel : public Callable {
 
   bool is_accessor{false};
 
+  // Experimental measured-stack variants: 0 = normal, 1 = counting forward, 2 = checked reverse.
+  int adstack_mode{0};
+
   Kernel(Program &program,
          const std::function<void()> &func,
          const std::string &name = "",

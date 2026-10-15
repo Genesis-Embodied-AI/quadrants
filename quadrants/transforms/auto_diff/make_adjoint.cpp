@@ -19,16 +19,17 @@ class MakeAdjoint : public ADTransform {
   // survive enclosing for-loop iterations (e.g. the dedicated ad-stacks that snapshot IfStmt conds in visit(IfStmt)).
   Block *ib_root;
   std::map<Stmt *, Stmt *> adjoint_stmt;
+  bool preserve_primal_stores;
 
-  explicit MakeAdjoint(Block *block) {
+  explicit MakeAdjoint(Block *block, bool preserve_stores) : preserve_primal_stores(preserve_stores) {
     current_block = nullptr;
     alloca_block = block;
     forward_backup = block;
     ib_root = block;
   }
 
-  static void run(Block *block) {
-    auto p = MakeAdjoint(block);
+  static void run(Block *block, bool preserve_stores) {
+    auto p = MakeAdjoint(block, preserve_stores);
     block->accept(&p);
   }
 
@@ -572,6 +573,8 @@ class MakeAdjoint : public ADTransform {
   }
 
   void visit(GlobalStoreStmt *stmt) override {
+    if (preserve_primal_stores)
+      return;
     // erase and replace with global load adjoint
 
     Stmt *adjoint_ptr{nullptr};
@@ -641,6 +644,8 @@ class MakeAdjoint : public ADTransform {
   }
 
   void visit(AtomicOpStmt *stmt) override {
+    if (preserve_primal_stores)
+      return;
     if (stmt->dest->is<ExternalPtrStmt>() ||
         (stmt->dest->is<MatrixPtrStmt>() && stmt->dest->as<MatrixPtrStmt>()->origin->is<ExternalPtrStmt>())) {
       ExternalPtrStmt *dest = nullptr;
@@ -830,8 +835,8 @@ class MakeAdjoint : public ADTransform {
 
 }  // namespace
 
-void make_adjoint(Block *ib) {
-  MakeAdjoint::run(ib);
+void make_adjoint(Block *ib, bool preserve_primal_stores) {
+  MakeAdjoint::run(ib, preserve_primal_stores);
 }
 
 }  // namespace quadrants::lang

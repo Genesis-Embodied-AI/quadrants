@@ -81,7 +81,8 @@ void demote_mesh_statements(IRNode *root, const CompileConfig &config, const Dem
 bool remove_loop_unique(IRNode *root);
 bool remove_range_assumption(IRNode *root);
 bool lower_access(IRNode *root, const CompileConfig &config, const LowerAccessPass::Args &args);
-void auto_diff(IRNode *root, const CompileConfig &config, AutodiffMode autodiffMode, bool use_stack = false);
+void auto_diff(IRNode *root, const CompileConfig &config, AutodiffMode autodiffMode, bool use_stack = false,
+               bool count_forward = false);
 /**
  * Check whether the kernel obeys the autodiff limitation e.g., gloabl data
  * access rule

@@ -322,6 +322,8 @@ class Kernel(FuncBase):
             AutodiffMode.REVERSE,
         )
         self.autodiff_mode = autodiff_mode
+        self.adstack_mode = 0
+        self.adstack_record = None
         self.grad: "Kernel | None" = None
         impl.get_runtime().kernels.append(self)  # type: ignore[arg-type]
         self.reset()
@@ -583,6 +585,7 @@ class Kernel(FuncBase):
                 quadrants_kernel = impl.get_runtime().prog.create_kernel(
                     quadrants_ast_generator, kernel_name, self.autodiff_mode
                 )
+                quadrants_kernel.adstack_mode = self.adstack_mode
                 if _pass == 1:
                     assert key not in self.materialized_kernels
                     self.materialized_kernels[key] = quadrants_kernel
@@ -660,6 +663,11 @@ class Kernel(FuncBase):
 
         callbacks: list[Callable[[], None]] = []
         launch_ctx = t_kernel.make_launch_context()
+        if self.adstack_record is not None:
+            launch_ctx.set_adstack_measurement(
+                self.runtime.prog.get_ndarray_data_ptr_as_int(self.adstack_record.buffer.arr),
+                self.adstack_record.capacity,
+            )
         # Special treatment for primitive types is unecessary and detrimental. See 'TemplateMapper.lookup' for details.
         args_hash: "ArgsHash" = (id(t_kernel), *[id(arg) for arg in args])
         # Stale-cache guard for mutable structs containing ndarrays. Frozen dataclass fields cannot be reassigned, so
@@ -961,6 +969,12 @@ class Kernel(FuncBase):
     # Thus this part needs to be fast. (i.e. < 3us on a 4 GHz x64 CPU)
     @_shell_pop_print
     def __call__(self, *py_args, **kwargs) -> Any:
+        if not self.adstack_mode:
+            from quadrants.lang.adstack import dispatch  # pylint: disable=import-outside-toplevel
+
+            handled, result = dispatch(self, py_args, kwargs)
+            if handled:
+                return result
         qd_stream = kwargs.pop("qd_stream", None)
         # `use_checkpoints` is the kernel-construction-time flag set by `@qd.kernel(graph=True, checkpoints=True)`. The
         # `_qd_from_checkpoint` kwarg can only be injected by `QuadrantsCallable.resume()`, which is the user-facing

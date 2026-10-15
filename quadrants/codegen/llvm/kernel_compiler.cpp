@@ -17,7 +17,7 @@ KernelCompiler::IRNodePtr KernelCompiler::compile(const CompileConfig &compile_c
   if (kernel_def.is_accessor && !compile_config.print_accessor_ir) {
     verbose = false;
   }
-  bool use_ad_stack = compile_config.ad_stack_experimental_enabled;
+  bool use_ad_stack = compile_config.ad_stack_experimental_enabled || kernel_def.adstack_mode != 0;
   irpass::compile_to_offloads(ir.get(), compile_config, &kernel_def,
                               /*verbose=*/verbose,
                               /*autodiff_mode=*/kernel_def.autodiff_mode,

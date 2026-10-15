@@ -6,6 +6,7 @@
 #include "quadrants/runtime/llvm/llvm_runtime_executor.h"
 #include "quadrants/program/adstack_size_expr_eval.h"
 #include "quadrants/program/program.h"
+#include "quadrants/program/context.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -330,8 +331,8 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
     std::vector<uint64_t> host_max_sizes(n_stacks);
     for (std::size_t i = 0; i < n_stacks; ++i) {
       const SerializedSizeExpr *expr = (i < ad_stack.size_exprs.size()) ? &ad_stack.size_exprs[i] : nullptr;
-      int64_t v = -1;
-      if (expr != nullptr && !expr->nodes.empty() && prog != nullptr) {
+      int64_t v = ctx && ctx->get_context().adstack_capacity ? ctx->get_context().adstack_capacity : -1;
+      if (v < 0 && expr != nullptr && !expr->nodes.empty() && prog != nullptr) {
         // Substitute any captured `MaxOverRange` whose result the max-reducer dispatched into a `Const` before the host
         // evaluator walks the tree. Mirrors `eval_per_task_metadata_on_host` on the SPIR-V side. The empty-results fast
         // path passes the live `expr` pointer directly so `size_expr_cache_` (keyed by `SerializedSizeExpr *`) stays

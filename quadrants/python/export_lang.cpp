@@ -654,6 +654,7 @@ void export_lang(nb::module_ &m) {
       ;
 
   nb::class_<Kernel>(m, "KernelCxx")
+      .def_rw("adstack_mode", &Kernel::adstack_mode)
       .def("no_activate",
            [](Kernel *self, SNode *snode) {
              // TODO(#2193): Also apply to @qd.func?
@@ -673,6 +674,7 @@ void export_lang(nb::module_ &m) {
           nb::rv_policy::reference);
 
   nb::class_<LaunchContextBuilder>(m, "KernelLaunchContext")
+      .def("set_adstack_measurement", &LaunchContextBuilder::set_adstack_measurement)
       .def("copy", &LaunchContextBuilder::copy)
       .def("set_arg_int", &LaunchContextBuilder::set_arg_int)
       .def("set_args_int", &LaunchContextBuilder::set_args_int)

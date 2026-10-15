@@ -153,6 +153,8 @@ class LaunchContextBuilder {
 
   RuntimeContext &get_context();
 
+  void set_adstack_measurement(uint64_t address, uint64_t capacity);
+
  private:
   TypedConstant fetch_ret_impl(int offset, const Type *dt);
   CallableBase *kernel_;

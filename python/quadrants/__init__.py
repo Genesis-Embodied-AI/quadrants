@@ -49,6 +49,7 @@ from quadrants.lang import (
     graph,  # noqa: F401  # the `qd.graph` namespace (do_while / parallel_context / parallel)
 )
 from quadrants.lang.intrinsics import *
+from quadrants.lang.adstack import adstack
 from quadrants.types.annotations import *
 
 # Provide a shortcut to types since they're commonly used.

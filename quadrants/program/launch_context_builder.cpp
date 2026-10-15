@@ -69,6 +69,11 @@ void LaunchContextBuilder::copy(const LaunchContextBuilder &other) {
   ndarray_shapes = other.ndarray_shapes;
 }
 
+void LaunchContextBuilder::set_adstack_measurement(uint64_t address, uint64_t capacity) {
+  ctx_->adstack_measurement = reinterpret_cast<int64_t *>(address);
+  ctx_->adstack_capacity = capacity;
+}
+
 void LaunchContextBuilder::set_arg_float(int arg_id, float64 d) {
   auto dt = kernel_->args_type->get_element_type(std::array{arg_id});
   QD_ASSERT_INFO(dt->is<PrimitiveType>(),
