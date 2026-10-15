@@ -21,7 +21,7 @@ def _variant(kernel, mode):
     variant = getattr(kernel, name, None)
     if variant is None:
         variant = Kernel(kernel.func, kernel.autodiff_mode, _is_classkernel=kernel.is_classkernel)
-        variant.quadrants_callable = kernel.quadrants_callable
+        variant.quadrants_callable = getattr(kernel, "_adstack_source_callable", kernel.quadrants_callable)
         variant.adstack_mode = mode
         setattr(kernel, name, variant)
     return variant
