@@ -178,11 +178,13 @@ std::string get_hashed_offline_cache_key(const CompileConfig &config,
     kernel_body_string = oss.str();
   }
 
-  auto compile_config_key = get_offline_cache_key_of_compile_config(config) + "counted-only-layout-v1";
+  auto compile_config_key = get_offline_cache_key_of_compile_config(config);
+  const std::string runtime_layout_key = "counted-only-layout-v1";
   auto device_caps_key = get_offline_cache_key_of_device_caps(caps);
   std::string autodiff_mode = std::to_string(static_cast<std::size_t>(kernel->autodiff_mode));
   picosha2::hash256_one_by_one hasher;
   hasher.process(compile_config_key.begin(), compile_config_key.end());
+  hasher.process(runtime_layout_key.begin(), runtime_layout_key.end());
   hasher.process(device_caps_key.begin(), device_caps_key.end());
   hasher.process(kernel_params_string.begin(), kernel_params_string.end());
   hasher.process(kernel_rets_string.begin(), kernel_rets_string.end());
