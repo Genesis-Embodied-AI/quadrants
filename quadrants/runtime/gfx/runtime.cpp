@@ -421,14 +421,9 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
   std::unique_ptr<DeviceAllocationGuard> args_buffer{nullptr}, ret_buffer{nullptr};
 
   if (qd_kernel->get_args_buffer_size()) {
-    // Needs both Uniform (the main kernel binds args as a uniform buffer) and Storage (the adstack sizer
-    // pipeline binds the same buffer through a `rw_buffer` / storage_buffer descriptor to resolve ndarray
-    // data pointers out of arg slots). Per VUID-VkDescriptorBufferInfo-buffer-02999, a buffer bound through
-    // a storage_buffer descriptor must have been allocated with `VK_BUFFER_USAGE_STORAGE_BUFFER_BIT`.
-    auto [buf, res] =
-        device_->allocate_memory_unique({qd_kernel->get_args_buffer_size(),
-                                         /*host_write=*/true, /*host_read=*/false,
-                                         /*export_sharing=*/false, AllocUsage::Uniform | AllocUsage::Storage});
+    auto [buf, res] = device_->allocate_memory_unique({qd_kernel->get_args_buffer_size(),
+                                                       /*host_write=*/true, /*host_read=*/false,
+                                                       /*export_sharing=*/false, AllocUsage::Uniform});
     QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate args buffer");
     args_buffer = std::move(buf);
   }

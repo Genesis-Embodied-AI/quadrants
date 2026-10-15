@@ -22,8 +22,7 @@ constexpr std::size_t kAdStackMaxConcurrentThreads = 65536;
 
 void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
                                             JITModule *cuda_module,
-                                            const std::vector<OffloadedTask> &offloaded_tasks,
-                                            void *device_context_ptr) {
+                                            const std::vector<OffloadedTask> &offloaded_tasks) {
   auto *executor = get_runtime_executor();
   auto prepare_task = [&](std::size_t task_index, const OffloadedTask &task) -> int {
     int grid = task.grid_dim;
@@ -114,8 +113,7 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
 
 void KernelLauncher::launch_offloaded_tasks_with_do_while(LaunchContextBuilder &ctx,
                                                           JITModule *cuda_module,
-                                                          const std::vector<OffloadedTask> &offloaded_tasks,
-                                                          void *device_context_ptr) {
+                                                          const std::vector<OffloadedTask> &offloaded_tasks) {
   const auto &levels = ctx.graph_do_while_levels;
   auto read_flag = [&](int level) -> bool {
     int32_t counter_val = 0;
@@ -138,7 +136,7 @@ void KernelLauncher::launch_offloaded_tasks_with_do_while(LaunchContextBuilder &
     // iteration. Kernels that mix the loop with plain top-level for-loops (which run once) fall through to the general
     // driver below.
     do {
-      launch_offloaded_tasks(ctx, cuda_module, offloaded_tasks, device_context_ptr);
+      launch_offloaded_tasks(ctx, cuda_module, offloaded_tasks);
     } while (read_flag(0));
     return;
   }
@@ -332,16 +330,13 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
     ctx.get_context().arg_buffer = device_arg_buffer;
   }
 
-  void *device_context_ptr = nullptr;
-  void *ephemeral_context_ptr = nullptr;
-
   if (ctx.has_graph_do_while()) {
     for (const auto &level : ctx.graph_do_while_levels) {
       QD_ASSERT(level.flag_dev_ptr);
     }
-    launch_offloaded_tasks_with_do_while(ctx, cuda_module, offloaded_tasks, device_context_ptr);
+    launch_offloaded_tasks_with_do_while(ctx, cuda_module, offloaded_tasks);
   } else {
-    launch_offloaded_tasks(ctx, cuda_module, offloaded_tasks, device_context_ptr);
+    launch_offloaded_tasks(ctx, cuda_module, offloaded_tasks);
   }
   // Persistent scratch (default-stream path): no per-launch free for the per-handle `arg_buffer` / `runtime_context`
   // or the launcher-global `result_buffer`. All live until launcher destruction; the dtor handles the final
@@ -382,9 +377,6 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   // preceding work on active_stream (including the kernel reads) has completed.
   if (ephemeral_arg_buffer != nullptr) {
     CUDADriver::get_instance().mem_free_async(ephemeral_arg_buffer, active_stream);
-  }
-  if (ephemeral_context_ptr != nullptr) {
-    CUDADriver::get_instance().mem_free_async(ephemeral_context_ptr, active_stream);
   }
 }
 
