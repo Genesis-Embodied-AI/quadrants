@@ -139,9 +139,7 @@ def test_counted_adstack_overflow_is_recoverable_exception():
     with qd.adstack:
         compute(x, y, n)
     compute.grad(x, y, n)
-    assert x.grad[0] == pytest.approx(
-        math.cos(x[0]) * math.cos(math.sin(x[0])), rel=2e-5
-    )
+    assert x.grad[0] == pytest.approx(math.cos(x[0]) * math.cos(math.sin(x[0])), rel=2e-5)
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal], offline_cache=False)
@@ -354,14 +352,10 @@ def test_counted_adstack_dense_field_tape():
     d2 = math.cos(0.2) * math.cos(math.sin(0.2))
     d3 = d2 * math.cos(math.sin(math.sin(0.2)))
     assert x.grad[None] == pytest.approx(128 * (d2 + d3), rel=2e-5)
-    assert loss[None] == pytest.approx(
-        128 * (math.sin(math.sin(0.2)) + math.sin(math.sin(math.sin(0.2)))), rel=2e-5
-    )
+    assert loss[None] == pytest.approx(128 * (math.sin(math.sin(0.2)) + math.sin(math.sin(math.sin(0.2)))), rel=2e-5)
 
 
-@test_utils.test(
-    arch=[qd.cpu, qd.cuda], offline_cache=False, require=qd.extension.sparse
-)
+@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False, require=qd.extension.sparse)
 def test_counted_adstack_rejects_sparse_fields():
     x = qd.field(qd.f32, needs_grad=True)
     qd.root.pointer(qd.i, 4).dense(qd.i, 4).place(x, x.grad)
@@ -374,3 +368,22 @@ def test_counted_adstack_rejects_sparse_fields():
     with pytest.raises(Exception, match="dense fields only"):
         with qd.adstack:
             compute()
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], offline_cache=False)
+def test_uncounted_backward_cannot_use_legacy_sizing():
+    x, y, n = _arrays()
+
+    @qd.kernel
+    def compute(x: qd.types.ndarray(), y: qd.types.ndarray(), n: qd.types.ndarray()):
+        for i in range(x.shape[0]):
+            value = x[i]
+            for j in range(n[i]):
+                value = qd.sin(value)
+            y[i] = value
+
+    compute(x, y, n)
+    y.grad.fill(1)
+    with pytest.raises(qd.QuadrantsCompilationError, match="Cannot use non static range in Backwards mode"):
+        compute.grad(x, y, n)
+    assert all(x.grad[i] == 0 for i in range(4))
