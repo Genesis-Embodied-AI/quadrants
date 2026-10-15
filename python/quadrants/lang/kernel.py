@@ -10,7 +10,7 @@ from dataclasses import _FIELDS  # type: ignore[reportAttributeAccessIssue]
 
 # Must import 'partial' directly instead of the entire module to avoid attribute lookup overhead.
 from functools import partial
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 # Must import 'ReferenceType' directly instead of the entire module to avoid attribute lookup overhead.
 from weakref import ReferenceType
@@ -87,6 +87,9 @@ from ._quadrants_callable import QuadrantsCallable
 _NONE, _VALIDATION = AutodiffMode.NONE, AutodiffMode.VALIDATION
 _FLOAT, _INT, _UINT, _QD_ARRAY, _QD_ARRAY_WITH_GRAD = KernelBatchedArgType
 _ARCH_PYTHON = Arch.python
+
+if TYPE_CHECKING:
+    from quadrants.lang.adstack import _Record
 
 
 class LaunchContextBufferCache:
@@ -323,7 +326,7 @@ class Kernel(FuncBase):
         )
         self.autodiff_mode = autodiff_mode
         self.adstack_mode = 0
-        self.adstack_record = None
+        self.adstack_record: "_Record | None" = None
         self.grad: "Kernel | None" = None
         impl.get_runtime().kernels.append(self)  # type: ignore[arg-type]
         self.reset()

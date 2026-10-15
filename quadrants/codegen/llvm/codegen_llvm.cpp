@@ -2086,7 +2086,7 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
   func_body_bb = llvm::BasicBlock::Create(*llvm_context, "body", func);
   builder->SetInsertPoint(func_body_bb);
   if (kernel->adstack_mode == 2) {
-    auto *ok = call("adstack_check_capacity", get_context(), tlctx->get_constant(uint64_t(0)));
+    auto *ok = call("adstack_replay_active", get_context());
     auto *body = llvm::BasicBlock::Create(*llvm_context, "adstack_checked_task", func);
     builder->CreateCondBr(builder->CreateICmpNE(ok, tlctx->get_constant(0)), body, final_block);
     builder->SetInsertPoint(body);

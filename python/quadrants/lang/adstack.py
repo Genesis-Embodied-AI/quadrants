@@ -83,6 +83,7 @@ def dispatch(kernel, args, kwargs):
         raise RuntimeError("qd.adstack prototype requires positional arguments and non-graph kernels")
     signature = _arguments(args)
     if counting:
+        assert scope is not None
         # Allocation and clearing are implementation work, not forward invocations to record on a Tape.
         tape = runtime.target_tape
         runtime.target_tape = None
@@ -95,7 +96,7 @@ def dispatch(kernel, args, kwargs):
         try:
             result = variant(*args)
             runtime.sync()
-            capacity = max(1, int(buffer[0]))
+            capacity = max(1, int(buffer.arr.read_int([0])))
         finally:
             variant.adstack_record = None
         record = _Record(signature, buffer, capacity, args)
@@ -116,7 +117,7 @@ def dispatch(kernel, args, kwargs):
     try:
         result = variant(*args)
         runtime.sync()
-        if int(record.buffer[1]):
+        if int(record.buffer.arr.read_int([1])):
             raise RuntimeError(
                 "Adstack capacity exceeded during backward replay. Replay required more stack space than counted "
                 f"during forward (capacity {record.capacity}). Discard or reset this backward's gradients."

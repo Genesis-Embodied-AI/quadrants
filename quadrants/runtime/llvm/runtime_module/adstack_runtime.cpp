@@ -44,7 +44,13 @@ extern "C" i32 adstack_check_capacity(RuntimeContext *ctx, u64 required) {
     __atomic_store_n(flag, i64(1), __ATOMIC_RELAXED);
     return 0;
   }
-  return __atomic_load_n(flag, __ATOMIC_RELAXED) == 0;
+  // Other threads can finish their own valid stacks after a failure; the host discards the entire result.
+  // Avoid a global atomic load on every successful push.
+  return 1;
+}
+
+extern "C" i32 adstack_replay_active(RuntimeContext *ctx) {
+  return __atomic_load_n(ctx->adstack_measurement + 1, __ATOMIC_RELAXED) == 0;
 }
 
 // Writes the addresses of `runtime->adstack_heap_buffer` and `runtime->adstack_heap_size` into the result buffer so the
