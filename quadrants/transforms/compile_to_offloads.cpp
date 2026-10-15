@@ -125,6 +125,8 @@ void compile_to_offloads(IRNode *ir,
       validate_adstack_counting(ir);
     irpass::auto_diff(ir, config, kernel->adstack_mode == 1 ? AutodiffMode::kReverse : autodiff_mode,
                       ad_use_stack || kernel->adstack_mode != 0, kernel->adstack_mode == 1);
+    if (kernel->adstack_mode == 1)
+      remove_adstack_count_outputs(ir, config);
     // TODO: Be carefull with the full_simplify when do high-order autodiff
     irpass::full_simplify(ir, config,
                           {false, /*autodiff_enabled*/ false, kernel->get_name(), verbose, "post_autodiff"});

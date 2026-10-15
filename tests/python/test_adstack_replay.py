@@ -74,7 +74,10 @@ def test_count_rejects_residual_primal_mutation():
     def compute():
         for i in range(1):
             counter[i] += 1
-            y[i] = x[i] * x[i]
+            value = x[i]
+            for j in range(counter[i]):
+                value = qd.sin(value)
+            y[i] = value
 
     with pytest.raises(Exception, match="non-differentiable buffer"):
         compute.grad()
@@ -104,8 +107,9 @@ def test_backward_only_persistent_cache(tmp_path, fastcache):
         )
 
 
+@pytest.mark.parametrize("read_modify_write", [False, True])
 @test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], ad_stack_replay_count=True, ad_stack_experimental_enabled=True)
-def test_write_only_array_output_and_alias_guard():
+def test_write_only_array_output_and_alias_guard(read_modify_write):
     x = qd.ndarray(qd.f32, shape=2, needs_grad=True)
     y = qd.ndarray(qd.f32, shape=2, needs_grad=True)
     n = qd.ndarray(qd.i32, shape=2)
@@ -120,7 +124,10 @@ def test_write_only_array_output_and_alias_guard():
             value = x[i]
             for j in range(n[i]):
                 value = qd.sin(value)
-            scratch[i] = 19
+            if qd.static(read_modify_write):
+                scratch[i] = scratch[i] | 16
+            else:
+                scratch[i] = 19
             y[i] = value
 
     # The count variant must not write even non-differentiable outputs. The normal backward still does.
@@ -137,7 +144,7 @@ def test_write_only_array_output_and_alias_guard():
     x.grad.fill(0)
     y.grad.fill(1)
     compute.grad(x, y, n, scratch)
-    np.testing.assert_array_equal(scratch.to_numpy(), [19, 19])
+    np.testing.assert_array_equal(scratch.to_numpy(), [23 if read_modify_write else 19] * 2)
     value, derivative = 0.2, 1.0
     for _ in range(3):
         derivative *= math.cos(value)

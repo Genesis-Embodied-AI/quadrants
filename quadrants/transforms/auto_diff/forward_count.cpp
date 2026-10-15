@@ -79,53 +79,7 @@ void lower_adstack_forward_count(Block *block, const std::unordered_set<Stmt *> 
   KeepForward keep(forward_statements);
   block->accept(&keep);
 
-  // A non-differentiable field output may survive normal autodiff. A field with no loads anywhere in the
-  // kernel cannot affect replay control flow; omit its stores from measurement. Fields have distinct SNodes,
-  // unlike external array arguments, which may alias at runtime.
-  IRNode *root = block;
-  while (root->get_parent())
-    root = root->get_parent();
-  std::unordered_set<SNode *> read_fields;
-  std::set<std::vector<int>> read_arrays;
-  auto field_pointer = [](Stmt *ptr) -> GlobalPtrStmt * {
-    if (auto *matrix = ptr->cast<MatrixPtrStmt>())
-      ptr = matrix->origin;
-    return ptr->cast<GlobalPtrStmt>();
-  };
-  auto array_pointer = [](Stmt *ptr) -> ArgLoadStmt * {
-    if (auto *matrix = ptr->cast<MatrixPtrStmt>())
-      ptr = matrix->origin;
-    if (auto *external = ptr->cast<ExternalPtrStmt>())
-      return external->base_ptr->cast<ArgLoadStmt>();
-    return nullptr;
-  };
-  for (auto *stmt : irpass::analysis::gather_statements(root, [](Stmt *) { return true; })) {
-    Stmt *source = nullptr;
-    if (auto *load = stmt->cast<GlobalLoadStmt>())
-      source = load->src;
-    if (auto *atomic = stmt->cast<AtomicOpStmt>())
-      source = atomic->dest;
-    if (source) {
-      if (auto *ptr = field_pointer(source))
-        read_fields.insert(ptr->snode);
-      if (auto *ptr = array_pointer(source))
-        read_arrays.insert(ptr->arg_id);
-    }
-  }
-  for (auto *stmt : irpass::analysis::gather_statements(block, [](Stmt *s) { return s->is<GlobalStoreStmt>(); })) {
-    auto *store = stmt->as<GlobalStoreStmt>();
-    auto *field = field_pointer(store->dest);
-    auto *array = array_pointer(store->dest);
-    // LaunchContextBuilder checks external aliases before executing a counting kernel, including cached kernels.
-    if ((field && !read_fields.count(field->snode)) || (array && !read_arrays.count(array->arg_id)))
-      store->parent->erase(store);
-  }
   auto statements = irpass::analysis::gather_statements(block, [](Stmt *) { return true; });
-  for (auto *stmt : statements) {
-    QD_ERROR_IF(stmt->is<GlobalStoreStmt>() || stmt->is<AtomicOpStmt>(),
-                "Adstack counting replay retains a write to a non-differentiable buffer; "
-                "counting must not change primal state");
-  }
   std::unordered_map<Stmt *, Counter> counters;
   for (auto *stmt : statements) {
     if (auto *stack = stmt->cast<AdStackAllocaStmt>()) {
