@@ -64,7 +64,8 @@ def test_counted_reusable_out_of_order_records():
         y.grad.fill(2)
         record.backward()
         assert x.grad[0] == pytest.approx(2 * derivative, rel=2e-5)
-    # Reuse also obeys the ordinary gradient accumulation contract.
+    # Reseed the output gradient consumed by backward; leave the input gradient to accumulate.
+    y.grad.fill(2)
     first.records[0].backward()
     assert x.grad[0] == pytest.approx(4 * d2, rel=2e-5)
     with pytest.raises(RuntimeError, match="No pending counted forward"):
@@ -136,11 +137,7 @@ def test_counted_numpy_argument():
 @test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
 def test_counted_torch_arguments():
     torch = pytest.importorskip("torch")
-    device = (
-        "cuda"
-        if qd.lang.impl.current_cfg().arch == qd.cuda and torch.cuda.is_available()
-        else "cpu"
-    )
+    device = "cuda" if qd.lang.impl.current_cfg().arch == qd.cuda and torch.cuda.is_available() else "cpu"
     x = torch.full((4,), 0.2, device=device, requires_grad=True)
     y = torch.zeros((4,), device=device, requires_grad=True)
 
@@ -158,9 +155,7 @@ def test_counted_torch_arguments():
         x.grad = torch.zeros_like(x)
         y.grad = torch.ones_like(y)
         scope.records[0].backward()
-        assert x.grad.cpu().numpy() == pytest.approx(
-            np.full(4, math.cos(0.2) * math.cos(math.sin(0.2))), rel=2e-5
-        )
+        assert x.grad.cpu().numpy() == pytest.approx(np.full(4, math.cos(0.2) * math.cos(math.sin(0.2))), rel=2e-5)
 
 
 @pytest.mark.parametrize("fastcache", [False, True])
@@ -180,3 +175,45 @@ def test_counted_persistent_cache(tmp_path, fastcache):
             ],
             check=True,
         )
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal], offline_cache=False)
+def test_counted_class_kernel():
+    @qd.data_oriented
+    class Model:
+        def __init__(self):
+            self.x = qd.field(qd.f32, shape=1, needs_grad=True)
+            self.y = qd.field(qd.f32, shape=1, needs_grad=True)
+            self.x[0] = 0.2
+
+        @qd.kernel
+        def compute(self, n: qd.i32):
+            for i in self.x:
+                value = self.x[i]
+                for j in range(n):
+                    value = qd.sin(value)
+                self.y[i] = value
+
+    model = Model()
+    with qd.adstack as scope:
+        model.compute(n=2)
+    model.y.grad.fill(1)
+    scope.records[0].backward()
+    assert model.x.grad[0] == pytest.approx(math.cos(0.2) * math.cos(math.sin(0.2)), rel=2e-5)
+
+
+@test_utils.test(arch=[qd.cpu], offline_cache=False)
+def test_counted_record_cannot_cross_reset():
+    x = qd.ndarray(qd.f32, shape=1)
+
+    @qd.kernel
+    def compute(x: qd.types.ndarray()):
+        for i in range(1):
+            x[i] = 1.0
+
+    with qd.adstack as scope:
+        compute(x)
+    qd.reset()
+    with pytest.raises(RuntimeError, match="cannot be used after"):
+        scope.records[0].backward()
+    scope.records[0].release()

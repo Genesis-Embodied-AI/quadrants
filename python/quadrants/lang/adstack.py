@@ -46,13 +46,9 @@ class _Invocation:
         if record is None:
             raise RuntimeError("This adstack invocation has been released")
         if impl.get_runtime().prog is not self._program:
-            raise RuntimeError(
-                "Adstack invocations cannot be used after qd.reset() or qd.init()"
-            )
+            raise RuntimeError("Adstack invocations cannot be used after qd.reset() or qd.init()")
         if _arguments(record.keepalive) != record.arguments:
-            raise RuntimeError(
-                "Counted invocation argument metadata changed before backward"
-            )
+            raise RuntimeError("Counted invocation argument metadata changed before backward")
         if getattr(impl.get_runtime(), "adstack_scope", None) is not None:
             raise RuntimeError("Run backward outside the qd.adstack context")
         self._remove_pending()
@@ -85,13 +81,9 @@ class _AdstackContext:
         runtime = impl.get_runtime()
         config = impl.current_cfg()
         if config.arch not in (core.cuda, core.x64, core.vulkan, core.metal):
-            raise RuntimeError(
-                "qd.adstack prototype supports CUDA, x64, Vulkan, and Metal only"
-            )
+            raise RuntimeError("qd.adstack prototype supports CUDA, x64, Vulkan, and Metal only")
         if config.ad_stack_size:
-            raise RuntimeError(
-                "qd.adstack prototype requires automatic ad_stack_size=0"
-            )
+            raise RuntimeError("qd.adstack prototype requires automatic ad_stack_size=0")
         if getattr(runtime, "adstack_scope", None) is not None:
             raise RuntimeError("Nested qd.adstack contexts are not supported")
         scope = _Scope()
@@ -130,12 +122,8 @@ def _variant(kernel, mode):
     name = "_adstack_count_variant" if mode == 1 else "_adstack_reverse_variant"
     variant = getattr(kernel, name, None)
     if variant is None:
-        variant = Kernel(
-            kernel.func, kernel.autodiff_mode, _is_classkernel=kernel.is_classkernel
-        )
-        variant.quadrants_callable = getattr(
-            kernel, "_adstack_source_callable", kernel.quadrants_callable
-        )
+        variant = Kernel(kernel.func, kernel.autodiff_mode, _is_classkernel=kernel.is_classkernel)
+        variant.quadrants_callable = getattr(kernel, "_adstack_source_callable", kernel.quadrants_callable)
         variant.adstack_mode = mode
         if mode == 1:
             variant.grad = kernel.grad
@@ -152,19 +140,11 @@ def dispatch(kernel, args, kwargs):
     counting = scope is not None and kernel.autodiff_mode == AutodiffMode.NONE
     if not counting and pending is None:
         return False, None
-    if (
-        kernel.use_graph
-        or kernel.use_checkpoints
-        or kwargs.get("qd_stream") is not None
-    ):
-        raise RuntimeError(
-            "qd.adstack prototype requires non-graph kernels without custom streams"
-        )
+    if kernel.use_graph or kernel.use_checkpoints or kwargs.get("qd_stream") is not None:
+        raise RuntimeError("qd.adstack prototype requires non-graph kernels without custom streams")
     kwargs = dict(kwargs)
     kwargs.pop("qd_stream", None)
-    args = kernel.fuse_args(
-        is_func=False, is_pyfunc=False, py_args=args, kwargs=kwargs, global_context=None
-    )
+    args = kernel.fuse_args(is_func=False, is_pyfunc=False, py_args=args, kwargs=kwargs, global_context=None)
     signature = _arguments(args)
     if counting:
         assert scope is not None
@@ -183,12 +163,8 @@ def dispatch(kernel, args, kwargs):
         try:
             result = variant(*args)
             runtime.sync()
-            if impl.current_cfg().arch in (core.vulkan, core.metal) and int(
-                buffer.arr.read_int([1])
-            ):
-                raise RuntimeError(
-                    "Measured adstack depth exceeds the backend capacity limit"
-                )
+            if impl.current_cfg().arch in (core.vulkan, core.metal) and int(buffer.arr.read_int([1])):
+                raise RuntimeError("Measured adstack depth exceeds the backend capacity limit")
             capacity = max(1, int(buffer.arr.read_int([0])))
         finally:
             variant.adstack_record = None
@@ -205,7 +181,5 @@ def dispatch(kernel, args, kwargs):
         raise RuntimeError("No pending counted forward invocation for this backward")
     invocation = pending[-1]
     if invocation._record.arguments != signature:
-        raise RuntimeError(
-            "Counted backward calls must match forward arguments in reverse invocation order"
-        )
+        raise RuntimeError("Counted backward calls must match forward arguments in reverse invocation order")
     return True, invocation.backward()

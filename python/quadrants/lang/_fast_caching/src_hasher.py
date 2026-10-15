@@ -86,9 +86,7 @@ def _intenum_member_qualname(value: Any) -> str | None:
     return f"{module}.{qualname}.{name}"
 
 
-def _resolve_intenum_member(
-    qualname: str | None, fallback: int | None
-) -> int | IntEnum | None:
+def _resolve_intenum_member(qualname: str | None, fallback: int | None) -> int | IntEnum | None:
     """Inverse of ``_intenum_member_qualname``: look up the enum member by ``"module.ClassQualName.MEMBER"``.
 
     Returns the resolved ``IntEnum`` member if every step (module import, attribute walk) succeeds AND the member's int
@@ -132,9 +130,7 @@ def _resolve_intenum_member(
     return fallback
 
 
-def make_source_config_key(
-    kernel_source_info: FunctionSourceInfo, compilation_mode: str = ""
-) -> str:
+def make_source_config_key(kernel_source_info: FunctionSourceInfo, compilation_mode: str = "") -> str:
     """Build the L1 cache key: source + config + version, with no dependence on args."""
     kernel_hash = function_hasher.hash_kernel(kernel_source_info)
     config_hash = config_hasher.hash_compile_config()
@@ -159,9 +155,7 @@ def make_source_config_key(
 
 def make_full_cache_key(source_config_key: str, narrow_args_hash: str) -> str:
     """Build the L2 cache key from the L1 key + narrow args hash. See module docstring."""
-    return hash_iterable_strings(
-        (_L2_MARKER, source_config_key, narrow_args_hash, _CACHE_VALUE_SCHEMA_VERSION)
-    )
+    return hash_iterable_strings((_L2_MARKER, source_config_key, narrow_args_hash, _CACHE_VALUE_SCHEMA_VERSION))
 
 
 def compute_narrow_args_hash(
@@ -174,9 +168,7 @@ def compute_narrow_args_hash(
     """Compute the args hash narrowed by ``pruning_paths`` (or wide if ``pruning_paths is None``), or ``None`` if an
     unsupported type forces fastcache off for this call.
     """
-    args_hash = args_hasher.hash_args(
-        raise_on_templated_floats, args, arg_metas, pruning_paths=pruning_paths
-    )
+    args_hash = args_hasher.hash_args(raise_on_templated_floats, args, arg_metas, pruning_paths=pruning_paths)
     if isinstance(args_hash, FastcacheSkip):
         if args_hash is FastcacheSkip.WARN:
             # the bit in caps at start should not be modified without modifying corresponding text
@@ -317,9 +309,7 @@ def load_pruning_info(
     except (pydantic.ValidationError, json.JSONDecodeError, UnicodeDecodeError) as e:
         warnings.warn(f"Failed to parse L1 cache entry: {e}")
         return None, None
-    if not function_hasher.validate_hashed_function_infos(
-        cache_value.hashed_function_source_infos
-    ):
+    if not function_hasher.validate_hashed_function_infos(cache_value.hashed_function_source_infos):
         return None, None
     return cache_value.used_py_dataclass_parameters, cache_value.graph_do_while_levels
 
@@ -424,9 +414,7 @@ def load(cache_key: str) -> CacheValue | None:
     cache_value = _try_load(cache_key)
     if cache_value is None:
         return None
-    if function_hasher.validate_hashed_function_infos(
-        cache_value.hashed_function_source_infos
-    ):
+    if function_hasher.validate_hashed_function_infos(cache_value.hashed_function_source_infos):
         return cache_value
     return None
 
