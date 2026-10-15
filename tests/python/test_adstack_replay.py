@@ -319,3 +319,33 @@ def test_measurement_failure_does_not_fall_back(monkeypatch):
     compute.grad(x, y, 3)
     expected = math.cos(0.2) * math.cos(math.sin(0.2)) * math.cos(math.sin(math.sin(0.2)))
     np.testing.assert_allclose(x.grad.to_numpy(), [expected], rtol=2e-5)
+
+
+@pytest.mark.parametrize("block_dim", [16, 32, 128])
+@pytest.mark.parametrize("dtype", [qd.f32, qd.f64])
+@test_utils.test(arch=qd.cuda)
+def test_replay_stack_layout_divergent_depths(block_dim, dtype):
+    n = 97
+    x = qd.ndarray(dtype, shape=n, needs_grad=True)
+    y = qd.ndarray(dtype, shape=n, needs_grad=True)
+    values = np.linspace(0.1, 0.9, n, dtype=np.float64 if dtype == qd.f64 else np.float32)
+    x.from_numpy(values)
+    y.grad.fill(1)
+
+    @qd.kernel
+    def compute(x: qd.types.ndarray(), y: qd.types.ndarray()):
+        qd.loop_config(block_dim=block_dim)
+        for i in range(n):
+            value = x[i]
+            for j in range(i % 11 + 1):
+                value = qd.sin(value)
+            y[i] = value
+
+    compute.grad(x, y)
+    expected = np.ones(n)
+    for i in range(n):
+        value = float(values[i])
+        for _ in range(i % 11 + 1):
+            expected[i] *= math.cos(value)
+            value = math.sin(value)
+    np.testing.assert_allclose(x.grad.to_numpy(), expected, rtol=2e-5)

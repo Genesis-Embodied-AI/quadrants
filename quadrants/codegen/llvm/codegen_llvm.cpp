@@ -2258,9 +2258,10 @@ llvm::Value *TaskCodeGenLLVM::emit_ad_stack_top_slot_ptr(AdStackAllocaStmt *stac
   auto *zero = llvm::ConstantInt::get(i64ty, 0);
   auto *one = llvm::ConstantInt::get(i64ty, 1);
   auto *index = builder->CreateSelect(builder->CreateICmpUGT(count, zero), builder->CreateSub(count, one), zero);
-  auto *offset =
-      builder->CreateAdd(builder->CreateMul(index, llvm::ConstantInt::get(i64ty, stack->entry_size_in_bytes())),
-                         llvm::ConstantInt::get(i64ty, adjoint_offset_bytes));
+  auto *offset = builder->CreateAdd(
+      builder->CreateMul(index, llvm::ConstantInt::get(i64ty, stack->entry_size_in_bytes() *
+                                                                  (compile_config.arch == Arch::cuda ? 32u : 1u))),
+      llvm::ConstantInt::get(i64ty, adjoint_offset_bytes));
   return builder->CreateGEP(llvm::Type::getInt8Ty(*llvm_context), llvm_val[stack], offset);
 }
 
@@ -2268,10 +2269,18 @@ void TaskCodeGenLLVM::visit(AdStackAllocaStmt *stmt) {
   auto *i64ty = llvm::Type::getInt64Ty(*llvm_context);
   auto *thread = builder->CreateZExt(call("linear_thread_idx", get_context()), i64ty);
   auto *capacity = call("adstack_capacity", get_context());
+  // CUDA stores each stack depth across 32 neighboring lanes before advancing to the next depth.
+  // The allocator rounds the worker count to 32 so serial tasks and partial groups also have backing storage.
+  const bool interleaved = compile_config.arch == Arch::cuda;
+  const auto lanes = interleaved ? 32u : 1u;
+  auto *group = builder->CreateUDiv(thread, llvm::ConstantInt::get(i64ty, lanes));
+  auto *lane = builder->CreateURem(thread, llvm::ConstantInt::get(i64ty, lanes));
   auto *layer =
-      builder->CreateAdd(builder->CreateMul(thread, llvm::ConstantInt::get(i64ty, ad_stack_per_thread_stride_)),
+      builder->CreateAdd(builder->CreateMul(group, llvm::ConstantInt::get(i64ty, ad_stack_per_thread_stride_)),
                          llvm::ConstantInt::get(i64ty, ad_stack_offsets_.at(stmt->stack_id)));
-  auto *offset = builder->CreateMul(layer, capacity);
+  auto *offset =
+      builder->CreateAdd(builder->CreateMul(builder->CreateMul(layer, capacity), llvm::ConstantInt::get(i64ty, lanes)),
+                         builder->CreateMul(lane, llvm::ConstantInt::get(i64ty, stmt->entry_size_in_bytes())));
   llvm_val[stmt] = builder->CreateGEP(llvm::Type::getInt8Ty(*llvm_context),
                                       call("LLVMRuntime_get_adstack_heap_buffer", get_runtime()), offset);
   builder->CreateStore(llvm::ConstantInt::get(i64ty, 0), ensure_ad_stack_count_alloca_llvm(stmt));

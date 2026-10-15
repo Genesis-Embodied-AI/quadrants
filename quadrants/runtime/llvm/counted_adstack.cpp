@@ -14,6 +14,11 @@ void LlvmRuntimeExecutor::prepare_counted_adstack(const AdStackSizingInfo &layou
                                                   LaunchContextBuilder &ctx) {
   if (!layout.per_thread_stride || !workers)
     return;
+  if (config_.arch == Arch::cuda) {
+    // Match the 32-lane stack layout in LLVM codegen, including launches with fewer than 32 workers.
+    QD_ERROR_IF(workers > std::numeric_limits<std::size_t>::max() - 31u, "Measured adstack worker count overflow");
+    workers = (workers + 31u) & ~std::size_t{31u};
+  }
   const auto capacity = ctx.get_context().adstack_capacity;
   QD_ERROR_IF(!capacity, "Stack-based backward requires a replay-count measurement");
   const auto limit = std::numeric_limits<std::size_t>::max();
