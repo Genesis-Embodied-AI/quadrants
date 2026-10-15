@@ -28,6 +28,8 @@ void remove_adstack_count_outputs(IRNode *root, const CompileConfig &config) {
   // read of any written buffer could observe a removed write, so reject it conservatively across the whole kernel.
   auto writes = irpass::analysis::gather_statements(
       root, [](Stmt *stmt) { return stmt->is<GlobalStoreStmt>() || stmt->is<AtomicOpStmt>(); });
+  if (writes.empty())
+    return;
   for (auto *stmt : writes) {
     auto *atomic = stmt->cast<AtomicOpStmt>();
     auto *dest = atomic ? atomic->dest : stmt->as<GlobalStoreStmt>()->dest;
