@@ -61,7 +61,7 @@ def measure(kernel, counted, x, y, n, repeats):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--arch", choices=("cuda", "cpu"), default="cuda")
+    parser.add_argument("--arch", choices=("cuda", "cpu", "vulkan", "metal"), default="cuda")
     parser.add_argument("--size", type=int, default=4096)
     parser.add_argument("--depth", type=int, default=32)
     parser.add_argument("--repeats", type=int, default=30)

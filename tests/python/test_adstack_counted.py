@@ -227,3 +227,37 @@ def test_counted_adstack_overflow_with_reduction(debug):
     compute.grad(x, y, n)
     expected = 4096 * math.cos(0.2) * math.cos(math.sin(0.2))
     assert x.grad[None] == pytest.approx(expected, rel=2e-4)
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal], offline_cache=False)
+def test_counted_adstack_multiple_tasks():
+    x, _, n = _arrays()
+    y = qd.ndarray(qd.f32, shape=8, needs_grad=True)
+
+    @qd.kernel
+    def compute(x: qd.types.ndarray(), y: qd.types.ndarray(), n: qd.types.ndarray()):
+        for i in range(4):
+            value = x[i]
+            for j in range(n[i]):
+                value = qd.sin(value)
+            y[i] = value
+        for i in range(4):
+            value = x[i]
+            for j in range(n[i] + 2):
+                value = qd.sin(value)
+            y[i + 4] = value
+
+    y.grad.fill(1)
+    with qd.adstack:
+        compute(x, y, n)
+    compute.grad(x, y, n)
+    for i in range(4):
+        expected = 0.0
+        for extra in (0, 2):
+            value, derivative = float(x[i]), 1.0
+            for _ in range(n[i] + extra):
+                derivative *= math.cos(value)
+                value = math.sin(value)
+            assert y[i + (4 if extra else 0)] == pytest.approx(value, rel=2e-5)
+            expected += derivative
+        assert x.grad[i] == pytest.approx(expected, rel=2e-5)
