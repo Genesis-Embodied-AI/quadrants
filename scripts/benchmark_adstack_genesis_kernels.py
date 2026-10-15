@@ -73,8 +73,8 @@ def main():
             ["nvidia-smi", "--query-gpu=name,driver_version", "--format=csv,noheader"], text=True
         ).strip(),
         "envs": args.envs,
-        "particles_per_env": solver.n_particles,
-        "grid_resolution": list(solver._grid_res),
+        "particles_per_env": int(solver.n_particles),
+        "grid_resolution": [int(n) for n in solver._grid_res],
         "precision": "32",
         "repeats": args.repeats,
         "kernels": {},
