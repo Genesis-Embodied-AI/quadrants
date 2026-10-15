@@ -373,6 +373,7 @@ class Kernel(FuncBase):
         # `Stage.SIM` rather than the raw int.
         self.checkpoint_user_labels_by_cp_id: list[int | None] = []
         self.quadrants_callable: QuadrantsCallable | None = None
+        self._adstack_source_callable: QuadrantsCallable
         self.visited_functions: set[FunctionSourceInfo] = set()
         self.kernel_function_info: FunctionSourceInfo | None = None
         self.compiled_kernel_data_by_key: dict[CompiledKernelKeyType, CompiledKernelData] = {}
