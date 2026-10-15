@@ -264,6 +264,8 @@ void export_lang(nb::module_ &m) {
               "Run the full advanced optimization pass pipeline.")
       .def_rw("ad_stack_experimental_enabled", &CompileConfig::ad_stack_experimental_enabled,
               "Enable the reverse-mode autodiff pipeline for kernels with runtime-bounded loops (the adstack).")
+      .def_rw("ad_stack_replay_count", &CompileConfig::ad_stack_replay_count,
+              "Measure reduced forward replay immediately before each stack-based backward.")
       .def_rw("ad_stack_size", &CompileConfig::ad_stack_size,
               "Force autodiff stacks to exactly this many slots. 0 lets the launch-time sizer choose automatically. "
               "No effect unless ad_stack_experimental_enabled is on.")
@@ -654,6 +656,7 @@ void export_lang(nb::module_ &m) {
       ;
 
   nb::class_<Kernel>(m, "KernelCxx")
+      .def_rw("adstack_mode", &Kernel::adstack_mode)
       .def("no_activate",
            [](Kernel *self, SNode *snode) {
              // TODO(#2193): Also apply to @qd.func?
@@ -673,6 +676,8 @@ void export_lang(nb::module_ &m) {
           nb::rv_policy::reference);
 
   nb::class_<LaunchContextBuilder>(m, "KernelLaunchContext")
+      .def("set_adstack_measurement", &LaunchContextBuilder::set_adstack_measurement)
+      .def("set_adstack_measurement_array", &LaunchContextBuilder::set_adstack_measurement_array)
       .def("copy", &LaunchContextBuilder::copy)
       .def("set_arg_int", &LaunchContextBuilder::set_arg_int)
       .def("set_args_int", &LaunchContextBuilder::set_args_int)

@@ -69,6 +69,7 @@ static std::vector<std::uint8_t> get_offline_cache_key_of_compile_config(const C
     serializer(subgroup_size(config.arch));
   }
   serializer(config.ad_stack_experimental_enabled);
+  serializer(config.ad_stack_replay_count);
   serializer(config.ad_stack_size);
   serializer(config.ad_stack_sparse_threshold_bytes);
   serializer(config.random_seed);
@@ -191,6 +192,10 @@ std::string get_hashed_offline_cache_key(const CompileConfig &config,
   hasher.process(kernel_rets_string.begin(), kernel_rets_string.end());
   hasher.process(kernel_body_string.begin(), kernel_body_string.end());
   hasher.process(autodiff_mode.begin(), autodiff_mode.end());
+  if (kernel->adstack_mode != 0) {
+    const std::string measured_mode = "adstack-measured:" + std::to_string(kernel->adstack_mode);
+    hasher.process(measured_mode.begin(), measured_mode.end());
+  }
   hasher.finish();
 
   auto res = picosha2::get_hash_hex_string(hasher);

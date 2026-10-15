@@ -27,6 +27,28 @@ STRUCT_FIELD(LLVMRuntime, adstack_max_reducer_outputs);
 STRUCT_FIELD(LLVMRuntime, adstack_overflow_flag_dev_ptr);
 STRUCT_FIELD(LLVMRuntime, adstack_overflow_task_id_dev_ptr);
 
+// The measured-stack prototype owns these two words per forward/backward invocation. Only one atomic reduction
+// per stack lifetime is needed; counter updates within the forward remain ordinary local arithmetic.
+extern "C" i32 adstack_measure_peak(RuntimeContext *ctx, i64 depth) {
+  auto *slot = ctx->adstack_measurement;
+  i64 previous = __atomic_load_n(slot, __ATOMIC_RELAXED);
+  while (previous < depth &&
+         !__atomic_compare_exchange_n(slot, &previous, depth, false, __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {
+  }
+  return 0;
+}
+
+extern "C" u64 adstack_checked_count(RuntimeContext *ctx, u64 required) {
+  auto *flag = ctx->adstack_measurement + 1;
+  if (required > ctx->adstack_capacity) {
+    __atomic_store_n(flag, i64(1), __ATOMIC_RELAXED);
+    return ctx->adstack_capacity;
+  }
+  // No thread exits early: reductions and barriers must still execute after a failure. The host discards
+  // the entire result. Avoid a global atomic load on every successful push.
+  return required;
+}
+
 // Writes the addresses of `runtime->adstack_heap_buffer` and `runtime->adstack_heap_size` into the result buffer so the
 // host-side executor can cache them. With those cached device pointers the host grows the heap by issuing two simple
 // `memcpy_host_to_device` writes - no per-grow kernel launch for the setters, which sidesteps any questions about

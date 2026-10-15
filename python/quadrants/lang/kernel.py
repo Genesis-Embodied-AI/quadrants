@@ -10,7 +10,7 @@ from dataclasses import _FIELDS  # type: ignore[reportAttributeAccessIssue]
 
 # Must import 'partial' directly instead of the entire module to avoid attribute lookup overhead.
 from functools import partial
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 # Must import 'ReferenceType' directly instead of the entire module to avoid attribute lookup overhead.
 from weakref import ReferenceType
@@ -87,6 +87,9 @@ from ._quadrants_callable import QuadrantsCallable
 _NONE, _VALIDATION = AutodiffMode.NONE, AutodiffMode.VALIDATION
 _FLOAT, _INT, _UINT, _QD_ARRAY, _QD_ARRAY_WITH_GRAD = KernelBatchedArgType
 _ARCH_PYTHON = Arch.python
+
+if TYPE_CHECKING:
+    from quadrants.lang.adstack_replay import _Record
 
 
 class LaunchContextBufferCache:
@@ -322,6 +325,8 @@ class Kernel(FuncBase):
             AutodiffMode.REVERSE,
         )
         self.autodiff_mode = autodiff_mode
+        self.adstack_mode = 0
+        self.adstack_record: "_Record | None" = None
         self.grad: "Kernel | None" = None
         impl.get_runtime().kernels.append(self)  # type: ignore[arg-type]
         self.reset()
@@ -399,6 +404,10 @@ class Kernel(FuncBase):
 
     def reset(self) -> None:
         self.runtime = impl.get_runtime()
+        self.adstack_record = None
+        for name in ("_adstack_count_variant", "_adstack_reverse_variant"):
+            if hasattr(self, name):
+                delattr(self, name)
         self.materialized_kernels = {}
         self.compiled_kernel_data_by_key = {}
         self._last_compiled_kernel_data = None
@@ -423,7 +432,9 @@ class Kernel(FuncBase):
         if self.runtime.src_ll_cache and self.quadrants_callable and self.quadrants_callable.is_pure:
             kernel_source_info, _src = get_source_info_and_src(self.func)
             self._kernel_source_info_cached = kernel_source_info  # reused by materialize / launch_kernel
-            self._l1_key = src_hasher.make_source_config_key(kernel_source_info)
+            self._l1_key = src_hasher.make_source_config_key(
+                kernel_source_info, compilation_mode=f"{self.autodiff_mode}:{self.adstack_mode}"
+            )
 
             # Phase 1: L1 lookup - pruning info only, no args walk yet.
             pruning_paths, cached_graph_do_while_levels = src_hasher.load_pruning_info(self._l1_key)
@@ -583,6 +594,7 @@ class Kernel(FuncBase):
                 quadrants_kernel = impl.get_runtime().prog.create_kernel(
                     quadrants_ast_generator, kernel_name, self.autodiff_mode
                 )
+                quadrants_kernel.adstack_mode = self.adstack_mode
                 if _pass == 1:
                     assert key not in self.materialized_kernels
                     self.materialized_kernels[key] = quadrants_kernel
@@ -660,6 +672,14 @@ class Kernel(FuncBase):
 
         callbacks: list[Callable[[], None]] = []
         launch_ctx = t_kernel.make_launch_context()
+        if self.adstack_record is not None:
+            if impl.current_cfg().arch in (Arch.vulkan, Arch.metal):
+                launch_ctx.set_adstack_measurement_array(self.adstack_record.buffer.arr, self.adstack_record.capacity)
+            else:
+                launch_ctx.set_adstack_measurement(
+                    self.runtime.prog.get_ndarray_data_ptr_as_int(self.adstack_record.buffer.arr),
+                    self.adstack_record.capacity,
+                )
         # Special treatment for primitive types is unecessary and detrimental. See 'TemplateMapper.lookup' for details.
         args_hash: "ArgsHash" = (id(t_kernel), *[id(arg) for arg in args])
         # Stale-cache guard for mutable structs containing ndarrays. Frozen dataclass fields cannot be reassigned, so
@@ -1024,6 +1044,15 @@ class Kernel(FuncBase):
                         py_args_l[i] = _arg._impl
                 if py_args_l is not None:
                     py_args = tuple(py_args_l)
+
+        if (
+            not self.adstack_mode
+            and self.autodiff_mode == AutodiffMode.REVERSE
+            and impl.current_cfg().ad_stack_replay_count
+        ):
+            from quadrants.lang.adstack_replay import backward  # pylint: disable=import-outside-toplevel
+
+            return backward(self, py_args, qd_stream)
 
         # Transform the primal kernel to forward mode grad kernel
         # then recover to primal when exiting the forward mode manager

@@ -961,6 +961,9 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
           }
           bindings->rw_buffer(bind.binding, *adstack_heap_buffer_int_);
         }
+      } else if (bind.buffer.type == BufferType::AdStackMeasurement) {
+        QD_ASSERT(host_ctx.adstack_measurement_allocation.device != nullptr);
+        bindings->rw_buffer(bind.binding, host_ctx.adstack_measurement_allocation);
       } else if (bind.buffer.type == BufferType::AdStackMetadata) {
         // Per-dispatch u32 buffer carrying `[stride_float, stride_int, (offset_i, max_size_i)*]`. Populated
         // from `ad_stack_metadata` above (which evaluated each alloca's `SizeExpr`). Empty `allocas` means

@@ -47,6 +47,7 @@ struct CompileConfig {
   int default_cpu_block_dim;
   int default_gpu_block_dim;
   bool ad_stack_experimental_enabled{false};
+  bool ad_stack_replay_count{false};
   int ad_stack_size{0};  // 0 = adaptive
   // Conservative-heap threshold (in bytes) below which a kernel keeps the eager `linear_thread_idx * stride` adstack
   // heap addressing instead of paying the per-launch reducer dispatch + per-task DtoH the `bound_expr`-driven sparse

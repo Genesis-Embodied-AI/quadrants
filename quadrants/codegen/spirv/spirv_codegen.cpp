@@ -64,6 +64,8 @@ std::string buffer_instance_name(BufferInfo b) {
       return kListgenBufferName;
     case BufferType::ExtArr:
       return std::string(kExtArrBufferName) + "_" + std::to_string(b.root_id) + (b.is_grad ? "_grad" : "");
+    case BufferType::AdStackMeasurement:
+      return "adstack_measurement_buffer";
     case BufferType::AdStackOverflow:
       return kAdStackOverflowBufferName;
     case BufferType::AdStackRowCounter:
@@ -89,6 +91,7 @@ TaskCodegen::TaskCodegen(const Params &params)
     : arch_(params.arch),
       caps_(params.caps),
       compile_config_(params.compile_config),
+      adstack_mode_(params.adstack_mode),
       task_id_in_kernel_(params.task_id_in_kernel),
       task_ir_(params.task_ir),
       compiled_structs_(params.compiled_structs),
@@ -177,8 +180,21 @@ TaskCodegen::Result TaskCodegen::run() {
     desc.iter_count = static_cast<uint32_t>(dense_desc_it->second.total_num_cells_from_root);
     return desc;
   };
-  auto adstack_analysis = analyze_adstack_static_bounds(task_ir_, snode_descriptor_resolver,
-                                                        compile_config_->ad_stack_sparse_threshold_bytes);
+  auto adstack_analysis = adstack_mode_ != 0
+                              ? StaticAdStackAnalysisResult{}
+                              : analyze_adstack_static_bounds(task_ir_, snode_descriptor_resolver,
+                                                              compile_config_->ad_stack_sparse_threshold_bytes);
+  if (adstack_mode_ == 2) {
+    for (auto *s : irpass::analysis::gather_statements(task_ir_, [](Stmt *s) { return s->is<AdStackAllocaStmt>(); })) {
+      auto *stack = s->as<AdStackAllocaStmt>();
+      ++adstack_analysis.num_ad_stacks;
+      if (stack->dt == PrimitiveType::f32)
+        adstack_analysis.per_thread_stride_float += 2 * stack->max_size;
+      else
+        adstack_analysis.per_thread_stride_int += stack->max_size;
+    }
+    adstack_analysis.lca_block_float = task_ir_->body.get();
+  }
   ad_stack_heap_per_thread_stride_float_ = adstack_analysis.per_thread_stride_float;
   ad_stack_heap_per_thread_stride_int_ = adstack_analysis.per_thread_stride_int;
   num_ad_stacks_ = adstack_analysis.num_ad_stacks;
@@ -1496,7 +1512,25 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
 
   const std::unordered_set<std::string> shuffle_ops{"subgroupShuffleDown", "subgroupShuffleUp", "subgroupShuffle"};
 
-  if (stmt->func_name == "composite_extract_0") {
+  if (stmt->func_name == "adstack_measure_peak") {
+    auto buffer = get_buffer_value(BufferType::AdStackMeasurement, PrimitiveType::u32);
+    auto ptr = ir_->struct_array_access(ir_->u32_type(), buffer, ir_->const_i32_zero_);
+    auto wide_depth = ir_->query_value(stmt->args[0]->raw_name());
+    auto too_large = ops_->gt(wide_depth, ir_->int_immediate_number(ir_->i64_type(), INT32_MAX));
+    auto error_label = ir_->new_label();
+    auto merge_label = ir_->new_label();
+    ir_->make_inst(spv::OpSelectionMerge, merge_label, spv::SelectionControlMaskNone);
+    ir_->make_inst(spv::OpBranchConditional, too_large, error_label, merge_label);
+    ir_->start_label(error_label);
+    auto error_ptr = ir_->struct_array_access(ir_->u32_type(), buffer, ir_->const_i32_one_);
+    ir_->make_value(spv::OpAtomicUMax, ir_->u32_type(), error_ptr, ir_->const_i32_one_, ir_->const_i32_zero_,
+                    ir_->uint_immediate_number(ir_->u32_type(), 1));
+    ir_->make_inst(spv::OpBranch, merge_label);
+    ir_->start_label(merge_label);
+    auto depth = ops_->cast(ir_->u32_type(), wide_depth);
+    ir_->make_value(spv::OpAtomicUMax, ir_->u32_type(), ptr, ir_->const_i32_one_, ir_->const_i32_zero_, depth);
+    val = ir_->const_i32_zero_;
+  } else if (stmt->func_name == "composite_extract_0") {
     val = ir_->make_value(spv::OpCompositeExtract, ir_->f32_type(), ir_->query_value(stmt->args[0]->raw_name()), 0);
   } else if (stmt->func_name == "composite_extract_1") {
     val = ir_->make_value(spv::OpCompositeExtract, ir_->f32_type(), ir_->query_value(stmt->args[0]->raw_name()), 1);
@@ -2874,6 +2908,13 @@ void TaskCodegen::emit_adstack_task_end_overflow_check() {
   if (!task_has_adstack_push_ || any_overflow_signal_var_.id == 0) {
     return;
   }
+  if (adstack_mode_ == 2) {
+    auto buffer = get_buffer_value(BufferType::AdStackMeasurement, PrimitiveType::u32);
+    auto ptr = ir_->struct_array_access(ir_->u32_type(), buffer, ir_->const_i32_one_);
+    auto signal = ir_->load_variable(any_overflow_signal_var_, ir_->u32_type());
+    ir_->make_value(spv::OpAtomicUMax, ir_->u32_type(), ptr, ir_->const_i32_one_, ir_->const_i32_zero_, signal);
+    return;
+  }
   spirv::Value zero = ir_->uint_immediate_number(ir_->u32_type(), 0);
   spirv::Value cur = ir_->load_variable(any_overflow_signal_var_, ir_->u32_type());
   spirv::Value has_overflow = ops_->ne(cur, zero);
@@ -3067,13 +3108,19 @@ void TaskCodegen::visit(AdStackPushStmt *stmt) {
   // buffer is emitted ONCE per task at task-end (see `emit_adstack_task_end_overflow_check`), so push
   // sites do not touch global memory for overflow signaling.
   spirv::Value max_val = info.max_size_val;
-  spirv::Value primal_ptr = ad_stack_slot_ptr(info, count, /*primal=*/true);
+  auto slot = count;
+  if (adstack_mode_ == 2)
+    slot = ir_->call_glsl450(ir_->u32_type(), GLSLstd450UMin, count, ops_->sub(max_val, one));
+  spirv::Value primal_ptr = ad_stack_slot_ptr(info, slot, /*primal=*/true);
   ir_->store_variable(primal_ptr, val);
   if (info.heap_kind != AdStackHeapKind::heap_int) {
-    spirv::Value adjoint_ptr = ad_stack_slot_ptr(info, count, /*primal=*/false);
+    spirv::Value adjoint_ptr = ad_stack_slot_ptr(info, slot, /*primal=*/false);
     ir_->store_variable(adjoint_ptr, ir_->get_zero(backing_type));
   }
-  ir_->store_variable(info.count_var, ops_->add(count, one));
+  auto next = ops_->add(count, one);
+  if (adstack_mode_ == 2)
+    next = ir_->call_glsl450(ir_->u32_type(), GLSLstd450UMin, next, max_val);
+  ir_->store_variable(info.count_var, next);
   // Update the per-task overflow-signal accumulator. `signal = (count >= max) ? stack_id + 1 : 0`; running max
   // across all push sites in this thread. No global memory access.
   spirv::Value any_overflow_var = ensure_any_overflow_signal_var();
@@ -3095,7 +3142,11 @@ void TaskCodegen::visit(AdStackPopStmt *stmt) {
   auto &info = ad_stacks_.at(stmt->stack);
   spirv::Value count = ir_->load_variable(info.count_var, ir_->u32_type());
   spirv::Value one = ir_->uint_immediate_number(ir_->u32_type(), 1);
-  ir_->store_variable(info.count_var, ops_->sub(count, one));
+  auto next = ops_->sub(count, one);
+  if (adstack_mode_ == 2)
+    next = ops_->select(ops_->gt(count, ir_->uint_immediate_number(ir_->u32_type(), 0)), next,
+                        ir_->uint_immediate_number(ir_->u32_type(), 0));
+  ir_->store_variable(info.count_var, next);
 }
 
 // `idx = min(count - 1, max_size - 1)` as a u32 when `clamp_to_max_size` is set. On the overflow path count can
@@ -3116,6 +3167,8 @@ static spirv::Value ad_stack_top_index(spirv::IRBuilder *ir,
   if (!clamp_to_max_size) {
     return idx;
   }
+  idx = ops_.select(ops_.gt(count, ir->uint_immediate_number(ir->u32_type(), 0)), idx,
+                    ir->uint_immediate_number(ir->u32_type(), 0));
   spirv::Value cap = ops_.sub(max_size_val, one);
   return ir->call_glsl450(ir->u32_type(), GLSLstd450UMin, idx, cap);
 }
@@ -3136,8 +3189,8 @@ void TaskCodegen::visit(AdStackLoadTopStmt *stmt) {
   auto &info = ad_stacks_.at(stmt->stack);
   ensure_ad_stack_metadata_loaded(info);
   spirv::Value count = ir_->load_variable(info.count_var, ir_->u32_type());
-  spirv::Value idx =
-      ad_stack_top_index(ir_.get(), *ops_, count, info.max_size_val, compile_config_ && (compile_config_->debug));
+  spirv::Value idx = ad_stack_top_index(ir_.get(), *ops_, count, info.max_size_val,
+                                        adstack_mode_ == 2 || (compile_config_ && compile_config_->debug));
   spirv::Value ptr = ad_stack_slot_ptr(info, idx, /*primal=*/true);
   spirv::SType backing_type = ad_stack_backing_type(info);
   spirv::Value loaded = ir_->load_variable(ptr, backing_type);
@@ -3159,8 +3212,8 @@ void TaskCodegen::visit(AdStackLoadTopAdjStmt *stmt) {
   // promotion on the int heap, which this assert excludes. For heap_float the backing type is `info.elem_type`
   // unconditionally, so any cast would be a no-op.
   spirv::Value count = ir_->load_variable(info.count_var, ir_->u32_type());
-  spirv::Value idx =
-      ad_stack_top_index(ir_.get(), *ops_, count, info.max_size_val, compile_config_ && (compile_config_->debug));
+  spirv::Value idx = ad_stack_top_index(ir_.get(), *ops_, count, info.max_size_val,
+                                        adstack_mode_ == 2 || (compile_config_ && compile_config_->debug));
   spirv::Value ptr = ad_stack_slot_ptr(info, idx, /*primal=*/false);
   spirv::Value loaded = ir_->load_variable(ptr, info.elem_type);
   ir_->register_value(stmt->raw_name(), loaded);
@@ -3173,8 +3226,8 @@ void TaskCodegen::visit(AdStackAccAdjointStmt *stmt) {
   ensure_ad_stack_metadata_loaded(info);
   // See the note in `AdStackLoadTopAdjStmt`: no cast is needed because heap_int is excluded by the assert above.
   spirv::Value count = ir_->load_variable(info.count_var, ir_->u32_type());
-  spirv::Value idx =
-      ad_stack_top_index(ir_.get(), *ops_, count, info.max_size_val, compile_config_ && (compile_config_->debug));
+  spirv::Value idx = ad_stack_top_index(ir_.get(), *ops_, count, info.max_size_val,
+                                        adstack_mode_ == 2 || (compile_config_ && compile_config_->debug));
   spirv::Value ptr = ad_stack_slot_ptr(info, idx, /*primal=*/false);
   spirv::Value old_val = ir_->load_variable(ptr, info.elem_type);
   spirv::Value incr = ir_->query_value(stmt->v->raw_name());
@@ -3359,6 +3412,7 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
     tp.arch = params_.arch;
     tp.caps = &params_.caps;
     tp.compile_config = params_.compile_config;
+    tp.adstack_mode = params_.kernel->adstack_mode;
 
     TaskCodegen cgen(tp);
     auto task_res = cgen.run();

@@ -9,6 +9,7 @@
 #include "quadrants/program/kernel.h"
 #include "quadrants/util/lang_util.h"
 #include "quadrants/codegen/ir_dump.h"
+#include "quadrants/transforms/auto_diff/forward_count.h"
 #include <fstream>
 
 namespace quadrants::lang {
@@ -92,9 +93,9 @@ void compile_to_offloads(IRNode *ir,
   }
 
   dump_ir("before_simplify_I");
-  irpass::full_simplify(
-      ir, config,
-      {false, /*autodiff_enabled*/ autodiff_mode != AutodiffMode::kNone, kernel->get_name(), verbose, "simplify_I"});
+  irpass::full_simplify(ir, config,
+                        {false, /*autodiff_enabled*/ autodiff_mode != AutodiffMode::kNone || kernel->adstack_mode != 0,
+                         kernel->get_name(), verbose, "simplify_I"});
   irpass::analysis::verify_if_debug(ir, config);
   dump_ir("after_simplify_I");
 
@@ -114,12 +115,15 @@ void compile_to_offloads(IRNode *ir,
     irpass::analysis::verify_if_debug(ir, config);
   }
 
-  if (autodiff_mode == AutodiffMode::kReverse || autodiff_mode == AutodiffMode::kForward) {
+  if (autodiff_mode == AutodiffMode::kReverse || autodiff_mode == AutodiffMode::kForward || kernel->adstack_mode == 1) {
     // Remove local atomics here so that we don't have to handle their gradients
     irpass::demote_atomics(ir, config);
 
     irpass::full_simplify(ir, config, {false, /*autodiff_enabled*/ true, kernel->get_name(), verbose, "pre_autodiff"});
-    irpass::auto_diff(ir, config, autodiff_mode, ad_use_stack);
+    if (kernel->adstack_mode != 0)
+      validate_adstack_counting(ir);
+    irpass::auto_diff(ir, config, kernel->adstack_mode == 1 ? AutodiffMode::kReverse : autodiff_mode,
+                      ad_use_stack || kernel->adstack_mode != 0, kernel->adstack_mode == 1);
     // TODO: Be carefull with the full_simplify when do high-order autodiff
     irpass::full_simplify(ir, config,
                           {false, /*autodiff_enabled*/ false, kernel->get_name(), verbose, "post_autodiff"});
@@ -181,7 +185,10 @@ void compile_to_offloads(IRNode *ir,
   // are still visible alongside the consuming range-for task. Gated on the same reverse+ad_use_stack predicate
   // the per-task call used so compile behaviour is unchanged for forward-only kernels.
   if (autodiff_mode == AutodiffMode::kReverse && ad_use_stack) {
-    irpass::determine_ad_stack_size(ir, config);
+    if (kernel->adstack_mode == 2)
+      prepare_counted_adstacks(ir);
+    else
+      irpass::determine_ad_stack_size(ir, config);
     print("Autodiff stack size determined");
   }
 }

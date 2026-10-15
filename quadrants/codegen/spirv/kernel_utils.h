@@ -69,6 +69,8 @@ struct TaskAttributes {
     // kernel name + offload task index in its diagnostic message. Allocated and grown on demand
     // following the same pattern as `AdStackBoundRowCapacity`.
     AdStackTaskRegistryId,
+    // Invocation-owned [maximum depth, overflow flag], bound without physical pointers.
+    AdStackMeasurement,
   };
 
   struct BufferInfo {

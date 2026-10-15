@@ -40,6 +40,7 @@ class TaskCodegen : public IRVisitor {
     std::string qd_kernel_name;
     int task_id_in_kernel;
     const CompileConfig *compile_config{nullptr};
+    int adstack_mode{0};
   };
 
   const bool use_64bit_pointers = false;
@@ -145,6 +146,7 @@ class TaskCodegen : public IRVisitor {
   Arch arch_;
   DeviceCapabilityConfig *caps_;
   const CompileConfig *compile_config_;
+  int adstack_mode_;
   // Index of this task within its kernel's task list (`KernelCodegen::run` -> `tasks[i]` for offload-stmt `i`). Stored
   // from `Params::task_id_in_kernel` at construction so the LCA-block row-claim can OpAtomicIAdd into its own slot of
   // the per-kernel `BufferType::AdStackRowCounter` array. Per-task slots are what makes the post-launch host readback

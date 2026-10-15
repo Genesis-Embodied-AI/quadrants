@@ -1968,8 +1968,11 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
   // and AMDGPU dispatch one thread per iteration without chunking, so their per-task `[begin_value, end_value)`
   // matches the user loop and the analyzer can fill the field.
   const bool task_range_is_original_loop = !arch_is_cpu(compile_config.arch);
-  auto adstack_analysis = analyze_adstack_static_bounds(
-      stmt, snode_resolver, compile_config.ad_stack_sparse_threshold_bytes, task_range_is_original_loop);
+  auto adstack_analysis =
+      kernel->adstack_mode != 0
+          ? StaticAdStackAnalysisResult{}
+          : analyze_adstack_static_bounds(stmt, snode_resolver, compile_config.ad_stack_sparse_threshold_bytes,
+                                          task_range_is_original_loop);
   ad_stack_bootstrap_pushes_ = std::move(adstack_analysis.bootstrap_pushes);
   ad_stack_lca_block_float_ir_ = adstack_analysis.lca_block_float;
   ad_stack_static_bound_expr_ = adstack_analysis.bound_expr;
@@ -2787,7 +2790,7 @@ void TaskCodeGenLLVM::visit(AdStackAllocaStmt *stmt) {
   const bool is_float = stmt->ret_type == PrimitiveType::f32 || stmt->ret_type == PrimitiveType::f64;
   if (is_float && ad_stack_static_bound_expr_.has_value()) {
     ad_stack_lazy_float_allocas_.insert(stmt);
-    if (compile_config.debug) {
+    if (compile_config.debug && kernel->adstack_mode != 2) {
       // Skip the `stack_init` call here when the alloca lives ABOVE the LCA block: `get_ad_stack_base_llvm(stmt)` would
       // emit `heap_float + row_id_var * stride_float + offset` while `row_id_var` is still its entry-block UINT32_MAX
       // init at this IR position (the LCA-block atomic-rmw row claim runs strictly later, after the gate IfStmt is
@@ -2846,7 +2849,7 @@ void TaskCodeGenLLVM::visit(AdStackAllocaStmt *stmt) {
   llvm::Value *total_offset = builder->CreateAdd(slice_offset, offset);
   llvm::Value *stack_ptr = builder->CreateGEP(i8ty, heap_base, total_offset);
   llvm_val[stmt] = stack_ptr;
-  if (compile_config.debug) {
+  if (compile_config.debug && kernel->adstack_mode != 2) {
     call("stack_init", llvm_val[stmt]);
     return;
   }
@@ -2866,7 +2869,7 @@ void TaskCodeGenLLVM::visit(AdStackAllocaStmt *stmt) {
 }
 
 void TaskCodeGenLLVM::visit(AdStackPopStmt *stmt) {
-  if (compile_config.debug) {
+  if (compile_config.debug && kernel->adstack_mode != 2) {
     call("stack_pop", get_ad_stack_base_llvm(stmt->stack->as<AdStackAllocaStmt>()));
     return;
   }
@@ -2916,7 +2919,7 @@ void TaskCodeGenLLVM::visit(AdStackPushStmt *stmt) {
     }
     return;
   }
-  if (compile_config.debug) {
+  if (compile_config.debug && kernel->adstack_mode != 2) {
     // Debug build: route through the bounds-checking helper so any sizer bug surfaces as an overflow flag at sync. The
     // `max_size` load is only needed on this path.
     ensure_ad_stack_metadata_llvm();
@@ -2950,13 +2953,19 @@ void TaskCodeGenLLVM::visit(AdStackPushStmt *stmt) {
     llvm::Value *count_alloca = ensure_ad_stack_count_alloca_llvm(stack);
     llvm::Value *old_count = builder->CreateLoad(i64ty, count_alloca);
     llvm::Value *new_count = builder->CreateAdd(old_count, llvm::ConstantInt::get(i64ty, 1));
+    if (kernel->adstack_mode == 2) {
+      // Saturate the count on overflow and keep participating in cooperative work. Results are invalid once
+      // the helper sets the error flag, but all subsequent stack accesses must remain within the allocation.
+      new_count = call("adstack_checked_count", get_context(), new_count);
+    }
     builder->CreateStore(new_count, count_alloca);
-    // Slot is at index `new_count - 1`, which equals `old_count`. Skip the saturating-subtract that
-    // `emit_ad_stack_top_slot_ptr` does because we just incremented and `new_count` is provably >= 1.
+    // Measured capacities are at least one, so even a saturated push has a valid top slot.
+    llvm::Value *slot_index =
+        kernel->adstack_mode == 2 ? builder->CreateSub(new_count, llvm::ConstantInt::get(i64ty, 1)) : old_count;
     std::size_t entry_size = stack->entry_size_in_bytes();
     llvm::Value *slot_offset =
         builder->CreateAdd(llvm::ConstantInt::get(i64ty, sizeof(int64)),
-                           builder->CreateMul(old_count, llvm::ConstantInt::get(i64ty, entry_size)));
+                           builder->CreateMul(slot_index, llvm::ConstantInt::get(i64ty, entry_size)));
     primal_ptr = builder->CreateGEP(i8ty, get_ad_stack_base_llvm(stack), slot_offset);
   }
   // Zero the primal+adjoint slot pair to match `stack_push`'s `memset(top_primal, 0, 2 * element_size)`. Without this,
@@ -2977,7 +2986,7 @@ void TaskCodeGenLLVM::visit(AdStackPushStmt *stmt) {
 void TaskCodeGenLLVM::visit(AdStackLoadTopStmt *stmt) {
   QD_ASSERT(stmt->return_ptr == false);
   auto stack = stmt->stack->as<AdStackAllocaStmt>();
-  if (compile_config.debug) {
+  if (compile_config.debug && kernel->adstack_mode != 2) {
     auto primal_ptr =
         call("stack_top_primal", get_ad_stack_base_llvm(stack), tlctx->get_constant(stack->element_size_in_bytes()));
     auto primal_ty = tlctx->get_data_type(stmt->ret_type);
@@ -3001,7 +3010,7 @@ void TaskCodeGenLLVM::visit(AdStackLoadTopStmt *stmt) {
 
 void TaskCodeGenLLVM::visit(AdStackLoadTopAdjStmt *stmt) {
   auto stack = stmt->stack->as<AdStackAllocaStmt>();
-  if (compile_config.debug) {
+  if (compile_config.debug && kernel->adstack_mode != 2) {
     auto adjoint =
         call("stack_top_adjoint", get_ad_stack_base_llvm(stack), tlctx->get_constant(stack->element_size_in_bytes()));
     auto adjoint_ty = tlctx->get_data_type(stmt->ret_type);
@@ -3026,7 +3035,7 @@ void TaskCodeGenLLVM::visit(AdStackLoadTopAdjStmt *stmt) {
 void TaskCodeGenLLVM::visit(AdStackAccAdjointStmt *stmt) {
   auto stack = stmt->stack->as<AdStackAllocaStmt>();
   llvm::Value *adjoint_ptr;
-  if (compile_config.debug) {
+  if (compile_config.debug && kernel->adstack_mode != 2) {
     adjoint_ptr =
         call("stack_top_adjoint", get_ad_stack_base_llvm(stack), tlctx->get_constant(stack->element_size_in_bytes()));
   } else if (is_compile_time_single_slot(stack)) {
