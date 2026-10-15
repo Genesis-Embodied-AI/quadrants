@@ -78,3 +78,26 @@ def test_count_rejects_residual_primal_mutation():
     with pytest.raises(Exception, match="non-differentiable buffer"):
         compute.grad()
     assert counter[0] == 0
+
+
+@pytest.mark.parametrize("fastcache", [False, True])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], ad_stack_replay_count=True, ad_stack_experimental_enabled=True)
+def test_backward_only_persistent_cache(tmp_path, fastcache):
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    worker = Path(__file__).with_name("adstack_replay_cache_worker.py")
+    for warm in (False, True):
+        subprocess.run(
+            [
+                sys.executable,
+                str(worker),
+                qd.lang.impl.current_cfg().arch.name,
+                str(tmp_path),
+                str(int(fastcache)),
+                str(int(warm)),
+            ],
+            check=True,
+            timeout=180,
+        )
