@@ -75,11 +75,9 @@ def _sizer_overflow_child(args: list[str]) -> None:
     sys.exit(RET_SUCCESS)
 
 
+@pytest.mark.skipif(sys.platform != "darwin", reason="MoltenVK placement-heap recycling")
+@test_utils.test(arch=qd.vulkan)
 def test_sizer_overflow_word_is_cleared_when_heaps_are_off():
-    if sys.platform != "darwin":
-        pytest.skip("MoltenVK placement-heap recycling")
-    if qd.vulkan not in test_utils.expected_archs():
-        pytest.skip("vulkan is not selected")
     env = os.environ.copy()
     env["PYTHONPATH"] = "."
     # Set this before the child imports Quadrants and loads MoltenVK.
