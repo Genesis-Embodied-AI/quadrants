@@ -58,7 +58,7 @@ struct InternalOpScope {};
 }  // namespace
 
 void export_lang(nb::module_ &m) {
-  m.def("read_adstack_replay_measurement", read_adstack_replay_measurement);
+  m.def("read_adstack_replay_measurement", lang::read_adstack_replay_measurement);
   using namespace quadrants::lang;
   using namespace std::placeholders;
 
