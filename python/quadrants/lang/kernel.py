@@ -1054,9 +1054,8 @@ class Kernel(FuncBase):
             and self.autodiff_mode == AutodiffMode.REVERSE
             and impl.current_cfg().ad_stack_replay_count
         ):
-            from quadrants.lang.adstack_replay import (
-                backward,  # pylint: disable=import-outside-toplevel
-            )
+            # pylint: disable-next=import-outside-toplevel
+            from quadrants.lang.adstack_replay import backward
 
             return backward(self, py_args, qd_stream)
 
