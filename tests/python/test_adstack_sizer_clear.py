@@ -9,24 +9,20 @@ before Quadrants loads MoltenVK, then repeats the second reverse launch that hit
 import os
 import subprocess
 import sys
-import textwrap
 
+import numpy as np
 import pytest
 
 import quadrants as qd
+from quadrants.lang import impl
 
 from tests import test_utils
 
-_CHILD = textwrap.dedent(
-    """\
-    import os
+TEST_RAN = "test ran"
+RET_SUCCESS = 42
 
-    os.environ["MVK_CONFIG_USE_MTLHEAP"] = "0"
 
-    import numpy as np
-    import quadrants as qd
-    from quadrants.lang import impl
-
+def _sizer_overflow_child(args: list[str]) -> None:
     # Match the harness: requiring the adstack extension turns this flag on.
     qd.init(
         arch=qd.vulkan,
@@ -74,19 +70,26 @@ _CHILD = textwrap.dedent(
     compute.grad(a)
     qd.sync()
     assert prog._get_max_reducer_dispatch_count() > pre_mutation
-    """
-)
+
+    print(TEST_RAN)
+    sys.exit(RET_SUCCESS)
 
 
-def test_sizer_overflow_word_is_cleared_when_heaps_are_off(tmp_path):
+def test_sizer_overflow_word_is_cleared_when_heaps_are_off():
     if sys.platform != "darwin":
         pytest.skip("MoltenVK placement-heap recycling")
     if qd.vulkan not in test_utils.expected_archs():
         pytest.skip("vulkan is not selected")
-    # The kernel decorator reads the function source. A `python -c` string has none, so the child is a real file.
-    script_path = tmp_path / "sizer_overflow_heaps_off.py"
-    script_path.write_text(_CHILD)
     env = os.environ.copy()
+    env["PYTHONPATH"] = "."
+    # Set this before the child imports Quadrants and loads MoltenVK.
     env["MVK_CONFIG_USE_MTLHEAP"] = "0"
-    proc = subprocess.run([sys.executable, str(script_path)], env=env, capture_output=True, text=True)
-    assert proc.returncode == 0, proc.stdout + "\n" + proc.stderr
+    proc = subprocess.run(
+        [sys.executable, __file__, _sizer_overflow_child.__name__], env=env, capture_output=True, text=True
+    )
+    assert proc.returncode == RET_SUCCESS, proc.stdout + "\n" + proc.stderr
+    assert TEST_RAN in proc.stdout, proc.stdout + "\n" + proc.stderr
+
+
+if __name__ == "__main__":
+    globals()[sys.argv[1]](sys.argv[2:])
