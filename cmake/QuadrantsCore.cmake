@@ -66,6 +66,7 @@ file(GLOB QUADRANTS_CORE_SOURCE CONFIGURE_DEPENDS
     "quadrants/jit/*"
     "quadrants/math/*"
     "quadrants/program/*"
+    "quadrants/program/adstack/*"
     "quadrants/struct/*"
     "quadrants/system/*"
     "quadrants/transforms/*"
