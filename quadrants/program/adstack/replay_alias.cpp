@@ -24,7 +24,13 @@ void LaunchContextBuilder::check_adstack_replay_aliases(Program *program) {
     uintptr_t address = reinterpret_cast<uintptr_t>(ptr->second);
     uint64_t bytes = array_runtime_sizes.at(id);
     if (allocation) {
-      bytes *= parameter.get_element_size();
+      auto dtype = parameter.get_dtype();
+      if (auto *structure = dtype->cast<StructType>()) {
+        dtype = structure->get_element_type(std::array{TypeFactory::DATA_PTR_POS_IN_NDARRAY});
+        for (int dimension : parameter.element_shape)
+          bytes *= dimension;
+      }
+      bytes *= data_type_size(dtype);
       if (llvm)
         address = reinterpret_cast<uintptr_t>(program->get_program_impl()->get_device_alloc_info_ptr(*allocation));
     }
