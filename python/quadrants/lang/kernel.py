@@ -813,7 +813,7 @@ class Kernel(FuncBase):
                 self.launch_context_buffer_cache.cache(t_kernel, args_hash, launch_ctx, launch_ctx_buffer)
 
         if self.adstack_mode == 1:
-            launch_ctx.check_adstack_replay_aliases()
+            launch_ctx.check_adstack_replay_aliases(impl.get_runtime().prog)
 
         try:
             prog = impl.get_runtime().prog

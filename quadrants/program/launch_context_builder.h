@@ -76,7 +76,7 @@ class LaunchContextBuilder {
   void set_args_uint(const std::vector<int> &args_id, const std::vector<uint64> &vec);
 
   void set_array_runtime_size(int arg_id, uint64 size);
-  void check_adstack_replay_aliases();
+  void check_adstack_replay_aliases(Program *program);
 
   void set_array_device_allocation_type(int arg_id, DevAllocType usage);
 

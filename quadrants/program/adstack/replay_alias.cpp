@@ -3,7 +3,7 @@
 
 namespace quadrants::lang {
 
-void LaunchContextBuilder::check_adstack_replay_aliases() {
+void LaunchContextBuilder::check_adstack_replay_aliases(Program *program) {
   struct Array {
     uintptr_t address;
     uint64_t bytes;
@@ -11,7 +11,7 @@ void LaunchContextBuilder::check_adstack_replay_aliases() {
     bool needs_grad;
   };
   std::vector<Array> arrays;
-  const bool llvm = arch_uses_llvm(kernel_->program->compile_config().arch);
+  const bool llvm = arch_uses_llvm(program->compile_config().arch);
   for (const auto &[id, parameter] : kernel_->nested_parameters) {
     if (!parameter.is_array)
       continue;
@@ -26,7 +26,7 @@ void LaunchContextBuilder::check_adstack_replay_aliases() {
     if (allocation) {
       bytes *= parameter.get_element_size();
       if (llvm)
-        address = reinterpret_cast<uintptr_t>(kernel_->program->get_program_impl()->get_device_alloc_info_ptr(*allocation));
+        address = reinterpret_cast<uintptr_t>(program->get_program_impl()->get_device_alloc_info_ptr(*allocation));
     }
     arrays.push_back({address, bytes, allocation, parameter.needs_grad});
   }
