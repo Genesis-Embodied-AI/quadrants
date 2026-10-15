@@ -93,10 +93,9 @@ void compile_to_offloads(IRNode *ir,
   }
 
   dump_ir("before_simplify_I");
-  irpass::full_simplify(
-      ir, config,
-      {false, /*autodiff_enabled*/ autodiff_mode != AutodiffMode::kNone || kernel->adstack_mode != 0,
-       kernel->get_name(), verbose, "simplify_I"});
+  irpass::full_simplify(ir, config,
+                        {false, /*autodiff_enabled*/ autodiff_mode != AutodiffMode::kNone || kernel->adstack_mode != 0,
+                         kernel->get_name(), verbose, "simplify_I"});
   irpass::analysis::verify_if_debug(ir, config);
   dump_ir("after_simplify_I");
 
@@ -124,7 +123,7 @@ void compile_to_offloads(IRNode *ir,
     if (kernel->adstack_mode != 0)
       validate_adstack_counting(ir);
     irpass::auto_diff(ir, config, kernel->adstack_mode == 1 ? AutodiffMode::kReverse : autodiff_mode,
-                     ad_use_stack || kernel->adstack_mode != 0, kernel->adstack_mode == 1);
+                      ad_use_stack || kernel->adstack_mode != 0, kernel->adstack_mode == 1);
     // TODO: Be carefull with the full_simplify when do high-order autodiff
     irpass::full_simplify(ir, config,
                           {false, /*autodiff_enabled*/ false, kernel->get_name(), verbose, "post_autodiff"});
@@ -251,7 +250,9 @@ void offload_to_executable(IRNode *ir,
     irpass::analysis::verify_if_debug(ir, config);
   }
 
-  if (make_thread_local) {
+  // A counted replay can abandon an overflowing thread. Keep its reductions as ordinary atomics so generated
+  // cooperative reduction epilogues cannot wait for threads that returned early.
+  if (make_thread_local && kernel->adstack_mode != 2) {
     irpass::make_thread_local(ir, config);
     print("Make thread local");
   }
@@ -267,7 +268,7 @@ void offload_to_executable(IRNode *ir,
     }
   }
 
-  if (make_block_local) {
+  if (make_block_local && kernel->adstack_mode != 2) {
     irpass::make_block_local(ir, config, {kernel->get_name(), verbose});
     print("Make block local");
   }

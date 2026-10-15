@@ -14,7 +14,11 @@ namespace quadrants::lang {
 
 namespace irpass {
 
-void auto_diff(IRNode *root, const CompileConfig &config, AutodiffMode autodiff_mode, bool use_stack, bool count_forward) {
+void auto_diff(IRNode *root,
+               const CompileConfig &config,
+               AutodiffMode autodiff_mode,
+               bool use_stack,
+               bool count_forward) {
   QD_AUTO_PROF;
   if (autodiff_mode == AutodiffMode::kReverse) {
     if (auto *root_block = root->cast<Block>()) {

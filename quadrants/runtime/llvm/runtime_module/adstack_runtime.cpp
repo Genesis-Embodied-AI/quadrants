@@ -32,8 +32,8 @@ STRUCT_FIELD(LLVMRuntime, adstack_overflow_task_id_dev_ptr);
 extern "C" i32 adstack_measure_peak(RuntimeContext *ctx, i64 depth) {
   auto *slot = ctx->adstack_measurement;
   i64 previous = __atomic_load_n(slot, __ATOMIC_RELAXED);
-  while (previous < depth && !__atomic_compare_exchange_n(slot, &previous, depth, false, __ATOMIC_RELAXED,
-                                                         __ATOMIC_RELAXED)) {
+  while (previous < depth &&
+         !__atomic_compare_exchange_n(slot, &previous, depth, false, __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {
   }
   return 0;
 }

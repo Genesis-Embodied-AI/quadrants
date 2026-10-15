@@ -401,6 +401,10 @@ class Kernel(FuncBase):
 
     def reset(self) -> None:
         self.runtime = impl.get_runtime()
+        self.adstack_record = None
+        for name in ("_adstack_pending", "_adstack_count_variant", "_adstack_reverse_variant"):
+            if hasattr(self, name):
+                delattr(self, name)
         self.materialized_kernels = {}
         self.compiled_kernel_data_by_key = {}
         self._last_compiled_kernel_data = None
@@ -969,8 +973,12 @@ class Kernel(FuncBase):
     # Thus this part needs to be fast. (i.e. < 3us on a 4 GHz x64 CPU)
     @_shell_pop_print
     def __call__(self, *py_args, **kwargs) -> Any:
-        if not self.adstack_mode:
-            from quadrants.lang.adstack import dispatch  # pylint: disable=import-outside-toplevel
+        if not self.adstack_mode and (
+            getattr(self.runtime, "adstack_scope", None) is not None or hasattr(self, "_adstack_pending")
+        ):
+            from quadrants.lang.adstack import (
+                dispatch,  # pylint: disable=import-outside-toplevel
+            )
 
             handled, result = dispatch(self, py_args, kwargs)
             if handled:

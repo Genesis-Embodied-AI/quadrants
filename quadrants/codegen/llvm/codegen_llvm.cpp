@@ -1968,11 +1968,11 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
   // and AMDGPU dispatch one thread per iteration without chunking, so their per-task `[begin_value, end_value)`
   // matches the user loop and the analyzer can fill the field.
   const bool task_range_is_original_loop = !arch_is_cpu(compile_config.arch);
-  auto adstack_analysis = kernel->adstack_mode != 0
-                              ? StaticAdStackAnalysisResult{}
-                              : analyze_adstack_static_bounds(stmt, snode_resolver,
-                                                              compile_config.ad_stack_sparse_threshold_bytes,
-                                                              task_range_is_original_loop);
+  auto adstack_analysis =
+      kernel->adstack_mode != 0
+          ? StaticAdStackAnalysisResult{}
+          : analyze_adstack_static_bounds(stmt, snode_resolver, compile_config.ad_stack_sparse_threshold_bytes,
+                                          task_range_is_original_loop);
   ad_stack_bootstrap_pushes_ = std::move(adstack_analysis.bootstrap_pushes);
   ad_stack_lca_block_float_ir_ = adstack_analysis.lca_block_float;
   ad_stack_static_bound_expr_ = adstack_analysis.bound_expr;

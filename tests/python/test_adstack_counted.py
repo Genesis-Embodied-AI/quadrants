@@ -3,6 +3,7 @@ import math
 import pytest
 
 import quadrants as qd
+
 from tests import test_utils
 
 
@@ -73,6 +74,40 @@ def test_counted_adstack_nested_conditional_loops():
                 if k % 2 == 0:
                     derivative *= 2 * value
                     value = value * value + 0.1
+        assert y[i] == pytest.approx(value, rel=2e-5)
+        assert x.grad[i] == pytest.approx(derivative, rel=2e-5)
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
+def test_counted_adstack_primal_dependent_branches():
+    x, y, n = _arrays()
+    n.fill(8)
+
+    @qd.kernel
+    def compute(x: qd.types.ndarray(), y: qd.types.ndarray(), n: qd.types.ndarray()):
+        for i in range(x.shape[0]):
+            value = x[i]
+            for j in range(n[i]):
+                if value > 0.0 and value < 0.5:
+                    value = qd.sin(value) + 0.3
+                else:
+                    value *= 0.7
+            y[i] = value
+
+    x.grad.fill(0)
+    y.grad.fill(1)
+    with qd.adstack:
+        compute(x, y, n)
+    compute.grad(x, y, n)
+    for i in range(4):
+        value, derivative = float(x[i]), 1.0
+        for _ in range(n[i]):
+            if 0.0 < value < 0.5:
+                derivative *= math.cos(value)
+                value = math.sin(value) + 0.3
+            else:
+                derivative *= 0.7
+                value *= 0.7
         assert y[i] == pytest.approx(value, rel=2e-5)
         assert x.grad[i] == pytest.approx(derivative, rel=2e-5)
 

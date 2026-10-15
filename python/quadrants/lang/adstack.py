@@ -18,6 +18,7 @@ class _Record:
     arguments: tuple
     buffer: ScalarNdarray
     capacity: int
+    keepalive: tuple
 
 
 class _AdstackContext:
@@ -28,6 +29,8 @@ class _AdstackContext:
             raise RuntimeError("qd.adstack prototype supports CUDA and x64 only")
         if config.offline_cache:
             raise RuntimeError("qd.adstack prototype requires qd.init(offline_cache=False)")
+        if config.ad_stack_size:
+            raise RuntimeError("qd.adstack prototype requires automatic ad_stack_size=0")
         if getattr(runtime, "adstack_scope", None) is not None:
             raise RuntimeError("Nested qd.adstack contexts are not supported")
         runtime.adstack_scope = self
@@ -88,14 +91,14 @@ def dispatch(kernel, args, kwargs):
         finally:
             runtime.target_tape = tape
         variant = _variant(kernel, 1)
-        variant.adstack_record = _Record(signature, buffer, 0)
+        variant.adstack_record = _Record(signature, buffer, 0, args)
         try:
             result = variant(*args)
             runtime.sync()
             capacity = max(1, int(buffer[0]))
         finally:
             variant.adstack_record = None
-        record = _Record(signature, buffer, capacity)
+        record = _Record(signature, buffer, capacity, args)
         if not hasattr(kernel.grad, "_adstack_pending"):
             kernel.grad._adstack_pending = []
         kernel.grad._adstack_pending.append(record)

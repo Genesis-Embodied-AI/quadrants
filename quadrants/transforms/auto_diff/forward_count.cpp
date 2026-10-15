@@ -76,8 +76,7 @@ void lower_adstack_forward_count(Block *block, const std::unordered_set<Stmt *> 
     } else if (auto *load = stmt->cast<AdStackLoadTopStmt>()) {
       load->replace_with(Stmt::make<LocalLoadStmt>(counters.at(load->stack).value));
     } else {
-      QD_ERROR_IF(stmt->is<AdStackPopStmt>() || stmt->is<AdStackLoadTopAdjStmt>() ||
-                      stmt->is<AdStackAccAdjointStmt>(),
+      QD_ERROR_IF(stmt->is<AdStackPopStmt>() || stmt->is<AdStackLoadTopAdjStmt>() || stmt->is<AdStackAccAdjointStmt>(),
                   "Unexpected reverse operation in adstack counting forward");
     }
   }

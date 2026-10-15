@@ -347,6 +347,8 @@ A large `ndrange` combined with several loop-carried variables multiplies quickl
 1. Reduce `num_buffers` - split the kernel, checkpoint manually, or fold two accumulators into one so the reverse pass has fewer loop-carried variables to replay.
 2. Raise `device_memory_fraction` or `device_memory_GB` in `qd.init()` if the GPU has headroom.
 
+For an experimental alternative that measures stack requirements during the original forward, see [Counting adstack requirements during forward execution](./adstack_counted.md).
+
 ## What can go wrong
 
 ### Adstack overflow
