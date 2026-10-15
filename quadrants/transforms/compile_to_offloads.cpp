@@ -85,9 +85,10 @@ void compile_to_offloads(IRNode *ir,
   }
 
   // Removes MatrixOfMatrixPtrStmt & MatrixOfGlobalPtrStmt
-  irpass::lower_matrix_ptr(ir, config.force_scalarize_matrix);
+  const bool scalarize_for_adstack = config.force_scalarize_matrix || kernel->adstack_mode != 0;
+  irpass::lower_matrix_ptr(ir, scalarize_for_adstack);
 
-  if (config.force_scalarize_matrix) {
+  if (scalarize_for_adstack) {
     irpass::scalarize(ir, false /*half2_optimization_enabled*/);
     irpass::die(ir);
   }

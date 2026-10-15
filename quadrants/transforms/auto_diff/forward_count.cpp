@@ -79,6 +79,33 @@ void lower_adstack_forward_count(Block *block, const std::unordered_set<Stmt *> 
   KeepForward keep(forward_statements);
   block->accept(&keep);
 
+  // A non-differentiable field output may survive normal autodiff. A field with no loads anywhere in the
+  // kernel cannot affect replay control flow; omit its stores from measurement. Fields have distinct SNodes,
+  // unlike external array arguments, which may alias at runtime.
+  IRNode *root = block;
+  while (root->get_parent())
+    root = root->get_parent();
+  std::unordered_set<SNode *> read_fields;
+  auto field_pointer = [](Stmt *ptr) -> GlobalPtrStmt * {
+    if (auto *matrix = ptr->cast<MatrixPtrStmt>())
+      ptr = matrix->origin;
+    return ptr->cast<GlobalPtrStmt>();
+  };
+  for (auto *stmt : irpass::analysis::gather_statements(root, [](Stmt *) { return true; })) {
+    if (auto *load = stmt->cast<GlobalLoadStmt>()) {
+      if (auto *ptr = field_pointer(load->src))
+        read_fields.insert(ptr->snode);
+    }
+    if (auto *atomic = stmt->cast<AtomicOpStmt>()) {
+      if (auto *ptr = field_pointer(atomic->dest))
+        read_fields.insert(ptr->snode);
+    }
+  }
+  for (auto *stmt : irpass::analysis::gather_statements(block, [](Stmt *s) { return s->is<GlobalStoreStmt>(); })) {
+    auto *store = stmt->as<GlobalStoreStmt>();
+    if (auto *ptr = field_pointer(store->dest); ptr && !read_fields.count(ptr->snode))
+      store->parent->erase(store);
+  }
   auto statements = irpass::analysis::gather_statements(block, [](Stmt *) { return true; });
   for (auto *stmt : statements) {
     QD_ERROR_IF(stmt->is<GlobalStoreStmt>() || stmt->is<AtomicOpStmt>(),
