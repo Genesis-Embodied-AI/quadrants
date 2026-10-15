@@ -15,7 +15,6 @@
 #include "quadrants/ir/expression_ops.h"
 #include "quadrants/ir/frontend_ir.h"
 #include "quadrants/ir/statements.h"
-#include "quadrants/program/adstack_size_expr_eval.h"
 #include "quadrants/program/adstack/replay_measurement.h"
 #include "quadrants/program/extension.h"
 #include "quadrants/program/ndarray.h"
@@ -59,6 +58,7 @@ struct InternalOpScope {};
 }  // namespace
 
 void export_lang(nb::module_ &m) {
+  m.def("read_adstack_replay_measurement", read_adstack_replay_measurement);
   using namespace quadrants::lang;
   using namespace std::placeholders;
 
@@ -80,7 +80,6 @@ void export_lang(nb::module_ &m) {
 #undef PER_ARCH
       .export_values();
 
-  m.def("read_adstack_replay_measurement", read_adstack_replay_measurement);
   m.def("arch_name", arch_name);
   m.def("arch_from_name", arch_from_name);
 
@@ -264,16 +263,6 @@ void export_lang(nb::module_ &m) {
               "NaN/inf/signed-zero guarantees.")
       .def_rw("advanced_optimization", &CompileConfig::advanced_optimization,
               "Run the full advanced optimization pass pipeline.")
-      .def_rw("ad_stack_experimental_enabled", &CompileConfig::ad_stack_experimental_enabled,
-              "Enable the reverse-mode autodiff pipeline for kernels with runtime-bounded loops (the adstack).")
-      .def_rw("ad_stack_replay_count", &CompileConfig::ad_stack_replay_count,
-              "Measure reduced forward replay immediately before each stack-based backward.")
-      .def_rw("ad_stack_size", &CompileConfig::ad_stack_size,
-              "Force autodiff stacks to exactly this many slots. 0 lets the launch-time sizer choose automatically. "
-              "No effect unless ad_stack_experimental_enabled is on.")
-      .def_rw("ad_stack_sparse_threshold_bytes", &CompileConfig::ad_stack_sparse_threshold_bytes,
-              "Byte cutoff below which the sparse adstack sizing path is skipped in favor of eager heap allocation. "
-              "No effect unless ad_stack_experimental_enabled is on.")
       .def_rw("flatten_if", &CompileConfig::flatten_if,
               "Flatten simple if statements into predicated (branchless) form.")
       .def_rw("make_thread_local", &CompileConfig::make_thread_local,
@@ -543,14 +532,7 @@ void export_lang(nb::module_ &m) {
       .def("get_graph_num_nodes_on_last_call", &Program::get_graph_num_nodes_on_last_call)
       .def("get_graph_num_checkpoints_on_last_call", &Program::get_graph_num_checkpoints_on_last_call)
       .def("get_graph_last_yield_cp_id_on_last_call", &Program::get_graph_last_yield_cp_id_on_last_call)
-      .def("get_graph_total_builds", &Program::get_graph_total_builds)
-      // Test-only introspection on the max-reducer dispatch counter. Leading underscore signals "internal, not part of
-      // the public Python API"; quadrants tests reach these via `impl.get_runtime().prog`. They are intentionally not
-      // surfaced on the user-facing `qd.*` namespace and not documented under `docs/`.
-      .def("_get_max_reducer_dispatch_count",
-           [](Program *program) { return program->adstack_cache().max_reducer_dispatch_count(); })
-      .def("_reset_max_reducer_dispatch_count",
-           [](Program *program) { program->adstack_cache().reset_max_reducer_dispatch_count(); });
+      .def("get_graph_total_builds", &Program::get_graph_total_builds);
   export_stream(m, program_class);
 
   nb::class_<CompileResult>(m, "CompileResult")

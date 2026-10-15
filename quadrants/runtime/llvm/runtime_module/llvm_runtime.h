@@ -143,81 +143,8 @@ struct LLVMRuntime {
   uint64 error_message_arguments[quadrants_error_message_max_num_arguments];
   i32 error_message_lock = 0;
   i64 error_code = 0;
-  // Dedicated overflow signal. Pointer to a 64-bit slot in pinned host memory (CUDA `cuMemAllocHost_v2`,
-  // HIP `hipHostMalloc`; CPU plain malloc; on this struct stored as the device-mapped address obtained via
-  // `cuMemHostGetDevicePointer` / HIP equivalent). The kernel-side `stack_push` writes via a system-wide
-  // atomic OR through this pointer; the host polls the corresponding host-side pointer (cached separately on
-  // `LlvmRuntimeExecutor`) without any DtoH or sync drain. Required hardware capability is system-scope
-  // atomics on host-mapped memory: NVIDIA Compute Capability 6.0+ (Pascal+, 2016) and AMD GFX9+ (Vega+, 2017),
-  // matching the existing pinned-host-scratch H2D-async pattern in `llvm_adstack_lazy_claim.cpp`. Separate from
-  // `error_code` so assertions (which set error_code=1, gated on `compile_config.debug`) do not leak through the
-  // always-on overflow poll. nullptr until `materialize_runtime` initialises it; nullptr-guarded in `stack_push`.
-  i64 *adstack_overflow_flag_dev_ptr = nullptr;
-
-  // Pinned-host slot recording the Program-assigned u32 identity of the FIRST adstack-sizing-info whose
-  // overflow path fired this Quadrants entry window. Codegen emits a `cmpxchg(0, id)` immediately after the
-  // OR-1 on `adstack_overflow_flag_dev_ptr`; only the first overflowing thread's id sticks, subsequent
-  // threads' cmpxchg fails harmlessly. Host reads the slot during the raise to produce a diagnostic that
-  // names the offending kernel / task / stack via `Program::adstack_sizing_info_registry_`. nullptr until
-  // `materialize_runtime` allocates the slot. Lives on the same UVA-mapped pinned host page as the flag
-  // above so a single `mem_alloc_host` call covers both.
-  i64 *adstack_overflow_task_id_dev_ptr = nullptr;
-
-  // Combined-heap fields. The codegen single-heap path reads these directly; the split-heap path leaves them untouched
-  // and uses the per-kind fields below. Kept for backward compatibility with kernels that have not yet migrated to the
-  // split layout (no codegen-side opt-in), so existing AdStack* tests stay byte-identical.
+  // Reusable measured-stack heap, owned by the host executor.
   Ptr adstack_heap_buffer = nullptr;
-  u64 adstack_heap_size = 0;
-  u64 adstack_per_thread_stride = 0;
-
-  // Split-heap fields. Float allocas (`AdStackAllocaStmt::ret_type == f32`) live in `adstack_heap_buffer_float`,
-  // addressed by `row_id_var * adstack_per_thread_stride_float + float_offset_within_slice`; the row claim happens
-  // lazily at the float Lowest Common Ancestor (LCA) block via an atomic-add into
-  // `adstack_row_counters[task_id_in_kernel]`. Int / u1 allocas live in `adstack_heap_buffer_int`, addressed by
-  // `linear_thread_idx * adstack_per_thread_stride_int + int_offset_within_slice` (eager per-thread layout, no row
-  // claim). Splitting is what lets the host shrink the float heap to `effective_rows * stride_float` (where
-  // `effective_rows` is the count of threads passing the captured `bound_expr` gate) instead of `num_threads *
-  // stride_total`. Each buffer is host-owned and grown via the device allocator before each launch; the host caches the
-  // field-of-LLVMRuntime pointers via `runtime_get_adstack_heap_field_ptrs` and subsequent grows write through those
-  // cached pointers.
-  Ptr adstack_heap_buffer_float = nullptr;
-  u64 adstack_heap_size_float = 0;
-  Ptr adstack_heap_buffer_int = nullptr;
-  u64 adstack_heap_size_int = 0;
-  u64 adstack_per_thread_stride_float = 0;
-  u64 adstack_per_thread_stride_int = 0;
-
-  // Per-launch adstack metadata buffers. Populated by the host right before each kernel launch from the
-  // `AdStackAllocaStmt::size_expr` host evaluator, consumed inside the kernel by the LLVM codegen base-address and
-  // push-overflow math. `adstack_offsets[stack_id]` is the byte offset within the per-thread slice of the appropriate
-  // kind (the codegen selects the slice at compile time based on `AdStackAllocaStmt::ret_type`), and
-  // `adstack_max_sizes[stack_id]` is the per-launch max-size. Both arrays live in device-visible memory.
-  u64 *adstack_offsets = nullptr;
-  u64 *adstack_max_sizes = nullptr;
-
-  // Per-task atomic counter array (`u32[num_tasks_in_kernel]`) for the lazy LCA-block float-heap row claim. Each task
-  // with a float adstack atomic-adds 1 into its slot at the LCA block; the returned value becomes the thread's
-  // `row_id_var`. Host clears slots before the launch and reads them back after to drive the grow-on-demand path on
-  // `adstack_heap_buffer_float`. Sized for the largest kernel observed; lives with the LLVMRuntime for its full
-  // lifetime.
-  u32 *adstack_row_counters = nullptr;
-  u64 adstack_row_counters_capacity = 0;
-
-  // Per-task captured row capacity (`u32[num_tasks_in_kernel]`) consumed by the codegen-emitted defense-in-depth bounds
-  // check at the float LCA-block claim site. For tasks where the host reducer published a per-task count, the slot
-  // holds that count; for every other task, the slot holds UINT32_MAX so the bounds check is inert by construction.
-  // Same lifetime / sizing pattern as `adstack_row_counters`.
-  u32 *adstack_bound_row_capacities = nullptr;
-  u64 adstack_bound_row_capacities_capacity = 0;
-
-  // Per-spec output slot for the max reducer. One i64 per captured `StaticAdStackMaxReducerSpec`, written by
-  // `runtime_eval_adstack_max_reduce` during the per-launch dispatch and read by the host launcher to substitute the
-  // value as a `Const` into the per-stack `SerializedSizeExpr` tree before any LLVM eval path walks it. Sized / grown
-  // by the LlvmRuntimeExecutor lazy-allocate path on the first launch that has captured specs; cleared to INT64_MIN
-  // before each dispatch so the running-max sentinel is well-defined when `length == 0` (returns INT64_MIN; the caller
-  // floors at 0 + clamps to compile-time).
-  i64 *adstack_max_reducer_outputs = nullptr;
-  u64 adstack_max_reducer_outputs_capacity = 0;
 
   Ptr result_buffer;
   i32 allocator_lock;

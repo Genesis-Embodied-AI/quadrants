@@ -1050,11 +1050,7 @@ class Kernel(FuncBase):
                 if py_args_l is not None:
                     py_args = tuple(py_args_l)
 
-        if (
-            not self.adstack_mode
-            and self.autodiff_mode == AutodiffMode.REVERSE
-            and impl.current_cfg().ad_stack_replay_count
-        ):
+        if not self.adstack_mode and self.autodiff_mode == AutodiffMode.REVERSE:
             # pylint: disable-next=import-outside-toplevel
             from quadrants.lang.adstack_replay import backward
 

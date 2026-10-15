@@ -287,10 +287,13 @@ class ASTTransformerFuncContext:
         self.raise_on_templated_floats = raise_on_templated_floats
         self.expanding_dataclass_call_parameters: bool = False
 
-        self.adstack_enabled: bool = _qd_core.is_extension_supported(
-            impl.current_cfg().arch,
-            extension.adstack,
-        ) and (impl.current_cfg().ad_stack_experimental_enabled or global_context.current_kernel.adstack_mode != 0)
+        self.adstack_enabled: bool = (
+            _qd_core.is_extension_supported(
+                impl.current_cfg().arch,
+                extension.adstack,
+            )
+            and global_context.current_kernel.adstack_mode != 0
+        )
 
     # e.g.: FunctionDef, Module, Global
     def variable_scope_guard(self):

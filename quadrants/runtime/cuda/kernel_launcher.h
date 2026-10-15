@@ -18,14 +18,8 @@ class KernelLauncher : public LLVM::KernelLauncher {
     JITModule *jit_module{nullptr};
     const std::vector<std::pair<int, Callable::Parameter>> *parameters;
     std::vector<OffloadedTask> offloaded_tasks;
-    // Per-kernel-handle persistent scratch. See the matching AMDGPU `Context` struct in
-    // `runtime/amdgpu/kernel_launcher.h` for the rationale: `publish_adstack_metadata`'s host-eval branch
-    // recursively launches `snode_reader_*` kernels via this same launcher, and a launcher-global persistent
-    // buffer would let those recursive launches overwrite the parent's `arg_buffer` / `RuntimeContext` before
-    // the parent kernel reads them. Per-handle isolation prevents the cross-clobber.
     void *arg_buffer_dev_ptr{nullptr};
     std::size_t arg_buffer_capacity{0};
-    void *runtime_context_dev_ptr{nullptr};
   };
 
  public:
@@ -55,17 +49,11 @@ class KernelLauncher : public LLVM::KernelLauncher {
  private:
   void launch_offloaded_tasks(LaunchContextBuilder &ctx,
                               JITModule *cuda_module,
-                              const std::vector<OffloadedTask> &offloaded_tasks,
-                              void *device_context_ptr);
+                              const std::vector<OffloadedTask> &offloaded_tasks);
   void launch_offloaded_tasks_with_do_while(LaunchContextBuilder &ctx,
                                             JITModule *cuda_module,
-                                            const std::vector<OffloadedTask> &offloaded_tasks,
-                                            void *device_context_ptr);
+                                            const std::vector<OffloadedTask> &offloaded_tasks);
 
-  // std::deque (not std::vector): `publish_adstack_metadata`'s host-eval branch recursively registers snode-reader
-  // kernels via this same launcher, calling `contexts_.resize()` while a parent `launch_llvm_kernel` frame still
-  // holds a reference into the container.  std::deque never invalidates references on push_back / resize, so the
-  // parent's `launcher_ctx` reference survives the child's registration.
   std::deque<Context> contexts_;
   GraphManager graph_manager_;
   // `result_buffer` stays launcher-global: kernels write to it, the host reads it back synchronously before any

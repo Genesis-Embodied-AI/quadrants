@@ -746,7 +746,7 @@ class IRPrinter : public IRVisitor {
   }
 
   void visit(AdStackAllocaStmt *stmt) override {
-    print("{}{} = stack alloc (max_size={})", stmt->type_hint(), stmt->name(), stmt->max_size);
+    print("{}{} = measured stack alloc", stmt->type_hint(), stmt->name());
     dbg_info_printer_(stmt);
   }
 

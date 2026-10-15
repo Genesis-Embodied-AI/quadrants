@@ -686,14 +686,6 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       if (current_task->ad_stack.per_thread_stride > 0) {
         current_task->ad_stack.static_num_threads =
             static_cast<std::size_t>(current_task->grid_dim) * static_cast<std::size_t>(current_task->block_dim);
-        if (stmt->task_type == Type::range_for && !(stmt->const_begin && stmt->const_end)) {
-          current_task->ad_stack.dynamic_gpu_range_for = true;
-          current_task->ad_stack.begin_const_value = stmt->const_begin ? stmt->begin_value : 0;
-          current_task->ad_stack.end_const_value = stmt->const_end ? stmt->end_value : 0;
-          current_task->ad_stack.begin_offset_bytes =
-              stmt->const_begin ? -1 : static_cast<std::int32_t>(stmt->begin_offset);
-          current_task->ad_stack.end_offset_bytes = stmt->const_end ? -1 : static_cast<std::int32_t>(stmt->end_offset);
-        }
       }
       offloaded_tasks.push_back(*current_task);
       current_task = nullptr;

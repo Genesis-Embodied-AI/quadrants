@@ -40,7 +40,6 @@ class TaskCodegen : public IRVisitor {
     std::string qd_kernel_name;
     int task_id_in_kernel;
     const CompileConfig *compile_config{nullptr};
-    int adstack_mode{0};
   };
 
   const bool use_64bit_pointers = false;
@@ -146,12 +145,6 @@ class TaskCodegen : public IRVisitor {
   Arch arch_;
   DeviceCapabilityConfig *caps_;
   const CompileConfig *compile_config_;
-  int adstack_mode_;
-  // Index of this task within its kernel's task list (`KernelCodegen::run` -> `tasks[i]` for offload-stmt `i`). Stored
-  // from `Params::task_id_in_kernel` at construction so the LCA-block row-claim can OpAtomicIAdd into its own slot of
-  // the per-kernel `BufferType::AdStackRowCounter` array. Per-task slots are what makes the post-launch host readback
-  // usable - a single shared slot 0 would have the next task's bind clear it before the host reads, losing every task
-  // except the last.
   int task_id_in_kernel_{0};
 
   struct BufferInfoTypeTupleHasher {
@@ -232,14 +225,6 @@ class TaskCodegen : public IRVisitor {
     // Index of this alloca in the task's pre-scan order; also the shader-side slot index into the
     // `AdStackMetadata` buffer (entries are `stride_float, stride_int, (offset_i, max_size_i)*`).
     uint32_t stack_id{0};
-    // Compile-time bound carried alongside the runtime-metadata index so the host launcher can
-    // populate the metadata buffer from `max_size_compile_time` when the per-alloca `size_expr` is
-    // empty (offline-cache load). Never read by the shader itself.
-    uint32_t max_size_compile_time{0};
-    // Compile-time prefix-sum offset (in elements of the heap's element type). Mirrored into
-    // `TaskAttributes::AdStackSizingAttribs::allocas[stack_id].offset_in_elems_compile_time` so the
-    // host launcher's no-size_expr path publishes the same layout the codegen assumed.
-    uint32_t offset_in_elems_compile_time{0};
     spirv::SType elem_type;
     // Per-alloca cached loads from the AdStackMetadata buffer (offset, max_size, and the derived
     // `adjoint_offset = offset + max_size`). Lazily emitted on the first push/load_top/load_top_adj
@@ -249,34 +234,11 @@ class TaskCodegen : public IRVisitor {
     spirv::Value adjoint_offset_val;
   };
   std::unordered_map<const Stmt *, AdStackSpirv> ad_stacks_;
-  // Total per-thread heap strides, pre-computed from the IR before any visitor runs from the
-  // compile-time `max_size` on each alloca. The runtime recomputes these from the evaluated
-  // `size_expr` trees and publishes them into the `AdStackMetadata` buffer; the shader reads the
-  // per-dispatch values from the metadata buffer rather than using these immediates directly. The
-  // compile-time values are still mirrored into `task_attribs.ad_stack.*` so the offline-cache-hit
-  // path with no symbolic bound captured reproduces the pre-PR shader layout.
-  uint32_t ad_stack_heap_per_thread_stride_float_{0};
-  uint32_t ad_stack_heap_per_thread_stride_int_{0};
-  // Total number of `AdStackAllocaStmt` the body will visit, pre-computed by the same scan that builds the heap
-  // strides. Used to size a single shared Function-scope `uint[num_ad_stacks_]` count array (see
-  // `ad_stack_count_ptr`) so that all per-stack `count` values share one OpVariable accessed via
-  // OpAccessChain. The shared array prevents spirv-opt's `LocalMultiStoreElim` / `SSARewrite` from promoting each
-  // count to a separate phi at every enclosing loop header - reverse-grad kernels that allocate hundreds of
-  // adstacks across enclosing loops would otherwise grow phi mega-clusters of hundreds of entries per loop
-  // header, which spirv-cross emits as one `uint _N;` forward-decl and one `_N = _N;` alias copy per phi per
-  // predecessor branch in the cross-compiled MSL.
   uint32_t num_ad_stacks_{0};
   // Single Function-scope `uint[num_ad_stacks_]` array, allocated lazily on first `ad_stack_count_ptr` call.
   // `info.count_var` for each stack is now an `OpAccessChain` pointer into element `stack_id` of this array
   // rather than its own `OpVariable Function`.
   spirv::Value ad_stack_count_array_var_;
-  // Running offsets into the per-thread slice assigned to the next AdStackAllocaStmt visitor. Each ends equal to
-  // the corresponding stride once every alloca has been visited; these feed the
-  // `offset_in_elems_compile_time` of each alloca's `AdStackSizingAttribs::allocas` entry.
-  uint32_t ad_stack_heap_next_offset_float_{0};
-  uint32_t ad_stack_heap_next_offset_int_{0};
-  // Buffers are cached for reuse across push/pop/load-top visitors and (re)computed lazily on first use inside a
-  // task so the `OpLoad` falls inside the dispatch body rather than the function header.
   spirv::Value ad_stack_heap_buffer_float_;
   spirv::Value ad_stack_heap_buffer_int_;
   // No SSA cache for the per-thread heap base: the heap base is `row_id_var * stride`, where `row_id_var` is a
@@ -291,27 +253,6 @@ class TaskCodegen : public IRVisitor {
   spirv::Value ad_stack_metadata_buffer_;
   spirv::Value ad_stack_metadata_stride_float_;
   spirv::Value ad_stack_metadata_stride_int_;
-  // Lowest common dominator (LCA) block of every f32-typed AdStackPushStmt / AdStackLoadTopStmt / AdStackLoadTopAdjStmt
-  // in the task body, populated by the pre-pass scan in `run()` that also builds the heap strides. The LCA is where
-  // `visit(Block *)` emits the one-shot row-claim that materialises `ad_stack_row_id_var_float_`. Computed only over
-  // float-typed pushes deliberately: int-heap pushes for loop index recovery and if-branch flags often live
-  // unconditionally at the offload body root (the autodiff pass emits them outside any user gate so the reverse pass
-  // can replay control flow), and folding them into the LCA computation pulls the LCA up to the root for kernels with
-  // grid-style sparse predicates - eliminating the savings on the float heap, which is the only one large enough to
-  // matter (per-thread float strides measured in thousands of f32 elements dominate the footprint, while int-stack
-  // strides are typically two orders of magnitude smaller). `nullptr` when the task has no f32 adstack pushes (the
-  // float heap is unbound and no row-claim is emitted) or when the LCA reduces to the task body's root - in the latter
-  // case the claim still runs from the root, equivalent in row-occupancy to the prior `invoc_id`-keyed eager layout.
-  Block *ad_stack_lca_block_float_{nullptr};
-  // Set of `AdStackPushStmt`s recognized as autodiff-bootstrap const-init pushes by the LCA pre-pass: parent block is
-  // the offload body, previous sibling is the matching alloca, pushed value is a `ConstStmt`. These pushes run
-  // unconditionally on every dispatched thread, so the LCA computation skips them (folding their parent block in would
-  // drag the LCA up to the offload root and revert to per-thread sizing); the `visit(AdStackPushStmt)` visitor also
-  // skips the slot store for these (the matching reverse pop only decrements `count_var` and never reads the slot back
-  // via `load_top`, so the bootstrap value is dead memory and writing it through a possibly-unclaimed `row_id_var`
-  // would corrupt arbitrary heap rows). Only the `count_var` increment is kept so push and pop stay balanced.
-  std::unordered_set<AdStackPushStmt *> ad_stack_bootstrap_pushes_;
-
   // Function-scope u32 alloca holding the maximum-overflow-signal-seen-this-thread across every adstack push site
   // in the task. Each `AdStackPushStmt` visitor updates it with `signal = (count >= max) ? stack_id + 1 : 0` via
   // OpUMax (register-only, no atomic, no global memory access on the not-overflowing fast path). Right before the
@@ -321,33 +262,7 @@ class TaskCodegen : public IRVisitor {
   // Lazy-allocated by the first `AdStackPushStmt` visitor; nullptr when the task has no adstack pushes (no
   // task-end emit needed). Reset to {} per task in `generate_*_kernel`.
   spirv::Value any_overflow_signal_var_;
-  // Set to true when the task body contains at least one `AdStackPushStmt` visit. Read by
-  // `emit_adstack_task_end_overflow_check` to decide whether to emit the task-end overflow check and
-  // its AdStackOverflow / AdStackTaskRegistryId buffer accesses. Forward-only tasks never set this and
-  // therefore never request the AdStack-side buffer binds, which keeps the SPIR-V launcher's bind
-  // path from null-binding `AdStackTaskRegistryId` on a Program that has not allocated it
-  // (allocation only fires inside `publish_adstack_metadata_spirv` for kernels with at least one
-  // adstack-bearing task; null-binding would crash Metal's `rw_buffer` device-equality assertion).
   bool task_has_adstack_push_{false};
-  // Function-scope OpVariable<u32> initialized to UINT32_MAX at task entry; overwritten with the atomically claimed row
-  // index when codegen visits `ad_stack_lca_block_float_`. `get_ad_stack_heap_thread_base_float()` loads this variable
-  // and multiplies against the runtime float stride to produce the per-thread heap base, replacing the prior `invoc_id
-  // * stride` formula. The variable is per-invocation (Function storage class) so the load yields a fresh SSA at each
-  // push site without violating SPIR-V section 2.16 dominance even when push sites live in sibling blocks of the LCA.
-  // The int heap path uses the eager `gl_GlobalInvocationID * stride_int` layout in
-  // `get_ad_stack_heap_thread_base_int()` and does not consult any row_id_var.
-  spirv::Value ad_stack_row_id_var_float_;
-  // Cached SSA handle to the per-dispatch StorageBuffer holding the single u32 atomic counter
-  // (`BufferType::AdStackRowCounter`). Lazily populated on first use inside the LCA-block claim emission so the
-  // `OpAtomicIAdd` lives in the dispatch body rather than the function header. Zero (default-constructed) when the task
-  // has no adstack push sites and the buffer is not bound.
-  spirv::Value ad_stack_row_counter_buffer_;
-  // Cached SSA handle to the per-kernel `BufferType::AdStackBoundRowCapacity` (`uint[num_tasks_in_kernel]`). Lazily
-  // populated at the float Lowest Common Ancestor (LCA) block emission site when the defense-in-depth bounds check
-  // fires; the host writes the per-task capacity (the reducer's count for tasks with a captured `bound_expr`,
-  // UINT32_MAX otherwise) so the OpAtomicUMax sentinel only fires on a reducer / main divergence. Zero-default when the
-  // task has no float adstack push sites and the buffer is not bound.
-  spirv::Value ad_stack_bound_row_capacity_buffer_;
   // Return (lazily) the StorageBuffer of `Array<f32>` that backs f32 adstacks for this dispatch, and the per-thread
   // base index inside it.
   spirv::Value get_ad_stack_heap_buffer_float();

@@ -11,8 +11,6 @@ qd.init(
     arch=getattr(qd, arch),
     offline_cache=True,
     offline_cache_file_path=path,
-    ad_stack_experimental_enabled=True,
-    ad_stack_replay_count=True,
 )
 
 

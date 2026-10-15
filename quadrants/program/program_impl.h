@@ -31,9 +31,6 @@ class ProgramImpl {
   // outside.
   CompileConfig *config;
 
-  // Back-reference to the owning `Program`, plumbed in from `Program`'s constructor so host-side per-launch paths
-  // (e.g. the adstack `SizeExpr` evaluator) can reach `SNodeRwAccessorsBank` without threading `Program *` through
-  // every kernel-launcher signature. Null until the owning Program sets it.
   Program *program{nullptr};
 
  public:
@@ -85,8 +82,6 @@ class ProgramImpl {
    * `synchronize_and_assert()`; promoting it to per-launch would tank the queue throughput on Apple Metal /
    * Vulkan.
    */
-  virtual void check_adstack_overflow_and_assert() {
-  }
 
   virtual StreamSemaphore flush() {
     synchronize();
@@ -151,12 +146,6 @@ class ProgramImpl {
   }
 
   virtual void finalize() {
-  }
-
-  // Hook invoked by `Program::finalize()` before any teardown sync. Lets backends flip state (e.g. the LLVM
-  // `finalizing_` flag used to suppress adstack-overflow polling) so the two `Program::synchronize()` calls that
-  // precede `finalize()` do not throw into the Program destructor path.
-  virtual void pre_finalize() {
   }
 
   virtual uint64 fetch_result_uint64(int i, uint64 *result_buffer) {

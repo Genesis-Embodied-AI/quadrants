@@ -7,8 +7,6 @@ namespace quadrants::lang::spirv {
 
 namespace {
 
-// Read one u32 word from a storage-buffer-backed uint32[]. Mirrors the same-named helper in
-// `adstack_bound_reducer_shader.cpp`; kept local so the gate shader's symbol set is self-contained.
 Value load_buf_u32(IRBuilder &ir, Value buffer, Value word_idx) {
   Value ptr = ir.struct_array_access(ir.u32_type(), buffer, word_idx);
   return ir.load_variable(ptr, ir.u32_type());

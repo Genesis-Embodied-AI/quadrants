@@ -14,7 +14,7 @@ void promote_ssa_to_local_var(Block *block);
 
 // Replace each AllocaStmt the reverse pass needs to read across iterations with an AdStackAllocaStmt + AdStackPushStmt
 // / AdStackLoadTopStmt. The AllocaJudger (file-private) decides which allocas need the promotion.
-void replace_local_var_with_stacks(Block *block, int ad_stack_size);
+void replace_local_var_with_stacks(Block *block);
 
 // Drop AdStackAllocaStmts whose pushed value is recomputable from already-stack-backed allocas + kernel args +
 // constants + loop indices. Trades forward-pass adstack memory traffic for cloned arithmetic in the reverse scope,

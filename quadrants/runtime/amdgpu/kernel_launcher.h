@@ -16,13 +16,6 @@ class KernelLauncher : public LLVM::KernelLauncher {
     JITModule *jit_module{nullptr};
     const std::vector<std::pair<int, Callable::Parameter>> *parameters;
     std::vector<OffloadedTask> offloaded_tasks;
-    // Per-kernel-handle persistent scratch. Allocated lazily on first use, grown amortised-doubling on demand,
-    // freed only on launcher destruction. Stored per-handle (not per-launcher) because `publish_adstack_metadata`'s
-    // host-eval branch evaluates `FieldLoad` SizeExpr leaves through `SNodeRwAccessorsBank`, which recursively
-    // launches `snode_reader_*` kernels via the same launcher singleton; sharing one device-side `arg_buffer` /
-    // `RuntimeContext` across kernels would let the recursive launch overwrite the parent's args before the parent
-    // kernel reads them. Per-handle buffers give each kernel a private device address that recursive launches
-    // cannot touch.
     void *arg_buffer_dev_ptr{nullptr};
     std::size_t arg_buffer_capacity{0};
     void *runtime_context_dev_ptr{nullptr};
@@ -107,10 +100,6 @@ class KernelLauncher : public LLVM::KernelLauncher {
   // child completes, before the parent kernel that would be the next reader). Grown amortised-doubling.
   void *persistent_result_buffer_dev_ptr_{nullptr};
   std::size_t persistent_result_buffer_capacity_{0};
-  // std::deque (not std::vector): `publish_adstack_metadata`'s host-eval branch recursively registers snode-reader
-  // kernels via this same launcher, calling `contexts_.resize()` while a parent `launch_llvm_kernel` frame still
-  // holds a reference into the container.  std::deque never invalidates references on push_back / resize, so the
-  // parent's `launcher_ctx` reference survives the child's registration.
   std::deque<Context> contexts_;
   GraphManager graph_manager_;
 

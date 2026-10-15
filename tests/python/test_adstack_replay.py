@@ -8,7 +8,7 @@ import quadrants as qd
 from tests import test_utils
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], ad_stack_replay_count=True, ad_stack_experimental_enabled=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan])
 def test_backward_only_remeasures_current_inputs():
     x = qd.ndarray(qd.f32, shape=4, needs_grad=True)
     y = qd.ndarray(qd.f32, shape=4, needs_grad=True)
@@ -38,7 +38,7 @@ def test_backward_only_remeasures_current_inputs():
         np.testing.assert_allclose(x.to_numpy(), 0.2)
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], ad_stack_replay_count=True, ad_stack_experimental_enabled=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan])
 def test_replay_dense_fields_tape():
     x = qd.field(qd.f32, shape=4, needs_grad=True)
     loss = qd.field(qd.f32, shape=(), needs_grad=True)
@@ -64,7 +64,7 @@ def test_replay_dense_fields_tape():
     np.testing.assert_allclose(x.grad.to_numpy(), derivative, rtol=2e-5)
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], ad_stack_replay_count=True, ad_stack_experimental_enabled=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan])
 def test_count_rejects_residual_primal_mutation():
     x = qd.field(qd.f32, shape=1, needs_grad=True)
     y = qd.field(qd.f32, shape=1, needs_grad=True)
@@ -85,7 +85,7 @@ def test_count_rejects_residual_primal_mutation():
 
 
 @pytest.mark.parametrize("fastcache", [False, True])
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], ad_stack_replay_count=True, ad_stack_experimental_enabled=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan])
 def test_backward_only_persistent_cache(tmp_path, fastcache):
     import subprocess
     import sys
@@ -108,7 +108,7 @@ def test_backward_only_persistent_cache(tmp_path, fastcache):
 
 
 @pytest.mark.parametrize("read_modify_write", [False, True])
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], ad_stack_replay_count=True, ad_stack_experimental_enabled=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan])
 def test_write_only_array_output_and_alias_guard(read_modify_write):
     x = qd.ndarray(qd.f32, shape=2, needs_grad=True)
     y = qd.ndarray(qd.f32, shape=2, needs_grad=True)
@@ -156,7 +156,7 @@ def test_write_only_array_output_and_alias_guard(read_modify_write):
 
 
 @pytest.mark.parametrize("debug", [False, True])
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], ad_stack_replay_count=True, ad_stack_experimental_enabled=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan])
 def test_replay_overflow_with_reduction(monkeypatch, debug):
     from quadrants.lang import adstack_replay
 
@@ -194,7 +194,7 @@ def test_replay_overflow_with_reduction(monkeypatch, debug):
     assert x.grad[None] == pytest.approx(4096 * math.cos(0.2) * math.cos(math.sin(0.2)), rel=2e-4)
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], ad_stack_replay_count=True, ad_stack_experimental_enabled=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan])
 def test_replay_disjoint_frame_outputs():
     x = qd.field(qd.f32, shape=4, needs_grad=True)
     y = qd.field(qd.f32, shape=4, needs_grad=True)
@@ -234,7 +234,7 @@ def test_replay_disjoint_frame_outputs():
     np.testing.assert_allclose(x.grad.to_numpy(), derivative, rtol=2e-5)
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], ad_stack_replay_count=True, ad_stack_experimental_enabled=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan])
 def test_replay_rejects_cross_iteration_output_dependency():
     x = qd.field(qd.f32, shape=4, needs_grad=True)
     y = qd.field(qd.f32, shape=4, needs_grad=True)
@@ -255,7 +255,7 @@ def test_replay_rejects_cross_iteration_output_dependency():
     np.testing.assert_array_equal(flags.to_numpy(), np.ones(5))
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda], ad_stack_replay_count=True, ad_stack_experimental_enabled=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda])
 def test_replay_torch_arguments_and_overlapping_views():
     torch = pytest.importorskip("torch")
     device = "cuda" if qd.lang.impl.current_cfg().arch == qd.cuda else "cpu"

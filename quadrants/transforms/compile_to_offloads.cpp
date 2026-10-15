@@ -179,28 +179,12 @@ void compile_to_offloads(IRNode *ir,
   irpass::analysis::verify_if_debug(ir, config);
 
   dump_ir("after_simplify_III");
-
-  // Run the adstack-size pre-pass here, before the per-task split in `KernelCodeGen::compile_kernel_to_module`
-  // and before `make_cpu_multithreaded_range_for` in `offload_to_executable` rewrites user ranges into chunk
-  // wrappers. The kernel IR still has every `OffloadedStmt` as a sibling in the top-level block, so the pre-
-  // pass can resolve a `GlobalLoadStmt(GlobalTemporaryStmt)` source by walking across tasks: prep serial tasks
-  // that store a dynamic range bound (e.g. `arr.shape[0]` lowered via `offload::PromoteIntermediateToGlobalTmp`)
-  // are still visible alongside the consuming range-for task. Gated on the same reverse+ad_use_stack predicate
-  // the per-task call used so compile behaviour is unchanged for forward-only kernels.
-  if (autodiff_mode == AutodiffMode::kReverse && ad_use_stack) {
-    if (kernel->adstack_mode == 2)
-      prepare_counted_adstacks(ir);
-    else
-      irpass::determine_ad_stack_size(ir, config);
-    print("Autodiff stack size determined");
-  }
 }
 
 void offload_to_executable(IRNode *ir,
                            const CompileConfig &config,
                            const Kernel *kernel,
                            bool verbose,
-                           bool determine_ad_stack_size,
                            bool lower_global_access,
                            bool make_thread_local,
                            bool make_block_local) {
@@ -318,12 +302,6 @@ void offload_to_executable(IRNode *ir,
                         {lower_global_access, /*autodiff_enabled*/ false, kernel->get_name(), verbose, "simplify_IV"});
   print("Simplified IV");
 
-  // `determine_ad_stack_size` used to run here, but the pre-pass needs the full kernel IR (all offloaded
-  // tasks as siblings) so cross-task `GlobalTemporaryStmt` sources can be resolved. It now runs at the end
-  // of `compile_to_offloads`, before the per-task split in `KernelCodeGen::compile_kernel_to_module`. The
-  // `determine_ad_stack_size` parameter is kept in the signature for API stability but is no longer used.
-  (void)determine_ad_stack_size;
-
   if (is_extension_supported(config.arch, Extension::quant)) {
     irpass::optimize_bit_struct_stores(ir, config, amgr.get());
     print("Bit struct stores optimized");
@@ -361,9 +339,7 @@ void compile_to_executable(IRNode *ir,
 
   compile_to_offloads(ir, config, kernel, verbose, autodiff_mode, ad_use_stack, start_from_ast);
 
-  offload_to_executable(ir, config, kernel, verbose,
-                        /*determine_ad_stack_size=*/autodiff_mode == AutodiffMode::kReverse && ad_use_stack,
-                        lower_global_access, make_thread_local, make_block_local);
+  offload_to_executable(ir, config, kernel, verbose, lower_global_access, make_thread_local, make_block_local);
 }
 
 void compile_function(IRNode *ir,

@@ -19,28 +19,20 @@ class MakeAdjoint : public ADTransform {
   // survive enclosing for-loop iterations (e.g. the dedicated ad-stacks that snapshot IfStmt conds in visit(IfStmt)).
   Block *ib_root;
   std::map<Stmt *, Stmt *> adjoint_stmt;
+  bool preserve_primal_stores;
 
-  explicit MakeAdjoint(Block *block) {
+  explicit MakeAdjoint(Block *block, bool preserve_stores) : preserve_primal_stores(preserve_stores) {
     current_block = nullptr;
     alloca_block = block;
     forward_backup = block;
     ib_root = block;
   }
 
-  static void run(Block *block) {
-    auto p = MakeAdjoint(block);
+  static void run(Block *block, bool preserve_stores) {
+    auto p = MakeAdjoint(block, preserve_stores);
     block->accept(&p);
   }
 
-  // Does `if_stmt`'s true/false body contain any AdStackPushStmt targeting `stack`? Recursive to catch pushes nested
-  // inside further control flow (if-in-if, if-in-for). Used by visit(IfStmt) to gate cond-snapshotting. Must be narrow:
-  // snapshotting every if-stmt would add an AdStackAllocaStmt per if, and determine_ad_stack_size cannot size stacks
-  // whose push/pop pair is only reachable through branches its Bellman-Ford walk considers "unreached" - codegen then
-  // aborts with "Adaptive autodiff stack's size should have been determined" and the extras also spam "Unused autodiff
-  // stack should have been eliminated" for every untouched snap stack. Only when the body actually pushes onto the
-  // cond's backing stack does BackupSSA's reverse-time clone of load_top read a post-body value rather than the forward
-  // cond (the case this snapshot guards against); in every other case the clone is correct and a snapshot would be dead
-  // weight.
   static bool block_pushes_to_stack(Block *block, Stmt *stack) {
     if (!block)
       return false;
@@ -317,17 +309,6 @@ class MakeAdjoint : public ADTransform {
   }
 
   void visit(IfStmt *if_stmt) override {
-    // Snapshot a stack-backed forward cond into a dedicated 1-push-per-if-execution ad-stack, but only when the cond's
-    // backing stack is also pushed inside the if body (e.g. short-circuit lowering pushes the rhs of `&&` onto the same
-    // stack that holds the cond). Without this, BackupSSA's clone of `if_stmt->cond` in the reverse block reads the
-    // cond stack AFTER the body-pushes rather than the forward-time cond value - the reverse IfStmt flips, pop counts
-    // drift, and gradients come out silently zero. A dedicated stack has exactly one push per forward if-execution, so
-    // the reverse load_top matches the forward cond.
-    //
-    // Guarded by the body-push check because snapshotting indiscriminately adds AdStackAllocaStmts that go through
-    // `determine_ad_stack_size` unused on every other if-stmt in the kernel - the adaptive-size pass emits "Unused
-    // autodiff stack should have been eliminated" warnings and the codegen step then fails with "Adaptive autodiff
-    // stack's size should have been determined".
     Stmt *reverse_cond = if_stmt->cond;
     AdStackAllocaStmt *snap_stack_ptr = nullptr;
     // Narrow guard: only the bare `AdStackLoadTopStmt` shape needs the explicit snapshot below. A compound cond (e.g.
@@ -356,18 +337,10 @@ class MakeAdjoint : public ADTransform {
       auto *cond_stack = if_stmt->cond->as<AdStackLoadTopStmt>()->stack->as<AdStackAllocaStmt>();
       if (body_pushes_to_stack(if_stmt, cond_stack)) {
         auto cond_type = if_stmt->cond->ret_type.ptr_removed();
-        // Size the snap stack the same way as the cond stack it mirrors: one forward push per if-execution matched by
-        // one reverse pop. Reusing cond_stack->max_size keeps the snap stack exempt from `determine_ad_stack_size` when
-        // the cond stack itself was built with a fixed size, which holds when ReplaceLocalVarWithStacks ran with a
-        // non-zero `ad_stack_size` (the only configuration supported for stack-based reverse AD).
-        auto snap_stack = Stmt::make<AdStackAllocaStmt>(cond_type, cond_stack->max_size);
+        auto snap_stack = Stmt::make<AdStackAllocaStmt>(cond_type);
         snap_stack_ptr = snap_stack->as<AdStackAllocaStmt>();
         // Allocate at the IB root so the stack persists across enclosing for-loop iterations.
         ib_root->insert(std::move(snap_stack), 0);
-        // Per-execution forward push of the cond value, just before the forward if-stmt. No initial zero push: the
-        // reverse load_top always runs after a matching forward push, so leaving the stack empty at entry is both
-        // correct and avoids a dead store that DSE would otherwise drop (and that `determine_ad_stack_size` would then
-        // miscount).
         if_stmt->insert_before_me(Stmt::make<AdStackPushStmt>(snap_stack_ptr, if_stmt->cond));
         // Per-execution reverse load of the snapshotted cond, emitted in the current reverse block.
         reverse_cond = insert<AdStackLoadTopStmt>(snap_stack_ptr);
@@ -572,6 +545,8 @@ class MakeAdjoint : public ADTransform {
   }
 
   void visit(GlobalStoreStmt *stmt) override {
+    if (preserve_primal_stores)
+      return;
     // erase and replace with global load adjoint
 
     Stmt *adjoint_ptr{nullptr};
@@ -641,6 +616,8 @@ class MakeAdjoint : public ADTransform {
   }
 
   void visit(AtomicOpStmt *stmt) override {
+    if (preserve_primal_stores)
+      return;
     if (stmt->dest->is<ExternalPtrStmt>() ||
         (stmt->dest->is<MatrixPtrStmt>() && stmt->dest->as<MatrixPtrStmt>()->origin->is<ExternalPtrStmt>())) {
       ExternalPtrStmt *dest = nullptr;
@@ -830,8 +807,8 @@ class MakeAdjoint : public ADTransform {
 
 }  // namespace
 
-void make_adjoint(Block *ib) {
-  MakeAdjoint::run(ib);
+void make_adjoint(Block *ib, bool preserve_primal_stores) {
+  MakeAdjoint::run(ib, preserve_primal_stores);
 }
 
 }  // namespace quadrants::lang
