@@ -145,3 +145,42 @@ def test_write_only_array_output_and_alias_guard():
     with pytest.raises(RuntimeError, match="aliased non-differentiable"):
         compute.grad(x, y, n, n)
     np.testing.assert_array_equal(n.to_numpy(), [3, 3])
+
+
+@pytest.mark.parametrize("debug", [False, True])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], ad_stack_replay_count=True, ad_stack_experimental_enabled=True)
+def test_replay_overflow_with_reduction(monkeypatch, debug):
+    from quadrants.lang import adstack_replay
+
+    qd.lang.impl.current_cfg().debug = debug
+    x = qd.ndarray(qd.f32, shape=(), needs_grad=True)
+    y = qd.ndarray(qd.f32, shape=4096, needs_grad=True)
+    n = qd.ndarray(qd.i32, shape=4096)
+    x[None] = 0.2
+    n.fill(2)
+
+    @qd.kernel
+    def compute(x: qd.types.ndarray(), y: qd.types.ndarray(), n: qd.types.ndarray()):
+        for i in range(y.shape[0]):
+            value = x[None]
+            for j in range(n[i]):
+                value = qd.sin(value)
+            y[i] = value
+
+    original_variant = adstack_replay._variant
+
+    def change_one_lane_after_count(kernel, mode):
+        if mode == 2:
+            n[0] = 100
+        return original_variant(kernel, mode)
+
+    monkeypatch.setattr(adstack_replay, "_variant", change_one_lane_after_count)
+    y.grad.fill(1)
+    with pytest.raises(RuntimeError, match="Adstack capacity exceeded"):
+        compute.grad(x, y, n)
+    monkeypatch.undo()
+    n.fill(2)
+    x.grad.fill(0)
+    y.grad.fill(1)
+    compute.grad(x, y, n)
+    assert x.grad[None] == pytest.approx(4096 * math.cos(0.2) * math.cos(math.sin(0.2)), rel=2e-4)
