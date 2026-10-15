@@ -1,0 +1,40 @@
+quadrants.lang.adstack
+======================
+
+.. py:module:: quadrants.lang.adstack
+
+.. autoapi-nested-parse::
+
+   Experimental forward measurements for stack-based reverse AD.
+
+   Explicit gradient calls consume records in reverse invocation order for each kernel. The initial implementation
+   uses the largest measured depth for every stack and supports CPU, CUDA, Vulkan, and Metal.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   quadrants.lang.adstack.adstack
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.lang.adstack.dispatch
+
+
+Module Contents
+---------------
+
+.. py:data:: adstack
+
+.. py:function:: dispatch(kernel, args, qd_stream=None)
+
+   Return (handled, result); ordinary kernel calls remain on their existing launch path.
+
+
