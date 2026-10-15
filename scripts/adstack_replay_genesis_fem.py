@@ -32,7 +32,8 @@ def main():
     entity.set_velocity(velocity)
     for _ in range(steps):
         scene.step()
-    loss = entity.get_state().pos[..., 0].mean()
+    state = scene.get_state().solvers_state[scene.solvers.index(scene.fem_solver)]
+    loss = state.pos[..., 0].mean()
     loss.backward()
     gradient = velocity.grad.detach().cpu().numpy()
     # Uniform translation with no external forces advances the mean x coordinate by steps * dt * velocity.x.
