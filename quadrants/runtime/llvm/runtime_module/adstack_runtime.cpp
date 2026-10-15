@@ -38,19 +38,15 @@ extern "C" i32 adstack_measure_peak(RuntimeContext *ctx, i64 depth) {
   return 0;
 }
 
-extern "C" i32 adstack_check_capacity(RuntimeContext *ctx, u64 required) {
+extern "C" u64 adstack_checked_count(RuntimeContext *ctx, u64 required) {
   auto *flag = ctx->adstack_measurement + 1;
   if (required > ctx->adstack_capacity) {
     __atomic_store_n(flag, i64(1), __ATOMIC_RELAXED);
-    return 0;
+    return ctx->adstack_capacity;
   }
-  // Other threads can finish their own valid stacks after a failure; the host discards the entire result.
-  // Avoid a global atomic load on every successful push.
-  return 1;
-}
-
-extern "C" i32 adstack_replay_active(RuntimeContext *ctx) {
-  return __atomic_load_n(ctx->adstack_measurement + 1, __ATOMIC_RELAXED) == 0;
+  // No thread exits early: reductions and barriers must still execute after a failure. The host discards
+  // the entire result. Avoid a global atomic load on every successful push.
+  return required;
 }
 
 // Writes the addresses of `runtime->adstack_heap_buffer` and `runtime->adstack_heap_size` into the result buffer so the

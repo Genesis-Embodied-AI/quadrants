@@ -188,3 +188,42 @@ def test_counted_adstack_tape():
     d2 = math.cos(0.2) * math.cos(math.sin(0.2))
     d3 = d2 * math.cos(math.sin(math.sin(0.2)))
     assert x.grad[0] == pytest.approx(d2 + d3, rel=2e-5)
+
+
+@pytest.mark.parametrize("debug", [False, True])
+@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
+def test_counted_adstack_overflow_with_reduction(debug):
+    qd.lang.impl.current_cfg().debug = debug
+    x = qd.ndarray(qd.f32, shape=(), needs_grad=True)
+    y = qd.ndarray(qd.f32, shape=4096, needs_grad=True)
+    n = qd.ndarray(qd.i32, shape=4096)
+    x[None] = 0.2
+    n.fill(2)
+
+    @qd.kernel
+    def compute(x: qd.types.ndarray(), y: qd.types.ndarray(), n: qd.types.ndarray()):
+        for i in range(y.shape[0]):
+            value = x[None]
+            for j in range(n[i]):
+                value = qd.sin(value)
+            y[i] = value
+
+    # All iterations accumulate into the same input gradient, allowing compiler-generated reductions.
+    with qd.adstack:
+        compute(x, y, n)
+    # Only one lane overflows; the rest must still complete their cooperative reduction.
+    n[0] = 100
+    y.grad.fill(1)
+    with pytest.raises(RuntimeError, match="Adstack capacity exceeded"):
+        compute.grad(x, y, n)
+    qd.sync()
+
+    # Discard the invalid gradients, then check a complete subsequent reduction numerically.
+    n.fill(2)
+    x.grad.fill(0)
+    y.grad.fill(1)
+    with qd.adstack:
+        compute(x, y, n)
+    compute.grad(x, y, n)
+    expected = 4096 * math.cos(0.2) * math.cos(math.sin(0.2))
+    assert x.grad[None] == pytest.approx(expected, rel=2e-4)

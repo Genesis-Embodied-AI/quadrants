@@ -250,9 +250,7 @@ void offload_to_executable(IRNode *ir,
     irpass::analysis::verify_if_debug(ir, config);
   }
 
-  // A counted replay can abandon an overflowing thread. Keep its reductions as ordinary atomics so generated
-  // cooperative reduction epilogues cannot wait for threads that returned early.
-  if (make_thread_local && kernel->adstack_mode != 2) {
+  if (make_thread_local) {
     irpass::make_thread_local(ir, config);
     print("Make thread local");
   }
@@ -268,7 +266,7 @@ void offload_to_executable(IRNode *ir,
     }
   }
 
-  if (make_block_local && kernel->adstack_mode != 2) {
+  if (make_block_local) {
     irpass::make_block_local(ir, config, {kernel->get_name(), verbose});
     print("Make block local");
   }

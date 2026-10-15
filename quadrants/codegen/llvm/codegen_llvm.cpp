@@ -2085,12 +2085,6 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
   // The real function body
   func_body_bb = llvm::BasicBlock::Create(*llvm_context, "body", func);
   builder->SetInsertPoint(func_body_bb);
-  if (kernel->adstack_mode == 2) {
-    auto *ok = call("adstack_replay_active", get_context());
-    auto *body = llvm::BasicBlock::Create(*llvm_context, "adstack_checked_task", func);
-    builder->CreateCondBr(builder->CreateICmpNE(ok, tlctx->get_constant(0)), body, final_block);
-    builder->SetInsertPoint(body);
-  }
   return task_kernel_name;
 }
 
@@ -2960,18 +2954,19 @@ void TaskCodeGenLLVM::visit(AdStackPushStmt *stmt) {
     llvm::Value *old_count = builder->CreateLoad(i64ty, count_alloca);
     llvm::Value *new_count = builder->CreateAdd(old_count, llvm::ConstantInt::get(i64ty, 1));
     if (kernel->adstack_mode == 2) {
-      auto *ok = call("adstack_check_capacity", get_context(), new_count);
-      auto *write_block = llvm::BasicBlock::Create(*llvm_context, "adstack_checked_push", func);
-      builder->CreateCondBr(builder->CreateICmpNE(ok, tlctx->get_constant(0)), write_block, final_block);
-      builder->SetInsertPoint(write_block);
+      // Saturate the count on overflow and keep participating in cooperative work. Results are invalid once
+      // the helper sets the error flag, but all subsequent stack accesses must remain within the allocation.
+      new_count = call("adstack_checked_count", get_context(), new_count);
     }
     builder->CreateStore(new_count, count_alloca);
-    // Slot is at index `new_count - 1`, which equals `old_count`. Skip the saturating-subtract that
-    // `emit_ad_stack_top_slot_ptr` does because we just incremented and `new_count` is provably >= 1.
+    // Measured capacities are at least one, so even a saturated push has a valid top slot.
+    llvm::Value *slot_index = kernel->adstack_mode == 2
+                                  ? builder->CreateSub(new_count, llvm::ConstantInt::get(i64ty, 1))
+                                  : old_count;
     std::size_t entry_size = stack->entry_size_in_bytes();
     llvm::Value *slot_offset =
         builder->CreateAdd(llvm::ConstantInt::get(i64ty, sizeof(int64)),
-                           builder->CreateMul(old_count, llvm::ConstantInt::get(i64ty, entry_size)));
+                           builder->CreateMul(slot_index, llvm::ConstantInt::get(i64ty, entry_size)));
     primal_ptr = builder->CreateGEP(i8ty, get_ad_stack_base_llvm(stack), slot_offset);
   }
   // Zero the primal+adjoint slot pair to match `stack_push`'s `memset(top_primal, 0, 2 * element_size)`. Without this,
