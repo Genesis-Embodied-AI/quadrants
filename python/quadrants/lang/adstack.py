@@ -45,7 +45,7 @@ class _Invocation:
         record = self._record
         if record is None:
             raise RuntimeError("This adstack invocation has been released")
-        if impl.get_runtime().prog is not self._program:
+        if impl.get_runtime()._prog is not self._program:
             raise RuntimeError("Adstack invocations cannot be used after qd.reset() or qd.init()")
         if _arguments(record.keepalive) != record.arguments:
             raise RuntimeError("Counted invocation argument metadata changed before backward")

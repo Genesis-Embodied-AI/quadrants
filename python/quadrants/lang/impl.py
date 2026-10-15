@@ -77,7 +77,7 @@ from quadrants.types.primitive_types import (
 )
 
 if TYPE_CHECKING:
-    from .adstack import _AdstackContext
+    from .adstack import _Scope
     from .ast.ast_transformer_utils import ASTTransformerGlobalContext
 
 
@@ -422,7 +422,7 @@ class PyQuadrants:
         self.default_up = u32
         self.print_full_traceback: bool = False
         self.target_tape = None
-        self.adstack_scope: "_AdstackContext | None" = None
+        self.adstack_scope: "_Scope | None" = None
         self.fwd_mode_manager = None
         self.grad_replaced = False
         self.kernels: list[Kernel] = kernels or []
