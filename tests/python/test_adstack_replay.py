@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 import quadrants as qd
+
 from tests import test_utils
 
 
