@@ -1,4 +1,4 @@
-"""Cross-process cache regression worker; invoked by test_adstack_compatibility."""
+"""Cross-process cache regression worker; invoked by test_adstack_replay."""
 
 import math
 import sys

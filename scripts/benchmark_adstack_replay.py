@@ -1,4 +1,4 @@
-"""Compare ordinary sizing with forward counting on a synthetic nonlinear loop.
+"""Compare ordinary sizing with backward replay counting on a synthetic nonlinear loop.
 
 Run in a built Quadrants environment:
     python scripts/benchmark_adstack_replay.py --arch cuda --size 4096 --depth 32 --repeats 30
