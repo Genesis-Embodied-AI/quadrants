@@ -349,9 +349,6 @@ GfxRuntime::GfxRuntime(const Params &params)
 }
 
 GfxRuntime::~GfxRuntime() {
-  // Set `finalizing_` before synchronize() so the adstack-overflow QD_ERROR_IF there short-circuits: a throw
-  // from this implicitly-noexcept destructor would call std::terminate(). See the field's declaration comment.
-
   synchronize();
 
   // Write pipeline cache back to disk.
@@ -673,11 +670,6 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
           bindings->rw_buffer(bind.binding, kDeviceNullAllocation);
         } else {
           if (!adstack_heap_buffer_float_ || adstack_heap_buffer_float_size_ < required) {
-            // Amortized doubling: mirrors `LlvmRuntimeExecutor::ensure_adstack_heap`. Without it, a sequence of
-            // launches with monotonically increasing dispatch sizes (e.g. BFS / frontier expansion) between
-            // `synchronize()` calls would reallocate on every launch and leave every displaced buffer sitting in
-            // `ctx_buffers_` until the next sync, accumulating O(K^2 * N) bytes of live-but-unused GPU memory. Doubling
-            // bounds the reallocations at O(log K) and the live memory at O(K * N).
             size_t new_size = std::max(required, 2 * adstack_heap_buffer_float_size_);
             auto [buf, res] = device_->allocate_memory_unique(
                 {new_size, /*host_write=*/false, /*host_read=*/false, /*export_sharing=*/false, AllocUsage::Storage});

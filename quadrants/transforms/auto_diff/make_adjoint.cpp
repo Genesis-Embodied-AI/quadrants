@@ -337,7 +337,7 @@ class MakeAdjoint : public ADTransform {
       auto *cond_stack = if_stmt->cond->as<AdStackLoadTopStmt>()->stack->as<AdStackAllocaStmt>();
       if (body_pushes_to_stack(if_stmt, cond_stack)) {
         auto cond_type = if_stmt->cond->ret_type.ptr_removed();
-        auto snap_stack = Stmt::make<AdStackAllocaStmt>(cond_type, cond_stack->max_size);
+        auto snap_stack = Stmt::make<AdStackAllocaStmt>(cond_type);
         snap_stack_ptr = snap_stack->as<AdStackAllocaStmt>();
         // Allocate at the IB root so the stack persists across enclosing for-loop iterations.
         ib_root->insert(std::move(snap_stack), 0);

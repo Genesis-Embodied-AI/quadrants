@@ -423,8 +423,8 @@ ExternalPtrStmt *IRBuilder::create_external_ptr(ArgLoadStmt *ptr, const std::vec
   return insert(Stmt::make_typed<ExternalPtrStmt>(ptr, indices, indices.size(), std::vector<int>(), is_grad));
 }
 
-AdStackAllocaStmt *IRBuilder::create_ad_stack(const DataType &dt, std::size_t max_size) {
-  return insert(Stmt::make_typed<AdStackAllocaStmt>(dt, max_size));
+AdStackAllocaStmt *IRBuilder::create_ad_stack(const DataType &dt) {
+  return insert(Stmt::make_typed<AdStackAllocaStmt>(dt));
 }
 
 void IRBuilder::ad_stack_push(AdStackAllocaStmt *stack, Stmt *val) {

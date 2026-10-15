@@ -109,12 +109,6 @@ class QD_DLL_EXPORT Program {
   // Drain the queue and raise on any pending user-visible assert (e.g. adstack overflow). Bound to `qd.sync()`.
   void synchronize_and_assert();
 
-  // Per-Quadrants-Python-entry poll for any pending adstack overflow signal. Unlike `synchronize_and_assert`
-  // this does NOT drain the queue: it only reads the pinned-host overflow flag (cheap host atomic load) and
-  // raises if set. Wired at every host-read entry point (`Ndarray::read`, `SNodeRwAccessorsBank` reads via
-  // `Program::launch_kernel`'s built-in poll) so a DLPack-bypass overflow surfaces within one entry of the
-  // offending launch even when the user never calls `qd.sync()`.
-
   StreamSemaphore flush();
 
   /**
@@ -227,13 +221,6 @@ class QD_DLL_EXPORT Program {
   inline SNodeRwAccessorsBank &get_snode_rw_accessors_bank() {
     return snode_rw_accessors_bank_;
   }
-
-  // Look up an `SNode` in this `Program`'s snode trees by its global `SNode::id`. Used by the host-side adstack
-  // size-expression evaluator to rehydrate an `SNode *` from a `snode_id` that survived the offline cache. Linear
-  // over all snode trees; called at most once per adstack leaf per kernel launch so the cost is negligible in
-  // practice.
-
-  // Adstack-overflow identity registry, diagnostic classifier, and per-launch snapshot all live on
 
   /**
    * Destroys a new SNode tree.
@@ -373,9 +360,6 @@ class QD_DLL_EXPORT Program {
   SNodeRwAccessorsBank snode_rw_accessors_bank_;
 
   std::vector<std::unique_ptr<SNodeTree>> snode_trees_;
-  // Lazy cache for `get_snode_by_id`. Invalidated by `add_snode_tree` and `destroy_snode_tree`.
-  // Adstack-specific state (per-task metadata caches, bytecode cache, size-expr results, generation counters,
-  // identity registry, diagnose-time launch snapshot). All adstack-specific surface lives in
   std::stack<int> free_snode_tree_ids_;
 
   std::vector<std::unique_ptr<Function>> functions_;

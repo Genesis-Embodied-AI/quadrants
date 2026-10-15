@@ -411,17 +411,13 @@ class AdStackAllocaJudger : public BasicStmtVisitor {
 class ReplaceLocalVarWithStacks : public BasicStmtVisitor {
  public:
   using BasicStmtVisitor::visit;
-  int ad_stack_size;
   DelayedIRModifier delayed_modifier_;
-
-  explicit ReplaceLocalVarWithStacks(int ad_stack_size) : ad_stack_size(ad_stack_size) {
-  }
 
   void visit(AllocaStmt *alloc) override {
     bool is_stack_needed = AdStackAllocaJudger::run(alloc);
     if (is_stack_needed) {
       auto dtype = alloc->ret_type.ptr_removed();
-      auto stack_alloca = Stmt::make<AdStackAllocaStmt>(dtype, ad_stack_size);
+      auto stack_alloca = Stmt::make<AdStackAllocaStmt>(dtype);
       auto stack_alloca_ptr = stack_alloca.get();
 
       alloc->replace_with(VecStatement(std::move(stack_alloca)));
@@ -658,8 +654,8 @@ void promote_ssa_to_local_var(Block *block) {
   PromoteSSA2LocalVar::run(block);
 }
 
-void replace_local_var_with_stacks(Block *block, int ad_stack_size) {
-  ReplaceLocalVarWithStacks pass(ad_stack_size);
+void replace_local_var_with_stacks(Block *block) {
+  ReplaceLocalVarWithStacks pass;
   block->accept(&pass);
 }
 

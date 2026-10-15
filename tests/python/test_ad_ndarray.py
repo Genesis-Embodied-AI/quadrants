@@ -28,7 +28,8 @@ def test_ad_sum():
         a[i] = 3
         b[i] = i
 
-    compute_sum(a, b, p)
+    with qd.adstack:
+        compute_sum(a, b, p)
 
     for i in range(N):
         assert p[i] == a[i] * b[i] + 1
@@ -60,7 +61,8 @@ def test_ad_sum_local_atomic():
         a[i] = 3
         b[i] = i
 
-    compute_sum(a, b, p)
+    with qd.adstack:
+        compute_sum(a, b, p)
 
     for i in range(N):
         assert p[i] == 3 * b[i] + 1
@@ -91,7 +93,8 @@ def test_ad_power():
         a[i] = 3
         b[i] = i
 
-    power(a, b, p)
+    with qd.adstack:
+        power(a, b, p)
 
     for i in range(N):
         assert p[i] == 3 ** b[i]
@@ -125,7 +128,8 @@ def test_ad_fibonacci():
     for i in range(N):
         c[i] = i
 
-    fib(a, b, c, f)
+    with qd.adstack:
+        fib(a, b, c, f)
 
     for i in range(N):
         f.grad[i] = 1
@@ -164,7 +168,8 @@ def test_ad_fibonacci_index():
     f.grad[None] = 1
     a.fill(1)
 
-    fib(a, b, f)
+    with qd.adstack:
+        fib(a, b, f)
     fib.grad(a, b, f)
 
     for i in range(M):
@@ -197,7 +202,8 @@ def test_integer_stack():
     for i in range(N):
         c[i] = i
 
-    int_stack(a, b, c, f)
+    with qd.adstack:
+        int_stack(a, b, c, f)
 
     for i in range(N):
         print(f[i])
@@ -237,7 +243,8 @@ def test_double_for_loops():
     for i in range(N):
         c[i] = i
 
-    double_for(a, b, c, f)
+    with qd.adstack:
+        double_for(a, b, c, f)
 
     for i in range(N):
         assert f[i] == 2 * i * (1 + 2**i)
@@ -277,7 +284,8 @@ def test_double_for_loops_more_nests():
         for k in range(N // 2):
             c[i, k] = i + k
 
-    double_for(a, b, c, f)
+    with qd.adstack:
+        double_for(a, b, c, f)
 
     for i in range(N):
         for k in range(N // 2):
@@ -327,7 +335,8 @@ def test_complex_body():
         c[i] = i
         f.grad[i] = 1
 
-    complex(a, c, f, g)
+    with qd.adstack:
+        complex(a, c, f, g)
     complex.grad(a, c, f, g)
 
     for i in range(N):
@@ -350,7 +359,8 @@ def test_mixed_inner_loops():
 
     loss.grad[0] = 1.0
     x[0] = 0.0
-    mixed_inner_loops(x, arr, loss)
+    with qd.adstack:
+        mixed_inner_loops(x, arr, loss)
     mixed_inner_loops.grad(x, arr, loss)
 
     assert loss[0] == 10.0
@@ -372,12 +382,13 @@ def test_mixed_inner_loops_tape():
 
     x[0] = 0.0
     with qd.ad.Tape(loss=loss):
-        mixed_inner_loops_tape(x, arr, loss)
+        with qd.adstack:
+            mixed_inner_loops_tape(x, arr, loss)
     assert loss[0] == 10.0
     assert x.grad[0] == 15.0
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack, ad_stack_size=32)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_inner_loops_local_variable_fixed_stack_size_kernel_grad():
     x = qd.ndarray(dtype=float, shape=(1), needs_grad=True)
     arr = qd.ndarray(dtype=float, shape=(2), needs_grad=True)
@@ -396,14 +407,15 @@ def test_inner_loops_local_variable_fixed_stack_size_kernel_grad():
 
     loss.grad[0] = 1.0
     x[0] = 0.0
-    test_inner_loops_local_variable(x, arr, loss)
+    with qd.adstack:
+        test_inner_loops_local_variable(x, arr, loss)
     test_inner_loops_local_variable.grad(x, arr, loss)
 
     assert loss[0] == 18.0
     assert x.grad[0] == 36.0
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack, ad_stack_size=0)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_inner_loops_local_variable_adaptive_stack_size_tape():
     x = qd.ndarray(dtype=float, shape=(1), needs_grad=True)
     arr = qd.ndarray(dtype=float, shape=(2), needs_grad=True)
@@ -422,13 +434,14 @@ def test_inner_loops_local_variable_adaptive_stack_size_tape():
 
     x[0] = 0.0
     with qd.ad.Tape(loss=loss):
-        test_inner_loops_local_variable(x, arr, loss)
+        with qd.adstack:
+            test_inner_loops_local_variable(x, arr, loss)
 
     assert loss[0] == 18.0
     assert x.grad[0] == 36.0
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack, ad_stack_size=0)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_more_inner_loops_local_variable_adaptive_stack_size_tape():
     x = qd.ndarray(dtype=float, shape=(1), needs_grad=True)
     arr = qd.ndarray(dtype=float, shape=(2), needs_grad=True)
@@ -449,13 +462,14 @@ def test_more_inner_loops_local_variable_adaptive_stack_size_tape():
 
     x[0] = 0.0
     with qd.ad.Tape(loss=loss):
-        test_more_inner_loops_local_variable(x, arr, loss)
+        with qd.adstack:
+            test_more_inner_loops_local_variable(x, arr, loss)
 
     assert loss[0] == 12.0
     assert x.grad[0] == 36.0
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack, ad_stack_size=32)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_more_inner_loops_local_variable_fixed_stack_size_tape():
     x = qd.ndarray(dtype=float, shape=(1), needs_grad=True)
     arr = qd.ndarray(dtype=float, shape=(2), needs_grad=True)
@@ -476,13 +490,14 @@ def test_more_inner_loops_local_variable_fixed_stack_size_tape():
 
     x[0] = 0.0
     with qd.ad.Tape(loss=loss):
-        test_more_inner_loops_local_variable(x, arr, loss)
+        with qd.adstack:
+            test_more_inner_loops_local_variable(x, arr, loss)
 
     assert loss[0] == 12.0
     assert x.grad[0] == 36.0
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack, ad_stack_size=32)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_stacked_inner_loops_local_variable_fixed_stack_size_kernel_grad():
     x = qd.ndarray(dtype=float, shape=(), needs_grad=True)
     arr = qd.ndarray(dtype=float, shape=(2), needs_grad=True)
@@ -507,14 +522,15 @@ def test_stacked_inner_loops_local_variable_fixed_stack_size_kernel_grad():
 
     loss.grad[None] = 1.0
     x[None] = 0.0
-    test_stacked_inner_loops_local_variable(x, arr, loss)
+    with qd.adstack:
+        test_stacked_inner_loops_local_variable(x, arr, loss)
     test_stacked_inner_loops_local_variable.grad(x, arr, loss)
 
     assert loss[None] == 36.0
     assert x.grad[None] == 38.0
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack, ad_stack_size=32)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_stacked_mixed_ib_and_non_ib_inner_loops_local_variable_fixed_stack_size_kernel_grad():
     x = qd.ndarray(dtype=float, shape=(), needs_grad=True)
     arr = qd.ndarray(dtype=float, shape=(2), needs_grad=True)
@@ -540,14 +556,15 @@ def test_stacked_mixed_ib_and_non_ib_inner_loops_local_variable_fixed_stack_size
 
     loss.grad[None] = 1.0
     x[None] = 0.0
-    test_stacked_mixed_ib_and_non_ib_inner_loops_local_variable(x, arr, loss)
+    with qd.adstack:
+        test_stacked_mixed_ib_and_non_ib_inner_loops_local_variable(x, arr, loss)
     test_stacked_mixed_ib_and_non_ib_inner_loops_local_variable.grad(x, arr, loss)
 
     assert loss[None] == 54.0
     assert x.grad[None] == 56.0
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack, ad_stack_size=0)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_stacked_inner_loops_local_variable_adaptive_stack_size_kernel_grad():
     x = qd.ndarray(dtype=float, shape=(), needs_grad=True)
     arr = qd.ndarray(dtype=float, shape=(2), needs_grad=True)
@@ -572,7 +589,8 @@ def test_stacked_inner_loops_local_variable_adaptive_stack_size_kernel_grad():
 
     loss.grad[None] = 1.0
     x[None] = 0.0
-    test_stacked_inner_loops_local_variable(x, arr, loss)
+    with qd.adstack:
+        test_stacked_inner_loops_local_variable(x, arr, loss)
     test_stacked_inner_loops_local_variable.grad(x, arr, loss)
 
     assert loss[None] == 36.0
@@ -580,7 +598,7 @@ def test_stacked_inner_loops_local_variable_adaptive_stack_size_kernel_grad():
 
 
 @pytest.mark.flaky(reruns=5)
-@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack, ad_stack_size=0)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_stacked_mixed_ib_and_non_ib_inner_loops_local_variable_adaptive_stack_size_kernel_grad():
     x = qd.ndarray(dtype=float, shape=(), needs_grad=True)
     arr = qd.ndarray(dtype=float, shape=(2), needs_grad=True)
@@ -606,14 +624,15 @@ def test_stacked_mixed_ib_and_non_ib_inner_loops_local_variable_adaptive_stack_s
 
     loss.grad[None] = 1.0
     x[None] = 0.0
-    test_stacked_mixed_ib_and_non_ib_inner_loops_local_variable(x, arr, loss)
+    with qd.adstack:
+        test_stacked_mixed_ib_and_non_ib_inner_loops_local_variable(x, arr, loss)
     test_stacked_mixed_ib_and_non_ib_inner_loops_local_variable.grad(x, arr, loss)
 
     assert loss[None] == 54.0
     assert x.grad[None] == 56.0
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack, ad_stack_size=0)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_large_for_loops_adaptive_stack_size():
     x = qd.ndarray(dtype=float, shape=(), needs_grad=True)
     arr = qd.ndarray(dtype=float, shape=(2), needs_grad=True)
@@ -627,13 +646,14 @@ def test_large_for_loops_adaptive_stack_size():
                     loss[None] += qd.sin(x[None]) + 1.0
 
     with qd.ad.Tape(loss=loss):
-        test_large_loop(x, arr, loss)
+        with qd.adstack:
+            test_large_loop(x, arr, loss)
 
     assert loss[None] == 1e7
     assert x.grad[None] == 1e7
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack, ad_stack_size=1)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_large_for_loops_fixed_stack_size():
     x = qd.ndarray(dtype=float, shape=(), needs_grad=True)
     arr = qd.ndarray(dtype=float, shape=(2), needs_grad=True)
@@ -647,7 +667,8 @@ def test_large_for_loops_fixed_stack_size():
                     loss[None] += qd.sin(x[None]) + 1.0
 
     with qd.ad.Tape(loss=loss):
-        test_large_loop(x, arr, loss)
+        with qd.adstack:
+            test_large_loop(x, arr, loss)
 
     assert loss[None] == 1e7
     assert x.grad[None] == 1e7
@@ -668,7 +689,8 @@ def test_multiple_ib():
 
     x[None] = 1.0
     with qd.ad.Tape(y):
-        compute_y(x, y)
+        with qd.adstack:
+            compute_y(x, y)
 
     assert y[None] == 12.0
     assert x.grad[None] == 12.0
@@ -694,7 +716,8 @@ def test_multiple_ib_multiple_outermost():
 
     x[None] = 1.0
     with qd.ad.Tape(y):
-        compute_y(x, y)
+        with qd.adstack:
+            compute_y(x, y)
 
     assert y[None] == 24.0
     assert x.grad[None] == 24.0
@@ -722,7 +745,8 @@ def test_multiple_ib_multiple_outermost_mixed():
 
     x[None] = 1.0
     with qd.ad.Tape(y):
-        compute_y(x, y)
+        with qd.adstack:
+            compute_y(x, y)
 
     assert y[None] == 42.0
     assert x.grad[None] == 42.0
@@ -747,7 +771,8 @@ def test_multiple_ib_mixed():
 
     x[None] = 1.0
     with qd.ad.Tape(y):
-        compute_y(x, y)
+        with qd.adstack:
+            compute_y(x, y)
 
     assert y[None] == 30.0
     assert x.grad[None] == 30.0
@@ -773,7 +798,8 @@ def test_multiple_ib_deeper():
 
     x[None] = 1.0
     with qd.ad.Tape(y):
-        compute_y(x, y)
+        with qd.adstack:
+            compute_y(x, y)
 
     assert y[None] == 42.0
     assert x.grad[None] == 42.0
@@ -801,7 +827,8 @@ def test_multiple_ib_deeper_non_scalar():
     x.fill(1.0)
     for i in range(N):
         y.grad[i] = 1.0
-    compute_y(x, y)
+    with qd.adstack:
+        compute_y(x, y)
     compute_y.grad(x, y)
     for i in range(N):
         assert y[i] == i * 10.0
@@ -832,7 +859,8 @@ def test_multiple_ib_inner_mixed():
 
     x[None] = 1.0
     with qd.ad.Tape(y):
-        compute_y(x, y)
+        with qd.adstack:
+            compute_y(x, y)
 
     assert y[None] == 78.0
     assert x.grad[None] == 78.0
@@ -857,7 +885,8 @@ def test_ib_global_load():
         a[i] = i
         b[i] = 2
 
-    compute(a, b, p)
+    with qd.adstack:
+        compute(a, b, p)
 
     for i in range(N):
         assert p[i] == i * i
@@ -881,7 +910,8 @@ def test_ad_if_simple():
     x[None] = 1
     y.grad[None] = 1
 
-    func(x, y)
+    with qd.adstack:
+        func(x, y)
     func.grad(x, y)
 
     assert x.grad[None] == 1
@@ -904,9 +934,11 @@ def test_ad_if():
     y.grad[0] = 1
     y.grad[1] = 1
 
-    func(0, x, y)
+    with qd.adstack:
+        func(0, x, y)
     func.grad(0, x, y)
-    func(1, x, y)
+    with qd.adstack:
+        func(1, x, y)
     func.grad(1, x, y)
 
     assert x.grad[0] == 2
@@ -939,7 +971,8 @@ def test_ad_if_nested():
     for i in range(n):
         x[i] = i % 4
 
-    func(x, y, z)
+    with qd.adstack:
+        func(x, y, z)
     for i in range(n):
         assert y[i] == i % 4
         y.grad[i] = 1
@@ -967,9 +1000,11 @@ def test_ad_if_mutable():
     y.grad[0] = 1
     y.grad[1] = 1
 
-    func(0, x, y)
+    with qd.adstack:
+        func(0, x, y)
     func.grad(0, x, y)
-    func(1, x, y)
+    with qd.adstack:
+        func(1, x, y)
     func.grad(1, x, y)
 
     assert x.grad[0] == 2
@@ -995,7 +1030,8 @@ def test_ad_if_parallel():
     y.grad[0] = 1
     y.grad[1] = 1
 
-    func(x, y)
+    with qd.adstack:
+        func(x, y)
     func.grad(x, y)
 
     assert x.grad[0] == 2
@@ -1021,7 +1057,8 @@ def test_ad_if_parallel_f64():
     y.grad[0] = 1
     y.grad[1] = 1
 
-    func(x, y)
+    with qd.adstack:
+        func(x, y)
     func.grad(x, y)
 
     assert x.grad[0] == 2
@@ -1047,7 +1084,8 @@ def test_ad_if_parallel_complex():
     y.grad[0] = 1
     y.grad[1] = 1
 
-    func(x, y)
+    with qd.adstack:
+        func(x, y)
     func.grad(x, y)
 
     assert x.grad[0] == 0
@@ -1192,7 +1230,8 @@ def test_ndarray_needs_grad_false():
     x = qd.ndarray(qd.f32, shape=N, needs_grad=True)
     y = qd.ndarray(qd.f32, shape=1, needs_grad=True)
 
-    test(x, y)
+    with qd.adstack:
+        test(x, y)
 
     y.grad.fill(1.0)
     test.grad(x, y)

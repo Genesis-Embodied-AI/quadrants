@@ -40,7 +40,7 @@ void auto_diff(IRNode *root,
 
       for (auto ib : IB) {
         promote_ssa_to_local_var(ib);
-        replace_local_var_with_stacks(ib, 2);
+        replace_local_var_with_stacks(ib);
         type_check(root, config);
 
         // Drop AdStackAllocas whose pushed value is recomputable from already-stack-backed allocas + args + const +

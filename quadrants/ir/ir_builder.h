@@ -260,7 +260,7 @@ class IRBuilder {
   }
 
   // Autodiff stack operations.
-  AdStackAllocaStmt *create_ad_stack(const DataType &dt, std::size_t max_size);
+  AdStackAllocaStmt *create_ad_stack(const DataType &dt);
   void ad_stack_push(AdStackAllocaStmt *stack, Stmt *val);
   void ad_stack_pop(AdStackAllocaStmt *stack);
   AdStackLoadTopStmt *ad_stack_load_top(AdStackAllocaStmt *stack);

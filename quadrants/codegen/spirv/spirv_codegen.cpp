@@ -2539,25 +2539,6 @@ std::vector<BufferBind> TaskCodegen::get_buffer_binds() {
   return result;
 }
 
-// --- AdStack (autodiff local-variable history stack) for SPIR-V ---
-// Primal and adjoint history lives in two per-dispatch StorageBuffers: one of Array<f32> bound as
-// BufferType::AdStackHeapFloat (for f32-valued adstacks) and one of Array<i32> bound as BufferType::AdStackHeapInt
-// (for i32 and u1 adstacks; u1 is stored as i32 because OpTypeBool has no defined storage layout and
-// `get_array_type` already applies the same bool->int remap on the Function-scope path). Each SPIR-V invocation
-// owns a contiguous slice sized at `ad_stack_heap_per_thread_stride_*` elements of the respective type; within
-// that slice, each adstack holds `max_size` primals followed by `max_size` adjoints. The runtime reads
-// `task_attribs.ad_stack_heap_per_thread_stride_(float|int)` and multiplies by the dispatched invocation count
-// to size each buffer at launch. `count_var` stays in Function-scope because it is just one u32 per adstack and
-// is hot on every push/pop, so keeping it on-chip avoids a device-memory round-trip per push.
-//
-// Heap storage is required on Metal/MoltenVK because the per-thread shader private-memory budget (a few dozen
-// KB per invocation) is too small for deeply nested reverse-mode kernels. A kernel that declares on the order
-// of 100+ u1/i32 adstack slots at default capacity 256 easily exceeds that budget (e.g. ~130 KB per thread),
-// so all such adstacks must live in device memory, not on-chip.
-//
-// Other primitive types (f64, i64, ...) are rejected outright by `visit(AdStackAllocaStmt)`. Add dedicated
-// f64/i64 heap buffers if support for those element types becomes necessary.
-
 spirv::Value TaskCodegen::get_ad_stack_heap_buffer_float() {
   if (ad_stack_heap_buffer_float_.id == 0) {
     ad_stack_heap_buffer_float_ = get_buffer_value({BufferType::AdStackHeapFloat}, PrimitiveType::f32);
@@ -2825,12 +2806,6 @@ void TaskCodegen::visit(AdStackPushStmt *stmt) {
 }
 
 void TaskCodegen::visit(AdStackPopStmt *stmt) {
-  // Intentionally unclamped, unlike the LLVM runtime's stack_pop. The forward AdStackPushStmt now increments
-  // count unconditionally (the in-bounds check folded into a clamp + OpSelect there), so push and pop are
-  // balanced and count returns to zero at the end of a balanced reverse pass even when intervening pushes
-  // overflowed. The LoadTop*/AccAdjoint visitors still clamp idx to max_size-1 so the OpAccessChain stays
-  // in-bounds when count is currently above max_size on the overflow path, and the host raises a RuntimeError
-  // at the next synchronize() before any garbage adjoint reaches user code.
   auto &info = ad_stacks_.at(stmt->stack);
   spirv::Value count = ir_->load_variable(info.count_var, ir_->u32_type());
   spirv::Value one = ir_->uint_immediate_number(ir_->u32_type(), 1);

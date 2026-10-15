@@ -119,12 +119,4 @@ void lower_adstack_forward_count(Block *block, const std::unordered_set<Stmt *> 
   }
 }
 
-void prepare_counted_adstacks(IRNode *root) {
-  for (auto *stmt : irpass::analysis::gather_statements(root, [](Stmt *s) { return s->is<AdStackAllocaStmt>(); })) {
-    auto *stack = stmt->as<AdStackAllocaStmt>();
-    // A non-singleton placeholder selects dynamic metadata addressing. The launch record supplies the real capacity.
-    stack->max_size = 2;
-  }
-}
-
 }  // namespace quadrants::lang

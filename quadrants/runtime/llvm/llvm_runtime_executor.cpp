@@ -196,10 +196,6 @@ void LlvmRuntimeExecutor::print_list_manager_info(void *list_manager, uint64 *re
              fmt::group_digits(element_size), size_MB);
 }
 
-Program *LlvmRuntimeExecutor::get_program() const {
-  return program_impl_ != nullptr ? program_impl_->program : nullptr;
-}
-
 void LlvmRuntimeExecutor::synchronize() {
   if (config_.arch == Arch::cuda) {
 #if defined(QD_WITH_CUDA)

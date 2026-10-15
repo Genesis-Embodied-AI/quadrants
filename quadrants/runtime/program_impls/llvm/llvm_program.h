@@ -99,9 +99,6 @@ class LlvmProgramImpl : public ProgramImpl {
     return runtime_exec_->fetch_result<T>(i, result_buffer);
   }
 
-  void pre_finalize() override {
-  }
-
   void finalize() override {
     runtime_exec_->finalize();
   }

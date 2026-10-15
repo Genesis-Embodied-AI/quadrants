@@ -184,8 +184,6 @@ void compile_to_offloads(IRNode *ir,
   // that store a dynamic range bound (e.g. `arr.shape[0]` lowered via `offload::PromoteIntermediateToGlobalTmp`)
   // are still visible alongside the consuming range-for task. Gated on the same reverse+ad_use_stack predicate
   // the per-task call used so compile behaviour is unchanged for forward-only kernels.
-  if (kernel->adstack_mode == 2)
-    prepare_counted_adstacks(ir);
 }
 
 void offload_to_executable(IRNode *ir,

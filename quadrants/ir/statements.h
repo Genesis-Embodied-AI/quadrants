@@ -1681,12 +1681,11 @@ class InternalFuncStmt : public Stmt {
 class AdStackAllocaStmt : public Stmt {
  public:
   DataType dt;
-  std::size_t max_size{0};  // 0 = adaptive
   // Stable identifier assigned during codegen pre-scan; indexes into the runtime adstack-metadata
   // arrays (offsets, max_sizes). -1 until the pre-scan runs.
   int stack_id{-1};
 
-  AdStackAllocaStmt(const DataType &dt, std::size_t max_size) : dt(dt), max_size(max_size) {
+  explicit AdStackAllocaStmt(const DataType &dt) : dt(dt) {
     ret_type = dt;
     QD_STMT_REG_FIELDS;
   }
@@ -1699,12 +1698,6 @@ class AdStackAllocaStmt : public Stmt {
     return element_size_in_bytes() * 2;
   }
 
-  std::size_t size_in_bytes() const {
-    // Header is a `u64` (see `stack_init`/`stack_push`/`stack_top_primal` in runtime.cpp), so use
-    // `sizeof(int64)` - not `sizeof(int32)` - to size the LLVM alloca matching the runtime layout.
-    return sizeof(int64) + entry_size_in_bytes() * max_size;
-  }
-
   bool has_global_side_effect() const override {
     return false;
   }
@@ -1713,7 +1706,7 @@ class AdStackAllocaStmt : public Stmt {
     return false;
   }
 
-  QD_STMT_DEF_FIELDS(ret_type, dt, max_size);
+  QD_STMT_DEF_FIELDS(ret_type, dt);
   QD_DEFINE_ACCEPT_AND_CLONE
 };
 

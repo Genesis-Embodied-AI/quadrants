@@ -716,7 +716,7 @@ class Scalarize : public BasicStmtVisitor {
       auto num_elements = tensor_type->get_num_elements();
       std::vector<Stmt *> scalarized_ad_stack;
       for (int i = 0; i < num_elements; i++) {
-        auto scalar_ad_stack = std::make_unique<AdStackAllocaStmt>(element_type, stmt->max_size);
+        auto scalar_ad_stack = std::make_unique<AdStackAllocaStmt>(element_type);
         scalar_ad_stack->ret_type = element_type;
         scalar_ad_stack->ret_type.set_is_pointer(true);
 
