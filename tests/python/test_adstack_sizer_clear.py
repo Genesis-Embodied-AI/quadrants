@@ -1,7 +1,7 @@
 """Regression: clear deliberately poisoned adstack metadata before the sizer runs.
 
-The shader writes the overflow word only when a ``MaxOverRange`` walk exceeds its cap. Poisoning the metadata
-buffer with nonzero words makes a missing clear fail without relying on allocator reuse or a particular platform.
+The shader writes the overflow word only when a ``MaxOverRange`` walk exceeds its cap. The Vulkan allocator
+poisons every buffer with nonzero words, so a missing metadata clear fails without relying on allocator reuse.
 """
 
 import os
@@ -76,13 +76,15 @@ def _sizer_overflow_child(args: list[str]) -> None:
 def test_sizer_overflow_word_is_cleared_after_poisoning():
     env = os.environ.copy()
     env["PYTHONPATH"] = "."
-    env["QD_TEST_ADSTACK_SIZER_POISON"] = "1"
+    env["QD_TEST_VULKAN_POISON_ALLOCATIONS"] = "1"
+    env["QD_DEBUG_ADSTACK"] = "1"
     proc = subprocess.run(
         [sys.executable, __file__, _sizer_overflow_child.__name__], env=env, capture_output=True, text=True
     )
     assert proc.returncode == RET_SUCCESS, proc.stdout + "\n" + proc.stderr
     assert TEST_RAN in proc.stdout, proc.stdout + "\n" + proc.stderr
-    assert "[adstack_sizer] poisoned metadata buffers" in proc.stderr, proc.stdout + "\n" + proc.stderr
+    assert "[vulkan_allocator] poisoned allocation" in proc.stderr, proc.stdout + "\n" + proc.stderr
+    assert "[adstack_sizer] kernel=" in proc.stderr, proc.stdout + "\n" + proc.stderr
 
 
 if __name__ == "__main__":

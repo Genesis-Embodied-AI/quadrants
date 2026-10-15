@@ -19,7 +19,6 @@
 
 #include <algorithm>
 #include <cstdio>
-#include <cstdlib>
 #include <cstring>
 #include <unordered_set>
 #include <vector>
@@ -448,8 +447,6 @@ std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
   auto [sizer_cmdlist, cmdlist_res] = device_->get_compute_stream()->new_command_list_unique();
   QD_ASSERT_INFO(cmdlist_res == RhiResult::success, "Failed to create adstack sizer cmdlist");
 
-  const char *poison_env = std::getenv("QD_TEST_ADSTACK_SIZER_POISON");
-  const bool poison_metadata = poison_env && std::strcmp(poison_env, "1") == 0;
   for (size_t k = 0; k < adstack_task_indices.size(); ++k) {
     auto bindings = device_->create_resource_set_unique();
     // All three bindings are declared as `StorageBuffer` in the sizer shader (`buffer_argument` lowers to
@@ -477,11 +474,6 @@ std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
     bindings->rw_buffer(3, *adstack_sizer_scratch_i64_buffer_);
     bindings->rw_buffer(4, *adstack_sizer_scratch_i32_buffer_);
 
-    // Test-only poisoning makes stale allocation contents deterministic.
-    if (poison_metadata) {
-      sizer_cmdlist->buffer_fill(per_task_metadata_allocs[k]->get_ptr(0), per_task_metadata_bytes[k], 0xA5A5A5A5u);
-      sizer_cmdlist->buffer_barrier(*per_task_metadata_allocs[k]);
-    }
     // Zero the buffer so the overflow flag starts clear before the sizer runs.
     sizer_cmdlist->buffer_fill(per_task_metadata_allocs[k]->get_ptr(0), per_task_metadata_bytes[k], 0);
     sizer_cmdlist->buffer_barrier(*per_task_metadata_allocs[k]);
@@ -506,9 +498,6 @@ std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
     sizer_cmdlist->buffer_barrier(*per_task_metadata_allocs[k]);
   }
   device_->get_compute_stream()->submit_synced(sizer_cmdlist.get());
-  if (poison_metadata) {
-    std::fprintf(stderr, "[adstack_sizer] poisoned metadata buffers\n");
-  }
 
   for (size_t k = 0; k < adstack_task_indices.size(); ++k) {
     size_t ti = adstack_task_indices[k];
