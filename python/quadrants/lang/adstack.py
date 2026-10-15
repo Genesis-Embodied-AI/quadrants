@@ -4,6 +4,7 @@ Explicit gradient calls consume records in reverse invocation order for each ker
 uses the largest measured depth for every stack and supports CPU, CUDA, Vulkan, and Metal.
 """
 
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from numbers import Number
 from typing import Any
@@ -27,6 +28,34 @@ class _Record:
 class _Scope:
     capacities: list[int] = field(default_factory=list)
     records: list["_Invocation"] = field(default_factory=list)
+
+
+@contextmanager
+def _measurement_io():
+    # Portable fills and readbacks launch helper kernels. They must not become counted user invocations.
+    runtime = impl.get_runtime()
+    tape, scope = runtime.target_tape, getattr(runtime, "adstack_scope", None)
+    runtime.target_tape = None
+    runtime.adstack_scope = None
+    try:
+        yield
+    finally:
+        runtime.target_tape, runtime.adstack_scope = tape, scope
+
+
+def _clear_measurement(buffer):
+    if impl.current_cfg().arch in (core.x64, core.cuda):
+        impl.get_runtime().prog.fill_uint(buffer.arr, 0)
+    else:
+        with _measurement_io():
+            buffer.fill(0)
+
+
+def _read_measurement(buffer):
+    if impl.current_cfg().arch in (core.x64, core.cuda):
+        return core.read_adstack_replay_measurement(impl.get_runtime().prog, buffer.arr)
+    with _measurement_io():
+        return buffer.to_numpy()
 
 
 class _Invocation:
@@ -53,13 +82,12 @@ class _Invocation:
             raise RuntimeError("Run backward outside the qd.adstack context")
         self._remove_pending()
         # A previous failed replay must not poison a subsequent attempt after inputs and gradients are restored.
-        record.buffer.arr.write_int([1], 0)
+        _clear_measurement(record.buffer)
         variant = _variant(self._kernel, 2)
         variant.adstack_record = record
         try:
             result = variant(*record.keepalive)
-            impl.get_runtime().sync()
-            if int(record.buffer.arr.read_int([1])):
+            if int(_read_measurement(record.buffer)[1]):
                 raise RuntimeError(
                     "Adstack capacity exceeded during backward replay. Replay required more stack space than counted "
                     f"during forward (capacity {record.capacity}). Discard or reset this backward's gradients."
@@ -149,22 +177,26 @@ def dispatch(kernel, args, qd_stream=None):
         tape = runtime.target_tape
         runtime.target_tape = None
         try:
-            buffer = ScalarNdarray(
-                i32 if impl.current_cfg().arch in (core.vulkan, core.metal) else i64,
-                (2,),
-            )
+            buffer = getattr(kernel, "_adstack_count_buffer", None)
+            if buffer is None:
+                buffer = ScalarNdarray(i32 if impl.current_cfg().arch in (core.vulkan, core.metal) else i64, (2,))
+                kernel._adstack_count_buffer = buffer
+            else:
+                _clear_measurement(buffer)
         finally:
             runtime.target_tape = tape
         variant = _variant(kernel, 1)
         variant.adstack_record = _Record(signature, buffer, 0, args)
         try:
             result = variant(*args)
-            runtime.sync()
-            if impl.current_cfg().arch in (core.vulkan, core.metal) and int(buffer.arr.read_int([1])):
+            measurement = _read_measurement(buffer)
+            if int(measurement[1]):
                 raise RuntimeError("Measured adstack depth exceeds the backend capacity limit")
-            capacity = max(1, int(buffer.arr.read_int([0])))
+            capacity = max(1, int(measurement[0]))
         finally:
             variant.adstack_record = None
+        # Readbacks finish each invocation before the scratch is reused. Retained records own their capacities,
+        # so another forward or backward can clear the shared words without changing an earlier measurement.
         record = _Record(signature, buffer, capacity, args)
         if not hasattr(kernel.grad, "_adstack_pending"):
             kernel.grad._adstack_pending = []
