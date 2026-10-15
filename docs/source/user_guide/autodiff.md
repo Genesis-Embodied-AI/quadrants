@@ -6,7 +6,7 @@ Automatic differentiation (autodiff) computes the exact gradient of a kernel's o
 
 Quadrants implements autodiff at compile time: when `.grad()` is requested, the compiler emits a companion kernel that runs on the same backend as the forward one and writes gradients into the primal fields' `.grad` companions. There is no Python-side tape, no per-op dispatch overhead, and no dependency on an external AD framework. Forward mode and reverse mode are available on every backend Quadrants targets: x64 / arm64 CPU, CUDA, AMDGPU, Metal, and Vulkan.
 
-**Dynamic loops.** Stack-based reverse mode requires running the forward kernel inside `with qd.adstack:`. The forward measures storage requirements; backward replays the kernel and computes gradients. See [counted adstack](./adstack_counted.md) for supported backends and restrictions.
+**Dynamic loops.** Stack-based reverse mode measures the reduced replay before every backward, then records stack values and computes gradients. No matching forward invocation is required. See [replay-counted adstack](./adstack_replay.md) for supported backends and restrictions.
 
 Three mechanisms are supported:
 
@@ -71,7 +71,7 @@ Notes:
 - `place(x, x.grad)` allocates the adjoint alongside the primal. Without it, `kernel.grad()` raises at first use. Ndarrays take `needs_grad=True` instead.
 - Adjoints must be cleared before each reverse pass; leftover values accumulate. `qd.ad.Tape` (below) does this automatically.
 - `kernel.grad(...)` takes the same arguments as the forward kernel.
-- Reverse-mode AD through a dynamic loop carrying intermediate values uses [counted adstack](./adstack_counted.md). Wrap its forward invocation in `with qd.adstack:` before calling backward.
+- Reverse-mode AD through a dynamic loop carrying intermediate values uses [replay-counted adstack](./adstack_replay.md). Backward measures its current replay inputs automatically.
 
 **Integer casts stop gradients.** Integers have no meaningful derivative, so the chain rule reads as zero upstream of any cast to integer - no error, just silently-zero gradients. This is a property of differentiation through quantization, not of Quadrants. Rules of thumb:
 
@@ -225,10 +225,8 @@ with qd.ad.Tape(loss=loss, validation=True):
 
 ## Autodiff with dynamic loops
 
-Wrap forward calls that need stack-based reverse mode in `with qd.adstack:`. Forward measures the required depth;
-backward allocates that capacity, replays the computation to record intermediates, then reverses it. See
-[Counting adstack requirements](adstack_counted.md) for supported kernels, reusable invocation handles, caching,
-and overflow recovery. Input values needed by replay must be preserved or restored.
+Stack-based reverse mode counts the reduced replay immediately before backward. See
+[Replay counting](adstack_replay.md) for supported kernels, caching, overflow handling, and restrictions.
 
 This branch removes the old symbolic sizing and sparse stack-allocation paths and their initialization options.
 Measured capacity is uniform across stacks; memory use scales with capacity, stack value sizes, and worker count.

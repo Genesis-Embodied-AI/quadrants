@@ -1,18 +1,10 @@
 """Exercise explicit FEM backward with replay counting in a Genesis environment.
 
-Run with Genesis installed alongside this Quadrants checkout. Use --legacy for the existing sizing baseline.
+Run with Genesis installed alongside this replay-only Quadrants checkout.
 """
-
-import argparse
-import os
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--legacy", action="store_true")
-    args = parser.parse_args()
-    os.environ["QD_AD_STACK_REPLAY_COUNT"] = "0" if args.legacy else "1"
-
     import genesis as gs
     import numpy as np
 
@@ -53,7 +45,7 @@ def main():
     gradient = solver.elements_v.vel.grad.to_numpy()[0, :, 0, :].sum(axis=0)
     # Uniform translation with no external forces advances the mean x coordinate by steps * dt * velocity.x.
     np.testing.assert_allclose(gradient, [steps * dt, 0, 0], rtol=1e-5, atol=1e-9)
-    print({"legacy": args.legacy, "velocity_gradient": gradient.tolist()})
+    print({"sizing": "replay-only", "velocity_gradient": gradient.tolist()})
     gs.destroy()
 
 

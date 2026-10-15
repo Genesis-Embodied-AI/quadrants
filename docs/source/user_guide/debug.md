@@ -40,7 +40,7 @@ a = x[-1]     # AssertionError in debug mode
 
 Counted backward checks capacity regardless of `debug`. Overflow keeps stack accesses within their allocation,
 continues execution, and raises `RuntimeError` after synchronization. Discard/reset the failed gradients and restore
-replay inputs before retrying. See [counted adstack](adstack_counted.md).
+replay inputs before retrying. See [replay-counted adstack](adstack_replay.md).
 
 ### Assertions in kernels
 
@@ -121,4 +121,3 @@ QD_DUMP_IR=1 QD_OFFLINE_CACHE=0 python my_script.py
 ```
 
 Compiled kernels will be written to `/tmp/ir` by default. Use `QD_DEBUG_DUMP_PATH=` to redirect to a custom directory.
-

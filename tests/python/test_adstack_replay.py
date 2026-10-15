@@ -283,3 +283,39 @@ def test_replay_torch_arguments_and_overlapping_views():
     with pytest.raises(RuntimeError, match="aliased non-differentiable"):
         compute.grad(x, y, storage[:4], storage[1:])
     torch.testing.assert_close(storage, torch.full_like(storage, 2))
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan])
+def test_measurement_failure_does_not_fall_back(monkeypatch):
+    import importlib
+
+    replay = importlib.import_module("quadrants.lang.adstack_replay")
+    x = qd.ndarray(qd.f32, shape=1, needs_grad=True)
+    y = qd.ndarray(qd.f32, shape=1, needs_grad=True)
+    x.fill(0.2)
+    y.fill(17)
+    x.grad.fill(0)
+    y.grad.fill(1)
+
+    @qd.kernel
+    def compute(x: qd.types.ndarray(), y: qd.types.ndarray(), n: qd.i32):
+        for i in range(x.shape[0]):
+            value = x[i]
+            for j in range(n):
+                value = qd.sin(value)
+            y[i] = value
+
+    def fail_readback(*args):
+        raise RuntimeError("measurement unavailable")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(replay, "_read_measurement", fail_readback)
+        with pytest.raises(RuntimeError, match="measurement unavailable"):
+            compute.grad(x, y, 3)
+    np.testing.assert_array_equal(x.grad.to_numpy(), [0])
+    np.testing.assert_array_equal(y.grad.to_numpy(), [1])
+    np.testing.assert_array_equal(y.to_numpy(), [17])
+    # A failed measurement leaves scratch and dispatch state reusable, but never runs an unmeasured reverse.
+    compute.grad(x, y, 3)
+    expected = math.cos(0.2) * math.cos(math.sin(0.2)) * math.cos(math.sin(math.sin(0.2)))
+    np.testing.assert_allclose(x.grad.to_numpy(), [expected], rtol=2e-5)
