@@ -28,7 +28,7 @@ def _variant(kernel, mode):
 
 
 def _read_measurement(runtime, arch, record):
-    if arch in (core.x64, core.cuda):
+    if arch in (core.x64, core.arm64, core.cuda):
         return core.read_adstack_replay_measurement(runtime.prog, record.buffer.arr)
     return record.buffer.to_numpy()
 
@@ -36,8 +36,8 @@ def _read_measurement(runtime, arch, record):
 def backward(kernel, args, qd_stream=None):
     runtime = impl.get_runtime()
     arch = impl.current_cfg().arch
-    if arch not in (core.x64, core.cuda, core.vulkan, core.metal):
-        raise RuntimeError("Adstack replay counting supports x64, CUDA, Vulkan, and Metal")
+    if arch not in (core.x64, core.arm64, core.cuda, core.vulkan, core.metal):
+        raise RuntimeError("Adstack replay counting supports x64, ARM64, CUDA, Vulkan, and Metal")
     if kernel.use_graph or kernel.use_checkpoints or qd_stream is not None:
         raise RuntimeError("Adstack replay counting requires non-graph kernels without custom streams")
     tape = runtime.target_tape
@@ -48,7 +48,7 @@ def backward(kernel, args, qd_stream=None):
             record = _Record(ScalarNdarray(i32 if arch in (core.vulkan, core.metal) else i64, (2,)))
             kernel._adstack_replay_scratch = record
         else:
-            if arch in (core.x64, core.cuda):
+            if arch in (core.x64, core.arm64, core.cuda):
                 # Zero both i64 words via the byte-size-aware u32 fill, without launching a Python fill kernel.
                 runtime.prog.fill_uint(record.buffer.arr, 0)
             else:

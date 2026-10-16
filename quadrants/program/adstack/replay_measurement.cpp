@@ -6,7 +6,7 @@ namespace quadrants::lang {
 
 std::vector<int64_t> read_adstack_replay_measurement(Program *program, Ndarray *buffer) {
   const auto arch = program->compile_config().arch;
-  QD_ERROR_IF(arch != Arch::x64 && arch != Arch::cuda, "Direct adstack measurement readback requires CPU or CUDA");
+  QD_ERROR_IF(!arch_is_cpu(arch) && arch != Arch::cuda, "Direct adstack measurement readback requires CPU or CUDA");
   QD_ERROR_IF(buffer->get_nelement() != 2 || buffer->dtype != PrimitiveType::i64,
               "Adstack measurement must contain two i64 values");
   // The count/reverse launch has already materialized pending work. Drain the program's stream before the
