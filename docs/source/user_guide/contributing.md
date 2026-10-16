@@ -120,7 +120,7 @@ Pull requests are validated by several CI jobs. Most run automatically; a failin
 
 ### GitLab token for CI
 
-The macOS, Linux wheel, and Windows workflows use the `GITLAB_PAT` GitHub Actions secret to authenticate Eigen clones from GitLab. This was added to improve clone reliability in [PR #968](https://github.com/Genesis-Embodied-AI/quadrants/pull/968).
+The macOS, Linux wheel, and Windows workflows use the `GITLAB_PAT` GitHub Actions secret to authenticate Eigen clones from GitLab to improve clone reliability.
 
 To create or replace this personal access token (PAT):
 
