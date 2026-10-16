@@ -72,6 +72,7 @@ def _sizer_overflow_child(args: list[str]) -> None:
     sys.exit(RET_SUCCESS)
 
 
+# The original issue occurred on Vulkan; poisoning only Vulkan allocations keeps the test setup simple for now.
 @test_utils.test(arch=qd.vulkan, require=qd.extension.adstack)
 def test_sizer_overflow_word_is_cleared_after_poisoning():
     env = os.environ.copy()
