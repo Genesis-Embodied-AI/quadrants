@@ -4910,7 +4910,7 @@ def _sizer_overflow_child(args: list[str]) -> None:
     compute(num_its, x, y)
     y.grad[()] = 1.0
     x.grad.fill(0.0)
-    # Run the backward kernel, which uses adstacks to store values needed for gradient calculations.
+    # Run the backward kernel, which uses adstack to store values needed for gradient calculations.
     # During this call, GPU sizing determines the required stack storage from the loop counts in num_its.
     # The allocator poisons the sizing metadata buffer; the runtime must clear it before the sizing shader runs.
     compute.grad(num_its, x, y)
