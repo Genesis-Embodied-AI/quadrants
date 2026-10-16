@@ -28,17 +28,17 @@ using TaskType = OffloadedStmt::TaskType;
  *
  *   @qd.kernel
  *   def foo():
- *     for __thread_id in range(8):
- *       block_begin = __thread_id * 128
+ *     for block_index in range(8):
+ *       block_begin = block_index * 128
  *       block_end = min(block_begin + 128, 1024)
  *       for i in range(block_begin, block_end):
  *           a[i] = i
  *
- * where 8 is the number of threads available on the CPU and cpu_per_worker_min_block_dim is set to 1.
+ * where 8 is the number of generated blocks and cpu_per_worker_min_block_dim is set to 1.
  *
  * This pass is only applied to range-for loops that are offloaded to
- * CPUs. The number of threads is determined by the config option
- * "cpu_max_num_threads", and the minimum chunk size by
+ * CPUs. The number of blocks is determined by the config option
+ * "cpu_max_num_threads", and the minimum block size by
  * "cpu_per_worker_min_block_dim" (default 512).
  *
  * The effect is that more invarants in the inner most can be identified and
@@ -107,9 +107,8 @@ class MakeCPUMultithreadedRangeFor : public BasicStmtVisitor {
 
     irpass::replace_all_usages_with(inner_loop, offloaded, inner_loop);
 
-    // Update the offloaded stmt.
-    // The statement now iterates over max CPU thread numbers.
-    // Therefore it has constant begin and end values.
+    // The outer loop now iterates over block indices from 0 to config_.cpu_max_num_threads - 1.
+    // Its bounds are constant because the number of blocks is fixed at compile time.
     offloaded->const_begin = true;
     offloaded->const_end = true;
     offloaded->begin_value = 0;
