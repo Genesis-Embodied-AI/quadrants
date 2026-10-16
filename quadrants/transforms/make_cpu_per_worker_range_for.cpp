@@ -10,9 +10,9 @@ namespace {
 
 using TaskType = OffloadedStmt::TaskType;
 
-/* This pass replaces a CPU range loop with two nested loops. The parallel outer loop assigns one block of consecutive
- * iterations to each task, with one task per configured worker. The serial inner loop executes the original loop body
- * over that block.
+/* This pass groups CPU loop iterations into blocks so the compiler can optimize each block as a serial loop. It creates
+ * one block per configured worker. A parallel outer loop runs the blocks, and a serial inner loop executes the original
+ * loop body over each block's consecutive iterations.
  *
  * For example, the following code:
  *
