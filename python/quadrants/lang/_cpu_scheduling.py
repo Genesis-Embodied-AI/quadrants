@@ -44,24 +44,24 @@ def configure_cpu_scheduling(kwargs: dict[str, Any], cfg: _qd_core.CompileConfig
             raise ValueError(f"Cannot specify both {old} and {new}, including through environment variables")
 
     for old, new in aliases:
-        if _is_supplied(kwargs, old):
-            name = old
-            warnings.warn(f"{old} is deprecated; use {new} instead.", DeprecationWarning, stacklevel=3)
-        elif _is_supplied(kwargs, new):
-            name = new
-        else:
+        if not _is_supplied(kwargs, old):
             continue
 
-        if new == "cpu_fixed_block_dim":
-            cfg.cpu_fixed_block_dim = _read(kwargs, name, int)
-            continue
-
-        cast = (lambda value: bool(int(value))) if name == old else _mode_from_env
-        value = _read(kwargs, name, cast)
-        if name == old:
+        warnings.warn(f"{old} is deprecated; use {new} instead.", DeprecationWarning, stacklevel=3)
+        if old == "make_cpu_multithreading_loop":
+            value = _read(kwargs, old, lambda value: bool(int(value)))
             if not isinstance(value, (bool, int)) or value not in (False, True):
                 raise TypeError("make_cpu_multithreading_loop must be a boolean")
             value = _qd_core.CPUWorkScheduling.PER_WORKER if value else _qd_core.CPUWorkScheduling.FIXED_SIZE
-        elif not isinstance(value, _qd_core.CPUWorkScheduling):
+        else:
+            value = _read(kwargs, old, int)
+        kwargs[new] = value
+
+    if _is_supplied(kwargs, "cpu_work_scheduling"):
+        value = _read(kwargs, "cpu_work_scheduling", _mode_from_env)
+        if not isinstance(value, _qd_core.CPUWorkScheduling):
             raise TypeError("cpu_work_scheduling must be a qd.CPUWorkScheduling member")
         cfg.cpu_work_scheduling = value
+
+    if _is_supplied(kwargs, "cpu_fixed_block_dim"):
+        cfg.cpu_fixed_block_dim = _read(kwargs, "cpu_fixed_block_dim", int)
