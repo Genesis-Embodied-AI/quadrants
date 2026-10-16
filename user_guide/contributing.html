@@ -529,6 +529,19 @@
 <section id="ci-checks">
 <h2>CI checks<a class="headerlink" href="#ci-checks" title="Link to this heading">#</a></h2>
 <p>Pull requests are validated by several CI jobs. Most run automatically; a failing check blocks merge.</p>
+<section id="gitlab-token-for-ci">
+<h3>GitLab token for CI<a class="headerlink" href="#gitlab-token-for-ci" title="Link to this heading">#</a></h3>
+<p>The macOS, Linux wheel, and Windows workflows use the <code class="docutils literal notranslate"><span class="pre">GITLAB_PAT</span></code> GitHub Actions secret to authenticate Eigen clones from GitLab to improve clone reliability.</p>
+<p>To create or replace this personal access token (PAT):</p>
+<ol class="arabic simple">
+<li><p>Sign in to GitLab and open <a class="reference external" href="https://gitlab.com/-/user_settings/personal_access_tokens">Personal access tokens</a>. See GitLab’s <a class="reference external" href="https://docs.gitlab.com/user/profile/personal_access_tokens/#create-a-personal-access-token">creation instructions</a> for the current UI steps.</p></li>
+<li><p>Create a token with a descriptive name (for example, <code class="docutils literal notranslate"><span class="pre">quadrants-ci</span></code>) and an expiration date. Select only the <code class="docutils literal notranslate"><span class="pre">read_repository</span></code> scope, which permits cloning over HTTPS; these workflows do not need write or API access.</p></li>
+<li><p>Copy the generated token immediately; GitLab only displays its value once.</p></li>
+<li><p>In the GitHub repository, open <strong>Settings &gt; Secrets and variables &gt; Actions</strong> and create or update the repository secret named <code class="docutils literal notranslate"><span class="pre">GITLAB_PAT</span></code>. An organization Actions secret with the same name and access granted to this repository also works.</p></li>
+</ol>
+<p>Before the token expires, create a replacement and update the same GitHub Actions secret. Verify that CI can still clone Eigen, then revoke the old token in GitLab. Keep token values in Actions secrets, never in workflow files or documentation.</p>
+<p>If GitLab clones become flaky, consider checking whether the token has expired.</p>
+</section>
 <section id="pre-commit-linters-linters-yml">
 <h3>Pre-commit / linters (<code class="docutils literal notranslate"><span class="pre">linters.yml</span></code>)<a class="headerlink" href="#pre-commit-linters-linters-yml" title="Link to this heading">#</a></h3>
 <p>Runs <code class="docutils literal notranslate"><span class="pre">pre-commit</span> <span class="pre">run</span> <span class="pre">-a</span></code> which enforces:</p>
@@ -711,6 +724,7 @@
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#ci-checks">CI checks</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#gitlab-token-for-ci">GitLab token for CI</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#pre-commit-linters-linters-yml">Pre-commit / linters (<code class="docutils literal notranslate"><span class="pre">linters.yml</span></code>)</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#other-ci-jobs">Other CI jobs</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#line-wrapping-check-check-wrapping-yml">Line wrapping check (<code class="docutils literal notranslate"><span class="pre">check_wrapping.yml</span></code>)</a></li>
