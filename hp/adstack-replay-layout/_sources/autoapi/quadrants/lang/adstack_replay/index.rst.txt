@@ -1,0 +1,24 @@
+quadrants.lang.adstack_replay
+=============================
+
+.. py:module:: quadrants.lang.adstack_replay
+
+.. autoapi-nested-parse::
+
+   Measure the reduced primal replay immediately before a stack-based backward.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.lang.adstack_replay.backward
+
+
+Module Contents
+---------------
+
+.. py:function:: backward(kernel, args, qd_stream=None)
+
