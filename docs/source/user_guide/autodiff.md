@@ -225,10 +225,6 @@ with qd.ad.Tape(loss=loss, validation=True):
 
 ## Autodiff with dynamic loops
 
-Stack-based reverse mode counts the reduced replay immediately before backward. See
-[Replay counting](adstack_replay.md) for supported kernels, caching, overflow handling, and restrictions.
+Stack-based reverse mode counts the reduced replay immediately before backward. See [Replay counting](adstack_replay.md) for supported kernels, caching, overflow handling, and restrictions.
 
-This branch removes the old symbolic sizing and sparse stack-allocation paths and their initialization options.
-Measured capacity is uniform across stacks; memory use scales with capacity, stack value sizes, and worker count.
-Both measurement and backward error reporting synchronize with the device. Representative application performance
-and peak memory still need measurement.
+This branch removes the old symbolic sizing and sparse stack-allocation paths and their initialization options. Measured capacity is uniform across stacks; memory use scales with capacity, stack value sizes, and worker count. Both measurement and backward error reporting synchronize with the device. Representative application performance and peak memory still need measurement.
