@@ -174,7 +174,7 @@ void compile_to_offloads(IRNode *ir,
   dump_ir("after_simplify_III");
 
   // Run the adstack-size pre-pass here, before the per-task split in `KernelCodeGen::compile_kernel_to_module`
-  // and before `make_cpu_multithreaded_range_for` in `offload_to_executable` rewrites user ranges into chunk
+  // and before `make_cpu_per_worker_range_for` in `offload_to_executable` rewrites user ranges into chunk
   // wrappers. The kernel IR still has every `OffloadedStmt` as a sibling in the top-level block, so the pre-
   // pass can resolve a `GlobalLoadStmt(GlobalTemporaryStmt)` source by walking across tasks: prep serial tasks
   // that store a dynamic range bound (e.g. `arr.shape[0]` lowered via `offload::PromoteIntermediateToGlobalTmp`)
@@ -230,7 +230,7 @@ void offload_to_executable(IRNode *ir,
   }
 
   if (config.cpu_work_scheduling == CPUWorkScheduling::PER_WORKER && arch_is_cpu(config.arch)) {
-    irpass::make_cpu_multithreaded_range_for(ir, config);
+    irpass::make_cpu_per_worker_range_for(ir, config);
     irpass::type_check(ir, config);
     print("Make CPU multithreaded range-for");
     irpass::analysis::verify_if_debug(ir, config);

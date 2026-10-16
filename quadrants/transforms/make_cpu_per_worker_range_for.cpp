@@ -139,7 +139,7 @@ class MakeCPUMultithreadedRangeFor : public BasicStmtVisitor {
 
 namespace irpass {
 
-void make_cpu_multithreaded_range_for(IRNode *root, const CompileConfig &config) {
+void make_cpu_per_worker_range_for(IRNode *root, const CompileConfig &config) {
   MakeCPUMultithreadedRangeFor::run(root, config);
 }
 
