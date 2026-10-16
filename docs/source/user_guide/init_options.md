@@ -23,25 +23,7 @@ For normal use, leave it at `True`; the caches are the main reason a repeated ru
 
 ## CPU loop scheduling
 
-With the default `cpu_work_scheduling=qd.CPUWorkScheduling.PER_WORKER`, CPU `range()` loops divide their iterations into blocks. A block is a consecutive group of iterations executed by one CPU thread.
-
-Two settings work together here: `cpu_max_num_threads` sets the number of CPU worker threads, and `cpu_per_worker_min_block_dim` sets the minimum number of iterations per block. For full definitions, defaults, and constraints, see [All options](#all-options) below.
-
-When a loop has too few iterations to occupy the CPU cores and each iteration does substantial work, smaller blocks can help. Larger blocks require fewer scheduling operations for long loops. Smaller blocks can distribute uneven work across more workers. Compare timings for your workload when choosing a scheduling mode and block size.
-
-For example, this configuration allows up to 12 threads and sets the minimum block size to 1:
-
-```python
-qd.init(arch=qd.cpu, cpu_max_num_threads=12, cpu_per_worker_min_block_dim=1)
-```
-
-With 200 iterations and 12 threads configured, the default minimum of 512 puts all useful work in one block. Reducing the minimum to 1 allows 12 blocks: eleven of 17 iterations and one of 13. It does not force one iteration per block.
-
-Note that explicitly serialized loops (loops preceded by `qd.loop_config(serialize=True)` or `qd.loop_config(parallelize=1)`) still execute in order on a single thread.
-
-See [CPU parallelization](parallelization.md#cpu-parallelization) for worker and task scheduling, the two scheduling modes, and their performance tradeoffs.
-
-For fixed-size tasks, select `cpu_work_scheduling=qd.CPUWorkScheduling.FIXED_SIZE` and set `cpu_fixed_block_dim` (default 32). Both block-size settings must be positive integers. The old `make_cpu_multithreading_loop` and `default_cpu_block_dim` names are deprecated; see [migration and environment variables](parallelization.md#initialization-environment-variables-and-deprecated-names).
+See [CPU parallelization](parallelization.md#cpu-parallelization) for scheduling modes, configuration options, examples, and tuning guidance.
 
 ## Compile-time tuning
 

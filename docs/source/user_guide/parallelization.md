@@ -236,7 +236,7 @@ def k_serial() -> qd.i32:
 
 The directive `qd.loop_config(parallelize=1)` also makes the following loop execute on one thread. These requests apply with either scheduling mode. Setting `cpu_work_scheduling=qd.CPUWorkScheduling.FIXED_SIZE` by itself does not request serial execution.
 
-See [CPU loop scheduling in qd.init options](init_options.md#cpu-loop-scheduling) for an initialization example and [All options](init_options.md#all-options) for the configuration reference.
+See [All options](init_options.md#all-options) for the initialization configuration reference.
 
 ## Multi-dimensional parallelization with qd.ndrange
 
