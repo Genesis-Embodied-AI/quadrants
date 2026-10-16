@@ -35,27 +35,35 @@ def _mode_from_env(value: str) -> _qd_core.CPUWorkScheduling:
 
 
 def configure_cpu_scheduling(kwargs: dict[str, Any], cfg: _qd_core.CompileConfig) -> None:
-    aliases = (
-        ("make_cpu_multithreading_loop", "cpu_work_scheduling"),
-        ("default_cpu_block_dim", "cpu_fixed_block_dim"),
-    )
-    for old, new in aliases:
-        if _is_supplied(kwargs, old) and _is_supplied(kwargs, new):
-            raise ValueError(f"Cannot specify both {old} and {new}, including through environment variables")
+    if _is_supplied(kwargs, "make_cpu_multithreading_loop") and _is_supplied(kwargs, "cpu_work_scheduling"):
+        raise ValueError(
+            "Cannot specify both make_cpu_multithreading_loop and cpu_work_scheduling, including through environment variables"
+        )
+    if _is_supplied(kwargs, "default_cpu_block_dim") and _is_supplied(kwargs, "cpu_fixed_block_dim"):
+        raise ValueError(
+            "Cannot specify both default_cpu_block_dim and cpu_fixed_block_dim, including through environment variables"
+        )
 
-    for old, new in aliases:
-        if not _is_supplied(kwargs, old):
-            continue
+    if _is_supplied(kwargs, "make_cpu_multithreading_loop"):
+        warnings.warn(
+            "make_cpu_multithreading_loop is deprecated; use cpu_work_scheduling instead.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        value = _read(kwargs, "make_cpu_multithreading_loop", lambda value: bool(int(value)))
+        if not isinstance(value, (bool, int)) or value not in (False, True):
+            raise TypeError("make_cpu_multithreading_loop must be a boolean")
+        kwargs["cpu_work_scheduling"] = (
+            _qd_core.CPUWorkScheduling.PER_WORKER if value else _qd_core.CPUWorkScheduling.FIXED_SIZE
+        )
 
-        warnings.warn(f"{old} is deprecated; use {new} instead.", DeprecationWarning, stacklevel=3)
-        if old == "make_cpu_multithreading_loop":
-            value = _read(kwargs, old, lambda value: bool(int(value)))
-            if not isinstance(value, (bool, int)) or value not in (False, True):
-                raise TypeError("make_cpu_multithreading_loop must be a boolean")
-            value = _qd_core.CPUWorkScheduling.PER_WORKER if value else _qd_core.CPUWorkScheduling.FIXED_SIZE
-        else:
-            value = _read(kwargs, old, int)
-        kwargs[new] = value
+    if _is_supplied(kwargs, "default_cpu_block_dim"):
+        warnings.warn(
+            "default_cpu_block_dim is deprecated; use cpu_fixed_block_dim instead.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        kwargs["cpu_fixed_block_dim"] = _read(kwargs, "default_cpu_block_dim", int)
 
     if _is_supplied(kwargs, "cpu_work_scheduling"):
         value = _read(kwargs, "cpu_work_scheduling", _mode_from_env)
