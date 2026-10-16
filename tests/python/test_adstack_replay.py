@@ -377,3 +377,104 @@ def test_replay_stack_layout_divergent_depths(block_dim, dtype):
             expected[i] *= math.cos(value)
             value = math.sin(value)
     np.testing.assert_allclose(x.grad.to_numpy(), expected, rtol=2e-5)
+
+
+@pytest.mark.parametrize("affects_depth", [False, True])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal], cfg_optimization=False)
+def test_count_prunes_only_unused_local_recurrences(affects_depth):
+    x = qd.field(qd.f32, shape=1, needs_grad=True)
+    y = qd.field(qd.f32, shape=1, needs_grad=True)
+    scratch = qd.field(qd.f32, shape=1)
+    x[0] = 0.2
+    scratch[0] = 1.0
+    y.grad[0] = 1.0
+
+    @qd.kernel
+    def compute():
+        for i in range(1):
+            scratch[i] = 2.0
+            unused = scratch[i]
+            for j in range(3):
+                unused = unused * unused + 1.0
+            scratch[i] = unused
+            depth = 3
+            if qd.static(affects_depth):
+                depth = qd.cast(unused, qd.i32)
+            value = x[i]
+            for j in range(depth):
+                value = qd.sin(value)
+            y[i] = value
+
+    if affects_depth:
+        # A recurrence used by the count must remain live and trigger the replay-dependency guard.
+        with pytest.raises(RuntimeError, match="non-differentiable buffer"):
+            compute.grad()
+        assert scratch[0] == 1.0
+        assert x.grad[0] == 0.0
+        assert y.grad[0] == 1.0
+    else:
+        compute.grad()
+        expected = math.cos(0.2) * math.cos(math.sin(0.2)) * math.cos(math.sin(math.sin(0.2)))
+        assert x.grad[0] == pytest.approx(expected, rel=2e-5)
+
+
+@pytest.mark.parametrize("force_sync", [False, True])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal])
+def test_caught_overflow_process_teardown(force_sync):
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    worker = Path(__file__).with_name("adstack_replay_overflow_worker.py")
+    result = subprocess.run(
+        [sys.executable, str(worker), qd.lang.impl.current_cfg().arch.name, str(int(force_sync))],
+        capture_output=True,
+        text=True,
+        timeout=180,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "OVERFLOW_TEARDOWN_OK" in result.stdout
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal])
+def test_interleaved_kernel_measurements_are_independent():
+    x = qd.ndarray(qd.f32, shape=4, needs_grad=True)
+    y = qd.ndarray(qd.f32, shape=4, needs_grad=True)
+    z = qd.ndarray(qd.f32, shape=4, needs_grad=True)
+    n = qd.ndarray(qd.i32, shape=1)
+    x.fill(0.2)
+
+    @qd.kernel
+    def first(x: qd.types.ndarray(), y: qd.types.ndarray(), n: qd.types.ndarray()):
+        for i in range(x.shape[0]):
+            value = x[i]
+            for j in range(n[0]):
+                value = qd.sin(value)
+            y[i] = value
+
+    @qd.kernel
+    def second(x: qd.types.ndarray(), z: qd.types.ndarray(), depth: qd.i32):
+        for i in range(x.shape[0]):
+            value = x[i]
+            for j in range(depth):
+                value = value * 0.9 + 0.01
+            z[i] = value
+
+    for depth in (2, 19, 1):
+        n[0] = depth
+        x.grad.fill(0)
+        y.grad.fill(1)
+        first.grad(x, y, n)
+        value, derivative = 0.2, 1.0
+        for _ in range(depth):
+            derivative *= math.cos(value)
+            value = math.sin(value)
+        np.testing.assert_allclose(x.grad.to_numpy(), derivative, rtol=2e-5)
+        first_capacity = first._adjoint._adstack_replay_scratch.capacity
+        z.grad.fill(1)
+        other_depth = 23 - depth
+        second.grad(x, z, other_depth)
+        np.testing.assert_allclose(x.grad.to_numpy(), derivative + 0.9**other_depth, rtol=2e-5)
+        assert first._adjoint._adstack_replay_scratch.capacity == first_capacity
+        assert first._adjoint._adstack_replay_scratch.buffer is not second._adjoint._adstack_replay_scratch.buffer

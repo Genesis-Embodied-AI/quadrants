@@ -260,23 +260,6 @@ def test_offline_cache_per_kernel(curr_arch):
         _test_offline_cache_for_a_kernel(curr_arch=curr_arch, kernel=kernel, args=args, result=get_res(*args))
 
 
-# Pins `AdStackCache::ensure_runtime_registry_ids_for_max_reducer`'s offline-cache reload path. On a fresh codegen run
-# the registry is seeded by `register_adstack_sizing_info` calls inside
-# `codegen_llvm.cpp::finalize_offloaded_task_function`, so the runtime helper's loop body is short-circuited by the
-# `is_adstack_sizing_info_registered` fast-path gate. Only on offline-cache reload (codegen skipped, kernels loaded from
-# disk) does the helper actually do work: re-deriving `(kernel_name, task_id_in_kernel)` from the serialised
-# `AdStackSizingInfo` fields and minting the same content-stable hash id the codegen-baked LLVM IR's overflow `cmpxchg`
-# immediate references. Without that helper a cache-loaded max-reducer kernel would have `registry_id` correctly
-# populated (since #635 follow-ups serialise it), but the per-`Program` registry would stay empty and the dispatcher's
-# `if (registry_id == 0) continue` gate (read against the cache-loaded `ad_stack`) AND the diagnose-on-overflow path
-# would both silently fail. The test below dispatches a max-reducer kernel twice with offline_cache=True; the second run
-# is a cache hit on disk but the per-spec in-memory cache is fresh, so the dispatch must fire and the counter must
-# advance. A regression in the registry-seeding helper would leave the counter at zero (dispatcher gate skips).
-# Restricted to LLVM-GPU arches because the recognizer is gated on those
-# (`codegen_llvm.cpp::finalize_offloaded_task_function` skips it on CPU per #655); the SPIR-V backend has its own
-# runtime re-registration loop in `runtime/gfx/adstack_sizer_launch.cpp:236` that is unaffected by this PR.
-
-
 @pytest.mark.parametrize("curr_arch", supported_archs_offline_cache)
 @_test_offline_cache_dec
 def test_calling_a_kernel_with_different_param_list(curr_arch):
@@ -656,3 +639,51 @@ def test_offline_cache_key_distinguishes_graph_parallel_regions(curr_arch):
 
     qd.reset()
     assert added_files() == expected_num_cache_files(2)
+
+
+@pytest.mark.parametrize("curr_arch", supported_archs_offline_cache)
+@_test_offline_cache_dec
+def test_multiple_ib_with_offline_cache(curr_arch):
+    count_of_cache_file = cache_files_cnt()
+
+    assert qd.lang is not None
+    arch_supported = qd.lang.misc.is_extension_supported(curr_arch, qd.extension.adstack)
+    if not arch_supported:
+        pytest.skip(reason=f"architecture not supported for adstack {curr_arch}")
+
+    def added_files():
+        return cache_files_cnt() - count_of_cache_file
+
+    def helper(warm):
+        x = qd.field(float, (), needs_grad=True)
+        y = qd.field(float, (), needs_grad=True)
+
+        @qd.kernel
+        def compute_y():
+            for j in range(2):
+                for i in range(3):
+                    y[None] += x[None]
+                for i in range(3):
+                    y[None] += x[None]
+
+        x[None] = 1.0
+        with qd.ad.Tape(y):
+            compute_y()
+
+        assert y[None] == 12.0
+        assert x.grad[None] == 12.0
+        for variant in (compute_y._adjoint._adstack_count_variant, compute_y._adjoint._adstack_reverse_variant):
+            assert variant.fe_ll_cache_observations.cache_hit == warm
+
+    qd.init(arch=curr_arch, enable_fallback=False, **current_thread_ext_options())
+    helper(False)
+    assert added_files() == expected_num_cache_files()
+
+    qd.reset()
+    warmed_files = added_files()
+    assert warmed_files > 0
+    qd.init(arch=curr_arch, enable_fallback=False, **current_thread_ext_options())
+    helper(True)
+
+    qd.reset()
+    assert added_files() == warmed_files

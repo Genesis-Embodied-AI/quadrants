@@ -70,6 +70,41 @@ bool may_overlap(const Access &a, const Access &b) {
   return true;
 }
 
+void prune_unused_count_locals(IRNode *root) {
+  auto statements = gather_forward_statements(root);
+  std::unordered_map<Stmt *, std::vector<Stmt *>> stores;
+  std::vector<Stmt *> pending;
+  for (auto *stmt : statements) {
+    if (auto *store = stmt->cast<LocalStoreStmt>()) {
+      auto *dest = store->dest;
+      while (auto *matrix = dest->cast<MatrixPtrStmt>())
+        dest = matrix->origin;
+      stores[dest].push_back(store);
+    } else if (stmt->is_container_statement() || !stmt->dead_instruction_eliminable()) {
+      // Preserve all control flow and side effects, including measurement publication. Local stores are
+      // needed only if their destination contributes to one of these roots.
+      pending.push_back(stmt);
+    }
+  }
+  std::unordered_set<Stmt *> live;
+  while (!pending.empty()) {
+    auto *stmt = pending.back();
+    pending.pop_back();
+    if (!stmt || !live.insert(stmt).second)
+      continue;
+    for (auto *operand : stmt->get_operands())
+      pending.push_back(operand);
+    if (auto it = stores.find(stmt); it != stores.end())
+      pending.insert(pending.end(), it->second.begin(), it->second.end());
+  }
+  // Mark from observable uses rather than from all local loads: an unused recurrence can read and write
+  // itself forever without contributing to a count, so ordinary dead-store elimination retains it.
+  for (auto *stmt : statements)
+    if (stmt->is<LocalStoreStmt>() && !live.count(stmt))
+      stmt->parent->erase(stmt);
+  irpass::die(root);
+}
+
 }  // namespace
 
 void remove_adstack_count_outputs(IRNode *root, const CompileConfig &config) {
@@ -92,6 +127,10 @@ void remove_adstack_count_outputs(IRNode *root, const CompileConfig &config) {
     else
       stmt->parent->erase(stmt);
   }
+  irpass::full_simplify(root, config, {false, /*autodiff_enabled=*/false});
+  // Removing outputs can leave unused counter-value locals holding their reads. Prune dead local stores even
+  // when optional CFG optimization is disabled, before checking whether replay depends on a removed write.
+  prune_unused_count_locals(root);
   irpass::full_simplify(root, config, {false, /*autodiff_enabled=*/false});
   for (auto *stmt : irpass::analysis::gather_statements(root, [](Stmt *s) { return s->is<GlobalLoadStmt>(); })) {
     auto read = access(stmt->as<GlobalLoadStmt>()->src);
