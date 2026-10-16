@@ -62,12 +62,12 @@ class MakeCPUMultithreadedRangeFor : public BasicStmtVisitor {
     auto one = offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(PrimitiveType::i32, 1)));
     // The C++ comments below illustrate the generated code. Configuration values are embedded at compile time.
     // const int32_t cpu_per_worker_min_block_dim = config_.cpu_per_worker_min_block_dim;
-    auto cpu_per_worker_min_block_dim =
+    Stmt *cpu_per_worker_min_block_dim =
         offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(config_.cpu_per_worker_min_block_dim)));
     // const int32_t num_blocks = config_.cpu_max_num_threads;
-    auto num_blocks = offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(config_.cpu_max_num_threads)));
+    Stmt *num_blocks = offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(config_.cpu_max_num_threads)));
     // block_index is the index in: for (int32_t block_index = 0; block_index < num_blocks; ++block_index).
-    auto block_index = offloaded_body->insert(Stmt::make_typed<LoopIndexStmt>(offloaded, 0));
+    Stmt *block_index = offloaded_body->insert(Stmt::make_typed<LoopIndexStmt>(offloaded, 0));
 
     // Retrieve range-for bounds.
     Stmt *begin_stmt;
@@ -88,8 +88,9 @@ class MakeCPUMultithreadedRangeFor : public BasicStmtVisitor {
     }
 
     // int32_t next_block_index = block_index + one;
-    auto next_block_index = offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(BinaryOpType::add, block_index, one));
-    auto get_cpu_per_worker_block_start_index_fn = [&](Stmt *index) {
+    Stmt *next_block_index =
+        offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(BinaryOpType::add, block_index, one));
+    auto get_cpu_per_worker_block_start_index_fn = [&](Stmt *index) -> Stmt * {
       // get_cpu_per_worker_block_start_index(original_range_begin, original_range_end, num_blocks,
       //                                      cpu_per_worker_min_block_dim, index)
       return offloaded_body->insert(Stmt::make_typed<InternalFuncStmt>(
@@ -100,11 +101,11 @@ class MakeCPUMultithreadedRangeFor : public BasicStmtVisitor {
     };
     // int32_t block_begin = get_cpu_per_worker_block_start_index(original_range_begin, original_range_end,
     //                                                         num_blocks, cpu_per_worker_min_block_dim, block_index);
-    auto block_begin = get_cpu_per_worker_block_start_index_fn(block_index);
+    Stmt *block_begin = get_cpu_per_worker_block_start_index_fn(block_index);
     // int32_t block_end = get_cpu_per_worker_block_start_index(original_range_begin, original_range_end,
     //                                                       num_blocks, cpu_per_worker_min_block_dim,
     //                                                       next_block_index);
-    auto block_end = get_cpu_per_worker_block_start_index_fn(next_block_index);
+    Stmt *block_end = get_cpu_per_worker_block_start_index_fn(next_block_index);
 
     // Create the serial inner loop.
     auto inner_loop = offloaded_body->insert(
