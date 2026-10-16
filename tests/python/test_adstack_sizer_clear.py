@@ -84,6 +84,7 @@ def test_sizer_overflow_word_is_cleared_after_poisoning():
     assert proc.returncode == RET_SUCCESS, proc.stdout + "\n" + proc.stderr
     assert TEST_RAN in proc.stdout, proc.stdout + "\n" + proc.stderr
     assert "[vulkan_allocator] poisoned allocation" in proc.stderr, proc.stdout + "\n" + proc.stderr
+    # Confirm GPU sizing ran; CPU sizing or cached metadata would bypass the buffer clear being tested.
     assert "[adstack_sizer] kernel=" in proc.stderr, proc.stdout + "\n" + proc.stderr
 
 
