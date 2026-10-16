@@ -265,10 +265,10 @@ def test_eliminate_recomputable_pushes_preserves_zero_body_store():
 
 @test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
 def test_backup_ssa_load_top_with_subsequent_pushes():
-    # Pins `BackupSSA::is_load_top_stable` against the reverse-mode aliasing bug where cloning an
-    # `AdStackLoadTopStmt` at the reverse cursor reads the stack's live top - which differs from the original
-    # forward-time top whenever the same stack received another push between the original load_top and the end of
-    # the IB. The minimal IR shape that exhibits this:
+    # Pins `BackupSSA::is_load_top_stable` against the reverse-mode aliasing bug where cloning an `AdStackLoadTopStmt`
+    # at the reverse cursor reads the stack's live top - which differs from the original forward-time top whenever the
+    # same stack received another push between the original load_top and the end of the IB. The minimal IR shape that
+    # exhibits this:
     #
     #   - A multi-axis `qd.ndrange(...)` whose flat loop index is decomposed into per-axis indices via repeated
     #     `floordiv` / `sub` over an adstack-backed value (each step pushes its result, then a subsequent
@@ -279,15 +279,15 @@ def test_backup_ssa_load_top_with_subsequent_pushes():
     #     reconstruct from `floordiv(load_top(stack), const)` clones - the load_top clones read the stack's
     #     final top, which is the LAST push (the inner axis) instead of the intermediate flat index.
     #
-    # With the stable-load-top guard, BackupSSA detects the unsafe load_top, falls back to the per-IB alloca
-    # spill (`load(op)`), and the reverse re-evaluation reads the per-iteration forward-time index, producing
-    # the analytic gradients. Without the guard, the reverse pass reads `g_mass[j/2, j]` and `g_in[j/2, j]`
-    # instead of `g_mass[i, j]` / `g_in[i, j]`, so cells whose forward gate was true at `(i=1, j=1)` end up
-    # dividing `adj(out)` by `g_mass[0, 1]` (= 0) and the gradient comes out as `inf`/`nan`.
+    # With the stable-load-top guard, BackupSSA detects the unsafe load_top, falls back to the per-IB alloca spill
+    # (`load(op)`), and the reverse re-evaluation reads the per-iteration forward-time index, producing the analytic
+    # gradients. Without the guard, the reverse pass reads `g_mass[j/2, j]` and `g_in[j/2, j]` instead of `g_mass[i, j]`
+    # / `g_in[i, j]`, so cells whose forward gate was true at `(i=1, j=1)` end up dividing `adj(out)` by `g_mass[0, 1]`
+    # (= 0) and the gradient comes out as `inf`/`nan`.
     #
-    # Internal details: `cfg_optimization=False` keeps the compound `if true && (g_mass[i, j] > 0)` form alive
-    # (the `&&` lowering inserts the multi-push into the gate stack that the chain analyzer must clone through);
-    # Counting enables the stack transformation where the cloned-load_top path fires.
+    # Internal details: `cfg_optimization=False` keeps the compound `if true && (g_mass[i, j] > 0)` form alive (the `&&`
+    # lowering inserts the multi-push into the gate stack that the chain analyzer must clone through); Counting enables
+    # the stack transformation where the cloned-load_top path fires.
     g_mass = qd.field(qd.f32, shape=(2, 2), needs_grad=True)
     g_in = qd.field(qd.f32, shape=(2, 2), needs_grad=True)
     g_out = qd.field(qd.f32, shape=(2, 2), needs_grad=True)

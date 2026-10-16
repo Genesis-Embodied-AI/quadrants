@@ -29,8 +29,8 @@ def main():
     for _ in range(steps):
         scene.step()
     solver = scene.fem_solver
-    # Genesis currently lacks FEMEntity.collect_output_grads, even on the legacy path. Seed the solver fields
-    # directly to exercise its four normal autodiff kernels without relying on that missing integration hook.
+    # Genesis currently lacks FEMEntity.collect_output_grads, even on the legacy path. Seed the solver fields directly
+    # to exercise its four normal autodiff kernels without relying on that missing integration hook.
     qd.ad.clear_all_gradients()
 
     @qd.kernel

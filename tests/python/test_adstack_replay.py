@@ -19,8 +19,8 @@ def test_adjoint_buffer_load_survives_clear():
     @qd.kernel
     def transfer(upstream: qd.types.ndarray(), downstream: qd.types.ndarray()):
         for i in range(upstream.shape[0]):
-            # Reverse AD consumes an output adjoint before clearing its slot. Shader load forwarding must
-            # preserve the pre-clear value, including on MoltenVK's Metal shader compiler.
+            # Reverse AD consumes an output adjoint before clearing its slot. Shader load forwarding must preserve the
+            # pre-clear value, including on MoltenVK's Metal shader compiler.
             value = upstream[i]
             upstream[i] = 0.0
             downstream[i] += value
