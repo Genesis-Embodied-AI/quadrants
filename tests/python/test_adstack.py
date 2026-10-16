@@ -4895,8 +4895,7 @@ def _sizer_overflow_child(args: list[str]) -> None:
     ):
         for i in range(num_its.shape[0]):
             v = x[i]
-            n = num_its[i]
-            for _ in range(n):
+            for _ in range(num_its[i]):
                 v = v * 0.95 + 0.01
             y[None] += v
 
