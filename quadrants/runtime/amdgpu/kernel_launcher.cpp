@@ -21,15 +21,6 @@ namespace {
 // comment in `runtime/cuda/kernel_launcher.cpp`.
 constexpr std::size_t kAdStackMaxConcurrentThreads = 65536;
 
-// Resolve the adstack thread count this task needs sizing for.
-//
-// For const-bound range_for and non-range_for tasks, codegen has already made `static_num_threads` tight
-// (`grid_dim * block_dim` with `grid_dim` clamped to `ceil((end-begin)/block_dim)` for const range_for), so
-// we return it directly.
-//
-// For dynamic-bound range_for tasks, resolve `end - begin` by reading the values codegen stashed into
-// `runtime->temporaries` via a host-side DtoH memcpy. Mirrors `runtime/cuda/kernel_launcher.cpp`.
-
 }  // namespace
 
 void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
@@ -40,8 +31,12 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
                                             int arg_size) {
   auto *executor = get_runtime_executor();
   auto prepare_task = [&](std::size_t task_index, const OffloadedTask &task) -> int {
-    QD_ERROR_IF(task.ad_stack.per_thread_stride, "Counted adstack is not supported on AMDGPU");
-    return task.grid_dim;
+    int grid = task.grid_dim;
+    if (task.ad_stack.per_thread_stride) {
+      grid = std::max(1, std::min(grid, static_cast<int>(kAdStackMaxConcurrentThreads / task.block_dim)));
+      executor->prepare_counted_adstack(task.ad_stack, std::size_t(grid) * task.block_dim, ctx);
+    }
+    return grid;
   };
 
   // GPU-side `qd.checkpoint` gating for the streaming path. The codegen-emitted prologue at the top of each cp_id >= 0

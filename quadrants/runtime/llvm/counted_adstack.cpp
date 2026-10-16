@@ -5,6 +5,7 @@
 #undef QD_RUNTIME_HOST
 #include "quadrants/rhi/llvm/llvm_device.h"
 #include "quadrants/rhi/cuda/cuda_driver.h"
+#include "quadrants/rhi/amdgpu/amdgpu_driver.h"
 #include <limits>
 
 namespace quadrants::lang {
@@ -45,8 +46,12 @@ void LlvmRuntimeExecutor::prepare_counted_adstack(const AdStackSizingInfo &layou
 #if defined(QD_WITH_CUDA)
     CUDADriver::get_instance().memcpy_host_to_device(adstack_heap_field_, &ptr, sizeof(ptr));
 #endif
+  } else if (config_.arch == Arch::amdgpu) {
+#if defined(QD_WITH_AMDGPU)
+    AMDGPUDriver::get_instance().memcpy_host_to_device(adstack_heap_field_, &ptr, sizeof(ptr));
+#endif
   } else {
-    QD_ERROR_IF(!arch_is_cpu(config_.arch), "Measured adstack supports CPU and CUDA on LLVM backends");
+    QD_ERROR_IF(!arch_is_cpu(config_.arch), "Measured adstack supports CPU, CUDA, and AMDGPU on LLVM backends");
     *static_cast<void **>(adstack_heap_field_) = ptr;
   }
   adstack_heap_ = std::move(guard);

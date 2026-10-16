@@ -36,8 +36,8 @@ def _read_measurement(runtime, arch, record):
 def backward(kernel, args, qd_stream=None):
     runtime = impl.get_runtime()
     arch = impl.current_cfg().arch
-    if arch not in (core.x64, core.arm64, core.cuda, core.vulkan, core.metal):
-        raise RuntimeError("Adstack replay counting supports x64, ARM64, CUDA, Vulkan, and Metal")
+    if arch not in (core.x64, core.arm64, core.cuda, core.amdgpu, core.vulkan, core.metal):
+        raise RuntimeError("Adstack replay counting supports x64, ARM64, CUDA, AMDGPU, Vulkan, and Metal")
     if kernel.use_graph or kernel.use_checkpoints or qd_stream is not None:
         raise RuntimeError("Adstack replay counting requires non-graph kernels without custom streams")
     tape = runtime.target_tape

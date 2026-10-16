@@ -30,7 +30,7 @@ def test_adjoint_buffer_load_survives_clear():
     np.testing.assert_array_equal(upstream.to_numpy(), np.zeros_like(seeds))
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan, qd.metal])
 def test_backward_only_remeasures_current_inputs():
     x = qd.ndarray(qd.f32, shape=4, needs_grad=True)
     y = qd.ndarray(qd.f32, shape=4, needs_grad=True)
@@ -60,7 +60,7 @@ def test_backward_only_remeasures_current_inputs():
         np.testing.assert_allclose(x.to_numpy(), 0.2)
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan, qd.metal])
 def test_replay_dense_fields_tape():
     x = qd.field(qd.f32, shape=4, needs_grad=True)
     loss = qd.field(qd.f32, shape=(), needs_grad=True)
@@ -86,7 +86,7 @@ def test_replay_dense_fields_tape():
     np.testing.assert_allclose(x.grad.to_numpy(), derivative, rtol=2e-5)
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan, qd.metal])
 def test_count_rejects_residual_primal_mutation():
     x = qd.field(qd.f32, shape=1, needs_grad=True)
     y = qd.field(qd.f32, shape=1, needs_grad=True)
@@ -107,7 +107,7 @@ def test_count_rejects_residual_primal_mutation():
 
 
 @pytest.mark.parametrize("fastcache", [False, True])
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan, qd.metal])
 def test_backward_only_persistent_cache(tmp_path, fastcache):
     import subprocess
     import sys
@@ -130,7 +130,7 @@ def test_backward_only_persistent_cache(tmp_path, fastcache):
 
 
 @pytest.mark.parametrize("read_modify_write", [False, True])
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan, qd.metal])
 def test_write_only_array_output_and_alias_guard(read_modify_write):
     x = qd.ndarray(qd.f32, shape=2, needs_grad=True)
     y = qd.ndarray(qd.f32, shape=2, needs_grad=True)
@@ -184,7 +184,7 @@ def test_write_only_array_output_and_alias_guard(read_modify_write):
 
 
 @pytest.mark.parametrize("debug", [False, True])
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan, qd.metal])
 def test_replay_overflow_with_reduction(monkeypatch, debug):
     from quadrants.lang import adstack_replay
 
@@ -222,7 +222,7 @@ def test_replay_overflow_with_reduction(monkeypatch, debug):
     assert x.grad[None] == pytest.approx(4096 * math.cos(0.2) * math.cos(math.sin(0.2)), rel=2e-4)
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan, qd.metal])
 def test_replay_disjoint_frame_outputs():
     x = qd.field(qd.f32, shape=4, needs_grad=True)
     y = qd.field(qd.f32, shape=4, needs_grad=True)
@@ -262,7 +262,7 @@ def test_replay_disjoint_frame_outputs():
     np.testing.assert_allclose(x.grad.to_numpy(), derivative, rtol=2e-5)
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan, qd.metal])
 def test_replay_rejects_cross_iteration_output_dependency():
     x = qd.field(qd.f32, shape=4, needs_grad=True)
     y = qd.field(qd.f32, shape=4, needs_grad=True)
@@ -313,7 +313,7 @@ def test_replay_torch_arguments_and_overlapping_views():
     torch.testing.assert_close(storage, torch.full_like(storage, 2))
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan, qd.metal])
 def test_measurement_failure_does_not_fall_back(monkeypatch):
     import importlib
 
@@ -351,7 +351,7 @@ def test_measurement_failure_does_not_fall_back(monkeypatch):
 
 @pytest.mark.parametrize("block_dim", [16, 32, 128])
 @pytest.mark.parametrize("dtype", [qd.f32, qd.f64])
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=[qd.cuda, qd.amdgpu])
 def test_replay_stack_layout_divergent_depths(block_dim, dtype):
     n = 97
     x = qd.ndarray(dtype, shape=n, needs_grad=True)
@@ -380,7 +380,7 @@ def test_replay_stack_layout_divergent_depths(block_dim, dtype):
 
 
 @pytest.mark.parametrize("affects_depth", [False, True])
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal], cfg_optimization=False)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan, qd.metal], cfg_optimization=False)
 def test_count_prunes_only_unused_local_recurrences(affects_depth):
     x = qd.field(qd.f32, shape=1, needs_grad=True)
     y = qd.field(qd.f32, shape=1, needs_grad=True)
@@ -419,7 +419,7 @@ def test_count_prunes_only_unused_local_recurrences(affects_depth):
 
 
 @pytest.mark.parametrize("force_sync", [False, True])
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan, qd.metal])
 def test_caught_overflow_process_teardown(force_sync):
     import subprocess
     import sys
@@ -437,7 +437,7 @@ def test_caught_overflow_process_teardown(force_sync):
     assert "OVERFLOW_TEARDOWN_OK" in result.stdout
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan, qd.metal])
 def test_interleaved_kernel_measurements_are_independent():
     x = qd.ndarray(qd.f32, shape=4, needs_grad=True)
     y = qd.ndarray(qd.f32, shape=4, needs_grad=True)
