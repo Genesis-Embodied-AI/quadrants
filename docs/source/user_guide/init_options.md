@@ -43,7 +43,7 @@ Default `False`. Some kernel arguments make Quadrants compile a separate, specia
 
 See [Autodiff](./autodiff.md) for the reverse-mode pipeline overview.
 
-Stack-based reverse mode uses [automatic backward replay counting](adstack_replay.md). The old `ad_stack_experimental_enabled`, `ad_stack_size`, and `ad_stack_sparse_threshold_bytes` options have been removed.
+Stack-based reverse mode uses [automatic backward replay counting](autodiff.md#autodiff-with-dynamic-loops). The old `ad_stack_experimental_enabled`, `ad_stack_size`, and `ad_stack_sparse_threshold_bytes` options have been removed.
 
 ## Apple Metal
 
@@ -71,7 +71,7 @@ Enables:
 - integer-overflow guards on arithmetic;
 - extra internal consistency checks throughout compilation.
 
-The adstack-overflow check on reverse-mode autodiff runs unconditionally on supported backends regardless of `debug`; see [Adstack replay](./adstack_replay.md) for the contract.
+The adstack-overflow check on reverse-mode autodiff runs unconditionally on supported backends regardless of `debug`; see [Adstack replay](./autodiff.md#autodiff-with-dynamic-loops) for the contract.
 
 **Cost.** Significant on both compile time (extra checks are inserted and validated throughout compilation; e.g. ~21s of added compile time observed on adstack-heavy kernels) and runtime. For just the field-bounds check in a release build without the rest, use [`check_out_of_bound`](#check_out_of_bound) below.
 
