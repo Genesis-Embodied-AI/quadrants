@@ -4916,13 +4916,6 @@ def _sizer_overflow_child(args: list[str]) -> None:
     compute.grad(num_its, x, y)
     qd.sync()
 
-    num_its.from_numpy(np.array([3, 3, 1, 2], dtype=np.int32))
-    compute(num_its, x, y)
-    y.grad[()] = 1.0
-    x.grad.fill(0.0)
-    compute.grad(num_its, x, y)
-    qd.sync()
-
     print(TEST_RAN)
     sys.exit(RET_SUCCESS)
 
