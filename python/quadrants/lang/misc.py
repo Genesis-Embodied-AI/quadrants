@@ -780,13 +780,9 @@ def graph_do_while(condition) -> bool:
 
 @util.quadrants_scope
 def block_idx():
-    """Return the current CPU scheduling block or GPU thread-block index.
-
-    On CPU, indices start at zero for each parallel loop execution, and code
-    outside a scheduled block returns 0. Both CPU scheduling modes are supported.
-    On GPUs, this returns the hardware block index, which may process multiple
-    groups of iterations. Nested serial loops retain their enclosing block index.
-    """
+    """Return the current CPU scheduling block or GPU thread-block index."""
+    if impl.current_cfg().arch in (vulkan, metal):
+        return impl.call_internal("workgroupId")
     return impl.call_internal("global_block_idx")
 
 

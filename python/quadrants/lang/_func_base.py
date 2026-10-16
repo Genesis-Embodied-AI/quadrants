@@ -826,10 +826,18 @@ class FuncBase:
                             "passing it into quadrants kernel."
                         )
                     quadrants_arch = impl.current_cfg().arch
+                    # PyTorch uses the "cuda" device spelling for both CUDA and HIP tensors. Both GPU contexts use
+                    # device 0; tensors from other GPU devices must retain the CPU staging/copy-back path.
+                    torch_gpu_arch = _qd_core.Arch.amdgpu if torch.version.hip else _arch_cuda
+                    direct_gpu = v.device.type == "cuda" and quadrants_arch == torch_gpu_arch and v.device.index == 0
 
                     # FIXME: only allocate when launching grad kernel
                     if v.requires_grad and v.grad is None:
                         v.grad = torch.zeros_like(v)
+                        if direct_gpu and quadrants_arch == _qd_core.Arch.amdgpu:
+                            # This producer is internal: callers cannot synchronize it before launching on a custom
+                            # Quadrants stream. Complete the first-time initialization before handing off.
+                            torch.cuda.current_stream(v.device).synchronize()
 
                     if v.requires_grad:
                         if not isinstance(v.grad, torch.Tensor):
@@ -843,9 +851,11 @@ class FuncBase:
                             )
 
                     grad = v.grad
-                    if (v.device.type != "cpu") and not (v.device.type == "cuda" and quadrants_arch == _arch_cuda):
+                    if grad is not None and grad.device != v.device:
+                        raise ValueError("The gradient tensor must be on the same device as its tensor.")
+                    if v.device.type != "cpu" and not direct_gpu:
                         # For a torch tensor to be passed as as input argument (in and/or out) of a quadrants kernel, its
-                        # memory must be hosted either on CPU, or on CUDA if and only if Quadrants is using CUDA backend.
+                        # memory must be hosted either on CPU, or on a GPU with a matching runtime and backend.
                         # We just replace it with a CPU tensor and by the end of kernel execution we'll use the callback
                         # to copy the values back to the original tensor.
                         v_cpu = v.to(device="cpu")

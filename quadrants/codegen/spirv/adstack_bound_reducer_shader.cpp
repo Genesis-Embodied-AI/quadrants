@@ -1,6 +1,7 @@
 #include "quadrants/codegen/spirv/adstack_bound_reducer_shader.h"
 
 #include "quadrants/codegen/spirv/spirv_ir_builder.h"
+#include "quadrants/codegen/spirv/spirv_operations.h"
 
 namespace quadrants::lang::spirv {
 
@@ -19,12 +20,12 @@ Value load_buf_u32(IRBuilder &ir, Value buffer, Value word_idx) {
 // pointer through a `memcpy` into the arg buffer); reading the two halves and reassembling matches the exact byte
 // layout the main kernel sees when it consumes the same arg buffer. Returned as u64 (not bitcast to i64) because the
 // only consumer is `OpConvertUToPtr` which takes an unsigned operand.
-Value load_arg_buf_u64_ptr(IRBuilder &ir, Value buffer, Value base_word_idx) {
+Value load_arg_buf_u64_ptr(IRBuilder &ir, SpirvOperations &ops_, Value buffer, Value base_word_idx) {
   Value lo = load_buf_u32(ir, buffer, base_word_idx);
-  Value hi_idx = ir.add(base_word_idx, ir.uint_immediate_number(ir.u32_type(), 1u));
+  Value hi_idx = ops_.add(base_word_idx, ir.uint_immediate_number(ir.u32_type(), 1u));
   Value hi = load_buf_u32(ir, buffer, hi_idx);
-  Value lo64 = ir.cast(ir.u64_type(), lo);
-  Value hi64 = ir.cast(ir.u64_type(), hi);
+  Value lo64 = ops_.cast(ir.u64_type(), lo);
+  Value hi64 = ops_.cast(ir.u64_type(), hi);
   Value shift = ir.uint_immediate_number(ir.u64_type(), 32u);
   Value hi_shifted = ir.make_value(spv::OpShiftLeftLogical, ir.u64_type(), hi64, shift);
   return ir.make_value(spv::OpBitwiseOr, ir.u64_type(), lo64, hi_shifted);
@@ -36,8 +37,8 @@ Value load_arg_buf_u64_ptr(IRBuilder &ir, Value buffer, Value base_word_idx) {
 // operand SPIR-V requires for `PhysicalStorageBuffer` reads. Caller passes the byte offset directly so the same helper
 // covers the 4-byte-stride f32 / i32 walk and the 8-byte-stride f64 walk (issued as two adjacent 4-byte loads at
 // offsets 0 and 4).
-Value psb_load_u32_at_byte_off(IRBuilder &ir, Value base_u64, Value byte_off_u64) {
-  Value target_u64 = ir.add(base_u64, byte_off_u64);
+Value psb_load_u32_at_byte_off(IRBuilder &ir, SpirvOperations &ops_, Value base_u64, Value byte_off_u64) {
+  Value target_u64 = ops_.add(base_u64, byte_off_u64);
 
   SType elem_sty = ir.u32_type();
   SType ptr_elem_type = ir.get_pointer_type(elem_sty, spv::StorageClassPhysicalStorageBuffer);
@@ -52,11 +53,11 @@ Value psb_load_u32_at_byte_off(IRBuilder &ir, Value base_u64, Value byte_off_u64
 }
 
 // Convenience wrapper around `psb_load_u32_at_byte_off` for the f32 / i32 path: byte offset is `elem_idx_u32 * 4`.
-Value psb_load_u32(IRBuilder &ir, Value base_u64, Value elem_idx_u32) {
+Value psb_load_u32(IRBuilder &ir, SpirvOperations &ops_, Value base_u64, Value elem_idx_u32) {
   Value four_u64 = ir.uint_immediate_number(ir.u64_type(), 4u);
-  Value elem_idx_u64 = ir.cast(ir.u64_type(), elem_idx_u32);
-  Value byte_off = ir.mul(elem_idx_u64, four_u64);
-  return psb_load_u32_at_byte_off(ir, base_u64, byte_off);
+  Value elem_idx_u64 = ops_.cast(ir.u64_type(), elem_idx_u32);
+  Value byte_off = ops_.mul(elem_idx_u64, four_u64);
+  return psb_load_u32_at_byte_off(ir, ops_, base_u64, byte_off);
 }
 
 // Assemble a u64 from two adjacent little-endian u32 PSB loads at byte offsets `elem_idx_u32 * 8` and `elem_idx_u32 * 8
@@ -64,16 +65,16 @@ Value psb_load_u32(IRBuilder &ir, Value base_u64, Value elem_idx_u32) {
 // 4-byte aligned (it may follow a u32 in a containing struct), so we issue two 4-byte u32 loads and reassemble the u64
 // in registers. The shifted-OR pattern mirrors `load_arg_buf_u64_ptr` above. Returned as u64 (not bitcast) because the
 // caller does its own bitcast to f64 for the comparison.
-Value psb_load_u64_pair(IRBuilder &ir, Value base_u64, Value elem_idx_u32) {
+Value psb_load_u64_pair(IRBuilder &ir, SpirvOperations &ops_, Value base_u64, Value elem_idx_u32) {
   Value eight_u64 = ir.uint_immediate_number(ir.u64_type(), 8u);
   Value four_u64 = ir.uint_immediate_number(ir.u64_type(), 4u);
-  Value elem_idx_u64 = ir.cast(ir.u64_type(), elem_idx_u32);
-  Value lo_byte_off = ir.mul(elem_idx_u64, eight_u64);
-  Value hi_byte_off = ir.add(lo_byte_off, four_u64);
-  Value lo = psb_load_u32_at_byte_off(ir, base_u64, lo_byte_off);
-  Value hi = psb_load_u32_at_byte_off(ir, base_u64, hi_byte_off);
-  Value lo64 = ir.cast(ir.u64_type(), lo);
-  Value hi64 = ir.cast(ir.u64_type(), hi);
+  Value elem_idx_u64 = ops_.cast(ir.u64_type(), elem_idx_u32);
+  Value lo_byte_off = ops_.mul(elem_idx_u64, eight_u64);
+  Value hi_byte_off = ops_.add(lo_byte_off, four_u64);
+  Value lo = psb_load_u32_at_byte_off(ir, ops_, base_u64, lo_byte_off);
+  Value hi = psb_load_u32_at_byte_off(ir, ops_, base_u64, hi_byte_off);
+  Value lo64 = ops_.cast(ir.u64_type(), lo);
+  Value hi64 = ops_.cast(ir.u64_type(), hi);
   Value shift = ir.uint_immediate_number(ir.u64_type(), 32u);
   Value hi_shifted = ir.make_value(spv::OpShiftLeftLogical, ir.u64_type(), hi64, shift);
   return ir.make_value(spv::OpBitwiseOr, ir.u64_type(), lo64, hi_shifted);
@@ -138,6 +139,7 @@ std::vector<uint32_t> build_adstack_bound_reducer_spirv(Arch arch, const DeviceC
   }
 
   IRBuilder ir(arch, caps);
+  SpirvOperations ops_(ir);
   ir.init_header();
 
   // Storage-buffer bindings (set 0). Layout matches `AdStackBoundReducerParams` documentation in the header and the
@@ -155,11 +157,11 @@ std::vector<uint32_t> build_adstack_bound_reducer_spirv(Arch arch, const DeviceC
 
   Value main_func = ir.new_function();
   ir.start_function(main_func);
-  ir.set_work_group_size({static_cast<int>(kAdStackBoundReducerWorkgroupSize), 1, 1});
+  ops_.set_work_group_size({static_cast<int>(kAdStackBoundReducerWorkgroupSize), 1, 1});
 
   // Per-thread invocation index. The host launcher dispatches `ceil(length / kWorkgroupSize)` workgroups, so `gid` may
   // exceed `length` on the trailing workgroup; the early-return below handles that case.
-  Value gid_u32 = ir.get_global_invocation_id(0);
+  Value gid_u32 = ops_.get_global_invocation_id(0);
 
   // Load the parameter blob fields once at the top of `main`. spirv-opt CSEs the redundant param loads if they happen
   // multiple times within the same basic block, but keeping them explicit at the top makes the shader-side data-flow
@@ -204,7 +206,7 @@ std::vector<uint32_t> build_adstack_bound_reducer_spirv(Arch arch, const DeviceC
   Label active_block = ir.new_label();
   Label early_return = ir.new_label();
   Label active_merge = ir.new_label();
-  Value in_range = ir.lt(gid_u32, length);
+  Value in_range = ops_.lt(gid_u32, length);
   ir.make_inst(spv::OpSelectionMerge, active_merge, spv::SelectionControlMaskNone);
   ir.make_inst(spv::OpBranchConditional, in_range, active_block, early_return);
 
@@ -218,8 +220,8 @@ std::vector<uint32_t> build_adstack_bound_reducer_spirv(Arch arch, const DeviceC
     // loads and reassembles into a u64. We always materialise the loaded value as a u64 (low 32 bits zero-extended in
     // the f32 / i32 case) so the dtype-branch downstream can pick f64 / f32 / i32 reinterpretation without re-loading.
     Value field_u64_var = ir.alloca_variable(ir.u64_type());
-    Value is_double = ir.ne(field_dtype_is_double_u32, ir.uint_immediate_number(ir.u32_type(), 0u));
-    Value field_source_is_snode = ir.ne(field_source_is_snode_u32, ir.uint_immediate_number(ir.u32_type(), 0u));
+    Value is_double = ops_.ne(field_dtype_is_double_u32, ir.uint_immediate_number(ir.u32_type(), 0u));
+    Value field_source_is_snode = ops_.ne(field_source_is_snode_u32, ir.uint_immediate_number(ir.u32_type(), 0u));
     Label src_snode_lbl = ir.new_label();
     Label src_ndarr_lbl = ir.new_label();
     Label src_merge = ir.new_label();
@@ -233,8 +235,8 @@ std::vector<uint32_t> build_adstack_bound_reducer_spirv(Arch arch, const DeviceC
       // two adjacent 4-byte words and reassemble into a u64. Issuing two u32 loads (rather than one u64 load) keeps the
       // alignment requirement at 4 bytes so any dense parent's f64-cell layout works without further alignment
       // promotion in the descriptor binding.
-      Value byte_off = ir.add(snode_byte_base_offset, ir.mul(gid_u32, snode_byte_cell_stride));
-      Value lo_word_idx = ir.div(byte_off, ir.uint_immediate_number(ir.u32_type(), 4u));
+      Value byte_off = ops_.add(snode_byte_base_offset, ops_.mul(gid_u32, snode_byte_cell_stride));
+      Value lo_word_idx = ops_.div(byte_off, ir.uint_immediate_number(ir.u32_type(), 4u));
       Value lo = load_buf_u32(ir, root_buf, lo_word_idx);
       Label snode_dbl_lbl = ir.new_label();
       Label snode_sgl_lbl = ir.new_label();
@@ -244,10 +246,10 @@ std::vector<uint32_t> build_adstack_bound_reducer_spirv(Arch arch, const DeviceC
 
       ir.start_label(snode_dbl_lbl);
       {
-        Value hi_word_idx = ir.add(lo_word_idx, ir.uint_immediate_number(ir.u32_type(), 1u));
+        Value hi_word_idx = ops_.add(lo_word_idx, ir.uint_immediate_number(ir.u32_type(), 1u));
         Value hi = load_buf_u32(ir, root_buf, hi_word_idx);
-        Value lo64 = ir.cast(ir.u64_type(), lo);
-        Value hi64 = ir.cast(ir.u64_type(), hi);
+        Value lo64 = ops_.cast(ir.u64_type(), lo);
+        Value hi64 = ops_.cast(ir.u64_type(), hi);
         Value shift = ir.uint_immediate_number(ir.u64_type(), 32u);
         Value hi_shifted = ir.make_value(spv::OpShiftLeftLogical, ir.u64_type(), hi64, shift);
         Value combined = ir.make_value(spv::OpBitwiseOr, ir.u64_type(), lo64, hi_shifted);
@@ -256,7 +258,7 @@ std::vector<uint32_t> build_adstack_bound_reducer_spirv(Arch arch, const DeviceC
       }
       ir.start_label(snode_sgl_lbl);
       {
-        ir.store_variable(field_u64_var, ir.cast(ir.u64_type(), lo));
+        ir.store_variable(field_u64_var, ops_.cast(ir.u64_type(), lo));
         ir.make_inst(spv::OpBranch, snode_merge);
       }
       ir.start_label(snode_merge);
@@ -267,7 +269,7 @@ std::vector<uint32_t> build_adstack_bound_reducer_spirv(Arch arch, const DeviceC
     {
       // ndarray-backed: PSB-load one u32 (f32 / i32) or two adjacent u32 words (f64). The base pointer is assembled
       // from the two arg-buffer u32 words at `arg_word_offset` and `arg_word_offset + 1`.
-      Value ndarray_ptr_u64 = load_arg_buf_u64_ptr(ir, args_buf, arg_word_offset);
+      Value ndarray_ptr_u64 = load_arg_buf_u64_ptr(ir, ops_, args_buf, arg_word_offset);
       Label ndarr_dbl_lbl = ir.new_label();
       Label ndarr_sgl_lbl = ir.new_label();
       Label ndarr_merge = ir.new_label();
@@ -276,14 +278,14 @@ std::vector<uint32_t> build_adstack_bound_reducer_spirv(Arch arch, const DeviceC
 
       ir.start_label(ndarr_dbl_lbl);
       {
-        Value combined = psb_load_u64_pair(ir, ndarray_ptr_u64, gid_u32);
+        Value combined = psb_load_u64_pair(ir, ops_, ndarray_ptr_u64, gid_u32);
         ir.store_variable(field_u64_var, combined);
         ir.make_inst(spv::OpBranch, ndarr_merge);
       }
       ir.start_label(ndarr_sgl_lbl);
       {
-        Value loaded = psb_load_u32(ir, ndarray_ptr_u64, gid_u32);
-        ir.store_variable(field_u64_var, ir.cast(ir.u64_type(), loaded));
+        Value loaded = psb_load_u32(ir, ops_, ndarray_ptr_u64, gid_u32);
+        ir.store_variable(field_u64_var, ops_.cast(ir.u64_type(), loaded));
         ir.make_inst(spv::OpBranch, ndarr_merge);
       }
       ir.start_label(ndarr_merge);
@@ -306,7 +308,7 @@ std::vector<uint32_t> build_adstack_bound_reducer_spirv(Arch arch, const DeviceC
     // See note above: `alloca_variable` hoists OpVariable to the entry block; pair with stores on every reachable path
     // through the dtype-branch so the merge-block load never sees undef.
     Value matched_var = ir.alloca_variable(ir.bool_type());
-    Value is_float = ir.ne(field_dtype_is_float_u32, ir.uint_immediate_number(ir.u32_type(), 0u));
+    Value is_float = ops_.ne(field_dtype_is_float_u32, ir.uint_immediate_number(ir.u32_type(), 0u));
     ir.make_inst(spv::OpSelectionMerge, dtype_merge, spv::SelectionControlMaskNone);
     ir.make_inst(spv::OpBranchConditional, is_float, float_lbl, int_lbl);
 
@@ -322,8 +324,8 @@ std::vector<uint32_t> build_adstack_bound_reducer_spirv(Arch arch, const DeviceC
         ir.start_label(f64_lbl);
         {
           Value field_d = ir.make_value(spv::OpBitcast, ir.f64_type(), field_u64);
-          Value lo64 = ir.cast(ir.u64_type(), threshold_bits);
-          Value hi64 = ir.cast(ir.u64_type(), threshold_bits_high);
+          Value lo64 = ops_.cast(ir.u64_type(), threshold_bits);
+          Value hi64 = ops_.cast(ir.u64_type(), threshold_bits_high);
           Value shift = ir.uint_immediate_number(ir.u64_type(), 32u);
           Value hi_shifted = ir.make_value(spv::OpShiftLeftLogical, ir.u64_type(), hi64, shift);
           Value threshold_u64 = ir.make_value(spv::OpBitwiseOr, ir.u64_type(), lo64, hi_shifted);
@@ -334,7 +336,7 @@ std::vector<uint32_t> build_adstack_bound_reducer_spirv(Arch arch, const DeviceC
         }
         ir.start_label(f32_lbl);
         {
-          Value field_word = ir.cast(ir.u32_type(), field_u64);
+          Value field_word = ops_.cast(ir.u32_type(), field_u64);
           Value field_f = ir.make_value(spv::OpBitcast, ir.f32_type(), field_word);
           Value threshold_f = ir.make_value(spv::OpBitcast, ir.f32_type(), threshold_bits);
           Value cmp = emit_compare(ir, field_f, threshold_f, op_code, /*is_float=*/true);
@@ -343,7 +345,7 @@ std::vector<uint32_t> build_adstack_bound_reducer_spirv(Arch arch, const DeviceC
         }
         ir.start_label(float_inner_merge);
       } else {
-        Value field_word = ir.cast(ir.u32_type(), field_u64);
+        Value field_word = ops_.cast(ir.u32_type(), field_u64);
         Value field_f = ir.make_value(spv::OpBitcast, ir.f32_type(), field_word);
         Value threshold_f = ir.make_value(spv::OpBitcast, ir.f32_type(), threshold_bits);
         Value cmp = emit_compare(ir, field_f, threshold_f, op_code, /*is_float=*/true);
@@ -354,7 +356,7 @@ std::vector<uint32_t> build_adstack_bound_reducer_spirv(Arch arch, const DeviceC
 
     ir.start_label(int_lbl);
     {
-      Value field_word = ir.cast(ir.u32_type(), field_u64);
+      Value field_word = ops_.cast(ir.u32_type(), field_u64);
       Value field_i = ir.make_value(spv::OpBitcast, ir.i32_type(), field_word);
       Value threshold_i = ir.make_value(spv::OpBitcast, ir.i32_type(), threshold_bits);
       Value cmp = emit_compare(ir, field_i, threshold_i, op_code, /*is_float=*/false);
@@ -368,7 +370,7 @@ std::vector<uint32_t> build_adstack_bound_reducer_spirv(Arch arch, const DeviceC
     // Apply polarity. The captured `StaticBoundExpr::polarity` is true when the LCA enters on the predicate holding
     // (typical `if cmp:` shape) and false when the LCA sits inside the `else` branch; in the latter case the count we
     // want is "threads where the predicate is FALSE", so we XOR-flip with `!polarity`.
-    Value polarity_u1 = ir.ne(polarity_u32, ir.uint_immediate_number(ir.u32_type(), 0u));
+    Value polarity_u1 = ops_.ne(polarity_u32, ir.uint_immediate_number(ir.u32_type(), 0u));
     Value not_polarity = ir.make_value(spv::OpLogicalNot, ir.bool_type(), polarity_u1);
     Value should_count = ir.make_value(spv::OpLogicalNotEqual, ir.bool_type(), matched, not_polarity);
 

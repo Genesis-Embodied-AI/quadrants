@@ -3361,6 +3361,10 @@ void TaskCodeGenLLVM::visit(FuncCallStmt *stmt) {
   // get_context(), (3) emit ret void on failure.
   auto *new_ctx = create_entry_block_alloca(get_runtime_type("RuntimeContext"));
   call("RuntimeContext_set_runtime", new_ctx, get_runtime());
+  if (arch_is_cpu(current_arch())) {
+    // A real function inherits the scheduling block of its caller.
+    call("RuntimeContext_set_cpu_block_idx", new_ctx, call("RuntimeContext_get_cpu_block_idx", get_context()));
+  }
   if (!stmt->func->parameter_list.empty()) {
     auto *buffer = create_entry_block_alloca(tlctx->get_data_type(stmt->func->args_type));
     set_args_ptr(stmt->func, new_ctx, buffer);
