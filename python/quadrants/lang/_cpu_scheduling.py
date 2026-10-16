@@ -35,7 +35,6 @@ def configure_cpu_scheduling(kwargs, cfg):
         ("make_cpu_multithreading_loop", "cpu_work_scheduling"),
         ("default_cpu_block_dim", "cpu_fixed_block_dim"),
     )
-    # Check all pairs before consuming arguments. Even equal values are ambiguous.
     for old, new in aliases:
         if _is_supplied(kwargs, old) and _is_supplied(kwargs, new):
             raise ValueError(f"Cannot specify both {old} and {new}, including through environment variables")
