@@ -70,32 +70,35 @@ class MakeCPUMultithreadedRangeFor : public BasicStmtVisitor {
     Stmt *block_index = offloaded_body->insert(Stmt::make_typed<LoopIndexStmt>(offloaded, 0));
 
     // Retrieve range-for bounds.
-    Stmt *begin_stmt;
-    Stmt *end_stmt;
+    Stmt *original_range_begin;
+    Stmt *original_range_end;
     if (offloaded->const_begin) {
-      begin_stmt = offloaded_body->insert(
+      original_range_begin = offloaded_body->insert(
           Stmt::make_typed<ConstStmt>(TypedConstant(PrimitiveType::i32, offloaded->begin_value)));
     } else {
-      begin_stmt = offloaded_body->insert(Stmt::make<GlobalTemporaryStmt>(offloaded->begin_offset, PrimitiveType::i32));
-      begin_stmt = offloaded_body->insert(Stmt::make<GlobalLoadStmt>(begin_stmt));
+      original_range_begin =
+          offloaded_body->insert(Stmt::make<GlobalTemporaryStmt>(offloaded->begin_offset, PrimitiveType::i32));
+      original_range_begin = offloaded_body->insert(Stmt::make<GlobalLoadStmt>(original_range_begin));
     }
     if (offloaded->const_end) {
-      end_stmt =
+      original_range_end =
           offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(PrimitiveType::i32, offloaded->end_value)));
     } else {
-      end_stmt = offloaded_body->insert(Stmt::make<GlobalTemporaryStmt>(offloaded->end_offset, PrimitiveType::i32));
-      end_stmt = offloaded_body->insert(Stmt::make<GlobalLoadStmt>(end_stmt));
+      original_range_end =
+          offloaded_body->insert(Stmt::make<GlobalTemporaryStmt>(offloaded->end_offset, PrimitiveType::i32));
+      original_range_end = offloaded_body->insert(Stmt::make<GlobalLoadStmt>(original_range_end));
     }
 
     // int32_t next_block_index = block_index + one;
     Stmt *next_block_index =
         offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(BinaryOpType::add, block_index, one));
     auto get_cpu_per_worker_block_start_index_fn = [&](Stmt *index) -> Stmt * {
-      return offloaded_body->insert(Stmt::make_typed<InternalFuncStmt>(
-          "get_cpu_per_worker_block_start_index",
-          std::vector<Stmt *>{begin_stmt, end_stmt, num_blocks, cpu_per_worker_min_block_dim, index},
-          PrimitiveType::i32,
-          /*with_runtime_context=*/false));
+      return offloaded_body->insert(
+          Stmt::make_typed<InternalFuncStmt>("get_cpu_per_worker_block_start_index",
+                                             std::vector<Stmt *>{original_range_begin, original_range_end, num_blocks,
+                                                                 cpu_per_worker_min_block_dim, index},
+                                             PrimitiveType::i32,
+                                             /*with_runtime_context=*/false));
     };
     Stmt *block_begin = get_cpu_per_worker_block_start_index_fn(block_index);
     Stmt *block_end = get_cpu_per_worker_block_start_index_fn(next_block_index);
