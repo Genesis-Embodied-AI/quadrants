@@ -463,7 +463,7 @@ def init(
 
     # compiler configurations (qd.cfg):
     for key in dir(cfg):
-        # These options are handled separately above, including CPU scheduling aliases and environment variables.
+        # These options are handled separately above.
         if key in ["arch", "default_fp", "default_ip", "cpu_work_scheduling", "cpu_fixed_block_dim"]:
             continue
         _cast = type(getattr(cfg, key))
