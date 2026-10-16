@@ -36,10 +36,8 @@ using TaskType = OffloadedStmt::TaskType;
  *
  * where 8 is the number of generated blocks and 1 <= cpu_per_worker_min_block_dim <= 128.
  *
- * This pass is only applied to range-for loops that are offloaded to
- * CPUs. The number of blocks is determined by the config option
- * "cpu_max_num_threads", and the minimum block size by
- * "cpu_per_worker_min_block_dim" (default 512).
+ * This pass is only applied to range-for loops that are offloaded to CPUs. The number of blocks is determined by the
+ * config option "cpu_max_num_threads", and the minimum block size by "cpu_per_worker_min_block_dim" (default 512).
  *
  * The effect is that more invarants in the inner most can be identified and
  * moved outside, so that LLVM has more chance to vectorize the innermost
