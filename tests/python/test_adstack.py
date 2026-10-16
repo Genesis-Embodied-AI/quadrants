@@ -4887,10 +4887,6 @@ def _sizer_overflow_child(args: list[str]) -> None:
         print_full_traceback=True,
     )
 
-    N = 4
-    x = qd.ndarray(qd.f32, shape=(N,), needs_grad=True)
-    y = qd.ndarray(qd.f32, shape=(), needs_grad=True)
-
     @qd.kernel
     def compute(
         num_its: qd.types.ndarray(dtype=qd.i32, ndim=1),
@@ -4904,6 +4900,9 @@ def _sizer_overflow_child(args: list[str]) -> None:
                 v = v * 0.95 + 0.01
             y[None] += v
 
+    N = 4
+    x = qd.ndarray(qd.f32, shape=(N,), needs_grad=True)
+    y = qd.ndarray(qd.f32, shape=(), needs_grad=True)
     num_its = qd.ndarray(qd.i32, shape=(N,))
     num_its.from_numpy(np.array([2, 3, 1, 2], dtype=np.int32))
     x.fill(0.1)
