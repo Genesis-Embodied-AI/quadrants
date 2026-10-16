@@ -99,10 +99,6 @@ TaskCodegen::TaskCodegen(const Params &params)
   // stale reads when a buffer is written and re-read within the same loop.
   // Marking buffer accesses as Volatile prevents this optimization.
   use_volatile_buffer_access_ = (arch_ == Arch::metal);
-#if defined(__APPLE__)
-  // Vulkan on Apple also reaches the Metal shader compiler through MoltenVK.
-  use_volatile_buffer_access_ |= (arch_ == Arch::vulkan);
-#endif
 }
 
 void TaskCodegen::fill_snode_to_root() {

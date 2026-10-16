@@ -870,12 +870,13 @@ void VulkanDeviceCreator::create_logical_device() {
       // that didn't advertise the feature. The `shaderInt64` guard stays because the sizer shader holds
       // PSB pointers as `i64` SSA values.
       if (buffer_device_address_feature.bufferDeviceAddress && device_supported_features.shaderInt64) {
-        // The prior `#if !defined(__APPLE__) && false` kill-switch referenced Taichi issue #6295 (broken
-        // BDA on the 2022-era MoltenVK pinned in `quadrants/rhi/CMakeLists.txt`). That pin has since been
-        // replaced with a LunarG-SDK-sourced MoltenVK (>= 1.3, sporting working `vkGetBufferDeviceAddress`),
-        // so there is no reason to hard-disable PSB on Apple (or anywhere) - the feature query above now
-        // correctly reflects the device's actual capability.
+#if !defined(__APPLE__)
+        // MoltenVK's SPIRV-Cross can forward a physical-pointer load past a later store even when the load
+        // carries MemoryAccessVolatileMask. In reverse AD this clears the output adjoint before reading it.
+        // Use descriptor bindings on Apple until MoltenVK includes the volatile-load fix in our vendored
+        // SPIRV-Cross; native Metal already uses that patched copy.
         caps.set(DeviceCapability::spirv_has_physical_storage_buffer, true);
+#endif
       }
       *pNextEnd = &buffer_device_address_feature;
       pNextEnd = &buffer_device_address_feature.pNext;
