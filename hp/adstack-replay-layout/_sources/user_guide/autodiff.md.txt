@@ -6,7 +6,7 @@ Automatic differentiation (autodiff) computes the exact gradient of a kernel's o
 
 Quadrants implements autodiff at compile time: when `.grad()` is requested, the compiler emits a companion kernel that runs on the same backend as the forward one and writes gradients into the primal fields' `.grad` companions. There is no Python-side tape, no per-op dispatch overhead, and no dependency on an external AD framework. Forward mode and reverse mode are available on every backend Quadrants targets: x64 / arm64 CPU, CUDA, AMDGPU, Metal, and Vulkan.
 
-**Dynamic loops.** Stack-based reverse mode measures the reduced replay before every backward, then records stack values and computes gradients. No matching forward invocation is required. See [replay-counted adstack](./adstack_replay.md) for supported backends and restrictions.
+**Dynamic loops.** Reverse mode automatically allocates storage for intermediate loop values during backward. See [Autodiff with dynamic loops](#autodiff-with-dynamic-loops) for behavior and restrictions.
 
 Three mechanisms are supported:
 
@@ -71,7 +71,7 @@ Notes:
 - `place(x, x.grad)` allocates the adjoint alongside the primal. Without it, `kernel.grad()` raises at first use. Ndarrays take `needs_grad=True` instead.
 - Adjoints must be cleared before each reverse pass; leftover values accumulate. `qd.ad.Tape` (below) does this automatically.
 - `kernel.grad(...)` takes the same arguments as the forward kernel.
-- Reverse-mode AD through a dynamic loop carrying intermediate values uses [replay-counted adstack](./adstack_replay.md). Backward measures its current replay inputs automatically.
+- Reverse-mode AD through a dynamic loop carrying intermediate values uses [automatically sized stack storage](#autodiff-with-dynamic-loops).
 
 **Integer casts stop gradients.** Integers have no meaningful derivative, so the chain rule reads as zero upstream of any cast to integer - no error, just silently-zero gradients. This is a property of differentiation through quantization, not of Quadrants. Rules of thumb:
 
@@ -225,6 +225,10 @@ with qd.ad.Tape(loss=loss, validation=True):
 
 ## Autodiff with dynamic loops
 
-Stack-based reverse mode counts the reduced replay immediately before backward. See [Replay counting](adstack_replay.md) for supported kernels, caching, overflow handling, and restrictions.
+Reverse mode uses stack storage to recover intermediate values when differentiating through dynamic loops. Each `.grad()` call or Tape backward first measures the storage needed using the current arguments and field values, then allocates storage and computes gradients. No counting context manager or stack-size setting is needed. Repeated backward calls measure again; a matching forward invocation is not required, but the current input state and output gradients must be suitable for the requested derivative.
 
-This branch removes the old symbolic sizing and sparse stack-allocation paths and their initialization options. Measured capacity is uniform across stacks; memory use scales with capacity, stack value sizes, and worker count. Both measurement and backward error reporting synchronize with the device. Representative application performance and peak memory still need measurement.
+Measurement leaves output values and gradients unchanged. It adds computation and device synchronization to backward. Inputs must remain unchanged between measurement and gradient computation. If the measured capacity is exceeded, backward raises `RuntimeError` after execution; discard or reset the failed gradients and restore the inputs before retrying. This check applies regardless of `debug`.
+
+Dense fields and supported array arguments work on x64 and ARM64 CPUs, CUDA, AMDGPU, Vulkan, and Metal. Pointer, bitmasked, and dynamic sparse fields are not supported by reverse-mode replay. Ordinary forward execution on these sparse fields remains supported. Checkpoint-enabled backward calls and custom streams with autodiff are also unsupported.
+
+Kernels whose backward computation depends on updates to non-differentiable output buffers may be rejected because measurement must leave those buffers unchanged. Overlapping array arguments are rejected when either argument is non-differentiable. Vulkan and Metal also reject mixed Quadrants/external array arguments when their overlap cannot be checked. Unsupported cases raise an error rather than using the old stack-sizing implementation.

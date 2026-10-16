@@ -470,7 +470,7 @@
 <section id="reverse-mode-autodiff">
 <h2>Reverse-mode autodiff<a class="headerlink" href="#reverse-mode-autodiff" title="Link to this heading">#</a></h2>
 <p>See <a class="reference internal" href="autodiff.html"><span class="std std-doc">Autodiff</span></a> for the reverse-mode pipeline overview.</p>
-<p>Stack-based reverse mode uses <a class="reference internal" href="adstack_replay.html"><span class="std std-doc">automatic backward replay counting</span></a>. The old <code class="docutils literal notranslate"><span class="pre">ad_stack_experimental_enabled</span></code>, <code class="docutils literal notranslate"><span class="pre">ad_stack_size</span></code>, and <code class="docutils literal notranslate"><span class="pre">ad_stack_sparse_threshold_bytes</span></code> options have been removed.</p>
+<p>Stack-based reverse mode uses <a class="reference internal" href="autodiff.html#autodiff-with-dynamic-loops"><span class="std std-ref">automatic backward replay counting</span></a>. The old <code class="docutils literal notranslate"><span class="pre">ad_stack_experimental_enabled</span></code>, <code class="docutils literal notranslate"><span class="pre">ad_stack_size</span></code>, and <code class="docutils literal notranslate"><span class="pre">ad_stack_sparse_threshold_bytes</span></code> options have been removed.</p>
 </section>
 <section id="apple-metal">
 <h2>Apple Metal<a class="headerlink" href="#apple-metal" title="Link to this heading">#</a></h2>
@@ -497,7 +497,7 @@
 <li><p>integer-overflow guards on arithmetic;</p></li>
 <li><p>extra internal consistency checks throughout compilation.</p></li>
 </ul>
-<p>The adstack-overflow check on reverse-mode autodiff runs unconditionally on supported backends regardless of <code class="docutils literal notranslate"><span class="pre">debug</span></code>; see <a class="reference internal" href="adstack_replay.html"><span class="std std-doc">Adstack replay</span></a> for the contract.</p>
+<p>The adstack-overflow check on reverse-mode autodiff runs unconditionally on supported backends regardless of <code class="docutils literal notranslate"><span class="pre">debug</span></code>; see <a class="reference internal" href="autodiff.html#autodiff-with-dynamic-loops"><span class="std std-ref">Adstack replay</span></a> for the contract.</p>
 <p><strong>Cost.</strong> Significant on both compile time (extra checks are inserted and validated throughout compilation; e.g. ~21s of added compile time observed on adstack-heavy kernels) and runtime. For just the field-bounds check in a release build without the rest, use <a class="reference internal" href="#check-out-of-bound"><code class="docutils literal notranslate"><span class="pre">check_out_of_bound</span></code></a> below.</p>
 </section>
 <section id="check-out-of-bound">
