@@ -569,6 +569,7 @@ def test_offline_cache_with_changing_compile_config(curr_arch):
         arch=curr_arch,
         enable_fallback=False,
         opt_level=0,
+        # Use an explicit baseline so the later 16 -> 32 -> 16 cache checks do not depend on the default.
         cpu_per_worker_min_block_dim=16,
         **current_thread_ext_options(),
     )
