@@ -131,6 +131,8 @@ To create or replace this personal access token (PAT):
 
 Before the token expires, create a replacement and update the same GitHub Actions secret. Verify that CI can still clone Eigen, then revoke the old token in GitLab. Keep token values in Actions secrets, never in workflow files or documentation.
 
+If GitLab clones become flaky, consider checking whether the token has expired.
+
 ### Pre-commit / linters (`linters.yml`)
 
 Runs `pre-commit run -a` which enforces:
