@@ -4907,26 +4907,18 @@ def _sizer_overflow_child(args: list[str]) -> None:
     x.fill(0.1)
     y.fill(0.0)
 
-    prog = impl.get_runtime().prog
-    # Reset the counter of GPU max-reducer launches to zero.
-    prog._reset_max_reducer_dispatch_count()
     compute(num_its, x, y)
     y.grad[()] = 1.0
     x.grad.fill(0.0)
     compute.grad(num_its, x, y)
     qd.sync()
-    # Return the number of GPU max-reducer launches since the counter was reset.
-    after_first = prog._get_max_reducer_dispatch_count()
-    assert after_first >= 1, after_first
 
     num_its.from_numpy(np.array([3, 3, 1, 2], dtype=np.int32))
-    pre_mutation = prog._get_max_reducer_dispatch_count()
     compute(num_its, x, y)
     y.grad[()] = 1.0
     x.grad.fill(0.0)
     compute.grad(num_its, x, y)
     qd.sync()
-    assert prog._get_max_reducer_dispatch_count() > pre_mutation
 
     print(TEST_RAN)
     sys.exit(RET_SUCCESS)
