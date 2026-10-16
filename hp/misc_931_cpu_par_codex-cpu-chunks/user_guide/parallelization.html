@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Parallelization &#8212; Quadrants 1.3.4 documentation</title>
+    <title>Parallelization &#8212; Quadrants 1.4.0 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../_static/documentation_options.js?v=e358f374"></script>
+    <script src="../_static/documentation_options.js?v=9172181d"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Sub-functions" href="sub_functions.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.3.4" />
+  <meta name="docsearch:version" content="1.4.0" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.3.4 documentation</p>
+    <p class="title logo__title">Quadrants 1.4.0 documentation</p>
   
 </a></div>
     
@@ -605,8 +605,8 @@
 </section>
 <section id="inspecting-block-indices">
 <h3>Inspecting block indices<a class="headerlink" href="#inspecting-block-indices" title="Link to this heading">#</a></h3>
-<p><code class="docutils literal notranslate"><span class="pre">qd.block_idx()</span></code> works on CPU, CUDA, AMDGPU, Vulkan, and Metal. On CPU, it returns the index of the block executing the current iteration. Each block runs as one runtime task. Indices start at zero for each parallel loop execution. They identify blocks, not worker threads or execution order.</p>
-<p>This function works with both scheduling modes. With <code class="docutils literal notranslate"><span class="pre">PER_WORKER</span></code>, it identifies the compiler-generated block of original iterations. With <code class="docutils literal notranslate"><span class="pre">FIXED_SIZE</span></code>, it identifies the group whose size is controlled by <code class="docutils literal notranslate"><span class="pre">block_dim</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">qd.block_idx()</span></code> returns a signed 32-bit integer. Call it inside a kernel or a function called by a kernel. It works on CPU, CUDA, AMDGPU, Vulkan, and Metal. On CPU, it returns the index of the block executing the current iteration. Each block runs as one runtime task. Indices start at zero for each parallel loop execution. They identify blocks, not worker threads or execution order.</p>
+<p>This function works with both scheduling modes. With <code class="docutils literal notranslate"><span class="pre">PER_WORKER</span></code>, it identifies the compiler-generated block of original iterations. With <code class="docutils literal notranslate"><span class="pre">FIXED_SIZE</span></code>, it identifies a group of up to <code class="docutils literal notranslate"><span class="pre">cpu_fixed_block_dim</span></code> iterations, which defaults to 32. A loop can override that size with <code class="docutils literal notranslate"><span class="pre">qd.loop_config(block_dim=...)</span></code>.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">k_record_blocks</span><span class="p">(</span><span class="n">out</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">)):</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">200</span><span class="p">):</span>
@@ -614,9 +614,23 @@
 </pre></div>
 </div>
 <p>With four workers, <code class="docutils literal notranslate"><span class="pre">cpu_work_scheduling=qd.CPUWorkScheduling.PER_WORKER</span></code>, and <code class="docutils literal notranslate"><span class="pre">cpu_per_worker_min_block_dim=1</span></code>, this records 50 occurrences of each index from 0 through 3. With <code class="docutils literal notranslate"><span class="pre">cpu_work_scheduling=qd.CPUWorkScheduling.FIXED_SIZE</span></code> and the default block size of 32, it records indices 0 through 6. The last block contains eight iterations.</p>
-<p>Nested serial loops retain the enclosing block’s index. On CPU, code outside a scheduled block, including a top-level explicitly serialized loop, returns <code class="docutils literal notranslate"><span class="pre">0</span></code>. The function is available inside kernels and their called functions. Empty blocks execute no original iterations, so the example does not record them.</p>
-<p>On GPUs, <code class="docutils literal notranslate"><span class="pre">qd.block_idx()</span></code> returns the hardware thread-block index. Vulkan and Metal call these blocks workgroups. A hardware block contains multiple GPU threads and can process several groups of original iterations. Its index stays the same when it processes another group. Serial GPU code runs in block zero.</p>
-<p>The same kernel can call <code class="docutils literal notranslate"><span class="pre">qd.block_idx()</span></code> on every supported backend, but block sizes and iteration assignments may differ. The returned index is not a globally unique identifier.</p>
+<p>For example, this CPU kernel records four groups of 32 iterations:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">cpu</span><span class="p">,</span> <span class="n">cpu_work_scheduling</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">CPUWorkScheduling</span><span class="o">.</span><span class="n">FIXED_SIZE</span><span class="p">)</span>
+<span class="n">out</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="mi">128</span><span class="p">)</span>
+
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">k_record_blocks</span><span class="p">(</span><span class="n">out</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">)):</span>
+    <span class="n">qd</span><span class="o">.</span><span class="n">loop_config</span><span class="p">(</span><span class="n">block_dim</span><span class="o">=</span><span class="mi">32</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">128</span><span class="p">):</span>
+        <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">block_idx</span><span class="p">()</span>
+
+<span class="n">k_record_blocks</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
+<span class="c1"># out contains 32 zeros, 32 ones, 32 twos, and 32 threes.</span>
+</pre></div>
+</div>
+<p>Nested serial loops retain the enclosing block’s index. On CPU, code outside a scheduled block, including a top-level explicitly serialized loop, returns <code class="docutils literal notranslate"><span class="pre">0</span></code>. The function is available inside kernels and their called functions. Calls through <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> retain the caller’s block index. The same holds for <code class="docutils literal notranslate"><span class="pre">&#64;qd.real_func</span></code>, which defines a separately compiled function. Empty blocks execute no original iterations, so the example does not record them.</p>
+<p>On GPUs, <code class="docutils literal notranslate"><span class="pre">qd.block_idx()</span></code> returns the hardware thread-block index along the x dimension. Vulkan and Metal call these blocks workgroups. A hardware block contains multiple GPU threads and can process several groups of original iterations. Its index stays the same when it processes another group. Serial GPU code runs in block zero.</p>
+<p>The same kernel can call <code class="docutils literal notranslate"><span class="pre">qd.block_idx()</span></code> on every supported backend, but block sizes and iteration assignments may differ. Block indices are local to one loop execution. They are not globally unique identifiers, and reading an index does not synchronize threads.</p>
 </section>
 <section id="requesting-serial-execution">
 <h3>Requesting serial execution<a class="headerlink" href="#requesting-serial-execution" title="Link to this heading">#</a></h3>
@@ -668,7 +682,7 @@
         <span class="n">a</span><span class="p">[</span><span class="n">I</span><span class="p">]</span> <span class="o">=</span> <span class="n">I</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">I</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">I</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
 </pre></div>
 </div>
-<p><code class="docutils literal notranslate"><span class="pre">I</span></code> is a <code class="docutils literal notranslate"><span class="pre">qd.Vector</span></code> with one element per dimension.</p>
+<p><code class="docutils literal notranslate"><span class="pre">I</span></code> is a <a class="reference internal" href="matrix_vector.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">qd.Vector</span></code></span></a> with one element per dimension.</p>
 </section>
 <section id="controlling-iteration-order-with-axes">
 <h3>Controlling iteration order with <code class="docutils literal notranslate"><span class="pre">axes=</span></code><a class="headerlink" href="#controlling-iteration-order-with-axes" title="Link to this heading">#</a></h3>
@@ -681,7 +695,7 @@
 </pre></div>
 </div>
 <p>The yielded loop variables (<code class="docutils literal notranslate"><span class="pre">i</span></code>, <code class="docutils literal notranslate"><span class="pre">j</span></code>, …) are still bound to canonical axes 0, 1, … — only the visit order changes. <code class="docutils literal notranslate"><span class="pre">axes=None</span></code> (the default) and the identity permutation <code class="docutils literal notranslate"><span class="pre">(0,</span> <span class="pre">1,</span> <span class="pre">...,</span> <span class="pre">N-1)</span></code> are equivalent and reproduce the default last-argument-innermost order. Mismatched length and non-permutation values are rejected up front with <code class="docutils literal notranslate"><span class="pre">qd.QuadrantsSyntaxError</span></code>; non-integer entries with <code class="docutils literal notranslate"><span class="pre">qd.QuadrantsTypeError</span></code>.</p>
-<p><code class="docutils literal notranslate"><span class="pre">axes=</span></code> is independent of what’s in the loop body: it controls the iteration order regardless of whether the body touches a <code class="docutils literal notranslate"><span class="pre">qd.field</span></code>, a <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code>, a <code class="docutils literal notranslate"><span class="pre">qd.tensor</span></code>, a <code class="docutils literal notranslate"><span class="pre">qd.Vector</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.Matrix</span></code> variant, or no tensor at all.</p>
+<p><code class="docutils literal notranslate"><span class="pre">axes=</span></code> is independent of what’s in the loop body: it controls the iteration order regardless of whether the body touches a <code class="docutils literal notranslate"><span class="pre">qd.field</span></code>, a <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code>, a <a class="reference internal" href="tensor.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">qd.tensor</span></code></span></a>, a <code class="docutils literal notranslate"><span class="pre">qd.Vector</span></code> / <a class="reference internal" href="matrix_vector.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">qd.Matrix</span></code></span></a> variant, or no tensor at all.</p>
 <p><code class="docutils literal notranslate"><span class="pre">axes=</span></code> is supported by both the plain and <code class="docutils literal notranslate"><span class="pre">qd.grouped</span></code> forms:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndrange</span><span class="p">(</span><span class="n">M</span><span class="p">,</span> <span class="n">N</span><span class="p">,</span> <span class="n">axes</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)):</span>
     <span class="o">...</span>
@@ -704,7 +718,7 @@
 <p>Reducing the number and complexity kernel parameters reduces the kernel launch latency. In addition:</p>
 <ul class="simple">
 <li><p>field args incur less launch latency than ndarray args</p></li>
-<li><p>global fields incur no parameter-related launch latency</p></li>
+<li><p><a class="reference internal" href="tensor_types.html"><span class="std std-doc">global fields</span></a>, accessed through global variables rather than passed as kernel arguments, incur no parameter-related launch latency</p></li>
 </ul>
 <p>For the underlying execution model - what a launch actually involves, where the latency comes from, and when reducing it helps - see <a class="reference internal" href="performance.html"><span class="std std-doc">Performance</span></a>.</p>
 </section>
@@ -725,7 +739,7 @@
 </section>
 <section id="thread-synchronization">
 <h2>Thread synchronization<a class="headerlink" href="#thread-synchronization" title="Link to this heading">#</a></h2>
-<p>Typically, Quadrants kernels use <code class="docutils literal notranslate"><span class="pre">atomic_</span></code> operations for synchronization. This is relatively easy and intuitive, and it works perfectly with global memory. The main downside is that <code class="docutils literal notranslate"><span class="pre">atomic</span></code> operations are slow, because they involve both global memory and thread synchronization, both of which are intrinsically slow, and combining them is slower still.</p>
+<p>Typically, Quadrants kernels use <code class="docutils literal notranslate"><span class="pre">atomic_</span></code> operations for synchronization. An atomic operation reads and updates a memory location as one indivisible operation, so concurrent updates to that location do not overwrite each other. This is relatively easy and intuitive, and it works perfectly with global memory. The main downside is that <code class="docutils literal notranslate"><span class="pre">atomic</span></code> operations are slow, because they involve both global memory and thread synchronization, both of which are intrinsically slow, and combining them is slower still.</p>
 <p>When using shared memory, there are various barriers and fences that can be used, to ensure that writes from all threads so far have completed, and now threads are free to read from memory written by other threads. The block-level primitives (<code class="docutils literal notranslate"><span class="pre">qd.simt.block.sync</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.simt.block.mem_fence</span></code>, the predicate-reducing barriers, and <code class="docutils literal notranslate"><span class="pre">SharedArray</span></code> itself) are documented in <a class="reference internal" href="block.html"><span class="std std-doc">block</span></a>, which also discusses the important distinction between a thread-converging barrier and a memory-only fence.</p>
 <p>However, these block-scope fences and barriers do not work for synchronizing writes across blocks. For cross-block coordination through global memory, use <code class="docutils literal notranslate"><span class="pre">qd.simt.grid.mem_fence()</span></code> (a device-scope fence; see <a class="reference internal" href="grid.html"><span class="std std-doc">grid</span></a>) — or, if you need full cross-block thread synchronization, finish the current kernel and launch a new kernel.</p>
 </section>

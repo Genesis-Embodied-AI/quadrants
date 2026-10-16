@@ -213,9 +213,8 @@ Module Contents
                         @qd.kernel(pure=True))
    :param \*\*kwargs: Quadrants provides highly customizable compilation through
                       ``kwargs``, which allows for fine grained control of Quadrants compiler
-                      behavior. Below we list some of the most frequently used ones. For a
-                      complete list, please check out
-                      https://github.com/Genesis-Embodied-AI/quadrants/blob/master/quadrants/program/compile_config.h.
+                      behavior. Below we list some of the most frequently used ones. For the full configuration reference, see
+                      `qd.init options <https://genesis-embodied-ai.github.io/quadrants/user_guide/init_options.html#all-options>`_.
 
                       * ``cpu_max_num_threads`` (int): Sets the number of threads used by the CPU thread pool.
                       * ``cpu_work_scheduling`` (CPUWorkScheduling): CPU scheduling mode (default: PER_WORKER).
@@ -390,11 +389,6 @@ Module Contents
 .. py:function:: block_idx()
 
    Return the current CPU scheduling block or GPU thread-block index.
-
-   On CPU, indices start at zero for each parallel loop execution, and code
-   outside a scheduled block returns 0. Both CPU scheduling modes are supported.
-   On GPUs, this returns the hardware block index, which may process multiple
-   groups of iterations. Nested serial loops retain their enclosing block index.
 
 
 .. py:function:: global_thread_idx()

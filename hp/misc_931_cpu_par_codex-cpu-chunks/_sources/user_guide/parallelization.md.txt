@@ -185,9 +185,9 @@ Their environment variables, `QD_MAKE_CPU_MULTITHREADING_LOOP` (`1` or `0`) and 
 
 ### Inspecting block indices
 
-`qd.block_idx()` works on CPU, CUDA, AMDGPU, Vulkan, and Metal. On CPU, it returns the index of the block executing the current iteration. Each block runs as one runtime task. Indices start at zero for each parallel loop execution. They identify blocks, not worker threads or execution order.
+`qd.block_idx()` returns a signed 32-bit integer. Call it inside a kernel or a function called by a kernel. It works on CPU, CUDA, AMDGPU, Vulkan, and Metal. On CPU, it returns the index of the block executing the current iteration. Each block runs as one runtime task. Indices start at zero for each parallel loop execution. They identify blocks, not worker threads or execution order.
 
-This function works with both scheduling modes. With `PER_WORKER`, it identifies the compiler-generated block of original iterations. With `FIXED_SIZE`, it identifies the group whose size is controlled by `block_dim`.
+This function works with both scheduling modes. With `PER_WORKER`, it identifies the compiler-generated block of original iterations. With `FIXED_SIZE`, it identifies a group of up to `cpu_fixed_block_dim` iterations, which defaults to 32. A loop can override that size with `qd.loop_config(block_dim=...)`.
 
 ```python
 @qd.kernel
@@ -198,11 +198,27 @@ def k_record_blocks(out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
 
 With four workers, `cpu_work_scheduling=qd.CPUWorkScheduling.PER_WORKER`, and `cpu_per_worker_min_block_dim=1`, this records 50 occurrences of each index from 0 through 3. With `cpu_work_scheduling=qd.CPUWorkScheduling.FIXED_SIZE` and the default block size of 32, it records indices 0 through 6. The last block contains eight iterations.
 
-Nested serial loops retain the enclosing block's index. On CPU, code outside a scheduled block, including a top-level explicitly serialized loop, returns `0`. The function is available inside kernels and their called functions. Empty blocks execute no original iterations, so the example does not record them.
+For example, this CPU kernel records four groups of 32 iterations:
 
-On GPUs, `qd.block_idx()` returns the hardware thread-block index. Vulkan and Metal call these blocks workgroups. A hardware block contains multiple GPU threads and can process several groups of original iterations. Its index stays the same when it processes another group. Serial GPU code runs in block zero.
+```python
+qd.init(arch=qd.cpu, cpu_work_scheduling=qd.CPUWorkScheduling.FIXED_SIZE)
+out = qd.ndarray(qd.i32, shape=128)
 
-The same kernel can call `qd.block_idx()` on every supported backend, but block sizes and iteration assignments may differ. The returned index is not a globally unique identifier.
+@qd.kernel
+def k_record_blocks(out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+    qd.loop_config(block_dim=32)
+    for i in range(128):
+        out[i] = qd.block_idx()
+
+k_record_blocks(out)
+# out contains 32 zeros, 32 ones, 32 twos, and 32 threes.
+```
+
+Nested serial loops retain the enclosing block's index. On CPU, code outside a scheduled block, including a top-level explicitly serialized loop, returns `0`. The function is available inside kernels and their called functions. Calls through `@qd.func` retain the caller's block index. The same holds for `@qd.real_func`, which defines a separately compiled function. Empty blocks execute no original iterations, so the example does not record them.
+
+On GPUs, `qd.block_idx()` returns the hardware thread-block index along the x dimension. Vulkan and Metal call these blocks workgroups. A hardware block contains multiple GPU threads and can process several groups of original iterations. Its index stays the same when it processes another group. Serial GPU code runs in block zero.
+
+The same kernel can call `qd.block_idx()` on every supported backend, but block sizes and iteration assignments may differ. Block indices are local to one loop execution. They are not globally unique identifiers, and reading an index does not synchronize threads.
 
 ### Requesting serial execution
 
@@ -260,7 +276,7 @@ def fill(a: qd.Template) -> None:
         a[I] = I[0] + I[1] + I[2]
 ```
 
-`I` is a `qd.Vector` with one element per dimension.
+`I` is a [`qd.Vector`](matrix_vector.md) with one element per dimension.
 
 ### Controlling iteration order with `axes=`
 
@@ -276,7 +292,7 @@ def k():
 
 The yielded loop variables (`i`, `j`, ...) are still bound to canonical axes 0, 1, ... — only the visit order changes. `axes=None` (the default) and the identity permutation `(0, 1, ..., N-1)` are equivalent and reproduce the default last-argument-innermost order. Mismatched length and non-permutation values are rejected up front with `qd.QuadrantsSyntaxError`; non-integer entries with `qd.QuadrantsTypeError`.
 
-`axes=` is independent of what's in the loop body: it controls the iteration order regardless of whether the body touches a `qd.field`, a `qd.ndarray`, a `qd.tensor`, a `qd.Vector` / `qd.Matrix` variant, or no tensor at all.
+`axes=` is independent of what's in the loop body: it controls the iteration order regardless of whether the body touches a `qd.field`, a `qd.ndarray`, a [`qd.tensor`](tensor.md), a `qd.Vector` / [`qd.Matrix`](matrix_vector.md) variant, or no tensor at all.
 
 `axes=` is supported by both the plain and `qd.grouped` forms:
 
@@ -300,7 +316,7 @@ If kernel launch latency is a bottleneck, then you can look into:
 
 Reducing the number and complexity kernel parameters reduces the kernel launch latency. In addition:
 - field args incur less launch latency than ndarray args
-- global fields incur no parameter-related launch latency
+- [global fields](tensor_types.md), accessed through global variables rather than passed as kernel arguments, incur no parameter-related launch latency
 
 For the underlying execution model - what a launch actually involves, where the latency comes from, and when reducing it helps - see [Performance](performance.md).
 
@@ -319,7 +335,7 @@ Quadrants gives access to shared memory, using `qd.simt.block.SharedArray()`, bu
 
 ## Thread synchronization
 
-Typically, Quadrants kernels use `atomic_` operations for synchronization. This is relatively easy and intuitive, and it works perfectly with global memory. The main downside is that `atomic` operations are slow, because they involve both global memory and thread synchronization, both of which are intrinsically slow, and combining them is slower still.
+Typically, Quadrants kernels use `atomic_` operations for synchronization. An atomic operation reads and updates a memory location as one indivisible operation, so concurrent updates to that location do not overwrite each other. This is relatively easy and intuitive, and it works perfectly with global memory. The main downside is that `atomic` operations are slow, because they involve both global memory and thread synchronization, both of which are intrinsically slow, and combining them is slower still.
 
 When using shared memory, there are various barriers and fences that can be used, to ensure that writes from all threads so far have completed, and now threads are free to read from memory written by other threads. The block-level primitives (`qd.simt.block.sync`, `qd.simt.block.mem_fence`, the predicate-reducing barriers, and `SharedArray` itself) are documented in [block](block.md), which also discusses the important distinction between a thread-converging barrier and a memory-only fence.
 
