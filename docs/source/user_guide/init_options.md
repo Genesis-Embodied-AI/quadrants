@@ -72,7 +72,7 @@ Enables:
 - integer-overflow guards on arithmetic;
 - extra internal consistency checks throughout compilation.
 
-The adstack-overflow check on reverse-mode autodiff runs unconditionally on every backend regardless of `debug`; see [Autodiff -> What can go wrong](./autodiff.md#what-can-go-wrong) for the contract.
+The adstack-overflow check on reverse-mode autodiff runs unconditionally on supported backends regardless of `debug`; see [Adstack replay](./adstack_replay.md) for the contract.
 
 **Cost.** Significant on both compile time (extra checks are inserted and validated throughout compilation; e.g. ~21s of added compile time observed on adstack-heavy kernels) and runtime. For just the field-bounds check in a release build without the rest, use [`check_out_of_bound`](#check_out_of_bound) below.
 

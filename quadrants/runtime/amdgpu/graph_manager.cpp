@@ -403,10 +403,10 @@ bool GraphManager::try_launch(int launch_id,
   // setup runs host-side between the serial range_for-bounds kernel and the range_for kernel
   // itself, and there is no host hook between graph nodes.
   for (const auto &task : offloaded_tasks) {
-    QD_ERROR_IF(!task.ad_stack.allocas.empty(),
+    QD_ERROR_IF(task.ad_stack.per_thread_stride,
                 "graph=True is not supported for kernels that use the reverse-mode autodiff stack "
-                "(task '{}' has {} adstack allocas). Launch without graph=True.",
-                task.name, task.ad_stack.allocas.size());
+                "(task '{}' uses adstack storage). Launch without graph=True.",
+                task.name);
   }
 
   resolve_ctx_ndarray_ptrs(ctx, parameters, executor);

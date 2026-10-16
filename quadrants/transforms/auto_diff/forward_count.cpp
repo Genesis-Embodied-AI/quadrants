@@ -59,9 +59,10 @@ std::unordered_set<Stmt *> gather_forward_statements(IRNode *root) {
 
 void validate_adstack_counting(IRNode *root) {
   for (auto *stmt : gather_forward_statements(root)) {
+    QD_ERROR_IF(stmt->is<RandStmt>(), "RandStmt not supported in AutoDiff for now.");
     QD_ERROR_IF(
-        stmt->is<InternalFuncStmt>() || stmt->is<RandStmt>() || stmt->is<WhileStmt>() || stmt->is<ContinueStmt>() ||
-            stmt->is<ReturnStmt>() || stmt->is<MeshForStmt>(),
+        stmt->is<InternalFuncStmt>() || stmt->is<WhileStmt>() || stmt->is<ContinueStmt>() || stmt->is<ReturnStmt>() ||
+            stmt->is<MeshForStmt>(),
         "Adstack replay counting prototype does not support random, internal/cooperative calls, while, continue, "
         "return, or mesh iteration");
     SNode *field = nullptr;

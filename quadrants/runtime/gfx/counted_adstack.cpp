@@ -13,8 +13,7 @@ std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
       adstack_task_indices.push_back(i);
   if (adstack_task_indices.empty())
     return per_task_ad_stack;
-  QD_ERROR_IF(!host_ctx.get_context().adstack_capacity,
-              "Stack-based backward requires a replay-count measurement");
+  QD_ERROR_IF(!host_ctx.get_context().adstack_capacity, "Stack-based backward requires a replay-count measurement");
 
   const uint64_t capacity = host_ctx.get_context().adstack_capacity;
   QD_ERROR_IF(capacity > INT32_MAX, "Measured SPIR-V adstack capacity exceeds the supported limit");
