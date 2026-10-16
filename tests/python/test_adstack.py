@@ -4888,11 +4888,15 @@ def _sizer_overflow_child(args: list[str]) -> None:
     )
 
     N = 4
-    x = qd.field(qd.f32, shape=(N,), needs_grad=True)
-    y = qd.field(qd.f32, shape=(), needs_grad=True)
+    x = qd.ndarray(qd.f32, shape=(N,), needs_grad=True)
+    y = qd.ndarray(qd.f32, shape=(), needs_grad=True)
 
     @qd.kernel
-    def compute(a: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+    def compute(
+        a: qd.types.ndarray(dtype=qd.i32, ndim=1),
+        x: qd.types.ndarray(dtype=qd.f32, ndim=1),
+        y: qd.types.ndarray(dtype=qd.f32, ndim=0),
+    ):
         for i in range(a.shape[0]):
             v = x[i]
             n = a[i]
@@ -4902,27 +4906,25 @@ def _sizer_overflow_child(args: list[str]) -> None:
 
     a = qd.ndarray(qd.i32, shape=(N,))
     a.from_numpy(np.array([2, 3, 1, 2], dtype=np.int32))
-    for i in range(N):
-        x[i] = 0.1
+    x.fill(0.1)
+    y.fill(0.0)
 
     prog = impl.get_runtime().prog
     prog._reset_max_reducer_dispatch_count()
-    compute(a)
+    compute(a, x, y)
     y.grad[None] = 1.0
-    for i in range(N):
-        x.grad[i] = 0.0
-    compute.grad(a)
+    x.grad.fill(0.0)
+    compute.grad(a, x, y)
     qd.sync()
     after_first = prog._get_max_reducer_dispatch_count()
     assert after_first >= 1, after_first
 
     a.from_numpy(np.array([3, 3, 1, 2], dtype=np.int32))
     pre_mutation = prog._get_max_reducer_dispatch_count()
-    compute(a)
+    compute(a, x, y)
     y.grad[None] = 1.0
-    for i in range(N):
-        x.grad[i] = 0.0
-    compute.grad(a)
+    x.grad.fill(0.0)
+    compute.grad(a, x, y)
     qd.sync()
     assert prog._get_max_reducer_dispatch_count() > pre_mutation
 
