@@ -1698,9 +1698,8 @@ RhiResult VulkanDevice::allocate_memory(const AllocParams &params, DeviceAllocat
     cmdlist->buffer_fill(out_devalloc->get_ptr(0), buffer_info.size, 0xA5A5A5A5u);
     cmdlist->buffer_barrier(*out_devalloc);
     stream->submit_synced(cmdlist.get());
-    std::call_once(poison_allocation_log_once_, [] {
-      std::fprintf(stderr, "[vulkan_allocator] poisoned allocation\n");
-    });
+    std::call_once(poison_allocation_log_once_,
+                   [] { std::fprintf(stderr, "[vulkan_allocator] poisoned allocation\n"); });
   }
   return RhiResult::success;
 }
