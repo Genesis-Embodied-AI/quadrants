@@ -386,10 +386,6 @@ def init(
             `qd.init options <https://genesis-embodied-ai.github.io/quadrants/user_guide/init_options.html#all-options>`_.
 
             * ``cpu_max_num_threads`` (int): Sets the number of threads used by the CPU thread pool.
-            * ``cpu_work_scheduling`` (CPUWorkScheduling): CPU scheduling mode (default: PER_WORKER).
-            * ``cpu_fixed_block_dim`` (int): Iterations per fixed-size CPU task (default: 32, must be >= 1).
-            * ``cpu_per_worker_min_block_dim`` (int): Minimum CPU range-for block size (default: 512, must be >= 1).
-              Reduce it for small loops with expensive iterations. Only used with ``CPUWorkScheduling.PER_WORKER``.
             * ``debug`` (bool): Enables the debug mode, under which Quadrants does a few more things like boundary checks.
             * ``print_ir`` (bool): Prints the CHI IR of the Quadrants kernels.
             *``offline_cache`` (bool): Enables offline cache of the compiled kernels. Default to True. When this is enabled Quadrants will cache compiled kernel on your local disk to accelerate future calls.
