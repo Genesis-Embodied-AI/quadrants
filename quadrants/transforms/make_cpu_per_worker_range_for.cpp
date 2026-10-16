@@ -58,43 +58,65 @@ class MakeCPUMultithreadedRangeFor : public BasicStmtVisitor {
       return;
     }
 
+    // The C++ comments below illustrate the generated code. Configuration values are embedded at compile time.
+    // global_tmp represents the runtime's temporary byte buffer for dynamically computed loop bounds.
+    // { ... }  // Body of one iteration of the parallel outer loop.
     auto offloaded_body = std::make_unique<Block>();
+    // const int32_t one = 1;
     auto one = offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(PrimitiveType::i32, 1)));
+    // const int32_t cpu_per_worker_min_block_dim = config_.cpu_per_worker_min_block_dim;
     auto cpu_per_worker_min_block_dim =
         offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(config_.cpu_per_worker_min_block_dim)));
+    // const int32_t num_blocks = config_.cpu_max_num_threads;
     auto num_blocks = offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(config_.cpu_max_num_threads)));
+    // block_index is the index in: for (int32_t block_index = 0; block_index < num_blocks; ++block_index).
     auto block_index = offloaded_body->insert(Stmt::make_typed<LoopIndexStmt>(offloaded, 0));
 
     // Retrieve range-for bounds.
     Stmt *begin_stmt;
     Stmt *end_stmt;
     if (offloaded->const_begin) {
+      // const int32_t original_range_begin = offloaded->begin_value;
       begin_stmt = offloaded_body->insert(
           Stmt::make_typed<ConstStmt>(TypedConstant(PrimitiveType::i32, offloaded->begin_value)));
     } else {
+      // int32_t *begin_ptr = reinterpret_cast<int32_t *>(global_tmp + offloaded->begin_offset);
       begin_stmt = offloaded_body->insert(Stmt::make<GlobalTemporaryStmt>(offloaded->begin_offset, PrimitiveType::i32));
+      // int32_t original_range_begin = *begin_ptr;
       begin_stmt = offloaded_body->insert(Stmt::make<GlobalLoadStmt>(begin_stmt));
     }
     if (offloaded->const_end) {
+      // const int32_t original_range_end = offloaded->end_value;
       end_stmt =
           offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(PrimitiveType::i32, offloaded->end_value)));
     } else {
+      // int32_t *end_ptr = reinterpret_cast<int32_t *>(global_tmp + offloaded->end_offset);
       end_stmt = offloaded_body->insert(Stmt::make<GlobalTemporaryStmt>(offloaded->end_offset, PrimitiveType::i32));
+      // int32_t original_range_end = *end_ptr;
       end_stmt = offloaded_body->insert(Stmt::make<GlobalLoadStmt>(end_stmt));
     }
 
+    // int32_t next_block_index = block_index + one;
     auto next_block_index = offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(BinaryOpType::add, block_index, one));
     auto get_cpu_per_worker_block_start_index_fn = [&](Stmt *index) {
+      // get_cpu_per_worker_block_start_index(original_range_begin, original_range_end, num_blocks,
+      //                                      cpu_per_worker_min_block_dim, index)
       return offloaded_body->insert(Stmt::make_typed<InternalFuncStmt>(
           "get_cpu_per_worker_block_start_index",
           std::vector<Stmt *>{begin_stmt, end_stmt, num_blocks, cpu_per_worker_min_block_dim, index},
           PrimitiveType::i32,
           /*with_runtime_context=*/false));
     };
+    // int32_t block_begin = get_cpu_per_worker_block_start_index(original_range_begin, original_range_end,
+    //                                                         num_blocks, cpu_per_worker_min_block_dim, block_index);
     auto block_begin = get_cpu_per_worker_block_start_index_fn(block_index);
+    // int32_t block_end = get_cpu_per_worker_block_start_index(original_range_begin, original_range_end,
+    //                                                       num_blocks, cpu_per_worker_min_block_dim,
+    //                                                       next_block_index);
     auto block_end = get_cpu_per_worker_block_start_index_fn(next_block_index);
 
     // Create the serial inner loop.
+    // for (int32_t i = block_begin; i < block_end; ++i) { /* original loop body */ }
     auto inner_loop = offloaded_body->insert(
         Stmt::make_typed<RangeForStmt>(block_begin, block_end, std::move(offloaded->body),
                                        /*is_bit_vectorized*/ false, /*num_cpu_threads*/ 1, /*block_dim*/ 1,
