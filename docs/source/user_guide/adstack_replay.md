@@ -1,6 +1,6 @@
 # Measure stack storage during backward
 
-This experimental replay-only branch measures stack requirements immediately before each `.grad()` call or Tape backward. Forward calls require no context manager or recording handle. Backward-only kernels and repeated backwards use their current arguments and state.
+Adstack replay measures stack requirements immediately before each `.grad()` call or Tape backward. Forward calls require no context manager or recording handle. Backward-only kernels and repeated backwards use their current arguments and state.
 
 Backward first executes a count-only version of its reduced primal replay, allocates measured storage, then runs the normal recording/reverse pass. Counting does not write output values or gradients. This adds a reduced replay and synchronization to each backward; it does not cache sizes by argument contents. A small measurement buffer is reused and cleared for each backward; CPU/CUDA read both measurement words directly, while SPIR-V uses the portable array-copy path.
 
