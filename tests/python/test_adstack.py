@@ -4893,38 +4893,38 @@ def _sizer_overflow_child(args: list[str]) -> None:
 
     @qd.kernel
     def compute(
-        a: qd.types.ndarray(dtype=qd.i32, ndim=1),
+        num_its: qd.types.ndarray(dtype=qd.i32, ndim=1),
         x: qd.types.ndarray(dtype=qd.f32, ndim=1),
         y: qd.types.ndarray(dtype=qd.f32, ndim=0),
     ):
-        for i in range(a.shape[0]):
+        for i in range(num_its.shape[0]):
             v = x[i]
-            n = a[i]
+            n = num_its[i]
             for _ in range(n):
                 v = v * 0.95 + 0.01
             y[None] += v
 
-    a = qd.ndarray(qd.i32, shape=(N,))
-    a.from_numpy(np.array([2, 3, 1, 2], dtype=np.int32))
+    num_its = qd.ndarray(qd.i32, shape=(N,))
+    num_its.from_numpy(np.array([2, 3, 1, 2], dtype=np.int32))
     x.fill(0.1)
     y.fill(0.0)
 
     prog = impl.get_runtime().prog
     prog._reset_max_reducer_dispatch_count()
-    compute(a, x, y)
+    compute(num_its, x, y)
     y.grad[None] = 1.0
     x.grad.fill(0.0)
-    compute.grad(a, x, y)
+    compute.grad(num_its, x, y)
     qd.sync()
     after_first = prog._get_max_reducer_dispatch_count()
     assert after_first >= 1, after_first
 
-    a.from_numpy(np.array([3, 3, 1, 2], dtype=np.int32))
+    num_its.from_numpy(np.array([3, 3, 1, 2], dtype=np.int32))
     pre_mutation = prog._get_max_reducer_dispatch_count()
-    compute(a, x, y)
+    compute(num_its, x, y)
     y.grad[None] = 1.0
     x.grad.fill(0.0)
-    compute.grad(a, x, y)
+    compute.grad(num_its, x, y)
     qd.sync()
     assert prog._get_max_reducer_dispatch_count() > pre_mutation
 
