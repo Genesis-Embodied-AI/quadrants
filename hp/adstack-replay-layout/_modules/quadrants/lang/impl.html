@@ -410,7 +410,6 @@
 <span class="p">)</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">.adstack</span><span class="w"> </span><span class="kn">import</span> <span class="n">_Scope</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">ASTTransformerGlobalContext</span>
 
 
@@ -755,7 +754,6 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">default_up</span> <span class="o">=</span> <span class="n">u32</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">print_full_traceback</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">target_tape</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">adstack_scope</span><span class="p">:</span> <span class="s2">"_Scope | None"</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">fwd_mode_manager</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">grad_replaced</span> <span class="o">=</span> <span class="kc">False</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">kernels</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Kernel</span><span class="p">]</span> <span class="o">=</span> <span class="n">kernels</span> <span class="ow">or</span> <span class="p">[]</span>
