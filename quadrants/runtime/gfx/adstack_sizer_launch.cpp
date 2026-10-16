@@ -474,9 +474,7 @@ std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
     bindings->rw_buffer(3, *adstack_sizer_scratch_i64_buffer_);
     bindings->rw_buffer(4, *adstack_sizer_scratch_i32_buffer_);
 
-    // The overflow word is stored only when a MaxOverRange walk hits the cap. The allocation is not
-    // zero-filled, so a recycled block (MoltenVK with placement heaps off) can already hold a nonzero
-    // word, and the host reports that stale word as a huge range. Clear the buffer before the shader.
+    // Zero the buffer so the overflow flag starts clear before the sizer runs.
     sizer_cmdlist->buffer_fill(per_task_metadata_allocs[k]->get_ptr(0), per_task_metadata_bytes[k], 0);
     sizer_cmdlist->buffer_barrier(*per_task_metadata_allocs[k]);
     sizer_cmdlist->bind_pipeline(adstack_sizer_pipeline_.get());
