@@ -94,11 +94,11 @@ class MakeCPUMultithreadedRangeFor : public BasicStmtVisitor {
     // int32_t next_block_index = block_index + one;
     Stmt *next_block_index =
         offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(BinaryOpType::add, block_index, one));
-    std::function<Stmt *(Stmt *)> get_cpu_per_worker_block_start_index_fn = [&](Stmt *index) -> Stmt * {
+    std::function<Stmt *(Stmt *)> get_cpu_per_worker_block_start_index_fn = [&](Stmt *boundary_index) -> Stmt * {
       return offloaded_body->insert(
           Stmt::make_typed<InternalFuncStmt>("get_cpu_per_worker_block_start_index",
                                              std::vector<Stmt *>{original_range_begin, original_range_end, num_blocks,
-                                                                 cpu_per_worker_min_block_dim, index},
+                                                                 cpu_per_worker_min_block_dim, boundary_index},
                                              PrimitiveType::i32,
                                              /*with_runtime_context=*/false));
     };
