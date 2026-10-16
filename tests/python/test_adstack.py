@@ -4897,7 +4897,7 @@ def _sizer_overflow_child(args: list[str]) -> None:
             v = x[i]
             for _ in range(num_its[i]):
                 v = v * 0.95 + 0.01
-            y[None] += v
+            y[()] += v
 
     N = 4
     x = qd.ndarray(qd.f32, shape=(N,), needs_grad=True)
@@ -4910,7 +4910,7 @@ def _sizer_overflow_child(args: list[str]) -> None:
     prog = impl.get_runtime().prog
     prog._reset_max_reducer_dispatch_count()
     compute(num_its, x, y)
-    y.grad[None] = 1.0
+    y.grad[()] = 1.0
     x.grad.fill(0.0)
     compute.grad(num_its, x, y)
     qd.sync()
@@ -4920,7 +4920,7 @@ def _sizer_overflow_child(args: list[str]) -> None:
     num_its.from_numpy(np.array([3, 3, 1, 2], dtype=np.int32))
     pre_mutation = prog._get_max_reducer_dispatch_count()
     compute(num_its, x, y)
-    y.grad[None] = 1.0
+    y.grad[()] = 1.0
     x.grad.fill(0.0)
     compute.grad(num_its, x, y)
     qd.sync()
