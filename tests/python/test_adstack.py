@@ -4877,7 +4877,7 @@ def test_max_reducer_dispatch_counts_advance_on_input_mutation():
 def _sizer_overflow_child(args: list[str]) -> None:
     # Disable fallback so an unavailable Vulkan backend fails instead of silently testing another backend.
     # Disable control-flow optimization to match the original input-mutation regression's configuration.
-    # Enable experimental adstacks.
+    # Enable experimental adstacks, which is disabled by default.
     # Print full tracebacks so failures captured from this child include the details needed to diagnose them.
     qd.init(
         arch=qd.vulkan,
