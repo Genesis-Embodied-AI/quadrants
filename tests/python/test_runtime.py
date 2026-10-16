@@ -108,6 +108,7 @@ special_init_cfgs = [
 @pytest.mark.parametrize("key,values", init_args.items())
 @test_utils.test()
 def test_init_arg(key, values):
+    # Check each option's default and values supplied through qd.init() arguments or environment variables.
     default, values = values
 
     # helper function:
