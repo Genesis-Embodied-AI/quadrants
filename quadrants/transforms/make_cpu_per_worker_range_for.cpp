@@ -10,12 +10,10 @@ namespace {
 
 using TaskType = OffloadedStmt::TaskType;
 
-/* This pass divides the range-for loop into multithreading blocks, and
- * inserts a new range-for loop that iterates over the number of threads
- * available on the CPU. The computing logics in the original range-for
- * loop are then packed into an inner serial for loop. In a nutshell,
- * the outer offloaded range-for loop is used to parallelize the computation,
- * and inner range-for loop conducts real computation logics.
+/* This pass groups the original loop iterations into consecutive blocks, with one block per configured CPU worker. The
+ * outer loop iterates over block indices and schedules each block as a separate task. Inside each task, a serial inner
+ * loop executes the original loop body for each iteration in that block. Different blocks can run in parallel;
+ * iterations within a block run sequentially.
  *
  * For example, the following code:
  *
