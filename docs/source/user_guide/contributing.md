@@ -118,6 +118,19 @@ CMAKE_ARGS="-DQD_WITH_AMDGPU=ON -DQD_WITH_CUDA=OFF" pip install --no-build-isola
 
 Pull requests are validated by several CI jobs. Most run automatically; a failing check blocks merge.
 
+### GitLab token for CI
+
+The macOS, Linux wheel, and Windows workflows use the `GITLAB_PAT` GitHub Actions secret to authenticate Eigen clones from GitLab. This was added to improve clone reliability in [PR #968](https://github.com/Genesis-Embodied-AI/quadrants/pull/968).
+
+To create or replace this personal access token (PAT):
+
+1. Sign in to GitLab and open [Personal access tokens](https://gitlab.com/-/user_settings/personal_access_tokens). See GitLab's [creation instructions](https://docs.gitlab.com/user/profile/personal_access_tokens/#create-a-personal-access-token) for the current UI steps.
+2. Create a token with a descriptive name (for example, `quadrants-ci`) and an expiration date. Select only the `read_repository` scope, which permits cloning over HTTPS; these workflows do not need write or API access.
+3. Copy the generated token immediately; GitLab only displays its value once.
+4. In the GitHub repository, open **Settings > Secrets and variables > Actions** and create or update the repository secret named `GITLAB_PAT`. An organization Actions secret with the same name and access granted to this repository also works.
+
+Before the token expires, create a replacement and update the same GitHub Actions secret. Verify that CI can still clone Eigen, then revoke the old token in GitLab. Keep token values in Actions secrets, never in workflow files or documentation.
+
 ### Pre-commit / linters (`linters.yml`)
 
 Runs `pre-commit run -a` which enforces:

@@ -45,6 +45,7 @@ jobs:
           df -h
       - name: manylinux wheel prerequisites
         env:
+          # Token setup and renewal: docs/source/user_guide/contributing.md#gitlab-token-for-ci
           GITLAB_PAT: ${{ secrets.GITLAB_PAT }}
         run: |
           export PATH=/opt/python/${{ matrix.PYTHON_CP_VERSION }}-${{ matrix.PYTHON_CP_VERSION }}/bin:$PATH
