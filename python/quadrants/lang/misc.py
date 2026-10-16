@@ -382,9 +382,8 @@ def init(
                       @qd.kernel(pure=True))
         **kwargs: Quadrants provides highly customizable compilation through
             ``kwargs``, which allows for fine grained control of Quadrants compiler
-            behavior. Below we list some of the most frequently used ones. For a
-            complete list, please check out
-            https://github.com/Genesis-Embodied-AI/quadrants/blob/master/quadrants/program/compile_config.h.
+            behavior. Below we list some of the most frequently used ones. For the full configuration reference, see
+            `qd.init options <https://genesis-embodied-ai.github.io/quadrants/user_guide/init_options.html#all-options>`_.
 
             * ``cpu_max_num_threads`` (int): Sets the number of threads used by the CPU thread pool.
             * ``cpu_work_scheduling`` (CPUWorkScheduling): CPU scheduling mode (default: PER_WORKER).
