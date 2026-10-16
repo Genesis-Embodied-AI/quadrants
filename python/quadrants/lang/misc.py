@@ -458,8 +458,7 @@ def init(
     env_spec.add("print_full_traceback")
     env_spec.add("unrolling_limit")
 
-    # Handle cpu_work_scheduling and cpu_fixed_block_dim, including environment variables and their deprecated aliases
-    # make_cpu_multithreading_loop and default_cpu_block_dim, respectively.
+    # Handle cpu_work_scheduling and cpu_fixed_block_dim.
     configure_cpu_scheduling(kwargs, cfg)
 
     # compiler configurations (qd.cfg):
