@@ -1,16 +1,20 @@
 """Resolve CPU scheduling settings and their deprecated initialization aliases."""
 
+from __future__ import annotations
+
 import os
 import warnings
+from collections.abc import Callable
+from typing import Any
 
 from quadrants._lib import core as _qd_core
 
 
-def _is_supplied(kwargs, name):
+def _is_supplied(kwargs: dict[str, Any], name: str) -> bool:
     return name in kwargs or bool(os.environ.get("QD_" + name.upper()))
 
 
-def _read(kwargs, name, cast):
+def _read(kwargs: dict[str, Any], name: str, cast: Callable[[str], Any]) -> Any:
     env_name = "QD_" + name.upper()
     env_value = os.environ.get(env_name, "")
     if name in kwargs:
@@ -20,7 +24,7 @@ def _read(kwargs, name, cast):
     return cast(env_value)
 
 
-def _mode_from_env(value):
+def _mode_from_env(value: str) -> _qd_core.CPUWorkScheduling:
     try:
         return {
             "PER_WORKER": _qd_core.CPUWorkScheduling.PER_WORKER,
@@ -30,7 +34,7 @@ def _mode_from_env(value):
         raise ValueError("QD_CPU_WORK_SCHEDULING must be PER_WORKER or FIXED_SIZE") from None
 
 
-def configure_cpu_scheduling(kwargs, cfg):
+def configure_cpu_scheduling(kwargs: dict[str, Any], cfg: _qd_core.CompileConfig) -> None:
     aliases = (
         ("make_cpu_multithreading_loop", "cpu_work_scheduling"),
         ("default_cpu_block_dim", "cpu_fixed_block_dim"),
