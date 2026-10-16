@@ -43,8 +43,7 @@ Default `False`. Some kernel arguments make Quadrants compile a separate, specia
 
 See [Autodiff](./autodiff.md) for the reverse-mode pipeline overview.
 
-Stack-based reverse mode uses [automatic backward replay counting](adstack_replay.md). The old
-`ad_stack_experimental_enabled`, `ad_stack_size`, and `ad_stack_sparse_threshold_bytes` options have been removed.
+Stack-based reverse mode uses [automatic backward replay counting](adstack_replay.md). The old `ad_stack_experimental_enabled`, `ad_stack_size`, and `ad_stack_sparse_threshold_bytes` options have been removed.
 
 ## Apple Metal
 

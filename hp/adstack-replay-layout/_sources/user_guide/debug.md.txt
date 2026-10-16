@@ -38,9 +38,7 @@ a = x[-1]     # AssertionError in debug mode
 
 #### Adstack overflow
 
-Counted backward checks capacity regardless of `debug`. Overflow keeps stack accesses within their allocation,
-continues execution, and raises `RuntimeError` after synchronization. Discard/reset the failed gradients and restore
-replay inputs before retrying. See [replay-counted adstack](adstack_replay.md).
+Counted backward checks capacity regardless of `debug`. Overflow keeps stack accesses within their allocation, continues execution, and raises `RuntimeError` after synchronization. Discard/reset the failed gradients and restore replay inputs before retrying. See [replay-counted adstack](adstack_replay.md).
 
 ### Assertions in kernels
 
