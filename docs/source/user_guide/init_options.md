@@ -23,11 +23,11 @@ For normal use, leave it at `True`; the caches are the main reason a repeated ru
 
 ## CPU loop scheduling
 
-With the default `cpu_work_scheduling=qd.CPUWorkScheduling.PER_WORKER`, CPU `range()` loops divide their iterations into blocks. A block is a consecutive group of iterations executed by one CPU thread. When a loop has too few iterations to occupy the CPU cores and each iteration does substantial work, smaller blocks can help.
+With the default `cpu_work_scheduling=qd.CPUWorkScheduling.PER_WORKER`, CPU `range()` loops divide their iterations into blocks. A block is a consecutive group of iterations executed by one CPU thread.
 
 Two settings work together here: `cpu_max_num_threads` sets the number of CPU worker threads, and `cpu_per_worker_min_block_dim` sets the minimum number of iterations per block. For full definitions, defaults, and constraints, see [All options](#all-options) below.
 
-Larger blocks require fewer scheduling operations for long loops. Smaller blocks can distribute uneven work across more workers. Compare timings for your workload when choosing a scheduling mode and block size.
+When a loop has too few iterations to occupy the CPU cores and each iteration does substantial work, smaller blocks can help. Larger blocks require fewer scheduling operations for long loops. Smaller blocks can distribute uneven work across more workers. Compare timings for your workload when choosing a scheduling mode and block size.
 
 For example, this configuration allows up to 12 threads and sets the minimum block size to 1:
 
