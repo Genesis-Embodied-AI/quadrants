@@ -5,11 +5,11 @@
 
 namespace quadrants::lang {
 
-inline int32_t get_cpu_block_start_index(int32_t range_begin,
-                                         int32_t range_end,
-                                         int32_t num_threads,
-                                         int32_t min_block_size,
-                                         int32_t boundary_index) {
+inline int32_t get_cpu_per_worker_block_start_index(int32_t range_begin,
+                                                    int32_t range_end,
+                                                    int32_t num_threads,
+                                                    int32_t min_block_size,
+                                                    int32_t boundary_index) {
   // Return the index at the start of the requested CPU block, clamped to range_end.
   // Block indices run from 0 to num_threads - 1. Boundary indices run from 0 to num_threads, because each block needs
   // a start and an end. The boundary at num_threads is range_end.
