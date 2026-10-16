@@ -220,8 +220,11 @@ class _EnvironmentConfigurator:
         # QD_OFFLINE_CACHE=0  : False
         # QD_OFFLINE_CACHE=1  : True
         self.keys.append(key)
-        if key in self.kwargs or os.environ.get("QD_" + key.upper(), ""):
+        if self.is_supplied(key):
             self[key] = self.read(key, _cast)
+
+    def is_supplied(self, key: str) -> bool:
+        return key in self.kwargs or bool(os.environ.get("QD_" + key.upper()))
 
     def read(self, key: str, env_parse_fn: Callable[[str], Any] | None = None) -> Any:
         """Read a supplied option, removing it from kwargs and parsing only environment-variable values."""

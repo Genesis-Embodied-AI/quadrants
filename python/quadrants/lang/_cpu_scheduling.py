@@ -2,18 +2,13 @@
 
 from __future__ import annotations
 
-import os
 import warnings
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from quadrants._lib import core as _qd_core
 
 if TYPE_CHECKING:
     from quadrants.lang.misc import _EnvironmentConfigurator
-
-
-def _is_supplied(kwargs: dict[str, Any], name: str) -> bool:
-    return name in kwargs or bool(os.environ.get("QD_" + name.upper()))
 
 
 def _mode_from_env(value: str) -> _qd_core.CPUWorkScheduling:
@@ -28,16 +23,16 @@ def _mode_from_env(value: str) -> _qd_core.CPUWorkScheduling:
 
 def configure_cpu_scheduling(env_comp: _EnvironmentConfigurator) -> None:
     kwargs = env_comp.kwargs
-    if _is_supplied(kwargs, "make_cpu_multithreading_loop") and _is_supplied(kwargs, "cpu_work_scheduling"):
+    if env_comp.is_supplied("make_cpu_multithreading_loop") and env_comp.is_supplied("cpu_work_scheduling"):
         raise ValueError(
             "Cannot specify both make_cpu_multithreading_loop and cpu_work_scheduling, including through environment variables"
         )
-    if _is_supplied(kwargs, "default_cpu_block_dim") and _is_supplied(kwargs, "cpu_fixed_block_dim"):
+    if env_comp.is_supplied("default_cpu_block_dim") and env_comp.is_supplied("cpu_fixed_block_dim"):
         raise ValueError(
             "Cannot specify both default_cpu_block_dim and cpu_fixed_block_dim, including through environment variables"
         )
 
-    if _is_supplied(kwargs, "make_cpu_multithreading_loop"):
+    if env_comp.is_supplied("make_cpu_multithreading_loop"):
         warnings.warn(
             "make_cpu_multithreading_loop is deprecated; use cpu_work_scheduling instead.",
             DeprecationWarning,
@@ -50,7 +45,7 @@ def configure_cpu_scheduling(env_comp: _EnvironmentConfigurator) -> None:
             _qd_core.CPUWorkScheduling.PER_WORKER if value else _qd_core.CPUWorkScheduling.FIXED_SIZE
         )
 
-    if _is_supplied(kwargs, "default_cpu_block_dim"):
+    if env_comp.is_supplied("default_cpu_block_dim"):
         warnings.warn(
             "default_cpu_block_dim is deprecated; use cpu_fixed_block_dim instead.",
             DeprecationWarning,
@@ -58,7 +53,7 @@ def configure_cpu_scheduling(env_comp: _EnvironmentConfigurator) -> None:
         )
         kwargs["cpu_fixed_block_dim"] = env_comp.read("default_cpu_block_dim", int)
 
-    if _is_supplied(kwargs, "cpu_work_scheduling"):
+    if env_comp.is_supplied("cpu_work_scheduling"):
         value = env_comp.read("cpu_work_scheduling", _mode_from_env)
         if not isinstance(value, _qd_core.CPUWorkScheduling):
             raise TypeError("cpu_work_scheduling must be a qd.CPUWorkScheduling member")
