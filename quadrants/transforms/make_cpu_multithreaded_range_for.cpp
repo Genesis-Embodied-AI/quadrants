@@ -34,7 +34,7 @@ using TaskType = OffloadedStmt::TaskType;
  *       for i in range(block_begin, block_end):
  *           a[i] = i
  *
- * where 8 is the number of generated blocks and cpu_per_worker_min_block_dim is set to 1.
+ * where 8 is the number of generated blocks and 1 <= cpu_per_worker_min_block_dim <= 128.
  *
  * This pass is only applied to range-for loops that are offloaded to
  * CPUs. The number of blocks is determined by the config option
