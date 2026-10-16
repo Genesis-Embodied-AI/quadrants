@@ -38,7 +38,7 @@ a = x[-1]     # AssertionError in debug mode
 
 #### Adstack overflow
 
-The adstack overflow check on reverse-mode autodiff runs always, on every backend, regardless of `debug`. A push past the per-stack capacity raises `QuadrantsAssertionError("[Aa]dstack overflow")` at the next Quadrants Python entry that polls the overflow flag after the offending kernel has executed - kernel launch, host-side field / ndarray read, or `qd.sync()`. On CPU this is the entry of the offending launch itself; on GPU it can be one or more entries later, since the GPU may not have run the offending push by the time the poll at end-of-launch fires. The error message describes the cause (untracked tensor mutation between launches, or sizer under-estimate caused by a bug in Quadrants) and the recovery flow; see [Autodiff -> What can go wrong](autodiff.md) for the full description.
+Counted backward checks capacity regardless of `debug`. Overflow keeps stack accesses within their allocation, continues execution, and raises `RuntimeError` after synchronization. Discard/reset the failed gradients and restore replay inputs before retrying. See [replay-counted adstack](autodiff.md#autodiff-with-dynamic-loops).
 
 ### Assertions in kernels
 
@@ -119,11 +119,3 @@ QD_DUMP_IR=1 QD_OFFLINE_CACHE=0 python my_script.py
 ```
 
 Compiled kernels will be written to `/tmp/ir` by default. Use `QD_DEBUG_DUMP_PATH=` to redirect to a custom directory.
-
-### Tracing adstack heap allocations
-
-```bash
-QD_DEBUG_ADSTACK=1 python my_script.py
-```
-
-Prints one line per task per kernel launch describing each adstack heap binding: task name, heap kind (float or int), sizing source (per-task reducer count or dispatched-threads worst case), per-thread stride, and resulting allocation in bytes. Useful for pinning which task drives the peak when an adstack-bearing kernel hits an OOM and the remedies in [Avoiding OOM on GPU](./autodiff.md#avoiding-oom-on-gpu) do not point at an obvious culprit.

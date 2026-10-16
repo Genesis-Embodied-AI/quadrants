@@ -206,6 +206,7 @@ def _kernel_impl(
     wrapped._primal = primal
     wrapped._adjoint = adjoint
     primal.quadrants_callable = wrapped
+    adjoint._adstack_source_callable = wrapped
     return wrapped
 
 

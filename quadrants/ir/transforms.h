@@ -81,7 +81,11 @@ void demote_mesh_statements(IRNode *root, const CompileConfig &config, const Dem
 bool remove_loop_unique(IRNode *root);
 bool remove_range_assumption(IRNode *root);
 bool lower_access(IRNode *root, const CompileConfig &config, const LowerAccessPass::Args &args);
-void auto_diff(IRNode *root, const CompileConfig &config, AutodiffMode autodiffMode, bool use_stack = false);
+void auto_diff(IRNode *root,
+               const CompileConfig &config,
+               AutodiffMode autodiffMode,
+               bool use_stack = false,
+               bool count_forward = false);
 /**
  * Check whether the kernel obeys the autodiff limitation e.g., gloabl data
  * access rule
@@ -93,7 +97,6 @@ void differentiation_validation_check(IRNode *root, const CompileConfig &config,
  * @return Whether the IR is modified, i.e., whether there exists adaptive
  * AD-stacks before this pass.
  */
-bool determine_ad_stack_size(IRNode *root, const CompileConfig &config);
 bool constant_fold(IRNode *root);
 void associate_continue_scope(IRNode *root, const CompileConfig &config);
 void offload(IRNode *root, const CompileConfig &config);
@@ -158,7 +161,6 @@ void offload_to_executable(IRNode *ir,
                            const CompileConfig &config,
                            const Kernel *kernel,
                            bool verbose,
-                           bool determine_ad_stack_size,
                            bool lower_global_access,
                            bool make_thread_local,
                            bool make_block_local);

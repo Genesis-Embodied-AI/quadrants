@@ -292,7 +292,7 @@ class ASTTransformerFuncContext:
                 impl.current_cfg().arch,
                 extension.adstack,
             )
-            and impl.current_cfg().ad_stack_experimental_enabled
+            and global_context.current_kernel.adstack_mode != 0
         )
 
     # e.g.: FunctionDef, Module, Global

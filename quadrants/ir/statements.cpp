@@ -417,13 +417,6 @@ std::unique_ptr<Stmt> OffloadedStmt::clone() const {
   new_stmt->graph_do_while_level_id = graph_do_while_level_id;
   new_stmt->task_index = task_index;
   new_stmt->loop_name = loop_name;
-  // Shared-pointer copy: the captured trip-count `SizeExpr` is read-only after `determine_ad_stack_size`
-  // populates it in `compile_to_offloads`, and LLVM codegen clones each offload at `codegen.cpp:68`
-  // before lowering it. Without this copy the cloned task arrives with `pre_chunk_loop_trip_count_expr ==
-  // nullptr`, the per-launch dynamic trip-count clip in `clip_effective_rows_by_loop_trip_count` falls
-  // back to the unclipped reducer count, and runtime-bounded sparse-gated workloads regress to the worst
-  // case heap allocation that the new field exists to avoid.
-  new_stmt->pre_chunk_loop_trip_count_expr = pre_chunk_loop_trip_count_expr;
   return new_stmt;
 }
 

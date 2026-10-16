@@ -45,6 +45,10 @@ struct RuntimeContext {
 
   // Use runtime accessors in LLVM code generation; Clang can insert explicit padding between these fields.
   int32_t cpu_block_idx{0};
+
+  // Invocation-owned device buffer: maximum measured depth, then overflow flag.
+  int64_t *adstack_measurement{nullptr};
+  uint64_t adstack_capacity{0};
 };
 
 #if defined(QD_RUNTIME_HOST)

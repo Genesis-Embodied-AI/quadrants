@@ -1,4 +1,5 @@
 #include "quadrants/transforms/auto_diff/forward_state_spill.h"
+#include "quadrants/transforms/auto_diff/forward_count.h"
 #include "quadrants/transforms/auto_diff/ir_shaping.h"
 #include "quadrants/transforms/auto_diff/make_adjoint.h"
 #include "quadrants/transforms/auto_diff/make_dual.h"
@@ -13,7 +14,11 @@ namespace quadrants::lang {
 
 namespace irpass {
 
-void auto_diff(IRNode *root, const CompileConfig &config, AutodiffMode autodiff_mode, bool use_stack) {
+void auto_diff(IRNode *root,
+               const CompileConfig &config,
+               AutodiffMode autodiff_mode,
+               bool use_stack,
+               bool count_forward) {
   QD_AUTO_PROF;
   if (autodiff_mode == AutodiffMode::kReverse) {
     if (auto *root_block = root->cast<Block>()) {
@@ -34,7 +39,7 @@ void auto_diff(IRNode *root, const CompileConfig &config, AutodiffMode autodiff_
 
       for (auto ib : IB) {
         promote_ssa_to_local_var(ib);
-        replace_local_var_with_stacks(ib, config.ad_stack_size);
+        replace_local_var_with_stacks(ib);
         type_check(root, config);
 
         // Drop AdStackAllocas whose pushed value is recomputable from already-stack-backed allocas + args + const +
@@ -47,9 +52,18 @@ void auto_diff(IRNode *root, const CompileConfig &config, AutodiffMode autodiff_
         eliminate_recomputable_ad_stack_pushes(ib);
         type_check(root, config);
 
+        std::unordered_set<Stmt *> forward_statements;
+        if (count_forward) {
+          forward_statements = gather_forward_statements(ib);
+        }
         make_adjoint(ib);
         type_check(root, config);
         backup_ssa(ib);
+        if (count_forward) {
+          lower_adstack_forward_count(ib, forward_statements);
+          type_check(root, config);
+          continue;
+        }
         // After MakeAdjoint emits the reverse-pass body, an outer-loop-invariant value pulled into the reverse
         // direction by `accumulate_unary_operand_checked` becomes a fresh `AdStackLoadTopStmt` per user-side use; in
         // straight-line unrolled IR those reads coalesce to one load per stack per block, which the dedicated pass

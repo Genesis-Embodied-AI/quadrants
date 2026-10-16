@@ -76,6 +76,7 @@ class LaunchContextBuilder {
   void set_args_uint(const std::vector<int> &args_id, const std::vector<uint64> &vec);
 
   void set_array_runtime_size(int arg_id, uint64 size);
+  void check_adstack_replay_aliases(Program *program);
 
   void set_array_device_allocation_type(int arg_id, DevAllocType usage);
 
@@ -97,10 +98,6 @@ class LaunchContextBuilder {
   void set_struct_arg(const std::vector<int> &arg_indices, T v);
 
   void set_ndarray_ptrs(int arg_id, uint64 data_ptr, uint64 grad_ptr);
-  // Same as `set_ndarray_ptrs`, but also mirrors the resolved host pointer into `array_ptrs` so the adstack
-  // size-expression evaluator can dereference it. Call only from launchers where `data_ptr`/`grad_ptr` is a
-  // real host-accessible address (CPU); device-only launchers (SPIR-V / CUDA / AMDGPU) must use the plain
-  // `set_ndarray_ptrs`.
   void set_host_accessible_ndarray_ptrs(int arg_id, uint64 data_ptr, uint64 grad_ptr);
 
   template <typename T>
@@ -109,12 +106,6 @@ class LaunchContextBuilder {
   template <typename T>
   T get_struct_arg(std::vector<int> arg_indices);
 
-  // Host-only counterpart of `get_struct_arg`: always reads from the launcher-owned `arg_buffer_` host backing
-  // store instead of `RuntimeContext::arg_buffer`. Needed because CUDA / AMDGPU launchers swap
-  // `ctx_->arg_buffer` to a device pointer before handing the context to the adstack sizer encoder; a plain
-  // `get_struct_arg<T>` at that point would dereference device memory from the host. Call this from host-side
-  // evaluators (e.g. `encode_adstack_size_expr_device_bytecode`) that need to peek scalar slots without
-  // assuming the kernel-facing `RuntimeContext::arg_buffer` still points at host memory.
   template <typename T>
   T get_struct_arg_host(std::vector<int> arg_indices);
 
@@ -152,6 +143,10 @@ class LaunchContextBuilder {
   uint64 get_struct_ret_uint(const std::vector<int> &index);
 
   RuntimeContext &get_context();
+
+  void set_adstack_measurement(uint64_t address, uint64_t capacity);
+  void set_adstack_measurement_array(Ndarray *array, uint64_t capacity);
+  DeviceAllocation adstack_measurement_allocation{kDeviceNullAllocation};
 
  private:
   TypedConstant fetch_ret_impl(int offset, const Type *dt);
@@ -229,7 +224,6 @@ class LaunchContextBuilder {
   // exposed as a flat vector here so the diagnose path (`Program::capture_diagnose_snapshot`) does not have to
   // walk `args_type` element offsets. The args-type walk would emit spurious "Cannot treat as TensorType"
   // diagnostics on out-of-rank axis lookups; mirroring shapes once at set-time is both cheaper and quieter.
-  std::unordered_map<int, std::vector<int>> ndarray_shapes;
 };
 
 }  // namespace quadrants::lang

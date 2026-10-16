@@ -4,7 +4,6 @@
 #undef QD_RUNTIME_HOST
 #include "fp16.h"
 
-#include "quadrants/program/adstack/cache.h"
 #include "quadrants/program/program.h"
 
 namespace quadrants::lang {
@@ -18,29 +17,6 @@ inline std::vector<T> concatenate_vector(const std::vector<T> &lhs, const std::v
   return result;
 }
 
-// Per-arg `ndarray_shapes` capture exists solely to feed the adstack-overflow diagnose snapshot
-// (`AdStackCache::capture_diagnose_snapshot` reads this map). The diagnose path can only fire on a reverse-mode launch
-// (the kernel that owns the adstack), so non-autodiff kernels never need the snapshot. The capture must also kick in
-// on the very first launch of an autodiff-tagged kernel - the first `record_*` fires INSIDE `publish_adstack_metadata`
-// which runs AFTER `capture_diagnose_snapshot`, so a pure `has_any_recordings()` gate would miss the bind of the first
-// reverse launch and the diagnose path would not be able to rerun the sizer. Hence the autodiff-mode check below:
-// every Forward / Reverse / CheckAutodiffValid kernel captures shapes from launch 0; pure forward kernels
-// (`autodiff_mode == kNone`) capture lazily once anything has recorded, which keeps the per-arg heap allocation off
-// the hot path of forward-only workloads. The `static_cast` is sound because every concrete launcher kernel
-// constructed through `Kernel::make_launch_context` and friends is a `Callable` subclass; `CallableBase` is the
-// launch-context type system fallback but has no live instances in launcher paths. Callers degrade safely when the
-// `Program` backref cannot be reached (launcher built pre-attach pays the capture cost rather than risking a missing
-// snapshot at diagnose time).
-inline bool ndarray_shape_capture_needed(const CallableBase *kernel) {
-  const auto *callable = static_cast<const Callable *>(kernel);
-  if (callable == nullptr || callable->program == nullptr) {
-    return true;
-  }
-  if (callable->autodiff_mode != AutodiffMode::kNone) {
-    return true;
-  }
-  return callable->program->adstack_cache().has_any_recordings();
-}
 }  // namespace
 
 LaunchContextBuilder::LaunchContextBuilder(CallableBase *kernel)
@@ -66,7 +42,16 @@ void LaunchContextBuilder::copy(const LaunchContextBuilder &other) {
   array_runtime_sizes = other.array_runtime_sizes;
   device_allocation_type = other.device_allocation_type;
   array_ptrs = other.array_ptrs;
-  ndarray_shapes = other.ndarray_shapes;
+}
+
+void LaunchContextBuilder::set_adstack_measurement(uint64_t address, uint64_t capacity) {
+  ctx_->adstack_measurement = reinterpret_cast<int64_t *>(address);
+  ctx_->adstack_capacity = capacity;
+}
+
+void LaunchContextBuilder::set_adstack_measurement_array(Ndarray *array, uint64_t capacity) {
+  adstack_measurement_allocation = array->get_device_allocation();
+  ctx_->adstack_capacity = capacity;
 }
 
 void LaunchContextBuilder::set_arg_float(int arg_id, float64 d) {
@@ -163,15 +148,6 @@ void LaunchContextBuilder::set_ndarray_ptrs(int arg_id, uint64 data_ptr, uint64 
 }
 
 void LaunchContextBuilder::set_host_accessible_ndarray_ptrs(int arg_id, uint64 data_ptr, uint64 grad_ptr) {
-  // Host-accessible variant used by the CPU kernel launcher. `set_ndarray_ptrs` alone only writes the
-  // resolved pointer into the kernel-visible arg buffer; it leaves the `array_ptrs` map holding whatever the
-  // earlier `set_arg_ndarray_impl` stashed (a `DeviceAllocation *` handle when the caller passed an Ndarray).
-  // The adstack size-expression evaluator reads straight from `array_ptrs` to resolve runtime loop bounds
-  // derived from ndarray element reads (`ExternalTensorRead` nodes from `determine_ad_stack_size`); on CPU the
-  // resolved `data_ptr` is the real host pointer to the element buffer, so mirror it into `array_ptrs` once
-  // the launcher knows the raw address. SPIR-V / CUDA / AMDGPU launchers stay on the plain `set_ndarray_ptrs`
-  // path: the address they pass is a device-only pointer that cannot be dereferenced from the evaluator, and
-  // stamping it into `array_ptrs` would just move the stale read to a harder-to-diagnose segfault.
   set_ndarray_ptrs(arg_id, data_ptr, grad_ptr);
   array_ptrs[{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY}] = reinterpret_cast<void *>(data_ptr);
   if (kernel_->nested_parameters[arg_id].needs_grad) {
@@ -329,9 +305,6 @@ void LaunchContextBuilder::set_arg_external_array_with_shape(int arg_id,
   }
   set_array_runtime_size(arg_id, size);
   set_array_device_allocation_type(arg_id, DevAllocType::kNone);
-  if (ndarray_shape_capture_needed(kernel_)) {
-    ndarray_shapes[arg_id] = std::vector<int>(shape.begin(), shape.end());
-  }
   for (int i = 0; i < shape.size(); i++) {
     set_struct_arg(std::array{arg_id, 0, i}, (int32)shape[i]);
   }
@@ -352,7 +325,6 @@ void LaunchContextBuilder::set_args_ndarray(const std::vector<int> &args_id, con
   device_allocation_type.reserve(device_allocation_type.size() + num_arrs);
 
   QD_ASSERT(num_arrs == args_id.size());
-  const bool capture_shapes = ndarray_shape_capture_needed(kernel_);
   for (int i = 0; i < num_arrs; i++) {
     const int arg_id = args_id[i];
     const Ndarray &arr = *arrs[i];
@@ -361,9 +333,6 @@ void LaunchContextBuilder::set_args_ndarray(const std::vector<int> &args_id, con
     array_ptrs[{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY}] = (void *)ptr;
     set_array_device_allocation_type(arg_id, DevAllocType::kNdarray);
     const std::vector<int> &shape = arr.shape;
-    if (capture_shapes) {
-      ndarray_shapes[arg_id] = shape;
-    }
     size_t total_size = 1;
     for (int32 i = 0; i < shape.size(); i++) {
       set_struct_arg(std::array{arg_id, 0, i}, (int32)shape[i]);
@@ -404,9 +373,6 @@ void LaunchContextBuilder::set_arg_ndarray_impl(int arg_id,
   // Set device allocation type and runtime size
   set_array_device_allocation_type(arg_id, DevAllocType::kNdarray);
   QD_ASSERT(shape.size() <= quadrants_max_num_indices);
-  if (ndarray_shape_capture_needed(kernel_)) {
-    ndarray_shapes[arg_id] = shape;
-  }
   size_t total_size = 1;
   for (int i = 0; i < shape.size(); i++) {
     set_struct_arg(std::array{arg_id, 0, i}, (int32)shape[i]);

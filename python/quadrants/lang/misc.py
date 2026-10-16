@@ -869,7 +869,7 @@ def is_extension_enabled(ext: Extension) -> bool:
     """
     arch = impl.current_cfg().arch
     if ext == extension.adstack:
-        return is_extension_supported(arch, ext) and impl.current_cfg().ad_stack_experimental_enabled
+        return is_extension_supported(arch, ext)
     return is_extension_supported(arch, ext)
 
 

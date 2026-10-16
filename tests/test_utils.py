@@ -250,9 +250,6 @@ def test(arch=None, exclude=None, require=None, **options):
             if not all(_qd_core.is_extension_supported(req_arch, e) for e in require):
                 continue
 
-            if qd.extension.adstack in require:
-                options["ad_stack_experimental_enabled"] = True
-
             current_options = copy.deepcopy(options)
             for feature, param in zip(_test_features, req_params):
                 value = param.value

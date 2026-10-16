@@ -15,7 +15,7 @@
 #include "quadrants/ir/expression_ops.h"
 #include "quadrants/ir/frontend_ir.h"
 #include "quadrants/ir/statements.h"
-#include "quadrants/program/adstack_size_expr_eval.h"
+#include "quadrants/program/adstack/replay_measurement.h"
 #include "quadrants/program/extension.h"
 #include "quadrants/program/ndarray.h"
 #include "quadrants/rhi/device_capability.h"
@@ -58,6 +58,7 @@ struct InternalOpScope {};
 }  // namespace
 
 void export_lang(nb::module_ &m) {
+  m.def("read_adstack_replay_measurement", lang::read_adstack_replay_measurement);
   using namespace quadrants::lang;
   using namespace std::placeholders;
 
@@ -262,14 +263,6 @@ void export_lang(nb::module_ &m) {
               "NaN/inf/signed-zero guarantees.")
       .def_rw("advanced_optimization", &CompileConfig::advanced_optimization,
               "Run the full advanced optimization pass pipeline.")
-      .def_rw("ad_stack_experimental_enabled", &CompileConfig::ad_stack_experimental_enabled,
-              "Enable the reverse-mode autodiff pipeline for kernels with runtime-bounded loops (the adstack).")
-      .def_rw("ad_stack_size", &CompileConfig::ad_stack_size,
-              "Force autodiff stacks to exactly this many slots. 0 lets the launch-time sizer choose automatically. "
-              "No effect unless ad_stack_experimental_enabled is on.")
-      .def_rw("ad_stack_sparse_threshold_bytes", &CompileConfig::ad_stack_sparse_threshold_bytes,
-              "Byte cutoff below which the sparse adstack sizing path is skipped in favor of eager heap allocation. "
-              "No effect unless ad_stack_experimental_enabled is on.")
       .def_rw("flatten_if", &CompileConfig::flatten_if,
               "Flatten simple if statements into predicated (branchless) form.")
       .def_rw("make_thread_local", &CompileConfig::make_thread_local,
@@ -539,14 +532,7 @@ void export_lang(nb::module_ &m) {
       .def("get_graph_num_nodes_on_last_call", &Program::get_graph_num_nodes_on_last_call)
       .def("get_graph_num_checkpoints_on_last_call", &Program::get_graph_num_checkpoints_on_last_call)
       .def("get_graph_last_yield_cp_id_on_last_call", &Program::get_graph_last_yield_cp_id_on_last_call)
-      .def("get_graph_total_builds", &Program::get_graph_total_builds)
-      // Test-only introspection on the max-reducer dispatch counter. Leading underscore signals "internal, not part of
-      // the public Python API"; quadrants tests reach these via `impl.get_runtime().prog`. They are intentionally not
-      // surfaced on the user-facing `qd.*` namespace and not documented under `docs/`.
-      .def("_get_max_reducer_dispatch_count",
-           [](Program *program) { return program->adstack_cache().max_reducer_dispatch_count(); })
-      .def("_reset_max_reducer_dispatch_count",
-           [](Program *program) { program->adstack_cache().reset_max_reducer_dispatch_count(); });
+      .def("get_graph_total_builds", &Program::get_graph_total_builds);
   export_stream(m, program_class);
 
   nb::class_<CompileResult>(m, "CompileResult")
@@ -654,6 +640,7 @@ void export_lang(nb::module_ &m) {
       ;
 
   nb::class_<Kernel>(m, "KernelCxx")
+      .def_rw("adstack_mode", &Kernel::adstack_mode)
       .def("no_activate",
            [](Kernel *self, SNode *snode) {
              // TODO(#2193): Also apply to @qd.func?
@@ -673,6 +660,9 @@ void export_lang(nb::module_ &m) {
           nb::rv_policy::reference);
 
   nb::class_<LaunchContextBuilder>(m, "KernelLaunchContext")
+      .def("check_adstack_replay_aliases", &LaunchContextBuilder::check_adstack_replay_aliases)
+      .def("set_adstack_measurement", &LaunchContextBuilder::set_adstack_measurement)
+      .def("set_adstack_measurement_array", &LaunchContextBuilder::set_adstack_measurement_array)
       .def("copy", &LaunchContextBuilder::copy)
       .def("set_arg_int", &LaunchContextBuilder::set_arg_int)
       .def("set_args_int", &LaunchContextBuilder::set_args_int)
