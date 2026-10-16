@@ -40,7 +40,8 @@ TEST(CPURangeForBlock, FullSignedRange) {
   const int32_t original_range_end = std::numeric_limits<int32_t>::max();
   const int32_t num_blocks = 4;
   const int32_t min_block_size = 1;
-  const int32_t expected[] = {original_range_begin, -(1 << 30), 0, 1 << 30, original_range_end};
+  const int32_t expected[] = {original_range_begin, original_range_begin / 2, 0, -(original_range_begin / 2),
+                              original_range_end};
   for (int boundary_index = 0; boundary_index <= num_blocks; ++boundary_index) {
     EXPECT_EQ(get_cpu_per_worker_block_start_index(original_range_begin, original_range_end, num_blocks, min_block_size,
                                                    boundary_index),
