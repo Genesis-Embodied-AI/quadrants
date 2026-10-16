@@ -8,7 +8,29 @@ import quadrants as qd
 from tests import test_utils
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan])
+@test_utils.test(arch=[qd.vulkan, qd.metal])
+def test_adjoint_buffer_load_survives_clear():
+    upstream = qd.ndarray(qd.f32, shape=17)
+    downstream = qd.ndarray(qd.f32, shape=17)
+    seeds = np.linspace(0.25, 2.0, 17, dtype=np.float32)
+    upstream.from_numpy(seeds)
+    downstream.fill(0)
+
+    @qd.kernel
+    def transfer(upstream: qd.types.ndarray(), downstream: qd.types.ndarray()):
+        for i in range(upstream.shape[0]):
+            # Reverse AD consumes an output adjoint before clearing its slot. Shader load forwarding must
+            # preserve the pre-clear value, including on MoltenVK's Metal shader compiler.
+            value = upstream[i]
+            upstream[i] = 0.0
+            downstream[i] += value
+
+    transfer(upstream, downstream)
+    np.testing.assert_array_equal(downstream.to_numpy(), seeds)
+    np.testing.assert_array_equal(upstream.to_numpy(), np.zeros_like(seeds))
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal])
 def test_backward_only_remeasures_current_inputs():
     x = qd.ndarray(qd.f32, shape=4, needs_grad=True)
     y = qd.ndarray(qd.f32, shape=4, needs_grad=True)
@@ -38,7 +60,7 @@ def test_backward_only_remeasures_current_inputs():
         np.testing.assert_allclose(x.to_numpy(), 0.2)
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal])
 def test_replay_dense_fields_tape():
     x = qd.field(qd.f32, shape=4, needs_grad=True)
     loss = qd.field(qd.f32, shape=(), needs_grad=True)
@@ -64,7 +86,7 @@ def test_replay_dense_fields_tape():
     np.testing.assert_allclose(x.grad.to_numpy(), derivative, rtol=2e-5)
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal])
 def test_count_rejects_residual_primal_mutation():
     x = qd.field(qd.f32, shape=1, needs_grad=True)
     y = qd.field(qd.f32, shape=1, needs_grad=True)
@@ -85,7 +107,7 @@ def test_count_rejects_residual_primal_mutation():
 
 
 @pytest.mark.parametrize("fastcache", [False, True])
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal])
 def test_backward_only_persistent_cache(tmp_path, fastcache):
     import subprocess
     import sys
@@ -108,7 +130,7 @@ def test_backward_only_persistent_cache(tmp_path, fastcache):
 
 
 @pytest.mark.parametrize("read_modify_write", [False, True])
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal])
 def test_write_only_array_output_and_alias_guard(read_modify_write):
     x = qd.ndarray(qd.f32, shape=2, needs_grad=True)
     y = qd.ndarray(qd.f32, shape=2, needs_grad=True)
@@ -134,11 +156,17 @@ def test_write_only_array_output_and_alias_guard(read_modify_write):
     from quadrants.lang.adstack_replay import _Record, _variant
 
     variant = _variant(compute._adjoint, 1)
-    record = _Record(qd.ndarray(qd.i32 if qd.lang.impl.current_cfg().arch == qd.vulkan else qd.i64, shape=2))
+    record = _Record(
+        qd.ndarray(qd.i32 if qd.lang.impl.current_cfg().arch in (qd.vulkan, qd.metal) else qd.i64, shape=2)
+    )
     variant.adstack_record = record
     try:
+        x.grad.fill(3)
+        y.grad.fill(5)
         variant(x, y, n, scratch)
         np.testing.assert_array_equal(scratch.to_numpy(), [7, 7])
+        np.testing.assert_array_equal(x.grad.to_numpy(), [3, 3])
+        np.testing.assert_array_equal(y.grad.to_numpy(), [5, 5])
     finally:
         variant.adstack_record = None
     x.grad.fill(0)
@@ -156,7 +184,7 @@ def test_write_only_array_output_and_alias_guard(read_modify_write):
 
 
 @pytest.mark.parametrize("debug", [False, True])
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal])
 def test_replay_overflow_with_reduction(monkeypatch, debug):
     from quadrants.lang import adstack_replay
 
@@ -194,7 +222,7 @@ def test_replay_overflow_with_reduction(monkeypatch, debug):
     assert x.grad[None] == pytest.approx(4096 * math.cos(0.2) * math.cos(math.sin(0.2)), rel=2e-4)
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal])
 def test_replay_disjoint_frame_outputs():
     x = qd.field(qd.f32, shape=4, needs_grad=True)
     y = qd.field(qd.f32, shape=4, needs_grad=True)
@@ -217,7 +245,7 @@ def test_replay_disjoint_frame_outputs():
     active[1, 0] = 7
     variant = _variant(compute._adjoint, 1)
     variant.adstack_record = _Record(
-        qd.ndarray(qd.i32 if qd.lang.impl.current_cfg().arch == qd.vulkan else qd.i64, shape=2)
+        qd.ndarray(qd.i32 if qd.lang.impl.current_cfg().arch in (qd.vulkan, qd.metal) else qd.i64, shape=2)
     )
     try:
         variant(0)
@@ -234,7 +262,7 @@ def test_replay_disjoint_frame_outputs():
     np.testing.assert_allclose(x.grad.to_numpy(), derivative, rtol=2e-5)
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal])
 def test_replay_rejects_cross_iteration_output_dependency():
     x = qd.field(qd.f32, shape=4, needs_grad=True)
     y = qd.field(qd.f32, shape=4, needs_grad=True)
@@ -285,7 +313,7 @@ def test_replay_torch_arguments_and_overlapping_views():
     torch.testing.assert_close(storage, torch.full_like(storage, 2))
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal])
 def test_measurement_failure_does_not_fall_back(monkeypatch):
     import importlib
 
