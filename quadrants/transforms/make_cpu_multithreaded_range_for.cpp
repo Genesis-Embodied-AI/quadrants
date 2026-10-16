@@ -67,7 +67,7 @@ class MakeCPUMultithreadedRangeFor : public BasicStmtVisitor {
     auto one = offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(PrimitiveType::i32, 1)));
     auto cpu_per_worker_min_block_dim =
         offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(config_.cpu_per_worker_min_block_dim)));
-    auto num_threads = offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(config_.cpu_max_num_threads)));
+    auto num_blocks = offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(config_.cpu_max_num_threads)));
     auto block_index = offloaded_body->insert(Stmt::make_typed<LoopIndexStmt>(offloaded, 0));
 
     // Retrieve range-for bounds.
@@ -92,7 +92,7 @@ class MakeCPUMultithreadedRangeFor : public BasicStmtVisitor {
     auto get_cpu_per_worker_block_start_index_fn = [&](Stmt *index) {
       return offloaded_body->insert(Stmt::make_typed<InternalFuncStmt>(
           "get_cpu_per_worker_block_start_index",
-          std::vector<Stmt *>{begin_stmt, end_stmt, num_threads, cpu_per_worker_min_block_dim, index},
+          std::vector<Stmt *>{begin_stmt, end_stmt, num_blocks, cpu_per_worker_min_block_dim, index},
           PrimitiveType::i32,
           /*with_runtime_context=*/false));
     };
