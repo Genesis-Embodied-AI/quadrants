@@ -46,6 +46,34 @@ def patch_os_environ_helper(custom_environ: dict, excludes: dict):
         os.environ = cached_environ
 
 
+@pytest.mark.skipif(
+    platform.system() == "Windows",
+    reason="XDG Base Directory Specification is only supported on *nix.",
+)
+@test_utils.test()
+def test_xdg_basedir(tmpdir):
+    orig_cache = os.environ.get("XDG_CACHE_HOME", None)
+    try:
+        # Note: This test intentionally calls os.putenv instead of using the
+        # patch_os_environ_helper because we need to propagate the change in
+        # environment to the native C++ code.
+        os.putenv("XDG_CACHE_HOME", str(tmpdir))
+
+        qd_python_core = qd._lib.utils.import_qd_python_core()
+        repo_dir = qd_python_core.get_repo_dir()
+
+        repo_path = pathlib.Path(repo_dir).resolve()
+        expected_path = pathlib.Path(tmpdir / "quadrants").resolve()
+
+        assert repo_path == expected_path
+
+    finally:
+        if orig_cache is None:
+            os.unsetenv("XDG_CACHE_HOME")
+        else:
+            os.environ["XDG_CACHE_HOME"] = orig_cache
+
+
 TF = [True, False]
 init_args = {
     # 'key': [default, choices],
@@ -75,34 +103,6 @@ special_init_cfgs = [
     "log_level",
     "gdb_trigger",
 ]
-
-
-@pytest.mark.skipif(
-    platform.system() == "Windows",
-    reason="XDG Base Directory Specification is only supported on *nix.",
-)
-@test_utils.test()
-def test_xdg_basedir(tmpdir):
-    orig_cache = os.environ.get("XDG_CACHE_HOME", None)
-    try:
-        # Note: This test intentionally calls os.putenv instead of using the
-        # patch_os_environ_helper because we need to propagate the change in
-        # environment to the native C++ code.
-        os.putenv("XDG_CACHE_HOME", str(tmpdir))
-
-        qd_python_core = qd._lib.utils.import_qd_python_core()
-        repo_dir = qd_python_core.get_repo_dir()
-
-        repo_path = pathlib.Path(repo_dir).resolve()
-        expected_path = pathlib.Path(tmpdir / "quadrants").resolve()
-
-        assert repo_path == expected_path
-
-    finally:
-        if orig_cache is None:
-            os.unsetenv("XDG_CACHE_HOME")
-        else:
-            os.environ["XDG_CACHE_HOME"] = orig_cache
 
 
 @pytest.mark.parametrize("key,values", init_args.items())
