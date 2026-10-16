@@ -3,7 +3,9 @@ import os
 import shutil
 import tempfile
 import warnings
+from collections.abc import Callable
 from copy import deepcopy as _deepcopy
+from typing import Any
 
 from quadrants import _logging, _snode
 from quadrants._lib import core as _qd_core
@@ -214,22 +216,23 @@ class _EnvironmentConfigurator:
         self.keys = []
 
     def add(self, key, _cast=None):
-        _cast = _cast or self.bool_int
-
-        self.keys.append(key)
-
         # QD_OFFLINE_CACHE=   : no effect
         # QD_OFFLINE_CACHE=0  : False
         # QD_OFFLINE_CACHE=1  : True
+        self.keys.append(key)
+        if key in self.kwargs or os.environ.get("QD_" + key.upper(), ""):
+            self[key] = self.read(key, _cast)
+
+    def read(self, key: str, env_parse_fn: Callable[[str], Any] | None = None) -> Any:
+        """Read a supplied option, removing it from kwargs and parsing only environment-variable values."""
+        env_parse_fn = env_parse_fn or self.bool_int
         name = "QD_" + key.upper()
         value = os.environ.get(name, "")
         if key in self.kwargs:
-            self[key] = self.kwargs[key]
             if value:
                 _qd_core.warn(f'Environment variable {name}={value} overridden by qd.init argument "{key}"')
-            del self.kwargs[key]  # mark as recognized
-        elif value:
-            self[key] = _cast(value)
+            return self.kwargs.pop(key)
+        return env_parse_fn(value)
 
     def __getitem__(self, key):
         return getattr(self.cfg, key)
@@ -458,13 +461,13 @@ def init(
     env_spec.add("print_full_traceback")
     env_spec.add("unrolling_limit")
 
-    # Handle cpu_work_scheduling and cpu_fixed_block_dim.
-    configure_cpu_scheduling(kwargs, cfg)
+    # Normalize deprecated CPU options and handle cpu_work_scheduling.
+    configure_cpu_scheduling(env_comp)
 
     # compiler configurations (qd.cfg):
     for key in dir(cfg):
         # These options are handled separately above.
-        if key in ["arch", "default_fp", "default_ip", "cpu_work_scheduling", "cpu_fixed_block_dim"]:
+        if key in ["arch", "default_fp", "default_ip", "cpu_work_scheduling"]:
             continue
         _cast = type(getattr(cfg, key))
         if _cast is bool:
