@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from quadrants.lang.misc import _EnvironmentConfigurator
 
 
-def normalize_cpu_scheduling_aliases(env_comp: _EnvironmentConfigurator) -> None:
+def normalize_deprecated_cpu_scheduling_aliases(env_comp: _EnvironmentConfigurator) -> None:
     kwargs = env_comp.kwargs
     if env_comp.is_supplied("make_cpu_multithreading_loop") and env_comp.is_supplied("cpu_work_scheduling"):
         raise ValueError(

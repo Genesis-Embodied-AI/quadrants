@@ -13,7 +13,7 @@ from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import Extension
 from quadrants._lib.utils import get_os_name
 from quadrants.lang import impl, util
-from quadrants.lang._cpu_scheduling import normalize_cpu_scheduling_aliases
+from quadrants.lang._cpu_scheduling import normalize_deprecated_cpu_scheduling_aliases
 from quadrants.lang.checkpoint import checkpoint
 from quadrants.lang.expr import Expr
 from quadrants.lang.graph_parallel import graph_parallel, graph_parallel_context
@@ -484,8 +484,7 @@ def init(
     env_spec.add("print_full_traceback")
     env_spec.add("unrolling_limit")
 
-    # Normalize deprecated CPU options.
-    normalize_cpu_scheduling_aliases(env_comp)
+    normalize_deprecated_cpu_scheduling_aliases(env_comp)
 
     # compiler configurations (qd.cfg):
     for key in dir(cfg):
