@@ -14,14 +14,14 @@ def _is_supplied(kwargs: dict[str, Any], name: str) -> bool:
     return name in kwargs or bool(os.environ.get("QD_" + name.upper()))
 
 
-def _read(kwargs: dict[str, Any], name: str, cast: Callable[[str], Any]) -> Any:
+def _read(kwargs: dict[str, Any], name: str, env_parse_fn: Callable[[str], Any]) -> Any:
     env_name = "QD_" + name.upper()
     env_value = os.environ.get(env_name, "")
     if name in kwargs:
         if env_value:
             _qd_core.warn(f'Environment variable {env_name}={env_value} overridden by qd.init argument "{name}"')
         return kwargs.pop(name)
-    return cast(env_value)
+    return env_parse_fn(env_value)
 
 
 def _mode_from_env(value: str) -> _qd_core.CPUWorkScheduling:
