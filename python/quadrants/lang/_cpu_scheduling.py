@@ -1,4 +1,4 @@
-"""Resolve CPU scheduling settings and their deprecated initialization aliases."""
+"""Normalize deprecated CPU scheduling options to their current names."""
 
 from __future__ import annotations
 
@@ -11,17 +11,7 @@ if TYPE_CHECKING:
     from quadrants.lang.misc import _EnvironmentConfigurator
 
 
-def _mode_from_env(value: str) -> _qd_core.CPUWorkScheduling:
-    try:
-        return {
-            "PER_WORKER": _qd_core.CPUWorkScheduling.PER_WORKER,
-            "FIXED_SIZE": _qd_core.CPUWorkScheduling.FIXED_SIZE,
-        }[value]
-    except KeyError:
-        raise ValueError("QD_CPU_WORK_SCHEDULING must be PER_WORKER or FIXED_SIZE") from None
-
-
-def configure_cpu_scheduling(env_comp: _EnvironmentConfigurator) -> None:
+def normalize_cpu_scheduling_aliases(env_comp: _EnvironmentConfigurator) -> None:
     kwargs = env_comp.kwargs
     if env_comp.is_supplied("make_cpu_multithreading_loop") and env_comp.is_supplied("cpu_work_scheduling"):
         raise ValueError(
@@ -52,9 +42,3 @@ def configure_cpu_scheduling(env_comp: _EnvironmentConfigurator) -> None:
             stacklevel=3,
         )
         kwargs["cpu_fixed_block_dim"] = env_comp.read("default_cpu_block_dim", int)
-
-    if env_comp.is_supplied("cpu_work_scheduling"):
-        value = env_comp.read("cpu_work_scheduling", _mode_from_env)
-        if not isinstance(value, _qd_core.CPUWorkScheduling):
-            raise TypeError("cpu_work_scheduling must be a qd.CPUWorkScheduling member")
-        env_comp["cpu_work_scheduling"] = value

@@ -5,6 +5,7 @@ import tempfile
 import warnings
 from collections.abc import Callable
 from copy import deepcopy as _deepcopy
+from enum import Enum
 from typing import Any
 
 from quadrants import _logging, _snode
@@ -12,7 +13,7 @@ from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import Extension
 from quadrants._lib.utils import get_os_name
 from quadrants.lang import impl, util
-from quadrants.lang._cpu_scheduling import configure_cpu_scheduling
+from quadrants.lang._cpu_scheduling import normalize_cpu_scheduling_aliases
 from quadrants.lang.checkpoint import checkpoint
 from quadrants.lang.expr import Expr
 from quadrants.lang.graph_parallel import graph_parallel, graph_parallel_context
@@ -220,7 +221,26 @@ class _EnvironmentConfigurator:
         # QD_OFFLINE_CACHE=0  : False
         # QD_OFFLINE_CACHE=1  : True
         self.keys.append(key)
-        if self.is_supplied(key):
+        if not self.is_supplied(key):
+            return
+
+        value_type = type(self[key])
+        if issubclass(value_type, Enum):
+
+            def parse_enum(text: str) -> Enum:
+                try:
+                    return value_type[text]
+                except KeyError:
+                    choices = " or ".join(value_type.__members__)
+                    raise ValueError(f"QD_{key.upper()} must be {choices}") from None
+
+            value = self.read(key, parse_enum)
+            if not isinstance(value, value_type):
+                raise TypeError(f"{key} must be a {value_type.__name__} member")
+            self[key] = value
+        else:
+            if _cast is None:
+                _cast = self.bool_int if value_type is bool else value_type
             self[key] = self.read(key, _cast)
 
     def is_supplied(self, key: str) -> bool:
@@ -464,18 +484,15 @@ def init(
     env_spec.add("print_full_traceback")
     env_spec.add("unrolling_limit")
 
-    # Normalize deprecated CPU options and handle cpu_work_scheduling.
-    configure_cpu_scheduling(env_comp)
+    # Normalize deprecated CPU options.
+    normalize_cpu_scheduling_aliases(env_comp)
 
     # compiler configurations (qd.cfg):
     for key in dir(cfg):
         # These options are handled separately above.
-        if key in ["arch", "default_fp", "default_ip", "cpu_work_scheduling"]:
+        if key in ["arch", "default_fp", "default_ip"]:
             continue
-        _cast = type(getattr(cfg, key))
-        if _cast is bool:
-            _cast = None
-        env_comp.add(key, _cast)
+        env_comp.add(key)
 
     unexpected_keys = kwargs.keys()
 

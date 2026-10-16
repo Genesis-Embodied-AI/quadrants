@@ -53,7 +53,7 @@ def test_cpu_scheduling_enum(mode, monkeypatch):
 @pytest.mark.parametrize("value", ["PER_WORKER", 0, 1, True, False, None, Enum("Other", "PER_WORKER").PER_WORKER])
 @test_utils.test(arch=qd.cpu)
 def test_cpu_scheduling_invalid_enum(value):
-    with pytest.raises(TypeError, match="cpu_work_scheduling must be a qd.CPUWorkScheduling member"):
+    with pytest.raises(TypeError, match="cpu_work_scheduling must be a CPUWorkScheduling member"):
         qd.init(arch=qd.cpu, cpu_work_scheduling=value)
 
 
