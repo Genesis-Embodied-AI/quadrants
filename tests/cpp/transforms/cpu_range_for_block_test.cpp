@@ -36,12 +36,14 @@ TEST(CPURangeForBlock, BlockBoundaryEdgeCases) {
 }
 
 TEST(CPURangeForBlock, FullSignedRange) {
-  const int32_t begin = std::numeric_limits<int32_t>::min();
-  const int32_t end = std::numeric_limits<int32_t>::max();
-  const int32_t expected[] = {begin, -(1 << 30), 0, 1 << 30, end};
+  const int32_t original_range_begin = std::numeric_limits<int32_t>::min();
+  const int32_t original_range_end = std::numeric_limits<int32_t>::max();
+  const int32_t expected[] = {original_range_begin, -(1 << 30), 0, 1 << 30, original_range_end};
   for (int boundary_index = 0; boundary_index <= 4; ++boundary_index) {
-    EXPECT_EQ(get_cpu_per_worker_block_start_index(begin, end, 4, 1, boundary_index), expected[boundary_index]);
-    EXPECT_EQ(get_cpu_per_worker_block_start_index(end, begin, 4, 1, boundary_index), begin);
+    EXPECT_EQ(get_cpu_per_worker_block_start_index(original_range_begin, original_range_end, 4, 1, boundary_index),
+              expected[boundary_index]);
+    EXPECT_EQ(get_cpu_per_worker_block_start_index(original_range_end, original_range_begin, 4, 1, boundary_index),
+              original_range_begin);
   }
 }
 
