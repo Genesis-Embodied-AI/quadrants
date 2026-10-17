@@ -31,13 +31,13 @@ def test_cpu_range_for_block_bounds(
     cpu_per_worker_min_block_dim, threads, constant_bounds, begin, end, expected_total, expected_visits
 ):
     qd.init(arch=qd.cpu, cpu_max_num_threads=threads, cpu_per_worker_min_block_dim=cpu_per_worker_min_block_dim)
-    out = qd.field(qd.i32, shape=8)
+    visited = qd.field(qd.i32, shape=8)
 
     @qd.kernel
     def k_dynamic_range(begin: qd.i32, end: qd.i32) -> qd.i32:
         total = 0
         for i in range(begin, end):
-            out[i + 2] += 1
+            visited[i + 2] += 1
             total += i
         return total
 
@@ -45,14 +45,14 @@ def test_cpu_range_for_block_bounds(
     def k_constant_range(begin: qd.template(), end: qd.template()) -> qd.i32:
         total = 0
         for i in range(begin, end):
-            out[i + 2] += 1
+            visited[i + 2] += 1
             total += i
         return total
 
     kernel = k_constant_range if constant_bounds else k_dynamic_range
-    out.fill(0)
+    visited.fill(0)
     assert kernel(begin, end) == expected_total
-    np.testing.assert_array_equal(out.to_numpy(), expected_visits)
+    np.testing.assert_array_equal(visited.to_numpy(), expected_visits)
 
 
 @pytest.mark.parametrize("serialize", [False, True])
