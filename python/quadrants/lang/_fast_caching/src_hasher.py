@@ -140,7 +140,6 @@ def make_source_config_key(kernel_source_info: FunctionSourceInfo, compilation_m
         (
             _L1_MARKER,
             compilation_mode,
-            "replay-only-layout-v1",
             quadrants.__version_str__,
             kernel_hash,
             config_hash,
