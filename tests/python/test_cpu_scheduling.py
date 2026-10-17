@@ -200,8 +200,13 @@ def test_cpu_fixed_block_dim_invalid(value):
 
 
 @pytest.mark.parametrize(
-    "cpu_fixed_block_dim,loop_block_dim,expected",
+    "init_cpu_fixed_block_dim,loop_block_dim_override,expected_block_indices",
     [
+        # expected_block_indices gives the block index returned by qd.block_idx() at each iteration.
+        # For a block size of 3, iterations 0, 1, and 2 run in block 0; iterations 3, 4, and 5 run in block 1.
+        # Iteration index:      0, 1, 2, 3, 4, 5, 6, 7
+        # Expected block:      0, 0, 0, 1, 1, 1, 2, 2
+        # loop_block_dim_override replaces init_cpu_fixed_block_dim for this loop; None means no override.
         (1, None, [0, 1, 2, 3, 4, 5, 6, 7]),
         (3, None, [0, 0, 0, 1, 1, 1, 2, 2]),
         (16, None, [0, 0, 0, 0, 0, 0, 0, 0]),
@@ -210,24 +215,24 @@ def test_cpu_fixed_block_dim_invalid(value):
     ],
 )
 @test_utils.test(arch=qd.cpu)
-def test_cpu_fixed_block_dim_execution(cpu_fixed_block_dim, loop_block_dim, expected):
+def test_cpu_fixed_block_dim_execution(init_cpu_fixed_block_dim, loop_block_dim_override, expected_block_indices):
     qd.init(
         arch=qd.cpu,
         cpu_work_scheduling=qd.CPUWorkScheduling.FIXED_SIZE,
-        cpu_fixed_block_dim=cpu_fixed_block_dim,
+        cpu_fixed_block_dim=init_cpu_fixed_block_dim,
         cpu_max_num_threads=4,
     )
     out = qd.ndarray(qd.i32, shape=8)
 
     @qd.kernel
     def k_record_blocks(out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
-        if qd.static(loop_block_dim is not None):
-            qd.loop_config(block_dim=loop_block_dim)
+        if qd.static(loop_block_dim_override is not None):
+            qd.loop_config(block_dim=loop_block_dim_override)
         for i in range(8):
             out[i] = qd.block_idx()
 
     k_record_blocks(out)
-    np.testing.assert_array_equal(out.to_numpy(), expected)
+    np.testing.assert_array_equal(out.to_numpy(), expected_block_indices)
 
 
 @pytest.mark.parametrize("fastcache", [False, True])
