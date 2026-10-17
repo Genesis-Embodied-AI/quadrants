@@ -60,7 +60,10 @@ def clean_scheduling_environment(monkeypatch):
         ({}, {"QD_MAKE_CPU_MULTITHREADING_LOOP": "1"}, "cpu_work_scheduling", qd.CPUWorkScheduling.PER_WORKER, True),
         ({}, {"QD_MAKE_CPU_MULTITHREADING_LOOP": "0"}, "cpu_work_scheduling", qd.CPUWorkScheduling.FIXED_SIZE, True),
         ({}, {"QD_DEFAULT_CPU_BLOCK_DIM": "17"}, "cpu_fixed_block_dim", 17, True),
-        # Empty deprecated environment variables do not conflict with current options or produce warnings.
+        # Empty environment variables are ignored, including deprecated ones.
+        ({}, {"QD_CPU_WORK_SCHEDULING": ""}, "cpu_work_scheduling", qd.CPUWorkScheduling.PER_WORKER, False),
+        ({}, {"QD_CPU_FIXED_BLOCK_DIM": ""}, "cpu_fixed_block_dim", 32, False),
+        ({}, {"QD_CPU_PER_WORKER_MIN_BLOCK_DIM": ""}, "cpu_per_worker_min_block_dim", 512, False),
         (
             {"cpu_work_scheduling": qd.CPUWorkScheduling.FIXED_SIZE, "cpu_fixed_block_dim": 17},
             {"QD_MAKE_CPU_MULTITHREADING_LOOP": "", "QD_DEFAULT_CPU_BLOCK_DIM": ""},
