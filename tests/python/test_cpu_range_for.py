@@ -10,9 +10,9 @@ from tests import test_utils
 @pytest.mark.parametrize("threads", [1, 4])
 @pytest.mark.parametrize("constant_bounds", [False, True])
 @pytest.mark.parametrize(
-    "begin,end,expected_total,expected_visits",
+    "begin,end,expected_total,expected_num_visits",
     [
-        # expected_visits counts how often each value of i should occur.
+        # expected_num_visits counts how often each value of i should occur.
         # For example, range(1, 4) should run with i = 1, 2, and 3, once each:
         # Value of i:       -2, -1, 0, 1, 2, 3, 4, 5
         # Expected count:    0,  0, 0, 1, 1, 1, 0, 0
@@ -28,16 +28,16 @@ from tests import test_utils
 )
 @test_utils.test(arch=qd.cpu)
 def test_cpu_range_for_block_bounds(
-    cpu_per_worker_min_block_dim, threads, constant_bounds, begin, end, expected_total, expected_visits
+    cpu_per_worker_min_block_dim, threads, constant_bounds, begin, end, expected_total, expected_num_visits
 ):
     qd.init(arch=qd.cpu, cpu_max_num_threads=threads, cpu_per_worker_min_block_dim=cpu_per_worker_min_block_dim)
-    visited = qd.field(qd.i32, shape=8)
+    num_visits = qd.field(qd.i32, shape=8)
 
     @qd.kernel
     def k_dynamic_range(begin: qd.i32, end: qd.i32) -> qd.i32:
         total = 0
         for i in range(begin, end):
-            visited[i + 2] += 1
+            num_visits[i + 2] += 1
             total += i
         return total
 
@@ -45,14 +45,14 @@ def test_cpu_range_for_block_bounds(
     def k_constant_range(begin: qd.template(), end: qd.template()) -> qd.i32:
         total = 0
         for i in range(begin, end):
-            visited[i + 2] += 1
+            num_visits[i + 2] += 1
             total += i
         return total
 
     kernel = k_constant_range if constant_bounds else k_dynamic_range
-    visited.fill(0)
+    num_visits.fill(0)
     assert kernel(begin, end) == expected_total
-    np.testing.assert_array_equal(visited.to_numpy(), expected_visits)
+    np.testing.assert_array_equal(num_visits.to_numpy(), expected_num_visits)
 
 
 @pytest.mark.parametrize("serialize", [False, True])
