@@ -1,13 +1,13 @@
 # Algorithms
 
-The algorithms here operate at device-level, using all available gpu cores, and contrast with:
+The algorithms here operate at device-level and contrast with:
 - [Per-thread linear algorithms](linalg_per_thread.md): operate on per-thread level
 - [Subgroup-level operations](subgroup.md): operate on per-subgroup level
 - [Block-level operations](block.md): operate on per-block level
 
-Each function is a kernel-side qd.func functions, which must be launched from inside a qd.kernel. They are fully compatible with graph. Every op requires caller-owned **scratch**, covered in a later section.
+The current composable functions are kernel-side `@qd.func` operations called from inside a `@qd.kernel`. The reductions, scans, selection, sort, and reduce-by-key operations require caller-owned **scratch**, covered in a later section.
 
-> **Experimental.** These device-wide algorithms are a new addition and should be considered experimental: their signatures and semantics may change in a future release. (This does not apply to the **deprecated** `parallel_sort` and `PrefixSumExecutor`, which are on their own removal track.)
+> **Experimental.** These `qd.algorithms` device-wide algorithms are a new addition and should be considered experimental: their signatures and semantics may change in a future release. (This does not apply to the **deprecated** `parallel_sort` and `PrefixSumExecutor`, which are on their own removal track.)
 
 ## What's available
 
@@ -21,12 +21,24 @@ Each function is a kernel-side qd.func functions, which must be launched from in
 | `qd.algorithms.{reduce,exclusive_scan,select,reduce_by_key,sort}_scratch_slots(...)` | Host- and kernel-callable helpers returning the scratch slot count each op needs. | yes | yes |
 | `qd.algorithms.parallel_sort` | Odd-even merge sort (in-place, key or key-value). **Deprecated**: prefer `sort`. | no | yes |
 | `qd.algorithms.PrefixSumExecutor` | Inclusive in-place prefix sum (i32 only). **Deprecated**: prefer `exclusive_scan_add`. | no | yes |
+| `(A @ X).write_to(Y)` for `qd.linalg.CSRMatrix` | [Compressed sparse row (CSR) matrix multiplication](#csr-sparse-matrix-multiplication) into caller-provided output. | yes | yes |
 
-These algorithms run on all of Quadrants' GPU backends (CUDA, AMDGPU, Vulkan, Metal); they are GPU-only and are not available on the CPU backend. (On Metal only 32-bit dtypes are supported - no `i64` / `u64` / `f64`; `PrefixSumExecutor` is CUDA / Vulkan only.) The `*_scratch_slots` helpers are plain integer arithmetic, so they also run on the host / CPU.
+The reductions, scans, selection, sort, and reduce-by-key operations run on Quadrants' GPU backends (CUDA, AMDGPU, Vulkan, Metal); they are GPU-only and are not available on the CPU backend. (On Metal only 32-bit dtypes are supported - no `i64` / `u64` / `f64`; `PrefixSumExecutor` is CUDA / Vulkan only.) The `*_scratch_slots` helpers are plain integer arithmetic, so they also run on the host / CPU.
 
 ## Composable `@qd.func` ops
 
-Every algorithm is a composable `@qd.func` (e.g. `reduce_add`, `sort`): call it at the **top level** of your own `@qd.kernel`, so the op is captured into the same kernel / graph as your surrounding phases. The function is annotated with `requires_top_level=True`, so attempting to use it outside of top level will throw an exception at compile time. Note that within a `qd.loop_do_while` counts as being at top-level [FIXME: add qd.checkpoint here too, once/when we merge qd.checkpoint].
+The reductions, scans, selection, sort, and reduce-by-key functions are composable `@qd.func` operations (e.g. `reduce_add`, `sort`): call them at the **top level** of your own `@qd.kernel`. These functions are annotated with `requires_top_level=True`, so attempting to use them outside of top level will throw an exception at compile time. Note that within a `qd.loop_do_while` counts as being at top-level [FIXME: add qd.checkpoint here too, once/when we merge qd.checkpoint].
+
+## CSR sparse matrix multiplication
+
+`qd.linalg.SparseMatrix.from_csr(row_ptr, col_idx, values, shape=(M, N))` returns a buffer-backed `qd.linalg.CSRMatrix` that borrows scalar `qd.ndarray` buffers: rank-1 `i32` row pointers and column indices, and rank-1 `f32` values. For `f32` arrays `X[N, K]` and `Y[M, K]`, `(A @ X).write_to(Y)` overwrites `Y` with `A @ X`, using current buffer contents. It is callable from Python or the top level of a kernel with `A: qd.linalg.CSRMatrix`, with the same interface on CPU, CUDA and Metal. Existing native `SparseMatrix` multiplication returns an allocated result.
+
+The row pointers must start at zero, be nondecreasing, and end within the equal column/value capacities; only that prefix is active. Active column indices must lie in `[0, N)`. Empty rows and unsorted columns are supported; duplicates accumulate in stored order. Dimensions and capacity must be positive, each buffer must fit `2**31 - 1` bytes, and output must not alias input storage. The operation is forward-only. Host calls raise on incompatible metadata. Kernel callers must supply matching shapes; an incompatible shape silently skips the write and leaves the previous output in place in release mode. Debug mode reports an assertion where runtime assertions are supported; Metal and Linux ARM64 do not support them. See [assertions in kernels](debug.md#assertions-in-kernels).
+
+```python
+A = qd.linalg.SparseMatrix.from_csr(row_ptr, col_idx, values, shape=(M, N))
+(A @ X).write_to(Y)
+```
 
 ## Key sizing parameters
 
@@ -35,7 +47,7 @@ Two parameters control sizing:
 - **live element count**, `n`: , the number of elements that will actually be handled by the algorithm. This is a runtime value, provided in a scalar tensor. It can be modified without recompiling the kernel.
 - **maximum capacity**, `log256_max_n`: a **compile-time** constant. One compiled kernel can by used for any live count up to that capacity - see [Capacity (`log256_max_n`)](#capacity-log256_max_n).
 
-Because each op runs entirely as device code it does no host-side validation (a size check would force a device-to-host read of the count that defeats graph capture), so you must size its `scratch` correctly up front - see [Scratch space](#scratch-space).
+The reductions, scans, selection, sort, and reduce-by-key operations described below do no host-side validation (a size check would force a device-to-host read of the count that defeats graph capture), so you must size their `scratch` correctly up front - see [Scratch space](#scratch-space).
 
 ## Capacity (`log256_max_n`)
 
@@ -71,7 +83,7 @@ Size `scratch` with the **same** `log256_max_n` you compile the op for - `reduce
 
 ## Scratch space
 
-The algorithms need scratch space in order to run. This is temporary space used by the algorithms. The caller owns the scratch space. It does not need to be initialized in any way. It does need to exist, and be correctly sized, and typed. Every algorithm takes a mandatory `scratch` argument, to receive the scratch space.
+The reductions, scans, selection, sort, and reduce-by-key functions need scratch space in order to run. This is temporary space used by the algorithms. The caller owns the scratch space. It does not need to be initialized in any way. It does need to exist, and be correctly sized, and typed. These functions take a mandatory `scratch` argument.
 
 **Ask first, then allocate.** Each algorithm ships a companion `*_scratch_slots(N)` function - branch-free integer arithmetic, no device round-trip - that returns the minimum number of slots needed for a length-`N` input. Allocate at least that many; allocating more is fine. These functions are both **host- and kernel-callable**: pass a Python `int` to size an allocation up front, or call the same function inside a `@qd.kernel` on a device-read `N` to recompute the requirement on-device and validate it against `scratch.shape[0]` without ever reading `N` back to the host..
 
@@ -426,7 +438,7 @@ No explicit fence is required between a kernel that writes the input and the sub
 
 ## Under the hood
 
-Implementation detail for the curious - not needed to *use* the ops. In every case the func emits a fixed-depth (`log256_max_n`) staircase of phases inside your kernel; each phase is a separate offloaded launch, so correctness relies on the same launch-boundary serialization as your surrounding top-level loops. `BLOCK_DIM = 256` throughout. Each op is implemented from scratch in Quadrants; the classical design it follows is cited in its subsection.
+Implementation detail for the curious - not needed to *use* the ops. The reductions, scans, selection, sort, and reduce-by-key functions emit a fixed-depth (`log256_max_n`) staircase of phases inside your kernel; each phase is a separate offloaded launch, so correctness relies on the same launch-boundary serialization as your surrounding top-level loops. `BLOCK_DIM = 256` throughout these functions. Each op is implemented from scratch in Quadrants; the classical design it follows is cited in its subsection.
 
 ### `reduce_{add,min,max}`
 
