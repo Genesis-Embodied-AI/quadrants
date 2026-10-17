@@ -144,7 +144,7 @@ def make_source_config_key(
     return hash_iterable_strings(
         (
             _L1_MARKER,
-            f"{autodiff_mode}:{adstack_mode.value}",
+            f"{autodiff_mode}:{adstack_mode}",
             quadrants.__version_str__,
             kernel_hash,
             config_hash,
