@@ -59,6 +59,7 @@ def test_src_hasher_create_cache_key_vary_config(key, value) -> None:
     assert cache_key_base == cache_key_same
     assert cache_key_same != cache_key_diff
 
+    # Restoring the original configuration must restore its cache key, with no stale state from the changed setting.
     qd_init_same_arch(print_ir_dbg_info=False)
     assert src_hasher.make_source_config_key(kernel_info) == cache_key_base
 
