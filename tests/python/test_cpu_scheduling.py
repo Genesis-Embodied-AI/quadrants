@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import sys
 import warnings
@@ -235,6 +236,32 @@ def test_cpu_fixed_block_dim_execution(init_cpu_fixed_block_dim, loop_block_dim_
     np.testing.assert_array_equal(block_indices.to_numpy(), expected_block_indices)
 
 
+def _cpu_scheduling_cache_child(args: list[str]) -> None:
+    cache_directory, options_json, fastcache_json, expected_json, warm_json = args
+    options = json.loads(options_json)
+    options["cpu_work_scheduling"] = getattr(qd.CPUWorkScheduling, options["cpu_work_scheduling"])
+    fastcache = json.loads(fastcache_json)
+    qd.init(
+        arch=qd.cpu,
+        cpu_max_num_threads=4,
+        offline_cache=True,
+        offline_cache_file_path=cache_directory,
+        **options,
+    )
+
+    @qd.kernel(fastcache=fastcache)
+    def k_record_blocks(block_indices: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        for i in range(8):
+            block_indices[i] = qd.block_idx()
+
+    block_indices = qd.ndarray(qd.i32, shape=8)
+    k_record_blocks(block_indices)
+    np.testing.assert_array_equal(block_indices.to_numpy(), json.loads(expected_json))
+    if fastcache:
+        assert k_record_blocks._primal.src_ll_cache_observations.cache_loaded == json.loads(warm_json)
+    qd.reset()
+
+
 @pytest.mark.parametrize("fastcache", [False, True])
 @pytest.mark.parametrize(
     "mode,key,value,expected_base,expected_changed",
@@ -248,33 +275,8 @@ def test_cpu_fixed_block_dim_execution(init_cpu_fixed_block_dim, loop_block_dim_
 def test_cpu_scheduling_cache_across_processes(tmp_path, fastcache, mode, key, value, expected_base, expected_changed):
     base = {"cpu_work_scheduling": mode, "cpu_per_worker_min_block_dim": 2, "cpu_fixed_block_dim": 3}
     changed = {**base, key: value}
-    script = tmp_path / "record_blocks.py"
-    script.write_text(
-        """
-import json
-import sys
-import numpy as np
-import quadrants as qd
-
-options = json.loads(sys.argv[2])
-options["cpu_work_scheduling"] = getattr(qd.CPUWorkScheduling, options["cpu_work_scheduling"])
-fastcache = bool(int(sys.argv[3]))
-qd.init(arch=qd.cpu, cpu_max_num_threads=4, offline_cache=True,
-        offline_cache_file_path=sys.argv[1], **options)
-
-@qd.kernel(fastcache=fastcache)
-def k_record_blocks(out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
-    for i in range(8):
-        out[i] = qd.block_idx()
-
-out = qd.ndarray(qd.i32, shape=8)
-k_record_blocks(out)
-np.testing.assert_array_equal(out.to_numpy(), json.loads(sys.argv[4]))
-if fastcache:
-    assert k_record_blocks._primal.src_ll_cache_observations.cache_loaded == bool(int(sys.argv[5]))
-qd.reset()
-"""
-    )
+    env = os.environ.copy()
+    env["PYTHONPATH"] = "."
     # Each process shares the cache directory. Returning to the first settings should reuse its cached kernel.
     for options, expected, warm in [
         (base, expected_base, False),
@@ -284,15 +286,21 @@ qd.reset()
         result = subprocess.run(
             [
                 sys.executable,
-                str(script),
+                __file__,
+                _cpu_scheduling_cache_child.__name__,
                 str(tmp_path / "cache"),
                 json.dumps(options),
-                str(int(fastcache)),
+                json.dumps(fastcache),
                 json.dumps(expected),
-                str(int(warm)),
+                json.dumps(warm),
             ],
+            env=env,
             capture_output=True,
             text=True,
             timeout=120,
         )
         assert result.returncode == 0, result.stdout + result.stderr
+
+
+if __name__ == "__main__":
+    globals()[sys.argv[1]](sys.argv[2:])
