@@ -18,7 +18,7 @@ The number of tasks can differ from the number of workers. When there are more t
 
 By default, Quadrants creates one worker thread per system-reported logical core.
 
-For a CPU `range()` loop, the compiler groups consecutive iterations into blocks. A block is a range of original iterations processed by one generated inner loop. The compiler creates one block per worker and schedules each block as a separate task.
+For a CPU `range()` loop, the compiler groups consecutive iterations into blocks. A block is a range of original iterations processed by one generated inner loop. The compiler creates one block per configured pool worker and schedules each block as a separate task.
 
 For example, consider this loop with 12,000 iterations. Here `work(i)` stands for the original work at iteration index `i`:
 
@@ -83,7 +83,11 @@ Select this mode with `qd.init(arch=qd.cpu, cpu_work_scheduling=qd.CPUWorkSchedu
 
 `cpu_max_num_threads` sets the number of CPU worker threads in the thread pool. Its default is the system-reported number of logical cores. In this mode, it also sets the number of tasks created for each parallel `range()` loop.
 
-The worker count is not capped to the number of logical cores. If it exceeds that count, the operating system shares CPU time among the worker threads.
+The pool size is not capped to the number of logical cores. However, a loop without an explicit `qd.loop_config(parallelize=...)` requests the system-reported number of logical cores, capped to the pool size. Increasing the pool size above that count does not make such a loop use more workers.
+
+For example, with eight logical cores and `cpu_max_num_threads=16`, the pool contains sixteen workers. A loop without a `parallelize` setting uses at most eight of them to process its sixteen tasks.
+
+To request more participating workers, place `qd.loop_config(parallelize=16)` immediately before the loop. The request is capped to the pool size. When more workers participate than there are logical cores, the operating system shares CPU time among them. Changing `parallelize` does not change the number of blocks in `PER_WORKER` mode.
 
 #### cpu_per_worker_min_block_dim
 
@@ -122,7 +126,7 @@ Select this mode with `qd.init(arch=qd.cpu, cpu_work_scheduling=qd.CPUWorkSchedu
 
 #### cpu_max_num_threads
 
-`cpu_max_num_threads` sets the number of CPU worker threads in the thread pool. Its default is the system-reported number of logical cores. It does not set the number of tasks in this mode.
+`cpu_max_num_threads` sets the number of CPU worker threads in the thread pool. Its default is the system-reported number of logical cores. It does not set the number of tasks in this mode. As in `PER_WORKER` mode, a loop without an explicit `parallelize` setting requests the system-reported number of logical cores, capped to the pool size. Use `qd.loop_config(parallelize=N)` to request a different number of participating workers, still capped to the pool size.
 
 For example, four workers can process 32 tasks. As a worker finishes one task, it takes another until all tasks are complete. Increasing the worker count does not change those tasks' iteration ranges.
 
