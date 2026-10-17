@@ -8,6 +8,7 @@
 #include "vk_mem_alloc.h"
 
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <list>
 #include <variant>
@@ -701,6 +702,8 @@ class QD_DLL_EXPORT VulkanDevice : public GraphicsDevice {
   struct ThreadLocalStreams;
   std::unique_ptr<ThreadLocalStreams> compute_streams_{nullptr};
   std::unique_ptr<ThreadLocalStreams> graphics_streams_{nullptr};
+
+  std::once_flag poison_allocation_log_once_;
 
   // Memory allocation
   struct AllocationInternal {

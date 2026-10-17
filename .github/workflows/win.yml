@@ -46,6 +46,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         env:
+          # Token setup and renewal: docs/source/user_guide/contributing.md#gitlab-token-for-ci
           GITLAB_PAT: ${{ secrets.GITLAB_PAT }}
         with:
           submodules: true
