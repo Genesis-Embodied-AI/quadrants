@@ -18,23 +18,23 @@ def test_environment_configurator_enum(enum_type, monkeypatch):
     base_cfg = SimpleNamespace(option=first)
     # An environment variable containing an enum member name selects that member.
     monkeypatch.setenv("QD_OPTION", second.name)
-    _EnvironmentConfigurator({}, base_cfg).add("option")
+    _EnvironmentConfigurator({}, base_cfg).configure("option")
     assert base_cfg.option is second
 
     # A keyword argument overrides even an invalid environment value and is removed from kwargs.
     monkeypatch.setenv("QD_OPTION", "invalid")
     kwargs = {"option": first}
-    _EnvironmentConfigurator(kwargs, base_cfg).add("option")
+    _EnvironmentConfigurator(kwargs, base_cfg).configure("option")
     assert base_cfg.option is first
     assert kwargs == {}
 
     # Without a keyword override, an invalid enum name in the environment raises an error.
     with pytest.raises(ValueError, match="QD_OPTION must be"):
-        _EnvironmentConfigurator({}, base_cfg).add("option")
+        _EnvironmentConfigurator({}, base_cfg).configure("option")
 
     # An empty environment variable is ignored, leaving the configured value unchanged.
     monkeypatch.setenv("QD_OPTION", "")
-    _EnvironmentConfigurator({}, base_cfg).add("option")
+    _EnvironmentConfigurator({}, base_cfg).configure("option")
     assert base_cfg.option is first
 
 
@@ -43,7 +43,7 @@ def test_environment_configurator_rejects_nonmember(value, monkeypatch):
     monkeypatch.delenv("QD_OPTION", raising=False)
     cfg = SimpleNamespace(option=ExampleMode.FIRST)
     with pytest.raises(TypeError, match="option must be a ExampleMode member"):
-        _EnvironmentConfigurator({"option": value}, cfg).add("option")
+        _EnvironmentConfigurator({"option": value}, cfg).configure("option")
     assert cfg.option is ExampleMode.FIRST
 
 
@@ -53,6 +53,6 @@ def test_environment_configurator_rejects_nonmember(value, monkeypatch):
 def test_environment_configurator_infers_parser(default, text, expected, monkeypatch):
     cfg = SimpleNamespace(option=default)
     monkeypatch.setenv("QD_OPTION", text)
-    _EnvironmentConfigurator({}, cfg).add("option")
+    _EnvironmentConfigurator({}, cfg).configure("option")
     assert cfg.option == expected
     assert type(cfg.option) is type(expected)

@@ -215,7 +215,7 @@ class _EnvironmentConfigurator:
         self.kwargs = kwargs
         self.keys = []
 
-    def add(self, key, _cast=None):
+    def configure(self, key, _cast=None):
         # QD_OFFLINE_CACHE=   : no effect
         # QD_OFFLINE_CACHE=0  : False
         # QD_OFFLINE_CACHE=1  : True
@@ -510,11 +510,11 @@ def init(
         impl.get_runtime().set_default_ip(default_ip)
 
     # submodule configurations (spec_cfg):
-    env_spec.add("log_level", str)
-    env_spec.add("gdb_trigger")
-    env_spec.add("short_circuit_operators")
-    env_spec.add("print_full_traceback")
-    env_spec.add("unrolling_limit")
+    env_spec.configure("log_level", str)
+    env_spec.configure("gdb_trigger")
+    env_spec.configure("short_circuit_operators")
+    env_spec.configure("print_full_traceback")
+    env_spec.configure("unrolling_limit")
 
     normalize_deprecated_cpu_scheduling_aliases(env_comp)
 
@@ -523,7 +523,7 @@ def init(
         # These options are handled separately above.
         if key in ["arch", "default_fp", "default_ip"]:
             continue
-        env_comp.add(key)
+        env_comp.configure(key)
 
     unexpected_keys = kwargs.keys()
 
