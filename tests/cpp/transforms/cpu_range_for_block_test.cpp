@@ -1,6 +1,5 @@
 #include "gtest/gtest.h"
 
-#include <algorithm>
 #include <cstdint>
 #include <limits>
 
@@ -25,12 +24,21 @@ TEST(CPURangeForBlock, BlockBoundaries) {
 }
 
 TEST(CPURangeForBlock, BlockBoundaryEdgeCases) {
-  for (int cpu_per_worker_min_block_dim : {1, 16, 512, 2048, 1 << 30, std::numeric_limits<int32_t>::max()}) {
-    // 200 iterations on 12 workers need blocks of 17, unless the configured minimum is larger.
-    const int64_t expected_width = std::max(17, cpu_per_worker_min_block_dim);
+  // 200 iterations on 12 workers: eleven blocks of 17 iterations, then one of 13.
+  const int32_t expected_small_minimum[] = {0, 17, 34, 51, 68, 85, 102, 119, 136, 153, 170, 187, 200};
+  for (int cpu_per_worker_min_block_dim : {1, 16}) {
     for (int boundary_index = 0; boundary_index <= 12; ++boundary_index) {
       EXPECT_EQ(get_cpu_per_worker_block_start_index(0, 200, 12, cpu_per_worker_min_block_dim, boundary_index),
-                std::min<int64_t>(200, expected_width * boundary_index));
+                expected_small_minimum[boundary_index]);
+    }
+  }
+
+  // A minimum above 200 puts all iterations in the first block and leaves the other blocks empty.
+  const int32_t expected_large_minimum[] = {0, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200};
+  for (int cpu_per_worker_min_block_dim : {512, 2048, 1 << 30, std::numeric_limits<int32_t>::max()}) {
+    for (int boundary_index = 0; boundary_index <= 12; ++boundary_index) {
+      EXPECT_EQ(get_cpu_per_worker_block_start_index(0, 200, 12, cpu_per_worker_min_block_dim, boundary_index),
+                expected_large_minimum[boundary_index]);
     }
   }
 }
