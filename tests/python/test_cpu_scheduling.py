@@ -23,39 +23,67 @@ def clean_scheduling_environment(monkeypatch):
         monkeypatch.delenv("QD_" + name, raising=False)
 
 
-@test_utils.test(arch=qd.cpu)
-def test_cpu_scheduling_defaults():
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", DeprecationWarning)
-        qd.init(arch=qd.cpu)
-    assert qd.lang.impl.current_cfg().cpu_work_scheduling == qd.CPUWorkScheduling.PER_WORKER
-
-
-@test_utils.test(arch=qd.cpu)
-def test_cpu_scheduling_environment_variable(monkeypatch):
-    monkeypatch.setenv("QD_CPU_WORK_SCHEDULING", "FIXED_SIZE")
-    qd.init(arch=qd.cpu)
-    assert qd.lang.impl.current_cfg().cpu_work_scheduling == qd.CPUWorkScheduling.FIXED_SIZE
-
-
 @pytest.mark.parametrize(
-    "init_options,env_vars,option_to_check,expected_value",
+    "init_options,env_vars,option_to_check,expected_value,expects_deprecation_warning",
     [
-        ({"make_cpu_multithreading_loop": True}, {}, "cpu_work_scheduling", qd.CPUWorkScheduling.PER_WORKER),
-        ({"make_cpu_multithreading_loop": False}, {}, "cpu_work_scheduling", qd.CPUWorkScheduling.FIXED_SIZE),
-        ({"default_cpu_block_dim": 17}, {}, "cpu_fixed_block_dim", 17),
-        ({}, {"QD_MAKE_CPU_MULTITHREADING_LOOP": "1"}, "cpu_work_scheduling", qd.CPUWorkScheduling.PER_WORKER),
-        ({}, {"QD_MAKE_CPU_MULTITHREADING_LOOP": "0"}, "cpu_work_scheduling", qd.CPUWorkScheduling.FIXED_SIZE),
-        ({}, {"QD_DEFAULT_CPU_BLOCK_DIM": "17"}, "cpu_fixed_block_dim", 17),
+        # Defaults.
+        ({}, {}, "cpu_work_scheduling", qd.CPUWorkScheduling.PER_WORKER, False),
+        ({}, {}, "cpu_fixed_block_dim", 32, False),
+        ({}, {}, "cpu_per_worker_min_block_dim", 512, False),
+        # Current qd.init() options.
+        (
+            {"cpu_work_scheduling": qd.CPUWorkScheduling.PER_WORKER},
+            {},
+            "cpu_work_scheduling",
+            qd.CPUWorkScheduling.PER_WORKER,
+            False,
+        ),
+        (
+            {"cpu_work_scheduling": qd.CPUWorkScheduling.FIXED_SIZE},
+            {},
+            "cpu_work_scheduling",
+            qd.CPUWorkScheduling.FIXED_SIZE,
+            False,
+        ),
+        ({"cpu_fixed_block_dim": 17}, {}, "cpu_fixed_block_dim", 17, False),
+        ({"cpu_per_worker_min_block_dim": 16}, {}, "cpu_per_worker_min_block_dim", 16, False),
+        # Current environment variables.
+        ({}, {"QD_CPU_WORK_SCHEDULING": "PER_WORKER"}, "cpu_work_scheduling", qd.CPUWorkScheduling.PER_WORKER, False),
+        ({}, {"QD_CPU_WORK_SCHEDULING": "FIXED_SIZE"}, "cpu_work_scheduling", qd.CPUWorkScheduling.FIXED_SIZE, False),
+        ({}, {"QD_CPU_FIXED_BLOCK_DIM": "17"}, "cpu_fixed_block_dim", 17, False),
+        ({}, {"QD_CPU_PER_WORKER_MIN_BLOCK_DIM": "16"}, "cpu_per_worker_min_block_dim", 16, False),
+        # Deprecated qd.init() options.
+        ({"make_cpu_multithreading_loop": True}, {}, "cpu_work_scheduling", qd.CPUWorkScheduling.PER_WORKER, True),
+        ({"make_cpu_multithreading_loop": False}, {}, "cpu_work_scheduling", qd.CPUWorkScheduling.FIXED_SIZE, True),
+        ({"default_cpu_block_dim": 17}, {}, "cpu_fixed_block_dim", 17, True),
+        # Deprecated environment variables.
+        ({}, {"QD_MAKE_CPU_MULTITHREADING_LOOP": "1"}, "cpu_work_scheduling", qd.CPUWorkScheduling.PER_WORKER, True),
+        ({}, {"QD_MAKE_CPU_MULTITHREADING_LOOP": "0"}, "cpu_work_scheduling", qd.CPUWorkScheduling.FIXED_SIZE, True),
+        ({}, {"QD_DEFAULT_CPU_BLOCK_DIM": "17"}, "cpu_fixed_block_dim", 17, True),
+        # Empty deprecated environment variables do not conflict with current options or produce warnings.
+        (
+            {"cpu_work_scheduling": qd.CPUWorkScheduling.FIXED_SIZE, "cpu_fixed_block_dim": 17},
+            {"QD_MAKE_CPU_MULTITHREADING_LOOP": "", "QD_DEFAULT_CPU_BLOCK_DIM": ""},
+            "cpu_fixed_block_dim",
+            17,
+            False,
+        ),
     ],
 )
 @test_utils.test(arch=qd.cpu)
-def test_cpu_scheduling_deprecated_alias(init_options, env_vars, option_to_check, expected_value, monkeypatch):
+def test_cpu_scheduling_options(
+    init_options, env_vars, option_to_check, expected_value, expects_deprecation_warning, monkeypatch
+):
     for name, value in env_vars.items():
         monkeypatch.setenv(name, value)
-    with pytest.warns(DeprecationWarning, match=f"is deprecated; use {option_to_check}"):
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", DeprecationWarning)
         qd.init(arch=qd.cpu, **init_options)
     assert getattr(qd.lang.impl.current_cfg(), option_to_check) == expected_value
+    deprecation_warnings = [warning for warning in caught if issubclass(warning.category, DeprecationWarning)]
+    assert bool(deprecation_warnings) == expects_deprecation_warning
+    for warning in deprecation_warnings:
+        assert f"is deprecated; use {option_to_check}" in str(warning.message)
 
 
 @pytest.mark.parametrize("old_env,new_env", [(False, False), (True, False), (False, True), (True, True)])
@@ -82,14 +110,6 @@ def test_cpu_scheduling_conflicting_aliases(
     # Reject both names even when they request identical settings.
     with pytest.raises(ValueError, match=f"Cannot specify both {old} and {new}"):
         qd.init(arch=qd.cpu, **kwargs)
-
-
-@test_utils.test(arch=qd.cpu)
-def test_cpu_scheduling_empty_environment(monkeypatch):
-    monkeypatch.setenv("QD_MAKE_CPU_MULTITHREADING_LOOP", "")
-    monkeypatch.setenv("QD_DEFAULT_CPU_BLOCK_DIM", "")
-    qd.init(arch=qd.cpu, cpu_work_scheduling=qd.CPUWorkScheduling.FIXED_SIZE, cpu_fixed_block_dim=17)
-    assert qd.lang.impl.current_cfg().cpu_fixed_block_dim == 17
 
 
 @pytest.mark.parametrize("value", [0, -1])
