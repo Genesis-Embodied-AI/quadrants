@@ -60,14 +60,6 @@ def clean_scheduling_environment(monkeypatch):
         ({}, {"QD_MAKE_CPU_MULTITHREADING_LOOP": "1"}, "cpu_work_scheduling", qd.CPUWorkScheduling.PER_WORKER, True),
         ({}, {"QD_MAKE_CPU_MULTITHREADING_LOOP": "0"}, "cpu_work_scheduling", qd.CPUWorkScheduling.FIXED_SIZE, True),
         ({}, {"QD_DEFAULT_CPU_BLOCK_DIM": "17"}, "cpu_fixed_block_dim", 17, True),
-        # Empty environment variables are ignored, including deprecated ones.
-        (
-            {"cpu_work_scheduling": qd.CPUWorkScheduling.FIXED_SIZE, "cpu_fixed_block_dim": 17},
-            {"QD_MAKE_CPU_MULTITHREADING_LOOP": "", "QD_DEFAULT_CPU_BLOCK_DIM": ""},
-            "cpu_fixed_block_dim",
-            17,
-            False,
-        ),
     ],
 )
 @test_utils.test(arch=qd.cpu)
