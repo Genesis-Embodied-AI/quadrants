@@ -39,29 +39,23 @@ def test_cpu_scheduling_environment_variable(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "deprecated_option, deprecated_value, replacement_option, expected_replacement_value, deprecated_env_value",
+    "init_options,env_vars,option_to_check,expected_value",
     [
-        ("make_cpu_multithreading_loop", True, "cpu_work_scheduling", qd.CPUWorkScheduling.PER_WORKER, "1"),
-        ("make_cpu_multithreading_loop", False, "cpu_work_scheduling", qd.CPUWorkScheduling.FIXED_SIZE, "0"),
-        ("default_cpu_block_dim", 17, "cpu_fixed_block_dim", 17, "17"),
+        ({"make_cpu_multithreading_loop": True}, {}, "cpu_work_scheduling", qd.CPUWorkScheduling.PER_WORKER),
+        ({"make_cpu_multithreading_loop": False}, {}, "cpu_work_scheduling", qd.CPUWorkScheduling.FIXED_SIZE),
+        ({"default_cpu_block_dim": 17}, {}, "cpu_fixed_block_dim", 17),
+        ({}, {"QD_MAKE_CPU_MULTITHREADING_LOOP": "1"}, "cpu_work_scheduling", qd.CPUWorkScheduling.PER_WORKER),
+        ({}, {"QD_MAKE_CPU_MULTITHREADING_LOOP": "0"}, "cpu_work_scheduling", qd.CPUWorkScheduling.FIXED_SIZE),
+        ({}, {"QD_DEFAULT_CPU_BLOCK_DIM": "17"}, "cpu_fixed_block_dim", 17),
     ],
 )
 @test_utils.test(arch=qd.cpu)
-def test_cpu_scheduling_deprecated_alias(
-    deprecated_option,
-    deprecated_value,
-    replacement_option,
-    expected_replacement_value,
-    deprecated_env_value,
-    monkeypatch,
-):
-    with pytest.warns(DeprecationWarning, match=f"{deprecated_option} is deprecated; use {replacement_option}"):
-        qd.init(arch=qd.cpu, **{deprecated_option: deprecated_value})
-    assert getattr(qd.lang.impl.current_cfg(), replacement_option) == expected_replacement_value
-    monkeypatch.setenv("QD_" + deprecated_option.upper(), deprecated_env_value)
-    with pytest.warns(DeprecationWarning, match=f"{deprecated_option} is deprecated; use {replacement_option}"):
-        qd.init(arch=qd.cpu)
-    assert getattr(qd.lang.impl.current_cfg(), replacement_option) == expected_replacement_value
+def test_cpu_scheduling_deprecated_alias(init_options, env_vars, option_to_check, expected_value, monkeypatch):
+    for name, value in env_vars.items():
+        monkeypatch.setenv(name, value)
+    with pytest.warns(DeprecationWarning, match=f"is deprecated; use {option_to_check}"):
+        qd.init(arch=qd.cpu, **init_options)
+    assert getattr(qd.lang.impl.current_cfg(), option_to_check) == expected_value
 
 
 @pytest.mark.parametrize("old_env,new_env", [(False, False), (True, False), (False, True), (True, True)])
