@@ -12,6 +12,7 @@ from tests import test_utils
 @pytest.mark.parametrize(
     "begin,end,expected_total,expected_visits",
     [
+        # The other parameterized values (block size, worker count, and constant bounds) should not affect these results.
         # expected_visits counts how often each value of i should occur.
         # For example, range(1, 4) should run with i = 1, 2, and 3, once each:
         # Value of i:       -2, -1, 0, 1, 2, 3, 4, 5
