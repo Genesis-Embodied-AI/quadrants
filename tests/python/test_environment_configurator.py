@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 import quadrants as qd
-from quadrants.lang.misc import _EnvironmentConfigurator
+from quadrants.lang._environment_configurator import _EnvironmentConfigurator
 
 
 class ExampleMode(Enum):
