@@ -12,7 +12,11 @@ from tests import test_utils
 @pytest.mark.parametrize(
     "begin,end,expected_total,expected_visits",
     [
-        # Visit-list positions correspond to iteration indices -2, -1, 0, 1, 2, 3, 4, 5.
+        # expected_visits counts how often each value of i should occur.
+        # For example, range(1, 4) should run with i = 1, 2, and 3, once each:
+        # Value of i:       -2, -1, 0, 1, 2, 3, 4, 5
+        # Expected count:    0,  0, 0, 1, 1, 1, 0, 0
+        # Comparing these counts checks that parallel scheduling does not skip an iteration or run it twice.
         (-2, -2, 0, [0, 0, 0, 0, 0, 0, 0, 0]),
         (3, 1, 0, [0, 0, 0, 0, 0, 0, 0, 0]),
         (-2, -1, -2, [1, 0, 0, 0, 0, 0, 0, 0]),
