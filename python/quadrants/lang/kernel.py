@@ -435,7 +435,7 @@ class Kernel(FuncBase):
             kernel_source_info, _src = get_source_info_and_src(self.func)
             self._kernel_source_info_cached = kernel_source_info  # reused by materialize / launch_kernel
             self._l1_key = src_hasher.make_source_config_key(
-                kernel_source_info, compilation_mode=f"{self.autodiff_mode}:{self.adstack_mode}"
+                kernel_source_info, autodiff_mode=self.autodiff_mode, adstack_mode=self.adstack_mode
             )
 
             # Phase 1: L1 lookup - pruning info only, no args walk yet.
