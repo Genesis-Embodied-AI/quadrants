@@ -48,7 +48,14 @@ def test_environment_configurator_rejects_nonmember(value, monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "default, text, expected", [(False, "0", False), (False, "1", True), (32, "64", 64), ("a", "b", "b")]
+    "default, text, expected",
+    [
+        (False, "0", False),
+        (False, "1", True),
+        (32, "64", 64),
+        ("a", "b", "b"),
+        (ExampleMode.FIRST, "SECOND", ExampleMode.SECOND),
+    ],
 )
 def test_environment_configurator_infers_parser(default, text, expected, monkeypatch):
     cfg = SimpleNamespace(option=default)
