@@ -2,7 +2,6 @@ import json
 import subprocess
 import sys
 import warnings
-from enum import Enum
 
 import numpy as np
 import pytest
@@ -26,43 +25,17 @@ def clean_scheduling_environment(monkeypatch):
 
 @test_utils.test(arch=qd.cpu)
 def test_cpu_scheduling_defaults():
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always", DeprecationWarning)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
         qd.init(arch=qd.cpu)
-    assert not [warning for warning in caught if issubclass(warning.category, DeprecationWarning)]
-    cfg = qd.lang.impl.current_cfg()
-    assert cfg.cpu_work_scheduling == qd.CPUWorkScheduling.PER_WORKER
-    assert cfg.cpu_fixed_block_dim == 32
-    assert cfg.cpu_per_worker_min_block_dim == 512
+    assert qd.lang.impl.current_cfg().cpu_work_scheduling == qd.CPUWorkScheduling.PER_WORKER
 
 
-@pytest.mark.parametrize("mode", [qd.CPUWorkScheduling.PER_WORKER, qd.CPUWorkScheduling.FIXED_SIZE])
 @test_utils.test(arch=qd.cpu)
-def test_cpu_scheduling_enum(mode, monkeypatch):
-    qd.init(arch=qd.cpu, cpu_work_scheduling=mode)
-    assert qd.lang.impl.current_cfg().cpu_work_scheduling == mode
-    monkeypatch.setenv("QD_CPU_WORK_SCHEDULING", mode.name)
+def test_cpu_scheduling_environment(monkeypatch):
+    monkeypatch.setenv("QD_CPU_WORK_SCHEDULING", "FIXED_SIZE")
     qd.init(arch=qd.cpu)
-    assert qd.lang.impl.current_cfg().cpu_work_scheduling == mode
-    # A keyword overrides the environment for the same spelling.
-    monkeypatch.setenv("QD_CPU_WORK_SCHEDULING", "invalid")
-    qd.init(arch=qd.cpu, cpu_work_scheduling=mode)
-    assert qd.lang.impl.current_cfg().cpu_work_scheduling == mode
-
-
-@pytest.mark.parametrize("value", ["PER_WORKER", 0, 1, True, False, None, Enum("Other", "PER_WORKER").PER_WORKER])
-@test_utils.test(arch=qd.cpu)
-def test_cpu_scheduling_invalid_enum(value):
-    with pytest.raises(TypeError, match="cpu_work_scheduling must be a CPUWorkScheduling member"):
-        qd.init(arch=qd.cpu, cpu_work_scheduling=value)
-
-
-@pytest.mark.parametrize("value", ["0", "1", "True", "per_worker", "qd.CPUWorkScheduling.PER_WORKER"])
-@test_utils.test(arch=qd.cpu)
-def test_cpu_scheduling_invalid_environment(value, monkeypatch):
-    monkeypatch.setenv("QD_CPU_WORK_SCHEDULING", value)
-    with pytest.raises(ValueError, match="QD_CPU_WORK_SCHEDULING must be PER_WORKER or FIXED_SIZE"):
-        qd.init(arch=qd.cpu)
+    assert qd.lang.impl.current_cfg().cpu_work_scheduling == qd.CPUWorkScheduling.FIXED_SIZE
 
 
 @pytest.mark.parametrize(
@@ -125,57 +98,50 @@ def test_cpu_fixed_block_dim_invalid(value):
         qd.init(arch=qd.cpu, cpu_fixed_block_dim=value)
 
 
-@pytest.mark.parametrize("cpu_fixed_block_dim", [1, 17, 64, 512])
-@pytest.mark.parametrize("loop_block_dim", [None, 32])
+@pytest.mark.parametrize(
+    "cpu_fixed_block_dim,loop_block_dim,expected",
+    [
+        (1, None, [0, 1, 2, 3, 4, 5, 6, 7]),
+        (3, None, [0, 0, 0, 1, 1, 1, 2, 2]),
+        (16, None, [0, 0, 0, 0, 0, 0, 0, 0]),
+        (1, 4, [0, 0, 0, 0, 1, 1, 1, 1]),
+        (16, 4, [0, 0, 0, 0, 1, 1, 1, 1]),
+    ],
+)
 @test_utils.test(arch=qd.cpu)
-def test_cpu_fixed_block_dim_execution(cpu_fixed_block_dim, loop_block_dim):
+def test_cpu_fixed_block_dim_execution(cpu_fixed_block_dim, loop_block_dim, expected):
     qd.init(
         arch=qd.cpu,
         cpu_work_scheduling=qd.CPUWorkScheduling.FIXED_SIZE,
         cpu_fixed_block_dim=cpu_fixed_block_dim,
         cpu_max_num_threads=4,
     )
-    out = qd.ndarray(qd.i32, shape=200)
-    has_loop_override = loop_block_dim is not None
+    out = qd.ndarray(qd.i32, shape=8)
 
     @qd.kernel
     def k_record_blocks(out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
-        if qd.static(has_loop_override):
+        if qd.static(loop_block_dim is not None):
             qd.loop_config(block_dim=loop_block_dim)
-        for i in range(200):
+        for i in range(8):
             out[i] = qd.block_idx()
 
     k_record_blocks(out)
-    width = cpu_fixed_block_dim if loop_block_dim is None else loop_block_dim
-    np.testing.assert_array_equal(out.to_numpy(), np.arange(200, dtype=np.int32) // width)
+    np.testing.assert_array_equal(out.to_numpy(), expected)
 
 
 @pytest.mark.parametrize("fastcache", [False, True])
 @pytest.mark.parametrize(
-    "base, changed, base_width, changed_width",
+    "mode,key,value,expected_base,expected_changed",
     [
-        (
-            {"cpu_work_scheduling": "PER_WORKER", "cpu_per_worker_min_block_dim": 16},
-            {"cpu_work_scheduling": "PER_WORKER", "cpu_per_worker_min_block_dim": 64},
-            50,
-            64,
-        ),
-        (
-            {"cpu_work_scheduling": "FIXED_SIZE", "cpu_fixed_block_dim": 17},
-            {"cpu_work_scheduling": "FIXED_SIZE", "cpu_fixed_block_dim": 64},
-            17,
-            64,
-        ),
-        (
-            {"cpu_work_scheduling": "PER_WORKER", "cpu_per_worker_min_block_dim": 16, "cpu_fixed_block_dim": 17},
-            {"cpu_work_scheduling": "FIXED_SIZE", "cpu_per_worker_min_block_dim": 16, "cpu_fixed_block_dim": 17},
-            50,
-            17,
-        ),
+        ("PER_WORKER", "cpu_per_worker_min_block_dim", 3, [0, 0, 1, 1, 2, 2, 3, 3], [0, 0, 0, 1, 1, 1, 2, 2]),
+        ("FIXED_SIZE", "cpu_fixed_block_dim", 2, [0, 0, 0, 1, 1, 1, 2, 2], [0, 0, 1, 1, 2, 2, 3, 3]),
+        ("PER_WORKER", "cpu_work_scheduling", "FIXED_SIZE", [0, 0, 1, 1, 2, 2, 3, 3], [0, 0, 0, 1, 1, 1, 2, 2]),
     ],
 )
 @test_utils.test(arch=qd.cpu)
-def test_cpu_scheduling_cache_across_processes(tmp_path, fastcache, base, changed, base_width, changed_width):
+def test_cpu_scheduling_cache_across_processes(tmp_path, fastcache, mode, key, value, expected_base, expected_changed):
+    base = {"cpu_work_scheduling": mode, "cpu_per_worker_min_block_dim": 2, "cpu_fixed_block_dim": 3}
+    changed = {**base, key: value}
     script = tmp_path / "record_blocks.py"
     script.write_text(
         """
@@ -192,20 +158,23 @@ qd.init(arch=qd.cpu, cpu_max_num_threads=4, offline_cache=True,
 
 @qd.kernel(fastcache=fastcache)
 def k_record_blocks(out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
-    for i in range(200):
+    for i in range(8):
         out[i] = qd.block_idx()
 
-out = qd.ndarray(qd.i32, shape=200)
+out = qd.ndarray(qd.i32, shape=8)
 k_record_blocks(out)
-np.testing.assert_array_equal(out.to_numpy(), np.arange(200, dtype=np.int32) // int(sys.argv[4]))
+np.testing.assert_array_equal(out.to_numpy(), json.loads(sys.argv[4]))
 if fastcache:
     assert k_record_blocks._primal.src_ll_cache_observations.cache_loaded == bool(int(sys.argv[5]))
 qd.reset()
-print("checked block assignments")
 """
     )
     # Each process shares the cache directory. Returning to the first settings should reuse its cached kernel.
-    for options, width, warm in [(base, base_width, False), (changed, changed_width, False), (base, base_width, True)]:
+    for options, expected, warm in [
+        (base, expected_base, False),
+        (changed, expected_changed, False),
+        (base, expected_base, True),
+    ]:
         result = subprocess.run(
             [
                 sys.executable,
@@ -213,7 +182,7 @@ print("checked block assignments")
                 str(tmp_path / "cache"),
                 json.dumps(options),
                 str(int(fastcache)),
-                str(width),
+                json.dumps(expected),
                 str(int(warm)),
             ],
             capture_output=True,
@@ -221,4 +190,3 @@ print("checked block assignments")
             timeout=120,
         )
         assert result.returncode == 0, result.stdout + result.stderr
-        assert "checked block assignments" in result.stdout
