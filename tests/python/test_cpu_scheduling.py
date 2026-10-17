@@ -32,7 +32,7 @@ def test_cpu_scheduling_defaults():
 
 
 @test_utils.test(arch=qd.cpu)
-def test_cpu_scheduling_environment(monkeypatch):
+def test_cpu_scheduling_environment_variable(monkeypatch):
     monkeypatch.setenv("QD_CPU_WORK_SCHEDULING", "FIXED_SIZE")
     qd.init(arch=qd.cpu)
     assert qd.lang.impl.current_cfg().cpu_work_scheduling == qd.CPUWorkScheduling.FIXED_SIZE
