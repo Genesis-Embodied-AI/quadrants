@@ -448,6 +448,10 @@
 <p>For normal use, leave it at <code class="docutils literal notranslate"><span class="pre">True</span></code>; the caches are the main reason a repeated run starts up quickly.</p>
 </section>
 </section>
+<section id="cpu-loop-scheduling">
+<h2>CPU loop scheduling<a class="headerlink" href="#cpu-loop-scheduling" title="Link to this heading">#</a></h2>
+<p>See <a class="reference internal" href="parallelization.html#cpu-parallelization"><span class="std std-ref">CPU parallelization</span></a> for scheduling modes, configuration options, examples, and tuning guidance.</p>
+</section>
 <section id="compile-time-tuning">
 <h2>Compile-time tuning<a class="headerlink" href="#compile-time-tuning" title="Link to this heading">#</a></h2>
 <section id="cfg-optimization">
@@ -646,10 +650,35 @@
 </dd></dl>
 
 <dl class="py property">
+<dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.cpu_fixed_block_dim">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">cpu_fixed_block_dim</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.cpu_fixed_block_dim" title="Link to this definition">#</a></dt>
+<dd><p>Iterations per task in CPUWorkScheduling.FIXED_SIZE mode (must be &gt;= 1, default 32). Overridden by qd.loop_config(block_dim=…). Does not set range-loop block size in PER_WORKER mode. Does not affect GPU loops.</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">32</span></code>.</p>
+</dd></dl>
+
+<dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.cpu_max_num_threads">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">cpu_max_num_threads</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.cpu_max_num_threads" title="Link to this definition">#</a></dt>
-<dd><p>Maximum number of CPU threads used to run kernels (the runtime thread pool and CPU parallel-for loops). Compilation threads are governed separately by num_compile_threads.</p>
+<dd><p>Number of worker threads in the shared CPU thread pool. Compilation threads are governed separately by num_compile_threads.</p>
 <p>Default: the number of available CPU cores.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.cpu_per_worker_min_block_dim">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">cpu_per_worker_min_block_dim</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.cpu_per_worker_min_block_dim" title="Link to this definition">#</a></dt>
+<dd><p>Minimum iterations per CPU range-for block (must be &gt;= 1, default 512). Block size is max(ceil((end - begin) / cpu_max_num_threads), cpu_per_worker_min_block_dim). Only used with CPUWorkScheduling.PER_WORKER; the final nonempty block may be smaller. Does not affect GPU loops.</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">512</span></code>.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.cpu_work_scheduling">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">cpu_work_scheduling</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">CPUWorkScheduling</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.cpu_work_scheduling" title="Link to this definition">#</a></dt>
+<dd><p>CPUWorkScheduling.PER_WORKER (default) creates one task per configured worker; CPUWorkScheduling.FIXED_SIZE groups iterations into fixed-size tasks.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>CPU range-loop scheduling</p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py property">
@@ -681,13 +710,6 @@
 </dd>
 </dl>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">'/tmp/ir/'</span></code>.</p>
-</dd></dl>
-
-<dl class="py property">
-<dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.default_cpu_block_dim">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">default_cpu_block_dim</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.default_cpu_block_dim" title="Link to this definition">#</a></dt>
-<dd><p>Number of iterations per CPU parallel-for block.</p>
-<p>Default: <code class="docutils literal notranslate"><span class="pre">32</span></code>.</p>
 </dd></dl>
 
 <dl class="py property">
@@ -811,13 +833,6 @@
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.make_block_local">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">make_block_local</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.make_block_local" title="Link to this definition">#</a></dt>
 <dd><p>Enable the block-local optimization, which stages spatially-local field accesses through GPU shared memory. CUDA only (the required BLS extension is CUDA-only). Mesh attribute localization is a separate pass controlled by make_mesh_block_local.</p>
-<p>Default: <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p>
-</dd></dl>
-
-<dl class="py property">
-<dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.make_cpu_multithreading_loop">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">make_cpu_multithreading_loop</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.make_cpu_multithreading_loop" title="Link to this definition">#</a></dt>
-<dd><p>Parallelize outer loops across CPU threads.</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p>
 </dd></dl>
 
@@ -1071,7 +1086,7 @@
 <section id="removed-options">
 <h2>Removed options<a class="headerlink" href="#removed-options" title="Link to this heading">#</a></h2>
 <p>These options were accepted by <code class="docutils literal notranslate"><span class="pre">qd.init</span></code> in earlier versions but never had any effect (nothing in the compiler or runtime read their value), so they have been removed: <code class="docutils literal notranslate"><span class="pre">use_llvm</span></code>, <code class="docutils literal notranslate"><span class="pre">lower_access</span></code>, <code class="docutils literal notranslate"><span class="pre">simplify_before_lower_access</span></code>, <code class="docutils literal notranslate"><span class="pre">simplify_after_lower_access</span></code>, <code class="docutils literal notranslate"><span class="pre">verbose</span></code>, <code class="docutils literal notranslate"><span class="pre">verbose_kernel_launches</span></code>, <code class="docutils literal notranslate"><span class="pre">gpu_max_reg</span></code>, and <code class="docutils literal notranslate"><span class="pre">cpu_block_dim_adaptive</span></code>. Passing any of them to <code class="docutils literal notranslate"><span class="pre">qd.init</span></code> now raises a <code class="docutils literal notranslate"><span class="pre">KeyError</span></code> (they were previously ignored), and the corresponding <code class="docutils literal notranslate"><span class="pre">QD_&lt;NAME&gt;</span></code> environment variables are no longer read. If your code passed any of these, drop them: none of them changed behavior.</p>
-<p>The <code class="docutils literal notranslate"><span class="pre">block_dim_adaptive</span></code> keyword of <code class="docutils literal notranslate"><span class="pre">qd.loop_config</span></code> (the helper that sets directives such as GPU block size and CPU parallelization for the loop that immediately follows it) has also been removed. It was the only setter for <code class="docutils literal notranslate"><span class="pre">cpu_block_dim_adaptive</span></code> and equally had no effect, so <code class="docutils literal notranslate"><span class="pre">qd.loop_config(block_dim_adaptive=...)</span></code> now raises a <code class="docutils literal notranslate"><span class="pre">TypeError</span></code>; drop the argument. The CPU parallel-for block size is controlled by <code class="docutils literal notranslate"><span class="pre">default_cpu_block_dim</span></code>.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">block_dim_adaptive</span></code> keyword of <code class="docutils literal notranslate"><span class="pre">qd.loop_config</span></code> (the helper that sets directives such as GPU block size and CPU parallelization for the loop that immediately follows it) has also been removed. It was the only setter for <code class="docutils literal notranslate"><span class="pre">cpu_block_dim_adaptive</span></code> and equally had no effect, so <code class="docutils literal notranslate"><span class="pre">qd.loop_config(block_dim_adaptive=...)</span></code> now raises a <code class="docutils literal notranslate"><span class="pre">TypeError</span></code>; drop the argument. See <a class="reference internal" href="parallelization.html#cpu-parallelization"><span class="std std-ref">CPU parallelization</span></a> for CPU block-size settings.</p>
 </section>
 </section>
 
@@ -1126,6 +1141,7 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#offline-cache"><code class="docutils literal notranslate"><span class="pre">offline_cache</span></code></a></li>
 </ul>
 </li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#cpu-loop-scheduling">CPU loop scheduling</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#compile-time-tuning">Compile-time tuning</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#cfg-optimization"><code class="docutils literal notranslate"><span class="pre">cfg_optimization</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#fast-math"><code class="docutils literal notranslate"><span class="pre">fast_math</span></code></a></li>
@@ -1160,11 +1176,13 @@
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.cache_loop_invariant_global_vars"><code class="docutils literal notranslate"><span class="pre">CompileConfig.cache_loop_invariant_global_vars</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.cfg_optimization"><code class="docutils literal notranslate"><span class="pre">CompileConfig.cfg_optimization</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.check_out_of_bound"><code class="docutils literal notranslate"><span class="pre">CompileConfig.check_out_of_bound</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.cpu_fixed_block_dim"><code class="docutils literal notranslate"><span class="pre">CompileConfig.cpu_fixed_block_dim</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.cpu_max_num_threads"><code class="docutils literal notranslate"><span class="pre">CompileConfig.cpu_max_num_threads</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.cpu_per_worker_min_block_dim"><code class="docutils literal notranslate"><span class="pre">CompileConfig.cpu_per_worker_min_block_dim</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.cpu_work_scheduling"><code class="docutils literal notranslate"><span class="pre">CompileConfig.cpu_work_scheduling</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.cuda_stack_limit"><code class="docutils literal notranslate"><span class="pre">CompileConfig.cuda_stack_limit</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.debug"><code class="docutils literal notranslate"><span class="pre">CompileConfig.debug</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.debug_dump_path"><code class="docutils literal notranslate"><span class="pre">CompileConfig.debug_dump_path</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.default_cpu_block_dim"><code class="docutils literal notranslate"><span class="pre">CompileConfig.default_cpu_block_dim</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.default_fp"><code class="docutils literal notranslate"><span class="pre">CompileConfig.default_fp</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.default_gpu_block_dim"><code class="docutils literal notranslate"><span class="pre">CompileConfig.default_gpu_block_dim</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.default_ip"><code class="docutils literal notranslate"><span class="pre">CompileConfig.default_ip</span></code></a></li>
@@ -1182,7 +1200,6 @@
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.half2_vectorization"><code class="docutils literal notranslate"><span class="pre">CompileConfig.half2_vectorization</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.kernel_profiler"><code class="docutils literal notranslate"><span class="pre">CompileConfig.kernel_profiler</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.make_block_local"><code class="docutils literal notranslate"><span class="pre">CompileConfig.make_block_local</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.make_cpu_multithreading_loop"><code class="docutils literal notranslate"><span class="pre">CompileConfig.make_cpu_multithreading_loop</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.make_mesh_block_local"><code class="docutils literal notranslate"><span class="pre">CompileConfig.make_mesh_block_local</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.make_thread_local"><code class="docutils literal notranslate"><span class="pre">CompileConfig.make_thread_local</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.max_block_dim"><code class="docutils literal notranslate"><span class="pre">CompileConfig.max_block_dim</span></code></a></li>

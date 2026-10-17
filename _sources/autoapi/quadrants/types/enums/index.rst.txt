@@ -9,6 +9,7 @@ Attributes
 
 .. autoapisummary::
 
+   quadrants.types.enums.CPUWorkScheduling
    quadrants.types.enums.Layout
    quadrants.types.enums.AutodiffMode
    quadrants.types.enums.SNodeGradType
@@ -26,6 +27,8 @@ Classes
 
 Module Contents
 ---------------
+
+.. py:data:: CPUWorkScheduling
 
 .. py:data:: Layout
 

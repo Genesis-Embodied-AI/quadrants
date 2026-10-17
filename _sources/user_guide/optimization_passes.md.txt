@@ -79,6 +79,8 @@ All of these are fields of `CompileConfig` (the Quadrants compiler-configuration
 
 For everyday use, leave them at their defaults - they are the best-supported and most reliable configuration. The most common deliberate change is `cfg_optimization=False` when iterating on a kernel whose compile time is in your way.
 
+CPU scheduling also affects optimization opportunities. See [CPU parallelization](parallelization.md#cpu-parallelization) for the scheduling modes and their tradeoffs.
+
 ## Inspecting what the compiler did
 
 These environment variables dump the IR so you can see the effect of each pass. Files are written to the directory set by the `debug_dump_path` option in `qd.init(...)` (default `/tmp/ir/`):
