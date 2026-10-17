@@ -12,14 +12,15 @@ namespace quadrants::lang {
 
 class Program;
 
+enum class AdstackMode { kNone = 0, kCount = 1, kReverse = 2 };
+
 class QD_DLL_EXPORT Kernel : public Callable {
  public:
   std::vector<SNode *> no_activate;
 
   bool is_accessor{false};
 
-  // Experimental measured-stack variants: 0 = normal, 1 = counting forward, 2 = checked reverse.
-  int adstack_mode{0};
+  AdstackMode adstack_mode{AdstackMode::kNone};
 
   Kernel(Program &program,
          const std::function<void()> &func,

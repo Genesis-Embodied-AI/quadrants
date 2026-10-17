@@ -2,6 +2,7 @@ from quadrants._lib import core as _qd_core
 
 Layout = _qd_core.Layout
 AutodiffMode = _qd_core.AutodiffMode
+AdstackMode = _qd_core.AdstackMode
 SNodeGradType = _qd_core.SNodeGradType
 Format = _qd_core.Format
 BoundaryMode = _qd_core.BoundaryMode

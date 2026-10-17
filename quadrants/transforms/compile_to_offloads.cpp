@@ -85,7 +85,7 @@ void compile_to_offloads(IRNode *ir,
   }
 
   // Removes MatrixOfMatrixPtrStmt & MatrixOfGlobalPtrStmt
-  const bool scalarize_for_adstack = config.force_scalarize_matrix || kernel->adstack_mode != 0;
+  const bool scalarize_for_adstack = config.force_scalarize_matrix || kernel->adstack_mode != AdstackMode::kNone;
   irpass::lower_matrix_ptr(ir, scalarize_for_adstack);
 
   if (scalarize_for_adstack) {
@@ -94,9 +94,10 @@ void compile_to_offloads(IRNode *ir,
   }
 
   dump_ir("before_simplify_I");
-  irpass::full_simplify(ir, config,
-                        {false, /*autodiff_enabled*/ autodiff_mode != AutodiffMode::kNone || kernel->adstack_mode != 0,
-                         kernel->get_name(), verbose, "simplify_I"});
+  irpass::full_simplify(
+      ir, config,
+      {false, /*autodiff_enabled*/ autodiff_mode != AutodiffMode::kNone || kernel->adstack_mode != AdstackMode::kNone,
+       kernel->get_name(), verbose, "simplify_I"});
   irpass::analysis::verify_if_debug(ir, config);
   dump_ir("after_simplify_I");
 
@@ -116,16 +117,18 @@ void compile_to_offloads(IRNode *ir,
     irpass::analysis::verify_if_debug(ir, config);
   }
 
-  if (autodiff_mode == AutodiffMode::kReverse || autodiff_mode == AutodiffMode::kForward || kernel->adstack_mode == 1) {
+  if (autodiff_mode == AutodiffMode::kReverse || autodiff_mode == AutodiffMode::kForward ||
+      kernel->adstack_mode == AdstackMode::kCount) {
     // Remove local atomics here so that we don't have to handle their gradients
     irpass::demote_atomics(ir, config);
 
     irpass::full_simplify(ir, config, {false, /*autodiff_enabled*/ true, kernel->get_name(), verbose, "pre_autodiff"});
-    if (kernel->adstack_mode != 0)
+    if (kernel->adstack_mode != AdstackMode::kNone)
       validate_adstack_counting(ir);
-    irpass::auto_diff(ir, config, kernel->adstack_mode == 1 ? AutodiffMode::kReverse : autodiff_mode,
-                      ad_use_stack || kernel->adstack_mode != 0, kernel->adstack_mode == 1);
-    if (kernel->adstack_mode == 1)
+    irpass::auto_diff(ir, config, kernel->adstack_mode == AdstackMode::kCount ? AutodiffMode::kReverse : autodiff_mode,
+                      ad_use_stack || kernel->adstack_mode != AdstackMode::kNone,
+                      kernel->adstack_mode == AdstackMode::kCount);
+    if (kernel->adstack_mode == AdstackMode::kCount)
       remove_adstack_count_outputs(ir, config);
     // TODO: Be carefull with the full_simplify when do high-order autodiff
     irpass::full_simplify(ir, config,

@@ -190,8 +190,8 @@ std::string get_hashed_offline_cache_key(const CompileConfig &config,
   hasher.process(kernel_rets_string.begin(), kernel_rets_string.end());
   hasher.process(kernel_body_string.begin(), kernel_body_string.end());
   hasher.process(autodiff_mode.begin(), autodiff_mode.end());
-  if (kernel->adstack_mode != 0) {
-    const std::string measured_mode = "adstack-measured:" + std::to_string(kernel->adstack_mode);
+  if (kernel->adstack_mode != AdstackMode::kNone) {
+    const std::string measured_mode = "adstack-measured:" + std::to_string(static_cast<int>(kernel->adstack_mode));
     hasher.process(measured_mode.begin(), measured_mode.end());
   }
   hasher.finish();

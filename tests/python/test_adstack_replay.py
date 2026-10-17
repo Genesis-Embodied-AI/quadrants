@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 import quadrants as qd
+from quadrants.types.enums import AdstackMode
 
 from tests import test_utils
 
@@ -155,7 +156,7 @@ def test_write_only_array_output_and_alias_guard(read_modify_write):
     # The count variant must not write even non-differentiable outputs. The normal backward still does.
     from quadrants.lang.adstack_replay import _Record, _variant
 
-    variant = _variant(compute._adjoint, 1)
+    variant = _variant(compute._adjoint, AdstackMode.COUNT)
     record = _Record(
         qd.ndarray(qd.i32 if qd.lang.impl.current_cfg().arch in (qd.vulkan, qd.metal) else qd.i64, shape=2)
     )
@@ -206,7 +207,7 @@ def test_replay_overflow_with_reduction(monkeypatch, debug):
     original_variant = adstack_replay._variant
 
     def change_one_lane_after_count(kernel, mode):
-        if mode == 2:
+        if mode == AdstackMode.REVERSE:
             n[0] = 100
         return original_variant(kernel, mode)
 
@@ -243,7 +244,7 @@ def test_replay_disjoint_frame_outputs():
     from quadrants.lang.adstack_replay import _Record, _variant
 
     active[1, 0] = 7
-    variant = _variant(compute._adjoint, 1)
+    variant = _variant(compute._adjoint, AdstackMode.COUNT)
     variant.adstack_record = _Record(
         qd.ndarray(qd.i32 if qd.lang.impl.current_cfg().arch in (qd.vulkan, qd.metal) else qd.i64, shape=2)
     )

@@ -67,7 +67,7 @@ from quadrants.types import (
     template,
 )
 from quadrants.types.compound_types import CompoundType
-from quadrants.types.enums import AutodiffMode
+from quadrants.types.enums import AdstackMode, AutodiffMode
 from quadrants.types.utils import is_signed
 
 from ._func_base import FuncBase
@@ -325,7 +325,7 @@ class Kernel(FuncBase):
             AutodiffMode.REVERSE,
         )
         self.autodiff_mode = autodiff_mode
-        self.adstack_mode = 0
+        self.adstack_mode = AdstackMode.NONE
         self.adstack_record: "_Record | None" = None
         self.grad: "Kernel | None" = None
         impl.get_runtime().kernels.append(self)  # type: ignore[arg-type]
@@ -814,7 +814,7 @@ class Kernel(FuncBase):
             if is_launch_ctx_cacheable and args_hash is not None:
                 self.launch_context_buffer_cache.cache(t_kernel, args_hash, launch_ctx, launch_ctx_buffer)
 
-        if self.adstack_mode == 1:
+        if self.adstack_mode == AdstackMode.COUNT:
             launch_ctx.check_adstack_replay_aliases(impl.get_runtime().prog)
 
         try:
@@ -1050,7 +1050,7 @@ class Kernel(FuncBase):
                 if py_args_l is not None:
                     py_args = tuple(py_args_l)
 
-        if not self.adstack_mode and self.autodiff_mode == AutodiffMode.REVERSE:
+        if self.adstack_mode == AdstackMode.NONE and self.autodiff_mode == AutodiffMode.REVERSE:
             # pylint: disable-next=import-outside-toplevel
             from quadrants.lang.adstack_replay import backward
 

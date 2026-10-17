@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from quadrants._lib import core
 from quadrants.lang import impl
 from quadrants.lang._ndarray import ScalarNdarray
+from quadrants.types.enums import AdstackMode
 from quadrants.types.primitive_types import i32, i64
 
 
@@ -14,10 +15,10 @@ class _Record:
     capacity: int = 0
 
 
-def _variant(kernel, mode):
+def _variant(kernel, mode: AdstackMode):
     from quadrants.lang.kernel import Kernel  # pylint: disable=import-outside-toplevel
 
-    name = "_adstack_count_variant" if mode == 1 else "_adstack_reverse_variant"
+    name = "_adstack_count_variant" if mode == AdstackMode.COUNT else "_adstack_reverse_variant"
     variant = getattr(kernel, name, None)
     if variant is None:
         variant = Kernel(kernel.func, kernel.autodiff_mode, _is_classkernel=kernel.is_classkernel)
@@ -54,7 +55,7 @@ def backward(kernel, args, qd_stream=None):
             else:
                 record.buffer.fill(0)
             record.capacity = 0
-        count = _variant(kernel, 1)
+        count = _variant(kernel, AdstackMode.COUNT)
         count.adstack_record = record
         try:
             count(*args)
@@ -64,7 +65,7 @@ def backward(kernel, args, qd_stream=None):
             record.capacity = max(1, int(measurement[0]))
         finally:
             count.adstack_record = None
-        reverse = _variant(kernel, 2)
+        reverse = _variant(kernel, AdstackMode.REVERSE)
         reverse.adstack_record = record
         try:
             result = reverse(*args)

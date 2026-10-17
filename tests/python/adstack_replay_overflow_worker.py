@@ -4,6 +4,7 @@ import sys
 
 import quadrants as qd
 from quadrants.lang import adstack_replay
+from quadrants.types.enums import AdstackMode
 
 arch, force_sync = sys.argv[1:]
 qd.init(arch=getattr(qd, arch), enable_fallback=False, offline_cache=False)
@@ -28,7 +29,7 @@ original_variant = adstack_replay._variant
 
 
 def grow_after_measurement(kernel, mode):
-    if mode == 2:
+    if mode == AdstackMode.REVERSE:
         n[0] = 64
     return original_variant(kernel, mode)
 

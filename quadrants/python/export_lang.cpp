@@ -107,6 +107,11 @@ void export_lang(nb::module_ &m) {
       .value("NULL", ExternalArrayLayout::kNull)
       .export_values();
 
+  nb::enum_<AdstackMode>(m, "AdstackMode")
+      .value("NONE", AdstackMode::kNone)
+      .value("COUNT", AdstackMode::kCount)
+      .value("REVERSE", AdstackMode::kReverse);
+
   nb::enum_<AutodiffMode>(m, "AutodiffMode", nb::is_arithmetic())
       .value("NONE", AutodiffMode::kNone)
       .value("VALIDATION", AutodiffMode::kCheckAutodiffValid)

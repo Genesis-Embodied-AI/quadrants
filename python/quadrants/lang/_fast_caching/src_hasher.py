@@ -47,7 +47,7 @@ from pydantic import BaseModel
 
 import quadrants
 from quadrants import _logging
-from quadrants.types.enums import AutodiffMode
+from quadrants.types.enums import AdstackMode, AutodiffMode
 
 from .._wrap_inspect import FunctionSourceInfo
 from ..kernel_arguments import ArgMetadata
@@ -134,7 +134,7 @@ def _resolve_intenum_member(qualname: str | None, fallback: int | None) -> int |
 def make_source_config_key(
     kernel_source_info: FunctionSourceInfo,
     autodiff_mode: AutodiffMode = AutodiffMode.NONE,
-    adstack_mode: int = 0,
+    adstack_mode: AdstackMode = AdstackMode.NONE,
 ) -> str:
     """Build the L1 cache key: source + config + version, with no dependence on args."""
     kernel_hash = function_hasher.hash_kernel(kernel_source_info)
@@ -144,7 +144,7 @@ def make_source_config_key(
     return hash_iterable_strings(
         (
             _L1_MARKER,
-            f"{autodiff_mode}:{adstack_mode}",
+            f"{autodiff_mode}:{adstack_mode.value}",
             quadrants.__version_str__,
             kernel_hash,
             config_hash,
