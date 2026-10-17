@@ -8,8 +8,24 @@ from tests import test_utils
 
 @pytest.mark.parametrize("cpu_per_worker_min_block_dim", [1, 16, 512, 2048])
 @pytest.mark.parametrize("threads", [1, 4])
+@pytest.mark.parametrize("constant_bounds", [False, True])
+@pytest.mark.parametrize(
+    "begin,end,expected_total,expected_visits",
+    [
+        (-7, -7, 0, [0] * 1100),
+        (9, 3, 0, [0] * 1100),
+        (-7, -6, -7, [0] * 13 + [1] + [0] * 1086),
+        (-7, 6, -13, [0] * 13 + [1] * 13 + [0] * 1074),
+        (0, 200, 19900, [0] * 20 + [1] * 200 + [0] * 880),
+        (0, 512, 130816, [0] * 20 + [1] * 512 + [0] * 568),
+        (3, 516, 132867, [0] * 23 + [1] * 513 + [0] * 564),
+        (3, 1028, 527875, [0] * 23 + [1] * 1025 + [0] * 52),
+    ],
+)
 @test_utils.test(arch=qd.cpu)
-def test_cpu_range_for_block_bounds(cpu_per_worker_min_block_dim, threads):
+def test_cpu_range_for_block_bounds(
+    cpu_per_worker_min_block_dim, threads, constant_bounds, begin, end, expected_total, expected_visits
+):
     qd.init(arch=qd.cpu, cpu_max_num_threads=threads, cpu_per_worker_min_block_dim=cpu_per_worker_min_block_dim)
     out = qd.field(qd.i32, shape=1100)
 
@@ -21,27 +37,18 @@ def test_cpu_range_for_block_bounds(cpu_per_worker_min_block_dim, threads):
             total += i
         return total
 
-    for begin, end in [(-7, -7), (9, 3), (-7, -6), (-7, 6), (0, 200), (0, 512), (3, 516), (3, 1028)]:
-        out.fill(0)
-        assert k_dynamic_range(begin, end) == sum(range(begin, end))
-        expected = np.zeros(1100, dtype=np.int32)
-        if end > begin:
-            expected[begin + 20 : end + 20] = 1
-        np.testing.assert_array_equal(out.to_numpy(), expected)
-
     @qd.kernel
-    def k_constant_range() -> qd.i32:
+    def k_constant_range(begin: qd.template(), end: qd.template()) -> qd.i32:
         total = 0
-        for i in range(200):
+        for i in range(begin, end):
             out[i + 20] += 1
             total += i
         return total
 
+    kernel = k_constant_range if constant_bounds else k_dynamic_range
     out.fill(0)
-    assert k_constant_range() == sum(range(200))
-    expected = np.zeros(1100, dtype=np.int32)
-    expected[20:220] = 1
-    np.testing.assert_array_equal(out.to_numpy(), expected)
+    assert kernel(begin, end) == expected_total
+    np.testing.assert_array_equal(out.to_numpy(), expected_visits)
 
 
 @pytest.mark.parametrize("serialize", [False, True])
