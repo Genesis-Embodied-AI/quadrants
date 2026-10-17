@@ -343,7 +343,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib.core.quadrants_python</span><span class="w"> </span><span class="kn">import</span> <span class="n">Extension</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_os_name</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span><span class="p">,</span> <span class="n">util</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._cpu_scheduling</span><span class="w"> </span><span class="kn">import</span> <span class="n">configure_cpu_scheduling</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._environment_configurator</span><span class="w"> </span><span class="kn">import</span> <span class="n">_EnvironmentConfigurator</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.checkpoint</span><span class="w"> </span><span class="kn">import</span> <span class="n">checkpoint</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.expr</span><span class="w"> </span><span class="kn">import</span> <span class="n">Expr</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.graph_parallel</span><span class="w"> </span><span class="kn">import</span> <span class="n">graph_parallel</span><span class="p">,</span> <span class="n">graph_parallel_context</span>
@@ -621,39 +621,37 @@
 
 
 
-<span class="k">class</span><span class="w"> </span><span class="nc">_EnvironmentConfigurator</span><span class="p">:</span>
-    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">,</span> <span class="n">_cfg</span><span class="p">):</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span> <span class="o">=</span> <span class="n">_cfg</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span> <span class="o">=</span> <span class="n">kwargs</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">keys</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">normalize_deprecated_cpu_scheduling_aliases</span><span class="p">(</span><span class="n">env_comp</span><span class="p">:</span> <span class="n">_EnvironmentConfigurator</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">kwargs</span> <span class="o">=</span> <span class="n">env_comp</span><span class="o">.</span><span class="n">kwargs</span>
+    <span class="k">if</span> <span class="n">env_comp</span><span class="o">.</span><span class="n">is_supplied</span><span class="p">(</span><span class="s2">"make_cpu_multithreading_loop"</span><span class="p">)</span> <span class="ow">and</span> <span class="n">env_comp</span><span class="o">.</span><span class="n">is_supplied</span><span class="p">(</span><span class="s2">"cpu_work_scheduling"</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="s2">"Cannot specify both make_cpu_multithreading_loop and cpu_work_scheduling, including through environment variables"</span>
+        <span class="p">)</span>
+    <span class="k">if</span> <span class="n">env_comp</span><span class="o">.</span><span class="n">is_supplied</span><span class="p">(</span><span class="s2">"default_cpu_block_dim"</span><span class="p">)</span> <span class="ow">and</span> <span class="n">env_comp</span><span class="o">.</span><span class="n">is_supplied</span><span class="p">(</span><span class="s2">"cpu_fixed_block_dim"</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="s2">"Cannot specify both default_cpu_block_dim and cpu_fixed_block_dim, including through environment variables"</span>
+        <span class="p">)</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">add</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">_cast</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-        <span class="n">_cast</span> <span class="o">=</span> <span class="n">_cast</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">bool_int</span>
+    <span class="k">if</span> <span class="n">env_comp</span><span class="o">.</span><span class="n">is_supplied</span><span class="p">(</span><span class="s2">"make_cpu_multithreading_loop"</span><span class="p">):</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+            <span class="s2">"make_cpu_multithreading_loop is deprecated; use cpu_work_scheduling instead."</span><span class="p">,</span>
+            <span class="ne">DeprecationWarning</span><span class="p">,</span>
+            <span class="n">stacklevel</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">env_comp</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="s2">"make_cpu_multithreading_loop"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="p">(</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">int</span><span class="p">))</span> <span class="ow">or</span> <span class="n">value</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="kc">False</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">"make_cpu_multithreading_loop must be a boolean"</span><span class="p">)</span>
+        <span class="n">kwargs</span><span class="p">[</span><span class="s2">"cpu_work_scheduling"</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">_qd_core</span><span class="o">.</span><span class="n">CPUWorkScheduling</span><span class="o">.</span><span class="n">PER_WORKER</span> <span class="k">if</span> <span class="n">value</span> <span class="k">else</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">CPUWorkScheduling</span><span class="o">.</span><span class="n">FIXED_SIZE</span>
+        <span class="p">)</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">keys</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
-
-        <span class="c1"># QD_OFFLINE_CACHE=   : no effect</span>
-        <span class="c1"># QD_OFFLINE_CACHE=0  : False</span>
-        <span class="c1"># QD_OFFLINE_CACHE=1  : True</span>
-        <span class="n">name</span> <span class="o">=</span> <span class="s2">"QD_"</span> <span class="o">+</span> <span class="n">key</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
-        <span class="n">value</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="s2">""</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">:</span>
-            <span class="bp">self</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
-            <span class="k">if</span> <span class="n">value</span><span class="p">:</span>
-                <span class="n">_qd_core</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="sa">f</span><span class="s1">'Environment variable </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s1">=</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s1"> overridden by qd.init argument "</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s1">"'</span><span class="p">)</span>
-            <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>  <span class="c1"># mark as recognized</span>
-        <span class="k">elif</span> <span class="n">value</span><span class="p">:</span>
-            <span class="bp">self</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">_cast</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
-
-    <span class="k">def</span><span class="w"> </span><span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
-        <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
-
-    <span class="k">def</span><span class="w"> </span><span class="fm">__setitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
-        <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
-
-    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">bool_int</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
-        <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+    <span class="k">if</span> <span class="n">env_comp</span><span class="o">.</span><span class="n">is_supplied</span><span class="p">(</span><span class="s2">"default_cpu_block_dim"</span><span class="p">):</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+            <span class="s2">"default_cpu_block_dim is deprecated; use cpu_fixed_block_dim instead."</span><span class="p">,</span>
+            <span class="ne">DeprecationWarning</span><span class="p">,</span>
+            <span class="n">stacklevel</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">kwargs</span><span class="p">[</span><span class="s2">"cpu_fixed_block_dim"</span><span class="p">]</span> <span class="o">=</span> <span class="n">env_comp</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="s2">"default_cpu_block_dim"</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span>
 
 
 <span class="k">class</span><span class="w"> </span><span class="nc">_SpecialConfig</span><span class="p">:</span>
@@ -868,24 +866,20 @@
         <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">set_default_ip</span><span class="p">(</span><span class="n">default_ip</span><span class="p">)</span>
 
     <span class="c1"># submodule configurations (spec_cfg):</span>
-    <span class="n">env_spec</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s2">"log_level"</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>
-    <span class="n">env_spec</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s2">"gdb_trigger"</span><span class="p">)</span>
-    <span class="n">env_spec</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s2">"short_circuit_operators"</span><span class="p">)</span>
-    <span class="n">env_spec</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s2">"print_full_traceback"</span><span class="p">)</span>
-    <span class="n">env_spec</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s2">"unrolling_limit"</span><span class="p">)</span>
+    <span class="n">env_spec</span><span class="o">.</span><span class="n">configure</span><span class="p">(</span><span class="s2">"log_level"</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>
+    <span class="n">env_spec</span><span class="o">.</span><span class="n">configure</span><span class="p">(</span><span class="s2">"gdb_trigger"</span><span class="p">)</span>
+    <span class="n">env_spec</span><span class="o">.</span><span class="n">configure</span><span class="p">(</span><span class="s2">"short_circuit_operators"</span><span class="p">)</span>
+    <span class="n">env_spec</span><span class="o">.</span><span class="n">configure</span><span class="p">(</span><span class="s2">"print_full_traceback"</span><span class="p">)</span>
+    <span class="n">env_spec</span><span class="o">.</span><span class="n">configure</span><span class="p">(</span><span class="s2">"unrolling_limit"</span><span class="p">)</span>
 
-    <span class="c1"># Handle cpu_work_scheduling and cpu_fixed_block_dim.</span>
-    <span class="n">configure_cpu_scheduling</span><span class="p">(</span><span class="n">kwargs</span><span class="p">,</span> <span class="n">cfg</span><span class="p">)</span>
+    <span class="n">normalize_deprecated_cpu_scheduling_aliases</span><span class="p">(</span><span class="n">env_comp</span><span class="p">)</span>
 
     <span class="c1"># compiler configurations (qd.cfg):</span>
     <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="nb">dir</span><span class="p">(</span><span class="n">cfg</span><span class="p">):</span>
         <span class="c1"># These options are handled separately above.</span>
-        <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">"arch"</span><span class="p">,</span> <span class="s2">"default_fp"</span><span class="p">,</span> <span class="s2">"default_ip"</span><span class="p">,</span> <span class="s2">"cpu_work_scheduling"</span><span class="p">,</span> <span class="s2">"cpu_fixed_block_dim"</span><span class="p">]:</span>
+        <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">"arch"</span><span class="p">,</span> <span class="s2">"default_fp"</span><span class="p">,</span> <span class="s2">"default_ip"</span><span class="p">]:</span>
             <span class="k">continue</span>
-        <span class="n">_cast</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="n">key</span><span class="p">))</span>
-        <span class="k">if</span> <span class="n">_cast</span> <span class="ow">is</span> <span class="nb">bool</span><span class="p">:</span>
-            <span class="n">_cast</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="n">env_comp</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">_cast</span><span class="p">)</span>
+        <span class="n">env_comp</span><span class="o">.</span><span class="n">configure</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
 
     <span class="n">unexpected_keys</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
 

@@ -444,7 +444,7 @@
 <section id="default-cpu-scheduling">
 <h3>Default CPU scheduling<a class="headerlink" href="#default-cpu-scheduling" title="Link to this heading">#</a></h3>
 <p>By default, Quadrants creates one worker thread per system-reported logical core.</p>
-<p>For a CPU <code class="docutils literal notranslate"><span class="pre">range()</span></code> loop, the compiler groups consecutive iterations into blocks. A block is a range of original iterations processed by one generated inner loop. The compiler creates one block per worker and schedules each block as a separate task.</p>
+<p>For a CPU <code class="docutils literal notranslate"><span class="pre">range()</span></code> loop, the compiler groups consecutive iterations into blocks. A block is a range of original iterations processed by one generated inner loop. The compiler creates one block per configured pool worker and schedules each block as a separate task.</p>
 <p>For example, consider this loop with 12,000 iterations. Here <code class="docutils literal notranslate"><span class="pre">work(i)</span></code> stands for the original work at iteration index <code class="docutils literal notranslate"><span class="pre">i</span></code>:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">12000</span><span class="p">):</span>
     <span class="n">work</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
@@ -496,7 +496,9 @@
 <section id="cpu-max-num-threads">
 <h4>cpu_max_num_threads<a class="headerlink" href="#cpu-max-num-threads" title="Link to this heading">#</a></h4>
 <p><code class="docutils literal notranslate"><span class="pre">cpu_max_num_threads</span></code> sets the number of CPU worker threads in the thread pool. Its default is the system-reported number of logical cores. In this mode, it also sets the number of tasks created for each parallel <code class="docutils literal notranslate"><span class="pre">range()</span></code> loop.</p>
-<p>The worker count is not capped to the number of logical cores. If it exceeds that count, the operating system shares CPU time among the worker threads.</p>
+<p>The pool size is not capped to the number of logical cores. However, a loop without an explicit <code class="docutils literal notranslate"><span class="pre">qd.loop_config(parallelize=...)</span></code> requests the system-reported number of logical cores, capped to the pool size. Increasing the pool size above that count does not make such a loop use more workers.</p>
+<p>For example, with eight logical cores and <code class="docutils literal notranslate"><span class="pre">cpu_max_num_threads=16</span></code>, the pool contains sixteen workers. A loop without a <code class="docutils literal notranslate"><span class="pre">parallelize</span></code> setting uses at most eight of them to process its sixteen tasks.</p>
+<p>To request more participating workers, place <code class="docutils literal notranslate"><span class="pre">qd.loop_config(parallelize=16)</span></code> immediately before the loop. The request is capped to the pool size. When more workers participate than there are logical cores, the operating system shares CPU time among them. Changing <code class="docutils literal notranslate"><span class="pre">parallelize</span></code> does not change the number of blocks in <code class="docutils literal notranslate"><span class="pre">PER_WORKER</span></code> mode.</p>
 </section>
 <section id="cpu-per-worker-min-block-dim">
 <h4>cpu_per_worker_min_block_dim<a class="headerlink" href="#cpu-per-worker-min-block-dim" title="Link to this heading">#</a></h4>
@@ -526,7 +528,7 @@
 <p>Select this mode with <code class="docutils literal notranslate"><span class="pre">qd.init(arch=qd.cpu,</span> <span class="pre">cpu_work_scheduling=qd.CPUWorkScheduling.FIXED_SIZE)</span></code>. Worker count and task size are independent. The two settings are <code class="docutils literal notranslate"><span class="pre">cpu_max_num_threads</span></code> and <code class="docutils literal notranslate"><span class="pre">cpu_fixed_block_dim</span></code>.</p>
 <section id="id1">
 <h4>cpu_max_num_threads<a class="headerlink" href="#id1" title="Link to this heading">#</a></h4>
-<p><code class="docutils literal notranslate"><span class="pre">cpu_max_num_threads</span></code> sets the number of CPU worker threads in the thread pool. Its default is the system-reported number of logical cores. It does not set the number of tasks in this mode.</p>
+<p><code class="docutils literal notranslate"><span class="pre">cpu_max_num_threads</span></code> sets the number of CPU worker threads in the thread pool. Its default is the system-reported number of logical cores. It does not set the number of tasks in this mode. As in <code class="docutils literal notranslate"><span class="pre">PER_WORKER</span></code> mode, a loop without an explicit <code class="docutils literal notranslate"><span class="pre">parallelize</span></code> setting requests the system-reported number of logical cores, capped to the pool size. Use <code class="docutils literal notranslate"><span class="pre">qd.loop_config(parallelize=N)</span></code> to request a different number of participating workers, still capped to the pool size.</p>
 <p>For example, four workers can process 32 tasks. As a worker finishes one task, it takes another until all tasks are complete. Increasing the worker count does not change those tasks’ iteration ranges.</p>
 </section>
 <section id="cpu-fixed-block-dim">
@@ -645,7 +647,7 @@
 </pre></div>
 </div>
 <p>The directive <code class="docutils literal notranslate"><span class="pre">qd.loop_config(parallelize=1)</span></code> also makes the following loop execute on one thread. These requests apply with either scheduling mode. Setting <code class="docutils literal notranslate"><span class="pre">cpu_work_scheduling=qd.CPUWorkScheduling.FIXED_SIZE</span></code> by itself does not request serial execution.</p>
-<p>See <a class="reference internal" href="init_options.html#cpu-loop-scheduling"><span class="std std-ref">CPU loop scheduling in qd.init options</span></a> for an initialization example and <a class="reference internal" href="init_options.html#all-options"><span class="std std-ref">All options</span></a> for the configuration reference.</p>
+<p>See <a class="reference internal" href="init_options.html#all-options"><span class="std std-ref">All options</span></a> for the initialization configuration reference.</p>
 </section>
 </section>
 <section id="multi-dimensional-parallelization-with-qd-ndrange">
