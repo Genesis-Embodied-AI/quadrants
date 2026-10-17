@@ -222,17 +222,17 @@ def test_cpu_fixed_block_dim_execution(init_cpu_fixed_block_dim, loop_block_dim_
         cpu_fixed_block_dim=init_cpu_fixed_block_dim,
         cpu_max_num_threads=4,
     )
-    out = qd.ndarray(qd.i32, shape=8)
+    block_indices = qd.ndarray(qd.i32, shape=8)
 
     @qd.kernel
-    def k_record_blocks(out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+    def k_record_blocks(block_indices: qd.types.ndarray(dtype=qd.i32, ndim=1)):
         if qd.static(loop_block_dim_override is not None):
             qd.loop_config(block_dim=loop_block_dim_override)
         for i in range(8):
-            out[i] = qd.block_idx()
+            block_indices[i] = qd.block_idx()
 
-    k_record_blocks(out)
-    np.testing.assert_array_equal(out.to_numpy(), expected_block_indices)
+    k_record_blocks(block_indices)
+    np.testing.assert_array_equal(block_indices.to_numpy(), expected_block_indices)
 
 
 @pytest.mark.parametrize("fastcache", [False, True])
