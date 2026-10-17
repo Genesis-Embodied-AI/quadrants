@@ -58,6 +58,8 @@ def test_cpu_range_for_block_bounds(
 @pytest.mark.parametrize("serialize", [False, True])
 @test_utils.test(arch=qd.cpu, cpu_max_num_threads=4, cpu_per_worker_min_block_dim=1)
 def test_cpu_range_for_block_serial_execution(serialize):
+    # Check that serialize=True and parallelize=1 preserve sequential execution even with four workers configured.
+    # Each iteration depends on the previous result, which must match the same calculation in ordinary Python.
     @qd.kernel
     def k_serial() -> qd.i32:
         result = 0
