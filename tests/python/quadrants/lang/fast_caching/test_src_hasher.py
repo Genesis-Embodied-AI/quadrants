@@ -23,16 +23,16 @@ RET_SUCCESS = 42
 
 
 @pytest.mark.parametrize(
-    "changed_config",
+    "key,value",
     [
-        {"random_seed": 123},
-        {"cpu_per_worker_min_block_dim": 1},
-        {"cpu_fixed_block_dim": 16},
-        {"cpu_work_scheduling": qd.CPUWorkScheduling.FIXED_SIZE},
+        ("random_seed", 123),
+        ("cpu_per_worker_min_block_dim", 1),
+        ("cpu_fixed_block_dim", 16),
+        ("cpu_work_scheduling", qd.CPUWorkScheduling.FIXED_SIZE),
     ],
 )
 @test_utils.test()
-def test_src_hasher_create_cache_key_vary_config(changed_config) -> None:
+def test_src_hasher_create_cache_key_vary_config(key, value) -> None:
     """Source+config key (L1) is stable across re-init with identical config, changes when the config changes.
 
     L1 is the level to test: config feeds only into it, and L2 just adds the args-narrow hash on top.
@@ -52,7 +52,7 @@ def test_src_hasher_create_cache_key_vary_config(changed_config) -> None:
     kernel_info, _src = get_source_info_and_src(f1.fn)
     cache_key_same = src_hasher.make_source_config_key(kernel_info)
 
-    qd_init_same_arch(print_ir_dbg_info=False, **changed_config)
+    qd_init_same_arch(print_ir_dbg_info=False, **{key: value})
     kernel_info, _src = get_source_info_and_src(f1.fn)
     cache_key_diff = src_hasher.make_source_config_key(kernel_info)
 
