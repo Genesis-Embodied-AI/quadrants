@@ -6,6 +6,7 @@
 #ifdef __APPLE__
 // For `runtime_lib_dir()`
 #include "quadrants/util/lang_util.h"
+#include <stdlib.h>
 #endif
 
 namespace quadrants::lang {
@@ -92,6 +93,15 @@ bool VulkanLoader::init(PFN_vkGetInstanceProcAddr get_proc_addr) {
     if (initialized_) {
       return;
     }
+#if defined(__APPLE__)
+    // Disable placement heaps by default. An explicit MVK_CONFIG_USE_MTLHEAP is still honored.
+    // MoltenVK reads MVK_CONFIG_USE_MTLHEAP when the dylib initializes. Placement heaps are its default on Apple
+    // GPUs, and repeated creation and destruction of those heaps leaves CPU memory reads slow for the rest of the
+    // process. An explicit environment value still wins.
+    if (std::getenv("MVK_CONFIG_USE_MTLHEAP") == nullptr) {
+      ::setenv("MVK_CONFIG_USE_MTLHEAP", "0", 0);
+    }
+#endif
     // (penguinliong) So that MoltenVK instances can be imported.
     if (get_proc_addr != nullptr) {
       volkInitializeCustom(get_proc_addr);
