@@ -6,20 +6,19 @@ import quadrants as qd
 from tests import test_utils
 
 
-@pytest.mark.parametrize("cpu_per_worker_min_block_dim", [1, 16, 512, 2048])
+@pytest.mark.parametrize("cpu_per_worker_min_block_dim", [1, 2, 4, 16, 512, 2048])
 @pytest.mark.parametrize("threads", [1, 4])
 @pytest.mark.parametrize("constant_bounds", [False, True])
 @pytest.mark.parametrize(
     "begin,end,expected_total,expected_visits",
     [
-        (-7, -7, 0, [0] * 1100),
-        (9, 3, 0, [0] * 1100),
-        (-7, -6, -7, [0] * 13 + [1] + [0] * 1086),
-        (-7, 6, -13, [0] * 13 + [1] * 13 + [0] * 1074),
-        (0, 200, 19900, [0] * 20 + [1] * 200 + [0] * 880),
-        (0, 512, 130816, [0] * 20 + [1] * 512 + [0] * 568),
-        (3, 516, 132867, [0] * 23 + [1] * 513 + [0] * 564),
-        (3, 1028, 527875, [0] * 23 + [1] * 1025 + [0] * 52),
+        # Visit-list positions correspond to iteration indices -2, -1, 0, 1, 2, 3, 4, 5.
+        (-2, -2, 0, [0, 0, 0, 0, 0, 0, 0, 0]),
+        (3, 1, 0, [0, 0, 0, 0, 0, 0, 0, 0]),
+        (-2, -1, -2, [1, 0, 0, 0, 0, 0, 0, 0]),
+        (-2, 3, 0, [1, 1, 1, 1, 1, 0, 0, 0]),
+        (0, 4, 6, [0, 0, 1, 1, 1, 1, 0, 0]),
+        (1, 6, 15, [0, 0, 0, 1, 1, 1, 1, 1]),
     ],
 )
 @test_utils.test(arch=qd.cpu)
@@ -27,13 +26,13 @@ def test_cpu_range_for_block_bounds(
     cpu_per_worker_min_block_dim, threads, constant_bounds, begin, end, expected_total, expected_visits
 ):
     qd.init(arch=qd.cpu, cpu_max_num_threads=threads, cpu_per_worker_min_block_dim=cpu_per_worker_min_block_dim)
-    out = qd.field(qd.i32, shape=1100)
+    out = qd.field(qd.i32, shape=8)
 
     @qd.kernel
     def k_dynamic_range(begin: qd.i32, end: qd.i32) -> qd.i32:
         total = 0
         for i in range(begin, end):
-            out[i + 20] += 1
+            out[i + 2] += 1
             total += i
         return total
 
@@ -41,7 +40,7 @@ def test_cpu_range_for_block_bounds(
     def k_constant_range(begin: qd.template(), end: qd.template()) -> qd.i32:
         total = 0
         for i in range(begin, end):
-            out[i + 20] += 1
+            out[i + 2] += 1
             total += i
         return total
 
