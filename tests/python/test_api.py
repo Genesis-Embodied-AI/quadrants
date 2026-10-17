@@ -59,6 +59,7 @@ user_api[qd] = [
     "Backend",
     "BitpackedFields",
     "BufferView",
+    "CPUWorkScheduling",
     "CRITICAL",
     "DEBUG",
     "DeviceCapability",
