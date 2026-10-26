@@ -4,6 +4,7 @@ import functools
 import numbers
 from collections.abc import Iterable
 from itertools import product
+from typing import cast
 
 import numpy as np
 
@@ -1076,8 +1077,7 @@ class Matrix(QuadrantsOperations):
     def tensor(cls, n, m, dtype, shape, **kwargs):
         """Allocate a tensor whose elements are ``n``-by-``m`` matrices.
 
-        Per-tensor backend dispatcher, equivalent to scalar ``qd.tensor()`` for matrix-valued elements. Selects
-        between ``qd.Matrix.field`` and ``qd.Matrix.ndarray`` based on the ``backend=`` keyword.
+        Equivalent to ``qd.tensor(qd.types.matrix(n, m, dtype), shape, **kwargs)``.
 
         Args:
             n (int): Number of rows of each matrix element.
@@ -1094,9 +1094,10 @@ class Matrix(QuadrantsOperations):
             >>> a = qd.Matrix.tensor(2, 3, qd.f32, shape=(4,))
             >>> b = qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
         """
-        from quadrants._tensor import _tensor_mat  # pylint: disable=C0415
+        from quadrants._tensor import tensor  # pylint: disable=C0415
+        from quadrants._tensor_wrapper import MatrixTensor  # pylint: disable=C0415
 
-        return _tensor_mat(n, m, dtype, shape, **kwargs)
+        return cast(MatrixTensor, tensor(MatrixType(n, m, ndim=2, dtype=dtype), shape, **kwargs))
 
     @staticmethod
     def rows(rows):
@@ -1289,8 +1290,7 @@ class Vector(Matrix):
     def tensor(cls, n, dtype, shape, **kwargs):
         """Allocate a tensor whose elements are length-``n`` vectors.
 
-        Per-tensor backend dispatcher, equivalent to scalar ``qd.tensor()`` for vector-valued elements. Selects
-        between ``qd.Vector.field`` and ``qd.Vector.ndarray`` based on the ``backend=`` keyword.
+        Equivalent to ``qd.tensor(qd.types.vector(n, dtype), shape, **kwargs)``.
 
         Args:
             n (int): Length of each vector element.
@@ -1306,9 +1306,10 @@ class Vector(Matrix):
             >>> v = qd.Vector.tensor(3, qd.f32, shape=(4,))
             >>> u = qd.Vector.tensor(3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
         """
-        from quadrants._tensor import _tensor_vec  # pylint: disable=C0415
+        from quadrants._tensor import tensor  # pylint: disable=C0415
+        from quadrants._tensor_wrapper import VectorTensor  # pylint: disable=C0415
 
-        return _tensor_vec(n, dtype, shape, **kwargs)
+        return cast(VectorTensor, tensor(VectorType(n, dtype), shape, **kwargs))
 
 
 class MatrixField(Field):

@@ -1,8 +1,6 @@
 """Tests for ``qd.Vector.tensor`` / ``qd.Matrix.tensor`` factory classmethods.
 
-These are the per-tensor backend dispatchers for vector- and matrix-element tensors, parallel to scalar
-``qd.tensor()``. The dispatch implementation lives in ``quadrants/_tensor.py`` as ``_tensor_vec`` / ``_tensor_mat``
-(private); the public surface is the classmethods exercised here.
+These classmethods delegate to ``qd.tensor()`` with vector and matrix dtypes.
 
 Each behavioural test is parametrized over both backends.
 """
