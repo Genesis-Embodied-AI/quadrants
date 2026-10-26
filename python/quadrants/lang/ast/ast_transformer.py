@@ -295,7 +295,7 @@ class ASTTransformer(Builder):
         return False
 
     @staticmethod
-    def _unpack_layout_vector_index(ast_builder, index, layout_len):
+    def _unpack_layout_vector_index(ast_builder: _qd_core.ASTBuilder | None, index: Any, layout_len: int) -> list[Any]:
         """If ``index`` is a list, tuple, or rank-1 Vector of length ``layout_len``, return its component list so the
         layout permutation can be applied per-axis. Otherwise return ``[index]`` unchanged.
 
