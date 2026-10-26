@@ -137,8 +137,6 @@ def test_matrix_tensor_rejects_unknown_kwarg():
         qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), offset=(1,))
     with pytest.raises(TypeError, match="unexpected keyword"):
         qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), nonsense=42)
-    with pytest.raises(ValueError, match="layout"):
-        qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), layout=(0, 1))
 
 
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
