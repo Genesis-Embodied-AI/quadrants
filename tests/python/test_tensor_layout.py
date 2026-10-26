@@ -294,6 +294,9 @@ def test_layout_sequence_index(backend, shape, layout, index_kind, operation):
                 access(tuple(index), x, y)
             else:
                 access(index, x, y)
+        if qd.static(operation != "read"):
+            for I in qd.grouped(qd.ndrange(*shape)):
+                y[I] = x[I]
 
     initial_x = np.arange(np.prod(shape), dtype=np.int32).reshape(shape)
     results = []
@@ -303,6 +306,6 @@ def test_layout_sequence_index(backend, shape, layout, index_kind, operation):
         x.from_numpy(initial_x)
         y.fill(-1)
         run(x, y)
-        results.append(y.to_numpy() if operation == "read" else x.to_numpy())
+        results.append(y.to_numpy())
     actual_result, expected_result = results
     np.testing.assert_array_equal(actual_result, expected_result)
