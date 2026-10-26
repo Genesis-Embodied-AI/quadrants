@@ -246,7 +246,7 @@ def test_matrix_dtype_without_layout_still_works():
 @pytest.mark.parametrize("shape, layout", [((3, 5), None), ((3, 5), (0, 1)), ((3, 5), (1, 0)), ((3, 4, 5), (1, 2, 0))])
 @pytest.mark.parametrize("index_kind", ["list", "tuple"])
 @pytest.mark.parametrize("operation", ["read", "write", "read_modify_write", "augassign", "atomic_add"])
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test()
 def test_layout_sequence_index(backend, shape, layout, index_kind, operation):
     x = qd.tensor(qd.i32, shape=shape, backend=backend, layout=layout)
     out = qd.tensor(qd.i32, shape=shape, backend=backend)
