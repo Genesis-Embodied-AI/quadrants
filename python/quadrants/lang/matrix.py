@@ -1974,7 +1974,7 @@ class MatrixNdarray(Ndarray):
             result = _try_zerocopy_torch(self, copy=copy, device=device, is_ndarray=True)
             if result is not None:
                 return result
-        return self._ndarray_matrix_to_new_torch_via_copy(as_vector=0, device=device)
+        return self._copy_to_torch(as_vector=0, device=device)
 
     @python_scope
     def from_torch(self, arr):
@@ -2128,7 +2128,7 @@ class VectorNdarray(Ndarray):
             result = _try_zerocopy_torch(self, copy=copy, device=device, is_ndarray=True)
             if result is not None:
                 return result
-        return self._ndarray_matrix_to_new_torch_via_copy(as_vector=1, device=device)
+        return self._copy_to_torch(as_vector=1, device=device)
 
     @python_scope
     def from_torch(self, arr):
