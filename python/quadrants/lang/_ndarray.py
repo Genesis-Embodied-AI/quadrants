@@ -235,7 +235,7 @@ class Ndarray:
         return arr
 
     @python_scope
-    def _ndarray_matrix_to_new_numpy_via_copy(self, as_vector):
+    def _copy_to_numpy(self, as_vector):
         """Converts matrix ndarray to a numpy array.
 
         Returns:
@@ -275,7 +275,7 @@ class Ndarray:
 
     @python_scope
     def _copy_to_torch(self, as_vector, device=None):
-        """Mirror of ``_ndarray_matrix_to_new_numpy_via_copy`` that fills a torch tensor instead of a numpy array.
+        """Mirror of ``_copy_to_numpy`` that fills a torch tensor instead of a numpy array.
 
         Allocates a ``torch.zeros`` of the canonical shape including any trailing element-axis extents and dispatches
         the same ``ndarray_matrix_to_ext_arr`` bridge kernel - torch tensors expose the same external-array interface

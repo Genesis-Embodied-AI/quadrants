@@ -1943,7 +1943,7 @@ class MatrixNdarray(Ndarray):
                         raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
                 else:
                     return arr
-        arr = self._ndarray_matrix_to_new_numpy_via_copy(as_vector=0)
+        arr = self._copy_to_numpy(as_vector=0)
         if dtype is not None and arr.dtype != dtype:
             arr = arr.astype(dtype)
         return arr
@@ -2094,7 +2094,7 @@ class VectorNdarray(Ndarray):
                         raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
                 else:
                     return arr
-        arr = self._ndarray_matrix_to_new_numpy_via_copy(as_vector=1)
+        arr = self._copy_to_numpy(as_vector=1)
         if dtype is not None and arr.dtype != dtype:
             arr = arr.astype(dtype)
         return arr
