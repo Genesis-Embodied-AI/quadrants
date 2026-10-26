@@ -287,7 +287,7 @@ def test_layout_sequence_index(backend, shape, layout, index_kind, operation):
 
     @qd.kernel
     def run(x: qd.Tensor, y: qd.Tensor):
-        # Keep accesses in bounds even without permutation, so a regression reports wrong values rather than OOB.
+        # Use indices 0..2 on every axis so accesses stay in bounds even when the layout permutation is missing.
         for I in qd.grouped(qd.ndrange(*((3,) * len(shape)))):
             index = [I[axis] for axis in qd.static(range(len(shape)))]
             if qd.static(index_kind == "tuple"):
