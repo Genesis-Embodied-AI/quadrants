@@ -235,17 +235,8 @@ def test_layout_sequence_index(
     qd.func read and update the same canonical elements on both tensor backends."""
 
     @qd.func
-    def encode_index(I):
-        # Encode coordinates as an integer, e.g. [1, 2] -> 12.
-        # This encoding depends only on the index coordinates, not on the layout.
-        index_code = 0
-        for axis in qd.static(range(len(I))):
-            index_code = index_code * 10 + I[axis]
-        return index_code
-
-    @qd.func
     def f1(I, x: qd.Tensor, y: qd.Tensor):
-        index_code = encode_index(I)
+        index_code = test_utils.encode_index(I)
         if qd.static(operation == "read"):
             y[I] = x[I]
         elif qd.static(operation == "write"):

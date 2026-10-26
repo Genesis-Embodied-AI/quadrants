@@ -16,6 +16,16 @@ from quadrants.lang.misc import is_arch_supported
 
 
 # Helper functions
+@qd.func
+def encode_index(I):
+    # Encode coordinates as an integer, e.g. [1, 2] -> 12.
+    # This encoding depends only on the index coordinates, not on the layout.
+    index_code = 0
+    for axis in qd.static(range(len(I))):
+        index_code = index_code * 10 + I[axis]
+    return index_code
+
+
 def verify_image(image, image_name, tolerance=0.1, regerate_groundtruth_images=False):
     if regerate_groundtruth_images:
         ground_truth_name = f"tests/python/expected/{image_name}.png"
