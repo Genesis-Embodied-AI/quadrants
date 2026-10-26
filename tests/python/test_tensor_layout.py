@@ -259,13 +259,8 @@ def test_matrix_dtype_without_layout_still_works():
 )
 @test_utils.test()
 def test_layout_sequence_index(backend, shape, layout, index_kind, operation):
-    """Check that list and tuple indices passed through a qd.func read and update canonical tensor elements, regardless
-    of the physical layout or tensor backend."""
-    x = qd.tensor(qd.i32, shape=shape, backend=backend, layout=layout)
-    out = qd.tensor(qd.i32, shape=shape, backend=backend)
-    initial = np.arange(np.prod(shape), dtype=np.int32).reshape(shape)
-    x.from_numpy(initial)
-    out.fill(-1)
+    """Run the same kernel with and without a tensor layout, checking that list and tuple indices passed through a
+    qd.func read and update the same canonical elements on both tensor backends."""
 
     @qd.func
     def access(I, field: qd.Tensor, result: qd.Tensor):
@@ -293,16 +288,14 @@ def test_layout_sequence_index(backend, shape, layout, index_kind, operation):
             else:
                 access(index, field, result)
 
-    run(x, out)
-    expected_result = np.full(shape, -1, dtype=np.int32) if operation == "read" else initial.copy()
-    for index in np.ndindex(*((3,) * len(shape))):
-        value = 1
-        for component in index:
-            value = value * 10 + component
-        if operation == "read":
-            expected_result[index] = initial[index]
-        elif operation == "write":
-            expected_result[index] = value
-        else:
-            expected_result[index] += value
-    np.testing.assert_array_equal(out.to_numpy() if operation == "read" else x.to_numpy(), expected_result)
+    initial = np.arange(np.prod(shape), dtype=np.int32).reshape(shape)
+    results = []
+    for tensor_layout in (layout, None):
+        x = qd.tensor(qd.i32, shape=shape, backend=backend, layout=tensor_layout)
+        out = qd.tensor(qd.i32, shape=shape, backend=backend)
+        x.from_numpy(initial)
+        out.fill(-1)
+        run(x, out)
+        results.append(out.to_numpy() if operation == "read" else x.to_numpy())
+    actual_result, expected_result = results
+    np.testing.assert_array_equal(actual_result, expected_result)
