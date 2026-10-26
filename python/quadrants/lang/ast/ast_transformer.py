@@ -817,7 +817,7 @@ class ASTTransformer(Builder):
             # time. The IR layer downstream (``build_Subscript`` -> ``impl.subscript``) only knows about ``Ndarray`` /
             # ``Field`` / ``Expr``; the wrapper is host-side. Unwrap here so ``state.a[i, j]`` inside a kernel body
             # resolves to the bare impl. Top-level wrapper args (``def k(x: qd.Tensor)``) are unwrapped earlier in
-            # ``Kernel.__call__``; this handles the in-struct case. See ``perso_hugh/doc/quadrants-tensor.md`` §8.14.
+            # ``Kernel.__call__``; this handles the in-struct case.
             from quadrants._tensor_wrapper import (  # pylint: disable=C0415
                 Tensor as _TensorClass,
             )

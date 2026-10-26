@@ -4,8 +4,8 @@ Pins the wrapper's basic introspection (``shape``, ``dtype``, ``layout``, ``_unw
 indexing and surface-method forwards live in ``test_tensor_layout_host_indexing.py`` and
 ``test_tensor_wrapper_surface.py`` respectively.
 
-Stork-19 flipped ``qd.tensor()`` to return wrappers, so we can use it directly here. To exercise the explicit-
-construction path (``qd.Tensor(impl)``), we drop down to ``qd.field`` / ``qd.ndarray`` (which still return bare impls).
+``qd.tensor()`` returns wrappers, so we can use it directly here. To exercise the explicit- construction path
+(``qd.Tensor(impl)``), we drop down to ``qd.field`` / ``qd.ndarray`` (which still return bare impls).
 """
 
 import pytest
@@ -21,7 +21,7 @@ BACKEND_IDS = ["field", "ndarray"]
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @test_utils.test(arch=qd.cpu)
 def test_wrapper_construction_forwards_basic_attrs(backend):
-    """``qd.tensor()`` already returns a wrapper post stork-19."""
+    """``qd.tensor()`` already returns a wrapper."""
     t = qd.tensor(qd.f32, shape=(3, 4), backend=backend)
     assert isinstance(t, qd.Tensor)
     assert t.shape == (3, 4)

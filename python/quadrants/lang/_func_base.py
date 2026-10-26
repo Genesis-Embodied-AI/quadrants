@@ -648,8 +648,8 @@ class FuncBase:
         # it does **not** walk into struct args. When the recursion below descends into a ``@qd.data_oriented`` (or
         # plain dataclass) struct field whose value is a wrapper, we land here with ``needed_arg_type`` set to whatever
         # annotation the struct declared on the field (e.g. ``NdarrayType``) and ``v`` set to a ``Tensor`` instance.
-        # Unwrap defensively so the rest of the function sees the bare impl, matching what callers expect post-stork-19.
-        # Idempotent for top-level args (already unwrapped).
+        # Unwrap defensively so the rest of the function sees the bare impl, matching what callers expect. Idempotent
+        # for top-level args (already unwrapped).
         #
         # PERF-CRITICAL: The _any_tensor_constructed guard makes this check zero-cost when no qd.Tensor has been
         # created. ``type(v) in _TENSOR_WRAPPER_TYPES`` is used instead of ``isinstance`` because it is a pointer

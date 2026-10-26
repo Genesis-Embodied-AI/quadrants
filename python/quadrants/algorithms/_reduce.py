@@ -2,8 +2,7 @@
 """Device-wide reduce primitives.
 
 Provides the graph-composable ``qd.algorithms.reduce_{add,min,max}`` on top of the block-tier
-``block.reduce_{add,min,max}`` primitives, plus :func:`reduce_scratch_slots` for sizing the caller-owned scratch. See
-the design doc at ``perso_hugh/doc/qipc/qipc_device_algos_design.md`` for the algorithmic rationale.
+``block.reduce_{add,min,max}`` primitives, plus :func:`reduce_scratch_slots` for sizing the caller-owned scratch.
 
 Each ``reduce_{add,min,max}`` is a fixed-depth staircase of ``@qd.func`` phases (:func:`_reduce_phase`): call it at
 the **top level** of your own ``@qd.kernel`` with the live element count ``n`` as a device ``Expr`` and the recursion
@@ -295,7 +294,7 @@ def _reduce_pass_u64(
 # ``n`` as a device ``Expr`` and the recursion depth as a compile-time ``log256_max_n``. ``n`` flows dynamically while
 # ``log256_max_n`` fixes the launch topology, so one captured graph serves every count ``<= BLOCK_DIM ** log256_max_n``.
 # The identity is derived in-kernel from the element dtype and the per-block partials stage through
-# ``bit_cast``-into-scratch - see ``perso_hugh/doc/qipc/qipc_device_algos_design.md``.
+# ``bit_cast``-into-scratch.
 
 _OP_ADD = 0
 _OP_MIN = 1

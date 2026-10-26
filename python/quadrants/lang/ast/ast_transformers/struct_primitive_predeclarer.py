@@ -8,7 +8,7 @@ documents). ``FunctionDefTransformer.transform`` delegates here right after ``_p
 the only entry point.
 
 See ``docs/source/user_guide/compound_types.md`` (section "Runtime primitives: ``template_primitives=False``") for the
-user-facing surface and ``perso_hugh/doc/data_oriented_template_primitives.md`` for the design.
+user-facing surface.
 """
 
 import dataclasses

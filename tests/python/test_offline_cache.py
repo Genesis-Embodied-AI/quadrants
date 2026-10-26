@@ -274,7 +274,7 @@ def test_offline_cache_per_kernel(curr_arch):
 # advance. A regression in the registry-seeding helper would leave the counter at zero (dispatcher gate skips).
 # Restricted to LLVM-GPU arches because the recognizer is gated on those
 # (`codegen_llvm.cpp::finalize_offloaded_task_function` skips it on CPU per #655); the SPIR-V backend has its own
-# runtime re-registration loop in `runtime/gfx/adstack_sizer_launch.cpp:236` that is unaffected by this PR.
+# runtime re-registration loop in `runtime/gfx/adstack_sizer_launch.cpp:236`.
 @pytest.mark.parametrize("curr_arch", {qd.cuda, qd.amdgpu} & set(test_utils.expected_archs()))
 @_test_offline_cache_dec
 def test_max_reducer_registry_seeded_on_offline_cache_reload(curr_arch):

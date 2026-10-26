@@ -613,12 +613,12 @@ void LlvmRuntimeExecutor::finalize() {
     // Release unused memory from cuda memory pool
     synchronize();
 
-    // Trim the driver's default async-alloc mempool back to the driver. The mempool's release-threshold (set to 128
-    // MiB at context construction) would otherwise keep up to that many bytes of freed pages cached, which shows up to
+    // Trim the driver's default async-alloc mempool back to the driver. The mempool's release-threshold (set to 128 MiB
+    // at context construction) would otherwise keep up to that many bytes of freed pages cached, which shows up to
     // other co-tenant processes on the same device as memory still in use. Aligning post-`qd.reset()` driver-visible
     // free VRAM with the user-facing contract that `qd.reset()` releases everything Quadrants allocated materially
-    // reduces multi-process `HSA_STATUS_ERROR_OUT_OF_RESOURCES` failures across `pytest-xdist` workers (see
-    // perso_hugh/doc/amdgpu_test_suite_oom_followup.md). No-op on devices without mempool support.
+    // reduces multi-process `HSA_STATUS_ERROR_OUT_OF_RESOURCES` failures across `pytest-xdist` workers. No-op on
+    // devices without mempool support.
 #if defined(QD_WITH_CUDA)
     if (config_.arch == Arch::cuda) {
       CUDAContext::get_instance().trim_default_mem_pool();
@@ -792,12 +792,7 @@ void LlvmRuntimeExecutor::materialize_runtime(KernelProfilerBase *profiler, uint
   if (config_.arch == Arch::cuda || config_.arch == Arch::amdgpu) {
     // Parallel rand-state init on the GPU. Both CUDA and AMDGPU launch one thread per state via
     // `runtime_initialize_rand_states_cuda` (the function uses generic GPU intrinsics — `block_dim()`, `block_idx()`,
-    // `thread_idx()` — so the same kernel works on both backends despite the historical name). Previously AMDGPU fell
-    // through to `runtime_initialize_rand_states_serial`, which initialised every state sequentially from a single GPU
-    // lane: at the default config that is `saturating_grid_dim * max_block_dim` states (~20M on a typical GPU),
-    // spending ~4 s on the device for every `qd.init()`. Because the runtime dispatch is async on the default stream,
-    // that ~4 s was paid by whatever first user kernel waited behind it in `qd.sync()`, surfacing as a ~4 s
-    // first-launch penalty per `qd.init`.
+    // `thread_idx()` — so the same kernel works on both backends).
     QD_TRACE("Initializing {} random states (parallel GPU)", num_rand_states);
     runtime_jit->launch<void *, int>("runtime_initialize_rand_states_cuda", config_.saturating_grid_dim,
                                      config_.max_block_dim, 0, llvm_runtime_, starting_rand_state);

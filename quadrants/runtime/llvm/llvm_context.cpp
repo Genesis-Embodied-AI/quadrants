@@ -433,15 +433,10 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
 
       patch_intrinsic("cuda_match_any_sync_i32", Intrinsic::nvvm_match_any_sync_i32);
 
-      // The three intrinsics below replace the stubs in runtime.cpp that
-      // previously contained PTX inline asm with AArch64-specific register
-      // constraints. See the comment in runtime.cpp for the full story.
-      // The LLVM 10 bugs that originally prevented using these intrinsics
-      // (commented out before this change) are long fixed in LLVM 22.
+      // Replace the runtime.cpp stubs with intrinsics to avoid host-specific inline-assembly constraints.
       patch_intrinsic("cuda_active_mask", Intrinsic::nvvm_activemask);
 
-      // nvvm_match_all_sync_i32p returns {i32, i1}; extract only the i32.
-      // (The predicate is discarded — same as the old inline asm did.)
+      // nvvm_match_all_sync_i32p returns {i32, i1}; extract only the i32. Discard the predicate.
       {
         auto func = module->getFunction("cuda_match_all_sync_i32");
         if (func) {
@@ -777,12 +772,12 @@ void QuadrantsLLVMContext::link_module_with_cuda_libdevice(std::unique_ptr<llvm:
   strip_nvvmir_version(libdevice_module.get());
 
   // `slim_libdevice.10.bc` ships without an explicit `target datalayout` line (only the `nvptx64-nvidia-gpulibs`
-  // triple), so its `getDataLayout()` returns the empty LLVM-default DL where `i64` ABI alignment is 4 bytes.
-  // Previously we copied that empty DL straight into the kernel module, which made every CreateStore / CreateLoad
-  // of i64 emit `align 4` -> the NVPTX backend then split each `align 4` i64 store into two `st.b32` halves, and
-  // ptxas in turn mis-combined those halves into a single `ST.E.64` that dropped the low 32 bits of values produced
-  // by f64 / i64 arithmetic (single 64-bit virtual reg holding the full bit pattern). End result: silent precision
-  // loss for `bit_cast(scan_result_f64, u64)` and friends.
+  // triple), so its `getDataLayout()` returns the empty LLVM-default DL where `i64` ABI alignment is 4 bytes. Copying
+  // that empty DL into the kernel module makes every CreateStore / CreateLoad of i64 emit `align 4` -> the NVPTX
+  // backend then splits each `align 4` i64 store into two `st.b32` halves, and ptxas in turn mis-combines those halves
+  // into a single `ST.E.64` that drops the low 32 bits of values produced by f64 / i64 arithmetic (single 64-bit
+  // virtual reg holding the full bit pattern). End result: silent precision loss for `bit_cast(scan_result_f64, u64)`
+  // and friends.
   //
   // Pin the canonical NVPTX64 DL (matches LLVM's `NVPTXTargetMachine::computeDataLayout(is64Bit=true,
   // UseShortPointers=false)`) so CreateStore / CreateLoad see `i64:64` and emit single aligned `st.b64` / `ld.b64`.
@@ -826,8 +821,7 @@ void QuadrantsLLVMContext::link_module_with_amdgpu_libdevice(std::unique_ptr<llv
   // Force wave64 on every AMDGPU target (CDNA gfx9xx are wave64 by default; RDNA gfx10/11/12 default to wave32 but also
   // support wave64). Linking the wavefrontsize64=on libdevice variant aligns the ROCm device libraries with the wave64
   // codegen forced via target-features in llvm_context_pass.h::AMDGPUConvertAllocaInstAddressSpacePass and
-  // jit_amdgpu.cpp's TargetMachine features. See `hp/always-wave64`: testing both wave modes was costly, so we
-  // standardize on wave64.
+  // jit_amdgpu.cpp's TargetMachine features.
   std::string libdevice_files[] = {"ocml.bc",
                                    "oclc_wavefrontsize64_on.bc",
                                    "ockl.bc",

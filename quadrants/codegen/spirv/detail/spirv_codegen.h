@@ -247,12 +247,11 @@ class TaskCodegen : public IRVisitor {
     spirv::Value adjoint_offset_val;
   };
   std::unordered_map<const Stmt *, AdStackSpirv> ad_stacks_;
-  // Total per-thread heap strides, pre-computed from the IR before any visitor runs from the
-  // compile-time `max_size` on each alloca. The runtime recomputes these from the evaluated
-  // `size_expr` trees and publishes them into the `AdStackMetadata` buffer; the shader reads the
-  // per-dispatch values from the metadata buffer rather than using these immediates directly. The
-  // compile-time values are still mirrored into `task_attribs.ad_stack.*` so the offline-cache-hit
-  // path with no symbolic bound captured reproduces the pre-PR shader layout.
+  // Total per-thread heap strides, pre-computed from the IR before any visitor runs from the compile-time `max_size` on
+  // each alloca. The runtime recomputes these from the evaluated `size_expr` trees and publishes them into the
+  // `AdStackMetadata` buffer; the shader reads the per-dispatch values from the metadata buffer rather than using these
+  // immediates directly. The compile-time values are still mirrored into `task_attribs.ad_stack.*` so the
+  // offline-cache-hit path with no symbolic bound captured uses the compile-time shader layout.
   uint32_t ad_stack_heap_per_thread_stride_float_{0};
   uint32_t ad_stack_heap_per_thread_stride_int_{0};
   // Total number of `AdStackAllocaStmt` the body will visit, pre-computed by the same scan that builds the heap

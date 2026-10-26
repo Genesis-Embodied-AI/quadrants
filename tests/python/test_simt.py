@@ -663,8 +663,8 @@ def test_block_mem_fence_divergent_control_flow():
 
 
 # NOTE: a producer-consumer memory-ordering test for `block.mem_fence()` (i.e. thread 0 publishes data + flag with a
-# fence between, another thread spin-waits on flag then reads data) was attempted in this PR and removed. Every variant
-# deadlocks on CUDA before pytest's process-level timeout fires:
+# fence between, another thread spin-waits on flag then reads data) can deadlock on CUDA before pytest's process-level
+# timeout fires:
 #
 # 1. Plain shared-memory load `while flag[0] == 0: pass` -- LLVM hoists the load out of the loop because there is no
 #    `volatile` qualifier and no memory-clobbering call inside the loop body. The consumer never re-reads the flag.
@@ -685,12 +685,11 @@ def test_block_mem_fence_divergent_control_flow():
 #
 # The fundamental gap is that Quadrants' Python API does not currently expose a `volatile`-flavored shared-array
 # primitive, which is the standard tool for writing producer-consumer ordering tests in CUDA / Vulkan / Metal. Adding
-# such a primitive (e.g. `block.SharedArray(..., volatile=True)`) is a Quadrants frontend feature outside this PR.
+# such a primitive (e.g. `block.SharedArray(..., volatile=True)`) requires frontend support.
 #
 # What we do test, in lieu of a full producer-consumer ordering test:
 #   - `test_block_mem_fence_smoke`: end-to-end compile + run on every backend.
-#   - `test_block_mem_fence_divergent_control_flow`: the fence is a fence, not a thread-converging barrier. This
-#     catches the regression we actually fixed in this PR.
+#   - `test_block_mem_fence_divergent_control_flow`: the fence is a fence, not a thread-converging barrier.
 #
 # The convergence test exercises every backend's mem_fence through divergent control flow, which is the hard
 # correctness property and the practical motivation for renaming `mem_sync -> mem_fence`. Pure memory-ordering
@@ -716,8 +715,8 @@ def test_block_mem_sync_deprecated_alias():
     assert a[0] == 7
 
 
-# Portable test for `block.global_thread_idx()`. Runs on every supported GPU backend; in particular, verifies the
-# SPIR-V dispatch path that was previously unreachable due to a Python-side dispatch bug.
+# Portable test for `block.global_thread_idx()`. Runs on every supported GPU backend; in particular, verifies the SPIR-V
+# dispatch path.
 @test_utils.test(arch=qd.gpu)
 def test_block_global_thread_idx_portable():
     N = 64
@@ -754,11 +753,11 @@ def test_block_thread_idx_portable():
         assert a[i] == i
 
 
-# Multi-block coverage for `block.thread_idx()`: with block_dim=8 and loop total 32, the kernel runs across 4 blocks
-# and the in-block index must reset to 0 at each block boundary. Without this case, a regression that aliased
+# Multi-block coverage for `block.thread_idx()`: with block_dim=8 and loop total 32, the kernel runs across 4 blocks and
+# the in-block index must reset to 0 at each block boundary. Without this case, a regression that aliased
 # `block.thread_idx()` to `block.global_thread_idx()` (or vice versa) would slip past the single-block portable tests.
-# CUDA / AMDGPU lower this to the `tid.x` SREG; Vulkan / Metal lower it to `gl_LocalInvocationID.x` (which is what
-# required the `OpEntryPoint` interface fix earlier in this PR).
+# CUDA / AMDGPU lower this to the `tid.x` SREG; Vulkan / Metal lower it to `gl_LocalInvocationID.x` (which must be
+# included in the `OpEntryPoint` interface).
 @test_utils.test(arch=qd.gpu)
 def test_block_thread_idx_multi_block():
     N = 32

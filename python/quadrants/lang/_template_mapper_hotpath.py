@@ -1,5 +1,4 @@
 # pyright: reportAttributeAccessIssue=false
-
 """
 This function '_extract_arg' is called so often during physics simulation with Genesis that it becomes a major
 bottleneck for simple scenes running faster than 10M FPS. In practice, it adds about 100% overhead when running 20M
@@ -227,8 +226,8 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
     # args, but the dataclass-field recursion at the bottom of this function walks struct attributes via raw
     # ``getattr``, so a wrapper stored as a struct field arrives here un-stripped with its declared annotation (e.g.
     # ``qd.types.NDArray[qd.f32, 2]``). Without this unwrap the function falls through to the "external arrays" path
-    # (line ~149) which technically reads ``.shape`` off the wrapper but produces a meaningless cache key. See
-    # ``perso_hugh/doc/quadrants-tensor.md`` §8.14. Idempotent for top-level args.
+    # (line ~149) which technically reads ``.shape`` off the wrapper but produces a meaningless cache key. Idempotent
+    # for top-level args.
     #
     # PERF-CRITICAL: The _any_tensor_constructed guard makes this check zero-cost when no qd.Tensor has been created.
     # This function runs on *every* argument of *every* kernel invocation. ``type(arg) in _TENSOR_WRAPPER_TYPES`` is

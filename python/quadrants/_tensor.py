@@ -6,9 +6,8 @@ optional physical memory layout on a per-tensor basis.
 See ``docs/source/user_guide/tensor.md`` for the user guide.
 
 ``qd.Tensor`` is the wrapper *class* defined in ``_tensor_wrapper.py``; it doubles as the polymorphic kernel-argument
-annotation. The dispatch sites that previously keyed off the ``_TensorAnnotation`` singleton type now check
-``annotation is Tensor`` (the class). See ``_func_base.py``, ``_template_mapper_hotpath.py`` and
-``function_def_transformer.py``.
+annotation. Dispatch sites check ``annotation is Tensor`` (the class). See ``_func_base.py``,
+``_template_mapper_hotpath.py`` and ``function_def_transformer.py``.
 """
 
 # pylint: disable=import-outside-toplevel
@@ -35,10 +34,6 @@ _TENSOR_T_NDARRAY_MARKER = "__qd_tensor_t_ndarray__"
 
 # ----------------------------------------------------------------------------
 # Internal: attach layout metadata to an existing Ndarray.
-#
-# Public API for ndarray + non-identity layout lands in an earlier change (the qd.tensor(..., backend=NDARRAY,
-# layout=...) path is currently gated by NotImplementedError). Until then, this private helper exists so the AST
-# subscript-rewrite plumbing can be exercised end-to-end in tests without changing the user-facing factory signature.
 # ----------------------------------------------------------------------------
 
 

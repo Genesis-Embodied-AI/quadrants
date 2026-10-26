@@ -17,16 +17,16 @@ from tests import test_utils
 
 
 def test_tensor_is_a_class():
-    """As of stork-19, ``qd.Tensor`` is the wrapper *class* (not a Template singleton). Used both as kernel-arg
-    annotation and as a constructor: ``qd.Tensor(impl)`` produces a wrapper. The annotation branch in
-    ``_func_base.py`` recognises ``annotation is qd.Tensor`` explicitly.
+    """``qd.Tensor`` is the wrapper *class* (not a Template singleton). Used both as kernel-arg annotation and as a
+        constructor: ``qd.Tensor(impl)`` produces a wrapper. The annotation branch in ``_func_base.py`` recognises
+        ``annotation is qd.Tensor`` explicitly.
     """
     assert isinstance(qd.Tensor, type)
 
 
 @test_utils.test(arch=qd.cpu)
 def test_tensor_factory_returns_wrapper():
-    """Post stork-19, ``qd.tensor(...)`` returns ``qd.Tensor`` instances."""
+    """``qd.tensor(...)`` returns ``qd.Tensor`` instances."""
     a = qd.tensor(qd.i32, shape=(4,), backend=qd.Backend.NDARRAY)
     b = qd.tensor(qd.i32, shape=(4,), backend=qd.Backend.FIELD)
     assert isinstance(a, qd.Tensor)
@@ -405,8 +405,7 @@ def test_module_level_qd_tensor_kernel_all_combos_share_decl():
     into the cache key and re-fragmenting per call. Anything lower on the ndarray side would mean two layouts collided
     onto one compiled body, which the value asserts above already catch independently.
 
-    Mirrors the Genesis pattern after the stork-20 ``set_gravity`` collapse: one decl, multiple backend/layout
-    instances at runtime.
+    Mirrors the Genesis pattern in ``set_gravity``: one decl, multiple backend/layout instances at runtime.
     """
     expected = _expected_canonical()
     n_before = len(_module_level_fill_2d._primal.mapper.mapping)

@@ -4,28 +4,22 @@ A thin Python wrapper around an underlying ``Ndarray`` or ``ScalarField`` impl. 
 property rather than something we police test by test: the wrapper exposes a fixed whitelisted surface uniformly,
 regardless of which impl it contains.
 
-Promoted to ``qd.Tensor`` in ``hp/tensor-stork-19``: the class is now the public name, doubles as the polymorphic
-kernel-arg annotation (``def f(x: qd.Tensor): ...``), and is what ``qd.tensor()``, ``qd.Vector.tensor()``,
-``qd.Matrix.tensor()`` return. Bare impls are still reachable via ``qd.field``, ``qd.ndarray``, ``qd.Vector.field`` etc.
+``qd.Tensor`` doubles as the polymorphic kernel-arg annotation (``def f(x: qd.Tensor): ...``), and is what
+``qd.tensor()``, ``qd.Vector.tensor()``, ``qd.Matrix.tensor()`` return. Bare impls are still reachable via ``qd.field``,
+``qd.ndarray``, ``qd.Vector.field`` etc.
 
 Surface:
 
 - Introspection: ``shape``, ``dtype``, ``layout``, ``_unwrap()``.
 - Layout-aware host-side ``__getitem__`` / ``__setitem__`` — permutes the canonical user key to the physical slot on
-  layout-tagged ndarrays. Fixes gotcha B from the design doc (§8.11).
+  layout-tagged ndarrays.
 - Symmetric pickle via ``__reduce__`` — round-trips through ``to_numpy()`` so it works uniformly on both backends
   (Field, which never supported pickle upstream, is picklable through the wrapper).
-- Forwards for ``to_numpy`` / ``from_numpy`` / ``to_torch`` / ``from_torch`` / ``to_dlpack`` / ``fill`` /
-  ``copy_from`` — already layout-aware on both backends after stork-15/16, the wrapper delegates.
+- Forwards for ``to_numpy`` / ``from_numpy`` / ``to_torch`` / ``from_torch`` / ``to_dlpack`` / ``fill`` / ``copy_from``
+  — layout-aware on both backends, the wrapper delegates.
 - Lazy-wrapped ``.grad`` — returns a ``Tensor`` wrapping ``impl.grad`` (identity-stable via
   ``functools.cached_property``).
 - ``VectorTensor`` / ``MatrixTensor`` subclasses carrying ``element_shape``.
-
-Out of scope:
-- Genesis migration (stork-20): rewrite Genesis ``isinstance`` sites from ``(qd.Field, qd.Ndarray)`` to
-  ``qd.Tensor``, switch its tensor allocations to ``qd.tensor()``.
-
-See ``perso_hugh/doc/quadrants-tensor.md`` §8.11 / §8.12.
 """
 
 # pylint: disable=import-outside-toplevel
@@ -45,10 +39,9 @@ __all__ = [
 
 
 # PERF-CRITICAL: This flag is checked on every kernel arg in _template_mapper_hotpath._extract_arg,
-# kernel.Kernel.__call__, _func_base._inject_template_globals, and args_hasher.stringify_obj_type.
-# It gates the isinstance(arg, Tensor) unwrap so that programs which never construct a qd.Tensor pay zero Python
-# overhead for the check. Removing this flag or the guards that read it causes a measurable ~4% CPU regression on
-# Genesis benchmarks (see regression_2026apr23_stork_log.md).
+# kernel.Kernel.__call__, _func_base._inject_template_globals, and args_hasher.stringify_obj_type. It gates the
+# isinstance(arg, Tensor) unwrap so that programs which never construct a qd.Tensor pay zero Python overhead for the
+# check. Removing this flag or the guards that read it causes a measurable ~4% CPU regression on Genesis benchmarks.
 _any_tensor_constructed = False
 
 
@@ -118,7 +111,7 @@ class Tensor:
 
     @property
     def layout(self) -> typing.Optional[typing.Tuple[int, ...]]:
-        # Forwards to the impl's ``layout`` property (symmetric across backends after stork-16).
+        # Forwards to the impl's ``layout`` property (symmetric across backends).
         return self._impl.layout
 
     # ------------------------------------------------------------------
@@ -401,7 +394,7 @@ def _rebuild_scalar_tensor(
     kwargs: typing.Dict[str, typing.Any] = {"backend": backend}
     if layout is not None:
         kwargs["layout"] = layout
-    # ``qd.tensor()`` already returns a Tensor wrapper post stork-19.
+    # ``qd.tensor()`` already returns a Tensor wrapper.
     t = qd.tensor(dtype, shape, **kwargs)  # type: ignore[reportOptionalCall]
     t.from_numpy(data)  # type: ignore[reportAttributeAccessIssue]
     return t  # type: ignore[reportReturnType]
