@@ -263,20 +263,26 @@ def test_layout_sequence_index(backend, shape, layout, index_kind, operation):
     qd.func read and update the same canonical elements on both tensor backends."""
 
     @qd.func
-    def access(I, x: qd.Tensor, y: qd.Tensor):
-        value = 1
+    def encode_index(I):
+        # Encode these single-digit coordinates in order, e.g. [1, 2] -> 112, so swapped axes produce different codes.
+        index_code = 1
         for axis in qd.static(range(len(shape))):
-            value = value * 10 + I[axis]
+            index_code = index_code * 10 + I[axis]
+        return index_code
+
+    @qd.func
+    def access(I, x: qd.Tensor, y: qd.Tensor):
+        index_code = encode_index(I)
         if qd.static(operation == "read"):
             y[I] = x[I]
         elif qd.static(operation == "write"):
-            x[I] = value
+            x[I] = index_code
         elif qd.static(operation == "read_modify_write"):
-            x[I] = x[I] + value
+            x[I] = x[I] + index_code
         elif qd.static(operation == "augassign"):
-            x[I] += value
+            x[I] += index_code
         else:
-            qd.atomic_add(x[I], value)
+            qd.atomic_add(x[I], index_code)
 
     @qd.kernel
     def run(x: qd.Tensor, y: qd.Tensor):
