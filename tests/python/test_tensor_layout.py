@@ -263,39 +263,39 @@ def test_layout_sequence_index(backend, shape, layout, index_kind, operation):
     qd.func read and update the same canonical elements on both tensor backends."""
 
     @qd.func
-    def access(I, field: qd.Tensor, result: qd.Tensor):
+    def access(I, x: qd.Tensor, out: qd.Tensor):
         value = 1
         for axis in qd.static(range(len(shape))):
             value = value * 10 + I[axis]
         if qd.static(operation == "read"):
-            result[I] = field[I]
+            out[I] = x[I]
         elif qd.static(operation == "write"):
-            field[I] = value
+            x[I] = value
         elif qd.static(operation == "read_modify_write"):
-            field[I] = field[I] + value
+            x[I] = x[I] + value
         elif qd.static(operation == "augassign"):
-            field[I] += value
+            x[I] += value
         else:
-            qd.atomic_add(field[I], value)
+            qd.atomic_add(x[I], value)
 
     @qd.kernel
-    def run(field: qd.Tensor, result: qd.Tensor):
+    def run(x: qd.Tensor, out: qd.Tensor):
         # Keep accesses in bounds even without permutation, so a regression reports wrong values rather than OOB.
         for I in qd.grouped(qd.ndrange(*((3,) * len(shape)))):
             index = [I[axis] for axis in qd.static(range(len(shape)))]
             if qd.static(index_kind == "tuple"):
-                access(tuple(index), field, result)
+                access(tuple(index), x, out)
             else:
-                access(index, field, result)
+                access(index, x, out)
 
     initial = np.arange(np.prod(shape), dtype=np.int32).reshape(shape)
     results = []
     for tensor_layout in (layout, None):
-        field = qd.tensor(qd.i32, shape=shape, backend=backend, layout=tensor_layout)
-        result = qd.tensor(qd.i32, shape=shape, backend=backend)
-        field.from_numpy(initial)
-        result.fill(-1)
-        run(field, result)
-        results.append(result.to_numpy() if operation == "read" else field.to_numpy())
+        x = qd.tensor(qd.i32, shape=shape, backend=backend, layout=tensor_layout)
+        out = qd.tensor(qd.i32, shape=shape, backend=backend)
+        x.from_numpy(initial)
+        out.fill(-1)
+        run(x, out)
+        results.append(out.to_numpy() if operation == "read" else x.to_numpy())
     actual_result, expected_result = results
     np.testing.assert_array_equal(actual_result, expected_result)
