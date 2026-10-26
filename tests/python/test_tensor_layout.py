@@ -264,7 +264,7 @@ def test_layout_sequence_index(backend, shape, layout, index_kind, operation):
 
     @qd.func
     def encode_index(I):
-        # Encode coordinates in order, e.g. [1, 2] -> 112.
+        # Encode coordinates as an integer, e.g. [1, 2] -> 112.
         index_code = 1
         for axis in qd.static(range(len(shape))):
             index_code = index_code * 10 + I[axis]
