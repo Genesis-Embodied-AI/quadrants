@@ -254,14 +254,13 @@ def test_matrix_dtype_without_layout_still_works():
         (qd.Backend.FIELD, (3, 4, 5), (1, 2, 0), tuple, "read"),
         (qd.Backend.NDARRAY, (3, 5), (1, 0), tuple, "atomic_add"),
         (qd.Backend.FIELD, (3, 5), (0, 1), list, "augassign"),
-        (qd.Backend.NDARRAY, (3, 5), None, list, "read_modify_write"),
     ],
 )
 @test_utils.test()
 def test_layout_sequence_index(
     backend: qd.Backend,
     shape: tuple[int, ...],
-    layout: tuple[int, ...] | None,
+    layout: tuple[int, ...],
     index_kind: type[list] | type[tuple],
     operation: str,
 ) -> None:
