@@ -370,5 +370,5 @@ def test_static_matrix_return_dimension_mismatch():
     def foo() -> qd.types.vector(4, qd.i32):
         return qd.static(value)
 
-    with pytest.raises(qd.QuadrantsRuntimeTypeError, match="Return matrix ndim mismatch, expecting=1, got=2"):
+    with pytest.raises(qd.QuadrantsCompilationError, match="Return matrix ndim mismatch, expecting=1, got=2"):
         foo()

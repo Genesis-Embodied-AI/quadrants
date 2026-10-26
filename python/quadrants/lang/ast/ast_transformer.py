@@ -12,6 +12,7 @@ from typing import Any, Generator, Iterable, Sequence, Type, TypeVar, cast
 import numpy as np
 
 from quadrants._lib import core as _qd_core
+from quadrants._lib.core.quadrants_python import DataTypeCxx
 from quadrants.lang import exception, expr, impl, matrix, mesh
 from quadrants.lang import ops as qd_ops
 from quadrants.lang._dataclass_util import create_flat_name
@@ -585,14 +586,14 @@ class ASTTransformer(Builder):
                             and not values.element_type() in primitive_types.all_types
                         ):
                             raise QuadrantsRuntimeTypeError.get_ret(
-                                cast(_qd_core.DataTypeCxx, return_type.dtype).to_string(), values.element_type()
+                                cast(DataTypeCxx, return_type.dtype).to_string(), values.element_type()
                             )
                         elif (
                             return_type.dtype in primitive_types.integer_types
                             and not values.element_type() in primitive_types.integer_types
                         ):
                             raise QuadrantsRuntimeTypeError.get_ret(
-                                cast(_qd_core.DataTypeCxx, return_type.dtype).to_string(), values.element_type()
+                                cast(DataTypeCxx, return_type.dtype).to_string(), values.element_type()
                             )
                         elif len(values.get_shape()) != return_type.ndim:
                             raise QuadrantsRuntimeTypeError(
@@ -613,11 +614,11 @@ class ASTTransformer(Builder):
                             np.integer,
                         ):
                             raise QuadrantsRuntimeTypeError.get_ret(
-                                cast(_qd_core.DataTypeCxx, return_type.dtype).to_string(), dt
+                                cast(DataTypeCxx, return_type.dtype).to_string(), dt
                             )
                         elif return_type.dtype in primitive_types.integer_types and dt not in (int, np.integer):
                             raise QuadrantsRuntimeTypeError.get_ret(
-                                cast(_qd_core.DataTypeCxx, return_type.dtype).to_string(), dt
+                                cast(DataTypeCxx, return_type.dtype).to_string(), dt
                             )
                         elif ndim != return_type.ndim:
                             raise QuadrantsRuntimeTypeError(
@@ -1055,8 +1056,11 @@ class ASTTransformer(Builder):
     def build_static_for(ctx: ASTTransformerFuncContext, node: ast.For, is_grouped: bool) -> None:
         qd_unroll_limit = impl.get_runtime().unrolling_limit
         if is_grouped:
-            assert len(cast(ast.Call, cast(ast.Call, node.iter).args[0]).args) == 1
-            ndrange_arg = build_stmt(ctx, cast(ast.Call, cast(ast.Call, node.iter).args[0]).args[0])
+            # The dispatcher recognized qd.static(qd.grouped(...)).
+            static_call = cast(ast.Call, node.iter)
+            grouped_call = cast(ast.Call, static_call.args[0])
+            assert len(grouped_call.args) == 1
+            ndrange_arg = build_stmt(ctx, grouped_call.args[0])
             if not isinstance(ndrange_arg, _Ndrange):
                 raise QuadrantsSyntaxError("Only 'qd.ndrange' is allowed in 'qd.static(qd.grouped(...))'.")
             targets = ASTTransformer.get_for_loop_targets(node)
@@ -1126,18 +1130,18 @@ class ASTTransformer(Builder):
 
     @staticmethod
     def build_range_for(ctx: ASTTransformerFuncContext, node: ast.For) -> None:
+        # build_For dispatches here only for a call to range.
+        iterator = cast(ast.Call, node.iter)
         with ctx.variable_scope_guard():
             loop_name = cast(ast.Name, node.target).id
             ctx.check_loop_var(loop_name)
             loop_var = expr.Expr(ctx.required_ast_builder.make_id_expr(""))
             ctx.create_variable(loop_name, loop_var)
-            if len(cast(ast.Call, node.iter).args) not in [1, 2]:
-                raise QuadrantsSyntaxError(
-                    f"Range should have 1 or 2 arguments, found {len(cast(ast.Call, node.iter).args)}"
-                )
-            if len(cast(ast.Call, node.iter).args) == 2:
-                begin_expr = expr.Expr(build_stmt(ctx, cast(ast.Call, node.iter).args[0]))
-                end_expr = expr.Expr(build_stmt(ctx, cast(ast.Call, node.iter).args[1]))
+            if len(iterator.args) not in [1, 2]:
+                raise QuadrantsSyntaxError(f"Range should have 1 or 2 arguments, found {len(iterator.args)}")
+            if len(iterator.args) == 2:
+                begin_expr = expr.Expr(build_stmt(ctx, iterator.args[0]))
+                end_expr = expr.Expr(build_stmt(ctx, iterator.args[1]))
 
                 # Warning for implicit dtype conversion
                 boundary_type_cast_warning(begin_expr)
@@ -1147,7 +1151,7 @@ class ASTTransformer(Builder):
                 end = cast(Expr, qd_ops.cast(end_expr, primitive_types.i32))
 
             else:
-                end_expr = expr.Expr(build_stmt(ctx, cast(ast.Call, node.iter).args[0]))
+                end_expr = expr.Expr(build_stmt(ctx, iterator.args[0]))
 
                 # Warning for implicit dtype conversion
                 boundary_type_cast_warning(end_expr)
@@ -1398,8 +1402,8 @@ class ASTTransformer(Builder):
             raise QuadrantsSyntaxError("'else' clause for 'for' not supported in Quadrants kernels")
         decorator = get_decorator(ctx, node.iter)
         double_decorator = ""
-        if decorator != "" and len(cast(ast.Call, node.iter).args) == 1:
-            double_decorator = get_decorator(ctx, cast(ast.Call, node.iter).args[0])
+        if decorator != "" and isinstance(node.iter, ast.Call) and len(node.iter.args) == 1:
+            double_decorator = get_decorator(ctx, node.iter.args[0])
 
         if decorator == "static":
             if double_decorator == "static":
