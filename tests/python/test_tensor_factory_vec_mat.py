@@ -192,8 +192,8 @@ def test_compound_factory_layout(backend, element_shape, layout):
     shape = (2, 4, 5)
     factory = qd.Vector.tensor if len(element_shape) == 1 else qd.Matrix.tensor
     x = factory(*element_shape, qd.f32, shape=shape, backend=backend, layout=layout, needs_grad=True)
-    expected = np.arange(np.prod(shape + element_shape), dtype=np.float32).reshape(shape + element_shape)
-    x.from_numpy(expected)
+    initial = np.arange(np.prod(shape + element_shape), dtype=np.float32).reshape(shape + element_shape)
+    x.from_numpy(initial)
     assert x.shape == shape
     assert x.element_shape == element_shape
     assert x.layout == (None if layout in (None, (0, 1, 2)) else layout)
@@ -207,5 +207,5 @@ def test_compound_factory_layout(backend, element_shape, layout):
             x.grad[I] = 2 * x[I]
 
     increment(x)
-    np.testing.assert_array_equal(x.to_numpy(), expected + 1)
-    np.testing.assert_array_equal(x.grad.to_numpy(), 2 * (expected + 1))
+    np.testing.assert_array_equal(x.to_numpy(), initial + 1)
+    np.testing.assert_array_equal(x.grad.to_numpy(), 2 * (initial + 1))
