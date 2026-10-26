@@ -1980,7 +1980,7 @@ class MatrixNdarray(Ndarray):
     def from_torch(self, arr):
         """Load all entries from a ``torch.Tensor`` of shape ``self.shape + (n, m)``. Mirrors
         :meth:`MatrixField.from_torch`."""
-        self._ndarray_matrix_from_torch(arr, as_vector=0)
+        self._copy_from_torch(arr, as_vector=0)
 
     @python_scope
     def __deepcopy__(self, memo=None):
@@ -2133,7 +2133,7 @@ class VectorNdarray(Ndarray):
     @python_scope
     def from_torch(self, arr):
         """Load all entries from a ``torch.Tensor`` of shape ``self.shape + (n,)``."""
-        self._ndarray_matrix_from_torch(arr, as_vector=1)
+        self._copy_from_torch(arr, as_vector=1)
 
     @python_scope
     def __deepcopy__(self, memo=None):

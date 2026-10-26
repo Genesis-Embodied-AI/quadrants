@@ -297,7 +297,7 @@ class Ndarray:
         return out
 
     @python_scope
-    def _ndarray_matrix_from_torch(self, arr, as_vector):
+    def _copy_from_torch(self, arr, as_vector):
         """Mirror of ``_copy_from_numpy`` that ingests a torch tensor. ``.contiguous()`` is forced so the
         bridge kernel sees a tightly-packed external array."""
         contig = arr.contiguous()
