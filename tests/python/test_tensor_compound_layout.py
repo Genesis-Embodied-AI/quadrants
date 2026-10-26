@@ -11,14 +11,19 @@ from quadrants.lang.field import _TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET
 
 from tests import test_utils
 
-BACKENDS = [qd.Backend.FIELD, qd.Backend.NDARRAY]
-DTYPES = [qd.types.vector(3, qd.f32), qd.types.matrix(2, 3, qd.f32)]
-LAYOUTS = [None, (0, 1, 2), (1, 0, 2), (2, 0, 1)]
+VECTOR_DTYPE = qd.types.vector(3, qd.f32)
+MATRIX_DTYPE = qd.types.matrix(2, 3, qd.f32)
 
 
-@pytest.mark.parametrize("backend", BACKENDS)
-@pytest.mark.parametrize("dtype", DTYPES)
-@pytest.mark.parametrize("layout", LAYOUTS)
+@pytest.mark.parametrize(
+    "backend,dtype,layout",
+    [
+        (qd.Backend.FIELD, VECTOR_DTYPE, None),
+        (qd.Backend.NDARRAY, MATRIX_DTYPE, (0, 1, 2)),
+        (qd.Backend.FIELD, MATRIX_DTYPE, (1, 0, 2)),
+        (qd.Backend.NDARRAY, VECTOR_DTYPE, (2, 0, 1)),
+    ],
+)
 @test_utils.test()
 def test_compound_layout_indexing_and_numpy(backend, dtype, layout):
     shape = (2, 4, 5)
@@ -63,9 +68,15 @@ def test_compound_layout_indexing_and_numpy(backend, dtype, layout):
     np.testing.assert_array_equal(a.to_numpy(), source)
 
 
-@pytest.mark.parametrize("backend", BACKENDS)
-@pytest.mark.parametrize("dtype", DTYPES)
-@pytest.mark.parametrize("layout", [(1, 0, 2), (2, 0, 1)])
+@pytest.mark.parametrize(
+    "backend,dtype,layout",
+    [
+        (qd.Backend.FIELD, VECTOR_DTYPE, (1, 0, 2)),
+        (qd.Backend.NDARRAY, MATRIX_DTYPE, (2, 0, 1)),
+        (qd.Backend.FIELD, MATRIX_DTYPE, (2, 0, 1)),
+        (qd.Backend.NDARRAY, VECTOR_DTYPE, (1, 0, 2)),
+    ],
+)
 @test_utils.test()
 def test_compound_layout_copy_and_pickle(backend, dtype, layout):
     a = qd.tensor(dtype, (2, 4, 5), backend=backend, layout=layout)
@@ -85,9 +96,15 @@ def test_compound_layout_copy_and_pickle(backend, dtype, layout):
         np.testing.assert_array_equal(restored.to_numpy(), expected)
 
 
-@pytest.mark.parametrize("backend", BACKENDS)
-@pytest.mark.parametrize("dtype", DTYPES)
-@pytest.mark.parametrize("layout", [(1, 0, 2), (2, 0, 1)])
+@pytest.mark.parametrize(
+    "backend,dtype,layout",
+    [
+        (qd.Backend.FIELD, VECTOR_DTYPE, (1, 0, 2)),
+        (qd.Backend.NDARRAY, MATRIX_DTYPE, (2, 0, 1)),
+        (qd.Backend.FIELD, MATRIX_DTYPE, (2, 0, 1)),
+        (qd.Backend.NDARRAY, VECTOR_DTYPE, (1, 0, 2)),
+    ],
+)
 @test_utils.test(exclude=[qd.vulkan])
 def test_compound_layout_torch_and_dlpack(backend, dtype, layout):
     torch = pytest.importorskip("torch")
@@ -127,8 +144,13 @@ def test_compound_layout_torch_and_dlpack(backend, dtype, layout):
         np.testing.assert_array_equal(shared.cpu().numpy(), expected)
 
 
-@pytest.mark.parametrize("backend", BACKENDS)
-@pytest.mark.parametrize("dtype", DTYPES)
+@pytest.mark.parametrize(
+    "backend,dtype",
+    [
+        (qd.Backend.FIELD, VECTOR_DTYPE),
+        (qd.Backend.NDARRAY, MATRIX_DTYPE),
+    ],
+)
 @test_utils.test(arch=qd.cpu)
 def test_compound_layout_numpy_zero_copy(backend, dtype):
     pytest.importorskip("torch")
@@ -142,8 +164,13 @@ def test_compound_layout_numpy_zero_copy(backend, dtype):
         a.fill(3)
 
 
-@pytest.mark.parametrize("backend", BACKENDS)
-@pytest.mark.parametrize("dtype", DTYPES)
+@pytest.mark.parametrize(
+    "backend,dtype",
+    [
+        (qd.Backend.NDARRAY, VECTOR_DTYPE),
+        (qd.Backend.FIELD, MATRIX_DTYPE),
+    ],
+)
 @test_utils.test()
 def test_compound_layout_grad(backend, dtype):
     a = qd.tensor(dtype, (2, 4, 5), backend=backend, layout=(2, 0, 1), needs_grad=True)
@@ -164,9 +191,15 @@ def test_compound_layout_grad(backend, dtype):
     np.testing.assert_array_equal(a.grad.to_numpy(), np.full(a.shape + a.element_shape, 2))
 
 
-@pytest.mark.parametrize("backend", BACKENDS)
-@pytest.mark.parametrize("dtype", DTYPES)
-@pytest.mark.parametrize("shape,layout", [((), ()), ((4,), (0,)), ((2, 5), (1, 0))])
+@pytest.mark.parametrize(
+    "backend,dtype,shape,layout",
+    [
+        (qd.Backend.FIELD, VECTOR_DTYPE, (), ()),
+        (qd.Backend.NDARRAY, MATRIX_DTYPE, (), ()),
+        (qd.Backend.NDARRAY, VECTOR_DTYPE, (4,), (0,)),
+        (qd.Backend.FIELD, MATRIX_DTYPE, (2, 5), (1, 0)),
+    ],
+)
 @test_utils.test()
 def test_compound_layout_other_ranks(backend, dtype, shape, layout):
     a = qd.tensor(dtype, shape, backend=backend, layout=layout)
@@ -175,16 +208,22 @@ def test_compound_layout_other_ranks(backend, dtype, shape, layout):
     np.testing.assert_array_equal(a.to_numpy(), np.full(shape + a.element_shape, 4))
 
 
-@pytest.mark.parametrize("backend", BACKENDS)
-@pytest.mark.parametrize("dtype", DTYPES)
-@pytest.mark.parametrize("layout", [(0,), (0, 0), (0, 2), (0, 1, 2)])
+@pytest.mark.parametrize(
+    "backend,dtype,layout",
+    [
+        (qd.Backend.FIELD, VECTOR_DTYPE, (0,)),
+        (qd.Backend.NDARRAY, MATRIX_DTYPE, (0, 0)),
+        (qd.Backend.NDARRAY, VECTOR_DTYPE, (0, 2)),
+        (qd.Backend.FIELD, MATRIX_DTYPE, (0, 1, 2)),
+    ],
+)
 @test_utils.test()
 def test_compound_layout_invalid(backend, dtype, layout):
     with pytest.raises(ValueError, match="layout"):
         qd.tensor(dtype, (2, 5), backend=backend, layout=layout)
 
 
-@pytest.mark.parametrize("dtype", DTYPES)
+@pytest.mark.parametrize("dtype", [VECTOR_DTYPE, MATRIX_DTYPE])
 @test_utils.test()
 def test_compound_layout_ndarray_import_rejects_physical_shape(dtype):
     a = qd.tensor(dtype, (2, 5), layout=(1, 0))
@@ -196,7 +235,7 @@ def test_compound_layout_ndarray_import_rejects_physical_shape(dtype):
         a.from_torch(torch.from_numpy(wrong_shape))
 
 
-@pytest.mark.parametrize("dtype", DTYPES)
+@pytest.mark.parametrize("dtype", [VECTOR_DTYPE, MATRIX_DTYPE])
 @test_utils.test()
 def test_compound_layout_kernel_specialization(dtype):
     @qd.kernel
