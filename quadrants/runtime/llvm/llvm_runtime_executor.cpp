@@ -792,7 +792,7 @@ void LlvmRuntimeExecutor::materialize_runtime(KernelProfilerBase *profiler, uint
   if (config_.arch == Arch::cuda || config_.arch == Arch::amdgpu) {
     // Parallel rand-state init on the GPU. Both CUDA and AMDGPU launch one thread per state via
     // `runtime_initialize_rand_states_cuda` (the function uses generic GPU intrinsics — `block_dim()`, `block_idx()`,
-    // `thread_idx()` — so the same kernel works on both backends).
+    // `thread_idx()` - so the same kernel works on both backends).
     QD_TRACE("Initializing {} random states (parallel GPU)", num_rand_states);
     runtime_jit->launch<void *, int>("runtime_initialize_rand_states_cuda", config_.saturating_grid_dim,
                                      config_.max_block_dim, 0, llvm_runtime_, starting_rand_state);

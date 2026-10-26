@@ -1,5 +1,4 @@
-"""Tests for ``layout=`` on the ``qd.tensor()`` factory.
-"""
+"""Tests for ``layout=`` on the ``qd.tensor()`` factory."""
 
 import itertools
 

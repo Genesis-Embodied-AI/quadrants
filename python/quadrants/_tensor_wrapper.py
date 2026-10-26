@@ -16,7 +16,7 @@ Surface:
 - Symmetric pickle via ``__reduce__`` — round-trips through ``to_numpy()`` so it works uniformly on both backends
   (Field, which never supported pickle upstream, is picklable through the wrapper).
 - Forwards for ``to_numpy`` / ``from_numpy`` / ``to_torch`` / ``from_torch`` / ``to_dlpack`` / ``fill`` /
-  ``copy_from`` — layout-aware on both backends, the wrapper delegates.
+  ``copy_from`` - layout-aware on both backends, the wrapper delegates.
 - Lazy-wrapped ``.grad`` — returns a ``Tensor`` wrapping ``impl.grad`` (identity-stable via
   ``functools.cached_property``).
 - ``VectorTensor`` / ``MatrixTensor`` subclasses carrying ``element_shape``.
