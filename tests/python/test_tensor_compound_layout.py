@@ -11,17 +11,14 @@ from quadrants.lang.field import _TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET
 
 from tests import test_utils
 
-VECTOR_DTYPE = qd.types.vector(3, qd.f32)
-MATRIX_DTYPE = qd.types.matrix(2, 3, qd.f32)
-
 
 @pytest.mark.parametrize(
     "backend,dtype,layout",
     [
-        (qd.Backend.FIELD, VECTOR_DTYPE, None),
-        (qd.Backend.NDARRAY, MATRIX_DTYPE, (0, 1, 2)),
-        (qd.Backend.FIELD, MATRIX_DTYPE, (1, 0, 2)),
-        (qd.Backend.NDARRAY, VECTOR_DTYPE, (2, 0, 1)),
+        (qd.Backend.FIELD, qd.types.vector(3, qd.f32), None),
+        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (0, 1, 2)),
+        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (1, 0, 2)),
+        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1)),
     ],
 )
 @test_utils.test()
@@ -71,10 +68,10 @@ def test_compound_layout_indexing_and_numpy(backend, dtype, layout):
 @pytest.mark.parametrize(
     "backend,dtype,layout",
     [
-        (qd.Backend.FIELD, VECTOR_DTYPE, (1, 0, 2)),
-        (qd.Backend.NDARRAY, MATRIX_DTYPE, (2, 0, 1)),
-        (qd.Backend.FIELD, MATRIX_DTYPE, (2, 0, 1)),
-        (qd.Backend.NDARRAY, VECTOR_DTYPE, (1, 0, 2)),
+        (qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2)),
+        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (2, 0, 1)),
+        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1)),
+        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (1, 0, 2)),
     ],
 )
 @test_utils.test()
@@ -99,10 +96,10 @@ def test_compound_layout_copy_and_pickle(backend, dtype, layout):
 @pytest.mark.parametrize(
     "backend,dtype,layout",
     [
-        (qd.Backend.FIELD, VECTOR_DTYPE, (1, 0, 2)),
-        (qd.Backend.NDARRAY, MATRIX_DTYPE, (2, 0, 1)),
-        (qd.Backend.FIELD, MATRIX_DTYPE, (2, 0, 1)),
-        (qd.Backend.NDARRAY, VECTOR_DTYPE, (1, 0, 2)),
+        (qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2)),
+        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (2, 0, 1)),
+        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1)),
+        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (1, 0, 2)),
     ],
 )
 @test_utils.test(exclude=[qd.vulkan])
@@ -147,10 +144,10 @@ def test_compound_layout_torch_and_dlpack(backend, dtype, layout):
 @pytest.mark.parametrize(
     "backend,dtype",
     [
-        (qd.Backend.FIELD, VECTOR_DTYPE),
-        (qd.Backend.FIELD, MATRIX_DTYPE),
-        (qd.Backend.NDARRAY, VECTOR_DTYPE),
-        (qd.Backend.NDARRAY, MATRIX_DTYPE),
+        (qd.Backend.FIELD, qd.types.vector(3, qd.f32)),
+        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32)),
+        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32)),
+        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32)),
     ],
 )
 @test_utils.test(arch=qd.cpu)
@@ -169,10 +166,10 @@ def test_compound_layout_numpy_zero_copy(backend, dtype):
 @pytest.mark.parametrize(
     "backend,dtype",
     [
-        (qd.Backend.FIELD, VECTOR_DTYPE),
-        (qd.Backend.FIELD, MATRIX_DTYPE),
-        (qd.Backend.NDARRAY, VECTOR_DTYPE),
-        (qd.Backend.NDARRAY, MATRIX_DTYPE),
+        (qd.Backend.FIELD, qd.types.vector(3, qd.f32)),
+        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32)),
+        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32)),
+        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32)),
     ],
 )
 @test_utils.test()
@@ -198,10 +195,10 @@ def test_compound_layout_grad(backend, dtype):
 @pytest.mark.parametrize(
     "backend,dtype,shape,layout",
     [
-        (qd.Backend.FIELD, VECTOR_DTYPE, (), ()),
-        (qd.Backend.NDARRAY, MATRIX_DTYPE, (), ()),
-        (qd.Backend.NDARRAY, VECTOR_DTYPE, (4,), (0,)),
-        (qd.Backend.FIELD, MATRIX_DTYPE, (2, 5), (1, 0)),
+        (qd.Backend.FIELD, qd.types.vector(3, qd.f32), (), ()),
+        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (), ()),
+        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (4,), (0,)),
+        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 5), (1, 0)),
     ],
 )
 @test_utils.test()
@@ -215,10 +212,10 @@ def test_compound_layout_other_ranks(backend, dtype, shape, layout):
 @pytest.mark.parametrize(
     "backend,dtype,layout",
     [
-        (qd.Backend.FIELD, VECTOR_DTYPE, (0,)),
-        (qd.Backend.NDARRAY, MATRIX_DTYPE, (0, 0)),
-        (qd.Backend.NDARRAY, VECTOR_DTYPE, (0, 2)),
-        (qd.Backend.FIELD, MATRIX_DTYPE, (0, 1, 2)),
+        (qd.Backend.FIELD, qd.types.vector(3, qd.f32), (0,)),
+        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (0, 0)),
+        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (0, 2)),
+        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (0, 1, 2)),
     ],
 )
 @test_utils.test()
@@ -227,7 +224,7 @@ def test_compound_layout_invalid(backend, dtype, layout):
         qd.tensor(dtype, (2, 5), backend=backend, layout=layout)
 
 
-@pytest.mark.parametrize("dtype", [VECTOR_DTYPE, MATRIX_DTYPE])
+@pytest.mark.parametrize("dtype", [qd.types.vector(3, qd.f32), qd.types.matrix(2, 3, qd.f32)])
 @test_utils.test()
 def test_compound_layout_ndarray_import_rejects_physical_shape(dtype):
     a = qd.tensor(dtype, (2, 5), layout=(1, 0))
@@ -242,10 +239,10 @@ def test_compound_layout_ndarray_import_rejects_physical_shape(dtype):
 @pytest.mark.parametrize(
     "backend,dtype",
     [
-        (qd.Backend.FIELD, VECTOR_DTYPE),
-        (qd.Backend.FIELD, MATRIX_DTYPE),
-        (qd.Backend.NDARRAY, VECTOR_DTYPE),
-        (qd.Backend.NDARRAY, MATRIX_DTYPE),
+        (qd.Backend.FIELD, qd.types.vector(3, qd.f32)),
+        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32)),
+        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32)),
+        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32)),
     ],
 )
 @test_utils.test()
