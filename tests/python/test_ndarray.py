@@ -1212,3 +1212,34 @@ def test_ndarray_del(dtype) -> None:
 
     foo()
     assert qd.lang.impl.get_runtime().prog._get_num_ndarrays() == 0
+
+
+@test_utils.test(arch=qd.cpu)
+def test_vector_ndarray_to_numpy_dtype():
+    v = qd.Vector.ndarray(3, qd.f32, shape=(2,))
+    arr = v.to_numpy(dtype=np.float64)
+    assert arr.dtype == np.float64
+    assert arr.shape == (2, 3)
+
+
+@test_utils.test(arch=qd.cpu)
+def test_matrix_ndarray_to_numpy_dtype():
+    m = qd.Matrix.ndarray(2, 2, qd.f32, shape=(3,))
+    arr = m.to_numpy(dtype=np.float64)
+    assert arr.dtype == np.float64
+    assert arr.shape == (3, 2, 2)
+
+
+@test_utils.test(arch=qd.cpu)
+def test_vector_ndarray_to_numpy_no_dtype_unchanged():
+    """to_numpy() without dtype should return native dtype."""
+    v = qd.Vector.ndarray(3, qd.f32, shape=(2,))
+    arr = v.to_numpy()
+    assert arr.dtype == np.float32
+
+
+@test_utils.test(arch=qd.cpu)
+def test_matrix_ndarray_to_numpy_no_dtype_unchanged():
+    m = qd.Matrix.ndarray(2, 2, qd.f32, shape=(3,))
+    arr = m.to_numpy()
+    assert arr.dtype == np.float32

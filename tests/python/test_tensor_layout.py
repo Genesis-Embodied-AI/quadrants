@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 import quadrants as qd
+from quadrants._tensor import _with_layout
 
 from tests import test_utils
 
@@ -305,3 +306,53 @@ def test_layout_sequence_index(
         y_l.append(y.to_numpy())
     y, expected_y = y_l
     np.testing.assert_array_equal(y, expected_y)
+
+
+@test_utils.test(arch=qd.cpu)
+def test_anyarray_shape_canonical_in_kernel_rank2():
+    """x.shape[i] inside a kernel on a layout-tagged NDARRAY must return canonical sizes, not physical ones. Otherwise
+    for non-square shapes the idiomatic ``for i in range(x.shape[0])`` loop produces OOB writes.
+    """
+    N, B = 3, 5
+
+    @qd.kernel
+    def fill(x: qd.types.ndarray()):
+        for i in range(x.shape[0]):
+            for j in range(x.shape[1]):
+                x[i, j] = i * 100 + j
+
+    a = qd.tensor(qd.i32, shape=(B, N), backend=qd.Backend.NDARRAY)
+    _with_layout(a, (1, 0))
+
+    fill(a)
+    got = a.to_numpy()
+
+    expected = np.zeros((N, B), dtype=np.int32)
+    for i in range(N):
+        for j in range(B):
+            expected[i, j] = i * 100 + j
+    np.testing.assert_array_equal(got, expected)
+
+
+@test_utils.test(arch=qd.cpu)
+def test_anyarray_shape_canonical_identity_layout():
+    """Identity layout should not affect .shape semantics."""
+    M, N = 4, 6
+
+    @qd.kernel
+    def fill(x: qd.types.ndarray()):
+        for i in range(x.shape[0]):
+            for j in range(x.shape[1]):
+                x[i, j] = i * 10 + j
+
+    a = qd.tensor(qd.i32, shape=(M, N), backend=qd.Backend.NDARRAY)
+    _with_layout(a, (0, 1))
+
+    fill(a)
+    got = a.to_numpy()
+
+    expected = np.zeros((M, N), dtype=np.int32)
+    for i in range(M):
+        for j in range(N):
+            expected[i, j] = i * 10 + j
+    np.testing.assert_array_equal(got, expected)

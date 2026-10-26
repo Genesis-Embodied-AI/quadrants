@@ -185,3 +185,24 @@ def test_tensor_vec_mat_not_public():
     """Ensure the old top-level names were dropped from the public surface."""
     assert not hasattr(qd, "tensor_vec"), "qd.tensor_vec leaked into public API"
     assert not hasattr(qd, "tensor_mat"), "qd.tensor_mat leaked into public API"
+
+
+@test_utils.test(arch=qd.cpu)
+def test_vector_tensor_order_hint_no_dead_end():
+    """The error message for order= on Vector.tensor must NOT suggest layout= since Vector.tensor doesn't accept
+    layout= either.
+    """
+    with pytest.raises(TypeError, match="does not accept order=") as exc_info:
+        qd.Vector.tensor(3, qd.f32, shape=(4,), order="ji")
+    msg = str(exc_info.value)
+    assert (
+        "pass layout=(...) instead" not in msg
+    ), f"Dead-end hint: message suggests layout= which is also rejected: {msg}"
+
+
+@test_utils.test(arch=qd.cpu)
+def test_matrix_tensor_order_hint_no_dead_end():
+    with pytest.raises(TypeError, match="does not accept order=") as exc_info:
+        qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), order="ji")
+    msg = str(exc_info.value)
+    assert "pass layout=(...) instead" not in msg

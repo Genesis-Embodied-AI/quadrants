@@ -159,3 +159,10 @@ def test_tensor_compound_vector_roundtrip(backend):
     arr = a.to_numpy()
     assert arr.shape == (4, 3)
     assert arr[2, 1] == 21.0
+
+
+@test_utils.test(arch=qd.cpu)
+def test_scalar_tensor_order_hint_still_suggests_layout():
+    """The scalar qd.tensor() factory DOES accept layout=, so the hint should still point to it."""
+    with pytest.raises(TypeError, match="pass layout="):
+        qd.tensor(qd.f32, shape=(4,), order="ji")
