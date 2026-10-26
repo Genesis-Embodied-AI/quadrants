@@ -715,8 +715,8 @@ def test_block_mem_sync_deprecated_alias():
     assert a[0] == 7
 
 
-# Portable test for `block.global_thread_idx()`. Runs on every supported GPU backend; in particular, verifies the SPIR-V
-# dispatch path.
+# Portable test for `block.global_thread_idx()`. Runs on every supported GPU backend; in particular, verifies the
+# SPIR-V dispatch path.
 @test_utils.test(arch=qd.gpu)
 def test_block_global_thread_idx_portable():
     N = 64
@@ -753,8 +753,8 @@ def test_block_thread_idx_portable():
         assert a[i] == i
 
 
-# Multi-block coverage for `block.thread_idx()`: with block_dim=8 and loop total 32, the kernel runs across 4 blocks and
-# the in-block index must reset to 0 at each block boundary. Without this case, a regression that aliased
+# Multi-block coverage for `block.thread_idx()`: with block_dim=8 and loop total 32, the kernel runs across 4 blocks
+# and the in-block index must reset to 0 at each block boundary. Without this case, a regression that aliased
 # `block.thread_idx()` to `block.global_thread_idx()` (or vice versa) would slip past the single-block portable tests.
 # CUDA / AMDGPU lower this to the `tid.x` SREG; Vulkan / Metal lower it to `gl_LocalInvocationID.x` (which must be
 # included in the `OpEntryPoint` interface).

@@ -35,7 +35,7 @@ def _mat_reference(backend):
 @test_utils.test(arch=qd.cpu)
 def test_vector_tensor_default_backend_matches_vector_ndarray():
     """``qd.Vector.tensor`` returns a ``qd.VectorTensor`` wrapper; the underlying impl must match what
-        ``qd.Vector.ndarray`` returns directly."""
+    ``qd.Vector.ndarray`` returns directly."""
     a = qd.Vector.tensor(3, qd.f32, shape=(4,))
     b = qd.Vector.ndarray(3, qd.f32, shape=(4,))
     assert isinstance(a, qd.VectorTensor)

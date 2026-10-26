@@ -7,7 +7,8 @@ See ``docs/source/user_guide/tensor.md`` for the user guide.
 
 ``qd.Tensor`` is the wrapper *class* defined in ``_tensor_wrapper.py``; it doubles as the polymorphic kernel-argument
 annotation. Dispatch sites check ``annotation is Tensor`` (the class). See ``_func_base.py``,
-``_template_mapper_hotpath.py`` and ``function_def_transformer.py``.
+``_template_mapper_hotpath.py`` and
+``function_def_transformer.py``.
 """
 
 # pylint: disable=import-outside-toplevel

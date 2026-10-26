@@ -40,8 +40,8 @@ TEST(SpirvVersion, ValidatesBuffersAndGlobalInterfaces) {
   //     // SPIR-V requires used built-in inputs in the entry-point interface. Reading these inputs lets validation
   //     // catch missing registrations after the interface changes; the additions' numerical results are not tested.
   //     v += gl_GlobalInvocationID.x;   // Exercise the registered entry-point input path.
-  // v += gl_LocalInvocationID.x;    // Check that a second registered input is included, not just the first. // This
-  // input uses global_values. The two inputs above use
+  //     v += gl_LocalInvocationID.x;    // Check that a second registered input is included, not just the first.
+  //     // This input uses global_values. The two inputs above use
   //     // entry_point_inputs_ and would not catch a missing global_values list in the entry-point interface.
   //     v += gl_SubgroupInvocationID;
   //     v += next_random();            // Exercise private globals tracked through global_values.

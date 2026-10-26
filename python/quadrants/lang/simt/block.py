@@ -486,8 +486,8 @@ def _radix_rank_match_atomic_or_wave32(
 
     # ``smem_offsets`` (i32) backs the per-subgroup histograms (step 1), in-place column-sum upsweep (step 2), folded
     # prefixes (step 4), and the leader's atomic_add slot (step 5).  ``smem_match`` (i32) backs the per-digit ballot
-    # mask in step 5.  Keeping these arrays separate leaves the offsets path independent of the match-mask width so the
-    # wave64 sibling can pick ``i64`` for its match region.
+    # mask in step 5.  Keeping these arrays separate leaves the
+    # offsets path independent of the match-mask width so the wave64 sibling can pick ``i64`` for its match region.
     smem_offsets = SharedArray(impl.static((BLOCK_SUBGROUPS * RADIX_DIGITS,)), _i32)
     smem_match = SharedArray(impl.static((BLOCK_SUBGROUPS * RADIX_DIGITS,)), _i32)
 

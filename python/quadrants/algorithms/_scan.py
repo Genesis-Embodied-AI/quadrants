@@ -2,8 +2,8 @@
 """Device-wide exclusive-scan primitives.
 
 Provides the graph-composable ``qd.algorithms.exclusive_scan_{add,min,max}`` on top of the block-tier
-``block.exclusive_scan`` primitive, plus :func:`exclusive_scan_scratch_slots` for sizing the caller-owned scratch. Uses
-the Blelloch 1990 / Harris-Sengupta-Owens 2007 three-pass formulation.
+``block.exclusive_scan`` primitive, plus :func:`exclusive_scan_scratch_slots` for sizing the caller-owned scratch.
+Uses the Blelloch 1990 / Harris-Sengupta-Owens 2007 three-pass formulation.
 
 Each ``exclusive_scan_{add,min,max}`` is a fixed-depth three-pass staircase of ``@qd.func`` phases - pass 1 tile-reduce
 (:func:`_reduce_phase`), pass 2 in-place scan of the partials (:func:`_emit_scan_inplace`), pass 3 per-tile downsweep
@@ -349,8 +349,8 @@ def exclusive_scan_scratch_slots(n, log256_max_n: int = None) -> int:
 # ---------------------------------------------------------------------------------------------------------------------
 #
 # Mirrors the reduce design (see ``_reduce.py``): the three-pass Blelloch scan is emitted as a staircase of ``@qd.func``
-# phases. ``exclusive_scan_{add,min,max}`` are the graph-composable entries: call them at the **top level** of your own
-# ``@qd.kernel`` with a device-resident count ``n`` (i32 Expr) and a compile-time ``log256_max_n``, so one captured
+# phases. ``exclusive_scan_{add,min,max}`` are the graph-composable entries: call them at the **top level** of your
+# own ``@qd.kernel`` with a device-resident count ``n`` (i32 Expr) and a compile-time ``log256_max_n``, so one captured
 # graph replays for any count ``<= BLOCK_DIM ** log256_max_n``. The scan is out-of-place (``arr`` -> ``out``);
 # ``scratch`` stages the per-tile partials staircase (``bit_cast`` through ``u32`` / ``u64``).
 

@@ -28,9 +28,9 @@ class OffloadedTask;
 //      drive precise invalidation.
 //   2. The adstack-overflow identity registry + diagnostic classifier that the codegen-emitted overflow path
 //      reads through (`Program::launch_kernel` populates `DiagnoseLaunchSnapshot`; the registry maps task ids
-// to kernel + offload-task identities + per-stack capacities, and `diagnose_adstack_overflow` runs the synchronous
-// sizer rerun against the captured snapshot to classify the failure mode). Both pieces are adstack-internal; keeping
-// them here leaves the `Program` surface focused on cross-feature program state.
+//      to kernel + offload-task identities + per-stack capacities, and `diagnose_adstack_overflow` runs the
+//      synchronous sizer rerun against the captured snapshot to classify the failure mode).
+// Both pieces are adstack-internal; keeping them here leaves `Program` focused on cross-feature program state.
 class AdStackCache {
  public:
   // Back-reference to `Program` is used by the diagnose path to reach `evaluate_adstack_size_expr` /

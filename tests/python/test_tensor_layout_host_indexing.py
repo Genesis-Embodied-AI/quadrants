@@ -14,8 +14,8 @@ The ``qd.Tensor`` wrapper owns this fix: on a layout-tagged ndarray it translate
 coords before hitting the impl accessor; on a field it simply delegates. Both paths give the user the canonical view,
 symmetric across backends.
 
-``qd.tensor()`` (and the Vector/Matrix variants) returns ``qd.Tensor`` wrappers, so the user path goes through the
-wrapper.
+``qd.tensor()`` (and the Vector/Matrix variants) returns ``qd.Tensor`` wrappers, so the user path goes through
+the wrapper.
 """
 
 import itertools

@@ -1398,11 +1398,12 @@ def test_adstack_overflow_caught_then_clean_teardown(tmp_path, force_sync):
 def test_adstack_overflow_diagnostic_and_auto_recovery():
     import torch
 
-    # Cross-backend regression for the always-on overflow detection + diagnostic + auto-recovery contract. The kernel's
-    # inner trip count is bounded by `n[0]`, an `int32` ndarray. The per-task adstack metadata cache invalidation tracks
-    # `Ndarray.write` / `Ndarray.fill` via `Program::ndarray_data_gen_` - mutations that route through Quadrants APIs
-    # invalidate cleanly. DLPack zero-copy mutations (`.to_torch(copy=False)`) bypass that tracking, so the cache holds
-    # a stale `max_size`; the next reverse launch overflows.
+    # Cross-backend regression for the always-on overflow detection + diagnostic + auto-recovery
+    # contract. The kernel's inner trip count is bounded by `n[0]`, an `int32`
+    # ndarray. The per-task adstack metadata cache invalidation tracks `Ndarray.write` /
+    # `Ndarray.fill` via `Program::ndarray_data_gen_` - mutations that route through Quadrants APIs
+    # invalidate cleanly. DLPack zero-copy mutations (`.to_torch(copy=False)`) bypass that tracking,
+    # so the cache holds a stale `max_size`; the next reverse launch overflows.
     #
     # The contract pinned here:
     #   1. The first launch with `n[0] = 2` populates the cache with `max_size = 2`.

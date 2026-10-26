@@ -1,4 +1,5 @@
 # pyright: reportAttributeAccessIssue=false
+
 """
 This function '_extract_arg' is called so often during physics simulation with Genesis that it becomes a major
 bottleneck for simple scenes running faster than 10M FPS. In practice, it adds about 100% overhead when running 20M

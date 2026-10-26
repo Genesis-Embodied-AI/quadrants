@@ -1139,15 +1139,15 @@ i32 amdgpu_cross_half_shuffle_i32(i32 target_lane, i32 value) {
   // RDNA the cost is also zero (we'd already be issuing a real ``ds_bpermute`` for the per-lane case; this just
   // makes the constant-target case behave the same way).
   //
-  // The ``+v`` constraint names the AMDGPU VGPR register class. clang accepts ``v`` as a constraint name on x86 (where
-  // it means an SSE register) and on amdgcn, but rejects it outright on AArch64 -- the asm is parsed against the host's
-  // clang target even though the resulting bitcode is later re-targeted to amdgcn at JIT time (see ``llvm_context.cpp``
-  // setting the module triple to ``amdgcn-amd-amdhsa``). The constraint string is preserved verbatim into the IR, so
-  // any host whose front-end accepts ``v`` produces bitcode that the AMDGPU backend later reads correctly. Gate on both
-  // ``ARCH_amdgpu`` (the runtime is built once per backend, see ``runtime_module/CMakeLists.txt``) and a host-arch
-  // allowlist; on AArch64 manylinux builds we drop the fence, which loses the constant-``target_lane`` VGPR hint -- the
-  // per-lane case (the common one) still emits a real ``ds_bpermute_b32`` because uniformity analysis sees per-lane
-  // inputs.
+  // The ``+v`` constraint names the AMDGPU VGPR register class. clang accepts ``v`` as a constraint name on x86
+  // (where it means an SSE register) and on amdgcn, but rejects it outright on AArch64 -- the asm is
+  // parsed against the host's clang target even though the resulting bitcode is later re-targeted to amdgcn at JIT
+  // time (see ``llvm_context.cpp`` setting the module triple to ``amdgcn-amd-amdhsa``). The constraint string is
+  // preserved verbatim into the IR, so any host whose front-end accepts ``v`` produces bitcode that the AMDGPU
+  // backend later reads correctly. Gate on both ``ARCH_amdgpu`` (the runtime is built once per backend, see
+  // ``runtime_module/CMakeLists.txt``) and a host-arch allowlist; on AArch64 manylinux builds we drop the fence,
+  // which loses the constant-``target_lane`` VGPR hint -- the per-lane case (the common one) still emits a real
+  // ``ds_bpermute_b32`` because uniformity analysis sees per-lane inputs.
 #if defined(ARCH_amdgpu) && (defined(__x86_64__) || defined(__i386__) || defined(__amdgcn__))
   __asm__ volatile("" : "+v"(byte));
 #endif

@@ -16,7 +16,9 @@ Genesis uses two different struct shapes depending on the global ``gs.use_ndarra
   Tests that mirror this shape are parametrised over the **ndarray** backend only.
 - ``gs.use_ndarray=False``: ``@qd.data_oriented`` struct, kernel takes the struct as ``qd.template()`` and accesses
   fields via attribute lookup at AST-build time. Tests that mirror this shape are parametrised over the **field**
-  backend only. (The other direction is forbidden by the check: "Ndarray shouldn't be passed in via ``qd.template()``".)
+  backend only. (The other direction is forbidden by the check: "Ndarray shouldn't be passed in
+  via ``qd.template()``".)
+
 """
 
 import dataclasses
@@ -140,9 +142,9 @@ def test_mixed_bare_and_wrapper_struct_fields():
 #
 # Pins the soft-failure side of wrapper unwrapping: even when the kernel eventually runs (via the slow path), the
 # wrapper-as-struct-field would have tripped the fastcache's per-parameter validator
-# (``args_hasher.stringify_obj_type``) and emitted ``[FASTCACHE][PARAM_INVALID]``, killing the recompile-avoidance for
-# the whole call. Following the harness used by ``test_src_ll_cache_arg_warnings``: capfd + ``@qd.pure`` makes the
-# warning observable end-to-end.
+# (``args_hasher.stringify_obj_type``) and emitted ``[FASTCACHE][PARAM_INVALID]``, killing the recompile-avoidance
+# for the whole call. Following the harness used by ``test_src_ll_cache_arg_warnings``: capfd + ``@qd.pure`` makes
+# the warning observable end-to-end.
 #
 # Ndarray-only — fastcache exercises the dataclass walker (``dataclass_to_repr``) for this struct shape; the
 # data_oriented walker has its own per-field code path which is exercised transitively by the dataclass test via the

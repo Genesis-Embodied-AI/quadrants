@@ -9,8 +9,8 @@ Pins two contracts:
 2. **Functional equivalence.** A kernel called with a wrapper must read and write the same memory as the same kernel
    called with the bare impl, on both backends. No data corruption, no shape confusion.
 
-``qd.tensor()`` returns wrappers, so to construct a *bare* impl for these tests we drop down to ``qd.field`` /
-``qd.ndarray`` directly. Wrapping then goes through ``qd.Tensor(impl)``.
+``qd.tensor()`` returns wrappers, so to construct a *bare* impl for these tests we drop down to
+``qd.field`` / ``qd.ndarray`` directly. Wrapping then goes through ``qd.Tensor(impl)``.
 """
 
 import pytest

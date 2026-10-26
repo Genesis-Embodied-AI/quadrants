@@ -21,8 +21,8 @@ Three properties make this form graph-friendly:
 2. **Device-resident ``n`` + fixed (~core-count) grid.** ``n`` is read from a 0-d ``i32`` ndarray with ``n[()]``, not
    taken as a host int; ``num_blocks`` / ``hist_len`` are derived on-device. Because those sizes reach the per-phase
    loop bounds as ``Expr``s (dynamic, not compile-time constant), the CUDA codegen leaves each offload's grid at the
-   *saturating* value (``num_SMs * max_blocks_per_SM * 2``) and the runtime grid-stride loop walks the actual range - a
-   fixed ~core-count grid regardless of ``n``.
+   *saturating* value (``num_SMs * max_blocks_per_SM * 2``) and the runtime grid-stride loop walks the actual range -
+   a fixed ~core-count grid regardless of ``n``.
 3. **Single call.** One :func:`sort` invocation replaces the host ping-pong loop.
 
 Algorithm (classical histogram-scan-scatter LSB radix sort, Knuth Vol. 3 §5.2.5, Blelloch 1990). Each digit pass

@@ -5,6 +5,7 @@ Regression tests for:
    are silently dropped when the byte offset involves a runtime stride
    multiply and the stored value is loop-invariant.
 2. Atomic operations on ndarrays accessed via physical storage buffers.
+
 """
 
 import numpy as np

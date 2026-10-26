@@ -995,8 +995,8 @@ class Kernel(FuncBase):
 
         self.raise_on_templated_floats = config.raise_on_templated_floats
         py_args = self.fuse_args(is_func=False, is_pyfunc=False, py_args=py_args, kwargs=kwargs, global_context=None)
-        # Tensor-wrapper unwrap. Canonicalize ``qd.Tensor`` slots, plus wrapper positions discovered on the first
-        # launch, before the autograd tape and identity-keyed caches observe the arg tuple.
+        # Tensor-wrapper unwrap. Canonicalize ``qd.Tensor`` slots, plus wrapper positions discovered on
+        # the first launch, before the autograd tape and identity-keyed caches observe the arg tuple.
         #
         # PERF: On first call, record the candidate arg positions. On subsequent calls, skip entirely (empty
         # candidates) or type-check only the cached positions (no full-arg scan). For a kernel with 30 args and 1

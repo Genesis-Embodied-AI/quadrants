@@ -5,8 +5,8 @@ property rather than something we police test by test: the wrapper exposes a fix
 regardless of which impl it contains.
 
 ``qd.Tensor`` doubles as the polymorphic kernel-arg annotation (``def f(x: qd.Tensor): ...``), and is what
-``qd.tensor()``, ``qd.Vector.tensor()``, ``qd.Matrix.tensor()`` return. Bare impls are still reachable via ``qd.field``,
-``qd.ndarray``, ``qd.Vector.field`` etc.
+``qd.tensor()``, ``qd.Vector.tensor()``,
+``qd.Matrix.tensor()`` return. Bare impls are still reachable via ``qd.field``, ``qd.ndarray``, ``qd.Vector.field`` etc.
 
 Surface:
 
@@ -15,8 +15,8 @@ Surface:
   layout-tagged ndarrays.
 - Symmetric pickle via ``__reduce__`` — round-trips through ``to_numpy()`` so it works uniformly on both backends
   (Field, which never supported pickle upstream, is picklable through the wrapper).
-- Forwards for ``to_numpy`` / ``from_numpy`` / ``to_torch`` / ``from_torch`` / ``to_dlpack`` / ``fill`` / ``copy_from``
-  — layout-aware on both backends, the wrapper delegates.
+- Forwards for ``to_numpy`` / ``from_numpy`` / ``to_torch`` / ``from_torch`` / ``to_dlpack`` / ``fill`` /
+  ``copy_from`` — layout-aware on both backends, the wrapper delegates.
 - Lazy-wrapped ``.grad`` — returns a ``Tensor`` wrapping ``impl.grad`` (identity-stable via
   ``functools.cached_property``).
 - ``VectorTensor`` / ``MatrixTensor`` subclasses carrying ``element_shape``.
@@ -39,9 +39,10 @@ __all__ = [
 
 
 # PERF-CRITICAL: This flag is checked on every kernel arg in _template_mapper_hotpath._extract_arg,
-# kernel.Kernel.__call__, _func_base._inject_template_globals, and args_hasher.stringify_obj_type. It gates the
-# isinstance(arg, Tensor) unwrap so that programs which never construct a qd.Tensor pay zero Python overhead for the
-# check. Removing this flag or the guards that read it causes a measurable ~4% CPU regression on Genesis benchmarks.
+# kernel.Kernel.__call__, _func_base._inject_template_globals, and args_hasher.stringify_obj_type.
+# It gates the isinstance(arg, Tensor) unwrap so that programs which never construct a qd.Tensor pay zero Python
+# overhead for the check. Removing this flag or the guards that read it causes a measurable ~4% CPU regression on
+# Genesis benchmarks.
 _any_tensor_constructed = False
 
 
