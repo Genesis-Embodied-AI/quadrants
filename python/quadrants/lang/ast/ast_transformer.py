@@ -302,8 +302,8 @@ class ASTTransformer(Builder):
     def _unpack_layout_vector_index(
         ast_builder: _qd_core.ASTBuilder | None, index: _LayoutIndex, layout_len: int
     ) -> list[_LayoutIndex]:
-        """Unpack Python lists and tuples, or rank-1 Vectors of length ``layout_len``, into component lists for per-axis
-        layout permutation. Otherwise return ``[index]`` unchanged.
+        """Unpack Python lists, tuples, and single-column Matrix indices for per-axis layout permutation. Rank-1 Expr
+        indices are unpacked when their length matches ``layout_len``. Otherwise return ``[index]`` unchanged.
 
         Handles the following forms a single subscript can take inside a kernel:
 
@@ -316,7 +316,7 @@ class ASTTransformer(Builder):
         """
         if isinstance(index, (list, tuple)):
             return list(index)
-        if isinstance(index, Matrix) and index.n == layout_len and index.m == 1:
+        if isinstance(index, Matrix) and index.m == 1:
             return index.to_list()
         if isinstance(index, expr.Expr) and index.is_tensor():
             shape = index.get_shape()
