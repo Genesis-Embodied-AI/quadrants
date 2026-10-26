@@ -12,7 +12,7 @@ from typing import Any, Generator, Iterable, Sequence, Type, TypeAlias, TypeVar,
 import numpy as np
 
 from quadrants._lib import core as _qd_core
-from quadrants._lib.core.quadrants_python import DataTypeCxx
+from quadrants._lib.core.quadrants_python import ASTBuilder, DataTypeCxx
 from quadrants.lang import exception, expr, impl, matrix, mesh
 from quadrants.lang import ops as qd_ops
 from quadrants.lang._dataclass_util import create_flat_name
@@ -304,7 +304,7 @@ class ASTTransformer(Builder):
         return False
 
     @staticmethod
-    def _unpack_layout_vector_index(ast_builder: _qd_core.ASTBuilder | None, index: _LayoutIndex) -> list[_LayoutIndex]:
+    def _unpack_layout_vector_index(ast_builder: ASTBuilder | None, index: _LayoutIndex) -> list[_LayoutIndex]:
         """Unpack Python lists, tuples, single-column Matrix indices, and rank-1 Expr indices for per-axis layout
         permutation. Otherwise return ``[index]`` unchanged.
 
@@ -320,7 +320,7 @@ class ASTTransformer(Builder):
         if isinstance(index, (list, tuple)):
             return list(index)
         if isinstance(index, Matrix) and index.m == 1:
-            return index.to_list()
+            return cast(list[_LayoutIndex], index.to_list())
         if isinstance(index, expr.Expr) and index.is_tensor():
             shape = index.get_shape()
             if len(shape) == 1:
