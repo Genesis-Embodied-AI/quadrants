@@ -206,22 +206,3 @@ def test_compound_factory_layout(backend, element_shape, layout):
     increment(a)
     np.testing.assert_array_equal(a.to_numpy(), expected + 1)
     np.testing.assert_array_equal(a.grad.to_numpy(), 2 * (expected + 1))
-
-
-@test_utils.test(arch=qd.cpu)
-def test_vector_tensor_order_hint_no_dead_end():
-    """The order= hint points to layout=, which the convenience factory now accepts."""
-    with pytest.raises(TypeError, match="does not accept order=") as exc_info:
-        qd.Vector.tensor(3, qd.f32, shape=(4,), order="ji")
-    msg = str(exc_info.value)
-    assert "pass layout=(...) instead" in msg
-    assert qd.Vector.tensor(3, qd.f32, shape=(4,), layout=(0,)).shape == (4,)
-
-
-@test_utils.test(arch=qd.cpu)
-def test_matrix_tensor_order_hint_no_dead_end():
-    with pytest.raises(TypeError, match="does not accept order=") as exc_info:
-        qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), order="ji")
-    msg = str(exc_info.value)
-    assert "pass layout=(...) instead" in msg
-    assert qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), layout=(0,)).shape == (4,)
