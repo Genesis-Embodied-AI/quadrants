@@ -299,11 +299,9 @@ class ASTTransformer(Builder):
         return False
 
     @staticmethod
-    def _unpack_layout_vector_index(
-        ast_builder: _qd_core.ASTBuilder | None, index: _LayoutIndex, layout_len: int
-    ) -> list[_LayoutIndex]:
-        """Unpack Python lists, tuples, and single-column Matrix indices for per-axis layout permutation. Rank-1 Expr
-        indices are unpacked when their length matches ``layout_len``. Otherwise return ``[index]`` unchanged.
+    def _unpack_layout_vector_index(ast_builder: _qd_core.ASTBuilder | None, index: _LayoutIndex) -> list[_LayoutIndex]:
+        """Unpack Python lists, tuples, single-column Matrix indices, and rank-1 Expr indices for per-axis layout
+        permutation. Otherwise return ``[index]`` unchanged.
 
         Handles the following forms a single subscript can take inside a kernel:
 
@@ -320,8 +318,8 @@ class ASTTransformer(Builder):
             return index.to_list()
         if isinstance(index, expr.Expr) and index.is_tensor():
             shape = index.get_shape()
-            if len(shape) == 1 and shape[0] == layout_len:
-                return [impl.subscript(ast_builder, index, k) for k in range(layout_len)]
+            if len(shape) == 1:
+                return [impl.subscript(ast_builder, index, k) for k in range(shape[0])]
         return [index]
 
     @staticmethod
@@ -359,9 +357,7 @@ class ASTTransformer(Builder):
         layout = getattr(node.value.ptr, "_qd_layout", None)
         if layout is not None:
             if len(node.slice.ptr) == 1:
-                node.slice.ptr = ASTTransformer._unpack_layout_vector_index(
-                    ctx.ast_builder, node.slice.ptr[0], len(layout)
-                )
+                node.slice.ptr = ASTTransformer._unpack_layout_vector_index(ctx.ast_builder, node.slice.ptr[0])
             if len(node.slice.ptr) == len(layout):
                 node.slice.ptr = [node.slice.ptr[axis] for axis in layout]
         node.ptr = impl.subscript(ctx.ast_builder, node.value.ptr, *node.slice.ptr)
