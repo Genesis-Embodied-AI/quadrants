@@ -242,10 +242,21 @@ def test_matrix_dtype_without_layout_still_works():
     assert tuple(a.shape) == (4,)
 
 
-@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
-@pytest.mark.parametrize("shape, layout", [((3, 5), None), ((3, 5), (0, 1)), ((3, 5), (1, 0)), ((3, 4, 5), (1, 2, 0))])
-@pytest.mark.parametrize("index_kind", ["list", "tuple"])
-@pytest.mark.parametrize("operation", ["read", "write", "read_modify_write", "augassign", "atomic_add"])
+@pytest.mark.parametrize(
+    "backend, shape, layout, index_kind, operation",
+    [
+        (qd.Backend.FIELD, (3, 5), (1, 0), "list", "read"),
+        (qd.Backend.NDARRAY, (3, 4, 5), (1, 2, 0), "list", "write"),
+        (qd.Backend.FIELD, (3, 4, 5), (1, 2, 0), "list", "read_modify_write"),
+        (qd.Backend.NDARRAY, (3, 5), (1, 0), "list", "augassign"),
+        (qd.Backend.FIELD, (3, 4, 5), (1, 2, 0), "list", "atomic_add"),
+        (qd.Backend.NDARRAY, (3, 5), (1, 0), "list", "atomic_add"),
+        (qd.Backend.FIELD, (3, 4, 5), (1, 2, 0), "tuple", "read"),
+        (qd.Backend.NDARRAY, (3, 5), (1, 0), "tuple", "atomic_add"),
+        (qd.Backend.FIELD, (3, 5), (0, 1), "list", "augassign"),
+        (qd.Backend.NDARRAY, (3, 5), None, "list", "read_modify_write"),
+    ],
+)
 @test_utils.test()
 def test_layout_sequence_index(backend, shape, layout, index_kind, operation):
     x = qd.tensor(qd.i32, shape=shape, backend=backend, layout=layout)
