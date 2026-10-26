@@ -374,8 +374,7 @@ grow per-feature. <code class="docutils literal notranslate"><span class="pre">A
 methods here. <code class="docutils literal notranslate"><span class="pre">FunctionDefTransformer.build_FunctionDef</span></code> calls <code class="docutils literal notranslate"><span class="pre">auto_wrap_for_loops</span></code> on the kernel body when the
 kernel was decorated with <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True,</span> <span class="pre">checkpoints=True)</span></code>, so that every top-level for-loop not already
 inside a <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.checkpoint(...)</span></code> becomes its own implicit no-yield checkpoint.</p>
-<p>See <code class="docutils literal notranslate"><span class="pre">docs/source/user_guide/graph.md</span></code> for the user-facing surface and <code class="docutils literal notranslate"><span class="pre">perso_hugh/doc/qipc/reentrant.md</span></code> for the
-design.</p>
+<p>See <code class="docutils literal notranslate"><span class="pre">docs/source/user_guide/graph.md</span></code> for the user-facing surface.</p>
 <section id="classes">
 <h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
