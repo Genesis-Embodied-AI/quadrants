@@ -1032,3 +1032,13 @@ def test_grouped_static_for_cast():
         return ret
 
     assert foo() == test_utils.approx(10)
+
+
+@test_utils.test()
+def test_annotated_assignment_requires_value():
+    @qd.kernel
+    def foo():
+        value: qd.i32
+
+    with pytest.raises(qd.QuadrantsSyntaxError, match="Annotated assignments require an initial value"):
+        foo()

@@ -134,7 +134,8 @@ class ASTTransformer(Builder):
 
     @staticmethod
     def build_AnnAssign(ctx: ASTTransformerFuncContext, node: ast.AnnAssign):
-        assert node.value is not None
+        if node.value is None:
+            raise QuadrantsSyntaxError("Annotated assignments require an initial value")
         build_stmt(ctx, node.value)
         build_stmt(ctx, node.annotation)
 
