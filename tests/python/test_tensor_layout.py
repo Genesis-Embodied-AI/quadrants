@@ -245,16 +245,16 @@ def test_matrix_dtype_without_layout_still_works():
 @pytest.mark.parametrize(
     "backend, shape, layout, index_kind, operation",
     [
-        (qd.Backend.FIELD, (3, 5), (1, 0), "list", "read"),
-        (qd.Backend.NDARRAY, (3, 4, 5), (1, 2, 0), "list", "write"),
-        (qd.Backend.FIELD, (3, 4, 5), (1, 2, 0), "list", "read_modify_write"),
-        (qd.Backend.NDARRAY, (3, 5), (1, 0), "list", "augassign"),
-        (qd.Backend.FIELD, (3, 4, 5), (1, 2, 0), "list", "atomic_add"),
-        (qd.Backend.NDARRAY, (3, 5), (1, 0), "list", "atomic_add"),
-        (qd.Backend.FIELD, (3, 4, 5), (1, 2, 0), "tuple", "read"),
-        (qd.Backend.NDARRAY, (3, 5), (1, 0), "tuple", "atomic_add"),
-        (qd.Backend.FIELD, (3, 5), (0, 1), "list", "augassign"),
-        (qd.Backend.NDARRAY, (3, 5), None, "list", "read_modify_write"),
+        (qd.Backend.FIELD, (3, 5), (1, 0), list, "read"),
+        (qd.Backend.NDARRAY, (3, 4, 5), (1, 2, 0), list, "write"),
+        (qd.Backend.FIELD, (3, 4, 5), (1, 2, 0), list, "read_modify_write"),
+        (qd.Backend.NDARRAY, (3, 5), (1, 0), list, "augassign"),
+        (qd.Backend.FIELD, (3, 4, 5), (1, 2, 0), list, "atomic_add"),
+        (qd.Backend.NDARRAY, (3, 5), (1, 0), list, "atomic_add"),
+        (qd.Backend.FIELD, (3, 4, 5), (1, 2, 0), tuple, "read"),
+        (qd.Backend.NDARRAY, (3, 5), (1, 0), tuple, "atomic_add"),
+        (qd.Backend.FIELD, (3, 5), (0, 1), list, "augassign"),
+        (qd.Backend.NDARRAY, (3, 5), None, list, "read_modify_write"),
     ],
 )
 @test_utils.test()
@@ -262,7 +262,7 @@ def test_layout_sequence_index(
     backend: qd.Backend,
     shape: tuple[int, ...],
     layout: tuple[int, ...] | None,
-    index_kind: str,
+    index_kind: type[list] | type[tuple],
     operation: str,
 ) -> None:
     """Run the same kernel with and without a tensor layout, checking that list and tuple indices passed through a
@@ -296,10 +296,7 @@ def test_layout_sequence_index(
         # Visit every tensor position, grouping its coordinates into the index vector I for either 2D or 3D shapes.
         for I in qd.grouped(qd.ndrange(*shape)):
             I_l = [I[axis] for axis in qd.static(range(len(shape)))]
-            if qd.static(index_kind == "tuple"):
-                f1(tuple(I_l), x, y)
-            else:
-                f1(I_l, x, y)
+            f1(index_kind(I_l), x, y)
 
     initial_x = np.arange(np.prod(shape), dtype=np.int32).reshape(shape)
     initial_y = -initial_x - 1
