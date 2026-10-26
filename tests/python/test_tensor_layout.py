@@ -296,12 +296,13 @@ def test_layout_sequence_index(backend, shape, layout, index_kind, operation):
                 access(index, x, y)
 
     initial_x = np.arange(np.prod(shape), dtype=np.int32).reshape(shape)
+    initial_y = -initial_x - 1
     y_l = []
     for tensor_layout in (layout, None):
         x = qd.tensor(qd.i32, shape=shape, backend=backend)
         y = qd.tensor(qd.i32, shape=shape, backend=backend, layout=tensor_layout)
         x.from_numpy(initial_x)
-        y.from_numpy(-initial_x - 1)
+        y.from_numpy(initial_y)
         run(x, y)
         y_l.append(y.to_numpy())
     y, expected_y = y_l
