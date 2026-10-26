@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 import quadrants as qd
+from quadrants.lang.field import _TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET
 
 from tests import test_utils
 
@@ -18,7 +19,7 @@ LAYOUTS = [None, (0, 1, 2), (1, 0, 2), (2, 0, 1)]
 @pytest.mark.parametrize("backend", BACKENDS)
 @pytest.mark.parametrize("dtype", DTYPES)
 @pytest.mark.parametrize("layout", LAYOUTS)
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test()
 def test_compound_layout_indexing_and_numpy(backend, dtype, layout):
     shape = (2, 4, 5)
     a = qd.tensor(dtype, shape, backend=backend, layout=layout)
@@ -65,7 +66,7 @@ def test_compound_layout_indexing_and_numpy(backend, dtype, layout):
 @pytest.mark.parametrize("backend", BACKENDS)
 @pytest.mark.parametrize("dtype", DTYPES)
 @pytest.mark.parametrize("layout", [(1, 0, 2), (2, 0, 1)])
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test()
 def test_compound_layout_copy_and_pickle(backend, dtype, layout):
     a = qd.tensor(dtype, (2, 4, 5), backend=backend, layout=layout)
     b = qd.tensor(dtype, a.shape, backend=backend)
@@ -87,13 +88,16 @@ def test_compound_layout_copy_and_pickle(backend, dtype, layout):
 @pytest.mark.parametrize("backend", BACKENDS)
 @pytest.mark.parametrize("dtype", DTYPES)
 @pytest.mark.parametrize("layout", [(1, 0, 2), (2, 0, 1)])
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(exclude=[qd.vulkan])
 def test_compound_layout_torch_and_dlpack(backend, dtype, layout):
     torch = pytest.importorskip("torch")
+    arch = qd.lang.impl.current_cfg().arch
+    if arch == qd.metal and backend == qd.Backend.FIELD and not _TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET:
+        pytest.skip("Metal field DLPack export requires PyTorch newer than 2.9.1")
     a = qd.tensor(dtype, (2, 4, 5), backend=backend, layout=layout)
     expected = np.arange(np.prod(a.shape + a.element_shape), dtype=np.float32).reshape(a.shape + a.element_shape)
     a.from_numpy(expected)
-    device = "cuda" if qd.lang.impl.current_cfg().arch == qd.cuda else "cpu"
+    device = "cuda" if arch in (qd.cuda, qd.amdgpu) else "cpu"
     copied = a.to_torch(device=device)
     np.testing.assert_array_equal(copied.cpu().numpy(), expected)
     copied.add_(10)
@@ -111,8 +115,10 @@ def test_compound_layout_torch_and_dlpack(backend, dtype, layout):
     canonical = physical.transpose(np.argsort(physical_axes))
     assert tuple(view.stride()) == tuple(s // canonical.itemsize for s in canonical.strides)
     view[1, 2, 3] = -7
-    if device == "cuda":
+    if view.device.type == "cuda":
         torch.cuda.synchronize()
+    elif view.device.type == "mps":
+        torch.mps.synchronize()
     expected[1, 2, 3] = -7
     np.testing.assert_array_equal(a.to_numpy(), expected)
     for copy_mode in (False, None):
@@ -138,7 +144,7 @@ def test_compound_layout_numpy_zero_copy(backend, dtype):
 
 @pytest.mark.parametrize("backend", BACKENDS)
 @pytest.mark.parametrize("dtype", DTYPES)
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test()
 def test_compound_layout_grad(backend, dtype):
     a = qd.tensor(dtype, (2, 4, 5), backend=backend, layout=(2, 0, 1), needs_grad=True)
     b = qd.tensor(dtype, a.shape, backend=backend, layout=(1, 0, 2), needs_grad=True)
@@ -161,7 +167,7 @@ def test_compound_layout_grad(backend, dtype):
 @pytest.mark.parametrize("backend", BACKENDS)
 @pytest.mark.parametrize("dtype", DTYPES)
 @pytest.mark.parametrize("shape,layout", [((), ()), ((4,), (0,)), ((2, 5), (1, 0))])
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test()
 def test_compound_layout_other_ranks(backend, dtype, shape, layout):
     a = qd.tensor(dtype, shape, backend=backend, layout=layout)
     a.fill(4)
@@ -172,14 +178,14 @@ def test_compound_layout_other_ranks(backend, dtype, shape, layout):
 @pytest.mark.parametrize("backend", BACKENDS)
 @pytest.mark.parametrize("dtype", DTYPES)
 @pytest.mark.parametrize("layout", [(0,), (0, 0), (0, 2), (0, 1, 2)])
-@test_utils.test(arch=qd.cpu)
+@test_utils.test()
 def test_compound_layout_invalid(backend, dtype, layout):
     with pytest.raises(ValueError, match="layout"):
         qd.tensor(dtype, (2, 5), backend=backend, layout=layout)
 
 
 @pytest.mark.parametrize("dtype", DTYPES)
-@test_utils.test(arch=qd.cpu)
+@test_utils.test()
 def test_compound_layout_ndarray_import_rejects_physical_shape(dtype):
     a = qd.tensor(dtype, (2, 5), layout=(1, 0))
     wrong_shape = np.zeros((5, 2) + a.element_shape, dtype=np.float32)
@@ -191,7 +197,7 @@ def test_compound_layout_ndarray_import_rejects_physical_shape(dtype):
 
 
 @pytest.mark.parametrize("dtype", DTYPES)
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test()
 def test_compound_layout_kernel_specialization(dtype):
     @qd.kernel
     def fill(x: qd.Tensor):

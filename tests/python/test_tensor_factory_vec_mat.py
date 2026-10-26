@@ -181,7 +181,7 @@ def test_tensor_vec_mat_not_public():
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @pytest.mark.parametrize("element_shape", [(3,), (2, 3)])
 @pytest.mark.parametrize("layout", [None, (0, 1, 2), (2, 0, 1)])
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test()
 def test_compound_factory_layout(backend, element_shape, layout):
     factory = qd.Vector.tensor if len(element_shape) == 1 else qd.Matrix.tensor
     a = factory(*element_shape, qd.f32, shape=(2, 4, 5), backend=backend, layout=layout, needs_grad=True)
