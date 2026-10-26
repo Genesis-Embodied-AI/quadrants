@@ -9,7 +9,7 @@ import math
 import platform
 import warnings
 from ast import unparse
-from typing import Any, Generator, Sequence, Type
+from typing import Any, Generator, Sequence, Type, TypeAlias
 
 import numpy as np
 
@@ -60,6 +60,10 @@ from quadrants.types import primitive_types
 from quadrants.types.utils import is_integral
 
 AutodiffMode = _qd_core.AutodiffMode
+
+_LayoutIndex: TypeAlias = (
+    int | np.integer | np.ndarray | Expr | Matrix | slice | None | list["_LayoutIndex"] | tuple["_LayoutIndex", ...]
+)
 
 
 def reshape_list(flat_list: list[Any], target_shape: Sequence[int]) -> list[Any]:
@@ -295,7 +299,9 @@ class ASTTransformer(Builder):
         return False
 
     @staticmethod
-    def _unpack_layout_vector_index(ast_builder: _qd_core.ASTBuilder | None, index: Any, layout_len: int) -> list[Any]:
+    def _unpack_layout_vector_index(
+        ast_builder: _qd_core.ASTBuilder | None, index: _LayoutIndex, layout_len: int
+    ) -> list[_LayoutIndex]:
         """If ``index`` is a list, tuple, or rank-1 Vector of length ``layout_len``, return its component list so the
         layout permutation can be applied per-axis. Otherwise return ``[index]`` unchanged.
 
