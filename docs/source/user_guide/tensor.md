@@ -126,7 +126,7 @@ assert m.to_numpy().shape == (4, 5, 2, 3)
 ```
 
 The vector tensor above stores axis 1 outermost, then axis 0, then the three components. Indexing remains
-`v[i, j][component]`, and exports use canonical shape axes followed by component axes. Both storage backends support this.
+`v[i, j][component]`, and exports use canonical shape axes followed by component axes.
 The equivalent convenience-factory calls are:
 
 ```python
