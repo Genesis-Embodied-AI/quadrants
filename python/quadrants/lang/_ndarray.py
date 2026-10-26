@@ -105,10 +105,10 @@ class Ndarray:
         """
         if impl.current_cfg().arch == _arch_metal:
             impl.get_runtime().sync()
-        layout = self._total_physical_layout()
-        if _is_identity_layout(layout):
+        total_physical_layout = self._total_physical_layout()
+        if _is_identity_layout(total_physical_layout):
             return impl.get_runtime().prog.ndarray_to_dlpack(self, self.arr, versioned=versioned)
-        return impl.get_runtime().prog.ndarray_to_dlpack(self, self.arr, layout, versioned=versioned)
+        return impl.get_runtime().prog.ndarray_to_dlpack(self, self.arr, total_physical_layout, versioned=versioned)
 
     def _reset(self):
         """
