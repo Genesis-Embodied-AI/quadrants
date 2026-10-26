@@ -268,7 +268,7 @@ class Ndarray:
         )
 
         if self.element_shape:
-            ext_arr_to_ndarray_matrix(arr, self, 1, len(self.element_shape) == 1)
+            ext_arr_to_ndarray_matrix(arr, self, layout_is_aos=1, as_vector=len(self.element_shape) == 1)
         else:
             ext_arr_to_ndarray(arr, self)
         impl.get_runtime().sync()
