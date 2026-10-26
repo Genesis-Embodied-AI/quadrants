@@ -1,5 +1,3 @@
-# type: ignore
-
 import ast
 import collections.abc
 import dataclasses
@@ -19,6 +17,7 @@ from quadrants.lang import ops as qd_ops
 from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._ndrange import _Ndrange
 from quadrants.lang._unpacked import _UnpackedVectorRef
+from quadrants.lang.ast.node_metadata import node_metadata
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
     Builder,
@@ -99,47 +98,47 @@ class ASTTransformer(Builder):
         # parameters need it - a data_oriented kernel arg (``self``), or a ``qd.template()`` func param; dataclass args
         # arrive here already flattened and are handled by ``mark_used`` above.
         if not node.id.startswith("__qd_") and (node.id in ctx.kernel_args or node.id in ctx.fn_param_names):
-            node._qd_arg_chain = node.id  # type: ignore[attr-defined]
+            node_metadata(node)._qd_arg_chain = node.id
         else:
-            node._qd_arg_chain = None  # type: ignore[attr-defined]
-        node.violates_pure, node.ptr, node.violates_pure_reason = ctx.get_var_by_name(node.id)
+            node_metadata(node)._qd_arg_chain = None
+        node_metadata(node).violates_pure, node_metadata(node).ptr, node_metadata(node).violates_pure_reason = ctx.get_var_by_name(node.id)
         # Flattened struct fields (``__qd_foo__qd_bar``) injected by ``populate_global_vars_from_dataclass`` are raw
         # ``Ndarray`` instances.  ``build_Attribute`` already promotes these via ``_promote_ndarray_if_declared`` but
         # the flattened-name path bypasses ``build_Attribute`` entirely, so we must promote here too.
-        node.ptr = ASTTransformer._promote_ndarray_if_declared(ctx, node.ptr)
-        if isinstance(node, (ast.stmt, ast.expr)) and isinstance(node.ptr, Expr):
-            node.ptr.dbg_info = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
-            node.ptr.ptr.set_dbg_info(node.ptr.dbg_info)
+        node_metadata(node).ptr = ASTTransformer._promote_ndarray_if_declared(ctx, node_metadata(node).ptr)
+        if isinstance(node, (ast.stmt, ast.expr)) and isinstance(node_metadata(node).ptr, Expr):
+            node_metadata(node).ptr.dbg_info = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
+            node_metadata(node).ptr.ptr.set_dbg_info(node_metadata(node).ptr.dbg_info)
         # ``qd.static`` is intentionally NOT a purity escape hatch: a captured module global is still flagged inside
         # a static scope, since its value never enters the fastcache key regardless of static wrapping.
-        if ctx.is_pure and node.violates_pure:
+        if ctx.is_pure and node_metadata(node).violates_pure:
             # ``str`` is included alongside the numeric/``Field`` types: a captured string only affects a kernel through
             # compile-time ``qd.static`` branches, and its value never enters the fastcache key, so it is cache-unsafe
             # in exactly the same way as a captured int/float.
-            if isinstance(node.ptr, (float, int, str, Field)):
+            if isinstance(node_metadata(node).ptr, (float, int, str, Field)):
                 if not _is_quadrants_internal_file(ctx.file):
-                    message = f"[PURE.VIOLATION] WARNING: Accessing global variable {node.id} {type(node.ptr)} {node.violates_pure_reason}"
+                    message = f"[PURE.VIOLATION] WARNING: Accessing global variable {node.id} {type(node_metadata(node).ptr)} {node_metadata(node).violates_pure_reason}"
                     # Transition period: violations inside a ``qd.static`` scope only warn instead of raising, giving
                     # downstream code time to migrate such constants to kernel params. ``UPPERCASE`` names also warn.
                     if node.id.upper() == node.id or ctx.is_in_static_scope():
                         warnings.warn(message)
                     else:
                         raise exception.QuadrantsCompilationError(message)
-        if isinstance(node.ptr, Generator):
+        if isinstance(node_metadata(node).ptr, Generator):
             raise ValueError("Cannot store generators in variables, inside kernels or functions")
-        return node.ptr
+        return node_metadata(node).ptr
 
     @staticmethod
     def build_AnnAssign(ctx: ASTTransformerFuncContext, node: ast.AnnAssign):
         build_stmt(ctx, node.value)
         build_stmt(ctx, node.annotation)
 
-        is_static_assign = isinstance(node.value, ast.Call) and node.value.func.ptr is impl.static
+        is_static_assign = isinstance(node.value, ast.Call) and node_metadata(node.value.func).ptr is impl.static
 
-        node.ptr = ASTTransformer.build_assign_annotated(
-            ctx, node.target, node.value.ptr, is_static_assign, node.annotation.ptr
+        node_metadata(node).ptr = ASTTransformer.build_assign_annotated(
+            ctx, node.target, node_metadata(node.value).ptr, is_static_assign, node_metadata(node.annotation).ptr
         )
-        return node.ptr
+        return node_metadata(node).ptr
 
     @staticmethod
     def build_assign_annotated(
@@ -181,11 +180,11 @@ class ASTTransformer(Builder):
     @staticmethod
     def build_Assign(ctx: ASTTransformerFuncContext, node: ast.Assign) -> None:
         build_stmt(ctx, node.value)
-        is_static_assign = isinstance(node.value, ast.Call) and node.value.func.ptr is impl.static
+        is_static_assign = isinstance(node.value, ast.Call) and node_metadata(node.value.func).ptr is impl.static
 
         # Keep all generated assign statements and compose single one at last. The variable is introduced to support
         # chained assignments. Ref https://github.com/taichi-dev/taichi/issues/2659.
-        values = node.value.ptr if is_static_assign else impl.expr_init(node.value.ptr)
+        values = node_metadata(node.value).ptr if is_static_assign else impl.expr_init(node_metadata(node.value).ptr)
 
         for node_target in node.targets:
             ASTTransformer.build_assign_unpack(ctx, node_target, values, is_static_assign)
@@ -280,17 +279,17 @@ class ASTTransformer(Builder):
     @staticmethod
     def build_NamedExpr(ctx: ASTTransformerFuncContext, node: ast.NamedExpr):
         build_stmt(ctx, node.value)
-        is_static_assign = isinstance(node.value, ast.Call) and node.value.func.ptr is impl.static
-        node.ptr = ASTTransformer.build_assign_basic(ctx, node.target, node.value.ptr, is_static_assign)
-        return node.ptr
+        is_static_assign = isinstance(node.value, ast.Call) and node_metadata(node.value.func).ptr is impl.static
+        node_metadata(node).ptr = ASTTransformer.build_assign_basic(ctx, node.target, node_metadata(node.value).ptr, is_static_assign)
+        return node_metadata(node).ptr
 
     @staticmethod
     def is_tuple(node):
         if isinstance(node, ast.Tuple):
             return True
-        if isinstance(node, ast.Index) and isinstance(node.value.ptr, tuple):
+        if isinstance(node, ast.Index) and isinstance(node_metadata(node.value).ptr, tuple):
             return True
-        if isinstance(node.ptr, tuple):
+        if isinstance(node_metadata(node).ptr, tuple):
             return True
         return False
 
@@ -323,15 +322,15 @@ class ASTTransformer(Builder):
         # field ``_{group}{k}`` when ``k`` is a python-int. The resolution lives entirely at AST-build time so the
         # runtime IR/PTX is byte-identical to the named-field form. Runtime indices are not supported here -- the user
         # must spell the cascade explicitly.
-        if isinstance(node.value.ptr, _UnpackedVectorRef):
-            slice_val = node.slice.ptr
-            node.ptr = node.value.ptr._qd_field_for(slice_val)
-            node.violates_pure = node.value.violates_pure
-            if node.violates_pure:
-                node.violates_pure_reason = node.value.violates_pure_reason
-            return node.ptr
+        if isinstance(node_metadata(node.value).ptr, _UnpackedVectorRef):
+            slice_val = node_metadata(node.slice).ptr
+            node_metadata(node).ptr = node_metadata(node.value).ptr._qd_field_for(slice_val)
+            node_metadata(node).violates_pure = node_metadata(node.value).violates_pure
+            if node_metadata(node).violates_pure:
+                node_metadata(node).violates_pure_reason = node_metadata(node.value).violates_pure_reason
+            return node_metadata(node).ptr
         if not ASTTransformer.is_tuple(node.slice):
-            node.slice.ptr = [node.slice.ptr]
+            node_metadata(node.slice).ptr = [node_metadata(node.slice).ptr]
         # Tensors layout: a layout-tagged Ndarray or Field with a non-identity ``_qd_layout`` has its canonical indices
         # permuted into physical-storage order before forwarding. ``None`` and identity layouts are handled
         # transparently (no rewrite => byte-identical IR for legacy code).
@@ -347,19 +346,19 @@ class ASTTransformer(Builder):
         # 2. Single-Vector subscript ``x[I]`` where I is a rank-N Matrix coming from ``qd.grouped(...)``: unpack into N
         #    scalars first, then permute. Without this, ``x[I]`` writes at canonical indices into the smaller physical
         #    buffer — silently OOB on permuted layouts.
-        layout = getattr(node.value.ptr, "_qd_layout", None)
+        layout = getattr(node_metadata(node.value).ptr, "_qd_layout", None)
         if layout is not None:
-            if len(node.slice.ptr) == 1:
-                node.slice.ptr = ASTTransformer._unpack_layout_vector_index(
-                    ctx.ast_builder, node.slice.ptr[0], len(layout)
+            if len(node_metadata(node.slice).ptr) == 1:
+                node_metadata(node.slice).ptr = ASTTransformer._unpack_layout_vector_index(
+                    ctx.ast_builder, node_metadata(node.slice).ptr[0], len(layout)
                 )
-            if len(node.slice.ptr) == len(layout):
-                node.slice.ptr = [node.slice.ptr[axis] for axis in layout]
-        node.ptr = impl.subscript(ctx.ast_builder, node.value.ptr, *node.slice.ptr)
-        node.violates_pure = node.value.violates_pure
-        if node.violates_pure:
-            node.violates_pure_reason = node.value.violates_pure_reason
-        return node.ptr
+            if len(node_metadata(node.slice).ptr) == len(layout):
+                node_metadata(node.slice).ptr = [node_metadata(node.slice).ptr[axis] for axis in layout]
+        node_metadata(node).ptr = impl.subscript(ctx.ast_builder, node_metadata(node.value).ptr, *node_metadata(node.slice).ptr)
+        node_metadata(node).violates_pure = node_metadata(node.value).violates_pure
+        if node_metadata(node).violates_pure:
+            node_metadata(node).violates_pure_reason = node_metadata(node.value).violates_pure_reason
+        return node_metadata(node).ptr
 
     @staticmethod
     def build_Slice(ctx: ASTTransformerFuncContext, node: ast.Slice):
@@ -370,36 +369,36 @@ class ASTTransformer(Builder):
         if node.step is not None:
             build_stmt(ctx, node.step)
 
-        node.ptr = slice(
-            node.lower.ptr if node.lower else None,
-            node.upper.ptr if node.upper else None,
-            node.step.ptr if node.step else None,
+        node_metadata(node).ptr = slice(
+            node_metadata(node.lower).ptr if node.lower else None,
+            node_metadata(node.upper).ptr if node.upper else None,
+            node_metadata(node.step).ptr if node.step else None,
         )
-        return node.ptr
+        return node_metadata(node).ptr
 
     @staticmethod
     def build_ExtSlice(ctx: ASTTransformerFuncContext, node: ast.ExtSlice):
         build_stmts(ctx, node.dims)
-        node.ptr = tuple(dim.ptr for dim in node.dims)
-        return node.ptr
+        node_metadata(node).ptr = tuple(node_metadata(dim).ptr for dim in node.dims)
+        return node_metadata(node).ptr
 
     @staticmethod
     def build_Tuple(ctx: ASTTransformerFuncContext, node: ast.Tuple):
         build_stmts(ctx, node.elts)
-        node.ptr = tuple(elt.ptr for elt in node.elts)
-        return node.ptr
+        node_metadata(node).ptr = tuple(node_metadata(elt).ptr for elt in node.elts)
+        return node_metadata(node).ptr
 
     @staticmethod
     def build_List(ctx: ASTTransformerFuncContext, node: ast.List):
         build_stmts(ctx, node.elts)
         reason = []
         for elt in node.elts:
-            if elt.violates_pure:
-                node.violates_pure = True
+            if node_metadata(elt).violates_pure:
+                node_metadata(node).violates_pure = True
                 reason.append("list member violates pure " + str(elt))
-        node.ptr = [elt.ptr for elt in node.elts]
-        node.violates_pure_reason = "\n".join(reason) if reason else None
-        return node.ptr
+        node_metadata(node).ptr = [node_metadata(elt).ptr for elt in node.elts]
+        node_metadata(node).violates_pure_reason = "\n".join(reason) if reason else None
+        return node_metadata(node).ptr
 
     @staticmethod
     def build_Dict(ctx: ASTTransformerFuncContext, node: ast.Dict):
@@ -409,8 +408,8 @@ class ASTTransformer(Builder):
                 dic.update(build_stmt(ctx, value))
             else:
                 dic[build_stmt(ctx, key)] = build_stmt(ctx, value)
-        node.ptr = dic
-        return node.ptr
+        node_metadata(node).ptr = dic
+        return node_metadata(node).ptr
 
     @staticmethod
     def process_listcomp(ctx: ASTTransformerFuncContext, node, result) -> None:
@@ -446,7 +445,7 @@ class ASTTransformer(Builder):
     def process_ifs(ctx: ASTTransformerFuncContext, node: ast.If, now_comp, now_if, func, result):
         if now_if >= len(node.generators[now_comp].ifs):
             return ASTTransformer.process_generators(ctx, node, now_comp + 1, func, result)
-        cond = node.generators[now_comp].ifs[now_if].ptr
+        cond = node_metadata(node.generators[now_comp].ifs[now_if]).ptr
         if cond:
             ASTTransformer.process_ifs(ctx, node, now_comp, now_if + 1, func, result)
 
@@ -456,51 +455,51 @@ class ASTTransformer(Builder):
     def build_ListComp(ctx: ASTTransformerFuncContext, node: ast.ListComp):
         result = []
         ASTTransformer.process_generators(ctx, node, 0, ASTTransformer.process_listcomp, result)
-        node.ptr = result
-        return node.ptr
+        node_metadata(node).ptr = result
+        return node_metadata(node).ptr
 
     @staticmethod
     def build_DictComp(ctx: ASTTransformerFuncContext, node: ast.DictComp):
         result = {}
         ASTTransformer.process_generators(ctx, node, 0, ASTTransformer.process_dictcomp, result)
-        node.ptr = result
-        return node.ptr
+        node_metadata(node).ptr = result
+        return node_metadata(node).ptr
 
     @staticmethod
     def build_Index(ctx: ASTTransformerFuncContext, node: ast.Index):
-        node.ptr = build_stmt(ctx, node.value)
-        return node.ptr
+        node_metadata(node).ptr = build_stmt(ctx, node.value)
+        return node_metadata(node).ptr
 
     @staticmethod
     def build_Constant(ctx: ASTTransformerFuncContext, node: ast.Constant):
-        node.ptr = node.value
-        return node.ptr
+        node_metadata(node).ptr = node.value
+        return node_metadata(node).ptr
 
     @staticmethod
     def build_keyword(ctx: ASTTransformerFuncContext, node: ast.keyword):
         build_stmt(ctx, node.value)
         if node.arg is None:
-            node.ptr = node.value.ptr
+            node_metadata(node).ptr = node_metadata(node.value).ptr
         else:
-            node.ptr = {node.arg: node.value.ptr}
-        return node.ptr
+            node_metadata(node).ptr = {node.arg: node_metadata(node.value).ptr}
+        return node_metadata(node).ptr
 
     @staticmethod
     def build_Starred(ctx: ASTTransformerFuncContext, node: ast.Starred):
-        node.ptr = build_stmt(ctx, node.value)
-        return node.ptr
+        node_metadata(node).ptr = build_stmt(ctx, node.value)
+        return node_metadata(node).ptr
 
     @staticmethod
     def build_FormattedValue(ctx: ASTTransformerFuncContext, node: ast.FormattedValue):
-        node.ptr = build_stmt(ctx, node.value)
+        node_metadata(node).ptr = build_stmt(ctx, node.value)
         if node.format_spec is None or len(node.format_spec.values) == 0:
-            return node.ptr
+            return node_metadata(node).ptr
         values = node.format_spec.values
         assert len(values) == 1
         format_str = values[0].s
         assert format_str is not None
         # distinguished from normal list
-        return ["__qd_fmt_value__", node.ptr, format_str]
+        return ["__qd_fmt_value__", node_metadata(node).ptr, format_str]
 
     @staticmethod
     def build_JoinedStr(ctx: ASTTransformerFuncContext, node: ast.JoinedStr):
@@ -518,8 +517,8 @@ class ASTTransformer(Builder):
                 raise QuadrantsSyntaxError("Invalid value for fstring.")
 
         args.insert(0, str_spec)
-        node.ptr = impl.qd_format(*args)
-        return node.ptr
+        node_metadata(node).ptr = impl.qd_format(*args)
+        return node_metadata(node).ptr
 
     @staticmethod
     def build_Call(ctx: ASTTransformerFuncContext, node: ast.Call) -> Any | None:
@@ -536,7 +535,7 @@ class ASTTransformer(Builder):
                 raise QuadrantsSyntaxError("Return inside non-static if/for is not supported")
         if node.value is not None:
             build_stmt(ctx, node.value)
-        if node.value is None or node.value.ptr is None:
+        if node.value is None or node_metadata(node.value).ptr is None:
             if not ctx.is_real_function:
                 ctx.returned = ReturnStatus.ReturnedVoid
             return None
@@ -550,9 +549,9 @@ class ASTTransformer(Builder):
                 )
             return_exprs = []
             if len(ctx.func.return_type) == 1:
-                node.value.ptr = [node.value.ptr]
-            assert len(ctx.func.return_type) == len(node.value.ptr)
-            for return_type, ptr in zip(ctx.func.return_type, node.value.ptr):
+                node_metadata(node.value).ptr = [node_metadata(node.value).ptr]
+            assert len(ctx.func.return_type) == len(node_metadata(node.value).ptr)
+            for return_type, ptr in zip(ctx.func.return_type, node_metadata(node.value).ptr):
                 if id(return_type) in primitive_types.type_ids:
                     if isinstance(ptr, Expr):
                         if ptr.is_tensor() or ptr.is_struct() or ptr.element_type() not in primitive_types.all_types:
@@ -637,7 +636,7 @@ class ASTTransformer(Builder):
                 _qd_core.DebugInfo(ctx.memoized_get_pos_info(node)),
             )
         else:
-            ctx.return_data = node.value.ptr
+            ctx.return_data = node_metadata(node.value).ptr
             if ctx.func.return_type is not None:
                 if len(ctx.func.return_type) == 1:
                     ctx.return_data = [ctx.return_data]
@@ -666,10 +665,10 @@ class ASTTransformer(Builder):
         if node.attr not in names:
             return False
         if is_subscript:
-            x = node.value.value.ptr
-            indices = node.value.slice.ptr
+            x = node_metadata(node.value.value).ptr
+            indices = node_metadata(node.value.slice).ptr
         else:
-            x = node.value.ptr
+            x = node_metadata(node.value).ptr
             indices = []
         if not isinstance(x, Field):
             return False
@@ -681,11 +680,11 @@ class ASTTransformer(Builder):
         if field_dim != index_dim + 1:
             return False
         if node.attr == "append":
-            node.ptr = lambda val: append(x.parent(), indices, val)
+            node_metadata(node).ptr = lambda val: append(x.parent(), indices, val)
         elif node.attr == "deactivate":
-            node.ptr = lambda: deactivate(x.parent(), indices)
+            node_metadata(node).ptr = lambda: deactivate(x.parent(), indices)
         else:
-            node.ptr = lambda: length(x.parent(), indices)
+            node_metadata(node).ptr = lambda: length(x.parent(), indices)
         return True
 
     @staticmethod
@@ -745,33 +744,33 @@ class ASTTransformer(Builder):
         except Exception as e:
             e = handle_exception_from_cpp(e)
             if isinstance(e, QuadrantsIndexError):
-                node.value.ptr = None
+                node_metadata(node.value).ptr = None
                 if ASTTransformer.build_attribute_if_is_dynamic_snode_method(ctx, node):
-                    return node.ptr
+                    return node_metadata(node).ptr
             raise e
 
         if ASTTransformer.build_attribute_if_is_dynamic_snode_method(ctx, node):
-            return node.ptr
+            return node_metadata(node).ptr
 
-        if isinstance(node.value.ptr, Expr) and not hasattr(node.value.ptr, node.attr):
+        if isinstance(node_metadata(node.value).ptr, Expr) and not hasattr(node_metadata(node.value).ptr, node.attr):
             if node.attr in Matrix._swizzle_to_keygroup:
                 keygroup = Matrix._swizzle_to_keygroup[node.attr]
-                Matrix._keygroup_to_checker[keygroup](node.value.ptr, node.attr)
+                Matrix._keygroup_to_checker[keygroup](node_metadata(node.value).ptr, node.attr)
                 attr_len = len(node.attr)
                 if attr_len == 1:
-                    node.ptr = Expr(
+                    node_metadata(node).ptr = Expr(
                         impl.get_runtime()
                         .compiling_callable.ast_builder()
                         .expr_subscript(
-                            node.value.ptr.ptr,
+                            node_metadata(node.value).ptr.ptr,
                             make_expr_group(keygroup.index(node.attr)),
                             _qd_core.DebugInfo(impl.get_runtime().get_current_src_info()),
                         )
                     )
                 else:
-                    node.ptr = Expr(
+                    node_metadata(node).ptr = Expr(
                         _qd_core.subscript_with_multiple_indices(
-                            node.value.ptr.ptr,
+                            node_metadata(node.value).ptr.ptr,
                             [make_expr_group(keygroup.index(ch)) for ch in node.attr],
                             (attr_len,),
                             _qd_core.DebugInfo(impl.get_runtime().get_current_src_info()),
@@ -782,37 +781,37 @@ class ASTTransformer(Builder):
                     matrix_ops as tensor_ops,
                 )
 
-                node.ptr = getattr(tensor_ops, node.attr)
-                setattr(node, "caller", node.value.ptr)
-        elif dataclasses.is_dataclass(node.value.ptr):
-            lifted = maybe_lifted_primitive(ctx, node.value.ptr, node.attr)
+                node_metadata(node).ptr = getattr(tensor_ops, node.attr)
+                setattr(node, "caller", node_metadata(node.value).ptr)
+        elif dataclasses.is_dataclass(node_metadata(node.value).ptr):
+            lifted = maybe_lifted_primitive(ctx, node_metadata(node.value).ptr, node.attr)
             if lifted is not None:
-                node.ptr = lifted
-                return node.ptr
-            node.ptr = getattr(node.value.ptr, node.attr)
+                node_metadata(node).ptr = lifted
+                return node_metadata(node).ptr
+            node_metadata(node).ptr = getattr(node_metadata(node.value).ptr, node.attr)
             from quadrants._tensor_wrapper import (  # pylint: disable=C0415
                 Tensor as _TensorClass,
             )
 
-            if isinstance(node.ptr, _TensorClass):
-                node.ptr = node.ptr._unwrap()
-            node.ptr = ASTTransformer._promote_ndarray_if_declared(ctx, node.ptr)
+            if isinstance(node_metadata(node).ptr, _TensorClass):
+                node_metadata(node).ptr = node_metadata(node).ptr._unwrap()
+            node_metadata(node).ptr = ASTTransformer._promote_ndarray_if_declared(ctx, node_metadata(node).ptr)
         else:
             # Unpacked-vector group access on a ``@qd.dataclass`` Struct expression. Returns a transient
             # ``_UnpackedVectorRef`` that ``build_Subscript`` (or its assignment-LHS sibling) resolves to a direct field
             # reference. The lookup is by-name on ``_qd_unpacked_groups``, which ``StructType.__call__`` attaches to
             # every Struct instance whose type declared at least one vector field with ``unpacked=True``. Tested in
             # ``test_unpacked.py``.
-            groups = getattr(node.value.ptr, "_qd_unpacked_groups", None)
+            groups = getattr(node_metadata(node.value).ptr, "_qd_unpacked_groups", None)
             if groups and node.attr in groups:
                 count, dtype, naming_fn = groups[node.attr]
-                node.ptr = _UnpackedVectorRef(node.value.ptr, node.attr, count, dtype, naming_fn)
-                return node.ptr
-            lifted = maybe_lifted_primitive(ctx, node.value.ptr, node.attr)
+                node_metadata(node).ptr = _UnpackedVectorRef(node_metadata(node.value).ptr, node.attr, count, dtype, naming_fn)
+                return node_metadata(node).ptr
+            lifted = maybe_lifted_primitive(ctx, node_metadata(node.value).ptr, node.attr)
             if lifted is not None:
-                node.ptr = lifted
-                return node.ptr
-            node.ptr = getattr(node.value.ptr, node.attr)
+                node_metadata(node).ptr = lifted
+                return node_metadata(node).ptr
+            node_metadata(node).ptr = getattr(node_metadata(node.value).ptr, node.attr)
             # ``qd.Tensor`` wrappers reached via attribute access on a ``@qd.data_oriented`` struct field at AST-build
             # time. The IR layer downstream (``build_Subscript`` -> ``impl.subscript``) only knows about ``Ndarray`` /
             # ``Field`` / ``Expr``; the wrapper is host-side. Unwrap here so ``state.a[i, j]`` inside a kernel body
@@ -822,25 +821,25 @@ class ASTTransformer(Builder):
                 Tensor as _TensorClass,
             )
 
-            if isinstance(node.ptr, _TensorClass):
-                node.ptr = node.ptr._unwrap()
-            node.ptr = ASTTransformer._promote_ndarray_if_declared(ctx, node.ptr)
-            node.violates_pure = node.value.violates_pure
-            if node.violates_pure:
-                node.violates_pure_reason = node.value.violates_pure_reason
+            if isinstance(node_metadata(node).ptr, _TensorClass):
+                node_metadata(node).ptr = node_metadata(node).ptr._unwrap()
+            node_metadata(node).ptr = ASTTransformer._promote_ndarray_if_declared(ctx, node_metadata(node).ptr)
+            node_metadata(node).violates_pure = node_metadata(node.value).violates_pure
+            if node_metadata(node).violates_pure:
+                node_metadata(node).violates_pure_reason = node_metadata(node.value).violates_pure_reason
             # ``qd.static`` is intentionally NOT a purity escape hatch (see ``build_Name``).
-            if ctx.is_pure and node.violates_pure:
+            if ctx.is_pure and node_metadata(node).violates_pure:
                 # ``str`` included for the same reason as in ``build_Name``: a captured string is cache-unsafe.
-                if isinstance(node.ptr, (int, float, str, Field)):
+                if isinstance(node_metadata(node).ptr, (int, float, str, Field)):
                     violation = True
-                    if violation and isinstance(node.ptr, enum.Enum):
+                    if violation and isinstance(node_metadata(node).ptr, enum.Enum):
                         violation = False
-                    if violation and node.value.ptr in [math, np]:
+                    if violation and node_metadata(node.value).ptr in [math, np]:
                         violation = False
-                    if violation and _is_from_quadrants_module(node.value.ptr):
+                    if violation and _is_from_quadrants_module(node_metadata(node.value).ptr):
                         violation = False
                     if violation:
-                        message = f"[PURE.VIOLATION] WARNING: Accessing global var {node.attr} from outside function scope within pure kernel {node.value.violates_pure_reason}"
+                        message = f"[PURE.VIOLATION] WARNING: Accessing global var {node.attr} from outside function scope within pure kernel {node_metadata(node.value).violates_pure_reason}"
                         # Transition period (see ``build_Name``): ``qd.static`` scope downgrades this to a warning.
                         if node.attr.upper() == node.attr or ctx.is_in_static_scope():
                             warnings.warn(message)
@@ -853,13 +852,13 @@ class ASTTransformer(Builder):
         parent_chain = getattr(node.value, "_qd_arg_chain", None)
         if parent_chain is not None:
             flat = create_flat_name(parent_chain, node.attr)
-            node._qd_arg_chain = flat  # type: ignore[attr-defined]
+            node_metadata(node)._qd_arg_chain = flat
             pruning = ctx.global_context.pruning
             if not pruning.enforcing and not ctx.expanding_dataclass_call_parameters:
                 pruning.mark_kernel_arg_chain_used(ctx.func.func_id, flat)
         else:
-            node._qd_arg_chain = None  # type: ignore[attr-defined]
-        return node.ptr
+            node_metadata(node)._qd_arg_chain = None
+        return node_metadata(node).ptr
 
     @staticmethod
     def build_BinOp(ctx: ASTTransformerFuncContext, node: ast.BinOp):
@@ -884,10 +883,10 @@ class ASTTransformer(Builder):
             ast.MatMult: matmul,
         }.get(type(node.op))
         try:
-            node.ptr = op(node.left.ptr, node.right.ptr)
+            node_metadata(node).ptr = op(node_metadata(node.left).ptr, node_metadata(node.right).ptr)
         except TypeError as e:
             raise QuadrantsTypeError(str(e)) from None
-        return node.ptr
+        return node_metadata(node).ptr
 
     @staticmethod
     def build_AugAssign(ctx: ASTTransformerFuncContext, node: ast.AugAssign):
@@ -898,8 +897,8 @@ class ASTTransformer(Builder):
                 f'Kernel argument "{node.target.id}" is immutable in the kernel. '
                 f"If you want to change its value, please create a new variable."
             )
-        node.ptr = node.target.ptr._augassign(node.value.ptr, type(node.op).__name__)
-        return node.ptr
+        node_metadata(node).ptr = node_metadata(node.target).ptr._augassign(node_metadata(node.value).ptr, type(node.op).__name__)
+        return node_metadata(node).ptr
 
     @staticmethod
     def build_UnaryOp(ctx: ASTTransformerFuncContext, node: ast.UnaryOp):
@@ -910,31 +909,31 @@ class ASTTransformer(Builder):
             ast.Not: qd_ops.logical_not,
             ast.Invert: lambda l: ~l,
         }.get(type(node.op))
-        node.ptr = op(node.operand.ptr)
-        return node.ptr
+        node_metadata(node).ptr = op(node_metadata(node.operand).ptr)
+        return node_metadata(node).ptr
 
     @staticmethod
     def build_bool_op(op):
         def inner(operands):
             if len(operands) == 1:
-                return operands[0].ptr
-            return op(operands[0].ptr, inner(operands[1:]))
+                return node_metadata(operands[0]).ptr
+            return op(node_metadata(operands[0]).ptr, inner(operands[1:]))
 
         return inner
 
     @staticmethod
     def build_static_and(operands):
         for operand in operands:
-            if not operand.ptr:
-                return operand.ptr
-        return operands[-1].ptr
+            if not node_metadata(operand).ptr:
+                return node_metadata(operand).ptr
+        return node_metadata(operands[-1]).ptr
 
     @staticmethod
     def build_static_or(operands):
         for operand in operands:
-            if operand.ptr:
-                return operand.ptr
-        return operands[-1].ptr
+            if node_metadata(operand).ptr:
+                return node_metadata(operand).ptr
+        return node_metadata(operands[-1]).ptr
 
     @staticmethod
     def build_BoolOp(ctx: ASTTransformerFuncContext, node: ast.BoolOp):
@@ -955,8 +954,8 @@ class ASTTransformer(Builder):
                 ast.Or: ASTTransformer.build_bool_op(qd_ops.bit_or),
             }
         op = ops.get(type(node.op))
-        node.ptr = op(node.values)
-        return node.ptr
+        node_metadata(node).ptr = op(node.values)
+        return node_metadata(node).ptr
 
     @staticmethod
     def build_Compare(ctx: ASTTransformerFuncContext, node: ast.Compare):
@@ -978,7 +977,7 @@ class ASTTransformer(Builder):
         }
         if ctx.is_in_static_scope():
             ops = {**ops, **ops_static}
-        operands = [node.left.ptr] + [comparator.ptr for comparator in node.comparators]
+        operands = [node_metadata(node.left).ptr] + [node_metadata(comparator).ptr for comparator in node.comparators]
         operand_nodes = (node.left, *node.comparators)
         val = True
         for i, node_op in enumerate(node.ops):
@@ -1027,8 +1026,8 @@ class ASTTransformer(Builder):
             val = qd_ops.logical_and(val, op(l, r))
         if not isinstance(val, (bool, np.bool_)):
             val = qd_ops.cast(val, primitive_types.u1)
-        node.ptr = val
-        return node.ptr
+        node_metadata(node).ptr = val
+        return node_metadata(node).ptr
 
     @staticmethod
     def get_for_loop_targets(node: ast.Name | ast.Tuple | Any) -> list:
@@ -1085,7 +1084,7 @@ class ASTTransformer(Builder):
 
             iter_time = 0
             alert_already = False
-            for target_values in node.iter.ptr:
+            for target_values in node_metadata(node.iter).ptr:
                 if not isinstance(target_values, collections.abc.Sequence) or len(targets) == 1:
                     target_values = [target_values]
 
@@ -1282,7 +1281,7 @@ class ASTTransformer(Builder):
                 build_stmts(ctx, node.body)
                 ctx.ast_builder.end_frontend_struct_for()
             else:
-                loop_var = node.iter.ptr
+                loop_var = node_metadata(node.iter).ptr
                 # Layout-tagged tensors (both ndarray and field): the runtime fills the loop-target slots with
                 # *physical* indices but the user spelled them with canonical names (``for i, j in x`` where ``i``
                 # is canonical axis 0). Allocate hidden physical slots and rebind each user name to the physical slot
@@ -1319,14 +1318,14 @@ class ASTTransformer(Builder):
 
         with ctx.variable_scope_guard():
             var = expr.Expr(ctx.ast_builder.make_id_expr(""))
-            ctx.mesh = node.iter.ptr.mesh
+            ctx.mesh = node_metadata(node.iter).ptr.mesh
             assert isinstance(ctx.mesh, impl.MeshInstance)
-            mesh_idx = mesh.MeshElementFieldProxy(ctx.mesh, node.iter.ptr._type, var.ptr)
+            mesh_idx = mesh.MeshElementFieldProxy(ctx.mesh, node_metadata(node.iter).ptr._type, var.ptr)
             ctx.create_variable(target, mesh_idx)
             ctx.ast_builder.begin_frontend_mesh_for(
                 mesh_idx.ptr,
                 ctx.mesh.mesh_ptr,
-                node.iter.ptr._type,
+                node_metadata(node.iter).ptr._type,
                 _qd_core.DebugInfo(impl.get_runtime().get_current_src_info()),
             )
             ctx.loop_depth += 1
@@ -1344,23 +1343,23 @@ class ASTTransformer(Builder):
         target = targets[0]
 
         with ctx.variable_scope_guard():
-            ctx.mesh = node.iter.ptr.mesh
+            ctx.mesh = node_metadata(node.iter).ptr.mesh
             assert isinstance(ctx.mesh, impl.MeshInstance)
             loop_name = node.target.id + "_index__"
             loop_var = expr.Expr(ctx.ast_builder.make_id_expr(""))
             ctx.create_variable(loop_name, loop_var)
             begin = expr.Expr(0)
-            end = qd_ops.cast(node.iter.ptr.size, primitive_types.i32)
+            end = qd_ops.cast(node_metadata(node.iter).ptr.size, primitive_types.i32)
             for_di = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
             ctx.ast_builder.begin_frontend_range_for(loop_var.ptr, begin.ptr, end.ptr, for_di)
             entry_expr = _qd_core.get_relation_access(
                 ctx.mesh.mesh_ptr,
-                node.iter.ptr.from_index.ptr,
-                node.iter.ptr.to_element_type,
+                node_metadata(node.iter).ptr.from_index.ptr,
+                node_metadata(node.iter).ptr.to_element_type,
                 loop_var.ptr,
             )
             entry_expr.type_check(impl.get_runtime().prog.config())
-            mesh_idx = mesh.MeshElementFieldProxy(ctx.mesh, node.iter.ptr.to_element_type, entry_expr)
+            mesh_idx = mesh.MeshElementFieldProxy(ctx.mesh, node_metadata(node.iter).ptr.to_element_type, entry_expr)
             ctx.create_variable(target, mesh_idx)
             ctx.loop_depth += 1
             build_stmts(ctx, node.body)
@@ -1420,7 +1419,7 @@ class ASTTransformer(Builder):
                         "Using non static inlined if statement as for-loop iterable is not currently supported."
                     )
                 build_stmt(ctx, _iter.test)
-                next_iter = _iter.body if _iter.test.ptr else _iter.orelse
+                next_iter = _iter.body if node_metadata(_iter.test).ptr else _iter.orelse
                 new_for = ast.For(
                     target=node.target,
                     iter=next_iter,
@@ -1435,13 +1434,13 @@ class ASTTransformer(Builder):
                 return ASTTransformer.build_For(ctx, new_for)
             else:
                 build_stmt(ctx, node.iter)
-                if isinstance(node.iter.ptr, mesh.MeshElementField):
+                if isinstance(node_metadata(node.iter).ptr, mesh.MeshElementField):
                     if not _qd_core.is_extension_supported(impl.default_cfg().arch, _qd_core.Extension.mesh):
                         raise Exception(
                             "Backend " + str(impl.default_cfg().arch) + " doesn't support MeshQuadrants extension"
                         )
                     return ASTTransformer.build_mesh_for(ctx, node)
-                if isinstance(node.iter.ptr, mesh.MeshRelationAccessProxy):
+                if isinstance(node_metadata(node.iter).ptr, mesh.MeshRelationAccessProxy):
                     return ASTTransformer.build_nested_mesh_for(ctx, node)
                 # Struct for
                 return ASTTransformer.build_struct_for(ctx, node, is_grouped=False)
@@ -1556,7 +1555,7 @@ class ASTTransformer(Builder):
         is_static_if = get_decorator(ctx, node.test) == "static"
 
         if is_static_if:
-            if node.test.ptr:
+            if node_metadata(node.test).ptr:
                 build_stmts(ctx, node.body)
             else:
                 build_stmts(ctx, node.orelse)
@@ -1564,7 +1563,7 @@ class ASTTransformer(Builder):
 
         with ctx.non_static_if_guard(node):
             stmt_dbg_info = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
-            impl.begin_frontend_if(ctx.ast_builder, node.test.ptr, stmt_dbg_info)
+            impl.begin_frontend_if(ctx.ast_builder, node_metadata(node.test).ptr, stmt_dbg_info)
             ctx.ast_builder.begin_frontend_if_true()
             build_stmts(ctx, node.body)
             ctx.ast_builder.pop_scope()
@@ -1585,34 +1584,34 @@ class ASTTransformer(Builder):
         build_stmt(ctx, node.orelse)
 
         has_tensor_type = False
-        if isinstance(node.test.ptr, expr.Expr) and node.test.ptr.is_tensor():
+        if isinstance(node_metadata(node.test).ptr, expr.Expr) and node_metadata(node.test).ptr.is_tensor():
             has_tensor_type = True
-        if isinstance(node.body.ptr, expr.Expr) and node.body.ptr.is_tensor():
+        if isinstance(node_metadata(node.body).ptr, expr.Expr) and node_metadata(node.body).ptr.is_tensor():
             has_tensor_type = True
-        if isinstance(node.orelse.ptr, expr.Expr) and node.orelse.ptr.is_tensor():
+        if isinstance(node_metadata(node.orelse).ptr, expr.Expr) and node_metadata(node.orelse).ptr.is_tensor():
             has_tensor_type = True
 
         if has_tensor_type:
-            if isinstance(node.test.ptr, expr.Expr) and node.test.ptr.is_tensor():
+            if isinstance(node_metadata(node.test).ptr, expr.Expr) and node_metadata(node.test).ptr.is_tensor():
                 raise QuadrantsSyntaxError(
                     "Using conditional expression for element-wise select operation on "
                     "Quadrants vectors/matrices is deprecated and removed starting from Quadrants v1.5.0 "
                     'Please use "qd.select" instead.'
                 )
-            node.ptr = qd_ops.select(node.test.ptr, node.body.ptr, node.orelse.ptr)
-            return node.ptr
+            node_metadata(node).ptr = qd_ops.select(node_metadata(node.test).ptr, node_metadata(node.body).ptr, node_metadata(node.orelse).ptr)
+            return node_metadata(node).ptr
 
         is_static_if = get_decorator(ctx, node.test) == "static"
 
         if is_static_if:
-            if node.test.ptr:
-                node.ptr = build_stmt(ctx, node.body)
+            if node_metadata(node.test).ptr:
+                node_metadata(node).ptr = build_stmt(ctx, node.body)
             else:
-                node.ptr = build_stmt(ctx, node.orelse)
-            return node.ptr
+                node_metadata(node).ptr = build_stmt(ctx, node.orelse)
+            return node_metadata(node).ptr
 
-        node.ptr = qd_ops.ifte(node.test.ptr, node.body.ptr, node.orelse.ptr)
-        return node.ptr
+        node_metadata(node).ptr = qd_ops.ifte(node_metadata(node.test).ptr, node_metadata(node.body).ptr, node_metadata(node.orelse).ptr)
+        return node_metadata(node).ptr
 
     @staticmethod
     def _is_string_mod_args(msg) -> bool:
