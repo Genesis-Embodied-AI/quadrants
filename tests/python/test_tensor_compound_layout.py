@@ -148,6 +148,8 @@ def test_compound_layout_torch_and_dlpack(backend, dtype, layout):
     "backend,dtype",
     [
         (qd.Backend.FIELD, VECTOR_DTYPE),
+        (qd.Backend.FIELD, MATRIX_DTYPE),
+        (qd.Backend.NDARRAY, VECTOR_DTYPE),
         (qd.Backend.NDARRAY, MATRIX_DTYPE),
     ],
 )
@@ -167,8 +169,10 @@ def test_compound_layout_numpy_zero_copy(backend, dtype):
 @pytest.mark.parametrize(
     "backend,dtype",
     [
-        (qd.Backend.NDARRAY, VECTOR_DTYPE),
+        (qd.Backend.FIELD, VECTOR_DTYPE),
         (qd.Backend.FIELD, MATRIX_DTYPE),
+        (qd.Backend.NDARRAY, VECTOR_DTYPE),
+        (qd.Backend.NDARRAY, MATRIX_DTYPE),
     ],
 )
 @test_utils.test()
@@ -235,9 +239,17 @@ def test_compound_layout_ndarray_import_rejects_physical_shape(dtype):
         a.from_torch(torch.from_numpy(wrong_shape))
 
 
-@pytest.mark.parametrize("dtype", [VECTOR_DTYPE, MATRIX_DTYPE])
+@pytest.mark.parametrize(
+    "backend,dtype",
+    [
+        (qd.Backend.FIELD, VECTOR_DTYPE),
+        (qd.Backend.FIELD, MATRIX_DTYPE),
+        (qd.Backend.NDARRAY, VECTOR_DTYPE),
+        (qd.Backend.NDARRAY, MATRIX_DTYPE),
+    ],
+)
 @test_utils.test()
-def test_compound_layout_kernel_specialization(dtype):
+def test_compound_layout_kernel_specialization(backend, dtype):
     @qd.kernel
     def fill(x: qd.Tensor):
         for i, j in qd.ndrange(2, 5):
@@ -245,7 +257,7 @@ def test_compound_layout_kernel_specialization(dtype):
 
     expected = np.arange(2, dtype=np.float32)[:, None] * 10 + np.arange(5, dtype=np.float32)
     for layout in (None, (1, 0), None):
-        a = qd.tensor(dtype, (2, 5), layout=layout)
+        a = qd.tensor(dtype, (2, 5), backend=backend, layout=layout)
         fill(a)
         expanded = expected.reshape((2, 5) + (1,) * len(a.element_shape))
         np.testing.assert_array_equal(a.to_numpy(), np.broadcast_to(expanded, (2, 5) + a.element_shape))
