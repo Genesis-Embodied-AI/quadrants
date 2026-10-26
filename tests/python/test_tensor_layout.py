@@ -258,7 +258,13 @@ def test_matrix_dtype_without_layout_still_works():
     ],
 )
 @test_utils.test()
-def test_layout_sequence_index(backend, shape, layout, index_kind, operation):
+def test_layout_sequence_index(
+    backend: qd.Backend,
+    shape: tuple[int, ...],
+    layout: tuple[int, ...] | None,
+    index_kind: str,
+    operation: str,
+) -> None:
     """Run the same kernel with and without a tensor layout, checking that list and tuple indices passed through a
     qd.func read and update the same canonical elements on both tensor backends."""
 
