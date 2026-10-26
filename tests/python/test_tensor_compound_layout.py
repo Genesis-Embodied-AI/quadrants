@@ -260,7 +260,7 @@ def test_compound_layout_kernel_specialization(backend, dtype):
     @qd.kernel
     def fill(x: qd.Tensor):
         for i, j in qd.ndrange(2, 5):
-            x[i, j] = x[i, j] * 0 + test_utils.encode_index([i, j])
+            x[i, j] = dtype(0) + test_utils.encode_index([i, j])
 
     expected = np.arange(2, dtype=np.float32)[:, None] * 10 + np.arange(5, dtype=np.float32)
     for layout in (None, (1, 0), None):
