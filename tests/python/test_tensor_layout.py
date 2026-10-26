@@ -304,5 +304,5 @@ def test_layout_sequence_index(backend, shape, layout, index_kind, operation):
         y.from_numpy(-initial_x - 1)
         run(x, y)
         y_l.append(y.to_numpy())
-    actual_result, expected_result = y_l
-    np.testing.assert_array_equal(actual_result, expected_result)
+    y, expected_y = y_l
+    np.testing.assert_array_equal(y, expected_y)
