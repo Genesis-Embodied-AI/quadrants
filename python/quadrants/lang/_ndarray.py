@@ -275,7 +275,7 @@ class Ndarray:
         """Mirror of ``_copy_to_new_numpy`` that fills a torch tensor instead of a numpy array.
 
         Allocates a ``torch.zeros`` of ``self.arr.total_physical_shape()`` (including any trailing element-axis extents)
-        and dispatches the same ``ndarray_matrix_to_ext_arr`` bridge kernel — torch tensors expose the same external-array
+        and dispatches the same ``ndarray_matrix_to_ext_arr`` bridge kernel - torch tensors expose the same external-array
         interface to the kernel as numpy arrays do.
         """
         import torch  # pylint: disable=C0415
