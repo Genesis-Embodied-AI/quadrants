@@ -23,6 +23,7 @@ from tests import test_utils
 )
 @test_utils.test()
 def test_compound_layout_indexing_and_numpy(backend, dtype, layout):
+    """Check canonical kernel and Python indexing, NumPy copying, and imports from non-contiguous arrays."""
     shape = (2, 4, 5)
     a = qd.tensor(dtype, shape, backend=backend, layout=layout)
     element_shape = (dtype.n,) if dtype.ndim == 1 else (dtype.n, dtype.m)
@@ -76,6 +77,7 @@ def test_compound_layout_indexing_and_numpy(backend, dtype, layout):
 )
 @test_utils.test()
 def test_compound_layout_copy_and_pickle(backend, dtype, layout):
+    """Check copying between layouts and preservation of values, shape, and layout through pickle and deepcopy."""
     a = qd.tensor(dtype, (2, 4, 5), backend=backend, layout=layout)
     b = qd.tensor(dtype, a.shape, backend=backend)
     expected = np.arange(np.prod(a.shape + a.element_shape), dtype=np.float32).reshape(a.shape + a.element_shape)
@@ -104,6 +106,7 @@ def test_compound_layout_copy_and_pickle(backend, dtype, layout):
 )
 @test_utils.test(exclude=[qd.vulkan])
 def test_compound_layout_torch_and_dlpack(backend, dtype, layout):
+    """Check Torch copying and imports, plus canonical DLPack shapes, physical strides, and shared-memory writes."""
     torch = pytest.importorskip("torch")
     arch = qd.lang.impl.current_cfg().arch
     if arch == qd.metal and backend == qd.Backend.FIELD and not _TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET:
@@ -152,6 +155,7 @@ def test_compound_layout_torch_and_dlpack(backend, dtype, layout):
 )
 @test_utils.test(arch=qd.cpu)
 def test_compound_layout_numpy_zero_copy(backend, dtype):
+    """Check that NumPy zero-copy exports expose canonical shapes and share writable memory with the tensor."""
     pytest.importorskip("torch")
     a = qd.tensor(dtype, (2, 4, 5), backend=backend, layout=(2, 0, 1))
     a.fill(3)
@@ -174,6 +178,7 @@ def test_compound_layout_numpy_zero_copy(backend, dtype):
 )
 @test_utils.test()
 def test_compound_layout_grad(backend, dtype):
+    """Check that gradients retain the layout and compute correct values across different input and output layouts."""
     a = qd.tensor(dtype, (2, 4, 5), backend=backend, layout=(2, 0, 1), needs_grad=True)
     b = qd.tensor(dtype, a.shape, backend=backend, layout=(1, 0, 2), needs_grad=True)
     assert a.grad.shape == a.shape
@@ -203,6 +208,7 @@ def test_compound_layout_grad(backend, dtype):
 )
 @test_utils.test()
 def test_compound_layout_other_ranks(backend, dtype, shape, layout):
+    """Check allocation, filling, and NumPy export for tensors with zero, one, or two shape axes."""
     a = qd.tensor(dtype, shape, backend=backend, layout=layout)
     a.fill(4)
     assert a.shape == shape
@@ -220,6 +226,7 @@ def test_compound_layout_other_ranks(backend, dtype, shape, layout):
 )
 @test_utils.test()
 def test_compound_layout_invalid(backend, dtype, layout):
+    """Check that short, long, repeated-axis, and out-of-range layout permutations are rejected."""
     with pytest.raises(ValueError, match="layout"):
         qd.tensor(dtype, (2, 5), backend=backend, layout=layout)
 
@@ -227,6 +234,7 @@ def test_compound_layout_invalid(backend, dtype, layout):
 @pytest.mark.parametrize("dtype", [qd.types.vector(3, qd.f32), qd.types.matrix(2, 3, qd.f32)])
 @test_utils.test()
 def test_compound_layout_ndarray_import_rejects_physical_shape(dtype):
+    """Check that NumPy and Torch imports reject physical storage shapes instead of accepting them as canonical shapes."""
     a = qd.tensor(dtype, (2, 5), layout=(1, 0))
     wrong_shape = np.zeros((5, 2) + a.element_shape, dtype=np.float32)
     with pytest.raises(ValueError, match="Mismatch shape"):
@@ -247,6 +255,8 @@ def test_compound_layout_ndarray_import_rejects_physical_shape(dtype):
 )
 @test_utils.test()
 def test_compound_layout_kernel_specialization(backend, dtype):
+    """Check that reusing a kernel across default and permuted layouts preserves canonical indexing."""
+
     @qd.kernel
     def fill(x: qd.Tensor):
         for i, j in qd.ndrange(2, 5):
