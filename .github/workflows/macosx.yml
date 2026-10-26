@@ -17,7 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         MAC_OS_VERSION: [26]
-        PYTHON_VERSION: ['3.10', '3.11', '3.12', '3.13']
+        PYTHON_VERSION: ['3.12', '3.13', '3.14']
     name: Mac OS Build
     runs-on: macos-${{ matrix.MAC_OS_VERSION }}
     steps:
@@ -72,17 +72,17 @@ jobs:
       fail-fast: false
       matrix:
         MAC_OS_VERSION: [26]
-        PYTHON_VERSION: ['3.10', '3.11', '3.12', '3.13']
+        PYTHON_VERSION: ['3.12', '3.13', '3.14']
         ARCH: [metal, vulkan, cpu]
         include:
           - MAC_OS_VERSION: 15
-            PYTHON_VERSION: '3.10'
+            PYTHON_VERSION: '3.12'
             ARCH: metal
           - MAC_OS_VERSION: 15
-            PYTHON_VERSION: '3.10'
+            PYTHON_VERSION: '3.12'
             ARCH: vulkan
           - MAC_OS_VERSION: 15
-            PYTHON_VERSION: '3.10'
+            PYTHON_VERSION: '3.12'
             ARCH: cpu
     runs-on: macos-${{ matrix.MAC_OS_VERSION }}
     steps:
@@ -122,12 +122,12 @@ jobs:
       id-token: write
       contents: read
     concurrency:
-      # group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}-${{ matrix.PYTHON_CP_VERSION }}-${{ matrix.PYTHON_CP_VERSION != 'cp310' && 'all' || github.sha }}-test
+      # group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}-${{ matrix.PYTHON_CP_VERSION }}-${{ matrix.PYTHON_CP_VERSION != 'cp312' && 'all' || github.sha }}-test
       group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}-${{ matrix.PYTHON_CP_VERSION }}-test
       cancel-in-progress: true
     strategy:
       matrix:
-        PYTHON_CP_VERSION: ["cp310", "cp311", "cp312", "cp313"]
+        PYTHON_CP_VERSION: ["cp312", "cp313", "cp314"]
         MAC_OS_VERSION: [26]
       fail-fast: false
     with:

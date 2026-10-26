@@ -9,16 +9,15 @@ classifiers = [
     "Topic :: Games/Entertainment :: Simulation",
     "Intended Audience :: Science/Research",
     "Intended Audience :: Developers",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 license = "Apache-2.0"
 keywords = ["graphics", "simulation"]
 dynamic = ["version"]
 readme = "README.md"
-requires-python = ">=3.10,<3.14"
+requires-python = ">=3.12,<3.15"
 dependencies = [
     "numpy>=1.26.0",
     "colorama",
@@ -54,7 +53,7 @@ dev = [
     # C++ <-> Python bindings (replaced pybind11); ships its own stubgen. 2.14.0 requires __index__ for implicit
     # conversion to int arguments, which numpy.bool no longer provides, so `field[i] = np_bool` stops working.
     # FIXME: coerce numpy scalars to int in lang/field.py before handing them to write_uint, then drop this bound.
-    "nanobind>=2.0.0,<2.14.0",
+    "nanobind>=2.12.0,<2.14.0",
     "pydantic",
     "GitPython",
     "yapf",
@@ -107,7 +106,7 @@ Homepage = "https://github.com/Genesis-Embodied-AI/quadrants"
 requires = [
     "scikit-build-core>=0.10",
     # FIXME: drop this bound together with the one in the dev extra above.
-    "nanobind>=2.0.0,<2.14.0",
+    "nanobind>=2.12.0,<2.14.0",
     "numpy>=2.0.0",        # NumPy headers for the extension
     "setuptools_scm>=6.0", # version from git tags (metadata provider below)
 ]
