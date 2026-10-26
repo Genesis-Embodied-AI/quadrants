@@ -241,7 +241,11 @@ class Ndarray:
         Returns:
             numpy.ndarray: The result numpy array.
         """
+<<<<<<< HEAD
         arr = np.zeros(shape=self._total_canonical_shape(), dtype=to_numpy_type(self.dtype))
+=======
+        arr = np.zeros(shape=self.arr.total_physical_shape(), dtype=to_numpy_type(self.dtype))
+>>>>>>> hp/ndarray-names
         from quadrants._kernels import (  # pylint: disable=C0415
             ndarray_matrix_to_ext_arr,  # pylint: disable=C0415
         )
@@ -253,7 +257,20 @@ class Ndarray:
 
     @python_scope
     def _copy_from_numpy(self, arr):
+<<<<<<< HEAD
         """Copy a NumPy array in canonical axis order into this ndarray's existing storage."""
+=======
+        """Loads all values from a numpy array.
+
+        ``arr.shape`` is validated against the *canonical* shape (what ``self.shape`` reports). The
+        ``ext_arr_to_ndarray`` kernel iterates ``arr`` canonically and writes through ``ndarray[I]``, so on
+        layout-tagged destinations the AST permutation routes canonical positions into the underlying physical buffer
+        without any python-side transpose.
+
+        Args:
+            arr (numpy.ndarray): The source numpy array, in canonical axis order.
+        """
+>>>>>>> hp/ndarray-names
         if not isinstance(arr, np.ndarray):
             raise TypeError(f"{np.ndarray} expected, but {type(arr)} provided")
         canonical_shape = self._total_canonical_shape()
@@ -277,15 +294,25 @@ class Ndarray:
     def _copy_to_new_torch(self, as_vector, device=None):
         """Mirror of ``_copy_to_new_numpy`` that fills a torch tensor instead of a numpy array.
 
+<<<<<<< HEAD
         Allocates a ``torch.zeros`` of the canonical shape including any trailing element-axis extents and dispatches
         the same ``ndarray_matrix_to_ext_arr`` bridge kernel - torch tensors expose the same external-array interface
         to the kernel as numpy arrays do.
+=======
+        Allocates a ``torch.zeros`` of ``self.arr.total_physical_shape()`` (including any trailing element-axis extents)
+        and dispatches the same ``ndarray_matrix_to_ext_arr`` bridge kernel — torch tensors expose the same external-array
+        interface to the kernel as numpy arrays do.
+>>>>>>> hp/ndarray-names
         """
         import torch  # pylint: disable=C0415
 
         from quadrants.lang.util import to_pytorch_type  # pylint: disable=C0415
 
+<<<<<<< HEAD
         out = torch.zeros(size=self._total_canonical_shape(), dtype=to_pytorch_type(self.dtype), device=device)
+=======
+        out = torch.zeros(size=tuple(self.arr.total_physical_shape()), dtype=to_pytorch_type(self.dtype), device=device)
+>>>>>>> hp/ndarray-names
         from quadrants._kernels import (  # pylint: disable=C0415
             ndarray_matrix_to_ext_arr,  # pylint: disable=C0415
         )
@@ -298,12 +325,22 @@ class Ndarray:
 
     @python_scope
     def _copy_from_torch(self, arr, as_vector):
+<<<<<<< HEAD
         """Mirror of ``_copy_from_numpy`` that ingests a torch tensor. ``.contiguous()`` is forced so the
         bridge kernel sees a tightly-packed external array."""
         contig = arr.contiguous()
         canonical_shape = self._total_canonical_shape()
         if canonical_shape != tuple(contig.shape):
             raise ValueError(f"Mismatch shape: {canonical_shape} expected, but {tuple(contig.shape)} provided")
+=======
+        """Mirror of ``_ndarray_matrix_from_numpy`` that ingests a torch tensor. ``.contiguous()`` is forced so the
+        bridge kernel sees a tightly-packed external array."""
+        contig = arr.contiguous()
+        if tuple(self.arr.total_physical_shape()) != tuple(contig.shape):
+            raise ValueError(
+                f"Mismatch shape: {tuple(self.arr.total_physical_shape())} expected, but {tuple(contig.shape)} provided"
+            )
+>>>>>>> hp/ndarray-names
         from quadrants._kernels import (  # pylint: disable=C0415
             ext_arr_to_ndarray_matrix,  # pylint: disable=C0415
         )
@@ -313,6 +350,33 @@ class Ndarray:
         impl.get_runtime().sync()
 
     @python_scope
+<<<<<<< HEAD
+=======
+    def _ndarray_matrix_from_numpy(self, arr, as_vector):
+        """Loads all values from a numpy array.
+
+        Args:
+            arr (numpy.ndarray): The source numpy array.
+        """
+        if not isinstance(arr, np.ndarray):
+            raise TypeError(f"{np.ndarray} expected, but {type(arr)} provided")
+        if tuple(self.arr.total_physical_shape()) != tuple(arr.shape):
+            raise ValueError(
+                f"Mismatch shape: {tuple(self.arr.total_physical_shape())} expected, but {tuple(arr.shape)} provided"
+            )
+        if not arr.flags.c_contiguous:
+            arr = np.ascontiguousarray(arr)
+
+        from quadrants._kernels import (  # pylint: disable=C0415
+            ext_arr_to_ndarray_matrix,  # pylint: disable=C0415
+        )
+
+        layout_is_aos = 1
+        ext_arr_to_ndarray_matrix(arr, self, layout_is_aos, as_vector)
+        impl.get_runtime().sync()
+
+    @python_scope
+>>>>>>> hp/ndarray-names
     def _get_element_size(self):
         """Returns the size of one element in bytes.
 

@@ -33,7 +33,7 @@ def _mat_reference(backend):
 
 @test_utils.test(arch=qd.cpu)
 def test_vector_tensor_default_backend_matches_vector_ndarray():
-    """Post stork-19 ``qd.Vector.tensor`` returns a ``qd.VectorTensor`` wrapper; the underlying impl must match what
+    """``qd.Vector.tensor`` returns a ``qd.VectorTensor`` wrapper; the underlying impl must match what
     ``qd.Vector.ndarray`` returns directly."""
     a = qd.Vector.tensor(3, qd.f32, shape=(4,))
     b = qd.Vector.ndarray(3, qd.f32, shape=(4,))

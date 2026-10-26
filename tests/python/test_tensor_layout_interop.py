@@ -567,10 +567,10 @@ def test_genesis_shaped_dofs_batch_layout(backend):
 
 
 # ----------------------------------------------------------------------------
-# Pickle: as of stork-19 ``qd.tensor()`` returns a ``qd.Tensor`` wrapper, whose ``__reduce__`` round-trips via
+# Pickle: ``qd.tensor()`` returns a ``qd.Tensor`` wrapper, whose ``__reduce__`` round-trips via
 # ``to_numpy()`` (the canonical view) and rebuilds a fresh wrapper through the factory. The factory is given the
 # original ``layout=`` kwarg, so the restored tensor preserves the layout *and* its canonical-indexed values match
-# the original. See 8.7 in ``perso_hugh/doc/quadrants-tensor.md`` for rationale.
+# the original.
 # ----------------------------------------------------------------------------
 
 
