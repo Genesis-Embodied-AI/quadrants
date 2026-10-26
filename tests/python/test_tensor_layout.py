@@ -263,20 +263,20 @@ def test_layout_sequence_index(backend, shape, layout, index_kind, operation):
     qd.func read and update the same canonical elements on both tensor backends."""
 
     @qd.func
-    def access(I, field: qd.Tensor, result: qd.Tensor):
+    def access(index, field: qd.Tensor, result: qd.Tensor):
         value = 1
         for axis in qd.static(range(len(shape))):
-            value = value * 10 + I[axis]
+            value = value * 10 + index[axis]
         if qd.static(operation == "read"):
-            result[I] = field[I]
+            result[index] = field[index]
         elif qd.static(operation == "write"):
-            field[I] = value
+            field[index] = value
         elif qd.static(operation == "read_modify_write"):
-            field[I] = field[I] + value
+            field[index] = field[index] + value
         elif qd.static(operation == "augassign"):
-            field[I] += value
+            field[index] += value
         else:
-            qd.atomic_add(field[I], value)
+            qd.atomic_add(field[index], value)
 
     @qd.kernel
     def run(field: qd.Tensor, result: qd.Tensor):
@@ -291,11 +291,11 @@ def test_layout_sequence_index(backend, shape, layout, index_kind, operation):
     initial = np.arange(np.prod(shape), dtype=np.int32).reshape(shape)
     results = []
     for tensor_layout in (layout, None):
-        x = qd.tensor(qd.i32, shape=shape, backend=backend, layout=tensor_layout)
-        out = qd.tensor(qd.i32, shape=shape, backend=backend)
-        x.from_numpy(initial)
-        out.fill(-1)
-        run(x, out)
-        results.append(out.to_numpy() if operation == "read" else x.to_numpy())
+        field = qd.tensor(qd.i32, shape=shape, backend=backend, layout=tensor_layout)
+        result = qd.tensor(qd.i32, shape=shape, backend=backend)
+        field.from_numpy(initial)
+        result.fill(-1)
+        run(field, result)
+        results.append(result.to_numpy() if operation == "read" else field.to_numpy())
     actual_result, expected_result = results
     np.testing.assert_array_equal(actual_result, expected_result)
