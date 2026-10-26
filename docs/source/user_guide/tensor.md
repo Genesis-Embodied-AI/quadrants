@@ -111,6 +111,8 @@ assert b.shape == (N, B)        # canonical shape, unchanged
 b[i, j] = ...                   # canonical indexing in kernels still works
 ```
 
+Inside kernels, `b[I]` also uses canonical indices when `I` is a list, tuple, or grouped index vector. This includes list or tuple indices passed to a `@qd.func`; callers do not need to reorder the indices to match `layout`.
+
 Any permutation is supported, up to Quadrants' maximum number of tensor dimensions (`quadrants_max_num_indices`, a compile-time constant currently equal to 12). `layout=None` and the identity permutation (`(0, 1, ..., N-1)`) are equivalent and forward no permutation to the underlying allocator.
 
 For best performance, pair `qd.tensor(..., layout=...)` with a matching iteration order via `qd.ndrange(..., axes=...)` (see [`parallelization`](parallelization.md#controlling-iteration-order-with-axes)): the permutation has the same meaning in both APIs (canonical axis index at each successive nesting level, outermost first), and using the same value on both lines adjacent flat threads up with adjacent physical memory slots.

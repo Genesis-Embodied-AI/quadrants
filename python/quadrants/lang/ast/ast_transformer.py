@@ -296,17 +296,20 @@ class ASTTransformer(Builder):
 
     @staticmethod
     def _unpack_layout_vector_index(ast_builder, index, layout_len):
-        """If ``index`` is a rank-1 Vector of length ``layout_len``, return its component list so the layout permutation
-        can be applied per-axis. Otherwise return ``[index]`` unchanged.
+        """If ``index`` is a list, tuple, or rank-1 Vector of length ``layout_len``, return its component list so the
+        layout permutation can be applied per-axis. Otherwise return ``[index]`` unchanged.
 
-        Handles both forms a single subscript can take inside a kernel:
+        Handles the following forms a single subscript can take inside a kernel:
 
+        - Python ``list`` / ``tuple``, including indices passed through a ``@qd.func``.
         - ``Matrix`` (Python class) — produced when the kernel runs on the python backend, e.g. ``qd.grouped(field)``
           returning a ``[Matrix([i, j])]`` list.
         - ``Expr`` with tensor shape ``(N,)`` — produced by ``matrix.make_matrix(loop_indices, ...)`` in
           :func:`build_struct_for` / :func:`build_grouped_ndrange_for`, which is what real kernels see for
           ``for I in qd.grouped(...)``.
         """
+        if isinstance(index, (list, tuple)) and len(index) == layout_len:
+            return list(index)
         if isinstance(index, Matrix) and index.n == layout_len and index.m == 1:
             return index.to_list()
         if isinstance(index, expr.Expr) and index.is_tensor():
@@ -344,9 +347,9 @@ class ASTTransformer(Builder):
         #
         # Two indexing forms must be permuted:
         # 1. Multi-arg subscript ``x[i, j, ...]``: ``node.slice.ptr`` is already a list of N scalars; permute by axis.
-        # 2. Single-Vector subscript ``x[I]`` where I is a rank-N Matrix coming from ``qd.grouped(...)``: unpack into N
-        #    scalars first, then permute. Without this, ``x[I]`` writes at canonical indices into the smaller physical
-        #    buffer — silently OOB on permuted layouts.
+        # 2. Single-sequence subscript ``x[I]`` where I is a list, tuple, or vector coming from ``qd.grouped(...)``:
+        #    unpack into N scalars first, then permute. Without this, ``x[I]`` writes at canonical indices into the
+        #    permuted physical buffer, potentially going out of bounds.
         layout = getattr(node.value.ptr, "_qd_layout", None)
         if layout is not None:
             if len(node.slice.ptr) == 1:
