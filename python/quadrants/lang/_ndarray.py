@@ -274,7 +274,7 @@ class Ndarray:
         impl.get_runtime().sync()
 
     @python_scope
-    def _copy_to_torch(self, as_vector, device=None):
+    def _copy_to_new_torch(self, as_vector, device=None):
         """Mirror of ``_copy_to_numpy`` that fills a torch tensor instead of a numpy array.
 
         Allocates a ``torch.zeros`` of the canonical shape including any trailing element-axis extents and dispatches
