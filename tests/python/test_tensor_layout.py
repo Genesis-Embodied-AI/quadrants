@@ -286,7 +286,7 @@ def test_layout_sequence_index(backend, shape, layout, index_kind, operation):
             qd.atomic_add(y[I], index_code)
 
     @qd.kernel
-    def k1(x: qd.Tensor, y: qd.Tensor):
+    def k1(x: qd.Tensor, y: qd.Tensor) -> None:
         # Visit every tensor position, grouping its coordinates into the index vector I for either 2D or 3D shapes.
         for I in qd.grouped(qd.ndrange(*shape)):
             I_l = [I[axis] for axis in qd.static(range(len(shape)))]
