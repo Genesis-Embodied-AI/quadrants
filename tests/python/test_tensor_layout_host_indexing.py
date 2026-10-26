@@ -14,8 +14,8 @@ The ``qd.Tensor`` wrapper owns this fix: on a layout-tagged ndarray it translate
 coords before hitting the impl accessor; on a field it simply delegates. Both paths give the user the canonical view,
 symmetric across backends.
 
-Stork-19 flips ``qd.tensor()`` (and the Vector/Matrix variants) to return ``qd.Tensor`` wrappers, so the natural
-user path here goes through the wrapper and the previous gotcha-B xfails turn into unconditional passes.
+``qd.tensor()`` (and the Vector/Matrix variants) returns ``qd.Tensor`` wrappers, so the user path goes through
+the wrapper.
 """
 
 import itertools

@@ -1140,7 +1140,7 @@ i32 amdgpu_cross_half_shuffle_i32(i32 target_lane, i32 value) {
   // makes the constant-target case behave the same way).
   //
   // The ``+v`` constraint names the AMDGPU VGPR register class. clang accepts ``v`` as a constraint name on x86
-  // (where it historically means an SSE register) and on amdgcn, but rejects it outright on AArch64 -- the asm is
+  // (where it means an SSE register) and on amdgcn, but rejects it outright on AArch64 -- the asm is
   // parsed against the host's clang target even though the resulting bitcode is later re-targeted to amdgcn at JIT
   // time (see ``llvm_context.cpp`` setting the module triple to ``amdgcn-amd-amdhsa``). The constraint string is
   // preserved verbatim into the IR, so any host whose front-end accepts ``v`` produces bitcode that the AMDGPU

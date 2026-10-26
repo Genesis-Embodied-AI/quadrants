@@ -3,13 +3,11 @@ wrappers).
 
 The user-guide doc ``docs/source/user_guide/compound_types.md`` claims this pattern is not supported ("can contain
 ndarray? no" for ``@qd.data_oriented``). But the in-tree error message in ``python/quadrants/lang/impl.py`` lists
-``@qd.data_oriented / frozen-dataclass template`` as a *supported* route, and the ndarray-in-struct infrastructure
-added by ``#561 [Type] Tensor 24`` (2026-04-28) — specifically ``_predeclare_struct_ndarrays`` in
-``python/quadrants/lang/ast/ast_transformers/function_def_transformer.py`` — explicitly walks both
+``@qd.data_oriented / frozen-dataclass template`` as a *supported* route, and ``_predeclare_struct_ndarrays`` in
+``python/quadrants/lang/ast/ast_transformers/function_def_transformer.py`` explicitly walks both
 ``dataclasses.is_dataclass(val)`` and ``hasattr(val, "__dict__")`` containers, the latter being the data_oriented case.
 
-This file pins what actually works, and documents the gaps. See ``perso_hugh/doc/data_oriented_ndarray.md`` for the
-design analysis.
+This file pins what actually works, and documents the gaps.
 """
 
 import dataclasses

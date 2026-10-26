@@ -123,9 +123,3 @@ def test_pickle_all_dtypes(dtype):
     np.testing.assert_array_equal(b.to_numpy(), a.to_numpy())
     assert b.shape == a.shape
     assert b.dtype == a.dtype
-
-
-# Note: the legacy ``Ndarray.layout = Layout.SOA`` SOA-pickle-rejection test was removed in stork-17.
-# ``Ndarray.layout`` is now a read-only property reporting the canonical-axis permutation tuple (or ``None``); the old
-# enum-based ``Layout.SOA`` was replaced by stork-13/14's per-tensor layout API and the SOA-rejection branch in
-# ``_ndarray_pickle.serialize`` became unreachable.

@@ -7,7 +7,6 @@ switching, ``layout=`` perf tuning) should never have to special-case the backen
 Each test parametrises over both backends and at least one non-identity layout. If a future change re-introduces an
 asymmetry (e.g. one backend gains a kwarg the other doesn't), one of these tests will fail.
 
-See ``perso_hugh/doc/quadrants-tensor.md`` §8.9 for the design rationale and the per-asymmetry decision matrix.
 """
 
 import itertools
@@ -115,7 +114,7 @@ def test_to_numpy_accepts_dtype_kwarg(backend, layout):
 
 
 # ----------------------------------------------------------------------------
-# Pickle: symmetric across backends as of stork-19. The wrapper's ``__reduce__`` round-trips via ``to_numpy()``, so
+# Pickle: symmetric across backends. The wrapper's ``__reduce__`` round-trips via ``to_numpy()``, so
 # Field — whose bare impl never supported pickle upstream — is now picklable through the wrapper that
 # ``qd.tensor()`` returns. The reducer also forwards ``layout=`` to the rebuild path, so non-identity layout tags
 # survive the round-trip on both backends (see

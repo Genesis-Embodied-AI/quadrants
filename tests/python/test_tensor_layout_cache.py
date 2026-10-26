@@ -171,3 +171,57 @@ def test_ndim_distinct_in_cache_key():
 
     assert len(k1d._primal.mapper.mapping) == 1
     assert len(k2d._primal.mapper.mapping) == 1
+
+
+@test_utils.test(arch=qd.cpu)
+def test_fastcache_layout_distinct_keys():
+    """Two ndarrays of the same dtype/rank but different layouts must NOT share a fastcache entry, otherwise the second
+    call reuses IR compiled for the first layout and silently mis-indexes.
+    """
+    from quadrants.lang._fast_caching.args_hasher import stringify_obj_type
+
+    a_plain = qd.ndarray(qd.f32, shape=(4, 3))
+    a_layout = qd.ndarray(qd.f32, shape=(3, 4))
+    a_layout._qd_layout = (1, 0)
+
+    key_plain = stringify_obj_type(False, ("x",), a_plain, None)
+    key_layout = stringify_obj_type(False, ("x",), a_layout, None)
+
+    assert key_plain is not None
+    assert key_layout is not None
+    assert key_plain != key_layout, (
+        f"Plain and layout-tagged ndarrays must produce different cache keys, " f"got {key_plain!r} for both"
+    )
+
+
+@test_utils.test(arch=qd.cpu)
+def test_fastcache_vector_ndarray_layout_distinct():
+    from quadrants.lang._fast_caching.args_hasher import stringify_obj_type
+
+    v_plain = qd.Vector.ndarray(3, qd.f32, shape=(4,))
+    v_layout = qd.Vector.ndarray(3, qd.f32, shape=(4,))
+    v_layout._qd_layout = (0,)
+
+    key_plain = stringify_obj_type(False, ("x",), v_plain, None)
+    key_layout = stringify_obj_type(False, ("x",), v_layout, None)
+
+    assert key_plain is not None
+    assert key_layout is not None
+    # Identity layout tagged is technically distinct from None
+    assert key_plain != key_layout
+
+
+@test_utils.test(arch=qd.cpu)
+def test_fastcache_matrix_ndarray_layout_distinct():
+    from quadrants.lang._fast_caching.args_hasher import stringify_obj_type
+
+    m_plain = qd.Matrix.ndarray(2, 2, qd.f32, shape=(4,))
+    m_layout = qd.Matrix.ndarray(2, 2, qd.f32, shape=(4,))
+    m_layout._qd_layout = (0,)
+
+    key_plain = stringify_obj_type(False, ("x",), m_plain, None)
+    key_layout = stringify_obj_type(False, ("x",), m_layout, None)
+
+    assert key_plain is not None
+    assert key_layout is not None
+    assert key_plain != key_layout
