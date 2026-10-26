@@ -652,7 +652,7 @@ void export_lang(nb::module_ &m) {
       .def("read_float", &Ndarray::read_float)
       .def("write_int", &Ndarray::write_int)
       .def("write_float", &Ndarray::write_float)
-      .def("total_shape", &Ndarray::total_shape)
+      .def("total_physical_shape", &Ndarray::total_physical_shape)
       .def("element_shape", &Ndarray::get_element_shape)
       .def("element_data_type", &Ndarray::get_element_data_type)
       .def_ro("dtype", &Ndarray::dtype)

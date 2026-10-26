@@ -430,8 +430,10 @@ class Ndarray:
             key = ()
         if not isinstance(key, (tuple, list)):
             key = (key,)
-        if len(key) != len(self.arr.total_shape()):
-            raise QuadrantsIndexError(f"{len(self.arr.total_shape())}d ndarray indexed with {len(key)}d indices: {key}")
+        if len(key) != len(self.arr.total_physical_shape()):
+            raise QuadrantsIndexError(
+                f"{len(self.arr.total_physical_shape())}d ndarray indexed with {len(key)}d indices: {key}"
+            )
         return key
 
     @python_scope
