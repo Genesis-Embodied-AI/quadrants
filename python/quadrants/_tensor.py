@@ -105,8 +105,8 @@ def _coerce_backend(backend):
 # ``offset=`` for field offset indexing, ``order=`` for SoA layouts) should call ``qd.field`` / ``qd.ndarray`` directly
 # — they have explicitly opted out of the unified tensor API.
 #
-# ``layout=`` is on the scalar ``qd.tensor`` factory only; the Vector/Matrix factories reject it because layout
-# semantics over an extra element axis are out of scope for now.
+# ``layout=`` is accepted by the generic ``qd.tensor`` factory for scalar and compound dtypes. The Vector/Matrix
+# convenience factories retain their existing keyword surface.
 _SCALAR_ACCEPTED_KWARGS = frozenset({"backend", "needs_grad", "layout"})
 _VEC_MAT_ACCEPTED_KWARGS = frozenset({"backend", "needs_grad"})
 
@@ -161,6 +161,8 @@ def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
         layout (tuple of int, optional): Permutation of canonical axes describing the physical memory nesting order,
             outermost first. For a rank-N tensor, must be a permutation of ``range(N)``. ``None`` (default) and the
             identity permutation both mean "natural row-major-like layout" (no permutation is applied).
+            For vector or matrix dtypes, only the shape axes are permuted; component axes remain innermost in their
+            original order.
 
             ``shape`` is always interpreted as the **canonical** shape (the shape you index inside kernels). The
             underlying allocation is automatically sized to the permuted *physical* shape, and kernel subscripts
@@ -168,8 +170,8 @@ def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
             ``Backend.NDARRAY``.
 
     Returns:
-        A ``ScalarField`` when ``backend == Backend.FIELD``, or an ``Ndarray`` when ``backend == Backend.NDARRAY``. In
-        both cases ``.shape`` reports the canonical shape; the physical layout is managed transparently.
+        A ``Tensor``, ``VectorTensor``, or ``MatrixTensor`` wrapper for the selected backend and element type.
+        ``.shape`` reports the canonical shape; the physical layout is managed transparently.
 
     Example::
 
@@ -195,16 +197,6 @@ def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
         raise TypeError(
             f"qd.tensor() allocates a new tensor; to wrap an existing {type(dtype).__name__}, use qd.wrap(impl) instead"
         )
-    if layout is not None:
-        from quadrants.lang.matrix import (
-            MatrixType,  # pylint: disable=import-outside-toplevel
-        )
-
-        if isinstance(dtype, MatrixType):
-            raise TypeError(
-                "layout= is not supported with compound dtypes (vector/matrix). "
-                "Use qd.Vector.tensor(...) or qd.Matrix.tensor(...) without layout= instead."
-            )
     _validate_kwargs(kwargs, factory_name="qd.tensor", accepted=_SCALAR_ACCEPTED_KWARGS)
     backend = _coerce_backend(backend)
     forwarded = {k: v for k, v in kwargs.items() if k != "backend"}
@@ -245,7 +237,7 @@ def _tensor_vec(n, dtype, shape, *, backend=Backend.NDARRAY, **kwargs):
 
     Dispatcher over ``qd.Vector.field`` and ``qd.Vector.ndarray`` selected by the ``backend=`` keyword. Not part of
     the public API — call ``qd.Vector.tensor(...)`` instead. Hard-validates kwargs against ``_VEC_MAT_ACCEPTED_KWARGS``
-    (no ``layout=`` — layout semantics over an extra element axis are out of scope for now).
+    (no ``layout=``; use ``qd.tensor(qd.types.vector(...), ...)`` to specify a layout).
     """
     _validate_kwargs(kwargs, factory_name="qd.Vector.tensor", accepted=_VEC_MAT_ACCEPTED_KWARGS)
     backend = _coerce_backend(backend)
@@ -266,7 +258,7 @@ def _tensor_mat(n, m, dtype, shape, *, backend=Backend.NDARRAY, **kwargs):
 
     Dispatcher over ``qd.Matrix.field`` and ``qd.Matrix.ndarray`` selected by the ``backend=`` keyword. Not part of
     the public API — call ``qd.Matrix.tensor(...)`` instead. Hard-validates kwargs against ``_VEC_MAT_ACCEPTED_KWARGS``
-    (no ``layout=`` — layout semantics over an extra element axis are out of scope for now).
+    (no ``layout=``; use ``qd.tensor(qd.types.matrix(...), ...)`` to specify a layout).
     """
     _validate_kwargs(kwargs, factory_name="qd.Matrix.tensor", accepted=_VEC_MAT_ACCEPTED_KWARGS)
     backend = _coerce_backend(backend)

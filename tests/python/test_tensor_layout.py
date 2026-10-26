@@ -196,33 +196,36 @@ def test_layout_with_needs_grad_allocates_grad(backend):
 
 
 # ----------------------------------------------------------------------------
-# Compound dtype (vector / matrix) + layout= must be rejected
+# Compound dtype (vector / matrix) + identity layout preserves the default allocation
 # ----------------------------------------------------------------------------
 
 
-def test_layout_rejected_for_vector_dtype():
-    """qd.tensor() with a compound vector dtype must reject layout=."""
+def test_identity_layout_for_vector_dtype():
+    """qd.tensor() accepts an identity layout for compound vector dtypes."""
     qd.init(arch=qd.x64)
     vec3 = qd.types.vector(3, qd.f32)
-    with pytest.raises(TypeError, match="layout.*not supported.*compound"):
-        qd.tensor(vec3, shape=(4,), layout=(0,))
+    a = qd.tensor(vec3, shape=(4,), layout=(0,))
+    assert a.shape == (4,)
+    assert a.layout is None
 
 
-def test_layout_rejected_for_matrix_dtype():
-    """qd.tensor() with a compound matrix dtype must reject layout=."""
+def test_identity_layout_for_matrix_dtype():
+    """qd.tensor() accepts an identity layout for compound matrix dtypes."""
     qd.init(arch=qd.x64)
     mat2x2 = qd.types.matrix(2, 2, qd.f32)
-    with pytest.raises(TypeError, match="layout.*not supported.*compound"):
-        qd.tensor(mat2x2, shape=(4,), layout=(0,))
+    a = qd.tensor(mat2x2, shape=(4,), layout=(0,))
+    assert a.shape == (4,)
+    assert a.layout is None
 
 
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
-def test_layout_rejected_for_vector_dtype_both_backends(backend):
-    """layout= rejection applies to both field and ndarray backends."""
+def test_identity_layout_for_vector_dtype_both_backends(backend):
+    """Identity layouts are accepted on both field and ndarray backends."""
     qd.init(arch=qd.x64)
     vec3 = qd.types.vector(3, qd.f32)
-    with pytest.raises(TypeError, match="layout.*not supported.*compound"):
-        qd.tensor(vec3, shape=(5,), backend=backend, layout=(0,))
+    a = qd.tensor(vec3, shape=(5,), backend=backend, layout=(0,))
+    assert a.shape == (5,)
+    assert a.layout is None
 
 
 def test_vector_dtype_without_layout_still_works():
