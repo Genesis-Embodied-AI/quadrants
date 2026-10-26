@@ -19,7 +19,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.os == 'ubuntu-22.04' && 'quay.io/pypa/manylinux_2_28_x86_64:latest' || matrix.os == 'ubuntu-22.04-arm' && 'quay.io/pypa/manylinux_2_34_aarch64:2025.11.11-1' }}
     concurrency:
-      # group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref }}-${{ matrix.PYTHON_CP_VERSION }}-${{ matrix.PYTHON_CP_VERSION != 'cp312' && 'all' || github.sha }}-build
+      # group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref }}-${{ matrix.PYTHON_CP_VERSION }}-${{ matrix.PYTHON_CP_VERSION != 'cp310' && 'all' || github.sha }}-build
       group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name }}-${{ github.head_ref || github.ref }}-${{ matrix.PYTHON_CP_VERSION }}-${{matrix.os}}-build
       cancel-in-progress: ${{ github.event_name != 'release' }}
     strategy:
@@ -84,7 +84,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     needs: build_wheel
     concurrency:
-      # group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref }}-${{ matrix.PYTHON_CP_VERSION }}-${{ matrix.PYTHON_CP_VERSION != 'cp312' && 'all' || github.sha }}-test
+      # group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref }}-${{ matrix.PYTHON_CP_VERSION }}-${{ matrix.PYTHON_CP_VERSION != 'cp310' && 'all' || github.sha }}-test
       group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name }}-${{ github.head_ref || github.ref }}-${{ matrix.PYTHON_VERSION }}-${{matrix.os}}-test
       cancel-in-progress: ${{ github.event_name != 'release' }}
     strategy:
@@ -138,7 +138,7 @@ jobs:
       id-token: write
       contents: read
     concurrency:
-      # group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}-${{ matrix.PYTHON_CP_VERSION }}-${{ matrix.PYTHON_CP_VERSION != 'cp312' && 'all' || github.sha }}-test
+      # group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}-${{ matrix.PYTHON_CP_VERSION }}-${{ matrix.PYTHON_CP_VERSION != 'cp310' && 'all' || github.sha }}-test
       group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}-${{ matrix.PYTHON_CP_VERSION }}-${{matrix.os}}-publish-pypi
       cancel-in-progress: true
     strategy:

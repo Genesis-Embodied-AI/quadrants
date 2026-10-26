@@ -19,13 +19,16 @@ dynamic = ["version"]
 readme = "README.md"
 requires-python = ">=3.12,<3.15"
 dependencies = [
-    "numpy>=1.26.0",
+    "numpy>=1.26.0; python_version < '3.14'",
+    "numpy>=2.3.4; python_version >= '3.14'",
     "colorama",
     "dill",
-    "pydantic>=2.0.0",  # rewrite of 1.10 from scratch
+    "pydantic>=2.0.0; python_version < '3.14'",  # rewrite of 1.10 from scratch
+    "pydantic>=2.12.0; python_version >= '3.14'",
     "rich>=1.0.0",  # first non-beta version; 2020
     "setuptools>=77.0.0",  # Gives project.license-files
-    "cffi>=1.16.0",
+    "cffi>=1.16.0; python_version < '3.14'",
+    "cffi>=2.0.0; python_version >= '3.14'",
 ]
 
 [tool.setuptools_scm]
@@ -55,6 +58,7 @@ dev = [
     # FIXME: coerce numpy scalars to int in lang/field.py before handing them to write_uint, then drop this bound.
     "nanobind>=2.12.0,<2.14.0",
     "pydantic",
+    "pydantic>=2.12.0; python_version >= '3.14'",
     "GitPython",
     "yapf",
     "distro",
@@ -69,6 +73,7 @@ dev = [
     "scikit-build-core>=0.10",  # build backend (was scikit-build classic)
     "build",                    # `python -m build` / pip wheel frontend
     "setuptools_scm>=6.0",
+    "numpy>=2.3.4; python_version >= '3.14'",
     "numpy>=2.0.0",
     "ninja; platform_system != 'Windows'",
 ]
@@ -82,11 +87,13 @@ test = [
     "pytest-retry",
     "pytest-xdist>=3.7.0",
 
+    "numpy>=2.3.4; python_version >= '3.14'",
     "numpy>=2.0.0",  # otherwise, on windows, tries to install 1.26.4, which has no wheel for python 3.13
     "psutil",
     "autograd",
     "requests",
     "cffi",
+    "cffi>=2.0.0; python_version >= '3.14'",
     "scipy",
     "setproctitle",
     "nbmake",
@@ -107,6 +114,7 @@ requires = [
     "scikit-build-core>=0.10",
     # FIXME: drop this bound together with the one in the dev extra above.
     "nanobind>=2.12.0,<2.14.0",
+    "numpy>=2.3.4; python_version >= '3.14'",
     "numpy>=2.0.0",        # NumPy headers for the extension
     "setuptools_scm>=6.0", # version from git tags (metadata provider below)
 ]

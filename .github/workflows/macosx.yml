@@ -122,7 +122,7 @@ jobs:
       id-token: write
       contents: read
     concurrency:
-      # group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}-${{ matrix.PYTHON_CP_VERSION }}-${{ matrix.PYTHON_CP_VERSION != 'cp312' && 'all' || github.sha }}-test
+      # group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}-${{ matrix.PYTHON_CP_VERSION }}-${{ matrix.PYTHON_CP_VERSION != 'cp310' && 'all' || github.sha }}-test
       group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}-${{ matrix.PYTHON_CP_VERSION }}-test
       cancel-in-progress: true
     strategy:
