@@ -275,7 +275,7 @@ class Matrix(QuadrantsOperations):
         return super().__new__(cls)
 
     _swizzle_to_keygroup: ClassVar[dict[str, str]]
-    _keygroup_to_checker: ClassVar[dict[str, Callable[[object, str], None]]]
+    _keygroup_to_checker: ClassVar[dict[str, Callable[["Matrix | expr.Expr", str], None]]]
 
     def __init__(self, arr, dt=None):
         if not isinstance(arr, (list, tuple, np.ndarray)):

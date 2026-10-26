@@ -102,7 +102,9 @@ class ASTTransformer(Builder):
             node_metadata(node)._qd_arg_chain = node.id
         else:
             node_metadata(node)._qd_arg_chain = None
-        node_metadata(node).violates_pure, node_metadata(node).ptr, node_metadata(node).violates_pure_reason = ctx.get_var_by_name(node.id)
+        node_metadata(node).violates_pure, node_metadata(node).ptr, node_metadata(node).violates_pure_reason = (
+            ctx.get_var_by_name(node.id)
+        )
         # Flattened struct fields (``__qd_foo__qd_bar``) injected by ``populate_global_vars_from_dataclass`` are raw
         # ``Ndarray`` instances.  ``build_Attribute`` already promotes these via ``_promote_ndarray_if_declared`` but
         # the flattened-name path bypasses ``build_Attribute`` entirely, so we must promote here too.
@@ -282,7 +284,9 @@ class ASTTransformer(Builder):
     def build_NamedExpr(ctx: ASTTransformerFuncContext, node: ast.NamedExpr):
         build_stmt(ctx, node.value)
         is_static_assign = isinstance(node.value, ast.Call) and node_metadata(node.value.func).ptr is impl.static
-        node_metadata(node).ptr = ASTTransformer.build_assign_basic(ctx, node.target, node_metadata(node.value).ptr, is_static_assign)
+        node_metadata(node).ptr = ASTTransformer.build_assign_basic(
+            ctx, node.target, node_metadata(node.value).ptr, is_static_assign
+        )
         return node_metadata(node).ptr
 
     @staticmethod
@@ -354,7 +358,9 @@ class ASTTransformer(Builder):
                 )
             if len(node_metadata(node.slice).ptr) == len(layout):
                 node_metadata(node.slice).ptr = [node_metadata(node.slice).ptr[axis] for axis in layout]
-        node_metadata(node).ptr = impl.subscript(ctx.ast_builder, node_metadata(node.value).ptr, *node_metadata(node.slice).ptr)
+        node_metadata(node).ptr = impl.subscript(
+            ctx.ast_builder, node_metadata(node.value).ptr, *node_metadata(node.slice).ptr
+        )
         node_metadata(node).violates_pure = node_metadata(node.value).violates_pure
         if node_metadata(node).violates_pure:
             node_metadata(node).violates_pure_reason = node_metadata(node.value).violates_pure_reason
@@ -424,6 +430,7 @@ class ASTTransformer(Builder):
 
         if isinstance(_iter, impl.Expr) and _iter.ptr.is_tensor():
             shape = _iter.ptr.get_shape()
+            assert shape is not None
             flattened = [Expr(x) for x in ctx.required_ast_builder.expand_exprs([_iter.ptr])]
             _iter = reshape_list(flattened, shape)
 
@@ -578,14 +585,14 @@ class ASTTransformer(Builder):
                             and not values.element_type() in primitive_types.all_types
                         ):
                             raise QuadrantsRuntimeTypeError.get_ret(
-                                cast(_qd_core.DataType, return_type.dtype).to_string(), values.element_type()
+                                cast(_qd_core.DataTypeCxx, return_type.dtype).to_string(), values.element_type()
                             )
                         elif (
                             return_type.dtype in primitive_types.integer_types
                             and not values.element_type() in primitive_types.integer_types
                         ):
                             raise QuadrantsRuntimeTypeError.get_ret(
-                                cast(_qd_core.DataType, return_type.dtype).to_string(), values.element_type()
+                                cast(_qd_core.DataTypeCxx, return_type.dtype).to_string(), values.element_type()
                             )
                         elif len(values.get_shape()) != return_type.ndim:
                             raise QuadrantsRuntimeTypeError(
@@ -605,9 +612,13 @@ class ASTTransformer(Builder):
                             np.floating,
                             np.integer,
                         ):
-                            raise QuadrantsRuntimeTypeError.get_ret(cast(_qd_core.DataType, return_type.dtype).to_string(), dt)
+                            raise QuadrantsRuntimeTypeError.get_ret(
+                                cast(_qd_core.DataTypeCxx, return_type.dtype).to_string(), dt
+                            )
                         elif return_type.dtype in primitive_types.integer_types and dt not in (int, np.integer):
-                            raise QuadrantsRuntimeTypeError.get_ret(cast(_qd_core.DataType, return_type.dtype).to_string(), dt)
+                            raise QuadrantsRuntimeTypeError.get_ret(
+                                cast(_qd_core.DataTypeCxx, return_type.dtype).to_string(), dt
+                            )
                         elif ndim != return_type.ndim:
                             raise QuadrantsRuntimeTypeError(
                                 f"Return matrix ndim mismatch, expecting={return_type.ndim}, got={ndim}."
@@ -801,7 +812,9 @@ class ASTTransformer(Builder):
             groups = getattr(node_metadata(node.value).ptr, "_qd_unpacked_groups", None)
             if groups and node.attr in groups:
                 count, dtype, naming_fn = groups[node.attr]
-                node_metadata(node).ptr = _UnpackedVectorRef(node_metadata(node.value).ptr, node.attr, count, dtype, naming_fn)
+                node_metadata(node).ptr = _UnpackedVectorRef(
+                    node_metadata(node.value).ptr, node.attr, count, dtype, naming_fn
+                )
                 return node_metadata(node).ptr
             lifted = maybe_lifted_primitive(ctx, node_metadata(node.value).ptr, node.attr)
             if lifted is not None:
@@ -893,7 +906,9 @@ class ASTTransformer(Builder):
                 f'Kernel argument "{node.target.id}" is immutable in the kernel. '
                 f"If you want to change its value, please create a new variable."
             )
-        node_metadata(node).ptr = node_metadata(node.target).ptr._augassign(node_metadata(node.value).ptr, type(node.op).__name__)
+        node_metadata(node).ptr = node_metadata(node.target).ptr._augassign(
+            node_metadata(node.value).ptr, type(node.op).__name__
+        )
         return node_metadata(node).ptr
 
     @staticmethod
@@ -1117,7 +1132,9 @@ class ASTTransformer(Builder):
             loop_var = expr.Expr(ctx.required_ast_builder.make_id_expr(""))
             ctx.create_variable(loop_name, loop_var)
             if len(cast(ast.Call, node.iter).args) not in [1, 2]:
-                raise QuadrantsSyntaxError(f"Range should have 1 or 2 arguments, found {len(cast(ast.Call, node.iter).args)}")
+                raise QuadrantsSyntaxError(
+                    f"Range should have 1 or 2 arguments, found {len(cast(ast.Call, node.iter).args)}"
+                )
             if len(cast(ast.Call, node.iter).args) == 2:
                 begin_expr = expr.Expr(build_stmt(ctx, cast(ast.Call, node.iter).args[0]))
                 end_expr = expr.Expr(build_stmt(ctx, cast(ast.Call, node.iter).args[1]))
@@ -1151,13 +1168,18 @@ class ASTTransformer(Builder):
         with ctx.variable_scope_guard():
             ndrange_var = cast(_Ndrange, impl.expr_init(build_stmt(ctx, node.iter)))
             ndrange_begin = cast(Expr, qd_ops.cast(expr.Expr(0), primitive_types.i32))
-            ndrange_end = cast(Expr, qd_ops.cast(
-                expr.Expr(impl.subscript(ctx.ast_builder, ndrange_var.acc_dimensions, 0)),
-                primitive_types.i32,
-            ))
+            ndrange_end = cast(
+                Expr,
+                qd_ops.cast(
+                    expr.Expr(impl.subscript(ctx.ast_builder, ndrange_var.acc_dimensions, 0)),
+                    primitive_types.i32,
+                ),
+            )
             ndrange_loop_var = expr.Expr(ctx.required_ast_builder.make_id_expr(""))
             for_di = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
-            ctx.required_ast_builder.begin_frontend_range_for(ndrange_loop_var.ptr, ndrange_begin.ptr, ndrange_end.ptr, for_di)
+            ctx.required_ast_builder.begin_frontend_range_for(
+                ndrange_loop_var.ptr, ndrange_begin.ptr, ndrange_end.ptr, for_di
+            )
             I = cast(Expr, impl.expr_init(ndrange_loop_var))
             targets = ASTTransformer.get_for_loop_targets(node)
             if len(targets) != len(ndrange_var.dimensions):
@@ -1175,9 +1197,9 @@ class ASTTransformer(Builder):
             n_levels = len(ndrange_var.dimensions)
             for p in range(n_levels):
                 if p + 1 < n_levels:
-                    target_tmp = impl.expr_init(I // ndrange_var.acc_dimensions[p + 1])
+                    target_tmp = cast(Expr, impl.expr_init(I // ndrange_var.acc_dimensions[p + 1]))
                 else:
-                    target_tmp = impl.expr_init(I)
+                    target_tmp = cast(Expr, impl.expr_init(I))
                 canonical_idx = physical_to_canonical[p]
                 target = targets[canonical_idx]
                 ctx.create_variable(
@@ -1204,13 +1226,18 @@ class ASTTransformer(Builder):
         with ctx.variable_scope_guard():
             ndrange_var = cast(_Ndrange, impl.expr_init(build_stmt(ctx, cast(ast.Call, node.iter).args[0])))
             ndrange_begin = cast(Expr, qd_ops.cast(expr.Expr(0), primitive_types.i32))
-            ndrange_end = cast(Expr, qd_ops.cast(
-                expr.Expr(impl.subscript(ctx.ast_builder, ndrange_var.acc_dimensions, 0)),
-                primitive_types.i32,
-            ))
+            ndrange_end = cast(
+                Expr,
+                qd_ops.cast(
+                    expr.Expr(impl.subscript(ctx.ast_builder, ndrange_var.acc_dimensions, 0)),
+                    primitive_types.i32,
+                ),
+            )
             ndrange_loop_var = expr.Expr(ctx.required_ast_builder.make_id_expr(""))
             for_di = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
-            ctx.required_ast_builder.begin_frontend_range_for(ndrange_loop_var.ptr, ndrange_begin.ptr, ndrange_end.ptr, for_di)
+            ctx.required_ast_builder.begin_frontend_range_for(
+                ndrange_loop_var.ptr, ndrange_begin.ptr, ndrange_end.ptr, for_di
+            )
 
             targets = ASTTransformer.get_for_loop_targets(node)
             if len(targets) != 1:
@@ -1353,6 +1380,7 @@ class ASTTransformer(Builder):
                 node_metadata(node.iter).ptr.from_index.ptr,
                 node_metadata(node.iter).ptr.to_element_type,
                 loop_var.ptr,
+                for_di,
             )
             entry_expr.type_check(impl.get_runtime().prog.config())
             mesh_idx = mesh.MeshElementFieldProxy(ctx.mesh, node_metadata(node.iter).ptr.to_element_type, entry_expr)
@@ -1594,7 +1622,9 @@ class ASTTransformer(Builder):
                     "Quadrants vectors/matrices is deprecated and removed starting from Quadrants v1.5.0 "
                     'Please use "qd.select" instead.'
                 )
-            node_metadata(node).ptr = qd_ops.select(node_metadata(node.test).ptr, node_metadata(node.body).ptr, node_metadata(node.orelse).ptr)
+            node_metadata(node).ptr = qd_ops.select(
+                node_metadata(node.test).ptr, node_metadata(node.body).ptr, node_metadata(node.orelse).ptr
+            )
             return node_metadata(node).ptr
 
         is_static_if = get_decorator(ctx, node.test) == "static"
@@ -1606,7 +1636,9 @@ class ASTTransformer(Builder):
                 node_metadata(node).ptr = build_stmt(ctx, node.orelse)
             return node_metadata(node).ptr
 
-        node_metadata(node).ptr = qd_ops.ifte(node_metadata(node.test).ptr, node_metadata(node.body).ptr, node_metadata(node.orelse).ptr)
+        node_metadata(node).ptr = qd_ops.ifte(
+            node_metadata(node.test).ptr, node_metadata(node.body).ptr, node_metadata(node.orelse).ptr
+        )
         return node_metadata(node).ptr
 
     @staticmethod
