@@ -404,6 +404,7 @@ class Ndarray:
 
     @python_scope
     def _normalize_index(self, key):
+        """Normalize None and scalar indices to tuples, and validate the number of indices including component axes."""
         if key is None:
             key = ()
         if not isinstance(key, (tuple, list)):
