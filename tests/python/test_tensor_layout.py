@@ -286,7 +286,7 @@ def test_layout_sequence_index(backend, shape, layout, index_kind, operation):
             qd.atomic_add(y[I], index_code)
 
     @qd.kernel
-    def run(x: qd.Tensor, y: qd.Tensor):
+    def k1(x: qd.Tensor, y: qd.Tensor):
         # Visit every tensor position, grouping its coordinates into the index vector I for either 2D or 3D shapes.
         for I in qd.grouped(qd.ndrange(*shape)):
             I_l = [I[axis] for axis in qd.static(range(len(shape)))]
@@ -303,7 +303,7 @@ def test_layout_sequence_index(backend, shape, layout, index_kind, operation):
         y = qd.tensor(qd.i32, shape=shape, backend=backend, layout=tensor_layout)
         x.from_numpy(initial_x)
         y.from_numpy(initial_y)
-        run(x, y)
+        k1(x, y)
         y_l.append(y.to_numpy())
     y, expected_y = y_l
     np.testing.assert_array_equal(y, expected_y)
