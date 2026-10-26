@@ -7,6 +7,7 @@ These are the per-tensor backend dispatchers for vector- and matrix-element tens
 Each behavioural test is parametrized over both backends.
 """
 
+import numpy as np
 import pytest
 
 import quadrants as qd
@@ -61,17 +62,15 @@ def test_vector_tensor_invalid_backend_raises():
 
 @test_utils.test(arch=qd.cpu)
 def test_vector_tensor_rejects_unknown_kwarg():
-    """``qd.Vector.tensor`` shares the same kwarg-validation contract as ``qd.tensor``, minus ``layout=`` (layout
-    semantics over an extra element axis are out of scope for now). ``order=`` raises with a dedicated layout-pointing
-    message."""
+    """``qd.Vector.tensor`` shares the kwarg-validation contract of ``qd.tensor``, including the hint for order=."""
     with pytest.raises(TypeError, match="layout="):
         qd.Vector.tensor(3, qd.f32, shape=(4,), order="ji")
     with pytest.raises(TypeError, match="unexpected keyword"):
         qd.Vector.tensor(3, qd.f32, shape=(4,), offset=(1,))
     with pytest.raises(TypeError, match="unexpected keyword"):
         qd.Vector.tensor(3, qd.f32, shape=(4,), nonsense=42)
-    with pytest.raises(TypeError, match="unexpected keyword"):
-        qd.Vector.tensor(3, qd.f32, shape=(4,), layout=(0,))
+    with pytest.raises(ValueError, match="layout"):
+        qd.Vector.tensor(3, qd.f32, shape=(4,), layout=(0, 1))
 
 
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
@@ -133,17 +132,15 @@ def test_matrix_tensor_invalid_backend_raises():
 
 @test_utils.test(arch=qd.cpu)
 def test_matrix_tensor_rejects_unknown_kwarg():
-    """``qd.Matrix.tensor`` shares the same kwarg-validation contract as ``qd.tensor``, minus ``layout=`` (layout
-    semantics over an extra element axis are out of scope for now). ``order=`` raises with a dedicated layout-pointing
-    message."""
+    """``qd.Matrix.tensor`` shares the kwarg-validation contract of ``qd.tensor``, including the hint for order=."""
     with pytest.raises(TypeError, match="layout="):
         qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), order="ji")
     with pytest.raises(TypeError, match="unexpected keyword"):
         qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), offset=(1,))
     with pytest.raises(TypeError, match="unexpected keyword"):
         qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), nonsense=42)
-    with pytest.raises(TypeError, match="unexpected keyword"):
-        qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), layout=(0,))
+    with pytest.raises(ValueError, match="layout"):
+        qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), layout=(0, 1))
 
 
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
@@ -185,3 +182,29 @@ def test_tensor_vec_mat_not_public():
     """Ensure the old top-level names were dropped from the public surface."""
     assert not hasattr(qd, "tensor_vec"), "qd.tensor_vec leaked into public API"
     assert not hasattr(qd, "tensor_mat"), "qd.tensor_mat leaked into public API"
+
+
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
+@pytest.mark.parametrize("element_shape", [(3,), (2, 3)])
+@pytest.mark.parametrize("layout", [None, (0, 1, 2), (2, 0, 1)])
+@test_utils.test(arch=[qd.cpu, qd.cuda])
+def test_compound_factory_layout(backend, element_shape, layout):
+    factory = qd.Vector.tensor if len(element_shape) == 1 else qd.Matrix.tensor
+    a = factory(*element_shape, qd.f32, shape=(2, 4, 5), backend=backend, layout=layout, needs_grad=True)
+    expected = np.arange(np.prod((2, 4, 5) + element_shape), dtype=np.float32).reshape((2, 4, 5) + element_shape)
+    a.from_numpy(expected)
+    assert a.shape == (2, 4, 5)
+    assert a.element_shape == element_shape
+    assert a.layout == (None if layout in (None, (0, 1, 2)) else layout)
+    assert a.grad.shape == a.shape
+    assert a.grad.layout == a.layout
+
+    @qd.kernel
+    def increment(x: qd.Tensor):
+        for I in qd.grouped(x):
+            x[I] += 1
+            x.grad[I] = 2 * x[I]
+
+    increment(a)
+    np.testing.assert_array_equal(a.to_numpy(), expected + 1)
+    np.testing.assert_array_equal(a.grad.to_numpy(), 2 * (expected + 1))

@@ -1085,7 +1085,9 @@ class Matrix(QuadrantsOperations):
             dtype: Element data type (e.g. ``qd.f32``).
             shape: Shape of the tensor (excluding the matrix dimensions) as an ``int`` or tuple of ``int``.
             backend (qd.Backend, optional): Storage backend. Defaults to ``qd.Backend.NDARRAY``.
-            **kwargs: Forwarded verbatim to the underlying ``qd.Matrix.field`` / ``qd.Matrix.ndarray`` call.
+            layout (tuple of int, optional): Permutation of shape axes, outermost first. Matrix component axes stay
+                innermost. Defaults to the natural axis order.
+            **kwargs: Additional options such as ``needs_grad``, forwarded to ``qd.tensor``.
 
         Example::
 
@@ -1295,7 +1297,9 @@ class Vector(Matrix):
             dtype: Element data type (e.g. ``qd.f32``).
             shape: Shape of the tensor (excluding the vector dimension) as an ``int`` or tuple of ``int``.
             backend (qd.Backend, optional): Storage backend. Defaults to ``qd.Backend.NDARRAY``.
-            **kwargs: Forwarded verbatim to the underlying ``qd.Vector.field`` / ``qd.Vector.ndarray`` call.
+            layout (tuple of int, optional): Permutation of shape axes, outermost first. Vector components stay
+                innermost. Defaults to the natural axis order.
+            **kwargs: Additional options such as ``needs_grad``, forwarded to ``qd.tensor``.
 
         Example::
 

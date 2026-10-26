@@ -16,10 +16,11 @@ annotation. The dispatch sites that previously keyed off the ``_TensorAnnotation
 # lang/types subpackages.)
 
 from enum import IntEnum
+from typing import cast
 
 # Re-export so ``from quadrants._tensor import *`` still binds ``Tensor`` — keeps the wildcard import in
 # ``__init__.py`` simple and atomic.
-from quadrants._tensor_wrapper import Tensor
+from quadrants._tensor_wrapper import MatrixTensor, Tensor, VectorTensor
 from quadrants._tensor_wrapper import wrap as _wrap_impl
 
 __all__ = [
@@ -105,20 +106,13 @@ def _coerce_backend(backend):
 # ``offset=`` for field offset indexing, ``order=`` for SoA layouts) should call ``qd.field`` / ``qd.ndarray`` directly
 # — they have explicitly opted out of the unified tensor API.
 #
-# ``layout=`` is accepted by the generic ``qd.tensor`` factory for scalar and compound dtypes. The Vector/Matrix
-# convenience factories retain their existing keyword surface.
-_SCALAR_ACCEPTED_KWARGS = frozenset({"backend", "needs_grad", "layout"})
-_VEC_MAT_ACCEPTED_KWARGS = frozenset({"backend", "needs_grad"})
+# All three factories accept the same options, including shape-axis layouts for compound dtypes.
+_TENSOR_ACCEPTED_KWARGS = frozenset({"backend", "needs_grad", "layout"})
 
 
 def _validate_kwargs(kwargs, *, factory_name, accepted):
     if "order" in kwargs:
-        if "layout" in accepted:
-            raise TypeError(f"{factory_name}(...) does not accept order=; pass layout=(...) instead")
-        raise TypeError(
-            f"{factory_name}(...) does not accept order= (or layout=); "
-            "use the underlying qd.Vector.field / qd.Matrix.field for non-default storage order"
-        )
+        raise TypeError(f"{factory_name}(...) does not accept order=; pass layout=(...) instead")
     extra = set(kwargs) - accepted
     if extra:
         accepted_str = ", ".join(sorted(accepted | {"dtype", "shape"}))
@@ -186,7 +180,7 @@ def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
     Raises:
         ValueError: If ``backend`` is not a valid :class:`Backend` member, or if ``layout`` is not a permutation of
             ``range(len(shape))``.
-        TypeError: If any keyword argument outside the accepted set is passed (see ``_SCALAR_ACCEPTED_KWARGS``).
+        TypeError: If any keyword argument outside the accepted set is passed (see ``_TENSOR_ACCEPTED_KWARGS``).
     """
     from quadrants.lang._ndarray import (
         Ndarray,  # pylint: disable=import-outside-toplevel
@@ -197,7 +191,7 @@ def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
         raise TypeError(
             f"qd.tensor() allocates a new tensor; to wrap an existing {type(dtype).__name__}, use qd.wrap(impl) instead"
         )
-    _validate_kwargs(kwargs, factory_name="qd.tensor", accepted=_SCALAR_ACCEPTED_KWARGS)
+    _validate_kwargs(kwargs, factory_name="qd.tensor", accepted=_TENSOR_ACCEPTED_KWARGS)
     backend = _coerce_backend(backend)
     forwarded = {k: v for k, v in kwargs.items() if k != "backend"}
     # pylint: disable-next=import-outside-toplevel  # late import to break circular dependency
@@ -235,40 +229,22 @@ def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
 def _tensor_vec(n, dtype, shape, *, backend=Backend.NDARRAY, **kwargs):
     """Private impl backing ``qd.Vector.tensor``.
 
-    Dispatcher over ``qd.Vector.field`` and ``qd.Vector.ndarray`` selected by the ``backend=`` keyword. Not part of
-    the public API — call ``qd.Vector.tensor(...)`` instead. Hard-validates kwargs against ``_VEC_MAT_ACCEPTED_KWARGS``
-    (no ``layout=``; use ``qd.tensor(qd.types.vector(...), ...)`` to specify a layout).
+    Delegates to ``qd.tensor`` with a vector dtype, sharing its backend and shape-axis layout semantics. Not part of
+    the public API - call ``qd.Vector.tensor(...)`` instead. Validates keywords using the convenience factory's name.
     """
-    _validate_kwargs(kwargs, factory_name="qd.Vector.tensor", accepted=_VEC_MAT_ACCEPTED_KWARGS)
-    backend = _coerce_backend(backend)
-    forwarded = {k: v for k, v in kwargs.items() if k != "backend"}
-    # pylint: disable-next=import-outside-toplevel  # late import to break circular dependency
-    from quadrants._tensor_wrapper import VectorTensor
-    from quadrants.lang.matrix import Vector
+    _validate_kwargs(kwargs, factory_name="qd.Vector.tensor", accepted=_TENSOR_ACCEPTED_KWARGS)
+    from quadrants.types import vector
 
-    if backend is Backend.FIELD:
-        return VectorTensor(Vector.field(n, dtype, shape, **forwarded))
-    if backend is Backend.NDARRAY:
-        return VectorTensor(Vector.ndarray(n, dtype, shape, **forwarded))
-    raise AssertionError(f"unhandled Backend member: {backend!r}")
+    return cast(VectorTensor, tensor(vector(n, dtype), shape, backend=backend, **kwargs))
 
 
 def _tensor_mat(n, m, dtype, shape, *, backend=Backend.NDARRAY, **kwargs):
     """Private impl backing ``qd.Matrix.tensor``.
 
-    Dispatcher over ``qd.Matrix.field`` and ``qd.Matrix.ndarray`` selected by the ``backend=`` keyword. Not part of
-    the public API — call ``qd.Matrix.tensor(...)`` instead. Hard-validates kwargs against ``_VEC_MAT_ACCEPTED_KWARGS``
-    (no ``layout=``; use ``qd.tensor(qd.types.matrix(...), ...)`` to specify a layout).
+    Delegates to ``qd.tensor`` with a matrix dtype, sharing its backend and shape-axis layout semantics. Not part of
+    the public API - call ``qd.Matrix.tensor(...)`` instead. Validates keywords using the convenience factory's name.
     """
-    _validate_kwargs(kwargs, factory_name="qd.Matrix.tensor", accepted=_VEC_MAT_ACCEPTED_KWARGS)
-    backend = _coerce_backend(backend)
-    forwarded = {k: v for k, v in kwargs.items() if k != "backend"}
-    # pylint: disable-next=import-outside-toplevel  # late import to break circular dependency
-    from quadrants._tensor_wrapper import MatrixTensor
-    from quadrants.lang.matrix import Matrix
+    _validate_kwargs(kwargs, factory_name="qd.Matrix.tensor", accepted=_TENSOR_ACCEPTED_KWARGS)
+    from quadrants.types import matrix
 
-    if backend is Backend.FIELD:
-        return MatrixTensor(Matrix.field(n, m, dtype, shape, **forwarded))
-    if backend is Backend.NDARRAY:
-        return MatrixTensor(Matrix.ndarray(n, m, dtype, shape, **forwarded))
-    raise AssertionError(f"unhandled Backend member: {backend!r}")
+    return cast(MatrixTensor, tensor(matrix(n, m, dtype), shape, backend=backend, **kwargs))
