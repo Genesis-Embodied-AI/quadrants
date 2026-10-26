@@ -105,12 +105,10 @@ class Ndarray:
         """
         if impl.current_cfg().arch == _arch_metal:
             impl.get_runtime().sync()
-        layout = getattr(self, "_qd_layout", None)
+        layout = self._total_physical_layout()
         if _is_identity_layout(layout):
             return impl.get_runtime().prog.ndarray_to_dlpack(self, self.arr, versioned=versioned)
-        # DLPack includes the trailing vector/matrix component axes, which retain their original order.
-        full_layout = list(layout) + list(range(len(layout), len(layout) + len(self.element_shape)))
-        return impl.get_runtime().prog.ndarray_to_dlpack(self, self.arr, full_layout, versioned=versioned)
+        return impl.get_runtime().prog.ndarray_to_dlpack(self, self.arr, layout, versioned=versioned)
 
     def _reset(self):
         """
@@ -156,6 +154,13 @@ class Ndarray:
             return phys
         inv = _invert_layout(layout)
         return tuple(phys[inv[i]] for i in range(len(phys)))
+
+    def _total_physical_layout(self):
+        """Return canonical axis numbers in physical order, with component axes unchanged at the end."""
+        layout = self._qd_layout
+        if layout is None:
+            layout = tuple(range(len(self.shape)))
+        return list(layout) + list(range(len(layout), len(layout) + len(self.element_shape)))
 
     def _total_canonical_shape(self):
         """Return canonical shape axes followed by element component axes."""
