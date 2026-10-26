@@ -191,14 +191,14 @@ def test_tensor_vec_mat_not_public():
 def test_compound_factory_layout(backend, element_shape, layout):
     shape = (2, 4, 5)
     factory = qd.Vector.tensor if len(element_shape) == 1 else qd.Matrix.tensor
-    a = factory(*element_shape, qd.f32, shape=shape, backend=backend, layout=layout, needs_grad=True)
+    x = factory(*element_shape, qd.f32, shape=shape, backend=backend, layout=layout, needs_grad=True)
     expected = np.arange(np.prod(shape + element_shape), dtype=np.float32).reshape(shape + element_shape)
-    a.from_numpy(expected)
-    assert a.shape == shape
-    assert a.element_shape == element_shape
-    assert a.layout == (None if layout in (None, (0, 1, 2)) else layout)
-    assert a.grad.shape == a.shape
-    assert a.grad.layout == a.layout
+    x.from_numpy(expected)
+    assert x.shape == shape
+    assert x.element_shape == element_shape
+    assert x.layout == (None if layout in (None, (0, 1, 2)) else layout)
+    assert x.grad.shape == x.shape
+    assert x.grad.layout == x.layout
 
     @qd.kernel
     def increment(x: qd.Tensor):
@@ -206,6 +206,6 @@ def test_compound_factory_layout(backend, element_shape, layout):
             x[I] += 1
             x.grad[I] = 2 * x[I]
 
-    increment(a)
-    np.testing.assert_array_equal(a.to_numpy(), expected + 1)
-    np.testing.assert_array_equal(a.grad.to_numpy(), 2 * (expected + 1))
+    increment(x)
+    np.testing.assert_array_equal(x.to_numpy(), expected + 1)
+    np.testing.assert_array_equal(x.grad.to_numpy(), 2 * (expected + 1))
