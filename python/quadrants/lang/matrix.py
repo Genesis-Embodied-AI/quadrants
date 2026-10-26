@@ -4,6 +4,7 @@ import functools
 import numbers
 from collections.abc import Iterable
 from itertools import product
+from typing import Callable, ClassVar
 
 import numpy as np
 
@@ -272,6 +273,9 @@ class Matrix(QuadrantsOperations):
             arr = _scalar_tensors_to_items(arr)
             return py_tensor.PyTensor(arr)
         return super().__new__(cls)
+
+    _swizzle_to_keygroup: ClassVar[dict[str, str]]
+    _keygroup_to_checker: ClassVar[dict[str, Callable[[object, str], None]]]
 
     def __init__(self, arr, dt=None):
         if not isinstance(arr, (list, tuple, np.ndarray)):

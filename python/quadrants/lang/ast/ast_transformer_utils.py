@@ -23,6 +23,7 @@ from quadrants.lang.exception import (
 if TYPE_CHECKING:
     from .._func_base import FuncBase
     from .._pruning import Pruning
+    from ..mesh import MeshInstance
 
 AutodiffMode = _qd_core.AutodiffMode
 
@@ -269,6 +270,7 @@ class ASTTransformerFuncContext:
         self.static_scope_status = StaticScopeStatus()
         self.returned = ReturnStatus.NoReturn
         self.ast_builder = ast_builder
+        self.mesh: "MeshInstance | None" = None
         self.visited_funcdef = False
         self.is_real_function = is_real_function
         self.kernel_args: list = []
@@ -294,6 +296,12 @@ class ASTTransformerFuncContext:
             )
             and impl.current_cfg().ad_stack_experimental_enabled
         )
+
+    @property
+    def required_ast_builder(self) -> ASTBuilder:
+        """Return the native builder during lowering, after signature-only parsing has finished."""
+        assert self.ast_builder is not None
+        return self.ast_builder
 
     # e.g.: FunctionDef, Module, Global
     def variable_scope_guard(self):
@@ -321,7 +329,7 @@ class ASTTransformerFuncContext:
     def current_scope(self) -> dict[str, Any]:
         return self.local_scopes[-1]
 
-    def current_loop_scope(self) -> dict[str, Any]:
+    def current_loop_scope(self) -> LoopScopeAttribute:
         return self.loop_scopes[-1]
 
     def loop_status(self) -> LoopStatus:

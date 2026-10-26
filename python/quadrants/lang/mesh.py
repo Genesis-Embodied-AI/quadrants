@@ -590,7 +590,7 @@ def _TetMesh():
 
 
 class MeshElementFieldProxy:
-    def __init__(self, mesh: MeshInstance, element_type: MeshElementType, entry_expr: impl.Expr):
+    def __init__(self, mesh: MeshInstance, element_type: MeshElementType, entry_expr: _qd_core.ExprCxx):
         ast_builder = impl.get_runtime().compiling_callable.ast_builder()
 
         self.mesh = mesh
