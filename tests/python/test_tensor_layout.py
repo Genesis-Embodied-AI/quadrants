@@ -277,13 +277,13 @@ def test_layout_sequence_index(backend, shape, layout, index_kind, operation):
         if qd.static(operation == "read"):
             y[I] = x[I]
         elif qd.static(operation == "write"):
-            x[I] = index_code
+            y[I] = index_code
         elif qd.static(operation == "read_modify_write"):
-            x[I] = x[I] + index_code
+            y[I] = y[I] + index_code
         elif qd.static(operation == "augassign"):
-            x[I] += index_code
+            y[I] += index_code
         elif qd.static(operation == "atomic_add"):
-            qd.atomic_add(x[I], index_code)
+            qd.atomic_add(y[I], index_code)
 
     @qd.kernel
     def run(x: qd.Tensor, y: qd.Tensor):
@@ -294,17 +294,14 @@ def test_layout_sequence_index(backend, shape, layout, index_kind, operation):
                 access(tuple(index), x, y)
             else:
                 access(index, x, y)
-        if qd.static(operation != "read"):
-            for I in qd.grouped(qd.ndrange(*shape)):
-                y[I] = x[I]
 
     initial_x = np.arange(np.prod(shape), dtype=np.int32).reshape(shape)
     results = []
     for tensor_layout in (layout, None):
-        x = qd.tensor(qd.i32, shape=shape, backend=backend, layout=tensor_layout)
-        y = qd.tensor(qd.i32, shape=shape, backend=backend)
+        x = qd.tensor(qd.i32, shape=shape, backend=backend)
+        y = qd.tensor(qd.i32, shape=shape, backend=backend, layout=tensor_layout)
         x.from_numpy(initial_x)
-        y.fill(-1)
+        y.from_numpy(-initial_x - 1)
         run(x, y)
         results.append(y.to_numpy())
     actual_result, expected_result = results
