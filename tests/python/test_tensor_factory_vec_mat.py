@@ -189,11 +189,12 @@ def test_tensor_vec_mat_not_public():
 )
 @test_utils.test()
 def test_compound_factory_layout(backend, element_shape, layout):
+    shape = (2, 4, 5)
     factory = qd.Vector.tensor if len(element_shape) == 1 else qd.Matrix.tensor
-    a = factory(*element_shape, qd.f32, shape=(2, 4, 5), backend=backend, layout=layout, needs_grad=True)
-    expected = np.arange(np.prod((2, 4, 5) + element_shape), dtype=np.float32).reshape((2, 4, 5) + element_shape)
+    a = factory(*element_shape, qd.f32, shape=shape, backend=backend, layout=layout, needs_grad=True)
+    expected = np.arange(np.prod(shape + element_shape), dtype=np.float32).reshape(shape + element_shape)
     a.from_numpy(expected)
-    assert a.shape == (2, 4, 5)
+    assert a.shape == shape
     assert a.element_shape == element_shape
     assert a.layout == (None if layout in (None, (0, 1, 2)) else layout)
     assert a.grad.shape == a.shape
