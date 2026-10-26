@@ -1,0 +1,49 @@
+quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer
+================================================================
+
+.. py:module:: quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer
+
+.. autoapi-nested-parse::
+
+   Lift primitive members of ``@qd.data_oriented(template_primitives=False)`` template args into runtime scalar kernel
+   args at AST-build time.
+
+   Lives alongside ``ndarray_arg_resolver.py`` / ``checkpoint_transformer.py`` so the central
+   ``function_def_transformer.py`` file doesn't have to grow per-feature (the same rationale the ndarray resolver
+   documents). ``FunctionDefTransformer.transform`` delegates here right after ``_predeclare_struct_ndarrays``; this is
+   the only entry point.
+
+   See ``docs/source/user_guide/compound_types.md`` (section "Runtime primitives: ``template_primitives=False``") for the
+   user-facing surface and ``perso_hugh/doc/data_oriented_template_primitives.md`` for the design.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer.predeclare_struct_primitives
+
+
+Module Contents
+---------------
+
+.. py:function:: predeclare_struct_primitives(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext) -> None
+
+   For each templated arg whose root class is decorated ``@qd.data_oriented(template_primitives=False)``, walk
+   the reachable attribute graph and declare every primitive (``int`` / ``float`` / ``bool``) member as a runtime
+   scalar kernel arg, instead of letting ``build_Attribute`` bake it as a compile-time constant. The arg-load
+   ``Expr`` is cached on the global context keyed by ``(id(parent_obj), attr_name)`` for ``build_Attribute`` to
+   substitute, and a ``(arg_id, template_arg_idx, attr_chain, kind)`` tuple is recorded for the launch path to
+   bind the live value.
+
+   Mirrors ``_predeclare_struct_ndarrays``. Primitive leaves have no stable identity (``id(5)`` is interned), so
+   the cache is keyed on the parent container's identity plus the attribute name. Only plain Python ``int`` /
+   ``float`` / ``bool`` are lifted (matched by exact type so numpy scalars etc. keep their previous baked
+   behaviour). dtype follows the runtime defaults (``default_ip`` / ``default_fp``), matching how a baked Python
+   constant would be typed.
+
+   ``_seen`` guards against attribute-graph cycles (e.g. ``sim.solver.sim is sim``), same as the ndarray walker.
+
+
