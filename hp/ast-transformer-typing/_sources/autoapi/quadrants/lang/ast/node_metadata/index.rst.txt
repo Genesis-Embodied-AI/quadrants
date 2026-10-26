@@ -1,0 +1,58 @@
+quadrants.lang.ast.node_metadata
+================================
+
+.. py:module:: quadrants.lang.ast.node_metadata
+
+.. autoapi-nested-parse::
+
+   Typed access to the metadata attached to Python AST nodes during lowering.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   quadrants.lang.ast.node_metadata.NodeMetadata
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.lang.ast.node_metadata.node_metadata
+
+
+Module Contents
+---------------
+
+.. py:class:: NodeMetadata
+
+   Bases: :py:obj:`Protocol`
+
+
+   Fields populated by the transformer, on the original AST node.
+
+   ``ptr`` is a dynamically evaluated Python value or a Quadrants expression. Fields are only available after the
+   corresponding builder has populated them; this view neither initializes fields nor changes missing-field behavior.
+
+
+   .. py:attribute:: ptr
+      :type:  Any
+
+
+   .. py:attribute:: violates_pure
+      :type:  bool
+
+
+   .. py:attribute:: violates_pure_reason
+      :type:  str | None
+
+
+.. py:function:: node_metadata(node: ast.AST) -> NodeMetadata
+
+   Expose lowering metadata without discarding the node's standard AST type.
+
+
