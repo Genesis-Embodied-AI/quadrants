@@ -295,12 +295,12 @@ def test_layout_sequence_index(backend, shape, layout, index_kind, operation):
             else:
                 access(index, x, y)
 
-    initial = np.arange(np.prod(shape), dtype=np.int32).reshape(shape)
+    initial_x = np.arange(np.prod(shape), dtype=np.int32).reshape(shape)
     results = []
     for tensor_layout in (layout, None):
         x = qd.tensor(qd.i32, shape=shape, backend=backend, layout=tensor_layout)
         y = qd.tensor(qd.i32, shape=shape, backend=backend)
-        x.from_numpy(initial)
+        x.from_numpy(initial_x)
         y.fill(-1)
         run(x, y)
         results.append(y.to_numpy() if operation == "read" else x.to_numpy())
