@@ -228,9 +228,8 @@ def _tensor_vec(n, dtype, shape, *, backend=Backend.NDARRAY, **kwargs):
     """Private impl backing ``qd.Vector.tensor``.
 
     Delegates to ``qd.tensor`` with a vector dtype, sharing its backend and shape-axis layout semantics. Not part of
-    the public API - call ``qd.Vector.tensor(...)`` instead. Validates keywords using the convenience factory's name.
+    the public API - call ``qd.Vector.tensor(...)`` instead.
     """
-    _validate_kwargs(kwargs, factory_name="qd.Vector.tensor", accepted=_TENSOR_ACCEPTED_KWARGS)
     from quadrants.types import vector
 
     return cast(VectorTensor, tensor(vector(n, dtype), shape, backend=backend, **kwargs))
@@ -240,9 +239,8 @@ def _tensor_mat(n, m, dtype, shape, *, backend=Backend.NDARRAY, **kwargs):
     """Private impl backing ``qd.Matrix.tensor``.
 
     Delegates to ``qd.tensor`` with a matrix dtype, sharing its backend and shape-axis layout semantics. Not part of
-    the public API - call ``qd.Matrix.tensor(...)`` instead. Validates keywords using the convenience factory's name.
+    the public API - call ``qd.Matrix.tensor(...)`` instead.
     """
-    _validate_kwargs(kwargs, factory_name="qd.Matrix.tensor", accepted=_TENSOR_ACCEPTED_KWARGS)
     from quadrants.types import matrix
 
     return cast(MatrixTensor, tensor(matrix(n, m, dtype), shape, backend=backend, **kwargs))
