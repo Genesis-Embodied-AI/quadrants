@@ -252,28 +252,25 @@ class Ndarray:
         return arr
 
     @python_scope
-    def _ndarray_from_numpy(self, arr):
-        """Loads all values from a numpy array.
-
-        ``arr.shape`` is validated against the *canonical* shape (what ``self.shape`` reports). The
-        ``ext_arr_to_ndarray`` kernel iterates ``arr`` canonically and writes through ``ndarray[I]``, so on
-        layout-tagged destinations the AST permutation routes canonical positions into the underlying physical buffer
-        without any python-side transpose.
-
-        Args:
-            arr (numpy.ndarray): The source numpy array, in canonical axis order.
-        """
+    def _copy_from_numpy(self, arr):
+        """Copy a NumPy array in canonical axis order into this ndarray's existing storage."""
         if not isinstance(arr, np.ndarray):
             raise TypeError(f"{np.ndarray} expected, but {type(arr)} provided")
-        canonical_shape = tuple(self.shape)
+        canonical_shape = self._total_canonical_shape()
         if canonical_shape != tuple(arr.shape):
             raise ValueError(f"Mismatch shape: {canonical_shape} expected, but {tuple(arr.shape)} provided")
         if not arr.flags.c_contiguous:
             arr = np.ascontiguousarray(arr)
 
-        from quadrants._kernels import ext_arr_to_ndarray  # pylint: disable=C0415
+        from quadrants._kernels import (  # pylint: disable=C0415
+            ext_arr_to_ndarray,
+            ext_arr_to_ndarray_matrix,
+        )
 
-        ext_arr_to_ndarray(arr, self)
+        if self.element_shape:
+            ext_arr_to_ndarray_matrix(arr, self, 1, len(self.element_shape) == 1)
+        else:
+            ext_arr_to_ndarray(arr, self)
         impl.get_runtime().sync()
 
     @python_scope
@@ -301,7 +298,7 @@ class Ndarray:
 
     @python_scope
     def _ndarray_matrix_from_torch(self, arr, as_vector):
-        """Mirror of ``_ndarray_matrix_from_numpy`` that ingests a torch tensor. ``.contiguous()`` is forced so the
+        """Mirror of ``_copy_from_numpy`` that ingests a torch tensor. ``.contiguous()`` is forced so the
         bridge kernel sees a tightly-packed external array."""
         contig = arr.contiguous()
         canonical_shape = self._total_canonical_shape()
@@ -313,29 +310,6 @@ class Ndarray:
 
         layout_is_aos = 1
         ext_arr_to_ndarray_matrix(contig, self, layout_is_aos, as_vector)
-        impl.get_runtime().sync()
-
-    @python_scope
-    def _ndarray_matrix_from_numpy(self, arr, as_vector):
-        """Loads all values from a numpy array.
-
-        Args:
-            arr (numpy.ndarray): The source numpy array.
-        """
-        if not isinstance(arr, np.ndarray):
-            raise TypeError(f"{np.ndarray} expected, but {type(arr)} provided")
-        canonical_shape = self._total_canonical_shape()
-        if canonical_shape != tuple(arr.shape):
-            raise ValueError(f"Mismatch shape: {canonical_shape} expected, but {tuple(arr.shape)} provided")
-        if not arr.flags.c_contiguous:
-            arr = np.ascontiguousarray(arr)
-
-        from quadrants._kernels import (  # pylint: disable=C0415
-            ext_arr_to_ndarray_matrix,  # pylint: disable=C0415
-        )
-
-        layout_is_aos = 1
-        ext_arr_to_ndarray_matrix(arr, self, layout_is_aos, as_vector)
         impl.get_runtime().sync()
 
     @python_scope
@@ -520,7 +494,7 @@ class ScalarNdarray(Ndarray):
 
     @python_scope
     def from_numpy(self, arr):
-        self._ndarray_from_numpy(arr)
+        self._copy_from_numpy(arr)
 
     @python_scope
     def to_torch(self, device=None, *, copy=True):

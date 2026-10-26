@@ -1958,7 +1958,7 @@ class MatrixNdarray(Ndarray):
             >>> arr = np.ones((2, 1, 2, 2))
             >>> m.from_numpy(arr)
         """
-        self._ndarray_matrix_from_numpy(arr, as_vector=0)
+        self._copy_from_numpy(arr)
 
     @python_scope
     def to_torch(self, device=None, *, copy=True):
@@ -2112,7 +2112,7 @@ class VectorNdarray(Ndarray):
             >>> b = np.ones((2, 2, 3), dtype=np.float32)
             >>> a.from_numpy(b)
         """
-        self._ndarray_matrix_from_numpy(arr, as_vector=1)
+        self._copy_from_numpy(arr)
 
     @python_scope
     def to_torch(self, device=None, *, copy=True):
