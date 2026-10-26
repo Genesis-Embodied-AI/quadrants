@@ -1938,7 +1938,7 @@ class MatrixNdarray(Ndarray):
                         raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
                 else:
                     return arr
-        arr = self._ndarray_matrix_to_numpy(as_vector=0)
+        arr = self._copy_to_new_numpy(as_vector=0)
         if dtype is not None and arr.dtype != dtype:
             arr = arr.astype(dtype)
         return arr
@@ -1969,13 +1969,13 @@ class MatrixNdarray(Ndarray):
             result = _try_zerocopy_torch(self, copy=copy, device=device, is_ndarray=True)
             if result is not None:
                 return result
-        return self._ndarray_matrix_to_torch(as_vector=0, device=device)
+        return self._copy_to_new_torch(as_vector=0, device=device)
 
     @python_scope
     def from_torch(self, arr):
         """Load all entries from a ``torch.Tensor`` of shape ``self.shape + (n, m)``. Mirrors
         :meth:`MatrixField.from_torch`."""
-        self._ndarray_matrix_from_torch(arr, as_vector=0)
+        self._copy_from_torch(arr, as_vector=0)
 
     @python_scope
     def __deepcopy__(self, memo=None):
@@ -2089,7 +2089,7 @@ class VectorNdarray(Ndarray):
                         raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
                 else:
                     return arr
-        arr = self._ndarray_matrix_to_numpy(as_vector=1)
+        arr = self._copy_to_new_numpy(as_vector=1)
         if dtype is not None and arr.dtype != dtype:
             arr = arr.astype(dtype)
         return arr
@@ -2123,12 +2123,12 @@ class VectorNdarray(Ndarray):
             result = _try_zerocopy_torch(self, copy=copy, device=device, is_ndarray=True)
             if result is not None:
                 return result
-        return self._ndarray_matrix_to_torch(as_vector=1, device=device)
+        return self._copy_to_new_torch(as_vector=1, device=device)
 
     @python_scope
     def from_torch(self, arr):
         """Load all entries from a ``torch.Tensor`` of shape ``self.shape + (n,)``."""
-        self._ndarray_matrix_from_torch(arr, as_vector=1)
+        self._copy_from_torch(arr, as_vector=1)
 
     @python_scope
     def __deepcopy__(self, memo=None):
