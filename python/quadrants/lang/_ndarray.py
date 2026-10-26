@@ -403,7 +403,7 @@ class Ndarray:
         return BufferView(self, start, size)
 
     @python_scope
-    def _pad_key(self, key):
+    def _normalize_index(self, key):
         if key is None:
             key = ()
         if not isinstance(key, (tuple, list)):
@@ -455,14 +455,14 @@ class ScalarNdarray(Ndarray):
     @python_scope
     def __setitem__(self, key, value):
         self._initialize_host_accessor()
-        self.host_accessor.setter(value, *self._pad_key(key))
+        self.host_accessor.setter(value, *self._normalize_index(key))
 
     @python_scope
     def __getitem__(self, key):
         if isinstance(key, slice):
             return self._slice_to_buffer_view(key)
         self._initialize_host_accessor()
-        return self.host_accessor.getter(*self._pad_key(key))
+        return self.host_accessor.getter(*self._normalize_index(key))
 
     @python_scope
     def to_numpy(self, dtype=None, *, copy=True):
@@ -606,11 +606,11 @@ class NdarrayHostAccess:
 
         def getter():
             self.ndarr._initialize_host_accessor()
-            return self.ndarr.host_accessor.getter(*self.ndarr._pad_key(self.indices))
+            return self.ndarr.host_accessor.getter(*self.ndarr._normalize_index(self.indices))
 
         def setter(value):
             self.ndarr._initialize_host_accessor()
-            self.ndarr.host_accessor.setter(value, *self.ndarr._pad_key(self.indices))
+            self.ndarr.host_accessor.setter(value, *self.ndarr._normalize_index(self.indices))
 
         self.getter = getter
         self.setter = setter
