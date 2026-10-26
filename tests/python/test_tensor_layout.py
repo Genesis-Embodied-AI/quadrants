@@ -294,15 +294,15 @@ def test_layout_sequence_index(backend, shape, layout, index_kind, operation):
                 access(index, field, result)
 
     run(x, out)
-    expected = np.full(shape, -1, dtype=np.int32) if operation == "read" else initial.copy()
+    expected_result = np.full(shape, -1, dtype=np.int32) if operation == "read" else initial.copy()
     for index in np.ndindex(*((3,) * len(shape))):
         value = 1
         for component in index:
             value = value * 10 + component
         if operation == "read":
-            expected[index] = initial[index]
+            expected_result[index] = initial[index]
         elif operation == "write":
-            expected[index] = value
+            expected_result[index] = value
         else:
-            expected[index] += value
-    np.testing.assert_array_equal(out.to_numpy() if operation == "read" else x.to_numpy(), expected)
+            expected_result[index] += value
+    np.testing.assert_array_equal(out.to_numpy() if operation == "read" else x.to_numpy(), expected_result)
