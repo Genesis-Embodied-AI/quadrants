@@ -280,7 +280,7 @@ class Ndarray:
     def _ndarray_matrix_to_new_torch_via_copy(self, as_vector, device=None):
         """Mirror of ``_ndarray_matrix_to_new_numpy_via_copy`` that fills a torch tensor instead of a numpy array.
 
-        Allocates a ``torch.zeros`` of the canonical shape including the trailing element-axis extents and dispatches
+        Allocates a ``torch.zeros`` of the canonical shape including any trailing element-axis extents and dispatches
         the same ``ndarray_matrix_to_ext_arr`` bridge kernel - torch tensors expose the same external-array interface
         to the kernel as numpy arrays do.
         """
