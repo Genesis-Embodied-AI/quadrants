@@ -282,7 +282,7 @@ def test_layout_sequence_index(backend, shape, layout, index_kind, operation):
             x[I] = x[I] + index_code
         elif qd.static(operation == "augassign"):
             x[I] += index_code
-        else:
+        elif qd.static(operation == "atomic_add"):
             qd.atomic_add(x[I], index_code)
 
     @qd.kernel
