@@ -289,11 +289,11 @@ def test_layout_sequence_index(backend, shape, layout, index_kind, operation):
     def run(x: qd.Tensor, y: qd.Tensor):
         # Visit every tensor position, grouping its coordinates into the index vector I for either 2D or 3D shapes.
         for I in qd.grouped(qd.ndrange(*shape)):
-            index = [I[axis] for axis in qd.static(range(len(shape)))]
+            I_l = [I[axis] for axis in qd.static(range(len(shape)))]
             if qd.static(index_kind == "tuple"):
-                access(tuple(index), x, y)
+                access(tuple(I_l), x, y)
             else:
-                access(index, x, y)
+                access(I_l, x, y)
 
     initial_x = np.arange(np.prod(shape), dtype=np.int32).reshape(shape)
     initial_y = -initial_x - 1
