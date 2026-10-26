@@ -512,3 +512,18 @@ def test_vector_to_numpy_copy_none_dtype_fallback(backend):
     arr = t.to_numpy(dtype=np.float64, copy=None)
     assert arr.dtype == np.float64
     np.testing.assert_array_equal(arr, src.astype(np.float64))
+
+
+@test_utils.test(arch=qd.cpu)
+def test_vector_tensor_to_numpy_dtype_ndarray_backend():
+    """Tensor wrapper around VectorNdarray must forward dtype= correctly."""
+    v = qd.Vector.tensor(3, qd.f32, shape=(2,), backend=qd.Backend.NDARRAY)
+    arr = v.to_numpy(dtype=np.float64)
+    assert arr.dtype == np.float64
+
+
+@test_utils.test(arch=qd.cpu)
+def test_matrix_tensor_to_numpy_dtype_ndarray_backend():
+    m = qd.Matrix.tensor(2, 2, qd.f32, shape=(3,), backend=qd.Backend.NDARRAY)
+    arr = m.to_numpy(dtype=np.float64)
+    assert arr.dtype == np.float64
