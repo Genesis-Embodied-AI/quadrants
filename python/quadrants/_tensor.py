@@ -105,8 +105,6 @@ def _coerce_backend(backend):
 # work on one backend and raise cryptic errors deep in the other. Users who need backend-specific knobs (e.g.
 # ``offset=`` for field offset indexing, ``order=`` for SoA layouts) should call ``qd.field`` / ``qd.ndarray`` directly
 # — they have explicitly opted out of the unified tensor API.
-#
-# All three factories accept the same options, including shape-axis layouts for compound dtypes.
 _TENSOR_ACCEPTED_KWARGS = frozenset({"backend", "needs_grad", "layout"})
 
 
