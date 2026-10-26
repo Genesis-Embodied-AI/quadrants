@@ -287,6 +287,7 @@ def test_layout_sequence_index(backend, shape, layout, index_kind, operation):
 
     @qd.kernel
     def run(x: qd.Tensor, y: qd.Tensor):
+        # Visit every tensor position, grouping its coordinates into the index vector I for either 2D or 3D shapes.
         for I in qd.grouped(qd.ndrange(*shape)):
             index = [I[axis] for axis in qd.static(range(len(shape)))]
             if qd.static(index_kind == "tuple"):
