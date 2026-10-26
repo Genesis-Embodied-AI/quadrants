@@ -263,12 +263,12 @@ def test_layout_sequence_index(backend, shape, layout, index_kind, operation):
     qd.func read and update the same canonical elements on both tensor backends."""
 
     @qd.func
-    def access(I, x: qd.Tensor, out: qd.Tensor):
+    def access(I, x: qd.Tensor, y: qd.Tensor):
         value = 1
         for axis in qd.static(range(len(shape))):
             value = value * 10 + I[axis]
         if qd.static(operation == "read"):
-            out[I] = x[I]
+            y[I] = x[I]
         elif qd.static(operation == "write"):
             x[I] = value
         elif qd.static(operation == "read_modify_write"):
@@ -279,23 +279,23 @@ def test_layout_sequence_index(backend, shape, layout, index_kind, operation):
             qd.atomic_add(x[I], value)
 
     @qd.kernel
-    def run(x: qd.Tensor, out: qd.Tensor):
+    def run(x: qd.Tensor, y: qd.Tensor):
         # Keep accesses in bounds even without permutation, so a regression reports wrong values rather than OOB.
         for I in qd.grouped(qd.ndrange(*((3,) * len(shape)))):
             index = [I[axis] for axis in qd.static(range(len(shape)))]
             if qd.static(index_kind == "tuple"):
-                access(tuple(index), x, out)
+                access(tuple(index), x, y)
             else:
-                access(index, x, out)
+                access(index, x, y)
 
     initial = np.arange(np.prod(shape), dtype=np.int32).reshape(shape)
     results = []
     for tensor_layout in (layout, None):
         x = qd.tensor(qd.i32, shape=shape, backend=backend, layout=tensor_layout)
-        out = qd.tensor(qd.i32, shape=shape, backend=backend)
+        y = qd.tensor(qd.i32, shape=shape, backend=backend)
         x.from_numpy(initial)
-        out.fill(-1)
-        run(x, out)
-        results.append(out.to_numpy() if operation == "read" else x.to_numpy())
+        y.fill(-1)
+        run(x, y)
+        results.append(y.to_numpy() if operation == "read" else x.to_numpy())
     actual_result, expected_result = results
     np.testing.assert_array_equal(actual_result, expected_result)
