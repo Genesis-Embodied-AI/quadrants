@@ -157,7 +157,7 @@ class Ndarray:
         inv = _invert_layout(layout)
         return tuple(phys[inv[i]] for i in range(len(phys)))
 
-    def _total_logical_shape(self):
+    def _total_canonical_shape(self):
         """Return canonical shape axes followed by element component axes."""
         return tuple(self.shape) + self.element_shape
 
@@ -241,7 +241,7 @@ class Ndarray:
         Returns:
             numpy.ndarray: The result numpy array.
         """
-        arr = np.zeros(shape=self._total_logical_shape(), dtype=to_numpy_type(self.dtype))
+        arr = np.zeros(shape=self._total_canonical_shape(), dtype=to_numpy_type(self.dtype))
         from quadrants._kernels import (  # pylint: disable=C0415
             ndarray_matrix_to_ext_arr,  # pylint: disable=C0415
         )
@@ -288,7 +288,7 @@ class Ndarray:
 
         from quadrants.lang.util import to_pytorch_type  # pylint: disable=C0415
 
-        out = torch.zeros(size=self._total_logical_shape(), dtype=to_pytorch_type(self.dtype), device=device)
+        out = torch.zeros(size=self._total_canonical_shape(), dtype=to_pytorch_type(self.dtype), device=device)
         from quadrants._kernels import (  # pylint: disable=C0415
             ndarray_matrix_to_ext_arr,  # pylint: disable=C0415
         )
@@ -304,7 +304,7 @@ class Ndarray:
         """Mirror of ``_ndarray_matrix_from_numpy`` that ingests a torch tensor. ``.contiguous()`` is forced so the
         bridge kernel sees a tightly-packed external array."""
         contig = arr.contiguous()
-        canonical_shape = self._total_logical_shape()
+        canonical_shape = self._total_canonical_shape()
         if canonical_shape != tuple(contig.shape):
             raise ValueError(f"Mismatch shape: {canonical_shape} expected, but {tuple(contig.shape)} provided")
         from quadrants._kernels import (  # pylint: disable=C0415
@@ -324,7 +324,7 @@ class Ndarray:
         """
         if not isinstance(arr, np.ndarray):
             raise TypeError(f"{np.ndarray} expected, but {type(arr)} provided")
-        canonical_shape = self._total_logical_shape()
+        canonical_shape = self._total_canonical_shape()
         if canonical_shape != tuple(arr.shape):
             raise ValueError(f"Mismatch shape: {canonical_shape} expected, but {tuple(arr.shape)} provided")
         if not arr.flags.c_contiguous:
