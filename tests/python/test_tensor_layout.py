@@ -272,7 +272,7 @@ def test_layout_sequence_index(backend, shape, layout, index_kind, operation):
         return index_code
 
     @qd.func
-    def access(I, x: qd.Tensor, y: qd.Tensor):
+    def f1(I, x: qd.Tensor, y: qd.Tensor):
         index_code = encode_index(I)
         if qd.static(operation == "read"):
             y[I] = x[I]
@@ -291,9 +291,9 @@ def test_layout_sequence_index(backend, shape, layout, index_kind, operation):
         for I in qd.grouped(qd.ndrange(*shape)):
             I_l = [I[axis] for axis in qd.static(range(len(shape)))]
             if qd.static(index_kind == "tuple"):
-                access(tuple(I_l), x, y)
+                f1(tuple(I_l), x, y)
             else:
-                access(I_l, x, y)
+                f1(I_l, x, y)
 
     initial_x = np.arange(np.prod(shape), dtype=np.int32).reshape(shape)
     initial_y = -initial_x - 1
