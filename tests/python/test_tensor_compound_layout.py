@@ -255,16 +255,23 @@ def test_compound_layout_ndarray_import_rejects_physical_shape(dtype):
 )
 @test_utils.test()
 def test_compound_layout_kernel_specialization(backend, dtype):
-    """Check that reusing a kernel across default and permuted layouts preserves canonical indexing."""
+    """Check kernel reuse across layouts using distinct codes for every tensor position and element component."""
 
     @qd.kernel
     def fill(x: qd.Tensor):
         for i, j in qd.ndrange(2, 5):
-            x[i, j] = dtype(0) + test_utils.encode_index([i, j])
+            for row in qd.static(range(dtype.n)):
+                if qd.static(dtype.ndim == 1):
+                    x[i, j][row] = test_utils.encode_index([i, j, row])
+                else:
+                    for column in qd.static(range(dtype.m)):
+                        x[i, j][row, column] = test_utils.encode_index([i, j, row, column])
 
-    expected = np.arange(2, dtype=np.float32)[:, None] * 10 + np.arange(5, dtype=np.float32)
+    element_shape = (dtype.n,) if dtype.ndim == 1 else (dtype.n, dtype.m)
+    expected = np.zeros((2, 5) + element_shape, dtype=np.float32)
+    for index in np.ndindex(expected.shape):
+        expected[index] = sum(coordinate * 10 ** (len(index) - axis - 1) for axis, coordinate in enumerate(index))
     for layout in (None, (1, 0), None):
         a = qd.tensor(dtype, (2, 5), backend=backend, layout=layout)
         fill(a)
-        expanded = expected.reshape((2, 5) + (1,) * len(a.element_shape))
-        np.testing.assert_array_equal(a.to_numpy(), np.broadcast_to(expanded, (2, 5) + a.element_shape))
+        np.testing.assert_array_equal(a.to_numpy(), expected)
