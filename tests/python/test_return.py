@@ -363,12 +363,15 @@ def test_ret_4k():
 
 
 @test_utils.test(print_full_traceback=False)
-def test_static_matrix_return_dimension_mismatch():
+def test_python_matrix_return_dimension_mismatch():
     value = qd.Matrix([[1, 2], [3, 4]])
+
+    def matrix_value():
+        return value
 
     @qd.kernel
     def foo() -> qd.types.vector(4, qd.i32):
-        return qd.static(value)
+        return matrix_value()
 
     with pytest.raises(qd.QuadrantsCompilationError, match="Return matrix ndim mismatch, expecting=1, got=2"):
         foo()
