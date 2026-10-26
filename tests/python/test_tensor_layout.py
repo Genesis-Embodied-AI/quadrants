@@ -193,11 +193,6 @@ def test_layout_with_needs_grad_allocates_grad(backend):
     assert tuple(a.grad.shape) == tuple(a.shape)
 
 
-# ----------------------------------------------------------------------------
-# Compound dtype (vector / matrix) + identity layout preserves the default allocation
-# ----------------------------------------------------------------------------
-
-
 def test_vector_dtype_without_layout_still_works():
     """Compound vector dtype without layout= must still allocate fine."""
     qd.init(arch=qd.x64)
