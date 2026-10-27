@@ -149,13 +149,13 @@ jobs:
     with:
       artifact_name: manylinux_wheel_${{ matrix.PYTHON_CP_VERSION }}_${{matrix.os}}
     secrets: inherit
-  # Keep GPU interoperability on 3.14 until the cu128 and rocm6.4 PyTorch indexes provide 3.15 wheels.
   test_gpu:
     uses: ./.github/workflows/test_gpu.yml
     needs: build_wheel
     with:
       head_ref: ${{ github.head_ref || github.ref_name }}
       wheel_artifact_name: manylinux_wheel_cp314_ubuntu-22.04
+      python315_wheel_artifact_name: manylinux_wheel_cp315_ubuntu-22.04
       cpptests_artifact_name: manylinux_cpptests_cp314_ubuntu-22.04
     secrets:
       amdgpu_runner_region: ${{ secrets.AMDGPU_RUNNER_REGION }}
