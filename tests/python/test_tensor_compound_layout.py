@@ -485,6 +485,8 @@ def test_compound_layout_grad(backend: qd.Backend, dtype: MatrixType) -> None:
     y = qd.tensor(dtype, x.shape, backend=backend, layout=(1, 0, 2), needs_grad=True)
     assert x.grad.shape == x.shape
     assert x.grad.layout == x.layout
+    assert y.grad.shape == y.shape
+    assert y.grad.layout == y.layout
 
     @qd.kernel
     def double(x: qd.Tensor, y: qd.Tensor) -> None:
