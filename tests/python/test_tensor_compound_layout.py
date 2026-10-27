@@ -423,7 +423,7 @@ def test_compound_layout_dlpack_shape_and_strides(
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
     initial = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
     x.from_numpy(initial)
-    physical_axes = layout + tuple(range(len(shape), initial.ndim))
+    physical_axes = layout + tuple(range(len(shape), len(shape) + len(x.element_shape)))
     physical = np.ascontiguousarray(initial.transpose(physical_axes))
     canonical_view = physical.transpose(np.argsort(physical_axes))
     expected_strides = tuple(stride // canonical_view.itemsize for stride in canonical_view.strides)
