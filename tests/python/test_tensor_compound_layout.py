@@ -424,8 +424,8 @@ def test_compound_layout_dlpack_shape_and_strides(
     initial = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
     x.from_numpy(initial)
     physical_axes = layout + tuple(range(len(shape), len(shape) + len(x.element_shape)))
-    physical_copy_as_np = np.ascontiguousarray(initial.transpose(physical_axes))
-    canonical_view = physical_copy_as_np.transpose(np.argsort(physical_axes))
+    physical_values_np = np.ascontiguousarray(initial.transpose(physical_axes))
+    canonical_view = physical_values_np.transpose(np.argsort(physical_axes))
     expected_strides = tuple(stride // canonical_view.itemsize for stride in canonical_view.strides)
 
     view = torch.utils.dlpack.from_dlpack(x.to_dlpack())
