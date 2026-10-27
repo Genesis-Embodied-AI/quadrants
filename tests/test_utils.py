@@ -58,11 +58,11 @@ def fill_index_codes(x: qd.Tensor, dtype: qd.template()) -> None:
                     x[I][row, column] = encode_index([position_code, row, column])
 
 
-def require_torch_dlpack(backend: qd.Backend) -> ModuleType:
+def require_torch_dlpack(tensor_backend: qd.Backend) -> ModuleType:
     torch = pytest.importorskip("torch")
     if (
         qd.lang.impl.current_cfg().arch == qd.metal
-        and backend == qd.Backend.FIELD
+        and tensor_backend == qd.Backend.FIELD
         and not _TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET
     ):
         pytest.skip("Metal field DLPack export requires PyTorch newer than 2.9.1")
