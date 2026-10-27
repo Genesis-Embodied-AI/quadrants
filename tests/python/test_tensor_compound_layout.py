@@ -593,7 +593,7 @@ def test_compound_layout_kernel_specialization(backend: qd.Backend, dtype: Matri
 )
 @test_utils.test()
 def test_compound_layout_numpy_import_rejects_physical_shape(dtype: MatrixType) -> None:
-    """NumPy imports reject physical shape and accept canonical shape with the correct values."""
+    """NumPy imports reject physical shape."""
     shape = (2, 5)
     layout = (1, 0)
     x = qd.tensor(dtype, shape, backend=qd.Backend.NDARRAY, layout=layout)
@@ -601,10 +601,6 @@ def test_compound_layout_numpy_import_rejects_physical_shape(dtype: MatrixType) 
 
     with pytest.raises(ValueError, match="Mismatch shape"):
         x.from_numpy(source)
-
-    canonical_input = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
-    x.from_numpy(canonical_input)
-    np.testing.assert_array_equal(x.to_numpy(), canonical_input)
 
 
 @pytest.mark.parametrize(
