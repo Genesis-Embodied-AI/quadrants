@@ -70,7 +70,6 @@ def require_torch_dlpack(need_field_support: bool) -> ModuleType:
 
 
 def synchronize_torch(tensor: "torch.Tensor") -> None:
-    """Wait for a Torch write before reading the shared memory through Quadrants."""
     import torch
 
     if tensor.device.type == "cuda":
