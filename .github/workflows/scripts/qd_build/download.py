@@ -9,7 +9,7 @@ import tqdm
 def download_file(url, destination, name):
     """Retry transient failures, including interruptions while streaming the response body."""
     destination = Path(destination)
-    partial = destination.with_name(destination.name + ".download")
+    partial_file = destination.with_name(destination.name + ".download")
     attempts = 5
     for attempt in range(1, attempts + 1):
         try:
@@ -23,11 +23,11 @@ def download_file(url, destination, name):
                         total=int(response.headers.get("content-length", 0)),
                         desc=name,
                     ) as progress,
-                    partial.open("wb") as output,
+                    partial_file.open("wb") as output,
                 ):
                     for chunk in response.iter_content(chunk_size=8192):
                         progress.update(output.write(chunk))
-            partial.replace(destination)
+            partial_file.replace(destination)
             return
         except (
             requests.ConnectionError,
@@ -54,4 +54,4 @@ def download_file(url, destination, name):
             time.sleep(delay)
         finally:
             # Don't leave partial downloads around
-            partial.unlink(missing_ok=True)
+            partial_file.unlink(missing_ok=True)

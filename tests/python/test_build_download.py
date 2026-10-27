@@ -56,10 +56,10 @@ def test_interrupted_body_restarts_download(tmp_path, delays):
 def test_exhaustion_preserves_cache_and_removes_partial(tmp_path, monkeypatch, delays, error_type):
     destination = tmp_path / "archive"
     destination.write_bytes(b"old cache")
-    partial = tmp_path / "archive.download"
+    partial_file = tmp_path / "archive.download"
 
     def fail(*args, **kwargs):
-        partial.write_bytes(b"incomplete")
+        partial_file.write_bytes(b"incomplete")
         raise error_type("interrupted")
 
     get = Mock(side_effect=fail)
@@ -69,7 +69,7 @@ def test_exhaustion_preserves_cache_and_removes_partial(tmp_path, monkeypatch, d
     assert get.call_count == 5
     assert [call.args[0] for call in delays.call_args_list] == [1, 2, 4, 8]
     assert destination.read_bytes() == b"old cache"
-    assert not partial.exists()
+    assert not partial_file.exists()
 
 
 @pytest.mark.parametrize(
