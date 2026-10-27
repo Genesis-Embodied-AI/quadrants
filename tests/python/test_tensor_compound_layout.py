@@ -2,17 +2,26 @@
 
 import copy
 import pickle
+from types import ModuleType
+from typing import TYPE_CHECKING
 
 import numpy as np
+import numpy.typing as npt
 import pytest
 
 import quadrants as qd
 from quadrants.lang.field import _TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET
+from quadrants.lang.matrix import MatrixType
 
 from tests import test_utils
 
+if TYPE_CHECKING:
+    import torch
 
-def new_numpy_tensor_containing_index_codes(shape, element_shape):
+
+def new_numpy_tensor_containing_index_codes(
+    shape: tuple[int, ...], element_shape: tuple[int, ...]
+) -> npt.NDArray[np.float32]:
     """Build NumPy values encoding every shape and component coordinate as decimal digits."""
     values = np.empty(shape + element_shape, dtype=np.float32)
     # np.ndindex(values.shape) produces every index tuple in the array.
@@ -23,7 +32,7 @@ def new_numpy_tensor_containing_index_codes(shape, element_shape):
 
 
 @qd.kernel
-def fill_index_codes(x: qd.Tensor, dtype: qd.template()):
+def fill_index_codes(x: qd.Tensor, dtype: qd.template()) -> None:
     """Write each scalar component's index code through canonical kernel indices."""
     for I in qd.grouped(x):
         position_code = test_utils.encode_index(I)
@@ -35,7 +44,7 @@ def fill_index_codes(x: qd.Tensor, dtype: qd.template()):
                     x[I][row, column] = test_utils.encode_index([position_code, row, column])
 
 
-def require_torch_dlpack(backend):
+def require_torch_dlpack(backend: qd.Backend) -> ModuleType:
     torch = pytest.importorskip("torch")
     if (
         qd.lang.impl.current_cfg().arch == qd.metal
@@ -46,7 +55,7 @@ def require_torch_dlpack(backend):
     return torch
 
 
-def synchronize_torch(tensor):
+def synchronize_torch(tensor: "torch.Tensor") -> None:
     """Wait for a Torch write before reading the shared memory through Quadrants."""
     import torch
 
@@ -69,7 +78,7 @@ def synchronize_torch(tensor):
     ],
 )
 @test_utils.test()
-def test_compound_layout_metadata(backend, dtype, layout):
+def test_compound_layout_metadata(backend: qd.Backend, dtype: MatrixType, layout: tuple[int, ...] | None) -> None:
     """Allocation preserves canonical shape and component dimensions, and normalizes identity layouts."""
     shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
@@ -91,7 +100,7 @@ def test_compound_layout_metadata(backend, dtype, layout):
     ],
 )
 @test_utils.test()
-def test_compound_layout_kernel_writes(backend, dtype, layout):
+def test_compound_layout_kernel_writes(backend: qd.Backend, dtype: MatrixType, layout: tuple[int, ...] | None) -> None:
     """Kernel indexing writes the correct value to every shape and component coordinate."""
     shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
@@ -112,7 +121,9 @@ def test_compound_layout_kernel_writes(backend, dtype, layout):
     ],
 )
 @test_utils.test()
-def test_compound_layout_kernel_increment(backend, dtype, layout):
+def test_compound_layout_kernel_increment(
+    backend: qd.Backend, dtype: MatrixType, layout: tuple[int, ...] | None
+) -> None:
     """Grouped kernel iteration updates every canonical component exactly once."""
     shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
@@ -120,7 +131,7 @@ def test_compound_layout_kernel_increment(backend, dtype, layout):
     x.from_numpy(initial)
 
     @qd.kernel
-    def increment(x: qd.Tensor):
+    def increment(x: qd.Tensor) -> None:
         for I in qd.grouped(x):
             x[I] += 1
 
@@ -139,7 +150,7 @@ def test_compound_layout_kernel_increment(backend, dtype, layout):
     ],
 )
 @test_utils.test()
-def test_compound_layout_python_reads(backend, dtype, layout):
+def test_compound_layout_python_reads(backend: qd.Backend, dtype: MatrixType, layout: tuple[int, ...] | None) -> None:
     """Python indexing returns the components at the requested canonical position."""
     shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
@@ -161,7 +172,7 @@ def test_compound_layout_python_reads(backend, dtype, layout):
     ],
 )
 @test_utils.test()
-def test_compound_layout_python_writes(backend, dtype, layout):
+def test_compound_layout_python_writes(backend: qd.Backend, dtype: MatrixType, layout: tuple[int, ...] | None) -> None:
     """Python assignment changes only the requested canonical element."""
     shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
@@ -188,7 +199,9 @@ def test_compound_layout_python_writes(backend, dtype, layout):
     ],
 )
 @test_utils.test()
-def test_compound_layout_numpy_noncontiguous_import(backend, dtype, layout):
+def test_compound_layout_numpy_noncontiguous_import(
+    backend: qd.Backend, dtype: MatrixType, layout: tuple[int, ...] | None
+) -> None:
     """NumPy imports preserve canonical values even when the source has non-contiguous storage."""
     shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
@@ -211,7 +224,9 @@ def test_compound_layout_numpy_noncontiguous_import(backend, dtype, layout):
     ],
 )
 @test_utils.test()
-def test_compound_layout_numpy_export_is_independent(backend, dtype, layout):
+def test_compound_layout_numpy_export_is_independent(
+    backend: qd.Backend, dtype: MatrixType, layout: tuple[int, ...] | None
+) -> None:
     """A copied NumPy export has canonical values and can be changed without changing the tensor."""
     shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
@@ -239,7 +254,7 @@ def test_compound_layout_numpy_export_is_independent(backend, dtype, layout):
     ],
 )
 @test_utils.test(arch=qd.cpu)
-def test_compound_layout_numpy_zero_copy(backend, dtype, copy_mode):
+def test_compound_layout_numpy_zero_copy(backend: qd.Backend, dtype: MatrixType, copy_mode: bool | None) -> None:
     """Writing a NumPy view updates the tensor at the same canonical position."""
     pytest.importorskip("torch")
     shape = (2, 4, 5)
@@ -270,7 +285,9 @@ def test_compound_layout_numpy_zero_copy(backend, dtype, copy_mode):
     ],
 )
 @test_utils.test()
-def test_compound_layout_copy_to_default_layout(backend, dtype, layout):
+def test_compound_layout_copy_to_default_layout(
+    backend: qd.Backend, dtype: MatrixType, layout: tuple[int, ...] | None
+) -> None:
     """Copying between different layouts preserves every canonical component value."""
     shape = (2, 4, 5)
     src = qd.tensor(dtype, shape, backend=backend, layout=layout)
@@ -294,7 +311,9 @@ def test_compound_layout_copy_to_default_layout(backend, dtype, layout):
     ],
 )
 @test_utils.test()
-def test_compound_layout_copy_to_permuted_layout(backend, dtype, layout):
+def test_compound_layout_copy_to_permuted_layout(
+    backend: qd.Backend, dtype: MatrixType, layout: tuple[int, ...] | None
+) -> None:
     """Copying between different layouts preserves every canonical component value."""
     shape = (2, 4, 5)
     src = qd.tensor(dtype, shape, backend=backend, layout=None)
@@ -318,7 +337,7 @@ def test_compound_layout_copy_to_permuted_layout(backend, dtype, layout):
     ],
 )
 @test_utils.test()
-def test_compound_layout_pickle(backend, dtype, layout):
+def test_compound_layout_pickle(backend: qd.Backend, dtype: MatrixType, layout: tuple[int, ...] | None) -> None:
     """Pickle preserves the tensor type, canonical values, component dimensions, and layout."""
     shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
@@ -344,7 +363,7 @@ def test_compound_layout_pickle(backend, dtype, layout):
     ],
 )
 @test_utils.test()
-def test_compound_layout_deepcopy(backend, dtype, layout):
+def test_compound_layout_deepcopy(backend: qd.Backend, dtype: MatrixType, layout: tuple[int, ...] | None) -> None:
     """Deepcopy preserves the tensor type, canonical values, component dimensions, and layout."""
     shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
@@ -373,7 +392,9 @@ def test_compound_layout_deepcopy(backend, dtype, layout):
     ],
 )
 @test_utils.test()
-def test_compound_layout_torch_export_is_independent(backend, dtype, layout):
+def test_compound_layout_torch_export_is_independent(
+    backend: qd.Backend, dtype: MatrixType, layout: tuple[int, ...] | None
+) -> None:
     """A copied Torch export has canonical values and can be changed without changing the tensor."""
     pytest.importorskip("torch")
     shape = (2, 4, 5)
@@ -400,7 +421,9 @@ def test_compound_layout_torch_export_is_independent(backend, dtype, layout):
     ],
 )
 @test_utils.test()
-def test_compound_layout_torch_noncontiguous_import(backend, dtype, layout):
+def test_compound_layout_torch_noncontiguous_import(
+    backend: qd.Backend, dtype: MatrixType, layout: tuple[int, ...] | None
+) -> None:
     """Torch imports preserve canonical values from a non-contiguous source."""
     torch = pytest.importorskip("torch")
     shape = (2, 4, 5)
@@ -430,7 +453,7 @@ def test_compound_layout_torch_noncontiguous_import(backend, dtype, layout):
     ],
 )
 @test_utils.test(exclude=[qd.vulkan])
-def test_compound_layout_torch_zero_copy(backend, dtype, copy_mode):
+def test_compound_layout_torch_zero_copy(backend: qd.Backend, dtype: MatrixType, copy_mode: bool | None) -> None:
     """Torch sharing modes return the existing buffer and expose writes at canonical positions."""
     torch = require_torch_dlpack(backend)
     shape = (2, 4, 5)
@@ -464,7 +487,9 @@ def test_compound_layout_torch_zero_copy(backend, dtype, copy_mode):
     ],
 )
 @test_utils.test(exclude=[qd.vulkan])
-def test_compound_layout_dlpack_shape_and_strides(backend, dtype, layout):
+def test_compound_layout_dlpack_shape_and_strides(
+    backend: qd.Backend, dtype: MatrixType, layout: tuple[int, ...] | None
+) -> None:
     """DLPack describes canonical values over physical storage using the correct strides."""
     torch = require_torch_dlpack(backend)
     shape = (2, 4, 5)
@@ -493,7 +518,7 @@ def test_compound_layout_dlpack_shape_and_strides(backend, dtype, layout):
     ],
 )
 @test_utils.test(exclude=[qd.vulkan])
-def test_compound_layout_dlpack_writes(backend, dtype, layout):
+def test_compound_layout_dlpack_writes(backend: qd.Backend, dtype: MatrixType, layout: tuple[int, ...] | None) -> None:
     """A write through a DLPack view changes the same canonical element in the tensor."""
     torch = require_torch_dlpack(backend)
     shape = (2, 4, 5)
@@ -523,7 +548,7 @@ def test_compound_layout_dlpack_writes(backend, dtype, layout):
     ],
 )
 @test_utils.test()
-def test_compound_layout_grad(backend, dtype):
+def test_compound_layout_grad(backend: qd.Backend, dtype: MatrixType) -> None:
     """Check that gradients retain the layout and compute correct values across different input and output layouts."""
     shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=(2, 0, 1), needs_grad=True)
@@ -532,7 +557,7 @@ def test_compound_layout_grad(backend, dtype):
     assert x.grad.layout == x.layout
 
     @qd.kernel
-    def double(x: qd.Tensor, y: qd.Tensor):
+    def double(x: qd.Tensor, y: qd.Tensor) -> None:
         for I in qd.grouped(x):
             y[I] = 2 * x[I]
 
@@ -556,7 +581,9 @@ def test_compound_layout_grad(backend, dtype):
     ],
 )
 @test_utils.test()
-def test_compound_layout_other_ranks(backend, dtype, shape, layout):
+def test_compound_layout_other_ranks(
+    backend: qd.Backend, dtype: MatrixType, shape: tuple[int, ...], layout: tuple[int, ...] | None
+) -> None:
     """Check allocation, filling, and NumPy export for tensors with zero, one, or two shape axes."""
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
     x.fill(4)
@@ -574,7 +601,7 @@ def test_compound_layout_other_ranks(backend, dtype, shape, layout):
     ],
 )
 @test_utils.test()
-def test_compound_layout_invalid(backend, dtype, layout):
+def test_compound_layout_invalid(backend: qd.Backend, dtype: MatrixType, layout: tuple[int, ...] | None) -> None:
     """Check that short, long, repeated-axis, and out-of-range layout permutations are rejected."""
     with pytest.raises(ValueError, match="layout"):
         qd.tensor(dtype, (2, 5), backend=backend, layout=layout)
@@ -590,7 +617,7 @@ def test_compound_layout_invalid(backend, dtype, layout):
     ],
 )
 @test_utils.test()
-def test_compound_layout_kernel_specialization(backend, dtype):
+def test_compound_layout_kernel_specialization(backend: qd.Backend, dtype: MatrixType) -> None:
     """Check kernel reuse across layouts using distinct codes for every tensor position and element component."""
 
     shape = (2, 5)
@@ -612,7 +639,7 @@ def test_compound_layout_kernel_specialization(backend, dtype):
     ],
 )
 @test_utils.test()
-def test_compound_layout_numpy_import_rejects_physical_shape(dtype):
+def test_compound_layout_numpy_import_rejects_physical_shape(dtype: MatrixType) -> None:
     """NumPy imports require canonical shape rather than the physical storage shape."""
     shape = (2, 5)
     layout = (1, 0)
@@ -631,7 +658,7 @@ def test_compound_layout_numpy_import_rejects_physical_shape(dtype):
     ],
 )
 @test_utils.test()
-def test_compound_layout_torch_import_rejects_physical_shape(dtype):
+def test_compound_layout_torch_import_rejects_physical_shape(dtype: MatrixType) -> None:
     """Torch imports require canonical shape rather than the physical storage shape."""
     shape = (2, 5)
     layout = (1, 0)
