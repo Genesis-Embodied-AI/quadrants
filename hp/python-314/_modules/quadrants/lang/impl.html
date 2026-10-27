@@ -1244,11 +1244,10 @@
         <span class="c1">#     ``build_struct_for`` permute canonical user indices into physical storage order at the AST level (same</span>
         <span class="c1">#     rewrite mechanism as layout-tagged ndarrays).</span>
         <span class="c1">#</span>
-        <span class="c1"># This replaces the legacy scheme of building a nested stack of rank-1 dense SNodes (one per axis), which</span>
-        <span class="c1"># doubled the number of ``linearize`` / SNode ``lookup`` operations per subscript for no memory-layout benefit</span>
-        <span class="c1"># (physical byte order is determined by the shape-permutation, not by SNode nesting depth). See the CHI IR</span>
-        <span class="c1"># comparison in ``perso_hugh/doc/regression_2026apr23_stork_log.md`` (Experiment N+1) and the byte-identity</span>
-        <span class="c1"># regression tests in ``tests/python/test_tensor_layout_physical_bytes.py``.</span>
+        <span class="c1"># A nested stack of rank-1 dense SNodes (one per axis) doubles the number of ``linearize`` / SNode ``lookup``</span>
+        <span class="c1"># operations per subscript for no memory-layout benefit (physical byte order is determined by the</span>
+        <span class="c1"># shape-permutation, not by SNode nesting depth). See the byte-identity regression tests in</span>
+        <span class="c1"># ``tests/python/test_tensor_layout_physical_bytes.py``.</span>
         <span class="n">flat_axis_seq</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">dim</span><span class="p">))</span>
         <span class="n">phys_offset</span> <span class="o">=</span> <span class="n">offset</span>
         <span class="k">if</span> <span class="n">order</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">offset</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>

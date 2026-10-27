@@ -1461,7 +1461,7 @@
 
         <span class="bp">self</span><span class="o">.</span><span class="n">raise_on_templated_floats</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">raise_on_templated_floats</span>
         <span class="n">py_args</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fuse_args</span><span class="p">(</span><span class="n">is_func</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_pyfunc</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">py_args</span><span class="o">=</span><span class="n">py_args</span><span class="p">,</span> <span class="n">kwargs</span><span class="o">=</span><span class="n">kwargs</span><span class="p">,</span> <span class="n">global_context</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
-        <span class="c1"># Tensor-wrapper unwrap (stork-17). Canonicalize ``qd.Tensor`` slots, plus wrapper positions discovered on</span>
+        <span class="c1"># Tensor-wrapper unwrap. Canonicalize ``qd.Tensor`` slots, plus wrapper positions discovered on</span>
         <span class="c1"># the first launch, before the autograd tape and identity-keyed caches observe the arg tuple.</span>
         <span class="c1">#</span>
         <span class="c1"># PERF: On first call, record the candidate arg positions. On subsequent calls, skip entirely (empty</span>

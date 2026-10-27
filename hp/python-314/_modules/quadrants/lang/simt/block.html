@@ -905,7 +905,7 @@
 
     <span class="c1"># ``smem_offsets`` (i32) backs the per-subgroup histograms (step 1), in-place column-sum upsweep (step 2), folded</span>
     <span class="c1"># prefixes (step 4), and the leader's atomic_add slot (step 5).  ``smem_match`` (i32) backs the per-digit ballot</span>
-    <span class="c1"># mask in step 5.  These were previously unioned into a single ``i32`` SharedArray; splitting them keeps the</span>
+    <span class="c1"># mask in step 5.  Keeping these arrays separate leaves the</span>
     <span class="c1"># offsets path independent of the match-mask width so the wave64 sibling can pick ``i64`` for its match region.</span>
     <span class="n">smem_offsets</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">((</span><span class="n">BLOCK_SUBGROUPS</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span><span class="p">,)),</span> <span class="n">_i32</span><span class="p">)</span>
     <span class="n">smem_match</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">((</span><span class="n">BLOCK_SUBGROUPS</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span><span class="p">,)),</span> <span class="n">_i32</span><span class="p">)</span>
