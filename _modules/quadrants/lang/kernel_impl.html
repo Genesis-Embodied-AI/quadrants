@@ -346,7 +346,7 @@
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.enums</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutodiffMode</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">.._test_tools</span><span class="w"> </span><span class="kn">import</span> <span class="n">warnings_helper</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..</span><span class="w"> </span><span class="kn">import</span> <span class="n">_warnings</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">._quadrants_callable</span><span class="w"> </span><span class="kn">import</span> <span class="n">BoundQuadrantsCallable</span><span class="p">,</span> <span class="n">QuadrantsCallable</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.func</span><span class="w"> </span><span class="kn">import</span> <span class="n">Func</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.kernel</span><span class="w"> </span><span class="kn">import</span> <span class="n">Kernel</span>
@@ -626,7 +626,7 @@
         <span class="n">wrapped</span> <span class="o">=</span> <span class="n">_kernel_impl</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="n">level_of_class_stackframe</span><span class="o">=</span><span class="n">level</span><span class="p">,</span> <span class="n">graph</span><span class="o">=</span><span class="n">graph</span><span class="p">,</span> <span class="n">checkpoints</span><span class="o">=</span><span class="n">checkpoints</span><span class="p">)</span>
         <span class="n">wrapped</span><span class="o">.</span><span class="n">is_pure</span> <span class="o">=</span> <span class="n">pure</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">pure</span> <span class="ow">or</span> <span class="n">fastcache</span>
         <span class="k">if</span> <span class="n">pure</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">warnings_helper</span><span class="o">.</span><span class="n">warn_once</span><span class="p">(</span>
+            <span class="n">_warnings</span><span class="o">.</span><span class="n">warn_once</span><span class="p">(</span>
                 <span class="s2">"@qd.kernel parameter `pure` is deprecated. Please use parameter `fastcache`. "</span>
                 <span class="s2">"`pure` parameter is intended to be removed in 4.0.0"</span>
             <span class="p">)</span>
