@@ -13,7 +13,7 @@ from quadrants.lang.exception import (
 )
 from quadrants.types.enums import AutodiffMode
 
-from .._test_tools import warnings_helper
+from .. import _warnings
 from ._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
 from .func import Func
 from .kernel import Kernel
@@ -281,7 +281,7 @@ def kernel(
         wrapped = _kernel_impl(fn, level_of_class_stackframe=level, graph=graph, checkpoints=checkpoints)
         wrapped.is_pure = pure is not None and pure or fastcache
         if pure is not None:
-            warnings_helper.warn_once(
+            _warnings.warn_once(
                 "@qd.kernel parameter `pure` is deprecated. Please use parameter `fastcache`. "
                 "`pure` parameter is intended to be removed in 4.0.0"
             )

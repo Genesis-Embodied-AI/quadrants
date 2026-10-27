@@ -1,7 +1,5 @@
 import quadrants as qd
 
-from . import textwrap2, warnings_helper
-
 
 def qd_init_same_arch(**options) -> None:
     """
@@ -13,6 +11,3 @@ def qd_init_same_arch(**options) -> None:
     options = dict(options)
     options["arch"] = getattr(qd, qd.cfg.arch.name)
     qd.init(**options)
-
-
-__all__ = ["textwrap2", "warnings_helper"]

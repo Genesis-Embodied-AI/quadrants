@@ -11,11 +11,11 @@ from typing import Any
 import pytest
 
 import quadrants as qd
-import quadrants._test_tools.dataclass_test_tools as dataclass_test_tools
 import quadrants.lang._kernel_impl_dataclass as _kernel_impl_dataclass
 from quadrants.lang.kernel_arguments import ArgMetadata
 
 from tests import test_utils
+from tests.helpers import dataclass_helpers
 
 __all__ = [
     "Attribute",
@@ -220,7 +220,7 @@ def test_expand_func_arguments(in_meta: list[ArgMetadata], expected_meta: list[A
 def test_populate_global_vars_from_dataclasses(
     param_name: str, param_type: Any, expected_global_args: dict[str, Any]
 ) -> None:
-    py_arg = dataclass_test_tools.build_struct(param_type)
+    py_arg = dataclass_helpers.build_struct(param_type)
     global_vars = {}
     _kernel_impl_dataclass.populate_global_vars_from_dataclass(param_name, param_type, py_arg, global_vars)
     expected_names = set(expected_global_args.keys())
