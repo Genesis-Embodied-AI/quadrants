@@ -5,14 +5,21 @@ import pathlib
 import platform
 from errno import EEXIST
 from tempfile import NamedTemporaryFile, mkstemp
+from types import ModuleType
+from typing import TYPE_CHECKING
 
 import numpy as np
+import numpy.typing as npt
 import pytest
 
 import quadrants as qd
 from quadrants._lib import core as _qd_core
 from quadrants.lang import amdgpu, cpu, cuda, gpu, metal, vulkan
+from quadrants.lang.field import _TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET
 from quadrants.lang.misc import is_arch_supported
+
+if TYPE_CHECKING:
+    import torch
 
 
 # Helper functions
@@ -24,6 +31,52 @@ def encode_index(I):
     for axis in qd.static(range(len(I))):
         index_code = index_code * 10 + I[axis]
     return index_code
+
+
+def new_numpy_tensor_containing_index_codes(
+    shape: tuple[int, ...], element_shape: tuple[int, ...]
+) -> npt.NDArray[np.float32]:
+    """Build NumPy values encoding every shape and component coordinate as decimal digits."""
+    values = np.empty(shape + element_shape, dtype=np.float32)
+    # np.ndindex(values.shape) produces every index tuple in the array.
+    # E.g. for shape (2, 3), it yields (0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2).
+    for index in np.ndindex(values.shape):
+        values[index] = encode_index(index)
+    return values
+
+
+@qd.kernel
+def fill_index_codes(x: qd.Tensor, dtype: qd.template()) -> None:
+    """Write each scalar component's index code through canonical kernel indices."""
+    for I in qd.grouped(x):
+        position_code = encode_index(I)
+        for row in qd.static(range(dtype.n)):
+            if qd.static(dtype.ndim == 1):
+                x[I][row] = encode_index([position_code, row])
+            else:
+                for column in qd.static(range(dtype.m)):
+                    x[I][row, column] = encode_index([position_code, row, column])
+
+
+def require_torch_dlpack(backend: qd.Backend) -> ModuleType:
+    torch = pytest.importorskip("torch")
+    if (
+        qd.lang.impl.current_cfg().arch == qd.metal
+        and backend == qd.Backend.FIELD
+        and not _TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET
+    ):
+        pytest.skip("Metal field DLPack export requires PyTorch newer than 2.9.1")
+    return torch
+
+
+def synchronize_torch(tensor: "torch.Tensor") -> None:
+    """Wait for a Torch write before reading the shared memory through Quadrants."""
+    import torch
+
+    if tensor.device.type == "cuda":
+        torch.cuda.synchronize()
+    elif tensor.device.type == "mps":
+        torch.mps.synchronize()
 
 
 def verify_image(image, image_name, tolerance=0.1, regerate_groundtruth_images=False):

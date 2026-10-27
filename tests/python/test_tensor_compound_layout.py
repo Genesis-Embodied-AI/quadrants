@@ -2,68 +2,14 @@
 
 import copy
 import pickle
-from types import ModuleType
-from typing import TYPE_CHECKING
 
 import numpy as np
-import numpy.typing as npt
 import pytest
 
 import quadrants as qd
-from quadrants.lang.field import _TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET
 from quadrants.lang.matrix import MatrixType
 
 from tests import test_utils
-
-if TYPE_CHECKING:
-    import torch
-
-
-def new_numpy_tensor_containing_index_codes(
-    shape: tuple[int, ...], element_shape: tuple[int, ...]
-) -> npt.NDArray[np.float32]:
-    """Build NumPy values encoding every shape and component coordinate as decimal digits."""
-    values = np.empty(shape + element_shape, dtype=np.float32)
-    # np.ndindex(values.shape) produces every index tuple in the array.
-    # E.g. for shape (2, 3), it yields (0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2).
-    for index in np.ndindex(values.shape):
-        values[index] = test_utils.encode_index(index)
-    return values
-
-
-@qd.kernel
-def fill_index_codes(x: qd.Tensor, dtype: qd.template()) -> None:
-    """Write each scalar component's index code through canonical kernel indices."""
-    for I in qd.grouped(x):
-        position_code = test_utils.encode_index(I)
-        for row in qd.static(range(dtype.n)):
-            if qd.static(dtype.ndim == 1):
-                x[I][row] = test_utils.encode_index([position_code, row])
-            else:
-                for column in qd.static(range(dtype.m)):
-                    x[I][row, column] = test_utils.encode_index([position_code, row, column])
-
-
-def require_torch_dlpack(backend: qd.Backend) -> ModuleType:
-    torch = pytest.importorskip("torch")
-    if (
-        qd.lang.impl.current_cfg().arch == qd.metal
-        and backend == qd.Backend.FIELD
-        and not _TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET
-    ):
-        pytest.skip("Metal field DLPack export requires PyTorch newer than 2.9.1")
-    return torch
-
-
-def synchronize_torch(tensor: "torch.Tensor") -> None:
-    """Wait for a Torch write before reading the shared memory through Quadrants."""
-    import torch
-
-    if tensor.device.type == "cuda":
-        torch.cuda.synchronize()
-    elif tensor.device.type == "mps":
-        torch.mps.synchronize()
-
 
 # Construction and indexing
 
@@ -104,9 +50,9 @@ def test_compound_layout_kernel_writes(backend: qd.Backend, dtype: MatrixType, l
     """Kernel indexing writes the correct value to every shape and component coordinate."""
     shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
-    expected = new_numpy_tensor_containing_index_codes(shape, x.element_shape)
+    expected = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
 
-    fill_index_codes(x, dtype)
+    test_utils.fill_index_codes(x, dtype)
 
     np.testing.assert_array_equal(x.to_numpy(), expected)
 
@@ -125,7 +71,7 @@ def test_compound_layout_kernel_increment(backend: qd.Backend, dtype: MatrixType
     """Grouped kernel iteration updates every canonical component exactly once."""
     shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
-    initial = new_numpy_tensor_containing_index_codes(shape, x.element_shape)
+    initial = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
     x.from_numpy(initial)
 
     @qd.kernel
@@ -152,7 +98,7 @@ def test_compound_layout_python_reads(backend: qd.Backend, dtype: MatrixType, la
     """Python indexing returns the components at the requested canonical position."""
     shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
-    initial = new_numpy_tensor_containing_index_codes(shape, x.element_shape)
+    initial = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
     x.from_numpy(initial)
 
     actual = x[1, 2, 3].to_numpy()
@@ -174,7 +120,7 @@ def test_compound_layout_python_writes(backend: qd.Backend, dtype: MatrixType, l
     """Python assignment changes only the requested canonical element."""
     shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
-    initial = new_numpy_tensor_containing_index_codes(shape, x.element_shape)
+    initial = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
     x.from_numpy(initial)
     expected = initial.copy()
     expected[1, 2, 3] = initial[0, 0, 0]
@@ -203,7 +149,7 @@ def test_compound_layout_numpy_noncontiguous_import(
     """NumPy imports preserve canonical values even when the source has non-contiguous storage."""
     shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
-    initial = new_numpy_tensor_containing_index_codes(shape, x.element_shape)
+    initial = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
     source = initial[:, :, ::-1]
     assert not source.flags.c_contiguous
 
@@ -228,7 +174,7 @@ def test_compound_layout_numpy_export_is_independent(
     """A copied NumPy export has canonical values and can be changed without changing the tensor."""
     shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
-    initial = new_numpy_tensor_containing_index_codes(shape, x.element_shape)
+    initial = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
     x.from_numpy(initial)
 
     copied = x.to_numpy(copy=True)
@@ -258,7 +204,7 @@ def test_compound_layout_numpy_zero_copy(backend: qd.Backend, dtype: MatrixType,
     shape = (2, 4, 5)
     layout = (2, 0, 1)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
-    initial = new_numpy_tensor_containing_index_codes(shape, x.element_shape)
+    initial = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
     x.from_numpy(initial)
     expected = initial.copy()
     expected[1, 2, 3] = -7
@@ -290,7 +236,7 @@ def test_compound_layout_copy_to_default_layout(
     shape = (2, 4, 5)
     src = qd.tensor(dtype, shape, backend=backend, layout=layout)
     dst = qd.tensor(dtype, shape, backend=backend, layout=None)
-    initial = new_numpy_tensor_containing_index_codes(shape, src.element_shape)
+    initial = test_utils.new_numpy_tensor_containing_index_codes(shape, src.element_shape)
     src.from_numpy(initial)
     dst.fill(-1)
 
@@ -316,7 +262,7 @@ def test_compound_layout_copy_to_permuted_layout(
     shape = (2, 4, 5)
     src = qd.tensor(dtype, shape, backend=backend, layout=None)
     dst = qd.tensor(dtype, shape, backend=backend, layout=layout)
-    initial = new_numpy_tensor_containing_index_codes(shape, src.element_shape)
+    initial = test_utils.new_numpy_tensor_containing_index_codes(shape, src.element_shape)
     src.from_numpy(initial)
     dst.fill(-1)
 
@@ -339,7 +285,7 @@ def test_compound_layout_pickle(backend: qd.Backend, dtype: MatrixType, layout: 
     """Pickle preserves the tensor type, canonical values, component dimensions, and layout."""
     shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
-    initial = new_numpy_tensor_containing_index_codes(shape, x.element_shape)
+    initial = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
     x.from_numpy(initial)
 
     restored = pickle.loads(pickle.dumps(x))
@@ -365,7 +311,7 @@ def test_compound_layout_deepcopy(backend: qd.Backend, dtype: MatrixType, layout
     """Deepcopy preserves the tensor type, canonical values, component dimensions, and layout."""
     shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
-    initial = new_numpy_tensor_containing_index_codes(shape, x.element_shape)
+    initial = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
     x.from_numpy(initial)
 
     restored = copy.deepcopy(x)
@@ -397,7 +343,7 @@ def test_compound_layout_torch_export_is_independent(
     pytest.importorskip("torch")
     shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
-    initial = new_numpy_tensor_containing_index_codes(shape, x.element_shape)
+    initial = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
     x.from_numpy(initial)
     arch = qd.lang.impl.current_cfg().arch
     device = "cuda" if arch in (qd.cuda, qd.amdgpu) else "cpu"
@@ -426,7 +372,7 @@ def test_compound_layout_torch_noncontiguous_import(
     torch = pytest.importorskip("torch")
     shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
-    initial = new_numpy_tensor_containing_index_codes(shape, x.element_shape)
+    initial = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
     arch = qd.lang.impl.current_cfg().arch
     device = "cuda" if arch in (qd.cuda, qd.amdgpu) else "cpu"
     source = torch.tensor(initial, device=device).transpose(0, 1).contiguous().transpose(0, 1)
@@ -453,11 +399,11 @@ def test_compound_layout_torch_noncontiguous_import(
 @test_utils.test(exclude=[qd.vulkan])
 def test_compound_layout_torch_zero_copy(backend: qd.Backend, dtype: MatrixType, copy_mode: bool | None) -> None:
     """Torch sharing modes return the existing buffer and expose writes at canonical positions."""
-    torch = require_torch_dlpack(backend)
+    torch = test_utils.require_torch_dlpack(backend)
     shape = (2, 4, 5)
     layout = (2, 0, 1)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
-    initial = new_numpy_tensor_containing_index_codes(shape, x.element_shape)
+    initial = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
     x.from_numpy(initial)
     expected = initial.copy()
     expected[1, 2, 3] = -7
@@ -467,7 +413,7 @@ def test_compound_layout_torch_zero_copy(backend: qd.Backend, dtype: MatrixType,
     assert shared.data_ptr() == dlpack_view.data_ptr()
     np.testing.assert_array_equal(shared.cpu().numpy(), initial)
     shared[1, 2, 3] = -7
-    synchronize_torch(shared)
+    test_utils.synchronize_torch(shared)
 
     np.testing.assert_array_equal(x.to_numpy(), expected)
 
@@ -489,10 +435,10 @@ def test_compound_layout_dlpack_shape_and_strides(
     backend: qd.Backend, dtype: MatrixType, layout: tuple[int, ...]
 ) -> None:
     """DLPack describes canonical values over physical storage using the correct strides."""
-    torch = require_torch_dlpack(backend)
+    torch = test_utils.require_torch_dlpack(backend)
     shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
-    initial = new_numpy_tensor_containing_index_codes(shape, x.element_shape)
+    initial = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
     x.from_numpy(initial)
     physical_axes = layout + tuple(range(len(shape), initial.ndim))
     physical = np.ascontiguousarray(initial.transpose(physical_axes))
@@ -518,17 +464,17 @@ def test_compound_layout_dlpack_shape_and_strides(
 @test_utils.test(exclude=[qd.vulkan])
 def test_compound_layout_dlpack_writes(backend: qd.Backend, dtype: MatrixType, layout: tuple[int, ...]) -> None:
     """A write through a DLPack view changes the same canonical element in the tensor."""
-    torch = require_torch_dlpack(backend)
+    torch = test_utils.require_torch_dlpack(backend)
     shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
-    initial = new_numpy_tensor_containing_index_codes(shape, x.element_shape)
+    initial = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
     x.from_numpy(initial)
     expected = initial.copy()
     expected[1, 2, 3] = -7
 
     view = torch.utils.dlpack.from_dlpack(x.to_dlpack())
     view[1, 2, 3] = -7
-    synchronize_torch(view)
+    test_utils.synchronize_torch(view)
 
     np.testing.assert_array_equal(x.to_numpy(), expected)
 
@@ -620,11 +566,11 @@ def test_compound_layout_kernel_specialization(backend: qd.Backend, dtype: Matri
 
     shape = (2, 5)
     element_shape = (dtype.n,) if dtype.ndim == 1 else (dtype.n, dtype.m)
-    expected = new_numpy_tensor_containing_index_codes(shape, element_shape)
+    expected = test_utils.new_numpy_tensor_containing_index_codes(shape, element_shape)
 
     for layout in (None, (1, 0), None):
         x = qd.tensor(dtype, shape, backend=backend, layout=layout)
-        fill_index_codes(x, dtype)
+        test_utils.fill_index_codes(x, dtype)
 
         np.testing.assert_array_equal(x.to_numpy(), expected)
 
