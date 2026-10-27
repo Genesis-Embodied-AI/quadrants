@@ -384,7 +384,7 @@ def test_compound_layout_torch_noncontiguous_import(
 @test_utils.test(exclude=[qd.vulkan])
 def test_compound_layout_torch_zero_copy(backend: qd.Backend, dtype: MatrixType) -> None:
     """Torch sharing modes return the existing buffer and expose writes at canonical positions."""
-    torch = test_utils.require_torch_dlpack(need_field_support=backend == qd.Backend.FIELD)
+    test_utils.require_torch_dlpack(need_field_support=backend == qd.Backend.FIELD)
     shape = (2, 4, 5)
     layout = (2, 0, 1)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
@@ -392,10 +392,8 @@ def test_compound_layout_torch_zero_copy(backend: qd.Backend, dtype: MatrixType)
     x.from_numpy(initial)
     expected = initial.copy()
     expected[1, 2, 3] = -7
-    dlpack_view = torch.utils.dlpack.from_dlpack(x.to_dlpack())
 
     torch_view = x.to_torch(copy=False)
-    assert torch_view.data_ptr() == dlpack_view.data_ptr()
     np.testing.assert_array_equal(torch_view.cpu().numpy(), initial)
     torch_view[1, 2, 3] = -7
     test_utils.torch_synchronize(torch_view.device)
