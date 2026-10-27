@@ -426,8 +426,8 @@ def test_compound_layout_dlpack_shape_and_strides(
     physical_axes = layout + tuple(range(len(shape), len(shape) + len(x.element_shape)))
     physical_values_np = np.ascontiguousarray(initial.transpose(physical_axes))
     # Restores the original axis order without changing the physical storage.
-    canonical_view = physical_values_np.transpose(np.argsort(physical_axes))
-    expected_strides = tuple(stride // canonical_view.itemsize for stride in canonical_view.strides)
+    canonical_view_np = physical_values_np.transpose(np.argsort(physical_axes))
+    expected_strides = tuple(stride // canonical_view_np.itemsize for stride in canonical_view_np.strides)
 
     view = torch.utils.dlpack.from_dlpack(x.to_dlpack())
 
