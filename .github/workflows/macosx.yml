@@ -17,7 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         MAC_OS_VERSION: [26]
-        PYTHON_VERSION: ['3.12', '3.13', '3.14']
+        PYTHON_VERSION: ['3.12', '3.13', '3.14', '3.15']
     name: Mac OS Build
     runs-on: macos-${{ matrix.MAC_OS_VERSION }}
     steps:
@@ -72,7 +72,7 @@ jobs:
       fail-fast: false
       matrix:
         MAC_OS_VERSION: [26]
-        PYTHON_VERSION: ['3.12', '3.13', '3.14']
+        PYTHON_VERSION: ['3.12', '3.13', '3.14', '3.15']
         ARCH: [metal, vulkan, cpu]
         include:
           - MAC_OS_VERSION: 15
@@ -127,7 +127,7 @@ jobs:
       cancel-in-progress: true
     strategy:
       matrix:
-        PYTHON_CP_VERSION: ["cp312", "cp313", "cp314"]
+        PYTHON_CP_VERSION: ["cp312", "cp313", "cp314", "cp315"]
         MAC_OS_VERSION: [26]
       fail-fast: false
     with:

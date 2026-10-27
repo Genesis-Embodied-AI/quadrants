@@ -17,14 +17,14 @@ jobs:
   build_wheel:
     name: Manylinux wheel Build
     runs-on: ${{ matrix.os }}
-    container: ${{ matrix.os == 'ubuntu-22.04' && 'quay.io/pypa/manylinux_2_28_x86_64:latest' || matrix.os == 'ubuntu-22.04-arm' && 'quay.io/pypa/manylinux_2_34_aarch64:2025.11.11-1' }}
+    container: ${{ matrix.os == 'ubuntu-22.04' && 'quay.io/pypa/manylinux_2_28_x86_64:latest' || matrix.os == 'ubuntu-22.04-arm' && 'quay.io/pypa/manylinux_2_34_aarch64:latest' }}
     concurrency:
       # group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref }}-${{ matrix.PYTHON_CP_VERSION }}-${{ matrix.PYTHON_CP_VERSION != 'cp310' && 'all' || github.sha }}-build
       group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name }}-${{ github.head_ref || github.ref }}-${{ matrix.PYTHON_CP_VERSION }}-${{matrix.os}}-build
       cancel-in-progress: ${{ github.event_name != 'release' }}
     strategy:
       matrix:
-        PYTHON_CP_VERSION: ['cp312', 'cp313', 'cp314']
+        PYTHON_CP_VERSION: ['cp312', 'cp313', 'cp314', 'cp315']
         os: ['ubuntu-22.04', 'ubuntu-22.04-arm']
       fail-fast: false
     steps:
@@ -35,8 +35,8 @@ jobs:
         run: |
           df -h
           pushd /opt/python
-          rm -Rf cp39-cp39 cp310-cp310 cp311-cp311 cp314-cp314t cp38-cp38 cp313-cp313t pp310-pypy310_pp73 pp311-pypy311_pp73
-          for cpversion in cp312 cp313 cp314; do {
+          rm -Rf cp39-cp39 cp310-cp310 cp311-cp311 cp314-cp314t cp315-cp315t cp38-cp38 cp313-cp313t pp310-pypy310_pp73 pp311-pypy311_pp73
+          for cpversion in cp312 cp313 cp314 cp315; do {
             if [[ "${cpversion}" != "${{ matrix.PYTHON_CP_VERSION }}" ]]; then
               rm -Rf ${cpversion}-${cpversion}
             fi
@@ -89,7 +89,7 @@ jobs:
       cancel-in-progress: ${{ github.event_name != 'release' }}
     strategy:
       matrix:
-        PYTHON_VERSION: ['3.12', '3.13', '3.14']
+        PYTHON_VERSION: ['3.12', '3.13', '3.14', '3.15']
         os: ['ubuntu-22.04', 'ubuntu-22.04-arm']
       fail-fast: false
     steps:
@@ -143,12 +143,13 @@ jobs:
       cancel-in-progress: true
     strategy:
       matrix:
-        PYTHON_CP_VERSION: ["cp312", "cp313", "cp314"]
+        PYTHON_CP_VERSION: ["cp312", "cp313", "cp314", "cp315"]
         os: ['ubuntu-22.04', 'ubuntu-22.04-arm']
       fail-fast: false
     with:
       artifact_name: manylinux_wheel_${{ matrix.PYTHON_CP_VERSION }}_${{matrix.os}}
     secrets: inherit
+  # Keep GPU interoperability on 3.14 until the cu128 and rocm6.4 PyTorch indexes provide 3.15 wheels.
   test_gpu:
     uses: ./.github/workflows/test_gpu.yml
     needs: build_wheel
