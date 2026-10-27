@@ -413,7 +413,7 @@ def test_compound_layout_torch_zero_copy(backend: qd.Backend, dtype: MatrixType,
     assert shared.data_ptr() == dlpack_view.data_ptr()
     np.testing.assert_array_equal(shared.cpu().numpy(), initial)
     shared[1, 2, 3] = -7
-    test_utils.synchronize_torch(shared)
+    test_utils.torch_synchronize(shared.device)
 
     np.testing.assert_array_equal(x.to_numpy(), expected)
 
@@ -474,7 +474,7 @@ def test_compound_layout_dlpack_writes(backend: qd.Backend, dtype: MatrixType, l
 
     view = torch.utils.dlpack.from_dlpack(x.to_dlpack())
     view[1, 2, 3] = -7
-    test_utils.synchronize_torch(view)
+    test_utils.torch_synchronize(view.device)
 
     np.testing.assert_array_equal(x.to_numpy(), expected)
 

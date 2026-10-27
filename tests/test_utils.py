@@ -69,12 +69,12 @@ def require_torch_dlpack(need_field_support: bool) -> ModuleType:
     return torch
 
 
-def synchronize_torch(tensor: "torch.Tensor") -> None:
+def torch_synchronize(device: "torch.device") -> None:
     import torch
 
-    if tensor.device.type == "cuda":
-        torch.cuda.synchronize()
-    elif tensor.device.type == "mps":
+    if device.type == "cuda":
+        torch.cuda.synchronize(device)
+    elif device.type == "mps":
         torch.mps.synchronize()
 
 
