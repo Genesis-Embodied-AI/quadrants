@@ -564,10 +564,10 @@ def test_compound_layout_other_ranks(backend, dtype, shape, layout):
 @pytest.mark.parametrize(
     "backend,dtype,layout",
     [
-        (qd.Backend.FIELD, qd.types.vector(3, qd.f32), (0,)),
-        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (0, 0)),
-        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (0, 2)),
-        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (0, 1, 2)),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (0,), id="too-few-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (0, 0), id="repeated-axis"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (0, 2), id="axis-out-of-range"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (0, 1, 2), id="too-many-axes"),
     ],
 )
 @test_utils.test()
