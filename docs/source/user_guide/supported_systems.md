@@ -15,6 +15,8 @@ We test the following systems in our CI servers:
 - Ubuntu 22.04 and 24.04 (x64 and ARM64)
 - Windows 10 or later (x86 only)
 
+Linux wheels require glibc 2.35 or newer on both x64 and ARM64.
+
 ### GPUs
 
 - NVIDIA GPUs with compute capability 6.0 (`sm_60`, Pascal) through 12.0 (`sm_120`, Blackwell / Thor). Compute capability identifies the GPU features supported by an NVIDIA architecture; `sm_60` and `sm_120` are CUDA's codes for these versions.
