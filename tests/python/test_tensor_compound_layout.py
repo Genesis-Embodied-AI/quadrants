@@ -497,7 +497,7 @@ def test_compound_layout_grad(backend: qd.Backend, dtype: MatrixType) -> None:
     @qd.kernel
     def sum_components(y: qd.Tensor, loss: qd.Tensor) -> None:
         for I in qd.grouped(y):
-            loss[None] += y[I].sum()
+            loss[()] += y[I].sum()
 
     x.fill(3)
     loss.fill(0)
@@ -507,7 +507,7 @@ def test_compound_layout_grad(backend: qd.Backend, dtype: MatrixType) -> None:
     loss.grad.fill(1)
     scaled_square(x, y)
     sum_components(y, loss)
-    assert loss[None] == 27 * np.prod(shape + x.element_shape)
+    assert loss[()] == 27 * np.prod(shape + x.element_shape)
 
     # Differentiate the sum to obtain y.grad = 1, then y = 3*x*x to obtain x.grad = 6*x = 18.
     sum_components.grad(y, loss)
