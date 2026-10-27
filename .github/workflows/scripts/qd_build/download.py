@@ -44,6 +44,7 @@ def download_file(url, destination, name):
                     raise
             if attempt >= attempts:
                 raise
+            # Delay: 1, 2, 4, 8, ... seconds.
             delay = 2 ** (attempt - 1)
             print(
                 f"Download {name} failed (attempt {attempt}/{attempts}): {error}. Retrying in {delay}s.",
