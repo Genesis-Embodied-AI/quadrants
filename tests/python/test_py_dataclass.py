@@ -5703,14 +5703,14 @@ def test_final_subclass_structural_container_subclass_rejected():
 
 @test_utils.test()
 def test_final_subclass_structural_foreign_descriptor_identity():
-    """A *foreign* descriptor bound in a keyed structural attr (``Unit.__weakref__ = A.slot``) must carry its
-    owner's identity: its address-based ``repr`` is unkeyable and its own ``__qualname__`` is just the slot name, so
-    without the owner two distinct descriptors collapse to one token and a compile-time ``... is A.slot`` branch
-    would reuse the wrong specialization."""
+    """Foreign descriptors stored in structural attributes must retain their owner's identity in specialization keys.
+    Distinct owners, including ones with the same qualified name, must produce different keys to avoid reusing the
+    wrong specialization.
+    """
     from quadrants.lang._final_dataclass_fields import final_scalar_key
 
-    # Python 3.15 shares the generic __weakref__ descriptor between ordinary classes. Explicit slots
-    # provide distinct foreign descriptors, preserving the owner-identity regression this test exercises.
+    # Python 3.15 shares the generic __weakref__ descriptor between ordinary classes. Explicit slots provide distinct
+    # foreign descriptors, preserving the owner-identity regression this test exercises.
     class OwnerA:
         __slots__ = ("slot",)
 
