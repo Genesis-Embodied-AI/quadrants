@@ -95,11 +95,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - python_version: '3.14'
-            torch_cuda: cu128
-          - python_version: '3.15'
-            torch_cuda: cu126
+        python_version: ['3.14', '3.15']
     steps:
       - uses: actions/checkout@v4
         with:
@@ -130,9 +126,7 @@ jobs:
           python tests/run_tests.py -r 1 -v --arch cuda -m "not needs_torch"
       - name: install torch and run torch tests
         run: |
-          # The T4 runners use a CUDA 12.8-capable driver. cu126 provides Python 3.15 wheels; cu128 does not. Both run
-          # on this driver without requiring CUDA 13.
-          pip install torch --index-url https://download.pytorch.org/whl/${{ matrix.torch_cuda }}
+          pip install torch --index-url https://download.pytorch.org/whl/cu130
           python -c "import torch; print(torch.__version__, torch.version.cuda); assert torch.cuda.is_available()"
           python tests/run_tests.py -r 1 -v --arch cuda -m needs_torch
   test_linux_vulkan:
