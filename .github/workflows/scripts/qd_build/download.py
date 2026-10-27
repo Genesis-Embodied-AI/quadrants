@@ -13,7 +13,7 @@ def download_file(url, destination, name):
     attempts = 5
     for attempt in range(1, attempts + 1):
         try:
-            # Allow 15 seconds to connect and 60 seconds without receiving data, not 60 seconds for the whole download.
+            # Allow 15 seconds to connect and 60 seconds without receiving data.
             with requests.get(url, stream=True, timeout=(15, 60)) as response:
                 response.raise_for_status()
                 with (
