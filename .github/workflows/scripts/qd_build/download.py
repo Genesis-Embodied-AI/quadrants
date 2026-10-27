@@ -15,6 +15,7 @@ def download_file(url, destination, name):
         try:
             # Allow 15 seconds to connect and 60 seconds without receiving data.
             with requests.get(url, stream=True, timeout=(15, 60)) as response:
+                # Raise HTTPError for a 4xx or 5xx status before reading the response body.
                 response.raise_for_status()
                 with (
                     tqdm.tqdm(
