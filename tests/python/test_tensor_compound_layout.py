@@ -177,7 +177,6 @@ def test_compound_layout_numpy_export_is_independent(
     shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
     initial = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
-    # Copy these values into x; initial remains our reference for the original contents.
     x.from_numpy(initial)
 
     # Request a new NumPy array with its own storage. Its indices must have the same meaning as initial,
