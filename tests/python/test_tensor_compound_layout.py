@@ -458,9 +458,9 @@ def test_compound_layout_dlpack_writes(backend: qd.Backend, dtype: MatrixType, l
     expected = initial.copy()
     expected[1, 2, 3] = -7
 
-    view = torch.utils.dlpack.from_dlpack(x.to_dlpack())
-    view[1, 2, 3] = -7
-    test_utils.torch_synchronize(view.device)
+    torch_view = torch.utils.dlpack.from_dlpack(x.to_dlpack())
+    torch_view[1, 2, 3] = -7
+    test_utils.torch_synchronize(torch_view.device)
 
     np.testing.assert_array_equal(x.to_numpy(), expected)
 
