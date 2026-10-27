@@ -8,19 +8,6 @@ We test the following systems in our CI servers:
 - Ubuntu 22.04 and Ubuntu 24.04
 - Windows Server 2025
 
-Wheel CI covers Python 3.15 on Linux, macOS, and Windows. CUDA interoperability CI covers Python 3.14 and 3.15;
-the Python 3.15 job uses PyTorch's CUDA 12.6 wheels on T4 GPUs. ROCm interoperability CI remains on Python 3.14
-because the ROCm 6.4 PyTorch index does not provide Python 3.15 wheels.
-
-For optional PyTorch interoperability on Python 3.15, install a build from PyTorch's own wheel indexes. For example:
-
-```bash
-# CPU
-python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-# CUDA 13.0 (including Blackwell GPUs; requires a compatible NVIDIA driver)
-python -m pip install torch --index-url https://download.pytorch.org/whl/cu130
-```
-
 ## Supported systems:
 
 ### Operating systems
