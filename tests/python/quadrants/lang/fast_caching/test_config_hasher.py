@@ -3,7 +3,7 @@ from quadrants.lang import impl
 from quadrants.lang._fast_caching import config_hasher
 
 from tests import test_utils
-from tests.test_utils import qd_init_same_arch
+from tests.python.helpers.runtime import qd_init_same_arch
 
 
 @test_utils.test()

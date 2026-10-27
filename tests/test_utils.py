@@ -16,18 +16,6 @@ from quadrants.lang.misc import is_arch_supported
 
 
 # Helper functions
-def qd_init_same_arch(**options) -> None:
-    """
-    Used in tests to call qd.init, passing in the same arch as currently
-    configured. Since it's fairly fiddly to do that, extracting this out
-    to this helper function.
-    """
-    assert qd.cfg is not None
-    options = dict(options)
-    options["arch"] = getattr(qd, qd.cfg.arch.name)
-    qd.init(**options)
-
-
 def verify_image(image, image_name, tolerance=0.1, regerate_groundtruth_images=False):
     if regerate_groundtruth_images:
         ground_truth_name = f"tests/python/expected/{image_name}.png"

@@ -4,7 +4,8 @@ import textwrap
 
 from quadrants.lang import _wrap_inspect
 
-from tests import test_utils, textwrap2
+from tests import test_utils
+from tests.python.helpers import textwrap as test_textwrap
 
 
 @test_utils.test()
@@ -38,7 +39,7 @@ def test_wrap_inspect() -> None:
     assert len(src) == 4
     assert all([line != "" and len(line) > 2 for line in src])
     actual_src = "".join(src)
-    expected = textwrap2.dedent(
+    expected = test_textwrap.dedent(
         4,
         """\
         def my_func2(self, a: int, b: int) -> int:

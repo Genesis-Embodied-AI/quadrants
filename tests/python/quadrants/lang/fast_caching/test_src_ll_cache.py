@@ -18,7 +18,7 @@ from quadrants.lang._fast_caching import args_hasher
 from quadrants.lang._kernel_types import SrcLlCacheObservations
 
 from tests import test_utils
-from tests.test_utils import qd_init_same_arch
+from tests.python.helpers.runtime import qd_init_same_arch
 
 TEST_RAN = "test ran"
 RET_SUCCESS = 42

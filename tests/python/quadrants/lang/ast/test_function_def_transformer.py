@@ -8,7 +8,8 @@ from quadrants.lang.ast.ast_transformers.function_def_transformer import (
     FunctionDefTransformer,
 )
 
-from tests import dataclass_test_tools, test_utils
+from tests import test_utils
+from tests.python.helpers import dataclass_helpers
 
 
 @dataclasses.dataclass
@@ -88,7 +89,7 @@ def test_process_func_arg(argument_name: str, argument_type: Any, expected_varia
             assert name not in self.variables
             self.variables[name] = data
 
-    data = dataclass_test_tools.build_struct(argument_type)
+    data = dataclass_helpers.build_struct(argument_type)
     ctx = MockContext()
     FunctionDefTransformer._transform_func_arg(
         ctx,
