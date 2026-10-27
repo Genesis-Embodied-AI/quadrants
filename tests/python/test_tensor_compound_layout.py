@@ -364,10 +364,10 @@ def test_compound_layout_torch_noncontiguous_import(
     initial = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
     arch = qd.lang.impl.current_cfg().arch
     device = "cuda" if arch in (qd.cuda, qd.amdgpu) else "cpu"
-    source = torch.tensor(initial, device=device).transpose(0, 1).contiguous().transpose(0, 1)
-    assert not source.is_contiguous()
+    noncontiguous_input = torch.tensor(initial, device=device).transpose(0, 1).contiguous().transpose(0, 1)
+    assert not noncontiguous_input.is_contiguous()
 
-    x.from_torch(source)
+    x.from_torch(noncontiguous_input)
 
     np.testing.assert_array_equal(x.to_numpy(), initial)
 
