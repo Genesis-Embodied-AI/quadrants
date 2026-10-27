@@ -15,25 +15,41 @@ from tests import test_utils
 
 
 @pytest.mark.parametrize(
-    "backend,dtype,layout",
+    "backend,dtype,shape,layout",
     [
-        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), None, id="field-vector-default"),
-        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="field-matrix-swap-axes-0-1"),
-        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
-        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (0, 1, 2), id="ndarray-matrix-identity"),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (2, 4, 5), None, id="field-vector-default"),
+        pytest.param(
+            qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 4, 5), (1, 0, 2), id="field-matrix-swap-axes-0-1"
+        ),
+        pytest.param(
+            qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 4, 5), (2, 0, 1), id="ndarray-vector-cycle-axes"
+        ),
+        pytest.param(
+            qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (2, 4, 5), (0, 1, 2), id="ndarray-matrix-identity"
+        ),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (), (), id="field-vector-0d-identity"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (), (), id="ndarray-matrix-0d-identity"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (4,), (0,), id="ndarray-vector-1d-identity"),
+        pytest.param(
+            qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 5), (1, 0), id="field-matrix-2d-swap-axes-0-1"
+        ),
     ],
 )
 @test_utils.test()
-def test_compound_layout_metadata(backend: qd.Backend, dtype: MatrixType, layout: tuple[int, ...] | None) -> None:
-    """Allocation preserves canonical shape and component dimensions, and normalizes identity layouts."""
-    shape = (2, 4, 5)
+def test_compound_layout_metadata(
+    backend: qd.Backend, dtype: MatrixType, shape: tuple[int, ...], layout: tuple[int, ...] | None
+) -> None:
+    """Check shape, component dimensions, normalized layouts, filling, and NumPy export across tensor ranks."""
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
     element_shape = (dtype.n,) if dtype.ndim == 1 else (dtype.n, dtype.m)
-    expected_layout = None if layout in (None, (0, 1, 2)) else layout
+    expected_layout = None if layout is None or layout == tuple(range(len(shape))) else layout
 
     assert x.shape == shape
     assert x.element_shape == element_shape
     assert x.layout == expected_layout
+
+    x.fill(4)
+    np.testing.assert_array_equal(x.to_numpy(), np.full(shape + element_shape, 4))
 
 
 @pytest.mark.parametrize(
@@ -514,28 +530,6 @@ def test_compound_layout_grad(backend: qd.Backend, dtype: MatrixType) -> None:
     sum_components.grad(y, loss)
     scaled_square.grad(x, y)
     np.testing.assert_array_equal(x.grad.to_numpy(), np.full(x.shape + x.element_shape, 18))
-
-
-@pytest.mark.parametrize(
-    "backend,dtype,shape,layout",
-    [
-        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (), (), id="field-vector-0d-identity"),
-        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (), (), id="ndarray-matrix-0d-identity"),
-        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (4,), (0,), id="ndarray-vector-1d-identity"),
-        pytest.param(
-            qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 5), (1, 0), id="field-matrix-2d-swap-axes-0-1"
-        ),
-    ],
-)
-@test_utils.test()
-def test_compound_layout_other_ranks(
-    backend: qd.Backend, dtype: MatrixType, shape: tuple[int, ...], layout: tuple[int, ...]
-) -> None:
-    """Check allocation, filling, and NumPy export for tensors with zero, one, or two shape axes."""
-    x = qd.tensor(dtype, shape, backend=backend, layout=layout)
-    x.fill(4)
-    assert x.shape == shape
-    np.testing.assert_array_equal(x.to_numpy(), np.full(shape + x.element_shape, 4))
 
 
 @pytest.mark.parametrize(
