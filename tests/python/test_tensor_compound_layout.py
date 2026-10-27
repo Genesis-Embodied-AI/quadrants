@@ -36,7 +36,7 @@ def fill_index_codes(x: qd.Tensor, dtype: qd.template()):
 
 
 def require_torch_dlpack(backend):
-    """Skip only when Torch or its Metal field DLPack support is unavailable."""
+    """Require Torch and, for Metal fields, support for DLPack byte offsets."""
     torch = pytest.importorskip("torch")
     if (
         qd.lang.impl.current_cfg().arch == qd.metal
