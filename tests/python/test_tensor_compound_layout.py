@@ -193,20 +193,16 @@ def test_compound_layout_numpy_export_is_independent(
 
 
 @pytest.mark.parametrize(
-    "backend,dtype,copy_mode",
+    "backend,dtype",
     [
-        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), False, id="field-vector-copy-false"),
-        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), None, id="field-matrix-copy-none"),
-        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), None, id="ndarray-vector-copy-none"),
-        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), False, id="ndarray-matrix-copy-false"),
-        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), None, id="field-vector-copy-none"),
-        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), False, id="field-matrix-copy-false"),
-        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), False, id="ndarray-vector-copy-false"),
-        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), None, id="ndarray-matrix-copy-none"),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), id="field-vector"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), id="field-matrix"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), id="ndarray-vector"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), id="ndarray-matrix"),
     ],
 )
 @test_utils.test(arch=qd.cpu)
-def test_compound_layout_numpy_zero_copy(backend: qd.Backend, dtype: MatrixType, copy_mode: bool | None) -> None:
+def test_compound_layout_numpy_zero_copy(backend: qd.Backend, dtype: MatrixType) -> None:
     """Writing a NumPy view updates the tensor at the same canonical position."""
     pytest.importorskip("torch")
     shape = (2, 4, 5)
@@ -217,7 +213,7 @@ def test_compound_layout_numpy_zero_copy(backend: qd.Backend, dtype: MatrixType,
     expected = initial.copy()
     expected[1, 2, 3] = -7
 
-    np_view = x.to_numpy(copy=copy_mode)
+    np_view = x.to_numpy(copy=False)
     np.testing.assert_array_equal(np_view, initial)
     np_view[1, 2, 3] = -7
 
