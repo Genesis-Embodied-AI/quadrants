@@ -483,6 +483,7 @@ def test_compound_layout_grad(backend: qd.Backend, dtype: MatrixType) -> None:
     shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=(2, 0, 1), needs_grad=True)
     y = qd.tensor(dtype, x.shape, backend=backend, layout=(1, 0, 2), needs_grad=True)
+    loss = qd.tensor(qd.f32, shape=(), backend=backend, needs_grad=True)
     assert x.grad.shape == x.shape
     assert x.grad.layout == x.layout
     assert y.grad.shape == y.shape
@@ -493,12 +494,23 @@ def test_compound_layout_grad(backend: qd.Backend, dtype: MatrixType) -> None:
         for I in qd.grouped(x):
             y[I] = 2 * x[I]
 
+    @qd.kernel
+    def sum_components(y: qd.Tensor, loss: qd.Tensor) -> None:
+        for I in qd.grouped(y):
+            loss[None] += y[I].sum()
+
     x.fill(3)
+    loss.fill(0)
     x.grad.fill(0)
-    y.grad.fill(1)
+    y.grad.fill(0)
     double(x, y)
-    # Run the generated backward kernel: x.grad[I] += 2 * y.grad[I].
-    # With y.grad initialized to 1 and x.grad to 0, every component of x.grad should become 2.
+    sum_components(y, loss)
+    assert loss[None] == 6 * np.prod(shape + x.element_shape)
+
+    # Start from the explicit scalar loss: d(loss)/d(loss) = 1.
+    loss.grad.fill(1)
+    # Differentiate the sum to obtain y.grad = 1, then y = 2*x to obtain x.grad = 2.
+    sum_components.grad(y, loss)
     double.grad(x, y)
     np.testing.assert_array_equal(x.grad.to_numpy(), np.full(x.shape + x.element_shape, 2))
 
