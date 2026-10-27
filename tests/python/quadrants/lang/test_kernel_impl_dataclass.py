@@ -15,7 +15,7 @@ import quadrants.lang._kernel_impl_dataclass as _kernel_impl_dataclass
 from quadrants.lang.kernel_arguments import ArgMetadata
 
 from tests import test_utils
-from tests.python.helpers import dataclass_helpers
+from tests.helpers import dataclass_helpers
 
 __all__ = [
     "Attribute",

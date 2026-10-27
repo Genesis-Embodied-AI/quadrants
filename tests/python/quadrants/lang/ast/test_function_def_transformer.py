@@ -9,7 +9,7 @@ from quadrants.lang.ast.ast_transformers.function_def_transformer import (
 )
 
 from tests import test_utils
-from tests.python.helpers import dataclass_helpers
+from tests.helpers import dataclass_helpers
 
 
 @dataclasses.dataclass

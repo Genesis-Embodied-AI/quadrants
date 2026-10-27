@@ -5,7 +5,7 @@ import textwrap
 from quadrants.lang import _wrap_inspect
 
 from tests import test_utils
-from tests.python.helpers import textwrap as test_textwrap
+from tests.helpers import textwrap as test_textwrap
 
 
 @test_utils.test()

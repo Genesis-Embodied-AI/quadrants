@@ -17,7 +17,7 @@ from quadrants.lang.util import has_pytorch
 from quadrants.math import ivec3, vec3
 
 from tests import test_utils
-from tests.python.helpers.kernel_loading import load_kernel_from_string
+from tests.helpers.kernel_loading import load_kernel_from_string
 
 if has_pytorch():
     import torch  # noqa: F401

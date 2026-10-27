@@ -10,7 +10,7 @@ from quadrants.lang import impl
 from quadrants.lang.misc import get_host_arch_list
 
 from tests import test_utils
-from tests.python.helpers.kernel_loading import load_kernel_from_string
+from tests.helpers.kernel_loading import load_kernel_from_string
 
 data_types = [qd.i32, qd.f32, qd.i64, qd.f64]
 field_shapes = [(), 8, (6, 12)]

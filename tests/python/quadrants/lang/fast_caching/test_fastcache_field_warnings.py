@@ -19,7 +19,7 @@ import pytest
 import quadrants as qd
 
 from tests import test_utils
-from tests.python.helpers.runtime import qd_init_same_arch
+from tests.helpers.runtime import qd_init_same_arch
 
 
 @test_utils.test(arch=qd.cpu)
