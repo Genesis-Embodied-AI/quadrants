@@ -25,10 +25,10 @@ def download_file(url, destination, name):
                         total=int(response.headers.get("content-length", 0)),
                         desc=name,
                     ) as progress,
-                    partial_file.open("wb") as output,
+                    partial_file.open("wb") as output_fh,
                 ):
                     for chunk in response.iter_content(chunk_size=8192):
-                        progress.update(output.write(chunk))
+                        progress.update(output_fh.write(chunk))
             partial_file.replace(destination)
             return
         except (
