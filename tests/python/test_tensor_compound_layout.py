@@ -430,6 +430,7 @@ def test_compound_layout_dlpack_shape_and_strides(
     # Converts NumPy's strides from bytes to scalar elements, because DLPack and Torch express strides in elements.
     expected_strides = tuple(stride // canonical_view_np.itemsize for stride in canonical_view_np.strides)
 
+    # Creates a Torch tensor that shares x's memory.
     view = torch.utils.dlpack.from_dlpack(x.to_dlpack())
 
     assert tuple(view.shape) == initial.shape
