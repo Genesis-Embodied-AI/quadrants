@@ -24,7 +24,7 @@ A fresh, empty cache directory is created for each test session by pytest's [`tm
 
 ## Creating your build/dev environment
 
-It is recommended to use a virtual env. Quadrants supports Python 3.12-3.14 for building and testing. However, `pre-commit` is configured with a pinned Python `3.12` to ensure consistent formatting, so you will need Python 3.12 available for running pre-commit hooks.
+It is recommended to use a virtual env. Quadrants supports Python 3.12-3.15 for building and testing. However, `pre-commit` is configured with a pinned Python `3.12` to ensure consistent formatting, so you will need Python 3.12 available for running pre-commit hooks.
 
 After cloning, make sure to initialize submodules:
 
