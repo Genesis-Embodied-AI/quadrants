@@ -1,6 +1,6 @@
 from functools import partial
 from typing import Any, TypeAlias
-from weakref import ReferenceType
+from weakref import ReferenceType, WeakKeyDictionary
 
 from quadrants.lang import impl
 from quadrants.lang.impl import Program
@@ -21,7 +21,8 @@ from ._template_mapper_hotpath import (
 # Whether an arg of this class contributes to the args_hash ndarray-id walk in ``TemplateMapper.lookup``. Only the
 # decision is per class; the paths themselves must stay per instance, since a @qd.data_oriented class can have a
 # different attribute structure per instance (Genesis ``DataManager``).
-_arg_disposition: dict[type, object] = {}
+# Weak keys avoid retaining user classes and their kernels, which can keep the runtime alive during shutdown.
+_arg_disposition: WeakKeyDictionary[type, object] = WeakKeyDictionary()
 _SKIP = object()
 _PER_INSTANCE = object()
 
