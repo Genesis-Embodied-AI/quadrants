@@ -11,12 +11,12 @@ import pydantic
 import pytest
 
 import quadrants as qd
-from quadrants._test_tools import qd_init_same_arch
 from quadrants.lang import _wrap_inspect
 from quadrants.lang._fast_caching import function_hasher, src_hasher
 from quadrants.lang._wrap_inspect import get_source_info_and_src
 
 from tests import test_utils
+from tests.test_utils import qd_init_same_arch
 
 TEST_RAN = "test ran"
 RET_SUCCESS = 42

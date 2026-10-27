@@ -6,11 +6,11 @@ import numpy as np
 import pytest
 
 import quadrants as qd
-from quadrants._test_tools.load_kernel_string import load_kernel_from_string
 from quadrants.lang import impl
 from quadrants.lang.misc import get_host_arch_list
 
 from tests import test_utils
+from tests.load_kernel_string import load_kernel_from_string
 
 data_types = [qd.i32, qd.f32, qd.i64, qd.f64]
 field_shapes = [(), 8, (6, 12)]

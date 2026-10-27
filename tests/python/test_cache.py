@@ -1,10 +1,10 @@
 import pathlib
 
 import quadrants as qd
-from quadrants._test_tools import qd_init_same_arch
 from quadrants.lang.misc import get_host_arch_list
 
 from tests import test_utils
+from tests.test_utils import qd_init_same_arch
 
 
 @test_utils.test(arch=get_host_arch_list())

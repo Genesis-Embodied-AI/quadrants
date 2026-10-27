@@ -8,7 +8,7 @@ from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import is_data_oriented
 from quadrants.types import ndarray_type
 
-from .._test_tools import warnings_helper
+from .. import _warnings
 from ._kernel_types import ArgsHash
 from ._optional_annotation import OPTIONAL_ABSENT
 from ._template_mapper_hotpath import (
@@ -184,6 +184,6 @@ class TemplateMapper:
                 self._mapping_cache_tracker[args_hash] = mapping_cache_tracker_
                 self._mapping_cache[args_hash] = (count, key)
             except TypeError as e:
-                warnings_helper.warn_once(f"{e}. Template mapper caching disabled.")
+                _warnings.warn_once(f"{e}. Template mapper caching disabled.")
 
         return (count, key)

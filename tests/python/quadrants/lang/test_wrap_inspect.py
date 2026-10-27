@@ -2,10 +2,9 @@ import importlib
 import sys
 import textwrap
 
-from quadrants._test_tools import textwrap2
 from quadrants.lang import _wrap_inspect
 
-from tests import test_utils
+from tests import test_utils, textwrap2
 
 
 @test_utils.test()

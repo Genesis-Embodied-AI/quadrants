@@ -6,7 +6,6 @@ import numpy as np
 import pytest
 
 import quadrants as qd
-from quadrants._test_tools.load_kernel_string import load_kernel_from_string
 from quadrants.lang import impl
 from quadrants.lang.exception import (
     QuadrantsIndexError,
@@ -18,6 +17,7 @@ from quadrants.lang.util import has_pytorch
 from quadrants.math import ivec3, vec3
 
 from tests import test_utils
+from tests.load_kernel_string import load_kernel_from_string
 
 if has_pytorch():
     import torch  # noqa: F401

@@ -11,11 +11,10 @@ from typing import Any
 import pytest
 
 import quadrants as qd
-import quadrants._test_tools.dataclass_test_tools as dataclass_test_tools
 import quadrants.lang._kernel_impl_dataclass as _kernel_impl_dataclass
 from quadrants.lang.kernel_arguments import ArgMetadata
 
-from tests import test_utils
+from tests import dataclass_test_tools, test_utils
 
 __all__ = [
     "Attribute",

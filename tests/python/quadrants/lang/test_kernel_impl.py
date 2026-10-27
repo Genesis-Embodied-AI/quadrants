@@ -4,9 +4,9 @@ import pathlib
 import pytest
 
 import quadrants as qd
-from quadrants._test_tools import qd_init_same_arch
 
 from tests import test_utils
+from tests.test_utils import qd_init_same_arch
 
 _KERNEL_COVERAGE = os.environ.get("QD_KERNEL_COVERAGE") == "1"
 

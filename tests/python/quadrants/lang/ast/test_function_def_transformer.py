@@ -4,12 +4,11 @@ from typing import Any
 import pytest
 
 import quadrants as qd
-import quadrants._test_tools.dataclass_test_tools as dataclass_test_tools
 from quadrants.lang.ast.ast_transformers.function_def_transformer import (
     FunctionDefTransformer,
 )
 
-from tests import test_utils
+from tests import dataclass_test_tools, test_utils
 
 
 @dataclasses.dataclass
