@@ -151,12 +151,13 @@ def test_compound_layout_numpy_noncontiguous_import(
     shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
     initial = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
-    source = initial[:, :, ::-1]
-    assert not source.flags.c_contiguous
+    # ::-1 reverses the third axis, creating a view with a negative stride without copying the data.
+    noncontiguous_input = initial[:, :, ::-1]
+    assert not noncontiguous_input.flags.c_contiguous
 
-    x.from_numpy(source)
+    x.from_numpy(noncontiguous_input)
 
-    np.testing.assert_array_equal(x.to_numpy(), source)
+    np.testing.assert_array_equal(x.to_numpy(), noncontiguous_input)
 
 
 @pytest.mark.parametrize(
