@@ -35,6 +35,7 @@ def download_file(url, destination, name):
             requests.exceptions.ChunkedEncodingError,
             requests.HTTPError,
         ) as error:
+            # Raising aborts retries.
             if isinstance(error, requests.HTTPError):
                 # Only retry on these specific HTTP status codes.
                 # 408: Request Timeout; 429: Too Many Requests; 500: Internal Server Error;
