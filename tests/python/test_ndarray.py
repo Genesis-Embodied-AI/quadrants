@@ -883,35 +883,39 @@ def test_mismatched_index_python_scope():
         x[0, 0, 0]
 
 
+@pytest.mark.parametrize("read_index", [None, ()], ids=["none", "empty_tuple"])
+@pytest.mark.parametrize("write_index", [None, ()], ids=["none", "empty_tuple"])
 @test_utils.test(arch=supported_archs_quadrants_ndarray)
-def test_0dim_ndarray_read_write_python_scope():
-    # Keep mixed indexing here to cover compatibility with legacy None indices.
+def test_0dim_ndarray_read_write_python_scope(read_index, write_index):
+    # Cover both scalar-index spellings, including mixed reads and writes.
     x = qd.ndarray(dtype=qd.f32, shape=())
 
-    x[()] = 1.0
-    assert x[None] == 1.0
+    x[write_index] = 1.0
+    assert x[read_index] == 1.0
 
     y = qd.ndarray(dtype=qd.math.vec2, shape=())
-    y[()] = [1.0, 2.0]
-    assert y[None] == [1.0, 2.0]
+    y[write_index] = [1.0, 2.0]
+    assert y[read_index] == [1.0, 2.0]
 
 
+@pytest.mark.parametrize("read_index", [None, ()], ids=["none", "empty_tuple"])
+@pytest.mark.parametrize("write_index", [None, ()], ids=["none", "empty_tuple"])
 @test_utils.test(arch=supported_archs_quadrants_ndarray)
-def test_0dim_ndarray_read_write_quadrants_scope():
-    # Keep mixed indexing here to cover compatibility with legacy None indices.
+def test_0dim_ndarray_read_write_quadrants_scope(read_index, write_index):
+    # Cover both scalar-index spellings, including mixed reads and writes.
     x = qd.ndarray(dtype=qd.f32, shape=())
 
     @qd.kernel
     def write(x: qd.types.NDArray):
-        a = x[()] + 1
-        x[None] = 2 * a
+        a = x[read_index] + 1
+        x[write_index] = 2 * a
 
     write(x)
-    assert x[None] == 2.0
+    assert x[read_index] == 2.0
 
     y = qd.ndarray(dtype=qd.math.vec2, shape=())
     write(y)
-    assert y[None] == [2.0, 2.0]
+    assert y[read_index] == [2.0, 2.0]
 
 
 @test_utils.test(arch=supported_archs_quadrants_ndarray, require=qd.extension.data64)
