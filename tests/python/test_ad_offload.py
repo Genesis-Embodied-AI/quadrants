@@ -16,7 +16,7 @@ def test_offload_order():
             y[i] = x[i]
 
         # for i in x:
-        #     z[None] += y[i]
+        #     z[()] += y[i]
 
     with qd.ad.Tape(z):
         forward()

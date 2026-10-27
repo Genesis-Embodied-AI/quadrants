@@ -86,7 +86,7 @@ def test_assign():
 
     @qd.kernel
     def floor():
-        f[None] = qd.Vector([1, 2, 3])
+        f[()] = qd.Vector([1, 2, 3])
 
     with pytest.raises(
         qd.QuadrantsTypeError,

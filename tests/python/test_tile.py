@@ -1243,12 +1243,12 @@ def test_potrf(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype):
         for _ in range(tile_size):
             t = TILE.zeros(dtype=qd_dtype)
             t[:] = src_arr[0:tile_size, 0:tile_size]
-            t.cholesky_(eps_f[None])
+            t.cholesky_(eps_f[()])
             dst_arr[0:tile_size, 0:tile_size] = t
 
     A = _make_spd(tdim, np_dtype)
     src.from_numpy(A)
-    eps_field[None] = _EPS_VALS[qd_dtype]
+    eps_field[()] = _EPS_VALS[qd_dtype]
     k1(src, dst, eps_field, tdim)
     L_expected = np.linalg.cholesky(A.astype(np.float64)).astype(np_dtype)
     np.testing.assert_allclose(np.tril(dst.to_numpy()), L_expected, atol=atol)
@@ -1275,7 +1275,7 @@ def test_potrf_then_trsm(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype):
         for _ in range(tile_size):
             L = TILE.zeros(dtype=qd_dtype)
             L[:] = a_arr[0:tile_size, 0:tile_size]
-            L.cholesky_(eps_f[None])
+            L.cholesky_(eps_f[()])
             B = TILE.zeros(dtype=qd_dtype)
             B[:] = b_arr[0:tile_size, 0:tile_size]
             L.solve_triangular_(B)
@@ -1286,7 +1286,7 @@ def test_potrf_then_trsm(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype):
     Bnp = rng.randn(tdim, tdim).astype(np_dtype)
     a_field.from_numpy(A)
     b_field.from_numpy(Bnp)
-    eps_field[None] = _EPS_VALS[qd_dtype]
+    eps_field[()] = _EPS_VALS[qd_dtype]
     k1(a_field, b_field, x_field, eps_field, tdim)
     X = x_field.to_numpy()
     L_ref = np.linalg.cholesky(A.astype(np.float64))
@@ -1391,7 +1391,7 @@ def test_shared_array_cholesky(TILE, make_tile, tdim, m_size):
             sh = qd.simt.block.SharedArray((TILE.SIZE, TILE.SIZE), qd.f32)
             t = TILE.zeros(dtype=qd.f32)
             t[:] = src_f[0:tile_size, 0:tile_size]
-            t.cholesky_(eps_f[None])
+            t.cholesky_(eps_f[()])
             sh[0:tile_size, 0:tile_size] = t
             qd.simt.block.sync()
             t2 = TILE.zeros(dtype=qd.f32)
@@ -1400,7 +1400,7 @@ def test_shared_array_cholesky(TILE, make_tile, tdim, m_size):
 
     A = _make_spd(tdim)
     src.from_numpy(A)
-    eps_field[None] = 1e-10
+    eps_field[()] = 1e-10
     k1(src, dst, eps_field, tdim)
     L_expected = np.linalg.cholesky(A.astype(np.float64)).astype(np.float32)
     np.testing.assert_allclose(np.tril(dst.to_numpy()), L_expected, atol=1e-4)

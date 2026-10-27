@@ -20,26 +20,26 @@ def test_quant_int_atomics():
     bitpack.place(x, y, z)
     qd.root.place(bitpack)
 
-    x[None] = 3
-    y[None] = 2
-    z[None] = 0
+    x[()] = 3
+    y[()] = 2
+    z[()] = 0
 
     @qd.kernel
     def foo():
         for i in range(10):
-            x[None] += 4
+            x[()] += 4
 
         for j in range(5):
-            y[None] -= 1
+            y[()] -= 1
 
         for k in range(3):
-            z[None] += 1
+            z[()] += 1
 
     foo()
 
-    assert x[None] == 43
-    assert y[None] == -3
-    assert z[None] == 3
+    assert x[()] == 43
+    assert y[()] == -3
+    assert z[()] == 3
 
 
 @test_utils.test(require=[qd.extension.quant_basic, qd.extension.data64], debug=True)
@@ -80,12 +80,12 @@ def test_quant_fixed_atomics():
 
     @qd.kernel
     def foo():
-        x[None] = 0.7
-        y[None] = 123.4
+        x[()] = 0.7
+        y[()] = 123.4
         for _ in range(10):
-            x[None] -= 0.4
-            y[None] += 100.1
+            x[()] -= 0.4
+            y[()] += 100.1
 
     foo()
-    assert x[None] == approx(-3.3)
-    assert y[None] == approx(1124.4)
+    assert x[()] == approx(-3.3)
+    assert y[()] == approx(1124.4)

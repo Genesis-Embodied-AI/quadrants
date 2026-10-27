@@ -11,9 +11,9 @@ def test_serial_range_for():
 
     @qd.kernel
     def fill_range():
-        counter[None] = 0
+        counter[()] = 0
         for i in range(n):
-            s[qd.atomic_add(counter[None], 1)] = i
+            s[qd.atomic_add(counter[()], 1)] = i
 
     fill_range()
 
@@ -29,9 +29,9 @@ def test_serial_struct_for():
 
     @qd.kernel
     def fill_struct():
-        counter[None] = 0
+        counter[()] = 0
         for i in s:
-            s[qd.atomic_add(counter[None], 1)] = i
+            s[qd.atomic_add(counter[()], 1)] = i
 
     fill_struct()
 

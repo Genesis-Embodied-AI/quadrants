@@ -173,7 +173,7 @@ def test_io_zeros():
     zeros[1, 2] = 3
     mat.from_torch(zeros + 1)
 
-    assert mat[None][1, 2] == 4
+    assert mat[()][1, 2] == 4
 
     zeros = mat.to_torch()
     assert zeros[1, 2] == 4

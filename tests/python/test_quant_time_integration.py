@@ -49,10 +49,10 @@ def test_quant_time_integration(use_quant, use_exponent, use_shared_exp):
 
     @qd.kernel
     def advance(dt: qd.f32):
-        v_mid = v_at(x[None] + 0.5 * dt * v_at(x[None]))
-        x[None] = x[None] + v_mid * dt
+        v_mid = v_at(x[()] + 0.5 * dt * v_at(x[()]))
+        x[()] = x[()] + v_mid * dt
 
-    x[None] = [1, 0]
+    x[()] = [1, 0]
     num_steps = 1000
     dt = math.pi * 2 / num_steps
     px = []
@@ -62,8 +62,8 @@ def test_quant_time_integration(use_quant, use_exponent, use_shared_exp):
 
     for i in range(num_steps * N):
         advance(dt)
-        px.append(x[None][0])
-        py.append(x[None][1])
+        px.append(x[()][0])
+        py.append(x[()][1])
 
     assert px[num_steps // 2 - 1] == approx(-1, abs=2e-2)
     assert py[num_steps // 2 - 1] == approx(0, abs=2e-2)

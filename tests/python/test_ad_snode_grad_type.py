@@ -27,11 +27,11 @@ def test_snode_clear_gradient():
     x = qd.field(float, shape=(), needs_grad=True, needs_dual=True)
     y = qd.field(float, shape=(), needs_grad=True, needs_dual=True)
 
-    x[None] = 1.0
+    x[()] = 1.0
 
     @qd.kernel
     def compute():
-        y[None] += x[None] ** 2
+        y[()] += x[()] ** 2
 
     with qd.ad.Tape(loss=y):
         compute()
@@ -39,12 +39,12 @@ def test_snode_clear_gradient():
     with qd.ad.FwdMode(loss=y, param=x):
         compute()
 
-    assert x.grad[None] == 2.0
+    assert x.grad[()] == 2.0
 
     with qd.ad.Tape(loss=y):
         compute()
 
-    assert y.dual[None] == 2.0
+    assert y.dual[()] == 2.0
 
 
 # TODO: Add test for `adjoint_checkbit` after #5801 merged.

@@ -58,24 +58,24 @@ def test_multiple_calls():
 
     @qd.kernel
     def multiple_calls():
-        loss_1[None] += 3 * b[1] ** 2 + 5 * a[3] ** 2
-        loss_2[None] += 4 * b[2] ** 2 + 6 * a[4] ** 2
+        loss_1[()] += 3 * b[1] ** 2 + 5 * a[3] ** 2
+        loss_2[()] += 4 * b[2] ** 2 + 6 * a[4] ** 2
 
     with qd.ad.FwdMode(loss=loss_1, param=a, seed=[1.0 for _ in range(N)]):
         multiple_calls()
-    assert loss_1.dual[None] == 30
+    assert loss_1.dual[()] == 30
 
     with qd.ad.FwdMode(loss=loss_1, param=b, seed=[1.0 for _ in range(N)]):
         multiple_calls()
-    assert loss_1.dual[None] == 6
+    assert loss_1.dual[()] == 6
 
     with qd.ad.FwdMode(loss=loss_2, param=b, seed=[1.0 for _ in range(N)]):
         multiple_calls()
-    assert loss_2.dual[None] == 16
+    assert loss_2.dual[()] == 16
 
     with qd.ad.FwdMode(loss=loss_2, param=a, seed=[1.0 for _ in range(N)]):
         multiple_calls()
-    assert loss_2.dual[None] == 48
+    assert loss_2.dual[()] == 48
 
 
 @test_utils.test()
@@ -112,18 +112,18 @@ def test_clear_all_dual_field():
     y = qd.field(float, shape=(), needs_dual=True)
     loss = qd.field(float, shape=(), needs_dual=True)
 
-    x[None] = 2.0
-    y[None] = 3.0
+    x[()] = 2.0
+    y[()] = 3.0
 
     @qd.kernel
     def clear_dual_test():
-        y[None] = x[None] ** 2
-        loss[None] += y[None]
+        y[()] = x[()] ** 2
+        loss[()] += y[()]
 
     for _ in range(5):
         with qd.ad.FwdMode(loss=loss, param=x):
             clear_dual_test()
-        assert y.dual[None] == 4.0
+        assert y.dual[()] == 4.0
 
 
 @test_utils.test(debug=True)

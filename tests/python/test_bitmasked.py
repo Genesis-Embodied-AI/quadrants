@@ -22,14 +22,14 @@ def test_basic():
     @qd.kernel
     def sum():
         for i, j in x:
-            c[None] += qd.is_active(bm, [i, j])
-            s[None] += x[i, j]
+            c[()] += qd.is_active(bm, [i, j])
+            s[()] += x[i, j]
 
     run()
     sum()
 
-    assert c[None] == 3
-    assert s[None] == 42
+    assert c[()] == 3
+    assert s[()] == 42
 
 
 @test_utils.test(require=qd.extension.sparse)
@@ -45,7 +45,7 @@ def test_bitmasked_then_dense():
     @qd.kernel
     def func():
         for i in x:
-            s[None] += 1
+            s[()] += 1
 
     x[0] = 1
     x[127] = 1
@@ -53,7 +53,7 @@ def test_bitmasked_then_dense():
     x[257] = 1
 
     func()
-    assert s[None] == 256
+    assert s[()] == 256
 
 
 @test_utils.test(require=qd.extension.sparse)
@@ -69,7 +69,7 @@ def test_bitmasked_bitmasked():
     @qd.kernel
     def func():
         for i in x:
-            s[None] += 1
+            s[()] += 1
 
     x[0] = 1
     x[127] = 1
@@ -77,7 +77,7 @@ def test_bitmasked_bitmasked():
     x[257] = 1
 
     func()
-    assert s[None] == 4
+    assert s[()] == 4
 
 
 @test_utils.test(require=qd.extension.sparse)
@@ -100,11 +100,11 @@ def test_huge_bitmasked():
     @qd.kernel
     def count():
         for i in x:
-            s[None] += 1
+            s[()] += 1
 
     func()
     count()
-    assert s[None] == (n * n * 2) // 32
+    assert s[()] == (n * n * 2) // 32
 
 
 @test_utils.test(require=qd.extension.sparse)
@@ -131,11 +131,11 @@ def test_bitmasked_listgen_bounded():
     @qd.kernel
     def count():
         for i in x:
-            c[None] += 1
+            c[()] += 1
 
     func()
     count()
-    assert c[None] == n
+    assert c[()] == n
 
 
 @test_utils.test(require=qd.extension.sparse)
@@ -154,7 +154,7 @@ def test_deactivate():
 
     @qd.kernel
     def is_active():
-        c[None] = qd.is_active(a_a, [0])
+        c[()] = qd.is_active(a_a, [0])
 
     @qd.kernel
     def deactivate():
@@ -162,11 +162,11 @@ def test_deactivate():
 
     run()
     is_active()
-    assert c[None] == 1
+    assert c[()] == 1
 
     deactivate()
     is_active()
-    assert c[None] == 0
+    assert c[()] == 0
 
 
 @test_utils.test(require=qd.extension.sparse)
@@ -182,25 +182,25 @@ def test_sparsity_changes():
     @qd.kernel
     def run():
         for i in x:
-            s[None] += x[i]
-            c[None] += 1
+            s[()] += x[i]
+            c[()] += 1
 
     # Only two elements of |x| are activated
     x[1] = 2
     x[8] = 20
     run()
-    assert c[None] == 2
-    assert s[None] == 22
+    assert c[()] == 2
+    assert s[()] == 22
 
-    c[None] = 0
-    s[None] = 0
+    c[()] = 0
+    s[()] = 0
     # Four elements are activated now
     x[7] = 15
     x[14] = 5
 
     run()
-    assert c[None] == 4
-    assert s[None] == 42
+    assert c[()] == 4
+    assert s[()] == 42
 
 
 @test_utils.test(require=qd.extension.sparse)
@@ -228,7 +228,7 @@ def test_bitmasked_offset_child():
     @qd.kernel
     def func():
         for _ in z:
-            s[None] += 1
+            s[()] += 1
 
     z[0] = 1
     z[7] = 1
@@ -239,7 +239,7 @@ def test_bitmasked_offset_child():
     z[233] = 1
 
     func()
-    assert s[None] == 7
+    assert s[()] == 7
 
 
 @test_utils.test(require=qd.extension.sparse)
@@ -253,21 +253,21 @@ def test_bitmasked_2d_power_of_two():
 
     @qd.kernel
     def init():
-        num_active[None] = 0
+        num_active[()] = 0
         for x, y in qd.ndrange(width, height):
             some_val[x, y] = 5
-            num_active[None] += 1
+            num_active[()] += 1
 
     @qd.kernel
     def run():
-        num_active[None] = 0
+        num_active[()] = 0
         for x, y in some_val:
-            num_active[None] += 1
+            num_active[()] += 1
 
     init()
-    assert num_active[None] == total
+    assert num_active[()] == total
     run()
-    assert num_active[None] == total
+    assert num_active[()] == total
 
 
 @test_utils.test(require=qd.extension.sparse)
@@ -285,12 +285,12 @@ def test_root_deactivate():
 
     @qd.kernel
     def is_active():
-        c[None] = qd.is_active(a_a, [0])
+        c[()] = qd.is_active(a_a, [0])
 
     run()
     is_active()
-    assert c[None] == 1
+    assert c[()] == 1
 
     qd.root.deactivate_all()
     is_active()
-    assert c[None] == 0
+    assert c[()] == 0

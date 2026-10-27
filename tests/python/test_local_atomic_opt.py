@@ -12,10 +12,10 @@ def test_cse():
         a = 0
         a += 10
         a = a + 123
-        A[None] = a
+        A[()] = a
 
     func()
-    assert A[None] == 133
+    assert A[()] == 133
 
 
 @test_utils.test()
@@ -27,7 +27,7 @@ def test_store_forward():
         a = 0
         a = 123
         a += 10
-        A[None] = a
+        A[()] = a
 
     func()
-    assert A[None] == 133
+    assert A[()] == 133

@@ -303,7 +303,7 @@ def test_max_reducer_registry_seeded_on_offline_cache_reload(curr_arch):
                 n = a[i]
                 for _ in range(n):
                     v = v * 0.95 + 0.01
-                y[None] += v
+                y[()] += v
 
         a = qd.ndarray(qd.i32, shape=(N,))
         a.from_numpy(np.array([2, 3, 1, 2], dtype=np.int32))
@@ -313,7 +313,7 @@ def test_max_reducer_registry_seeded_on_offline_cache_reload(curr_arch):
         prog = impl.get_runtime().prog
         prog._reset_max_reducer_dispatch_count()
         compute(a)
-        y.grad[None] = 1.0
+        y.grad[()] = 1.0
         for i in range(N):
             x.grad[i] = 0.0
         compute.grad(a)
@@ -361,16 +361,16 @@ def test_multiple_ib_with_offline_cache(curr_arch):
         def compute_y():
             for j in range(2):
                 for i in range(3):
-                    y[None] += x[None]
+                    y[()] += x[()]
                 for i in range(3):
-                    y[None] += x[None]
+                    y[()] += x[()]
 
-        x[None] = 1.0
+        x[()] = 1.0
         with qd.ad.Tape(y):
             compute_y()
 
-        assert y[None] == 12.0
-        assert x.grad[None] == 12.0
+        assert y[()] == 12.0
+        assert x.grad[()] == 12.0
 
     qd.init(arch=curr_arch, enable_fallback=False, ad_stack_experimental_enabled=True, **current_thread_ext_options())
     helper()
@@ -436,15 +436,15 @@ def test_snode_reader_and_writer_with_offline_cache(curr_arch):
         x = qd.field(dtype=qd.f32, shape=())
         y = qd.field(dtype=qd.f32, shape=())
 
-        x[None] = 3.14
-        y[None] = 4.14
-        assert x[None] == test_utils.approx(3.14)
-        assert y[None] == test_utils.approx(4.14)
+        x[()] = 3.14
+        y[()] = 4.14
+        assert x[()] == test_utils.approx(3.14)
+        assert y[()] == test_utils.approx(4.14)
 
-        x[None] = 6.28
-        y[None] = 7.28
-        assert x[None] == test_utils.approx(6.28)
-        assert y[None] == test_utils.approx(7.28)
+        x[()] = 6.28
+        y[()] = 7.28
+        assert x[()] == test_utils.approx(6.28)
+        assert y[()] == test_utils.approx(7.28)
 
     assert added_files() == expected_num_cache_files()
     qd.init(arch=curr_arch, enable_fallback=False, **current_thread_ext_options())

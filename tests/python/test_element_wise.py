@@ -26,30 +26,30 @@ def test_binary_f(lhs_is_mat, rhs_is_mat):
     if lhs_is_mat:
         y.from_numpy(np.array([[0, 2], [9, 3.1], [7, 4]], np.float32))
     else:
-        y[None] = 6.1
+        y[()] = 6.1
     if rhs_is_mat:
         z.from_numpy(np.array([[4, 5], [6, 3], [9, 2]], np.float32))
     else:
-        z[None] = 5
+        z[()] = 5
 
     @qd.kernel
     def func():
-        x[0] = y[None] + z[None]
-        x[1] = y[None] - z[None]
-        x[2] = y[None] * z[None]
-        x[3] = y[None] / z[None]
-        x[4] = y[None] // z[None]
-        x[5] = y[None] % z[None]
-        x[6] = y[None] ** z[None]
-        x[7] = y[None] == z[None]
-        x[8] = y[None] != z[None]
-        x[9] = y[None] > z[None]
-        x[10] = y[None] >= z[None]
-        x[11] = y[None] < z[None]
-        x[12] = y[None] <= z[None]
-        x[13] = qd.atan2(y[None], z[None])
-        x[14] = qd.min(y[None], z[None])
-        x[15] = qd.max(y[None], z[None])
+        x[0] = y[()] + z[()]
+        x[1] = y[()] - z[()]
+        x[2] = y[()] * z[()]
+        x[3] = y[()] / z[()]
+        x[4] = y[()] // z[()]
+        x[5] = y[()] % z[()]
+        x[6] = y[()] ** z[()]
+        x[7] = y[()] == z[()]
+        x[8] = y[()] != z[()]
+        x[9] = y[()] > z[()]
+        x[10] = y[()] >= z[()]
+        x[11] = y[()] < z[()]
+        x[12] = y[()] <= z[()]
+        x[13] = qd.atan2(y[()], z[()])
+        x[14] = qd.min(y[()], z[()])
+        x[15] = qd.max(y[()], z[()])
 
     func()
     x = x.to_numpy()
@@ -91,34 +91,34 @@ def test_binary_i(is_mat):
     if lhs_is_mat:
         y.from_numpy(np.array([[0, 2], [9, 3], [7, 4]], np.int32))
     else:
-        y[None] = 6
+        y[()] = 6
     if rhs_is_mat:
         z.from_numpy(np.array([[4, 5], [6, 3], [9, 2]], np.int32))
     else:
-        z[None] = 5
+        z[()] = 5
 
     @qd.kernel
     def func():
-        x[0] = y[None] + z[None]
-        x[1] = y[None] - z[None]
-        x[2] = y[None] * z[None]
-        x[3] = y[None] // z[None]
-        x[4] = qd.raw_div(y[None], z[None])
-        x[5] = y[None] % z[None]
-        x[6] = qd.raw_mod(y[None], z[None])
-        x[7] = y[None] ** z[None]
-        x[8] = y[None] == z[None]
-        x[9] = y[None] != z[None]
-        x[10] = y[None] > z[None]
-        x[11] = y[None] >= z[None]
-        x[12] = y[None] < z[None]
-        x[13] = y[None] <= z[None]
-        x[14] = y[None] & z[None]
-        x[15] = y[None] ^ z[None]
-        x[16] = y[None] | z[None]
-        x[17] = qd.min(y[None], z[None])
-        x[18] = qd.max(y[None], z[None])
-        x[19] = y[None] << z[None]
+        x[0] = y[()] + z[()]
+        x[1] = y[()] - z[()]
+        x[2] = y[()] * z[()]
+        x[3] = y[()] // z[()]
+        x[4] = qd.raw_div(y[()], z[()])
+        x[5] = y[()] % z[()]
+        x[6] = qd.raw_mod(y[()], z[()])
+        x[7] = y[()] ** z[()]
+        x[8] = y[()] == z[()]
+        x[9] = y[()] != z[()]
+        x[10] = y[()] > z[()]
+        x[11] = y[()] >= z[()]
+        x[12] = y[()] < z[()]
+        x[13] = y[()] <= z[()]
+        x[14] = y[()] & z[()]
+        x[15] = y[()] ^ z[()]
+        x[16] = y[()] | z[()]
+        x[17] = qd.min(y[()], z[()])
+        x[18] = qd.max(y[()], z[()])
+        x[19] = y[()] << z[()]
 
     func()
     x = x.to_numpy()
@@ -160,24 +160,24 @@ def test_writeback_binary_f(rhs_is_mat):
     if rhs_is_mat:
         z.from_numpy(np.array([[4, 5], [6, 3], [9, 2]], np.float32))
     else:
-        z[None] = 5
+        z[()] = 5
 
     @qd.kernel
     def func():
         for i in x:
-            x[i] = y[None]
+            x[i] = y[()]
         if qd.static(rhs_is_mat):
-            x[0] = z[None]
+            x[0] = z[()]
         else:
-            x[0].fill(z[None])
-        x[1] += z[None]
-        x[2] -= z[None]
-        x[3] *= z[None]
-        x[4] /= z[None]
-        x[5] //= z[None]
-        x[6] %= z[None]
-        qd.atomic_min(x[7], z[None])
-        qd.atomic_max(x[8], z[None])
+            x[0].fill(z[()])
+        x[1] += z[()]
+        x[2] -= z[()]
+        x[3] *= z[()]
+        x[4] /= z[()]
+        x[5] //= z[()]
+        x[6] %= z[()]
+        qd.atomic_min(x[7], z[()])
+        qd.atomic_max(x[8], z[()])
 
     func()
     x = x.to_numpy()
@@ -207,23 +207,23 @@ def test_writeback_binary_i(rhs_is_mat):
     if rhs_is_mat:
         z.from_numpy(np.array([[4, 5], [6, 3], [9, 2]], np.int32))
     else:
-        z[None] = 5
+        z[()] = 5
 
     @qd.kernel
     def func():
         for i in x:
-            x[i] = y[None]
-        x[0] = z[None]
-        x[1] += z[None]
-        x[2] -= z[None]
-        x[3] *= z[None]
-        x[4] //= z[None]
-        x[5] %= z[None]
-        x[6] &= z[None]
-        x[7] |= z[None]
-        x[8] ^= z[None]
-        qd.atomic_min(x[10], z[None])
-        qd.atomic_max(x[11], z[None])
+            x[i] = y[()]
+        x[0] = z[()]
+        x[1] += z[()]
+        x[2] -= z[()]
+        x[3] *= z[()]
+        x[4] //= z[()]
+        x[5] %= z[()]
+        x[6] &= z[()]
+        x[7] |= z[()]
+        x[8] ^= z[()]
+        qd.atomic_min(x[10], z[()])
+        qd.atomic_max(x[11], z[()])
 
     func()
     x = x.to_numpy()
@@ -253,25 +253,25 @@ def test_unary():
 
     @qd.kernel
     def func():
-        xi[0] = -yi[None]
-        xi[1] = ~yi[None]
-        xi[2] = not yi[None]
-        xi[3] = abs(yi[None])
-        xf[0] = -yf[None]
-        xf[1] = abs(yf[None])
-        xf[2] = qd.sqrt(yf[None])
-        xf[3] = qd.sin(yf[None])
-        xf[4] = qd.cos(yf[None])
-        xf[5] = qd.tan(yf[None])
-        xf[6] = qd.asin(yf[None])
-        xf[7] = qd.acos(yf[None])
-        xf[8] = qd.tanh(yf[None])
-        xf[9] = qd.floor(yf[None])
-        xf[10] = qd.ceil(yf[None])
-        xf[11] = qd.exp(yf[None])
-        xf[12] = qd.log(yf[None])
-        xf[13] = qd.rsqrt(yf[None])
-        xf[14] = qd.round(yf[None])
+        xi[0] = -yi[()]
+        xi[1] = ~yi[()]
+        xi[2] = not yi[()]
+        xi[3] = abs(yi[()])
+        xf[0] = -yf[()]
+        xf[1] = abs(yf[()])
+        xf[2] = qd.sqrt(yf[()])
+        xf[3] = qd.sin(yf[()])
+        xf[4] = qd.cos(yf[()])
+        xf[5] = qd.tan(yf[()])
+        xf[6] = qd.asin(yf[()])
+        xf[7] = qd.acos(yf[()])
+        xf[8] = qd.tanh(yf[()])
+        xf[9] = qd.floor(yf[()])
+        xf[10] = qd.ceil(yf[()])
+        xf[11] = qd.exp(yf[()])
+        xf[12] = qd.log(yf[()])
+        xf[13] = qd.rsqrt(yf[()])
+        xf[14] = qd.round(yf[()])
 
     func()
     xi = xi.to_numpy()
@@ -329,19 +329,19 @@ def test_ternary_i(is_mat):
     if cond_is_mat:
         y.from_numpy(np.array([[0, 2], [9, 0], [7, 4]], np.int32))
     else:
-        y[None] = 0
+        y[()] = 0
     if lhs_is_mat:
         z.from_numpy(np.array([[4, 5], [6, 3], [9, 2]], np.int32))
     else:
-        z[None] = 5
+        z[()] = 5
     if rhs_is_mat:
         w.from_numpy(np.array([[4, 5], [6, 3], [9, 2]], np.int32))
     else:
-        w[None] = 4
+        w[()] = 4
 
     @qd.kernel
     def func():
-        x[0] = qd.select(y[None], z[None], w[None])
+        x[0] = qd.select(y[()], z[()], w[()])
 
     func()
     x = x.to_numpy()

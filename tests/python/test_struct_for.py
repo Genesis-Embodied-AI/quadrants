@@ -14,7 +14,7 @@ def test_singleton():
 
     fill()
 
-    assert x[None] == 3
+    assert x[()] == 3
 
 
 @test_utils.test()
@@ -30,7 +30,7 @@ def test_singleton2():
 
     fill()
 
-    assert x[None] == 3
+    assert x[()] == 3
 
 
 @test_utils.test()
@@ -135,7 +135,7 @@ def test_2d_non_POT():
     @qd.kernel
     def fill():
         for i, j in x:
-            y[None] += i + j * j
+            y[()] += i + j * j
 
     fill()
 
@@ -143,7 +143,7 @@ def test_2d_non_POT():
     for i in range(n):
         for j in range(m):
             tot += i + j * j
-    assert y[None] == tot
+    assert y[()] == tot
 
 
 @test_utils.test()

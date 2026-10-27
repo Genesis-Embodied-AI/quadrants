@@ -201,13 +201,13 @@ def test_ndrange_ast_transform():
     @qd.kernel
     def func():
         # `__getitem__ cannot be called from Python-scope` will be raised if
-        # `a[None]` is not transformed to `qd.subscript(a, None)` in qd.ndrange:
-        for i, j in qd.ndrange(a[None], b[None]):
+        # `a[()]` is not transformed to `qd.subscript(a, None)` in qd.ndrange:
+        for i, j in qd.ndrange(a[()], b[()]):
             r = i * n + j + 1
             A[i, j] = r
 
-    a[None] = u
-    b[None] = v
+    a[()] = u
+    b[()] = v
 
     func()
 

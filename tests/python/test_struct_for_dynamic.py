@@ -18,13 +18,13 @@ def test_dynamic():
     @qd.kernel
     def count():
         for i in x:
-            y[None] += 1
+            y[()] += 1
 
     x[n // 3] = 1
 
     count()
 
-    assert y[None] == n // 3 + 1
+    assert y[()] == n // 3 + 1
 
 
 @test_utils.test(

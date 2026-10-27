@@ -101,11 +101,11 @@ def test_length():
 
     @qd.kernel
     def get_len():
-        y[None] = qd.length(x.parent(), [])
+        y[()] = qd.length(x.parent(), [])
 
     get_len()
 
-    assert y[None] == n
+    assert y[()] == n
 
 
 @test_utils.test(require=qd.extension.sparse, exclude=[qd.metal])

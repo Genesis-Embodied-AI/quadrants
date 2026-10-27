@@ -16,9 +16,9 @@ def test_matrix_non_constant_index():
         for i in range(5):
             for j, k in qd.ndrange(2, 2):
                 m[i][j, k] = (j + 1) * (k + 1) * n[i][j, k]
-                loss[None] += m[i][j, k]
+                loss[()] += m[i][j, k]
 
-    loss.grad[None] = 1.0
+    loss.grad[()] = 1.0
     func1.grad()
 
     for i in range(5):

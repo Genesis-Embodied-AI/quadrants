@@ -89,11 +89,11 @@ def test_zero_outer_loop():
     @qd.kernel
     def test():
         for i in range(0):
-            x[None] = 1
+            x[()] = 1
 
     test()
 
-    assert x[None] == 0
+    assert x[()] == 0
 
 
 @test_utils.test()
@@ -104,11 +104,11 @@ def test_zero_inner_loop():
     def test():
         for i in range(1):
             for j in range(0):
-                x[None] = 1
+                x[()] = 1
 
     test()
 
-    assert x[None] == 0
+    assert x[()] == 0
 
 
 @test_utils.test()
@@ -123,12 +123,12 @@ def test_dynamic_loop_range():
     @qd.kernel
     def test():
         for i in x:
-            x[i] = qd.atomic_add(c[None], 1)
-        for i in range(c[None], c[None] * 2):
-            x[i - n] += c[None]
+            x[i] = qd.atomic_add(c[()], 1)
+        for i in range(c[()], c[()] * 2):
+            x[i - n] += c[()]
 
     test()
-    assert c[None] == n
+    assert c[()] == n
     assert sum(x.to_numpy()) == (n * (n - 1) // 2) + n * n
 
 
@@ -164,16 +164,16 @@ def test_assignment_in_nested_loops():
 
     @qd.kernel
     def func():
-        a = x[None]
+        a = x[()]
         for i in m:
             b = a
             for j in range(1):
                 b = b
-            x[None] = b
+            x[()] = b
 
-    x[None] = 1
+    x[()] = 1
     func()
-    assert x[None] == 1
+    assert x[()] == 1
 
 
 @test_utils.test(print_full_traceback=False)

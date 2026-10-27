@@ -7,12 +7,12 @@ from tests import test_utils
 
 @qd.func
 def some_sub_func(a: qd.template, b: qd.Template) -> None:
-    a[None] = b[None] + 2
+    a[()] = b[()] + 2
 
 
 @qd.kernel
 def some_kernel(a: qd.template, b: qd.Template) -> None:
-    a[None] = b[None] + 2
+    a[()] = b[()] + 2
     some_sub_func(a, b)
 
 
@@ -23,9 +23,9 @@ def test_template_no_braces():
     """
     a = qd.field(int, shape=())
     b = qd.field(int, shape=())
-    b[None] = 5
+    b[()] = 5
     some_kernel(a, b)
-    assert a[None] == 5 + 2
+    assert a[()] == 5 + 2
 
 
 @pytest.mark.parametrize("raise_on_templated_floats", [False, True])

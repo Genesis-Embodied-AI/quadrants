@@ -631,10 +631,10 @@ def test_while_break():
             i += 1
             if i > 10:
                 break
-        ret[None] = s
+        ret[()] = s
 
     func()
-    assert ret[None] == 55
+    assert ret[()] == 55
 
 
 @test_utils.test()
@@ -650,10 +650,10 @@ def test_while_continue():
             if i % 2 == 0:
                 continue
             s += i
-        ret[None] = s
+        ret[()] = s
 
     func()
-    assert ret[None] == 25
+    assert ret[()] == 25
 
 
 @test_utils.test(print_preprocessed_ir=True)

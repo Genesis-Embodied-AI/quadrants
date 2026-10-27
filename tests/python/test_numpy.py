@@ -261,7 +261,7 @@ def test_numpy_with_matrix():
 
     @qd.func
     def foo():
-        x[None] = qd.max(x[None], b)
+        x[()] = qd.max(x[()], b)
 
     bar()
     assert (x.to_numpy() == [0.0, 3.0, 0.0]).all()

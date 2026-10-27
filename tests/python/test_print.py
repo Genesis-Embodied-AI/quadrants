@@ -115,10 +115,10 @@ def test_print_matrix():
 
     @qd.kernel
     def func(k: qd.f32):
-        x[None][0, 0] = -1.0
+        x[()][0, 0] = -1.0
         y[2] += 1.0
-        print("hello", x[None], "world!")
-        print(y[2] * k, x[None] / k, y[2])
+        print("hello", x[()], "world!")
+        print(y[2] * k, x[()] / k, y[2])
 
     func(233.3)
     qd.sync()
@@ -131,10 +131,10 @@ def test_print_matrix_string_format():
 
     @qd.kernel
     def func(k: qd.f32):
-        x[None][0, 0] = -1.0
+        x[()][0, 0] = -1.0
         y[2] += 1.0
-        print("hello {} world!".format(x[None]))
-        print("{} {} {}".format(y[2] * k, x[None] / k, y[2]))
+        print("hello {} world!".format(x[()]))
+        print("{} {} {}".format(y[2] * k, x[()] / k, y[2]))
 
     func(233.3)
     qd.sync()
@@ -148,11 +148,11 @@ def test_print_matrix_string_format_with_spec(capfd):
 
     @qd.kernel
     def func(k: qd.f32):
-        x[None][0, 0] = -1.0
+        x[()][0, 0] = -1.0
         y[2] += 1.0
-        print("TEST_PRINT: hello {:.2f} world!".format(x[None]))
-        print("TEST_PRINT: {:.3f} {:e} {:.2}".format(y[2] * k, x[None] / k, y[2]))
-        print("TEST_PRINT: hello {:.10d} world!".format(z[None]))
+        print("TEST_PRINT: hello {:.2f} world!".format(x[()]))
+        print("TEST_PRINT: {:.3f} {:e} {:.2}".format(y[2] * k, x[()] / k, y[2]))
+        print("TEST_PRINT: hello {:.10d} world!".format(z[()]))
 
     func(233.3)
     qd.sync()
@@ -173,17 +173,17 @@ def test_print_matrix_string_format_with_spec_mismatch():
 
     @qd.kernel
     def test_x():
-        print("hello {:.2d} world!".format(x[None]))
+        print("hello {:.2d} world!".format(x[()]))
 
     @qd.kernel
     def test_y(k: qd.f32):
-        print("{:- #0.233lli} {:e} {:.2}".format(y[2] * k, x[None] / k, y[2]))
+        print("{:- #0.233lli} {:e} {:.2}".format(y[2] * k, x[()] / k, y[2]))
 
     @qd.kernel
     def test_z():
-        print("hello {:.2e} world!".format(z[None]))
+        print("hello {:.2e} world!".format(z[()]))
 
-    x[None][0, 0] = -1.0
+    x[()][0, 0] = -1.0
     y[2] += 1.0
     with pytest.raises(qd.QuadrantsTypeError, match=r"'.2d' doesn't match 'f32'."):
         test_x()
@@ -201,10 +201,10 @@ def test_print_matrix_fstring():
 
     @qd.kernel
     def func(k: qd.f32):
-        x[None][0, 0] = -1.0
+        x[()][0, 0] = -1.0
         y[2] += 1.0
-        print(f"hello {x[None]} world!")
-        print(f"{y[2] * k} {x[None] / k} {y[2]}")
+        print(f"hello {x[()]} world!")
+        print(f"{y[2] * k} {x[()] / k} {y[2]}")
 
     func(233.3)
     qd.sync()
@@ -218,11 +218,11 @@ def test_print_matrix_fstring_with_spec(capfd):
 
     @qd.kernel
     def func(k: qd.f32):
-        x[None][0, 0] = -1.0
+        x[()][0, 0] = -1.0
         y[2] += 1.0
-        print(f"TEST_PRINT: hello {x[None]:.2f} world!")
-        print(f"TEST_PRINT: {(y[2] * k):.3f} {(x[None] / k):e} {y[2]:.2}")
-        print(f"TEST_PRINT: hello {z[None]:.2d} world!")
+        print(f"TEST_PRINT: hello {x[()]:.2f} world!")
+        print(f"TEST_PRINT: {(y[2] * k):.3f} {(x[()] / k):e} {y[2]:.2}")
+        print(f"TEST_PRINT: hello {z[()]:.2d} world!")
 
     func(233.3)
     qd.sync()
@@ -243,17 +243,17 @@ def test_print_matrix_fstring_with_spec_mismatch():
 
     @qd.kernel
     def test_x():
-        print(f"hello {x[None]:.2d} world!")
+        print(f"hello {x[()]:.2d} world!")
 
     @qd.kernel
     def test_y(k: qd.f32):
-        print(f"{(y[2] * k):- #0.233lli} {(x[None] / k):e} {y[2]:.2}")
+        print(f"{(y[2] * k):- #0.233lli} {(x[()] / k):e} {y[2]:.2}")
 
     @qd.kernel
     def test_z():
-        print(f"hello {z[None]:.2e} world!")
+        print(f"hello {z[()]:.2e} world!")
 
-    x[None][0, 0] = -1.0
+    x[()][0, 0] = -1.0
     y[2] += 1.0
     with pytest.raises(qd.QuadrantsTypeError, match=r"'.2d' doesn't match 'f32'."):
         test_x()
@@ -399,7 +399,7 @@ def test_print_list():
         z = (1,)
         print([1, k**2, k + 1])  # [1, 233.3, 234.3]
         print(z)  # [1]
-        print([y[None], z])  # [[0, 0, 0], [1]]
+        print([y[()], z])  # [[0, 0, 0], [1]]
         print([])  # []
 
     func(233.3)

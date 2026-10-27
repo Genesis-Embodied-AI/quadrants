@@ -14,7 +14,7 @@ def test_ad_reduce_fwd():
     @qd.kernel
     def func():
         for i in x:
-            loss[None] += x[i] ** 2
+            loss[()] += x[i] ** 2
 
     total_loss = 0
     for i in range(N):
@@ -24,9 +24,9 @@ def test_ad_reduce_fwd():
     with qd.ad.FwdMode(loss=loss, param=x, seed=[1.0 for _ in range(N)]):
         func()
 
-    assert total_loss == test_utils.approx(loss[None])
+    assert total_loss == test_utils.approx(loss[()])
     sum = 0
     for i in range(N):
         sum += i * 2
 
-    assert loss.dual[None] == test_utils.approx(sum)
+    assert loss.dual[()] == test_utils.approx(sum)

@@ -11,14 +11,14 @@ def test_ad_if_simple_fwd():
 
     @qd.kernel
     def func():
-        if x[None] > 0.0:
-            y[None] = x[None]
+        if x[()] > 0.0:
+            y[()] = x[()]
 
-    x[None] = 1
+    x[()] = 1
     with qd.ad.FwdMode(loss=y, param=x, seed=[1.0]):
         func()
 
-    assert y.dual[None] == 1
+    assert y.dual[()] == 1
 
 
 @test_utils.test()

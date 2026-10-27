@@ -19,19 +19,19 @@ def test_matrix_self_assign():
 
     @qd.kernel
     def func():
-        a[None] = a[None].normalized()
-        b[None] = b[None].transpose()
-        c[None] = qd.Vector([c[None][1], c[None][0]])
+        a[()] = a[()].normalized()
+        b[()] = b[()].transpose()
+        c[()] = qd.Vector([c[()][1], c[()][0]])
 
     inv_sqrt2 = 1 / math.sqrt(2)
 
-    a[None] = [1, 1]
-    b[None] = [[1, 2], [3, 4]]
-    c[None] = [2, 3]
+    a[()] = [1, 1]
+    b[()] = [[1, 2], [3, 4]]
+    c[()] = [2, 3]
     func()
-    assert a[None] == qd.Vector([inv_sqrt2, inv_sqrt2])
-    assert b[None] == qd.Matrix([[1, 3], [2, 4]])
-    assert c[None] == qd.Vector([3, 2])
+    assert a[()] == qd.Vector([inv_sqrt2, inv_sqrt2])
+    assert b[()] == qd.Matrix([[1, 3], [2, 4]])
+    assert c[()] == qd.Vector([3, 2])
 
 
 @test_utils.test()
@@ -40,11 +40,11 @@ def test_random_vector_dup_eval():
 
     @qd.kernel
     def func():
-        a[None] = qd.Vector([qd.random(), 1]).normalized()
+        a[()] = qd.Vector([qd.random(), 1]).normalized()
 
     for i in range(4):
         func()
-        assert a[None].norm_sqr() == test_utils.approx(1)
+        assert a[()].norm_sqr() == test_utils.approx(1)
 
 
 @test_utils.test()

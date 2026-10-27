@@ -53,7 +53,7 @@ def test_kernel_template_gradient():
     @qd.kernel
     def compute_loss():
         for i in range(16):
-            qd.atomic_add(loss[None], z[i])
+            qd.atomic_add(loss[()], z[i])
 
     for i in range(16):
         x[i] = i

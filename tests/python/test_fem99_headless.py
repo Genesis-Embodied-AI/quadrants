@@ -13,7 +13,7 @@ visual explosion?) was never written down. Upstream taichi still carries the ide
 
 The critical atomic pattern in FEM99 is the scalar energy reduction under autodiff::
 
-    U[None] += V[i] * phi_i          # parallel over faces; becomes qd.atomic_add(f32)
+    U[()] += V[i] * phi_i          # parallel over faces; becomes qd.atomic_add(f32)
     with qd.ad.Tape(loss=U): ...     # reverse scatter also uses float atomics into pos.grad
 
 This file ports that pattern headlessly and checks for the symptoms we can assert without a GUI: finite energy /
@@ -71,7 +71,7 @@ def _run_fem99(n_grid: int, n_frames: int, substeps: int, seed: int = 0):
             phi_i += lam / 2 * log_J_i**2
             phi[i] = phi_i
             # THE atomic float reduction that motivated the Metal native-float-atomic disable.
-            U[None] += V[i] * phi_i
+            U[()] += V[i] * phi_i
 
     @qd.kernel
     def advance():
@@ -124,7 +124,7 @@ def _run_fem99(n_grid: int, n_frames: int, substeps: int, seed: int = 0):
             with qd.ad.Tape(loss=U):
                 update_U()
             advance()
-        u_hist.append(float(U[None]))
+        u_hist.append(float(U[()]))
 
     return np.array(u_hist, dtype=np.float64), pos.to_numpy()
 
@@ -151,7 +151,7 @@ def test_fem99_headless_stays_finite():
 
 @test_utils.test(arch=[qd.cpu, qd.metal])
 def test_ad_scalar_atomic_reduce_matches_closed_form():
-    """Smaller, sharper check: the exact `loss[None] += x[i]**2` pattern (test_ad_atomic) on Metal.
+    """Smaller, sharper check: the exact `loss[()] += x[i]**2` pattern (test_ad_atomic) on Metal.
 
     If native float atomics corrupt either the forward reduction or the reverse scatter, this fails.
     """
@@ -162,7 +162,7 @@ def test_ad_scalar_atomic_reduce_matches_closed_form():
     @qd.kernel
     def func():
         for i in x:
-            loss[None] += x[i] ** 2
+            loss[()] += x[i] ** 2
 
     for i in range(N):
         x[i] = float(i) * 0.1
@@ -171,8 +171,8 @@ def test_ad_scalar_atomic_reduce_matches_closed_form():
         func()
 
     expected = sum((i * 0.1) ** 2 for i in range(N))
-    assert loss[None] == test_utils.approx(expected, rel=1e-4)
+    assert loss[()] == test_utils.approx(expected, rel=1e-4)
     for i in range(N):
         assert x.grad[i] == test_utils.approx(2 * i * 0.1, rel=1e-4)
 
-    print(f"AD_REDUCE_OK loss={float(loss[None])}")
+    print(f"AD_REDUCE_OK loss={float(loss[()])}")

@@ -422,8 +422,8 @@ def test_sparse_not_supported():
 @test_utils.test(require=qd.extension.data64)
 def test_write_u64():
     x = qd.field(qd.u64, shape=())
-    x[None] = 2**64 - 1
-    assert x[None] == 2**64 - 1
+    x[()] = 2**64 - 1
+    assert x[()] == 2**64 - 1
 
 
 @test_utils.test(require=qd.extension.data64)

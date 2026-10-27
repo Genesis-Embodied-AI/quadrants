@@ -14,8 +14,8 @@ def test_polar_decompose_2D():
 
     @qd.kernel
     def polar_decompose_2D():
-        r, s = qd.polar_decompose(F[None])
-        F_1[None] += r
+        r, s = qd.polar_decompose(F[()])
+        F_1[()] += r
 
     with qd.ad.Tape(loss=loss):
         polar_decompose_2D()

@@ -127,7 +127,7 @@ def test_ad_dataclass_field_template_tape():
     @qd.kernel
     def compute(s: qd.template()):
         for i in range(N):
-            s.loss[None] += s.a[i] * s.b[i]
+            s.loss[()] += s.a[i] * s.b[i]
 
     with qd.ad.Tape(loss):
         compute(state)
@@ -135,7 +135,7 @@ def test_ad_dataclass_field_template_tape():
     # loss = sum_i a[i] * b[i]; dloss/da[i] = b[i]
     np.testing.assert_allclose(a.grad.to_numpy(), b.to_numpy())
     expected_loss = float((3.0 * np.arange(1, N + 1)).sum())
-    np.testing.assert_allclose(loss[None], expected_loss)
+    np.testing.assert_allclose(loss[()], expected_loss)
 
 
 # ----------------------------------------------------------------------------
@@ -206,7 +206,7 @@ def test_ad_dataclass_tensor_field_backend_tape():
     @qd.kernel
     def compute(s: qd.template()):
         for i in range(N):
-            s.loss[None] += s.a[i] * s.b[i]
+            s.loss[()] += s.a[i] * s.b[i]
 
     with qd.ad.Tape(loss._unwrap()):
         compute(state)

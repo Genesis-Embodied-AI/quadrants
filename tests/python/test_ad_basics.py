@@ -430,12 +430,12 @@ def test_ad_precision_1():
 
     @qd.kernel
     def func():
-        loss[None] = x[None]
+        loss[()] = x[()]
 
-    loss.grad[None] = 1
+    loss.grad[()] = 1
     func.grad()
 
-    assert x.grad[None] == 1
+    assert x.grad[()] == 1
 
 
 @test_utils.test(require=qd.extension.data64)
@@ -447,12 +447,12 @@ def test_ad_precision_2():
 
     @qd.kernel
     def func():
-        loss[None] = x[None]
+        loss[()] = x[()]
 
     with qd.ad.Tape(loss):
         func()
 
-    assert x.grad[None] == 1
+    assert x.grad[()] == 1
 
 
 @test_utils.test()
@@ -462,9 +462,9 @@ def test_ad_rand():
 
     @qd.kernel
     def work():
-        loss[None] = x[None] * qd.random()
+        loss[()] = x[()] * qd.random()
 
-    x[None] = 10
+    x[()] = 10
     with pytest.raises(RuntimeError) as e:
         with qd.ad.Tape(loss):
             work()
@@ -486,7 +486,7 @@ def test_ad_frac():
     @qd.kernel
     def calc_loss(input_field: qd.template(), loss: qd.template()):
         for i in input_field:
-            loss[None] += input_field[i]
+            loss[()] += input_field[i]
 
     n = 10
     field0 = qd.field(dtype=qd.f32, shape=(n,), needs_grad=True)
@@ -516,21 +516,21 @@ def test_ad_global_store_forwarding():
 
     @qd.kernel
     def func():
-        a[None] = x[None]
-        b[None] = a[None] * 2
-        c[None] = b[None] * 3
-        d[None] = c[None] * 4
-        e[None] = d[None] * 5
+        a[()] = x[()]
+        b[()] = a[()] * 2
+        c[()] = b[()] * 3
+        d[()] = c[()] * 4
+        e[()] = d[()] * 5
 
-    x[None] = 1
+    x[()] = 1
 
     with qd.ad.Tape(loss=e):
         func()
-    assert x.grad[None] == 120.0
-    assert a.grad[None] == 0.0
-    assert b.grad[None] == 0.0
-    assert c.grad[None] == 0.0
-    assert d.grad[None] == 0.0
+    assert x.grad[()] == 120.0
+    assert a.grad[()] == 0.0
+    assert b.grad[()] == 0.0
+    assert c.grad[()] == 0.0
+    assert d.grad[()] == 0.0
 
 
 @test_utils.test()
@@ -540,19 +540,19 @@ def test_ad_set_loss_grad():
 
     @qd.kernel
     def eval_x(x: qd.template()):
-        x[None] = 1.0
+        x[()] = 1.0
 
     @qd.kernel
     def compute_1(x: qd.template(), loss: qd.template()):
-        loss[None] = x[None]
+        loss[()] = x[()]
 
     @qd.kernel
     def compute_2(x: qd.template(), loss: qd.template()):
-        loss[None] = 2 * x[None]
+        loss[()] = 2 * x[()]
 
     @qd.kernel
     def compute_3(x: qd.template(), loss: qd.template()):
-        loss[None] = 4 * x[None]
+        loss[()] = 4 * x[()]
 
     eval_x(x)
     with qd.ad.Tape(loss=loss):
@@ -560,5 +560,5 @@ def test_ad_set_loss_grad():
         compute_2(x, loss)
         compute_3(x, loss)
 
-    assert loss[None] == 4
-    assert x.grad[None] == 4
+    assert loss[()] == 4
+    assert x.grad[()] == 4

@@ -12,23 +12,23 @@ def test_arg_load():
 
     @qd.kernel
     def set_i32(v: qd.i32):
-        x[None] = v
+        x[()] = v
 
     @qd.kernel
     def set_f32(v: qd.f32):
-        y[None] = v
+        y[()] = v
 
     set_i32(123)
-    assert x[None] == 123
+    assert x[()] == 123
 
     set_i32(456)
-    assert x[None] == 456
+    assert x[()] == 456
 
     set_f32(0.125)
-    assert y[None] == 0.125
+    assert y[()] == 0.125
 
     set_f32(1.5)
-    assert y[None] == 1.5
+    assert y[()] == 1.5
 
 
 @test_utils.test(require=qd.extension.data64)
@@ -40,17 +40,17 @@ def test_arg_load_f64():
 
     @qd.kernel
     def set_f64(v: qd.f64):
-        y[None] = qd.cast(v, qd.f32)
+        y[()] = qd.cast(v, qd.f32)
 
     @qd.kernel
     def set_i64(v: qd.i64):
-        y[None] = v
+        y[()] = v
 
     set_i64(789)
-    assert y[None] == 789
+    assert y[()] == 789
 
     set_f64(2.5)
-    assert y[None] == 2.5
+    assert y[()] == 2.5
 
 
 @test_utils.test()

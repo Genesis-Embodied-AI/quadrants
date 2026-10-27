@@ -18,7 +18,7 @@ def test_arg_read():
 
     @qd.kernel
     def func(a: qd.i8, b: qd.i32):
-        x[None] = b
+        x[()] = b
 
     func(255, 2)
-    assert x[None] == 2
+    assert x[()] == 2

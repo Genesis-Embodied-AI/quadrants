@@ -21,7 +21,7 @@ def test_clear_all_gradients():
     qd.root.dense(qd.i, n).dense(qd.j, n).place(z, w)
     qd.root.lazy_grad()
 
-    x.grad[None] = 3
+    x.grad[()] = 3
     for i in range(n):
         y.grad[i] = 3
         for j in range(n):
@@ -31,7 +31,7 @@ def test_clear_all_gradients():
     qd.ad.clear_all_gradients()
     assert impl.get_runtime().get_num_compiled_functions() == 3
 
-    assert x.grad[None] == 0
+    assert x.grad[()] == 0
     for i in range(n):
         assert y.grad[i] == 0
         for j in range(n):

@@ -19,7 +19,7 @@ def test_customized_kernels_tape():
     @qd.kernel
     def func(mul: qd.f32):
         for i in range(n):
-            qd.atomic_add(total[None], x[i] * mul)
+            qd.atomic_add(total[()], x[i] * mul)
 
     @qd.ad.grad_replaced
     def forward(mul):
@@ -49,7 +49,7 @@ def test_customized_kernels_grad():
     @qd.kernel
     def func(mul: qd.f32):
         for i in range(n):
-            qd.atomic_add(total[None], x[i] * mul)
+            qd.atomic_add(total[()], x[i] * mul)
 
     @qd.ad.grad_replaced
     def forward(mul):
@@ -60,7 +60,7 @@ def test_customized_kernels_grad():
     def backward(mul):
         func.grad(mul)
 
-    total.grad[None] = 1
+    total.grad[()] = 1
     forward(4)
     forward.grad(4)
     assert x.grad[0] == 4
@@ -80,7 +80,7 @@ def test_customized_kernels_indirect():
     @qd.kernel
     def func(mul: qd.f32):
         for i in range(n):
-            qd.atomic_add(total[None], x[i] * mul)
+            qd.atomic_add(total[()], x[i] * mul)
 
     def func_proxy(mul):
         func(mul)
@@ -114,7 +114,7 @@ def test_customized_kernels_oop():
         @qd.kernel
         def func(self, mul: qd.f32):
             for i in range(self.n):
-                qd.atomic_add(self.total[None], self.x[i] * mul)
+                qd.atomic_add(self.total[()], self.x[i] * mul)
 
         @qd.ad.grad_replaced
         def forward(self, mul):
@@ -149,7 +149,7 @@ def test_customized_kernels_oop2():
         @qd.kernel
         def func(self, mul: qd.f32):
             for i in range(self.n):
-                qd.atomic_add(self.total[None], self.x[i] * mul)
+                qd.atomic_add(self.total[()], self.x[i] * mul)
 
         def func_proxy(self, mul):
             self.func(mul)
@@ -186,7 +186,7 @@ def test_decorated_primal_is_quadrants_kernel():
     @qd.kernel
     def func(mul: qd.f32):
         for i in range(n):
-            qd.atomic_add(total[None], x[i] * mul)
+            qd.atomic_add(total[()], x[i] * mul)
 
     with pytest.raises(RuntimeError):
 
@@ -212,7 +212,7 @@ def test_decorated_primal_missing_decorator():
     @qd.kernel
     def func(mul: qd.f32):
         for i in range(n):
-            qd.atomic_add(total[None], x[i] * mul)
+            qd.atomic_add(total[()], x[i] * mul)
 
     def forward(mul):
         func(mul)
@@ -242,7 +242,7 @@ def test_customized_kernels_tape_no_grad():
     @qd.kernel
     def func(mul: qd.f32):
         for i in range(n):
-            qd.atomic_add(total[None], x[i] * mul)
+            qd.atomic_add(total[()], x[i] * mul)
 
     @qd.ad.no_grad
     def forward(mul):
@@ -269,14 +269,14 @@ def test_customized_kernels_grad_no_grad():
     @qd.kernel
     def func(mul: qd.f32):
         for i in range(n):
-            qd.atomic_add(total[None], x[i] * mul)
+            qd.atomic_add(total[()], x[i] * mul)
 
     @qd.ad.no_grad
     def forward(mul):
         func(mul)
         func(mul)
 
-    total.grad[None] = 1
+    total.grad[()] = 1
     forward(4)
     forward.grad(4)
     assert x.grad[0] == 0

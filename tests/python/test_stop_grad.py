@@ -17,7 +17,7 @@ def test_normal_grad():
     @qd.kernel
     def func():
         for i in range(n):
-            loss[None] += x[i] ** 2
+            loss[()] += x[i] ** 2
 
     for i in range(n):
         x[i] = i
@@ -44,7 +44,7 @@ def test_stop_grad():
     def func():
         for i in range(n):
             qd.stop_grad(x)
-            loss[None] += x[i] ** 2
+            loss[()] += x[i] ** 2
 
     for i in range(n):
         x[i] = i
@@ -72,9 +72,9 @@ def test_stop_grad2():
         # Two loops, one with stop grad on without
         for i in range(n):
             qd.stop_grad(x)
-            loss[None] += x[i] ** 2
+            loss[()] += x[i] ** 2
         for i in range(n):
-            loss[None] += x[i] ** 2
+            loss[()] += x[i] ** 2
 
     for i in range(n):
         x[i] = i

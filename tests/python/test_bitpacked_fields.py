@@ -70,15 +70,15 @@ def test_quant_int_load_and_store():
 
     @qd.kernel
     def set_val(idx: qd.i32):
-        x[None] = test_case[idx][0]
-        y[None] = test_case[idx][1]
-        z[None] = test_case[idx][2]
+        x[()] = test_case[idx][0]
+        y[()] = test_case[idx][1]
+        z[()] = test_case[idx][2]
 
     @qd.kernel
     def verify_val(idx: qd.i32):
-        assert x[None] == test_case[idx][0]
-        assert y[None] == test_case[idx][1]
-        assert z[None] == test_case[idx][2]
+        assert x[()] == test_case[idx][0]
+        assert y[()] == test_case[idx][1]
+        assert z[()] == test_case[idx][2]
 
     for idx in range(len(test_case_np)):
         set_val(idx)
@@ -122,15 +122,15 @@ def test_bitpacked_fields():
 
         @qd.kernel
         def set_val(test_val: qd.types.ndarray()):
-            a[None] = test_val[0]
-            b[None] = test_val[1]
-            c[None] = test_val[2]
+            a[()] = test_val[0]
+            b[()] = test_val[1]
+            c[()] = test_val[2]
 
         @qd.kernel
         def verify_val(test_val: qd.types.ndarray()):
-            assert a[None] == test_val[0]
-            assert b[None] == test_val[1]
-            assert c[None] == test_val[2]
+            assert a[()] == test_val[0]
+            assert b[()] == test_val[1]
+            assert c[()] == test_val[2]
 
         set_val(test_case)
         verify_val(test_case)

@@ -37,7 +37,7 @@ def test_break():
             i += 1
             if i > 10:
                 break
-        ret[None] = s
+        ret[()] = s
 
     func()
-    assert ret[None] == 55
+    assert ret[()] == 55

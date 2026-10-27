@@ -39,10 +39,10 @@ def test_cast_f32():
 
     @qd.kernel
     def func():
-        z[None] = qd.cast(1e9, qd.f32) / qd.cast(1e6, qd.f32) + 1e-3
+        z[()] = qd.cast(1e9, qd.f32) / qd.cast(1e6, qd.f32) + 1e-3
 
     func()
-    assert z[None] == 1000
+    assert z[()] == 1000
 
 
 @test_utils.test(require=qd.extension.data64)
@@ -51,10 +51,10 @@ def test_cast_f64():
 
     @qd.kernel
     def func():
-        z[None] = qd.cast(1e13, qd.f64) / qd.cast(1e10, qd.f64) + 1e-3
+        z[()] = qd.cast(1e13, qd.f64) / qd.cast(1e10, qd.f64) + 1e-3
 
     func()
-    assert z[None] == 1000
+    assert z[()] == 1000
 
 
 @pytest.mark.parametrize("dtype", [qd.f32, qd.f64])
@@ -94,7 +94,7 @@ def test_cast_within_while():
         while t > 5:
             t = 1.0
             break
-        ret[None] = t
+        ret[()] = t
 
     func()
 
@@ -107,16 +107,16 @@ def test_bit_cast():
 
     @qd.kernel
     def func1():
-        y[None] = qd.bit_cast(x[None], qd.f32)
+        y[()] = qd.bit_cast(x[()], qd.f32)
 
     @qd.kernel
     def func2():
-        z[None] = qd.bit_cast(y[None], qd.i32)
+        z[()] = qd.bit_cast(y[()], qd.i32)
 
-    x[None] = 2333
+    x[()] = 2333
     func1()
     func2()
-    assert z[None] == 2333
+    assert z[()] == 2333
 
 
 @test_utils.test(arch=qd.cpu)
@@ -166,16 +166,16 @@ def test_quant_int_extension():
 
     @qd.kernel
     def run_cast_int():
-        x[0] = qd.cast(a[None], qd.i32)
-        x[1] = qd.cast(b[None], qd.i32)
+        x[0] = qd.cast(a[()], qd.i32)
+        x[1] = qd.cast(b[()], qd.i32)
 
     @qd.kernel
     def run_cast_uint():
-        y[0] = qd.cast(a[None], qd.u32)
-        y[1] = qd.cast(b[None], qd.u32)
+        y[0] = qd.cast(a[()], qd.u32)
+        y[1] = qd.cast(b[()], qd.u32)
 
-    a[None] = -16
-    b[None] = -64
+    a[()] = -16
+    b[()] = -64
 
     run_cast_int()
     assert x[0] == -16

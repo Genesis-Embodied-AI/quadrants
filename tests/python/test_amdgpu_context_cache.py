@@ -25,15 +25,15 @@ def test_repeated_launch_argless_result_less():
     # Arg-less, result-less kernel: arg_buffer==nullptr normalization keeps the context stable, so identical
     # launches hit the cache after the first.
     x = qd.field(qd.i32, shape=())
-    x[None] = 0
+    x[()] = 0
 
     @qd.kernel
     def inc():
-        x[None] += 1
+        x[()] += 1
 
     for _ in range(64):
         inc()
-    assert x[None] == 64
+    assert x[()] == 64
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])

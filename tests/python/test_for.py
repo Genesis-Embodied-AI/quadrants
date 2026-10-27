@@ -148,14 +148,14 @@ def test_for_static_if_no_ad2():
             for i_3 in qd.static(range(3)) if qd.static(use_static) else range(3):
                 z += x[i_3, i_b] * y[i_3, i_b]
 
-            loss[None] += z.x + z.y + z.z
+            loss[()] += z.x + z.y + z.z
 
     use_static = False
 
     loss.fill(0.0)
     k1(use_static)
 
-    loss.grad[None] = 1.0
+    loss.grad[()] = 1.0
     x.grad.fill(0.0)
     y.grad.fill(0.0)
 

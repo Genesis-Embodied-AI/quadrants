@@ -21,11 +21,11 @@ def test_pointer():
     @qd.kernel
     def func():
         for i in x:
-            s[None] += 1
+            s[()] += 1
 
     activate()
     func()
-    assert s[None] == n * n
+    assert s[()] == n * n
 
 
 @test_utils.test(require=qd.extension.sparse)
@@ -46,12 +46,12 @@ def test_pointer2():
     @qd.kernel
     def func():
         for i in x:
-            s[None] += i
+            s[()] += i
 
     activate()
     func()
     N = n * n
-    assert s[None] == N * (N - 1) / 2
+    assert s[()] == N * (N - 1) / 2
 
 
 @test_utils.test(require=qd.extension.sparse)

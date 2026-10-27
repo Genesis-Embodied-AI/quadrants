@@ -12,7 +12,7 @@ def test_adjoint_checkbit_needs_grad():
 
     @qd.kernel
     def test():
-        x[None] = 1
+        x[()] = 1
 
     with qd.ad.Tape(loss=x, validation=True):
         test()
@@ -27,7 +27,7 @@ def test_adjoint_checkbit_lazy_grad():
 
     @qd.kernel
     def test():
-        x[None] = 1
+        x[()] = 1
 
     with qd.ad.Tape(loss=x, validation=True):
         test()
@@ -43,7 +43,7 @@ def test_adjoint_checkbit_place_grad():
 
     @qd.kernel
     def test():
-        x[None] = 1
+        x[()] = 1
 
     with qd.ad.Tape(loss=x, validation=True):
         test()
@@ -58,7 +58,7 @@ def test_adjoint_checkbit_needs_grad():
 
     @qd.kernel
     def test():
-        x[None] = 1
+        x[()] = 1
 
     with pytest.warns(Warning) as record:
         with qd.ad.Tape(loss=x, validation=True):
@@ -84,14 +84,14 @@ def test_break_gdar_rule_1():
 
     @qd.kernel
     def func_broke_rule_1():
-        loss[None] = x[1] * b[None]
-        b[None] += 100
+        loss[()] = x[1] * b[()]
+        b[()] += 100
 
     for i in range(N):
         x[i] = i
 
-    b[None] = 10
-    loss.grad[None] = 1
+    b[()] = 10
+    loss.grad[()] = 1
 
     with pytest.raises(qd.QuadrantsAssertionError):
         with qd.ad.Tape(loss=loss, validation=True):
@@ -108,13 +108,13 @@ def test_skip_grad_replaced():
     # This kernel breaks the global data access rule
     @qd.kernel
     def kernel_1():
-        loss[None] = x[1] * b[None]
-        b[None] += 100
+        loss[()] = x[1] * b[()]
+        b[()] += 100
 
     @qd.ad.grad_replaced
     def kernel_2():
-        loss[None] = x[1] * b[None]
-        b[None] += 100
+        loss[()] = x[1] * b[()]
+        b[()] += 100
 
     # The user defined grad kernel is not restricted by the global data access rule, thus should be skipped when checking
     @qd.ad.grad_for(kernel_2)
@@ -124,8 +124,8 @@ def test_skip_grad_replaced():
     for i in range(N):
         x[i] = i
 
-    b[None] = 10
-    loss.grad[None] = 1
+    b[()] = 10
+    loss.grad[()] = 1
 
     with pytest.raises(qd.QuadrantsAssertionError):
         with qd.ad.Tape(loss=loss, validation=True):
@@ -144,17 +144,17 @@ def test_autodiff_mode_recovered():
 
     @qd.kernel
     def kernel_1():
-        loss[None] = x[1] * b[None]
+        loss[()] = x[1] * b[()]
 
     @qd.kernel
     def kernel_2():
-        loss[None] = x[1] * b[None]
+        loss[()] = x[1] * b[()]
 
     for i in range(N):
         x[i] = i
 
-    b[None] = 10
-    loss.grad[None] = 1
+    b[()] = 10
+    loss.grad[()] = 1
 
     func_calls = []
     with qd.ad.Tape(loss=loss, validation=True) as t:
@@ -177,11 +177,11 @@ def test_validation_kernel_capture():
 
     @qd.kernel
     def kernel_1():
-        loss[None] = x[1] * b[None]
+        loss[()] = x[1] * b[()]
 
     @qd.kernel
     def kernel_2():
-        loss[None] = x[1] * b[None]
+        loss[()] = x[1] * b[()]
 
     def forward(T):
         for t in range(T):
@@ -191,8 +191,8 @@ def test_validation_kernel_capture():
     for i in range(N):
         x[i] = i
 
-    b[None] = 10
-    loss.grad[None] = 1
+    b[()] = 10
+    loss.grad[()] = 1
 
     with qd.ad.Tape(loss=loss, validation=True) as t:
         forward(T)

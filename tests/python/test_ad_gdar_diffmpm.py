@@ -55,7 +55,7 @@ def test_gdar_mpm(particles_side, n_grid_size, num_steps):
     @qd.kernel
     def set_v():
         for i in range(n_particles):
-            v[0, i] = init_v[None]
+            v[0, i] = init_v[()]
 
     @qd.kernel
     def p2g(f: qd.i32):
@@ -121,12 +121,12 @@ def test_gdar_mpm(particles_side, n_grid_size, num_steps):
     @qd.kernel
     def compute_x_avg():
         for i in range(n_particles):
-            x_avg[None] += (1 / n_particles) * x[steps - 1, i]
+            x_avg[()] += (1 / n_particles) * x[steps - 1, i]
 
     @qd.kernel
     def compute_loss():
-        dist = (x_avg[None] - qd.Vector(target)) ** 2
-        loss[None] = 0.5 * (dist(0) + dist(1))
+        dist = (x_avg[()] - qd.Vector(target)) ** 2
+        loss[()] = 0.5 * (dist(0) + dist(1))
 
     def substep(s):
         p2g(s)
@@ -134,7 +134,7 @@ def test_gdar_mpm(particles_side, n_grid_size, num_steps):
         g2p(s)
 
     # initialization
-    init_v[None] = [0, 0]
+    init_v[()] = [0, 0]
 
     for i in range(n_particles):
         F[0, i] = [[1, 0], [0, 1]]
@@ -151,7 +151,7 @@ def test_gdar_mpm(particles_side, n_grid_size, num_steps):
         grid_v_in.fill(0)
         grid_m_in.fill(0)
 
-        x_avg[None] = [0, 0]
+        x_avg[()] = [0, 0]
 
         with pytest.raises(qd.QuadrantsAssertionError):
             with qd.ad.Tape(loss=loss, validation=True):
@@ -162,10 +162,10 @@ def test_gdar_mpm(particles_side, n_grid_size, num_steps):
                 compute_x_avg()
                 compute_loss()
 
-        l = loss[None]
+        l = loss[()]
         losses.append(l)
-        grad = init_v.grad[None]
+        grad = init_v.grad[()]
         print("loss=", l, "   grad=", (grad[0], grad[1]))
         learning_rate = 10
-        init_v[None][0] -= learning_rate * grad[0]
-        init_v[None][1] -= learning_rate * grad[1]
+        init_v[()][0] -= learning_rate * grad[0]
+        init_v[()][1] -= learning_rate * grad[1]

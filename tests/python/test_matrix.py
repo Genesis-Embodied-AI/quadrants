@@ -56,9 +56,9 @@ def test_python_scope_vector_field(ops):
     t1 = qd.Vector.field(2, dtype=qd.i32, shape=())
     t2 = qd.Vector.field(2, dtype=qd.i32, shape=())
     a, b = test_vector_arrays[:2]
-    t1[None], t2[None] = a.tolist(), b.tolist()
+    t1[()], t2[()] = a.tolist(), b.tolist()
 
-    c = ops(t1[None], t2[None])
+    c = ops(t1[()], t2[()])
     assert np.allclose(c.to_numpy(), ops(a, b))
 
 
@@ -69,9 +69,9 @@ def test_python_scope_matrix_field(ops):
     t2 = qd.Matrix.field(2, 2, dtype=qd.i32, shape=())
     a, b = test_matrix_arrays[:2]
     # ndarray not supported here
-    t1[None], t2[None] = a.tolist(), b.tolist()
+    t1[()], t2[()] = a.tolist(), b.tolist()
 
-    c = ops(t1[None], t2[None])
+    c = ops(t1[()], t2[()])
     print(c)
 
     assert np.allclose(c.to_numpy(), ops(a, b))
@@ -133,13 +133,13 @@ def test_quadrants_scope_vector_operations_with_global_vectors():
 
         @qd.kernel
         def run():
-            r1[None] = ops(m1, m2)
-            r2[None] = ops(m1, m3[None])
+            r1[()] = ops(m1, m2)
+            r2[()] = ops(m1, m3[()])
 
         run()
 
-        assert np.allclose(r1[None].to_numpy(), ops(a, b))
-        assert np.allclose(r2[None].to_numpy(), ops(a, c))
+        assert np.allclose(r1[()].to_numpy(), ops(a, b))
+        assert np.allclose(r2[()].to_numpy(), ops(a, c))
 
 
 @test_utils.test(arch=get_host_arch_list())
@@ -154,13 +154,13 @@ def test_quadrants_scope_matrix_operations_with_global_matrices():
 
         @qd.kernel
         def run():
-            r1[None] = ops(m1, m2)
-            r2[None] = ops(m1, m3[None])
+            r1[()] = ops(m1, m2)
+            r2[()] = ops(m1, m3[()])
 
         run()
 
-        assert np.allclose(r1[None].to_numpy(), ops(a, b))
-        assert np.allclose(r2[None].to_numpy(), ops(a, c))
+        assert np.allclose(r1[()].to_numpy(), ops(a, b))
+        assert np.allclose(r2[()].to_numpy(), ops(a, c))
 
 
 def _test_local_matrix_non_constant_index():
@@ -279,8 +279,8 @@ def test_vector_to_list():
     assert list(b) == data
     assert len(b) == len(data)
 
-    a[None] = b
-    assert all(a[None] == qd.Vector(data))
+    a[()] = b
+    assert all(a[()] == qd.Vector(data))
 
 
 @test_utils.test(arch=qd.cpu)
@@ -292,8 +292,8 @@ def test_matrix_to_list():
     assert list(b) == data
     assert len(b) == len(data)
 
-    a[None] = b
-    assert all(a[None] == qd.Matrix(data))
+    a[()] = b
+    assert all(a[()] == qd.Matrix(data))
 
 
 @test_utils.test()
@@ -333,11 +333,11 @@ def test_copy_python_scope_matrix_to_quadrants_scope():
 @test_utils.test(debug=True)
 def test_copy_matrix_field_element_to_quadrants_scope():
     a = qd.Vector.field(3, qd.i32, shape=())
-    a[None] = qd.Vector([1, 2, 3])
+    a[()] = qd.Vector([1, 2, 3])
 
     @qd.kernel
     def test():
-        b = a[None]
+        b = a[()]
         assert b[0] == 1
         assert b[1] == 2
         assert b[2] == 3
@@ -347,9 +347,9 @@ def test_copy_matrix_field_element_to_quadrants_scope():
         assert b[0] == 5
         assert b[1] == 9
         assert b[2] == 7
-        assert a[None][0] == 1
-        assert a[None][1] == 2
-        assert a[None][2] == 3
+        assert a[()][0] == 1
+        assert a[()][1] == 2
+        assert a[()][2] == 3
 
     test()
 
@@ -606,8 +606,8 @@ def test_indexing_in_fields():
 
     @qd.kernel
     def foo():
-        f[None][0, 0] = 1.0
-        print(f[None][0])
+        f[()][0, 0] = 1.0
+        print(f[()][0])
 
     with pytest.raises(QuadrantsCompilationError, match=r"Expected 2 indices, got 1"):
         foo()
@@ -616,8 +616,8 @@ def test_indexing_in_fields():
 
     @qd.kernel
     def bar():
-        g[None][0] = 1.0
-        print(g[None][0, 0])
+        g[()][0] = 1.0
+        print(g[()][0, 0])
 
     with pytest.raises(QuadrantsCompilationError, match=r"Expected 1 indices, got 2"):
         bar()
@@ -648,14 +648,14 @@ def test_indexing_in_struct_field():
 
     @qd.kernel
     def foo():
-        print(s[None].v[0, 0])
+        print(s[()].v[0, 0])
 
     with pytest.raises(QuadrantsCompilationError, match=r"Expected 1 indices, got 2"):
         foo()
 
     @qd.kernel
     def bar():
-        print(s[None].m[0])
+        print(s[()].m[0])
 
     with pytest.raises(QuadrantsCompilationError, match=r"Expected 2 indices, got 1"):
         bar()
@@ -686,12 +686,12 @@ def test_local_matrix_read():
     @qd.kernel
     def get_index(i: qd.i32, j: qd.i32):
         mat = qd.Matrix([[x * 3 + y for y in range(3)] for x in range(3)])
-        s[None] = mat[i, j]
+        s[()] = mat[i, j]
 
     for i in range(3):
         for j in range(3):
             get_index(i, j)
-            assert s[None] == i * 3 + j
+            assert s[()] == i * 3 + j
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], real_matrix_scalarize=False)

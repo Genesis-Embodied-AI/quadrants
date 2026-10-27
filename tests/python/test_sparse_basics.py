@@ -18,14 +18,14 @@ def test_pointer():
     @qd.kernel
     def func():
         for i in x:
-            s[None] += 1
+            s[()] += 1
 
     x[0] = 1
     x[127] = 1
     x[256] = 1
 
     func()
-    assert s[None] == 256
+    assert s[()] == 256
 
 
 @test_utils.test(require=qd.extension.sparse)
@@ -42,14 +42,14 @@ def test_pointer_is_active():
     @qd.kernel
     def func():
         for i in range(n * n):
-            s[None] += qd.is_active(ptr, qd.rescale_index(x, ptr, [i]))
+            s[()] += qd.is_active(ptr, qd.rescale_index(x, ptr, [i]))
 
     x[0] = 1
     x[127] = 1
     x[256] = 1
 
     func()
-    assert s[None] == 256
+    assert s[()] == 256
 
 
 @test_utils.test(require=qd.extension.sparse)
@@ -65,14 +65,14 @@ def test_pointer_is_active_2():
     @qd.kernel
     def func():
         for i, j in qd.ndrange(n, n):
-            s[None] += qd.is_active(x.parent(), [i, j])
+            s[()] += qd.is_active(x.parent(), [i, j])
 
     x[0, 0] = 1
     x[0, 127] = 1
     x[127, 127] = 1
 
     func()
-    assert s[None] == 3
+    assert s[()] == 3
 
 
 @test_utils.test(require=qd.extension.sparse)
@@ -88,7 +88,7 @@ def test_pointer2():
     @qd.kernel
     def func():
         for i in x:
-            s[None] += 1
+            s[()] += 1
 
     x[0] = 1
     x[127] = 1
@@ -100,9 +100,9 @@ def test_pointer2():
     x[257 + n * n * 5] = 1
 
     func()
-    assert s[None] == 5 * n
+    assert s[()] == 5 * n
     print(x[257 + n * n * 7])
-    assert s[None] == 5 * n
+    assert s[()] == 5 * n
 
 
 @pytest.mark.skip(reason="https://github.com/taichi-dev/taichi/issues/2520")

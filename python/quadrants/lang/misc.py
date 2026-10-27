@@ -196,7 +196,7 @@ def reset():
     Example::
 
         >>> a = qd.field(qd.i32, shape=())
-        >>> a[None] = 1
+        >>> a[()] = 1
         >>> print("before reset: ", a)
         before rest: 1
         >>>

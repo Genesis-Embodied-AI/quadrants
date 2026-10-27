@@ -13,7 +13,7 @@ def test_pass_by_value():
 
     @qd.kernel
     def task():
-        set_val(ret[None], 112)
+        set_val(ret[()], 112)
 
     task()
-    assert ret[None] == 0
+    assert ret[()] == 0

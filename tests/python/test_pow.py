@@ -11,12 +11,12 @@ def _test_pow_f(dt):
 
     @qd.kernel
     def func(x: dt, y: dt):
-        z[None] = x**y
+        z[()] = x**y
 
     for x in [0.5, 1, 1.5, 2, 6.66]:
         for y in [-2, -1, -0.3, 0, 0.5, 1, 1.4, 2.6]:
             func(x, y)
-            assert z[None] == pytest.approx(x**y)
+            assert z[()] == pytest.approx(x**y)
 
 
 def _test_pow_i(dt):
@@ -24,12 +24,12 @@ def _test_pow_i(dt):
 
     @qd.kernel
     def func(x: dt, y: qd.template()):
-        z[None] = x**y
+        z[()] = x**y
 
     for x in range(-5, 5):
         for y in range(0, 4):
             func(x, y)
-            assert z[None] == x**y
+            assert z[()] == x**y
 
 
 @test_utils.test()
@@ -57,7 +57,7 @@ def _ipow_negative_exp(dt):
 
     @qd.kernel
     def foo(x: dt, y: qd.template()):
-        z[None] = x**y
+        z[()] = x**y
 
     with pytest.raises(QuadrantsRuntimeError):
         foo(10, -10)
@@ -87,12 +87,12 @@ def _test_pow_int_base_int_exp(dt_base, dt_exp):
 
     @qd.kernel
     def func(x: dt_base, y: dt_exp):
-        z[None] = x**y
+        z[()] = x**y
 
     for x in range(-5, 5):
         for y in range(0, 10):
             func(x, y)
-            assert z[None] == x**y
+            assert z[()] == x**y
 
 
 @test_utils.test()
@@ -113,12 +113,12 @@ def _test_pow_float_base_int_exp(dt_base, dt_exp):
 
     @qd.kernel
     def func(x: dt_base, y: dt_exp):
-        z[None] = x**y
+        z[()] = x**y
 
     for x in [-6.66, -2, -1.5, -1, -0.5, 0.5, 1, 1.5, 2, 6.66]:
         for y in range(-10, 10):
             func(x, y)
-            assert z[None] == pytest.approx(x**y)
+            assert z[()] == pytest.approx(x**y)
 
 
 @test_utils.test()
