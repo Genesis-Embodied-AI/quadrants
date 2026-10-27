@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 import requests
 
 # -- own --
+from .download import download_file
 from .misc import get_cache_home, info
 from .tinysh import bash, sh, sudo, tar
 
@@ -131,24 +132,7 @@ def download_dep(url, outdir, *, strip=0, force=False, args=None, plain=False, e
             pass
 
     if not local_cached.exists() or local_cached.stat().st_size != size:
-        import tqdm
-
-        with requests.get(url, stream=True) as r:
-            r.raise_for_status()
-            total_size = int(r.headers.get("content-length", 0))
-            prog = tqdm.tqdm(
-                unit="B",
-                unit_scale=True,
-                unit_divisor=1024,
-                total=total_size,
-                desc=name,
-            )
-            with prog, open(str(local_cached) + ".download", "wb") as f:
-                for chunk in r.iter_content(chunk_size=8192):
-                    sz = f.write(chunk)
-                    prog.update(sz)
-
-        shutil.move(str(local_cached) + ".download", local_cached)
+        download_file(url, local_cached, name)
 
     if sha256 is not None:
         actual_sha256 = hashlib.sha256(local_cached.read_bytes()).hexdigest()
