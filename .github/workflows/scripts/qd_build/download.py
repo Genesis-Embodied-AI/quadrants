@@ -24,11 +24,11 @@ def download_file(url, destination, name):
                         unit_divisor=1024,
                         total=int(response.headers.get("content-length", 0)),
                         desc=name,
-                    ) as progress,
+                    ) as tqdm_progress,
                     partial_file.open("wb") as output_fh,
                 ):
                     for chunk in response.iter_content(chunk_size=8192):
-                        progress.update(output_fh.write(chunk))
+                        tqdm_progress.update(output_fh.write(chunk))
             partial_file.replace(destination)
             return
         except (
