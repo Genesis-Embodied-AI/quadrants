@@ -36,6 +36,8 @@ def download_file(url, destination, name):
             requests.HTTPError,
         ) as error:
             if isinstance(error, requests.HTTPError):
+                # 408: Request Timeout; 429: Too Many Requests; 500: Internal Server Error;
+                # 502: Bad Gateway; 503: Service Unavailable; 504: Gateway Timeout.
                 if error.response is None or error.response.status_code not in (408, 429, 500, 502, 503, 504):
                     raise
             if attempt == attempts:
