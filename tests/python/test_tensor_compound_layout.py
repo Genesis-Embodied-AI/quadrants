@@ -497,6 +497,8 @@ def test_compound_layout_grad(backend: qd.Backend, dtype: MatrixType) -> None:
     x.grad.fill(0)
     y.grad.fill(1)
     double(x, y)
+    # Run the generated backward kernel: x.grad[I] += 2 * y.grad[I].
+    # With y.grad initialized to 1 and x.grad to 0, every component of x.grad should become 2.
     double.grad(x, y)
     np.testing.assert_array_equal(x.grad.to_numpy(), np.full(x.shape + x.element_shape, 2))
 
