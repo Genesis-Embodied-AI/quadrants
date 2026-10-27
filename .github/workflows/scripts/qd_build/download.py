@@ -28,6 +28,7 @@ def download_file(url, destination, name):
                     partial_file.open("wb") as output_fh,
                 ):
                     for chunk in response.iter_content(chunk_size=8192):
+                        # output_fh.write(chunk) returns the number of bytes written
                         tqdm_progress.update(output_fh.write(chunk))
             partial_file.replace(destination)
             return
