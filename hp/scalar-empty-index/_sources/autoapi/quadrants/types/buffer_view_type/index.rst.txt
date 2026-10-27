@@ -1,0 +1,44 @@
+quadrants.types.buffer_view_type
+================================
+
+.. py:module:: quadrants.types.buffer_view_type
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   quadrants.types.buffer_view_type.BufferViewType
+
+
+Module Contents
+---------------
+
+.. py:class:: BufferViewType(dtype=None, boundary='unsafe')
+
+   Type annotation for BufferView kernel parameters.
+
+   A BufferView is decomposed into three kernel arguments (ndarray, offset, size) and reassembled at compile time.
+
+   :param dtype: Element data type (e.g. qd.f32).
+   :param boundary: Boundary mode for the underlying ndarray ("unsafe", "clamp").
+
+   Prefer using the ``BufferView[dtype]`` square-bracket syntax::
+
+       from quadrants import BufferView
+
+       @qd.kernel
+       def k(v: BufferView[qd.f32]):
+           for i in range(v.size):
+               v[i] *= 2.0
+
+
+   .. py:attribute:: dtype
+      :value: None
+
+
+
+   .. py:attribute:: ndarray_type
+
+
