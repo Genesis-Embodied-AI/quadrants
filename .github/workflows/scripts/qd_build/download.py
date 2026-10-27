@@ -40,7 +40,7 @@ def download_file(url, destination, name):
                 # 502: Bad Gateway; 503: Service Unavailable; 504: Gateway Timeout.
                 if error.response.status_code not in (408, 429, 500, 502, 503, 504):
                     raise
-            if attempt == attempts:
+            if attempt >= attempts:
                 raise
             delay = 2 ** (attempt - 1)
             print(
