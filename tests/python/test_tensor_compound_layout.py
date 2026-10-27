@@ -399,7 +399,7 @@ def test_compound_layout_torch_noncontiguous_import(
 @test_utils.test(exclude=[qd.vulkan])
 def test_compound_layout_torch_zero_copy(backend: qd.Backend, dtype: MatrixType, copy_mode: bool | None) -> None:
     """Torch sharing modes return the existing buffer and expose writes at canonical positions."""
-    torch = test_utils.require_torch_dlpack(backend)
+    torch = test_utils.require_torch_dlpack(need_field_support=backend == qd.Backend.FIELD)
     shape = (2, 4, 5)
     layout = (2, 0, 1)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
@@ -435,7 +435,7 @@ def test_compound_layout_dlpack_shape_and_strides(
     backend: qd.Backend, dtype: MatrixType, layout: tuple[int, ...]
 ) -> None:
     """DLPack describes canonical values over physical storage using the correct strides."""
-    torch = test_utils.require_torch_dlpack(backend)
+    torch = test_utils.require_torch_dlpack(need_field_support=backend == qd.Backend.FIELD)
     shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
     initial = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
@@ -464,7 +464,7 @@ def test_compound_layout_dlpack_shape_and_strides(
 @test_utils.test(exclude=[qd.vulkan])
 def test_compound_layout_dlpack_writes(backend: qd.Backend, dtype: MatrixType, layout: tuple[int, ...]) -> None:
     """A write through a DLPack view changes the same canonical element in the tensor."""
-    torch = test_utils.require_torch_dlpack(backend)
+    torch = test_utils.require_torch_dlpack(need_field_support=backend == qd.Backend.FIELD)
     shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
     initial = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
