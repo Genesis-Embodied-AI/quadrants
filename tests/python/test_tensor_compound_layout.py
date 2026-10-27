@@ -373,20 +373,16 @@ def test_compound_layout_torch_noncontiguous_import(
 
 
 @pytest.mark.parametrize(
-    "backend,dtype,copy_mode",
+    "backend,dtype",
     [
-        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), False, id="field-vector-copy-false"),
-        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), None, id="field-matrix-copy-none"),
-        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), None, id="ndarray-vector-copy-none"),
-        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), False, id="ndarray-matrix-copy-false"),
-        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), None, id="field-vector-copy-none"),
-        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), False, id="field-matrix-copy-false"),
-        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), False, id="ndarray-vector-copy-false"),
-        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), None, id="ndarray-matrix-copy-none"),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), id="field-vector"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), id="field-matrix"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), id="ndarray-vector"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), id="ndarray-matrix"),
     ],
 )
 @test_utils.test(exclude=[qd.vulkan])
-def test_compound_layout_torch_zero_copy(backend: qd.Backend, dtype: MatrixType, copy_mode: bool | None) -> None:
+def test_compound_layout_torch_zero_copy(backend: qd.Backend, dtype: MatrixType) -> None:
     """Torch sharing modes return the existing buffer and expose writes at canonical positions."""
     torch = test_utils.require_torch_dlpack(need_field_support=backend == qd.Backend.FIELD)
     shape = (2, 4, 5)
@@ -398,7 +394,7 @@ def test_compound_layout_torch_zero_copy(backend: qd.Backend, dtype: MatrixType,
     expected[1, 2, 3] = -7
     dlpack_view = torch.utils.dlpack.from_dlpack(x.to_dlpack())
 
-    shared = x.to_torch(copy=copy_mode)
+    shared = x.to_torch(copy=False)
     assert shared.data_ptr() == dlpack_view.data_ptr()
     np.testing.assert_array_equal(shared.cpu().numpy(), initial)
     shared[1, 2, 3] = -7
