@@ -53,4 +53,5 @@ def download_file(url, destination, name):
             )
             time.sleep(delay)
         finally:
+            # Don't leave partial downloads around
             partial.unlink(missing_ok=True)
