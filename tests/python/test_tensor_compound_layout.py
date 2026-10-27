@@ -571,7 +571,7 @@ def test_compound_layout_invalid(
 )
 @test_utils.test()
 def test_compound_layout_kernel_specialization(backend: qd.Backend, dtype: MatrixType) -> None:
-    """Check kernel reuse across layouts using distinct codes for every tensor position and element component."""
+    """Check that the same kernel writes correct values when called with different tensor layouts."""
 
     shape = (2, 5)
     element_shape = (dtype.n,) if dtype.ndim == 1 else (dtype.n, dtype.m)
