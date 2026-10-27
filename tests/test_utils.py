@@ -16,7 +16,7 @@ from quadrants.lang.misc import is_arch_supported
 
 
 # Helper functions
-@qd.func
+@qd.pyfunc
 def encode_index(I):
     # Encode coordinates as an integer, e.g. [1, 2] -> 12.
     # This encoding depends only on the index coordinates, not on the layout.
