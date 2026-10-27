@@ -543,19 +543,21 @@ def test_compound_layout_grad(backend: qd.Backend, dtype: MatrixType) -> None:
 
 
 @pytest.mark.parametrize(
-    "backend,dtype,layout",
+    "backend,dtype,shape,layout",
     [
-        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (0,), id="too-few-axes"),
-        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (0, 0), id="repeated-axis"),
-        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (0, 2), id="axis-out-of-range"),
-        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (0, 1, 2), id="too-many-axes"),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (2, 5), (0,), id="too-few-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (2, 5), (0, 0), id="repeated-axis"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 5), (0, 2), id="axis-out-of-range"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 5), (0, 1, 2), id="too-many-axes"),
     ],
 )
 @test_utils.test()
-def test_compound_layout_invalid(backend: qd.Backend, dtype: MatrixType, layout: tuple[int, ...]) -> None:
+def test_compound_layout_invalid(
+    backend: qd.Backend, dtype: MatrixType, shape: tuple[int, ...], layout: tuple[int, ...]
+) -> None:
     """Check that short, long, repeated-axis, and out-of-range layout permutations are rejected."""
     with pytest.raises(ValueError, match="layout"):
-        qd.tensor(dtype, (2, 5), backend=backend, layout=layout)
+        qd.tensor(dtype, shape, backend=backend, layout=layout)
 
 
 @pytest.mark.parametrize(
