@@ -6,7 +6,6 @@ Regression tests for:
    multiply and the stored value is loop-invariant.
 2. Atomic operations on ndarrays accessed via physical storage buffers.
 
-See doc/metal_physical_ptr_miscompile.md in perso_hugh for full details.
 """
 
 import numpy as np

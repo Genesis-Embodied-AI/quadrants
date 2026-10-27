@@ -1399,7 +1399,7 @@ def test_adstack_overflow_diagnostic_and_auto_recovery():
     import torch
 
     # Cross-backend regression for the always-on overflow detection + diagnostic + auto-recovery
-    # contract shipped on this branch. The kernel's inner trip count is bounded by `n[0]`, an `int32`
+    # contract. The kernel's inner trip count is bounded by `n[0]`, an `int32`
     # ndarray. The per-task adstack metadata cache invalidation tracks `Ndarray.write` /
     # `Ndarray.fill` via `Program::ndarray_data_gen_` - mutations that route through Quadrants APIs
     # invalidate cleanly. DLPack zero-copy mutations (`.to_torch(copy=False)`) bypass that tracking,

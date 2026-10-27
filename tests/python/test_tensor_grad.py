@@ -5,8 +5,7 @@ The factories pass ``needs_grad`` through to ``qd.field`` / ``qd.ndarray`` via `
 (real-only). These tests lock that behaviour as part of the public contract on every (factory, backend) combination.
 
 Behavioural tests are parametrized over both backends. The int-dtype rejection check is NDARRAY-only because the FIELD
-path goes through the older Vector/Matrix.field code which raises a different error (out of scope for this branch's
-contract).
+path goes through Vector/Matrix.field code which raises a different error.
 """
 
 import pytest
@@ -178,7 +177,7 @@ def test_tensor_mat_grad_kernel_roundtrip(backend):
 # ----------------------------------------------------------------------------
 # Negative path: int dtype + needs_grad on the NDARRAY backend. Kept NDARRAY-only because the FIELD path raises
 # through the legacy create_field machinery with a different error class / message; the Vector.ndarray / Matrix.ndarray
-# rejection added in this branch is the focused contract.
+# rejection is the focused contract.
 # ----------------------------------------------------------------------------
 
 

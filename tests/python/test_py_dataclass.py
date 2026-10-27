@@ -3415,7 +3415,7 @@ def test_frozen_dataclass_passed_to_multiple_ancestor_annotations():
 # ---------------------------------------------------------------------------
 # POC: ``typing.Final[T]`` fields on frozen dataclasses => compile-time templates.
 #
-# Design goal (see perso_hugh/doc/final_dataclass_templates.md): let users mark selected fields of a plain frozen
+# Design goal: let users mark selected fields of a plain frozen
 # ``@dataclasses.dataclass`` config as ``typing.Final[T]`` to signal that the field's value must be baked as a
 # compile-time constant. This replaces the pre-existing ``@qd.data_oriented`` + ``qd.Template`` pattern for static
 # configs - where the same effect required opting the whole class into the data_oriented machinery and paying the
@@ -3437,8 +3437,7 @@ def test_frozen_dataclass_passed_to_multiple_ancestor_annotations():
 def test_final_field_bakes_as_compile_time_constant_via_qd_static():
     """Baseline POC: ``qd.static(config.dt)`` on a frozen dataclass with ``dt: Final[float]`` compiles and produces
     the expected numeric result. The important part is that the kernel compiles at all - ``qd.static`` fails today
-    on a non-Final dataclass field because the field lowers to a runtime scalar ``Expr`` (see
-    ``QuadrantsCompilationError: Invalid data type typing.Final[int]`` before this change).
+    on a non-Final dataclass field because the field lowers to a runtime scalar ``Expr``.
 
     ``qd.static(config.dt)`` is materialised into a named local ``dt_const`` before the kernel's inner-loop assign to
     avoid ``build_Assign``'s ``is_static_assign`` check, which rejects ``out[i] = qd.static(...)`` with "Static assign

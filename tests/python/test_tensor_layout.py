@@ -1,14 +1,12 @@
-"""Tests for ``layout=`` on the ``qd.tensor()`` factory.
-
-Phase 2 ships layout support for the field backend only. Non-identity layouts on the ndarray backend raise
-NotImplementedError until the AST rewrite lands in an earlier change.
-"""
+"""Tests for ``layout=`` on the ``qd.tensor()`` factory."""
 
 import itertools
 
+import numpy as np
 import pytest
 
 import quadrants as qd
+from quadrants._tensor import _with_layout
 
 from tests import test_utils
 
@@ -239,3 +237,122 @@ def test_matrix_dtype_without_layout_still_works():
     mat2x2 = qd.types.matrix(2, 2, qd.f32)
     a = qd.tensor(mat2x2, shape=(4,))
     assert tuple(a.shape) == (4,)
+
+
+@pytest.mark.parametrize(
+    "backend, shape, layout, index_kind, operation",
+    [
+        (qd.Backend.FIELD, (3, 5), (1, 0), list, "read"),
+        (qd.Backend.NDARRAY, (3, 4, 5), (1, 2, 0), list, "write"),
+        (qd.Backend.FIELD, (3, 4, 5), (1, 2, 0), list, "read_modify_write"),
+        (qd.Backend.NDARRAY, (3, 5), (1, 0), list, "augassign"),
+        (qd.Backend.FIELD, (3, 4, 5), (1, 2, 0), list, "atomic_add"),
+        (qd.Backend.NDARRAY, (3, 5), (1, 0), list, "atomic_add"),
+        (qd.Backend.FIELD, (3, 4, 5), (1, 2, 0), tuple, "read"),
+        (qd.Backend.NDARRAY, (3, 5), (1, 0), tuple, "atomic_add"),
+        (qd.Backend.FIELD, (3, 5), (0, 1), list, "augassign"),
+    ],
+)
+@test_utils.test()
+def test_layout_sequence_index(
+    backend: qd.Backend,
+    shape: tuple[int, ...],
+    layout: tuple[int, ...],
+    index_kind: type[list] | type[tuple],
+    operation: str,
+) -> None:
+    """Run the same kernel with and without a tensor layout, checking that list and tuple indices passed through a
+    qd.func read and update the same canonical elements on both tensor backends."""
+
+    @qd.func
+    def encode_index(I):
+        # Encode coordinates as an integer, e.g. [1, 2] -> 12.
+        # This encoding depends only on the index coordinates, not on the layout.
+        index_code = 0
+        for axis in qd.static(range(len(I))):
+            index_code = index_code * 10 + I[axis]
+        return index_code
+
+    @qd.func
+    def f1(I, x: qd.Tensor, y: qd.Tensor):
+        index_code = encode_index(I)
+        if qd.static(operation == "read"):
+            y[I] = x[I]
+        elif qd.static(operation == "write"):
+            y[I] = index_code
+        elif qd.static(operation == "read_modify_write"):
+            y[I] = y[I] + index_code
+        elif qd.static(operation == "augassign"):
+            y[I] += index_code
+        elif qd.static(operation == "atomic_add"):
+            qd.atomic_add(y[I], index_code)
+
+    @qd.kernel
+    def k1(x: qd.Tensor, y: qd.Tensor) -> None:
+        # Visit every tensor position, grouping its coordinates into the index vector I for either 2D or 3D shapes.
+        for I in qd.grouped(qd.ndrange(*shape)):
+            I_l = [I[axis] for axis in qd.static(range(len(shape)))]
+            f1(index_kind(I_l), x, y)
+
+    initial_x = np.arange(np.prod(shape), dtype=np.int32).reshape(shape)
+    initial_y = -initial_x - 1
+    y_l = []
+    for tensor_layout in (layout, None):
+        x = qd.tensor(qd.i32, shape=shape, backend=backend)
+        y = qd.tensor(qd.i32, shape=shape, backend=backend, layout=tensor_layout)
+        x.from_numpy(initial_x)
+        y.from_numpy(initial_y)
+        k1(x, y)
+        y_l.append(y.to_numpy())
+    y, expected_y = y_l
+    np.testing.assert_array_equal(y, expected_y)
+
+
+@test_utils.test(arch=qd.cpu)
+def test_anyarray_shape_canonical_in_kernel_rank2():
+    """x.shape[i] inside a kernel on a layout-tagged NDARRAY must return canonical sizes, not physical ones. Otherwise
+    for non-square shapes the idiomatic ``for i in range(x.shape[0])`` loop produces OOB writes.
+    """
+    N, B = 3, 5
+
+    @qd.kernel
+    def fill(x: qd.types.ndarray()):
+        for i in range(x.shape[0]):
+            for j in range(x.shape[1]):
+                x[i, j] = i * 100 + j
+
+    a = qd.tensor(qd.i32, shape=(B, N), backend=qd.Backend.NDARRAY)
+    _with_layout(a, (1, 0))
+
+    fill(a)
+    got = a.to_numpy()
+
+    expected = np.zeros((N, B), dtype=np.int32)
+    for i in range(N):
+        for j in range(B):
+            expected[i, j] = i * 100 + j
+    np.testing.assert_array_equal(got, expected)
+
+
+@test_utils.test(arch=qd.cpu)
+def test_anyarray_shape_canonical_identity_layout():
+    """Identity layout should not affect .shape semantics."""
+    M, N = 4, 6
+
+    @qd.kernel
+    def fill(x: qd.types.ndarray()):
+        for i in range(x.shape[0]):
+            for j in range(x.shape[1]):
+                x[i, j] = i * 10 + j
+
+    a = qd.tensor(qd.i32, shape=(M, N), backend=qd.Backend.NDARRAY)
+    _with_layout(a, (0, 1))
+
+    fill(a)
+    got = a.to_numpy()
+
+    expected = np.zeros((M, N), dtype=np.int32)
+    for i in range(M):
+        for j in range(N):
+            expected[i, j] = i * 10 + j
+    np.testing.assert_array_equal(got, expected)
