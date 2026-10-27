@@ -431,11 +431,11 @@ def test_compound_layout_dlpack_shape_and_strides(
     expected_strides = tuple(stride // canonical_view_np.itemsize for stride in canonical_view_np.strides)
 
     # Creates a Torch tensor that shares x's memory.
-    view = torch.utils.dlpack.from_dlpack(x.to_dlpack())
+    torch_view = torch.utils.dlpack.from_dlpack(x.to_dlpack())
 
-    assert tuple(view.shape) == initial.shape
-    assert tuple(view.stride()) == expected_strides
-    np.testing.assert_array_equal(view.cpu().numpy(), initial)
+    assert tuple(torch_view.shape) == initial.shape
+    assert tuple(torch_view.stride()) == expected_strides
+    np.testing.assert_array_equal(torch_view.cpu().numpy(), initial)
 
 
 @pytest.mark.parametrize(
