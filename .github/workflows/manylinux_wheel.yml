@@ -154,9 +154,9 @@ jobs:
     needs: build_wheel
     with:
       head_ref: ${{ github.head_ref || github.ref_name }}
-      wheel_artifact_name: manylinux_wheel_cp314_ubuntu-22.04
+      wheel_artifact_name: manylinux_wheel_cp312_ubuntu-22.04
       cuda_wheel_artifact_name: manylinux_wheel_cp315_ubuntu-22.04
-      cpptests_artifact_name: manylinux_cpptests_cp314_ubuntu-22.04
+      cpptests_artifact_name: manylinux_cpptests_cp312_ubuntu-22.04
     secrets:
       amdgpu_runner_region: ${{ secrets.AMDGPU_RUNNER_REGION }}
       amdgpu_runner_instance_id: ${{ secrets.AMDGPU_RUNNER_INSTANCE_ID }}
