@@ -39,7 +39,7 @@ from tests import test_utils
 def test_compound_layout_metadata(
     backend: qd.Backend, dtype: MatrixType, shape: tuple[int, ...], layout: tuple[int, ...] | None
 ) -> None:
-    """Check shape, component dimensions, normalized layouts, filling, and NumPy export across tensor ranks."""
+    """Check shape, component dimensions, and normalized layouts across tensor ranks."""
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
     element_shape = (dtype.n,) if dtype.ndim == 1 else (dtype.n, dtype.m)
     expected_layout = None if layout is None or layout == tuple(range(len(shape))) else layout
@@ -47,9 +47,6 @@ def test_compound_layout_metadata(
     assert x.shape == shape
     assert x.element_shape == element_shape
     assert x.layout == expected_layout
-
-    x.fill(4)
-    np.testing.assert_array_equal(x.to_numpy(), np.full(shape + element_shape, 4))
 
 
 @pytest.mark.parametrize(
@@ -177,26 +174,39 @@ def test_compound_layout_numpy_noncontiguous_import(
 
 
 @pytest.mark.parametrize(
-    "backend,dtype,layout",
+    "backend,dtype,shape,layout",
     [
-        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2), id="field-vector-swap-axes-0-1"),
-        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1), id="field-matrix-cycle-axes"),
-        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
-        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
+        pytest.param(
+            qd.Backend.FIELD, qd.types.vector(3, qd.f32), (2, 4, 5), (1, 0, 2), id="field-vector-swap-axes-0-1"
+        ),
+        pytest.param(
+            qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 4, 5), (2, 0, 1), id="field-matrix-cycle-axes"
+        ),
+        pytest.param(
+            qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 4, 5), (2, 0, 1), id="ndarray-vector-cycle-axes"
+        ),
+        pytest.param(
+            qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (2, 4, 5), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"
+        ),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (), (), id="field-vector-0d-identity"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (), (), id="ndarray-matrix-0d-identity"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (4,), (0,), id="ndarray-vector-1d-identity"),
+        pytest.param(
+            qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 5), (1, 0), id="field-matrix-2d-swap-axes-0-1"
+        ),
     ],
 )
 @test_utils.test()
 def test_compound_layout_numpy_export_is_independent(
-    backend: qd.Backend, dtype: MatrixType, layout: tuple[int, ...]
+    backend: qd.Backend, dtype: MatrixType, shape: tuple[int, ...], layout: tuple[int, ...]
 ) -> None:
     """A copied NumPy export has canonical values and can be changed without changing the tensor."""
-    shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
     initial = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
     x.from_numpy(initial)
 
     # Request a new NumPy array with its own storage. Its indices must have the same meaning as initial,
-    # even though x stores its axes in a different physical order.
+    # including when x stores its axes in a different physical order.
     copied = x.to_numpy(copy=True)
     np.testing.assert_array_equal(copied, initial)
 
