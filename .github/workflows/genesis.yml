@@ -45,9 +45,8 @@ jobs:
       unit_tests_modes: '["1"]'
     secrets: inherit
 
-  # A 'workflow_run' job is not attached to the pull request that started it, so its outcome is published as a check
-  # on the commit under test. This is what makes it appear among the checks of that pull request, and therefore what
-  # allows requiring it before merging.
+  # A 'workflow_run' job is not attached to the pull request that started it. Publish a commit status so its outcome
+  # can be required before merging, without creating a standalone check that GitHub may group under another workflow.
   publish-check:
     name: genesis-publish_check
 
@@ -56,10 +55,10 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      checks: write
+      statuses: write
 
     steps:
-      - name: Publish PR check
+      - name: Publish PR status
         uses: actions/github-script@v8
         env:
           CHECK_NAME: Genesis Unit Tests & Benchmarks
@@ -70,23 +69,18 @@ jobs:
           script: |
             const isSuccess = process.env.RESULT === 'success';
             const isSkipped = isSuccess && process.env.IS_SKIPPED === 'true';
-            await github.rest.checks.create({
+            await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              head_sha: context.payload.workflow_run.head_sha,
-              name: process.env.CHECK_NAME,
-              status: 'completed',
-              conclusion: isSkipped ? 'skipped' : isSuccess ? 'success' : 'failure',
-              details_url: process.env.RUN_URL,
-              output: {
-                title: process.env.CHECK_NAME,
-                summary: isSkipped
-                  ? 'The pull request was closed before its wheel was built, so the wheel is left untested.'
-                  : isSuccess
-                  ? 'The Genesis unit tests and benchmarks pass with the wheel under test.'
-                  : `The Genesis unit tests or benchmarks fail with the wheel under test (${process.env.RESULT}).`,
-                text: `**[Full log](${process.env.RUN_URL})**`
-              }
+              sha: context.payload.workflow_run.head_sha,
+              context: process.env.CHECK_NAME,
+              state: isSuccess ? 'success' : 'failure',
+              target_url: process.env.RUN_URL,
+              description: isSkipped
+                ? 'PR closed before its wheel was built; tests skipped.'
+                : isSuccess
+                ? 'The Genesis unit tests and benchmarks pass with the wheel under test.'
+                : `Genesis unit tests or benchmarks failed (${process.env.RESULT}).`,
             });
 
   # The comparison is the one the CI of Genesis runs on its own pull requests, down to the tolerances, the baseline
@@ -102,7 +96,9 @@ jobs:
       contents: read
       # To download the benchmark results of this very run.
       actions: read
+      # Keep checks permission while the shared workflow migrates from checks to commit statuses.
       checks: write
+      statuses: write
       pull-requests: write
 
     uses: Genesis-Embodied-AI/genesis-world/.github/workflows/alarm.yml@main
