@@ -1,10 +1,7 @@
 """Tests for ``qd.Tensor`` as an annotation in ``@qd.func`` parameters and struct fields.
 
-Pre-stork-23, ``qd.Tensor`` only worked as an annotation for top-level ``@qd.kernel`` parameters (handled by
-``_template_mapper_hotpath``). Using it in a ``@qd.func`` parameter or as a struct field annotation raised
-``QuadrantsTypeError`` because ``_transform_func_arg`` had no dispatch branch for the ``Tensor`` class.
-
-Stork-23 adds that branch. These tests pin the invariant.
+``_transform_func_arg`` must dispatch ``Tensor`` annotations in ``@qd.func`` parameters and struct fields,
+matching the top-level ``@qd.kernel`` parameter support in ``_template_mapper_hotpath``.
 """
 
 import dataclasses
@@ -120,7 +117,7 @@ def test_tensor_struct_field_func_via_template(backend):
 
 # ---------------------------------------------------------------------------
 # 4. Tensor wrapper in struct field (unwrap path via build_Attribute).
-#    qd.tensor() returns a Tensor wrapper (post stork-19), so this exercises the Tensor-unwrap in build_Attribute.
+#    qd.tensor() returns a Tensor wrapper, so this exercises the Tensor-unwrap in build_Attribute.
 # ---------------------------------------------------------------------------
 
 

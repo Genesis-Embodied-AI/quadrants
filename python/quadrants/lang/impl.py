@@ -900,11 +900,10 @@ def _field(
         #     ``build_struct_for`` permute canonical user indices into physical storage order at the AST level (same
         #     rewrite mechanism as layout-tagged ndarrays).
         #
-        # This replaces the legacy scheme of building a nested stack of rank-1 dense SNodes (one per axis), which
-        # doubled the number of ``linearize`` / SNode ``lookup`` operations per subscript for no memory-layout benefit
-        # (physical byte order is determined by the shape-permutation, not by SNode nesting depth). See the CHI IR
-        # comparison in ``perso_hugh/doc/regression_2026apr23_stork_log.md`` (Experiment N+1) and the byte-identity
-        # regression tests in ``tests/python/test_tensor_layout_physical_bytes.py``.
+        # A nested stack of rank-1 dense SNodes (one per axis) doubles the number of ``linearize`` / SNode ``lookup``
+        # operations per subscript for no memory-layout benefit (physical byte order is determined by the
+        # shape-permutation, not by SNode nesting depth). See the byte-identity regression tests in
+        # ``tests/python/test_tensor_layout_physical_bytes.py``.
         flat_axis_seq = list(range(dim))
         phys_offset = offset
         if order is not None and offset is not None:
