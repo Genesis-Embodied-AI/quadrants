@@ -174,10 +174,8 @@ def test_compound_layout_numpy_export_is_independent(
     backend: qd.Backend, dtype: MatrixType, layout: tuple[int, ...]
 ) -> None:
     """A copied NumPy export has canonical values and can be changed without changing the tensor."""
-    # Allocate a tensor whose physical axis order differs from the order used for indexing.
     shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
-    # Give every scalar position a distinct value so an axis or component mix-up is visible.
     initial = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
     # Copy these values into x; initial remains our reference for the original contents.
     x.from_numpy(initial)
