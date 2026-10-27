@@ -15,7 +15,8 @@ from tests import test_utils
 def new_numpy_tensor_containing_index_codes(shape, element_shape):
     """Build independent NumPy values encoding every shape and component coordinate as decimal digits."""
     values = np.empty(shape + element_shape, dtype=np.float32)
-    # Visit every scalar index tuple, including vector components or matrix rows and columns.
+    # np.ndindex(values.shape) produces every index tuple in the array.
+    # For shape (2, 3), it yields (0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2).
     for index in np.ndindex(values.shape):
         values[index] = sum(coordinate * 10 ** (len(index) - axis - 1) for axis, coordinate in enumerate(index))
     return values
