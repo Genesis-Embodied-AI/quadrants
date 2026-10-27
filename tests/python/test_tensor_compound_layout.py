@@ -122,11 +122,12 @@ def test_compound_layout_python_writes(backend: qd.Backend, dtype: MatrixType, l
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
     initial = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
     x.from_numpy(initial)
+
+    replacement = np.full(x.element_shape, -1, dtype=np.float32)
+    x[1, 2, 3] = replacement.tolist()
+
     expected = initial.copy()
-    expected[1, 2, 3] = initial[0, 0, 0]
-
-    x[1, 2, 3] = initial[0, 0, 0].tolist()
-
+    expected[1, 2, 3] = replacement
     np.testing.assert_array_equal(x.to_numpy(), expected)
 
 
