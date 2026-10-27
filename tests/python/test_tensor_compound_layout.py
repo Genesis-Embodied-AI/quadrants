@@ -12,216 +12,564 @@ from quadrants.lang.field import _TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET
 from tests import test_utils
 
 
+def index_code_array(shape, element_shape):
+    """Build independent NumPy values encoding every shape and component coordinate as decimal digits."""
+    values = np.empty(shape + element_shape, dtype=np.float32)
+    for index in np.ndindex(values.shape):
+        values[index] = sum(coordinate * 10 ** (len(index) - axis - 1) for axis, coordinate in enumerate(index))
+    return values
+
+
+@qd.kernel
+def fill_index_codes(x: qd.Tensor, dtype: qd.template()):
+    """Write each scalar component's index code through canonical kernel indices."""
+    for I in qd.grouped(x):
+        position_code = test_utils.encode_index(I)
+        for row in qd.static(range(dtype.n)):
+            if qd.static(dtype.ndim == 1):
+                x[I][row] = test_utils.encode_index([position_code, row])
+            else:
+                for column in qd.static(range(dtype.m)):
+                    x[I][row, column] = test_utils.encode_index([position_code, row, column])
+
+
+def require_torch_dlpack(backend):
+    """Skip only when Torch or its Metal field DLPack support is unavailable."""
+    torch = pytest.importorskip("torch")
+    if (
+        qd.lang.impl.current_cfg().arch == qd.metal
+        and backend == qd.Backend.FIELD
+        and not _TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET
+    ):
+        pytest.skip("Metal field DLPack export requires PyTorch newer than 2.9.1")
+    return torch
+
+
+def synchronize_torch(tensor):
+    """Wait for a Torch write before reading the shared memory through Quadrants."""
+    import torch
+
+    if tensor.device.type == "cuda":
+        torch.cuda.synchronize()
+    elif tensor.device.type == "mps":
+        torch.mps.synchronize()
+
+
+# Construction and indexing
+
+
 @pytest.mark.parametrize(
     "backend,dtype,layout",
     [
-        (qd.Backend.FIELD, qd.types.vector(3, qd.f32), None),
-        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (0, 1, 2)),
-        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (1, 0, 2)),
-        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1)),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), None, id="field-vector-default"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="field-matrix-swap-axes-0-1"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (0, 1, 2), id="ndarray-matrix-identity"),
     ],
 )
 @test_utils.test()
-def test_compound_layout_indexing_and_numpy(backend, dtype, layout):
-    """Check canonical kernel and Python indexing, NumPy copying, and imports from non-contiguous arrays."""
+def test_compound_layout_metadata(backend, dtype, layout):
+    """Allocation preserves canonical shape and component dimensions, and normalizes identity layouts."""
     shape = (2, 4, 5)
-    a = qd.tensor(dtype, shape, backend=backend, layout=layout)
+    x = qd.tensor(dtype, shape, backend=backend, layout=layout)
     element_shape = (dtype.n,) if dtype.ndim == 1 else (dtype.n, dtype.m)
-    expected = np.arange(np.prod(shape + element_shape), dtype=np.float32).reshape(shape + element_shape)
-    assert a.shape == shape
-    assert a.element_shape == element_shape
-    assert a.layout == (None if layout in (None, (0, 1, 2)) else layout)
+    expected_layout = None if layout in (None, (0, 1, 2)) else layout
 
-    @qd.kernel
-    def fill(x: qd.Tensor):
-        for i, j, k in qd.ndrange(2, 4, 5):
-            for r in qd.static(range(dtype.n)):
-                if qd.static(dtype.ndim == 1):
-                    x[i, j, k][r] = ((i * 4 + j) * 5 + k) * dtype.n + r
-                else:
-                    for c in qd.static(range(dtype.m)):
-                        x[i, j, k][r, c] = (((i * 4 + j) * 5 + k) * dtype.n + r) * dtype.m + c
+    assert x.shape == shape
+    assert x.element_shape == element_shape
+    assert x.layout == expected_layout
+
+
+@pytest.mark.parametrize(
+    "backend,dtype,layout",
+    [
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2), id="field-vector-swap-axes-0-1"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1), id="field-matrix-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
+    ],
+)
+@test_utils.test()
+def test_compound_layout_kernel_writes(backend, dtype, layout):
+    """Kernel indexing writes the correct value to every shape and component coordinate."""
+    shape = (2, 4, 5)
+    x = qd.tensor(dtype, shape, backend=backend, layout=layout)
+    expected = index_code_array(shape, x.element_shape)
+
+    fill_index_codes(x, dtype)
+
+    np.testing.assert_array_equal(x.to_numpy(), expected)
+
+
+@pytest.mark.parametrize(
+    "backend,dtype,layout",
+    [
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2), id="field-vector-swap-axes-0-1"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1), id="field-matrix-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
+    ],
+)
+@test_utils.test()
+def test_compound_layout_kernel_increment(backend, dtype, layout):
+    """Grouped kernel iteration updates every canonical component exactly once."""
+    shape = (2, 4, 5)
+    x = qd.tensor(dtype, shape, backend=backend, layout=layout)
+    initial = index_code_array(shape, x.element_shape)
+    x.from_numpy(initial)
 
     @qd.kernel
     def increment(x: qd.Tensor):
         for I in qd.grouped(x):
             x[I] += 1
 
-    fill(a)
-    np.testing.assert_array_equal(a.to_numpy(), expected)
-    np.testing.assert_array_equal(a[1, 2, 3].to_numpy(), expected[1, 2, 3])
-    increment(a)
-    expected += 1
-    np.testing.assert_array_equal(a.to_numpy(), expected)
-    a[1, 2, 3] = expected[0, 0, 0].tolist()
-    expected[1, 2, 3] = expected[0, 0, 0]
-    np.testing.assert_array_equal(a.to_numpy(), expected)
+    increment(x)
 
-    # Non-contiguous canonical input must not be mistaken for the physical allocation shape.
-    source = expected[:, :, ::-1]
-    a.from_numpy(source)
-    np.testing.assert_array_equal(a.to_numpy(), source)
-    copied = a.to_numpy()
-    copied.fill(-1)
-    np.testing.assert_array_equal(a.to_numpy(), source)
+    np.testing.assert_array_equal(x.to_numpy(), initial + 1)
 
 
 @pytest.mark.parametrize(
     "backend,dtype,layout",
     [
-        (qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2)),
-        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (2, 0, 1)),
-        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1)),
-        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (1, 0, 2)),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2), id="field-vector-swap-axes-0-1"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1), id="field-matrix-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
     ],
 )
 @test_utils.test()
-def test_compound_layout_copy_and_pickle(backend, dtype, layout):
-    """Check copying between layouts and preservation of values, shape, and layout through pickle and deepcopy."""
-    a = qd.tensor(dtype, (2, 4, 5), backend=backend, layout=layout)
-    b = qd.tensor(dtype, a.shape, backend=backend)
-    expected = np.arange(np.prod(a.shape + a.element_shape), dtype=np.float32).reshape(a.shape + a.element_shape)
-    a.from_numpy(expected)
-    b.copy_from(a)
-    np.testing.assert_array_equal(b.to_numpy(), expected)
-    a.fill(0)
-    a.copy_from(b)
-    np.testing.assert_array_equal(a.to_numpy(), expected)
-    for restored in (pickle.loads(pickle.dumps(a)), copy.deepcopy(a)):
-        assert type(restored) is type(a)
-        assert restored.shape == a.shape
-        assert restored.element_shape == a.element_shape
-        assert restored.layout == layout
-        np.testing.assert_array_equal(restored.to_numpy(), expected)
+def test_compound_layout_python_reads(backend, dtype, layout):
+    """Python indexing returns the components at the requested canonical position."""
+    shape = (2, 4, 5)
+    x = qd.tensor(dtype, shape, backend=backend, layout=layout)
+    initial = index_code_array(shape, x.element_shape)
+    x.from_numpy(initial)
+
+    actual = x[1, 2, 3].to_numpy()
+
+    np.testing.assert_array_equal(actual, initial[1, 2, 3])
 
 
 @pytest.mark.parametrize(
     "backend,dtype,layout",
     [
-        (qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2)),
-        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (2, 0, 1)),
-        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1)),
-        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (1, 0, 2)),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2), id="field-vector-swap-axes-0-1"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1), id="field-matrix-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
     ],
 )
-@test_utils.test(exclude=[qd.vulkan])
-def test_compound_layout_torch_and_dlpack(backend, dtype, layout):
-    """Check Torch copying and imports, plus canonical DLPack shapes, physical strides, and shared-memory writes."""
-    torch = pytest.importorskip("torch")
-    arch = qd.lang.impl.current_cfg().arch
-    if arch == qd.metal and backend == qd.Backend.FIELD and not _TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET:
-        pytest.skip("Metal field DLPack export requires PyTorch newer than 2.9.1")
-    a = qd.tensor(dtype, (2, 4, 5), backend=backend, layout=layout)
-    expected = np.arange(np.prod(a.shape + a.element_shape), dtype=np.float32).reshape(a.shape + a.element_shape)
-    a.from_numpy(expected)
-    device = "cuda" if arch in (qd.cuda, qd.amdgpu) else "cpu"
-    copied = a.to_torch(device=device)
-    np.testing.assert_array_equal(copied.cpu().numpy(), expected)
-    copied.add_(10)
-    np.testing.assert_array_equal(a.to_numpy(), expected)
-    # Keep the canonical shape but supply non-contiguous strides.
-    source = copied.transpose(0, 1).contiguous().transpose(0, 1)
-    a.from_torch(source)
-    expected += 10
-    np.testing.assert_array_equal(a.to_numpy(), expected)
+@test_utils.test()
+def test_compound_layout_python_writes(backend, dtype, layout):
+    """Python assignment changes only the requested canonical element."""
+    shape = (2, 4, 5)
+    x = qd.tensor(dtype, shape, backend=backend, layout=layout)
+    initial = index_code_array(shape, x.element_shape)
+    x.from_numpy(initial)
+    expected = initial.copy()
+    expected[1, 2, 3] = initial[0, 0, 0]
 
-    view = torch.utils.dlpack.from_dlpack(a.to_dlpack())
-    np.testing.assert_array_equal(view.cpu().numpy(), expected)
-    physical_axes = layout + tuple(range(3, expected.ndim))
-    physical = np.ascontiguousarray(expected.transpose(physical_axes))
-    canonical = physical.transpose(np.argsort(physical_axes))
-    assert tuple(view.stride()) == tuple(s // canonical.itemsize for s in canonical.strides)
-    view[1, 2, 3] = -7
-    if view.device.type == "cuda":
-        torch.cuda.synchronize()
-    elif view.device.type == "mps":
-        torch.mps.synchronize()
-    expected[1, 2, 3] = -7
-    np.testing.assert_array_equal(a.to_numpy(), expected)
-    for copy_mode in (False, None):
-        shared = a.to_torch(copy=copy_mode)
-        assert shared.data_ptr() == view.data_ptr()
-        np.testing.assert_array_equal(shared.cpu().numpy(), expected)
+    x[1, 2, 3] = initial[0, 0, 0].tolist()
+
+    np.testing.assert_array_equal(x.to_numpy(), expected)
+
+
+# NumPy imports and exports
 
 
 @pytest.mark.parametrize(
-    "backend,dtype",
+    "backend,dtype,layout",
     [
-        (qd.Backend.FIELD, qd.types.vector(3, qd.f32)),
-        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32)),
-        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32)),
-        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32)),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2), id="field-vector-swap-axes-0-1"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1), id="field-matrix-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
+    ],
+)
+@test_utils.test()
+def test_compound_layout_numpy_noncontiguous_import(backend, dtype, layout):
+    """NumPy imports preserve canonical values even when the source has non-contiguous storage."""
+    shape = (2, 4, 5)
+    x = qd.tensor(dtype, shape, backend=backend, layout=layout)
+    initial = index_code_array(shape, x.element_shape)
+    source = initial[:, :, ::-1]
+    assert not source.flags.c_contiguous
+
+    x.from_numpy(source)
+
+    np.testing.assert_array_equal(x.to_numpy(), source)
+
+
+@pytest.mark.parametrize(
+    "backend,dtype,layout",
+    [
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2), id="field-vector-swap-axes-0-1"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1), id="field-matrix-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
+    ],
+)
+@test_utils.test()
+def test_compound_layout_numpy_export_is_independent(backend, dtype, layout):
+    """A copied NumPy export has canonical values and can be changed without changing the tensor."""
+    shape = (2, 4, 5)
+    x = qd.tensor(dtype, shape, backend=backend, layout=layout)
+    initial = index_code_array(shape, x.element_shape)
+    x.from_numpy(initial)
+
+    copied = x.to_numpy(copy=True)
+    np.testing.assert_array_equal(copied, initial)
+    copied.fill(-1)
+
+    np.testing.assert_array_equal(x.to_numpy(), initial)
+
+
+@pytest.mark.parametrize(
+    "backend,dtype,copy_mode",
+    [
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), False, id="field-vector-copy-false"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), None, id="field-matrix-copy-none"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), None, id="ndarray-vector-copy-none"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), False, id="ndarray-matrix-copy-false"),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), None, id="field-vector-copy-none"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), False, id="field-matrix-copy-false"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), False, id="ndarray-vector-copy-false"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), None, id="ndarray-matrix-copy-none"),
     ],
 )
 @test_utils.test(arch=qd.cpu)
-def test_compound_layout_numpy_zero_copy(backend, dtype):
-    """Check that NumPy zero-copy exports expose canonical shapes and share writable memory with the tensor."""
+def test_compound_layout_numpy_zero_copy(backend, dtype, copy_mode):
+    """Writing a NumPy view updates the tensor at the same canonical position."""
     pytest.importorskip("torch")
-    a = qd.tensor(dtype, (2, 4, 5), backend=backend, layout=(2, 0, 1))
-    a.fill(3)
-    for copy_mode in (False, None):
-        view = a.to_numpy(copy=copy_mode)
-        assert view.shape == a.shape + a.element_shape
-        view[1, 2, 3] = 7
-        np.testing.assert_array_equal(a[1, 2, 3].to_numpy(), np.full(a.element_shape, 7))
-        a.fill(3)
+    shape = (2, 4, 5)
+    layout = (2, 0, 1)
+    x = qd.tensor(dtype, shape, backend=backend, layout=layout)
+    initial = index_code_array(shape, x.element_shape)
+    x.from_numpy(initial)
+    expected = initial.copy()
+    expected[1, 2, 3] = -7
+
+    view = x.to_numpy(copy=copy_mode)
+    np.testing.assert_array_equal(view, initial)
+    view[1, 2, 3] = -7
+
+    np.testing.assert_array_equal(x.to_numpy(), expected)
+
+
+# Copies and serialization
+
+
+@pytest.mark.parametrize(
+    "backend,dtype,layout",
+    [
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2), id="field-vector-swap-axes-0-1"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1), id="field-matrix-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
+    ],
+)
+@test_utils.test()
+def test_compound_layout_copy_to_default_layout(backend, dtype, layout):
+    """Copying between different layouts preserves every canonical component value."""
+    shape = (2, 4, 5)
+    src = qd.tensor(dtype, shape, backend=backend, layout=layout)
+    dst = qd.tensor(dtype, shape, backend=backend, layout=None)
+    initial = index_code_array(shape, src.element_shape)
+    src.from_numpy(initial)
+    dst.fill(-1)
+
+    dst.copy_from(src)
+
+    np.testing.assert_array_equal(dst.to_numpy(), initial)
+
+
+@pytest.mark.parametrize(
+    "backend,dtype,layout",
+    [
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2), id="field-vector-swap-axes-0-1"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1), id="field-matrix-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
+    ],
+)
+@test_utils.test()
+def test_compound_layout_copy_to_permuted_layout(backend, dtype, layout):
+    """Copying between different layouts preserves every canonical component value."""
+    shape = (2, 4, 5)
+    src = qd.tensor(dtype, shape, backend=backend, layout=None)
+    dst = qd.tensor(dtype, shape, backend=backend, layout=layout)
+    initial = index_code_array(shape, src.element_shape)
+    src.from_numpy(initial)
+    dst.fill(-1)
+
+    dst.copy_from(src)
+
+    np.testing.assert_array_equal(dst.to_numpy(), initial)
+
+
+@pytest.mark.parametrize(
+    "backend,dtype,layout",
+    [
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2), id="field-vector-swap-axes-0-1"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1), id="field-matrix-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
+    ],
+)
+@test_utils.test()
+def test_compound_layout_pickle(backend, dtype, layout):
+    """Pickle preserves the tensor type, canonical values, component dimensions, and layout."""
+    shape = (2, 4, 5)
+    x = qd.tensor(dtype, shape, backend=backend, layout=layout)
+    initial = index_code_array(shape, x.element_shape)
+    x.from_numpy(initial)
+
+    restored = pickle.loads(pickle.dumps(x))
+
+    assert type(restored) is type(x)
+    assert restored.shape == shape
+    assert restored.element_shape == x.element_shape
+    assert restored.layout == layout
+    np.testing.assert_array_equal(restored.to_numpy(), initial)
+
+
+@pytest.mark.parametrize(
+    "backend,dtype,layout",
+    [
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2), id="field-vector-swap-axes-0-1"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1), id="field-matrix-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
+    ],
+)
+@test_utils.test()
+def test_compound_layout_deepcopy(backend, dtype, layout):
+    """Deepcopy preserves the tensor type, canonical values, component dimensions, and layout."""
+    shape = (2, 4, 5)
+    x = qd.tensor(dtype, shape, backend=backend, layout=layout)
+    initial = index_code_array(shape, x.element_shape)
+    x.from_numpy(initial)
+
+    restored = copy.deepcopy(x)
+
+    assert type(restored) is type(x)
+    assert restored.shape == shape
+    assert restored.element_shape == x.element_shape
+    assert restored.layout == layout
+    np.testing.assert_array_equal(restored.to_numpy(), initial)
+
+
+# Torch imports and exports
+
+
+@pytest.mark.parametrize(
+    "backend,dtype,layout",
+    [
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2), id="field-vector-swap-axes-0-1"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1), id="field-matrix-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
+    ],
+)
+@test_utils.test()
+def test_compound_layout_torch_export_is_independent(backend, dtype, layout):
+    """A copied Torch export has canonical values and can be changed without changing the tensor."""
+    pytest.importorskip("torch")
+    shape = (2, 4, 5)
+    x = qd.tensor(dtype, shape, backend=backend, layout=layout)
+    initial = index_code_array(shape, x.element_shape)
+    x.from_numpy(initial)
+    arch = qd.lang.impl.current_cfg().arch
+    device = "cuda" if arch in (qd.cuda, qd.amdgpu) else "cpu"
+
+    copied = x.to_torch(device=device, copy=True)
+    np.testing.assert_array_equal(copied.cpu().numpy(), initial)
+    copied.add_(10)
+
+    np.testing.assert_array_equal(x.to_numpy(), initial)
+
+
+@pytest.mark.parametrize(
+    "backend,dtype,layout",
+    [
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2), id="field-vector-swap-axes-0-1"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1), id="field-matrix-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
+    ],
+)
+@test_utils.test()
+def test_compound_layout_torch_noncontiguous_import(backend, dtype, layout):
+    """Torch imports preserve canonical values from a non-contiguous source."""
+    torch = pytest.importorskip("torch")
+    shape = (2, 4, 5)
+    x = qd.tensor(dtype, shape, backend=backend, layout=layout)
+    initial = index_code_array(shape, x.element_shape)
+    arch = qd.lang.impl.current_cfg().arch
+    device = "cuda" if arch in (qd.cuda, qd.amdgpu) else "cpu"
+    source = torch.tensor(initial, device=device).transpose(0, 1).contiguous().transpose(0, 1)
+    assert not source.is_contiguous()
+
+    x.from_torch(source)
+
+    np.testing.assert_array_equal(x.to_numpy(), initial)
+
+
+@pytest.mark.parametrize(
+    "backend,dtype,copy_mode",
+    [
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), False, id="field-vector-copy-false"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), None, id="field-matrix-copy-none"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), None, id="ndarray-vector-copy-none"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), False, id="ndarray-matrix-copy-false"),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), None, id="field-vector-copy-none"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), False, id="field-matrix-copy-false"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), False, id="ndarray-vector-copy-false"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), None, id="ndarray-matrix-copy-none"),
+    ],
+)
+@test_utils.test(exclude=[qd.vulkan])
+def test_compound_layout_torch_zero_copy(backend, dtype, copy_mode):
+    """Torch sharing modes return the existing buffer and expose writes at canonical positions."""
+    torch = require_torch_dlpack(backend)
+    shape = (2, 4, 5)
+    layout = (2, 0, 1)
+    x = qd.tensor(dtype, shape, backend=backend, layout=layout)
+    initial = index_code_array(shape, x.element_shape)
+    x.from_numpy(initial)
+    expected = initial.copy()
+    expected[1, 2, 3] = -7
+    dlpack_view = torch.utils.dlpack.from_dlpack(x.to_dlpack())
+
+    shared = x.to_torch(copy=copy_mode)
+    assert shared.data_ptr() == dlpack_view.data_ptr()
+    np.testing.assert_array_equal(shared.cpu().numpy(), initial)
+    shared[1, 2, 3] = -7
+    synchronize_torch(shared)
+
+    np.testing.assert_array_equal(x.to_numpy(), expected)
+
+
+# DLPack views
+
+
+@pytest.mark.parametrize(
+    "backend,dtype,layout",
+    [
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2), id="field-vector-swap-axes-0-1"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1), id="field-matrix-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
+    ],
+)
+@test_utils.test(exclude=[qd.vulkan])
+def test_compound_layout_dlpack_shape_and_strides(backend, dtype, layout):
+    """DLPack describes canonical values over physical storage using the correct strides."""
+    torch = require_torch_dlpack(backend)
+    shape = (2, 4, 5)
+    x = qd.tensor(dtype, shape, backend=backend, layout=layout)
+    initial = index_code_array(shape, x.element_shape)
+    x.from_numpy(initial)
+    physical_axes = layout + tuple(range(len(shape), initial.ndim))
+    physical = np.ascontiguousarray(initial.transpose(physical_axes))
+    canonical_view = physical.transpose(np.argsort(physical_axes))
+    expected_strides = tuple(stride // canonical_view.itemsize for stride in canonical_view.strides)
+
+    view = torch.utils.dlpack.from_dlpack(x.to_dlpack())
+
+    assert tuple(view.shape) == initial.shape
+    assert tuple(view.stride()) == expected_strides
+    np.testing.assert_array_equal(view.cpu().numpy(), initial)
+
+
+@pytest.mark.parametrize(
+    "backend,dtype,layout",
+    [
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2), id="field-vector-swap-axes-0-1"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1), id="field-matrix-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
+    ],
+)
+@test_utils.test(exclude=[qd.vulkan])
+def test_compound_layout_dlpack_writes(backend, dtype, layout):
+    """A write through a DLPack view changes the same canonical element in the tensor."""
+    torch = require_torch_dlpack(backend)
+    shape = (2, 4, 5)
+    x = qd.tensor(dtype, shape, backend=backend, layout=layout)
+    initial = index_code_array(shape, x.element_shape)
+    x.from_numpy(initial)
+    expected = initial.copy()
+    expected[1, 2, 3] = -7
+
+    view = torch.utils.dlpack.from_dlpack(x.to_dlpack())
+    view[1, 2, 3] = -7
+    synchronize_torch(view)
+
+    np.testing.assert_array_equal(x.to_numpy(), expected)
+
+
+# Gradients, rank edge cases, validation, and kernel reuse
 
 
 @pytest.mark.parametrize(
     "backend,dtype",
     [
-        (qd.Backend.FIELD, qd.types.vector(3, qd.f32)),
-        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32)),
-        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32)),
-        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32)),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), id="field-vector"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), id="field-matrix"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), id="ndarray-vector"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), id="ndarray-matrix"),
     ],
 )
 @test_utils.test()
 def test_compound_layout_grad(backend, dtype):
     """Check that gradients retain the layout and compute correct values across different input and output layouts."""
-    a = qd.tensor(dtype, (2, 4, 5), backend=backend, layout=(2, 0, 1), needs_grad=True)
-    b = qd.tensor(dtype, a.shape, backend=backend, layout=(1, 0, 2), needs_grad=True)
-    assert a.grad.shape == a.shape
-    assert a.grad.layout == a.layout
+    shape = (2, 4, 5)
+    x = qd.tensor(dtype, shape, backend=backend, layout=(2, 0, 1), needs_grad=True)
+    y = qd.tensor(dtype, x.shape, backend=backend, layout=(1, 0, 2), needs_grad=True)
+    assert x.grad.shape == x.shape
+    assert x.grad.layout == x.layout
 
     @qd.kernel
     def double(x: qd.Tensor, y: qd.Tensor):
         for I in qd.grouped(x):
             y[I] = 2 * x[I]
 
-    a.fill(3)
-    a.grad.fill(0)
-    b.grad.fill(1)
-    double(a, b)
-    double.grad(a, b)
-    np.testing.assert_array_equal(a.grad.to_numpy(), np.full(a.shape + a.element_shape, 2))
+    x.fill(3)
+    x.grad.fill(0)
+    y.grad.fill(1)
+    double(x, y)
+    double.grad(x, y)
+    np.testing.assert_array_equal(x.grad.to_numpy(), np.full(x.shape + x.element_shape, 2))
 
 
 @pytest.mark.parametrize(
     "backend,dtype,shape,layout",
     [
-        (qd.Backend.FIELD, qd.types.vector(3, qd.f32), (), ()),
-        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (), ()),
-        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (4,), (0,)),
-        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 5), (1, 0)),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (), (), id="field-vector-0d-identity"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (), (), id="ndarray-matrix-0d-identity"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (4,), (0,), id="ndarray-vector-1d-identity"),
+        pytest.param(
+            qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 5), (1, 0), id="field-matrix-2d-swap-axes-0-1"
+        ),
     ],
 )
 @test_utils.test()
 def test_compound_layout_other_ranks(backend, dtype, shape, layout):
     """Check allocation, filling, and NumPy export for tensors with zero, one, or two shape axes."""
-    a = qd.tensor(dtype, shape, backend=backend, layout=layout)
-    a.fill(4)
-    assert a.shape == shape
-    np.testing.assert_array_equal(a.to_numpy(), np.full(shape + a.element_shape, 4))
+    x = qd.tensor(dtype, shape, backend=backend, layout=layout)
+    x.fill(4)
+    assert x.shape == shape
+    np.testing.assert_array_equal(x.to_numpy(), np.full(shape + x.element_shape, 4))
 
 
 @pytest.mark.parametrize(
     "backend,dtype,layout",
     [
-        (qd.Backend.FIELD, qd.types.vector(3, qd.f32), (0,)),
-        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (0, 0)),
-        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (0, 2)),
-        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (0, 1, 2)),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (0,), id="too-few-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (0, 0), id="repeated-axis"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (0, 2), id="axis-out-of-range"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (0, 1, 2), id="too-many-axes"),
     ],
 )
 @test_utils.test()
@@ -231,47 +579,65 @@ def test_compound_layout_invalid(backend, dtype, layout):
         qd.tensor(dtype, (2, 5), backend=backend, layout=layout)
 
 
-@pytest.mark.parametrize("dtype", [qd.types.vector(3, qd.f32), qd.types.matrix(2, 3, qd.f32)])
-@test_utils.test()
-def test_compound_layout_ndarray_import_rejects_physical_shape(dtype):
-    """Check that NumPy and Torch imports reject physical storage shapes instead of accepting them as canonical shapes."""
-    a = qd.tensor(dtype, (2, 5), layout=(1, 0))
-    wrong_shape = np.zeros((5, 2) + a.element_shape, dtype=np.float32)
-    with pytest.raises(ValueError, match="Mismatch shape"):
-        a.from_numpy(wrong_shape)
-    torch = pytest.importorskip("torch")
-    with pytest.raises(ValueError, match="Mismatch shape"):
-        a.from_torch(torch.from_numpy(wrong_shape))
-
-
 @pytest.mark.parametrize(
     "backend,dtype",
     [
-        (qd.Backend.FIELD, qd.types.vector(3, qd.f32)),
-        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32)),
-        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32)),
-        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32)),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), id="field-vector"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), id="field-matrix"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), id="ndarray-vector"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), id="ndarray-matrix"),
     ],
 )
 @test_utils.test()
 def test_compound_layout_kernel_specialization(backend, dtype):
     """Check kernel reuse across layouts using distinct codes for every tensor position and element component."""
 
-    @qd.kernel
-    def fill(x: qd.Tensor):
-        for i, j in qd.ndrange(2, 5):
-            for row in qd.static(range(dtype.n)):
-                if qd.static(dtype.ndim == 1):
-                    x[i, j][row] = test_utils.encode_index([i, j, row])
-                else:
-                    for column in qd.static(range(dtype.m)):
-                        x[i, j][row, column] = test_utils.encode_index([i, j, row, column])
-
+    shape = (2, 5)
     element_shape = (dtype.n,) if dtype.ndim == 1 else (dtype.n, dtype.m)
-    expected = np.zeros((2, 5) + element_shape, dtype=np.float32)
-    for index in np.ndindex(expected.shape):
-        expected[index] = sum(coordinate * 10 ** (len(index) - axis - 1) for axis, coordinate in enumerate(index))
+    expected = index_code_array(shape, element_shape)
+
     for layout in (None, (1, 0), None):
-        a = qd.tensor(dtype, (2, 5), backend=backend, layout=layout)
-        fill(a)
-        np.testing.assert_array_equal(a.to_numpy(), expected)
+        x = qd.tensor(dtype, shape, backend=backend, layout=layout)
+        fill_index_codes(x, dtype)
+
+        np.testing.assert_array_equal(x.to_numpy(), expected)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        pytest.param(qd.types.vector(3, qd.f32), id="vector"),
+        pytest.param(qd.types.matrix(2, 3, qd.f32), id="matrix"),
+    ],
+)
+@test_utils.test()
+def test_compound_layout_numpy_import_rejects_physical_shape(dtype):
+    """NumPy imports require canonical shape rather than the physical storage shape."""
+    shape = (2, 5)
+    layout = (1, 0)
+    x = qd.tensor(dtype, shape, backend=qd.Backend.NDARRAY, layout=layout)
+    source = np.zeros((5, 2) + x.element_shape, dtype=np.float32)
+
+    with pytest.raises(ValueError, match="Mismatch shape"):
+        x.from_numpy(source)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        pytest.param(qd.types.vector(3, qd.f32), id="vector"),
+        pytest.param(qd.types.matrix(2, 3, qd.f32), id="matrix"),
+    ],
+)
+@test_utils.test()
+def test_compound_layout_torch_import_rejects_physical_shape(dtype):
+    """Torch imports require canonical shape rather than the physical storage shape."""
+    shape = (2, 5)
+    layout = (1, 0)
+    x = qd.tensor(dtype, shape, backend=qd.Backend.NDARRAY, layout=layout)
+    wrong_shape = np.zeros((5, 2) + x.element_shape, dtype=np.float32)
+    torch = pytest.importorskip("torch")
+    source = torch.from_numpy(wrong_shape)
+
+    with pytest.raises(ValueError, match="Mismatch shape"):
+        x.from_torch(source)
