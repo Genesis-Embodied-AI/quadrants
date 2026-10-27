@@ -503,12 +503,12 @@ def test_compound_layout_grad(backend: qd.Backend, dtype: MatrixType) -> None:
     loss.fill(0)
     x.grad.fill(0)
     y.grad.fill(0)
+    # Start from the explicit scalar loss: d(loss)/d(loss) = 1.
+    loss.grad.fill(1)
     scaled_square(x, y)
     sum_components(y, loss)
     assert loss[None] == 27 * np.prod(shape + x.element_shape)
 
-    # Start from the explicit scalar loss: d(loss)/d(loss) = 1.
-    loss.grad.fill(1)
     # Differentiate the sum to obtain y.grad = 1, then y = 3*x*x to obtain x.grad = 6*x = 18.
     sum_components.grad(y, loss)
     scaled_square.grad(x, y)
