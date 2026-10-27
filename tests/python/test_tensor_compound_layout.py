@@ -612,7 +612,7 @@ def test_compound_layout_numpy_import_rejects_physical_shape(dtype: MatrixType) 
 )
 @test_utils.test()
 def test_compound_layout_torch_import_rejects_physical_shape(dtype: MatrixType) -> None:
-    """Torch imports require canonical shape rather than the physical storage shape."""
+    """Torch imports reject physical shape."""
     shape = (2, 5)
     layout = (1, 0)
     x = qd.tensor(dtype, shape, backend=qd.Backend.NDARRAY, layout=layout)
