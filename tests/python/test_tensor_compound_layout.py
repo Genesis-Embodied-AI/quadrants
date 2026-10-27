@@ -61,10 +61,10 @@ def synchronize_torch(tensor):
 @pytest.mark.parametrize(
     "backend,dtype,layout",
     [
-        (qd.Backend.FIELD, qd.types.vector(3, qd.f32), None),
-        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (1, 0, 2)),
-        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1)),
-        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (0, 1, 2)),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), None, id="field-vector-default"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="field-matrix-swap-axes-0-1"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (0, 1, 2), id="ndarray-matrix-identity"),
     ],
 )
 @test_utils.test()
@@ -83,10 +83,10 @@ def test_compound_layout_metadata(backend, dtype, layout):
 @pytest.mark.parametrize(
     "backend,dtype,layout",
     [
-        (qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2)),
-        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1)),
-        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1)),
-        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2)),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2), id="field-vector-swap-axes-0-1"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1), id="field-matrix-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
     ],
 )
 @test_utils.test()
@@ -104,10 +104,10 @@ def test_compound_layout_kernel_writes(backend, dtype, layout):
 @pytest.mark.parametrize(
     "backend,dtype,layout",
     [
-        (qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2)),
-        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1)),
-        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1)),
-        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2)),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2), id="field-vector-swap-axes-0-1"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1), id="field-matrix-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
     ],
 )
 @test_utils.test()
@@ -131,10 +131,10 @@ def test_compound_layout_kernel_increment(backend, dtype, layout):
 @pytest.mark.parametrize(
     "backend,dtype,layout",
     [
-        (qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2)),
-        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1)),
-        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1)),
-        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2)),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2), id="field-vector-swap-axes-0-1"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1), id="field-matrix-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
     ],
 )
 @test_utils.test()
@@ -153,10 +153,10 @@ def test_compound_layout_python_reads(backend, dtype, layout):
 @pytest.mark.parametrize(
     "backend,dtype,layout",
     [
-        (qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2)),
-        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1)),
-        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1)),
-        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2)),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2), id="field-vector-swap-axes-0-1"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1), id="field-matrix-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
     ],
 )
 @test_utils.test()
@@ -180,10 +180,10 @@ def test_compound_layout_python_writes(backend, dtype, layout):
 @pytest.mark.parametrize(
     "backend,dtype,layout",
     [
-        (qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2)),
-        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1)),
-        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1)),
-        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2)),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2), id="field-vector-swap-axes-0-1"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1), id="field-matrix-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
     ],
 )
 @test_utils.test()
@@ -203,10 +203,10 @@ def test_compound_layout_numpy_noncontiguous_import(backend, dtype, layout):
 @pytest.mark.parametrize(
     "backend,dtype,layout",
     [
-        (qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2)),
-        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1)),
-        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1)),
-        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2)),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2), id="field-vector-swap-axes-0-1"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1), id="field-matrix-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
     ],
 )
 @test_utils.test()
@@ -227,14 +227,14 @@ def test_compound_layout_numpy_export_is_independent(backend, dtype, layout):
 @pytest.mark.parametrize(
     "backend,dtype,copy_mode",
     [
-        (qd.Backend.FIELD, qd.types.vector(3, qd.f32), False),
-        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), None),
-        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), None),
-        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), False),
-        (qd.Backend.FIELD, qd.types.vector(3, qd.f32), None),
-        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), False),
-        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), False),
-        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), None),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), False, id="field-vector-copy-false"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), None, id="field-matrix-copy-none"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), None, id="ndarray-vector-copy-none"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), False, id="ndarray-matrix-copy-false"),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), None, id="field-vector-copy-none"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), False, id="field-matrix-copy-false"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), False, id="ndarray-vector-copy-false"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), None, id="ndarray-matrix-copy-none"),
     ],
 )
 @test_utils.test(arch=qd.cpu)
@@ -262,10 +262,10 @@ def test_compound_layout_numpy_zero_copy(backend, dtype, copy_mode):
 @pytest.mark.parametrize(
     "backend,dtype,layout",
     [
-        (qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2)),
-        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1)),
-        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1)),
-        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2)),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2), id="field-vector-swap-axes-0-1"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1), id="field-matrix-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
     ],
 )
 @test_utils.test()
@@ -286,10 +286,10 @@ def test_compound_layout_copy_to_default_layout(backend, dtype, layout):
 @pytest.mark.parametrize(
     "backend,dtype,layout",
     [
-        (qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2)),
-        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1)),
-        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1)),
-        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2)),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2), id="field-vector-swap-axes-0-1"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1), id="field-matrix-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
     ],
 )
 @test_utils.test()
@@ -310,10 +310,10 @@ def test_compound_layout_copy_to_permuted_layout(backend, dtype, layout):
 @pytest.mark.parametrize(
     "backend,dtype,layout",
     [
-        (qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2)),
-        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1)),
-        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1)),
-        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2)),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2), id="field-vector-swap-axes-0-1"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1), id="field-matrix-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
     ],
 )
 @test_utils.test()
@@ -336,10 +336,10 @@ def test_compound_layout_pickle(backend, dtype, layout):
 @pytest.mark.parametrize(
     "backend,dtype,layout",
     [
-        (qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2)),
-        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1)),
-        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1)),
-        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2)),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2), id="field-vector-swap-axes-0-1"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1), id="field-matrix-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
     ],
 )
 @test_utils.test()
@@ -365,10 +365,10 @@ def test_compound_layout_deepcopy(backend, dtype, layout):
 @pytest.mark.parametrize(
     "backend,dtype,layout",
     [
-        (qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2)),
-        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1)),
-        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1)),
-        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2)),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2), id="field-vector-swap-axes-0-1"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1), id="field-matrix-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
     ],
 )
 @test_utils.test()
@@ -392,10 +392,10 @@ def test_compound_layout_torch_export_is_independent(backend, dtype, layout):
 @pytest.mark.parametrize(
     "backend,dtype,layout",
     [
-        (qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2)),
-        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1)),
-        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1)),
-        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2)),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2), id="field-vector-swap-axes-0-1"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1), id="field-matrix-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
     ],
 )
 @test_utils.test()
@@ -418,14 +418,14 @@ def test_compound_layout_torch_noncontiguous_import(backend, dtype, layout):
 @pytest.mark.parametrize(
     "backend,dtype,copy_mode",
     [
-        (qd.Backend.FIELD, qd.types.vector(3, qd.f32), False),
-        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), None),
-        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), None),
-        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), False),
-        (qd.Backend.FIELD, qd.types.vector(3, qd.f32), None),
-        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), False),
-        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), False),
-        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), None),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), False, id="field-vector-copy-false"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), None, id="field-matrix-copy-none"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), None, id="ndarray-vector-copy-none"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), False, id="ndarray-matrix-copy-false"),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), None, id="field-vector-copy-none"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), False, id="field-matrix-copy-false"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), False, id="ndarray-vector-copy-false"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), None, id="ndarray-matrix-copy-none"),
     ],
 )
 @test_utils.test(exclude=[qd.vulkan])
@@ -456,10 +456,10 @@ def test_compound_layout_torch_zero_copy(backend, dtype, copy_mode):
 @pytest.mark.parametrize(
     "backend,dtype,layout",
     [
-        (qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2)),
-        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1)),
-        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1)),
-        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2)),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2), id="field-vector-swap-axes-0-1"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1), id="field-matrix-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
     ],
 )
 @test_utils.test(exclude=[qd.vulkan])
@@ -485,10 +485,10 @@ def test_compound_layout_dlpack_shape_and_strides(backend, dtype, layout):
 @pytest.mark.parametrize(
     "backend,dtype,layout",
     [
-        (qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2)),
-        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1)),
-        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1)),
-        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2)),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2), id="field-vector-swap-axes-0-1"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1), id="field-matrix-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
     ],
 )
 @test_utils.test(exclude=[qd.vulkan])
@@ -515,10 +515,10 @@ def test_compound_layout_dlpack_writes(backend, dtype, layout):
 @pytest.mark.parametrize(
     "backend,dtype",
     [
-        (qd.Backend.FIELD, qd.types.vector(3, qd.f32)),
-        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32)),
-        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32)),
-        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32)),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), id="field-vector"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), id="field-matrix"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), id="ndarray-vector"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), id="ndarray-matrix"),
     ],
 )
 @test_utils.test()
@@ -546,10 +546,12 @@ def test_compound_layout_grad(backend, dtype):
 @pytest.mark.parametrize(
     "backend,dtype,shape,layout",
     [
-        (qd.Backend.FIELD, qd.types.vector(3, qd.f32), (), ()),
-        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (), ()),
-        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (4,), (0,)),
-        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 5), (1, 0)),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (), (), id="field-vector-0d-identity"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (), (), id="ndarray-matrix-0d-identity"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (4,), (0,), id="ndarray-vector-1d-identity"),
+        pytest.param(
+            qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 5), (1, 0), id="field-matrix-2d-swap-axes-0-1"
+        ),
     ],
 )
 @test_utils.test()
@@ -580,10 +582,10 @@ def test_compound_layout_invalid(backend, dtype, layout):
 @pytest.mark.parametrize(
     "backend,dtype",
     [
-        (qd.Backend.FIELD, qd.types.vector(3, qd.f32)),
-        (qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32)),
-        (qd.Backend.NDARRAY, qd.types.vector(3, qd.f32)),
-        (qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32)),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), id="field-vector"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), id="field-matrix"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), id="ndarray-vector"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), id="ndarray-matrix"),
     ],
 )
 @test_utils.test()
@@ -604,8 +606,8 @@ def test_compound_layout_kernel_specialization(backend, dtype):
 @pytest.mark.parametrize(
     "dtype",
     [
-        qd.types.vector(3, qd.f32),
-        qd.types.matrix(2, 3, qd.f32),
+        pytest.param(qd.types.vector(3, qd.f32), id="vector"),
+        pytest.param(qd.types.matrix(2, 3, qd.f32), id="matrix"),
     ],
 )
 @test_utils.test()
@@ -623,8 +625,8 @@ def test_compound_layout_numpy_import_rejects_physical_shape(dtype):
 @pytest.mark.parametrize(
     "dtype",
     [
-        qd.types.vector(3, qd.f32),
-        qd.types.matrix(2, 3, qd.f32),
+        pytest.param(qd.types.vector(3, qd.f32), id="vector"),
+        pytest.param(qd.types.matrix(2, 3, qd.f32), id="matrix"),
     ],
 )
 @test_utils.test()
