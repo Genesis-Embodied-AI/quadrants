@@ -236,16 +236,15 @@ def test_fastcache_matrix_ndarray_layout_distinct():
 
 
 @qd.func
-def _write_compound_index_codes(
-    x: qd.template(), rows: qd.template(), columns: qd.template(), is_vector: qd.template()
-) -> None:
+def _write_compound_index_codes(x: qd.template()) -> None:
     for I in qd.grouped(x):
+        element_shape = qd.static(x[I].get_shape())
         position_code = test_utils.encode_index(I)
-        for row in qd.static(range(rows)):
-            if qd.static(is_vector):
+        for row in qd.static(range(element_shape[0])):
+            if qd.static(len(element_shape) == 1):
                 x[I][row] = test_utils.encode_index([position_code, row])
             else:
-                for column in qd.static(range(columns)):
+                for column in qd.static(range(element_shape[1])):
                     x[I][row, column] = test_utils.encode_index([position_code, row, column])
 
 
@@ -267,8 +266,8 @@ def test_compound_layout_offline_cache(backend: qd.Backend, dtype: MatrixType, t
     """Reload each layout from the offline cache and check every scalar value, with fastcache disabled."""
 
     @qd.kernel
-    def write(x: qd.Tensor, rows: qd.template(), columns: qd.template(), is_vector: qd.template()) -> None:
-        _write_compound_index_codes(x, rows, columns, is_vector)
+    def write(x: qd.Tensor) -> None:
+        _write_compound_index_codes(x)
 
     shape = (2, 4, 5)
     layouts = (None, (1, 0, 2), (2, 0, 1))
@@ -284,7 +283,7 @@ def test_compound_layout_offline_cache(backend: qd.Backend, dtype: MatrixType, t
             expected = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
             # The observation is cumulative, so reset it to check this particular layout's launch.
             write._primal.fe_ll_cache_observations.cache_hit = False
-            write(x, dtype.n, dtype.m, dtype.ndim == 1)
+            write(x)
             assert write._primal.fe_ll_cache_observations.cache_hit == expect_hit, layout
             assert not write._primal.src_ll_cache_observations.cache_loaded
             np.testing.assert_array_equal(x.to_numpy(), expected)
@@ -302,8 +301,8 @@ def test_compound_layout_fastcache(dtype: MatrixType, tmp_path: Path) -> None:
     """Reload each ndarray layout through fastcache and check that the restored kernel indexes it correctly."""
 
     @qd.kernel(fastcache=True)
-    def write(x: qd.Tensor, rows: qd.template(), columns: qd.template(), is_vector: qd.template()) -> None:
-        _write_compound_index_codes(x, rows, columns, is_vector)
+    def write(x: qd.Tensor) -> None:
+        _write_compound_index_codes(x)
 
     shape = (2, 4, 5)
     layouts = (None, (1, 0, 2), (2, 0, 1))
@@ -319,7 +318,7 @@ def test_compound_layout_fastcache(dtype: MatrixType, tmp_path: Path) -> None:
             expected = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
             write._primal.src_ll_cache_observations.cache_loaded = False
             write._primal.fe_ll_cache_observations.cache_hit = False
-            write(x, dtype.n, dtype.m, dtype.ndim == 1)
+            write(x)
             assert write._primal.src_ll_cache_observations.cache_loaded == expect_hit, layout
             assert not write._primal.fe_ll_cache_observations.cache_hit
             np.testing.assert_array_equal(x.to_numpy(), expected)
