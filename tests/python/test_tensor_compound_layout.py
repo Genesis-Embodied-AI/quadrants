@@ -490,9 +490,9 @@ def test_compound_layout_grad(backend: qd.Backend, dtype: MatrixType) -> None:
     assert y.grad.layout == y.layout
 
     @qd.kernel
-    def double(x: qd.Tensor, y: qd.Tensor) -> None:
+    def scaled_square(x: qd.Tensor, y: qd.Tensor) -> None:
         for I in qd.grouped(x):
-            y[I] = 2 * x[I]
+            y[I] = 3 * x[I] * x[I]
 
     @qd.kernel
     def sum_components(y: qd.Tensor, loss: qd.Tensor) -> None:
@@ -503,16 +503,16 @@ def test_compound_layout_grad(backend: qd.Backend, dtype: MatrixType) -> None:
     loss.fill(0)
     x.grad.fill(0)
     y.grad.fill(0)
-    double(x, y)
+    scaled_square(x, y)
     sum_components(y, loss)
-    assert loss[None] == 6 * np.prod(shape + x.element_shape)
+    assert loss[None] == 27 * np.prod(shape + x.element_shape)
 
     # Start from the explicit scalar loss: d(loss)/d(loss) = 1.
     loss.grad.fill(1)
-    # Differentiate the sum to obtain y.grad = 1, then y = 2*x to obtain x.grad = 2.
+    # Differentiate the sum to obtain y.grad = 1, then y = 3*x*x to obtain x.grad = 6*x = 18.
     sum_components.grad(y, loss)
-    double.grad(x, y)
-    np.testing.assert_array_equal(x.grad.to_numpy(), np.full(x.shape + x.element_shape, 2))
+    scaled_square.grad(x, y)
+    np.testing.assert_array_equal(x.grad.to_numpy(), np.full(x.shape + x.element_shape, 18))
 
 
 @pytest.mark.parametrize(
