@@ -3,7 +3,7 @@ import pathlib
 import quadrants as qd
 from quadrants.lang.misc import get_host_arch_list
 
-from tests import test_utils
+from tests.helpers import test_utils
 from tests.helpers.runtime import qd_init_same_arch
 
 

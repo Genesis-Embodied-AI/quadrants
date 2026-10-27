@@ -15,7 +15,7 @@ from quadrants.lang import impl
 from quadrants.lang.exception import QuadrantsAssertionError
 from quadrants.lang.misc import is_extension_supported
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 TEST_RAN = "test ran"
 RET_SUCCESS = 42

@@ -20,7 +20,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang.exception import QuadrantsSyntaxError, QuadrantsTypeError
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test(arch=qd.gpu)

@@ -3,7 +3,7 @@ from pytest import approx
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @pytest.mark.parametrize("exponent_bits", [5, 6, 7, 8])

@@ -12,7 +12,7 @@ from quadrants.lang import impl
 from quadrants.lang.exception import QuadrantsCompilationError
 from quadrants.lang.misc import get_host_arch_list
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 matrix_operation_types = [operator.add, operator.sub, operator.matmul]
 test_matrix_arrays = [

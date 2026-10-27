@@ -7,7 +7,7 @@ import quadrants as qd
 from quadrants.lang import impl
 from quadrants.lang.util import has_pytorch
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 u = platform.uname()
 

@@ -11,7 +11,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 # Coverage field allocation creates internal fill kernels that change cache file counts.
 # CI runs these tests in a separate phase without QD_KERNEL_COVERAGE (see 4_test.sh).

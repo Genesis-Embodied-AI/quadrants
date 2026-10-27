@@ -13,7 +13,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 archs_with_physical_storage_buffer = [qd.metal, qd.vulkan]
 

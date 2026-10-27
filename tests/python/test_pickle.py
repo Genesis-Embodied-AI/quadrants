@@ -5,7 +5,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 _ALL_DTYPES = [qd.f16, qd.f32, qd.f64, qd.i8, qd.i16, qd.i32, qd.i64, qd.u1, qd.u8, qd.u16, qd.u32, qd.u64]
 _64BIT_DTYPES = {qd.f64, qd.i64, qd.u64}

@@ -3,7 +3,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang.exception import QuadrantsRuntimeError
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 def _test_pow_f(dt):

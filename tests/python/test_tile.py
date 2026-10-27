@@ -17,7 +17,7 @@ from quadrants.lang.simt._tile import (
 )
 from quadrants.types import primitive_types
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 _T16 = 16  # tile16 SIZE; used in parametrize values (which run on both tile sizes)
 _QD_DTYPES = [qd.f32, qd.f64]

@@ -28,7 +28,7 @@ import numpy as np
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 def _run_fem99(n_grid: int, n_frames: int, substeps: int, seed: int = 0):

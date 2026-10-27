@@ -2,7 +2,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 # Defaults shrink particle / grid / steps counts so the JIT compile + AD-tape replay stays cheap; the slow-marked

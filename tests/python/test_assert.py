@@ -5,7 +5,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang.misc import get_host_arch_list
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 u = platform.uname()
 if u.system == "linux" and u.machine in ("arm64", "aarch64"):

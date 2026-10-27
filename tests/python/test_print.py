@@ -2,7 +2,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 # TODO: validation layer support on macos vulkan backend is not working.
 vk_on_mac = (qd.vulkan, "Darwin")

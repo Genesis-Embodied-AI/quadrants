@@ -4,7 +4,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang.util import has_pytorch
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test(arch=qd.cpu)

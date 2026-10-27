@@ -3,7 +3,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @pytest.mark.parametrize("cpu_per_worker_min_block_dim", [1, 2, 4, 16, 512, 2048])

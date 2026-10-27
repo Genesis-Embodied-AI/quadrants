@@ -3,7 +3,7 @@ import pytest
 import quadrants as qd
 from quadrants.types.enums import AutodiffMode
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test(debug=True)

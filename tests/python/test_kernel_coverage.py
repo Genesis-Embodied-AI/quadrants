@@ -12,7 +12,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 # These tests only run when QD_KERNEL_COVERAGE=1
 pytestmark = pytest.mark.skipif(

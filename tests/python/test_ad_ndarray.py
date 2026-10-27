@@ -3,7 +3,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang.exception import QuadrantsRuntimeError
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 archs_support_ndarray_ad = [qd.cpu, qd.cuda, qd.amdgpu, qd.metal]
 

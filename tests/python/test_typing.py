@@ -1,6 +1,6 @@
-import test_utils
-
 import quadrants as qd
+
+from tests.helpers import test_utils
 
 
 @test_utils.test()

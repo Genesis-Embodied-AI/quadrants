@@ -4,7 +4,7 @@ import quadrants as qd
 from quadrants.lang import impl
 from quadrants.types import primitive_types
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 _QD_TYPES = [qd.i8, qd.i16, qd.i32, qd.u8, qd.u16, qd.u32, qd.f32]
 _QD_64_TYPES = [qd.i64, qd.u64, qd.f64]
