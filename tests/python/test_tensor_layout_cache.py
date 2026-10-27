@@ -235,9 +235,9 @@ def test_fastcache_matrix_ndarray_layout_distinct():
     assert key_plain != key_layout
 
 
-# Wrap the same kernel body with and without fastcache in the tests below.
+@qd.func
 def _write_compound_index_codes(
-    x: qd.Tensor, rows: qd.template(), columns: qd.template(), is_vector: qd.template()
+    x: qd.template(), rows: qd.template(), columns: qd.template(), is_vector: qd.template()
 ) -> None:
     for I in qd.grouped(x):
         position_code = test_utils.encode_index(I)
@@ -265,7 +265,11 @@ def _write_compound_index_codes(
 @test_utils.test()
 def test_compound_layout_offline_cache(backend: qd.Backend, dtype: MatrixType, tmp_path: Path) -> None:
     """Reload each layout from the offline cache and check every scalar value, with fastcache disabled."""
-    write = qd.kernel(_write_compound_index_codes)
+
+    @qd.kernel
+    def write(x: qd.Tensor, rows: qd.template(), columns: qd.template(), is_vector: qd.template()) -> None:
+        _write_compound_index_codes(x, rows, columns, is_vector)
+
     shape = (2, 4, 5)
     layouts = (None, (1, 0, 2), (2, 0, 1))
 
@@ -296,7 +300,11 @@ def test_compound_layout_offline_cache(backend: qd.Backend, dtype: MatrixType, t
 @test_utils.test()
 def test_compound_layout_fastcache(dtype: MatrixType, tmp_path: Path) -> None:
     """Reload each ndarray layout through fastcache and check that the restored kernel indexes it correctly."""
-    write = qd.kernel(fastcache=True)(_write_compound_index_codes)
+
+    @qd.kernel(fastcache=True)
+    def write(x: qd.Tensor, rows: qd.template(), columns: qd.template(), is_vector: qd.template()) -> None:
+        _write_compound_index_codes(x, rows, columns, is_vector)
+
     shape = (2, 4, 5)
     layouts = (None, (1, 0, 2), (2, 0, 1))
 
