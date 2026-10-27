@@ -217,9 +217,9 @@ def test_compound_layout_numpy_zero_copy(backend: qd.Backend, dtype: MatrixType,
     expected = initial.copy()
     expected[1, 2, 3] = -7
 
-    view = x.to_numpy(copy=copy_mode)
-    np.testing.assert_array_equal(view, initial)
-    view[1, 2, 3] = -7
+    np_view = x.to_numpy(copy=copy_mode)
+    np.testing.assert_array_equal(np_view, initial)
+    np_view[1, 2, 3] = -7
 
     np.testing.assert_array_equal(x.to_numpy(), expected)
 
