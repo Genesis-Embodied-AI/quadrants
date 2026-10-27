@@ -9,8 +9,16 @@ exactly once (for the layout chosen at first compile time), and subsequent calls
 silently mis-index or crash.
 """
 
+import os
+from pathlib import Path
+
+import numpy as np
+import pytest
+
 import quadrants as qd
 from quadrants._tensor import _with_layout
+from quadrants._test_tools import qd_init_same_arch
+from quadrants.lang.matrix import MatrixType
 
 from tests import test_utils
 
@@ -225,3 +233,85 @@ def test_fastcache_matrix_ndarray_layout_distinct():
     assert key_plain is not None
     assert key_layout is not None
     assert key_plain != key_layout
+
+
+# Wrap the same kernel body with and without fastcache in the tests below.
+def _write_compound_index_codes(
+    x: qd.Tensor, rows: qd.template(), columns: qd.template(), is_vector: qd.template()
+) -> None:
+    for I in qd.grouped(x):
+        position_code = test_utils.encode_index(I)
+        for row in qd.static(range(rows)):
+            if qd.static(is_vector):
+                x[I][row] = test_utils.encode_index([position_code, row])
+            else:
+                for column in qd.static(range(columns)):
+                    x[I][row, column] = test_utils.encode_index([position_code, row, column])
+
+
+@pytest.mark.parametrize(
+    "backend,dtype",
+    [
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), id="field-vector"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), id="field-matrix"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), id="ndarray-vector"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), id="ndarray-matrix"),
+    ],
+)
+@pytest.mark.skipif(
+    os.environ.get("QD_KERNEL_COVERAGE") == "1",
+    reason="Coverage probes change the kernel AST, preventing offline cache hits after reinit",
+)
+@test_utils.test()
+def test_compound_layout_offline_cache(backend: qd.Backend, dtype: MatrixType, tmp_path: Path) -> None:
+    """Reload each layout from the offline cache and check every scalar value, with fastcache disabled."""
+    write = qd.kernel(_write_compound_index_codes)
+    shape = (2, 4, 5)
+    layouts = (None, (1, 0, 2), (2, 0, 1))
+
+    for expect_hit in (False, True):
+        # Reinitialization clears compiled kernels from memory and flushes the preceding runtime's disk cache.
+        qd_init_same_arch(offline_cache=True, src_ll_cache=False, offline_cache_file_path=str(tmp_path))
+        assert not write._primal.compiled_kernel_data_by_key
+        assert not write._primal.materialized_kernels
+
+        for layout in layouts:
+            x = qd.tensor(dtype, shape, backend=backend, layout=layout)
+            expected = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
+            # The observation is cumulative, so reset it to check this particular layout's launch.
+            write._primal.fe_ll_cache_observations.cache_hit = False
+            write(x, dtype.n, dtype.m, dtype.ndim == 1)
+            assert write._primal.fe_ll_cache_observations.cache_hit == expect_hit, layout
+            assert not write._primal.src_ll_cache_observations.cache_loaded
+            np.testing.assert_array_equal(x.to_numpy(), expected)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        pytest.param(qd.types.vector(3, qd.f32), id="ndarray-vector"),
+        pytest.param(qd.types.matrix(2, 3, qd.f32), id="ndarray-matrix"),
+    ],
+)
+@test_utils.test()
+def test_compound_layout_fastcache(dtype: MatrixType, tmp_path: Path) -> None:
+    """Reload each ndarray layout through fastcache and check that the restored kernel indexes it correctly."""
+    write = qd.kernel(fastcache=True)(_write_compound_index_codes)
+    shape = (2, 4, 5)
+    layouts = (None, (1, 0, 2), (2, 0, 1))
+
+    for expect_hit in (False, True):
+        # Fastcache loads its compiled artifact from the disk cache; a fastcache hit must bypass frontend compilation.
+        qd_init_same_arch(offline_cache=True, src_ll_cache=True, offline_cache_file_path=str(tmp_path))
+        assert not write._primal.compiled_kernel_data_by_key
+        assert not write._primal.materialized_kernels
+
+        for layout in layouts:
+            x = qd.tensor(dtype, shape, backend=qd.Backend.NDARRAY, layout=layout)
+            expected = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
+            write._primal.src_ll_cache_observations.cache_loaded = False
+            write._primal.fe_ll_cache_observations.cache_hit = False
+            write(x, dtype.n, dtype.m, dtype.ndim == 1)
+            assert write._primal.src_ll_cache_observations.cache_loaded == expect_hit, layout
+            assert not write._primal.fe_ll_cache_observations.cache_hit
+            np.testing.assert_array_equal(x.to_numpy(), expected)
