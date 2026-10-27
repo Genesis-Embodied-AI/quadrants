@@ -224,48 +224,33 @@ def test_compound_layout_numpy_zero_copy(backend: qd.Backend, dtype: MatrixType)
 
 
 @pytest.mark.parametrize(
-    "backend,dtype,layout",
+    "backend,dtype,src_layout,dst_layout",
     [
-        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2), id="field-vector-swap-axes-0-1"),
-        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1), id="field-matrix-cycle-axes"),
-        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
-        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2), None, id="field-vector-to-default"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1), None, id="field-matrix-to-default"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), None, id="ndarray-vector-to-default"),
+        pytest.param(
+            qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), None, id="ndarray-matrix-to-default"
+        ),
+        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), None, (1, 0, 2), id="field-vector-to-permuted"),
+        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), None, (2, 0, 1), id="field-matrix-to-permuted"),
+        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), None, (2, 0, 1), id="ndarray-vector-to-permuted"),
+        pytest.param(
+            qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), None, (1, 0, 2), id="ndarray-matrix-to-permuted"
+        ),
     ],
 )
 @test_utils.test()
-def test_compound_layout_copy_to_default_layout(
-    backend: qd.Backend, dtype: MatrixType, layout: tuple[int, ...]
+def test_compound_layout_copy_between_layouts(
+    backend: qd.Backend,
+    dtype: MatrixType,
+    src_layout: tuple[int, ...] | None,
+    dst_layout: tuple[int, ...] | None,
 ) -> None:
     """Copying between different layouts preserves every canonical component value."""
     shape = (2, 4, 5)
-    src = qd.tensor(dtype, shape, backend=backend, layout=layout)
-    dst = qd.tensor(dtype, shape, backend=backend, layout=None)
-    initial = test_utils.new_numpy_tensor_containing_index_codes(shape, src.element_shape)
-    src.from_numpy(initial)
-    dst.fill(-1)
-
-    dst.copy_from(src)
-
-    np.testing.assert_array_equal(dst.to_numpy(), initial)
-
-
-@pytest.mark.parametrize(
-    "backend,dtype,layout",
-    [
-        pytest.param(qd.Backend.FIELD, qd.types.vector(3, qd.f32), (1, 0, 2), id="field-vector-swap-axes-0-1"),
-        pytest.param(qd.Backend.FIELD, qd.types.matrix(2, 3, qd.f32), (2, 0, 1), id="field-matrix-cycle-axes"),
-        pytest.param(qd.Backend.NDARRAY, qd.types.vector(3, qd.f32), (2, 0, 1), id="ndarray-vector-cycle-axes"),
-        pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
-    ],
-)
-@test_utils.test()
-def test_compound_layout_copy_to_permuted_layout(
-    backend: qd.Backend, dtype: MatrixType, layout: tuple[int, ...]
-) -> None:
-    """Copying between different layouts preserves every canonical component value."""
-    shape = (2, 4, 5)
-    src = qd.tensor(dtype, shape, backend=backend, layout=None)
-    dst = qd.tensor(dtype, shape, backend=backend, layout=layout)
+    src = qd.tensor(dtype, shape, backend=backend, layout=src_layout)
+    dst = qd.tensor(dtype, shape, backend=backend, layout=dst_layout)
     initial = test_utils.new_numpy_tensor_containing_index_codes(shape, src.element_shape)
     src.from_numpy(initial)
     dst.fill(-1)
