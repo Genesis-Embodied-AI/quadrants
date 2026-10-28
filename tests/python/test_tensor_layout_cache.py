@@ -261,12 +261,12 @@ def test_compound_layout_offline_cache(backend: qd.Backend, dtype: MatrixType, t
     expected = test_utils.new_numpy_tensor_containing_index_codes(shape, dtype.get_shape())
 
     for expect_hit in (False, True):
-        # Reinitialization clears compiled kernels from memory and flushes the preceding runtime's disk cache.
-        qd_init_same_arch(offline_cache=True, src_ll_cache=False, offline_cache_file_path=str(tmp_path))
-        assert not k1._primal.compiled_kernel_data_by_key
-        assert not k1._primal.materialized_kernels
-
         for layout in layouts:
+            # Start each launch with empty in-memory caches and flush the preceding runtime's disk cache.
+            qd_init_same_arch(offline_cache=True, src_ll_cache=False, offline_cache_file_path=str(tmp_path))
+            assert not k1._primal.compiled_kernel_data_by_key
+            assert not k1._primal.materialized_kernels
+
             x = qd.tensor(dtype, shape, backend=backend, layout=layout)
             # The observation is cumulative, so reset it to check this particular layout's launch.
             k1._primal.fe_ll_cache_observations.cache_hit = False
@@ -296,12 +296,12 @@ def test_compound_layout_fastcache(dtype: MatrixType, tmp_path: Path) -> None:
     expected = test_utils.new_numpy_tensor_containing_index_codes(shape, dtype.get_shape())
 
     for expect_hit in (False, True):
-        # Fastcache loads its compiled artifact from the disk cache; a fastcache hit must bypass frontend compilation.
-        qd_init_same_arch(offline_cache=True, src_ll_cache=True, offline_cache_file_path=str(tmp_path))
-        assert not k1._primal.compiled_kernel_data_by_key
-        assert not k1._primal.materialized_kernels
-
         for layout in layouts:
+            # Start each launch with empty in-memory caches and flush the preceding runtime's disk cache.
+            qd_init_same_arch(offline_cache=True, src_ll_cache=True, offline_cache_file_path=str(tmp_path))
+            assert not k1._primal.compiled_kernel_data_by_key
+            assert not k1._primal.materialized_kernels
+
             x = qd.tensor(dtype, shape, backend=qd.Backend.NDARRAY, layout=layout)
             k1._primal.src_ll_cache_observations.cache_loaded = False
             k1._primal.fe_ll_cache_observations.cache_hit = False
