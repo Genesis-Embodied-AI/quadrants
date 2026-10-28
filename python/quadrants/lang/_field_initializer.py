@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 _FillValue: TypeAlias = Union[int, float, numbers.Number, np.number, list, tuple, "Matrix", None]
 
 
-def capture_fill_value(value: _FillValue, element_shape=()):
+def capture_fill_value(value: _FillValue, element_shape=()) -> _FillValue:
     """Validate and snapshot an initializer without allocating or materializing any fields."""
     if value is None or isinstance(value, numbers.Number):
         return value
