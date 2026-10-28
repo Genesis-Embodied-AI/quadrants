@@ -218,6 +218,7 @@ def test_compound_layout_numpy_export_is_independent(
     np.testing.assert_array_equal(x.to_numpy(), initial)
 
 
+@pytest.mark.needs_torch
 @pytest.mark.parametrize(
     "backend,dtype",
     [
@@ -341,6 +342,7 @@ def test_compound_layout_deepcopy(backend: qd.Backend, dtype: MatrixType, layout
 # Torch imports and exports
 
 
+@pytest.mark.needs_torch
 @pytest.mark.parametrize(
     "backend,dtype,layout",
     [
@@ -355,6 +357,7 @@ def test_compound_layout_torch_export_is_independent(
     backend: qd.Backend, dtype: MatrixType, layout: tuple[int, ...]
 ) -> None:
     """A copied Torch export has canonical values and can be changed without changing the tensor."""
+    test_utils.require_torch_gpu_kernels()
     pytest.importorskip("torch")
     shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
@@ -370,6 +373,7 @@ def test_compound_layout_torch_export_is_independent(
     np.testing.assert_array_equal(x.to_numpy(), initial)
 
 
+@pytest.mark.needs_torch
 @pytest.mark.parametrize(
     "backend,dtype,layout",
     [
@@ -384,6 +388,7 @@ def test_compound_layout_torch_noncontiguous_import(
     backend: qd.Backend, dtype: MatrixType, layout: tuple[int, ...]
 ) -> None:
     """Torch imports preserve canonical values from a non-contiguous source."""
+    test_utils.require_torch_gpu_kernels()
     torch = pytest.importorskip("torch")
     shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
@@ -398,6 +403,7 @@ def test_compound_layout_torch_noncontiguous_import(
     np.testing.assert_array_equal(x.to_numpy(), initial)
 
 
+@pytest.mark.needs_torch
 @pytest.mark.parametrize(
     "backend,dtype",
     [
@@ -410,6 +416,7 @@ def test_compound_layout_torch_noncontiguous_import(
 @test_utils.test(exclude=[qd.vulkan])
 def test_compound_layout_torch_zero_copy(backend: qd.Backend, dtype: MatrixType) -> None:
     """Torch sharing modes return the existing buffer and expose writes at canonical positions."""
+    test_utils.require_torch_gpu_kernels()
     test_utils.require_torch_dlpack(need_field_support=backend == qd.Backend.FIELD)
     shape = (2, 4, 5)
     layout = (2, 0, 1)
@@ -430,6 +437,7 @@ def test_compound_layout_torch_zero_copy(backend: qd.Backend, dtype: MatrixType)
 # DLPack views
 
 
+@pytest.mark.needs_torch
 @pytest.mark.parametrize(
     "backend,dtype,layout",
     [
@@ -464,6 +472,7 @@ def test_compound_layout_dlpack_shape_and_strides(
     np.testing.assert_array_equal(torch_view.cpu().numpy(), initial)
 
 
+@pytest.mark.needs_torch
 @pytest.mark.parametrize(
     "backend,dtype,layout",
     [
@@ -476,6 +485,7 @@ def test_compound_layout_dlpack_shape_and_strides(
 @test_utils.test(exclude=[qd.vulkan])
 def test_compound_layout_dlpack_writes(backend: qd.Backend, dtype: MatrixType, layout: tuple[int, ...]) -> None:
     """A write through a DLPack view changes the same canonical element in the tensor."""
+    test_utils.require_torch_gpu_kernels()
     torch = test_utils.require_torch_dlpack(need_field_support=backend == qd.Backend.FIELD)
     shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=layout)
@@ -603,6 +613,7 @@ def test_compound_layout_numpy_import_rejects_physical_shape(dtype: MatrixType) 
         x.from_numpy(source)
 
 
+@pytest.mark.needs_torch
 @pytest.mark.parametrize(
     "dtype",
     [

@@ -64,6 +64,12 @@ def fill_index_codes(x: qd.Tensor, dtype: qd.template()) -> None:
     fill_tensor_with_index_codes(x)
 
 
+def require_torch_gpu_kernels() -> None:
+    # The CI Torch wheel cannot execute GPU kernels on the AMD V520; transfers and metadata access still work.
+    if os.environ.get("QD_AMDGPU_V520") == "1" and qd.lang.impl.current_cfg().arch == qd.amdgpu:
+        pytest.skip("The CI Torch wheel cannot execute GPU kernels on AMD V520")
+
+
 def require_torch_dlpack(need_field_support: bool) -> ModuleType:
     torch = pytest.importorskip("torch")
     if (
