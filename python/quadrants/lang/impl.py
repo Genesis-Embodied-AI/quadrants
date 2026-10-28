@@ -590,7 +590,7 @@ class PyQuadrants:
         self.grad_vars.clear()
         self.dual_vars.clear()
         self.matrix_fields.clear()
-        self.field_initializers.run(self)
+        self.field_initializers.run()
 
     def _register_signal_handlers(self):
         if self._signal_handler_registry is None:
