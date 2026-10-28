@@ -153,9 +153,9 @@ def test_order_kwarg_rejected():
 
 
 # ----------------------------------------------------------------------------
-# Ndarray non-identity layout: enabled in an earlier change.
+# Ndarray non-identity layout.
 # These cases are exercised in depth in test_tensor_factory_layout_ndarray.py; this file just pins the smoke "factory
-# does not raise" contract that replaces the PR-6-era NotImplementedError gating.
+# does not raise" contract.
 # ----------------------------------------------------------------------------
 
 
