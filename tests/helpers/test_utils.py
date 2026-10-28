@@ -89,7 +89,7 @@ def verify_image(image, image_name, tolerance=0.1, regerate_groundtruth_images=F
         ground_truth_name = f"tests/python/expected/{image_name}.png"
         qd.tools.imwrite(image, ground_truth_name)
     else:
-        ground_truth_name = str(pathlib.Path(__file__).parent) + f"/python/expected/{image_name}.png"
+        ground_truth_name = str(pathlib.Path(__file__).parent.parent) + f"/python/expected/{image_name}.png"
         ground_truth_np = qd.tools.imread(ground_truth_name)
 
         # TODO:Fix this on Windows

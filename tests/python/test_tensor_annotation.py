@@ -9,7 +9,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 # ----------------------------------------------------------------------------
 # Class identity
@@ -212,7 +212,7 @@ def test_tensor_slot_none_then_wrapper_survives_tape_replay():
     @qd.kernel
     def pick_first(loss: qd.types.NDArray[qd.f32, None], bias: qd.Tensor):
         if qd.static(bias is not None):
-            loss[None] = bias[0] * 2.0
+            loss[()] = bias[0] * 2.0
 
     bias_wrapper = qd.wrap(bias)
 

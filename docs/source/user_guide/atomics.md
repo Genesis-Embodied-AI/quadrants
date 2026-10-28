@@ -123,9 +123,9 @@ def cas_loop_max():
     # Atomically: x = max(x, candidate). The framework already has atomic_max for primitives, but the same
     # shape works for any reduction whose backend support is missing.
     for _attempt in range(MAX_RETRIES):
-        cur = x[None]
+        cur = x[()]
         new = qd.max(cur, candidate)
-        old = qd.atomic_cas(x[None], cur, new)
+        old = qd.atomic_cas(x[()], cur, new)
         if old == cur:
             break  # CAS landed; we're done.
         # Otherwise some other thread won the race; loop back and re-read.

@@ -14,11 +14,11 @@ import quadrants as qd
 
 _KERNEL_COVERAGE = os.environ.get("QD_KERNEL_COVERAGE") == "1"
 import quadrants.lang
-from quadrants._test_tools import qd_init_same_arch
 from quadrants.lang._fast_caching import args_hasher
 from quadrants.lang._kernel_types import SrcLlCacheObservations
 
-from tests import test_utils
+from tests.helpers import test_utils
+from tests.helpers.runtime import qd_init_same_arch
 
 TEST_RAN = "test ran"
 RET_SUCCESS = 42

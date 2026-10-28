@@ -20,7 +20,7 @@ from quadrants._tensor import _with_layout
 from quadrants._test_tools import qd_init_same_arch
 from quadrants.lang.matrix import MatrixType
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 def _allocate(M, N, layout=None, dtype=qd.i32):

@@ -12,7 +12,7 @@ from quadrants.lang._kernel_types import KernelBatchedArgType
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.impl import Kernel, QuadrantsSyntaxError
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @pytest.fixture
