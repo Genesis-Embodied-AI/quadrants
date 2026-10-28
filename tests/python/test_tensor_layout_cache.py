@@ -235,19 +235,6 @@ def test_fastcache_matrix_ndarray_layout_distinct():
     assert key_plain != key_layout
 
 
-@qd.func
-def _write_compound_index_codes(x: qd.template()) -> None:
-    for I in qd.grouped(x):
-        element_shape = qd.static(x[I].get_shape())
-        position_code = test_utils.encode_index(I)
-        for row in qd.static(range(element_shape[0])):
-            if qd.static(len(element_shape) == 1):
-                x[I][row] = test_utils.encode_index([position_code, row])
-            else:
-                for column in qd.static(range(element_shape[1])):
-                    x[I][row, column] = test_utils.encode_index([position_code, row, column])
-
-
 @pytest.mark.parametrize(
     "backend,dtype",
     [
@@ -267,7 +254,7 @@ def test_compound_layout_offline_cache(backend: qd.Backend, dtype: MatrixType, t
 
     @qd.kernel
     def write(x: qd.Tensor) -> None:
-        _write_compound_index_codes(x)
+        test_utils.fill_tensor_with_index_codes(x)
 
     shape = (2, 4, 5)
     layouts = (None, (1, 0, 2), (2, 0, 1))
@@ -302,7 +289,7 @@ def test_compound_layout_fastcache(dtype: MatrixType, tmp_path: Path) -> None:
 
     @qd.kernel(fastcache=True)
     def write(x: qd.Tensor) -> None:
-        _write_compound_index_codes(x)
+        test_utils.fill_tensor_with_index_codes(x)
 
     shape = (2, 4, 5)
     layouts = (None, (1, 0, 2), (2, 0, 1))

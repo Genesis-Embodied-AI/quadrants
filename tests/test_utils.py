@@ -45,17 +45,23 @@ def new_numpy_tensor_containing_index_codes(
     return values
 
 
+@qd.func
+def fill_tensor_with_index_codes(x: qd.template()) -> None:
+    for I in qd.grouped(x):
+        element_shape = qd.static(x[I].get_shape())
+        position_code = encode_index(I)
+        for row in qd.static(range(element_shape[0])):
+            if qd.static(len(element_shape) == 1):
+                x[I][row] = encode_index([position_code, row])
+            else:
+                for column in qd.static(range(element_shape[1])):
+                    x[I][row, column] = encode_index([position_code, row, column])
+
+
 @qd.kernel
 def fill_index_codes(x: qd.Tensor, dtype: qd.template()) -> None:
     """Write each scalar component's index code through canonical kernel indices."""
-    for I in qd.grouped(x):
-        position_code = encode_index(I)
-        for row in qd.static(range(dtype.n)):
-            if qd.static(dtype.ndim == 1):
-                x[I][row] = encode_index([position_code, row])
-            else:
-                for column in qd.static(range(dtype.m)):
-                    x[I][row, column] = encode_index([position_code, row, column])
+    fill_tensor_with_index_codes(x)
 
 
 def require_torch_dlpack(need_field_support: bool) -> ModuleType:
