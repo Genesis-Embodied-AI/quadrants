@@ -15,11 +15,11 @@ def test_fill_initializer_shares_tree():
 
     @qd.kernel
     def add_field(field: qd.Template):
-        total[None] += field[None]
+        total[()] += field[()]
 
     for field in fields:
         add_field(field)
-    assert total[None] == 780
+    assert total[()] == 780
     assert len({field.snode._snode_tree_id for field in fields + [total]}) == 1
 
 
@@ -46,18 +46,18 @@ def test_fill_initializer_precedes_writes(operation):
     qd.sync()
     assert field[0] == 5
     assert field[1] == (3 if operation == "host" else 5)
-    assert other[None] == 7
+    assert other[()] == 7
 
 
 @test_utils.test()
 def test_fill_initializer_after_materialization():
     first = qd.field(qd.i32, shape=(), fill=2)
-    assert first[None] == 2
+    assert first[()] == 2
     second = qd.field(qd.i32, shape=(), fill=4)
     third = qd.field(qd.i32, shape=(), fill=6)
     qd.sync()
-    assert second[None] == 4
-    assert third[None] == 6
+    assert second[()] == 4
+    assert third[()] == 6
     assert second.snode._snode_tree_id == third.snode._snode_tree_id
     assert first.snode._snode_tree_id != second.snode._snode_tree_id
 
@@ -90,7 +90,7 @@ def test_fill_initializer_matrix_value_snapshot():
     value = qd.Matrix([[1, 2], [3, 4]])
     field = qd.Matrix.field(2, 2, qd.i32, shape=(), fill=value)
     value[0, 0] = 99
-    np.testing.assert_array_equal(field[None].to_numpy(), [[1, 2], [3, 4]])
+    np.testing.assert_array_equal(field[()].to_numpy(), [[1, 2], [3, 4]])
 
 
 @test_utils.test()
@@ -118,7 +118,7 @@ def test_fill_initializer_reset():
     assert not runtime.field_initializers.pending
     qd.init(arch=arch)
     field = qd.field(qd.i32, shape=(), fill=4)
-    assert field[None] == 4
+    assert field[()] == 4
 
 
 @pytest.mark.parametrize("value", [[1, 2], "invalid"])
@@ -127,7 +127,7 @@ def test_fill_initializer_invalid_scalar(value):
     with pytest.raises(ValueError, match="fill"):
         qd.field(qd.i32, shape=(), fill=value)
     field = qd.field(qd.i32, shape=(), fill=0)
-    assert field[None] == 0
+    assert field[()] == 0
 
 
 @pytest.mark.parametrize("value", [[[1, 2]], [[1, 2], [3]], [1, 2], [[1, None], [2, 3]]])
@@ -136,7 +136,7 @@ def test_fill_initializer_invalid_matrix(value):
     with pytest.raises(ValueError, match="fill"):
         qd.Matrix.field(2, 2, qd.i32, shape=(), fill=value)
     field = qd.field(qd.i32, shape=(), fill=0)
-    assert field[None] == 0
+    assert field[()] == 0
 
 
 @test_utils.test()
@@ -145,7 +145,7 @@ def test_fill_initializer_preserves_immediate_fill():
     first.fill(3)
     assert impl.get_runtime().get_num_compiled_functions() > 0
     second = qd.field(qd.i32, shape=(), fill=4)
-    assert second[None] == 4
+    assert second[()] == 4
     assert first.snode._snode_tree_id != second.snode._snode_tree_id
 
 
