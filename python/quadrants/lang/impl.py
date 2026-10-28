@@ -18,7 +18,7 @@ from quadrants._snode import fields_builder
 from quadrants.lang._field_initializer import (
     FieldInitializers,
     _FillValue,
-    prepare_fill,
+    capture_fill_value,
 )
 from quadrants.lang._ndarray import Ndarray, ScalarNdarray
 from quadrants.lang._ndarray_initializer import initialize_ndarray
@@ -857,7 +857,7 @@ def _field(
     *,
     fill: _FillValue = None,
 ):
-    fill = prepare_fill(fill)
+    fill = capture_fill_value(fill)
     x, x_grad, x_dual, x_grad_checkbit = create_field_member(dtype, name, needs_grad, needs_dual)
     x = ScalarField(x)
     if x_grad:
@@ -1006,7 +1006,7 @@ def field(dtype, shape=None, *args, fill: _FillValue = None, **kwargs):
                 shape = (*shape, dtype.n, dtype.m)
             dtype = dtype.dtype
         dtype = dtype_to_torch_dtype(dtype)
-        fill = prepare_fill(fill, element_shape)
+        fill = capture_fill_value(fill, element_shape)
         tensor = py_tensor.create_tensor(shape, dtype, batch_ndim=batch_ndim)
         if fill is not None:
             tensor.copy_(tensor.new_tensor(fill))
