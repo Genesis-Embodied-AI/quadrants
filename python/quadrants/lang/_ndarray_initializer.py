@@ -8,14 +8,14 @@ def initialize_ndarray(array, value):
 
     from quadrants.lang import impl  # pylint: disable=import-outside-toplevel
     from quadrants.lang._field_initializer import (  # pylint: disable=import-outside-toplevel
-        prepare_fill,
+        capture_fill_value,
     )
 
     if impl.is_python_backend():
-        value = prepare_fill(value, tuple(array.size()[len(array.shape) :]))
+        value = capture_fill_value(value, tuple(array.size()[len(array.shape) :]))
         array.copy_(array.new_tensor(value))
         return array
-    value = prepare_fill(value, array.element_shape)
+    value = capture_fill_value(value, array.element_shape)
     array.fill(value)
     # A consumer of to_dlpack() may use a different device queue. Complete allocation-time initialization before
     # returning the tensor so it is safe to export without an intervening explicit sync.
