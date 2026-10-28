@@ -28,6 +28,7 @@ from quadrants.lang.exception import (
 )
 from quadrants.lang.expr import Expr, make_expr_group
 from quadrants.lang.field import Field, ScalarField
+from quadrants.lang.field_initializer import FieldInitializers, prepare_fill
 from quadrants.lang.kernel import Kernel
 from quadrants.lang.kernel_arguments import SparseMatrixProxy
 from quadrants.lang.kernel_impl import BoundQuadrantsCallable, QuadrantsCallable
@@ -416,6 +417,7 @@ class PyQuadrants:
         self.grad_vars = []
         self.dual_vars = []
         self.matrix_fields = []
+        self.field_initializers = FieldInitializers()
         self.default_fp = f32
         self.default_ip = i32
         self.default_up = u32
@@ -588,12 +590,14 @@ class PyQuadrants:
         self.grad_vars.clear()
         self.dual_vars.clear()
         self.matrix_fields.clear()
+        self.field_initializers.run(self)
 
     def _register_signal_handlers(self):
         if self._signal_handler_registry is None:
             self._signal_handler_registry = _qd_core.HackedSignalRegister()
 
     def clear(self):
+        self.field_initializers.clear()
         if self._prog:
             self._prog.finalize()
             self._prog = None
@@ -845,7 +849,10 @@ def _field(
     offset=None,
     needs_grad=False,
     needs_dual=False,
+    *,
+    fill=None,
 ):
+    fill = prepare_fill(fill)
     x, x_grad, x_dual, x_grad_checkbit = create_field_member(dtype, name, needs_grad, needs_dual)
     x = ScalarField(x)
     if x_grad:
@@ -931,11 +938,12 @@ def _field(
                 object.__setattr__(x_grad, "_qd_layout", _qd_layout)  # type: ignore[attr-defined]
             if x_dual is not None:
                 object.__setattr__(x_dual, "_qd_layout", _qd_layout)  # type: ignore[attr-defined]
+    get_runtime().field_initializers.add(x, fill)
     return x
 
 
 @python_scope
-def field(dtype, shape=None, *args, **kwargs):
+def field(dtype, shape=None, *args, fill=None, **kwargs):
     """Defines a Quadrants field.
 
     A Quadrants field can be viewed as an abstract N-dimensional array, hiding away the complexity of how its
@@ -954,6 +962,8 @@ def field(dtype, shape=None, *args, **kwargs):
             adjoint field to store the gradients.
         needs_dual (bool, optional): whether this field participates in autodiff (forward mode) and thus needs a dual
             field to store the gradients.
+        fill (optional): Initial value, applied once when the field is materialized. Defaults to None (no explicit
+            initialization). Unlike calling ``field.fill()``, this does not materialize fields immediately.
 
     Example::
 
@@ -981,19 +991,26 @@ def field(dtype, shape=None, *args, **kwargs):
         from .util import dtype_to_torch_dtype  # pylint: disable=C0415
 
         batch_ndim = len(shape)
+        element_shape = ()
         if isinstance(dtype, MatrixType):
             if dtype.ndim == 1:
+                element_shape = (dtype.n,)
                 shape = (*shape, dtype.n)
             else:
+                element_shape = (dtype.n, dtype.m)
                 shape = (*shape, dtype.n, dtype.m)
             dtype = dtype.dtype
         dtype = dtype_to_torch_dtype(dtype)
-        return py_tensor.create_tensor(shape, dtype, batch_ndim=batch_ndim)
+        fill = prepare_fill(fill, element_shape)
+        tensor = py_tensor.create_tensor(shape, dtype, batch_ndim=batch_ndim)
+        if fill is not None:
+            tensor.copy_(tensor.new_tensor(fill))
+        return tensor
     if isinstance(dtype, MatrixType):
         if dtype.ndim == 1:
-            return Vector.field(dtype.n, dtype.dtype, shape, *args, **kwargs)
-        return Matrix.field(dtype.n, dtype.m, dtype.dtype, shape, *args, **kwargs)
-    return _field(dtype, shape, *args, **kwargs)
+            return Vector.field(dtype.n, dtype.dtype, shape, *args, fill=fill, **kwargs)
+        return Matrix.field(dtype.n, dtype.m, dtype.dtype, shape, *args, fill=fill, **kwargs)
+    return _field(dtype, shape, *args, fill=fill, **kwargs)
 
 
 @python_scope

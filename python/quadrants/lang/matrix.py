@@ -874,6 +874,8 @@ class Matrix(QuadrantsOperations):
         needs_dual=False,
         layout=Layout.AOS,
         ndim=None,
+        *,
+        fill=None,
     ):
         """Construct a data container to hold all elements of the Matrix.
 
@@ -888,6 +890,7 @@ class Matrix(QuadrantsOperations):
             needs_grad (bool, optional): Whether the Matrix need grad field (reverse mode autodiff).
             needs_dual (bool, optional): Whether the Matrix need dual field (forward mode autodiff).
             layout (Layout, optional): The field layout, either Array Of Structure (AOS) or Structure Of Array (SOA).
+            fill (optional): Initial scalar or per-component values, applied once on materialization. Defaults to None.
 
         Returns:
             :class:`~quadrants.Matrix`: A matrix.
@@ -898,8 +901,11 @@ class Matrix(QuadrantsOperations):
             if shape is None:
                 shape = ()
             mat_type = MatrixType(n, m, ndim=ndim if ndim is not None else 2, dtype=dtype)
-            return impl.field(mat_type, shape=shape)
+            return impl.field(mat_type, shape=shape, fill=fill)
 
+        from quadrants.lang.field_initializer import prepare_fill  # pylint: disable=C0415
+
+        fill = prepare_fill(fill, (n,) if ndim == 1 else (n, m))
         entries = []
         element_dim = ndim if ndim is not None else 2
         if isinstance(dtype, (list, tuple, np.ndarray)):
@@ -1030,6 +1036,7 @@ class Matrix(QuadrantsOperations):
                     entries_grad._qd_layout = _qd_layout
                 if needs_dual:
                     entries_dual._qd_layout = _qd_layout
+        impl.get_runtime().field_initializers.add(entries, fill)
         return entries
 
     @classmethod
