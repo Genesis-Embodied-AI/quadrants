@@ -8,9 +8,9 @@ import warnings
 
 from colorama import Fore, Style
 
-if sys.version_info[0] < 3 or sys.version_info[1] <= 5:
+if sys.version_info < (3, 12):
     raise RuntimeError(
-        "\nPlease restart with Python 3.6+\n" + "Current Python version:",
+        "\nPlease restart with Python 3.12+\n" + "Current Python version:",
         sys.version_info,
     )
 
@@ -78,12 +78,7 @@ def locale_encode(path):
     try:
         import locale  # pylint: disable=C0415
 
-        # Use getencoding() if available (Python 3.11+), otherwise fall back to getdefaultlocale()
-        # TODO: remove the conditional once our minimum python version is 3.11
-        if sys.version_info >= (3, 11):
-            encoding = locale.getencoding()  # pylint: disable=E1101
-        else:
-            encoding = locale.getdefaultlocale()[1]
+        encoding = locale.getencoding()
         return path.encode(encoding)
     except (UnicodeEncodeError, TypeError):
         try:

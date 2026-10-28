@@ -502,7 +502,7 @@ class ASTTransformer(Builder):
             return node.ptr
         values = node.format_spec.values
         assert len(values) == 1
-        format_str = values[0].s
+        format_str = values[0].value
         assert format_str is not None
         # distinguished from normal list
         return ["__qd_fmt_value__", node.ptr, format_str]
@@ -517,8 +517,6 @@ class ASTTransformer(Builder):
                 args.append(build_stmt(ctx, sub_node))
             elif isinstance(sub_node, ast.Constant):
                 str_spec += sub_node.value
-            elif isinstance(sub_node, ast.Str):
-                str_spec += sub_node.s
             else:
                 raise QuadrantsSyntaxError("Invalid value for fstring.")
 
@@ -1628,8 +1626,6 @@ class ASTTransformer(Builder):
             return False
         if not isinstance(msg.op, ast.Mod):
             return False
-        if isinstance(msg.left, ast.Str):
-            return True
         if isinstance(msg.left, ast.Constant) and isinstance(msg.left.value, str):
             return True
         return False
@@ -1680,8 +1676,6 @@ class ASTTransformer(Builder):
                 msg = build_stmt(ctx, node.msg)
                 if isinstance(node.msg, ast.Constant):
                     msg = str(msg)
-                elif isinstance(node.msg, ast.Str):
-                    pass
                 elif isinstance(msg, collections.abc.Sequence) and len(msg) > 0 and msg[0] == "__qd_format__":
                     msg, extra_args = ASTTransformer.qd_format_list_to_assert_msg(msg)
                 else:

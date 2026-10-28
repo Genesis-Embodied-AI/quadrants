@@ -28,7 +28,7 @@ jobs:
       - name: Python check
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: '3.12'
       - name: Linux prerequisites
         run: |
           bash .github/workflows/scripts_new/linux/1_prerequisites.sh
@@ -71,7 +71,7 @@ jobs:
       - name: Python check
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: '3.12'
       - name: Install CUDA libraries
         run: |
           sudo apt-get install -y libcusolver-dev-12-8 libcusolver-12-8 libcusparse-dev-12-8 libcusparse-12-8 libnvjitlink-12-8 libcublas-12-8
@@ -118,7 +118,7 @@ jobs:
       - name: Python check
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: '3.12'
       - name: Download CPU coverage
         uses: actions/download-artifact@v4
         continue-on-error: true
