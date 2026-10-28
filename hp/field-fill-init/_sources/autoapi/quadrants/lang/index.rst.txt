@@ -18,7 +18,6 @@ Submodules
    /autoapi/quadrants/lang/exception/index
    /autoapi/quadrants/lang/expr/index
    /autoapi/quadrants/lang/field/index
-   /autoapi/quadrants/lang/field_initializer/index
    /autoapi/quadrants/lang/func/index
    /autoapi/quadrants/lang/graph/index
    /autoapi/quadrants/lang/graph_parallel/index

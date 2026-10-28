@@ -344,6 +344,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">qd_python_core</span> <span class="k">as</span> <span class="n">_qd_python_core</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">expr</span><span class="p">,</span> <span class="n">impl</span><span class="p">,</span> <span class="n">runtime_ops</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">ops</span> <span class="k">as</span> <span class="n">ops_mod</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._field_initializer</span><span class="w"> </span><span class="kn">import</span> <span class="n">prepare_fill</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._metal_interop</span><span class="w"> </span><span class="kn">import</span> <span class="n">mps_sync_if_metal</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._ndarray</span><span class="w"> </span><span class="kn">import</span> <span class="n">Ndarray</span><span class="p">,</span> <span class="n">NdarrayHostAccess</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.common_ops</span><span class="w"> </span><span class="kn">import</span> <span class="n">QuadrantsOperations</span>
@@ -360,7 +361,6 @@
     <span class="n">_try_zerocopy_numpy</span><span class="p">,</span>
     <span class="n">_try_zerocopy_torch</span><span class="p">,</span>
 <span class="p">)</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.field_initializer</span><span class="w"> </span><span class="kn">import</span> <span class="n">prepare_fill</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.util</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">DataTypeCxxWrapper</span><span class="p">,</span>
     <span class="n">cook_dtype</span><span class="p">,</span>

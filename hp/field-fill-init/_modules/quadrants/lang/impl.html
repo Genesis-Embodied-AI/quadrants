@@ -348,6 +348,7 @@
     <span class="n">Program</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._snode</span><span class="w"> </span><span class="kn">import</span> <span class="n">fields_builder</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._field_initializer</span><span class="w"> </span><span class="kn">import</span> <span class="n">FieldInitializers</span><span class="p">,</span> <span class="n">prepare_fill</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._ndarray</span><span class="w"> </span><span class="kn">import</span> <span class="n">Ndarray</span><span class="p">,</span> <span class="n">ScalarNdarray</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._ndrange</span><span class="w"> </span><span class="kn">import</span> <span class="n">GroupedNDRange</span><span class="p">,</span> <span class="n">_Ndrange</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.any_array</span><span class="w"> </span><span class="kn">import</span> <span class="n">AnyArray</span>
@@ -361,7 +362,6 @@
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.expr</span><span class="w"> </span><span class="kn">import</span> <span class="n">Expr</span><span class="p">,</span> <span class="n">make_expr_group</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.field</span><span class="w"> </span><span class="kn">import</span> <span class="n">Field</span><span class="p">,</span> <span class="n">ScalarField</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.field_initializer</span><span class="w"> </span><span class="kn">import</span> <span class="n">FieldInitializers</span><span class="p">,</span> <span class="n">prepare_fill</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.kernel</span><span class="w"> </span><span class="kn">import</span> <span class="n">Kernel</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.kernel_arguments</span><span class="w"> </span><span class="kn">import</span> <span class="n">SparseMatrixProxy</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.kernel_impl</span><span class="w"> </span><span class="kn">import</span> <span class="n">BoundQuadrantsCallable</span><span class="p">,</span> <span class="n">QuadrantsCallable</span>
