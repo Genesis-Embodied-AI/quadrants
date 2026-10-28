@@ -288,24 +288,24 @@ def test_compound_layout_fastcache(dtype: MatrixType, tmp_path: Path) -> None:
     """Reload each ndarray layout through fastcache and check that the restored kernel indexes it correctly."""
 
     @qd.kernel(fastcache=True)
-    def write(x: qd.Tensor) -> None:
+    def k1(x: qd.Tensor) -> None:
         test_utils.fill_tensor_with_index_codes(x)
 
     shape = (2, 4, 5)
     layouts = (None, (1, 0, 2), (2, 0, 1))
+    expected = test_utils.new_numpy_tensor_containing_index_codes(shape, dtype.get_shape())
 
     for expect_hit in (False, True):
         # Fastcache loads its compiled artifact from the disk cache; a fastcache hit must bypass frontend compilation.
         qd_init_same_arch(offline_cache=True, src_ll_cache=True, offline_cache_file_path=str(tmp_path))
-        assert not write._primal.compiled_kernel_data_by_key
-        assert not write._primal.materialized_kernels
+        assert not k1._primal.compiled_kernel_data_by_key
+        assert not k1._primal.materialized_kernels
 
         for layout in layouts:
             x = qd.tensor(dtype, shape, backend=qd.Backend.NDARRAY, layout=layout)
-            expected = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
-            write._primal.src_ll_cache_observations.cache_loaded = False
-            write._primal.fe_ll_cache_observations.cache_hit = False
-            write(x)
-            assert write._primal.src_ll_cache_observations.cache_loaded == expect_hit, layout
-            assert not write._primal.fe_ll_cache_observations.cache_hit
+            k1._primal.src_ll_cache_observations.cache_loaded = False
+            k1._primal.fe_ll_cache_observations.cache_hit = False
+            k1(x)
+            assert k1._primal.src_ll_cache_observations.cache_loaded == expect_hit, layout
+            assert not k1._primal.fe_ll_cache_observations.cache_hit
             np.testing.assert_array_equal(x.to_numpy(), expected)
