@@ -6,7 +6,8 @@ from typing import TYPE_CHECKING, TypeAlias, Union
 import numpy as np
 
 if TYPE_CHECKING:
-    from quadrants.lang.matrix import Matrix
+    from quadrants.lang.field import ScalarField
+    from quadrants.lang.matrix import Matrix, MatrixField
 
 
 _FillValue: TypeAlias = Union[int, float, numbers.Number, np.number, list, tuple, "Matrix", None]
@@ -34,17 +35,17 @@ def prepare_fill(value: _FillValue, element_shape=()):
 class FieldInitializers:
     """Runtime-owned initializers; ordinary field.fill calls never enter this queue."""
 
-    def __init__(self):
-        self.pending = []
+    def __init__(self) -> None:
+        self.pending: list[tuple["ScalarField | MatrixField", _FillValue]] = []
 
-    def add(self, field, value):
+    def add(self, field: "ScalarField | MatrixField", value: _FillValue) -> None:
         if value is not None:
             self.pending.append((field, value))
 
-    def clear(self):
+    def clear(self) -> None:
         self.pending.clear()
 
-    def run(self):
+    def run(self) -> None:
         if not self.pending:
             return
         # Fill kernels materialize recursively. Detach the queue before launching any of them.
