@@ -205,13 +205,13 @@ def test_compound_layout_numpy_export_is_independent(
     initial = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
     x.from_numpy(initial)
 
-    # Request a new NumPy array with its own storage. Its indices must have the same meaning as initial,
-    # including when x stores its axes in a different physical order.
+    # Request a new NumPy array with its own storage. Its indices must have the same meaning as initial, including when
+    # x stores its axes in a different physical order.
     copied = x.to_numpy(copy=True)
     np.testing.assert_array_equal(copied, initial)
 
-    # Overwrite the export with a value absent from the nonnegative index codes. If it shares storage with x,
-    # this write would also change x and the final comparison would fail.
+    # Overwrite the export with a value absent from the nonnegative index codes. If it shares storage with x, this write
+    # would also change x and the final comparison would fail.
     copied.fill(-1)
 
     # Read x again to verify that changing the exported array left every original value intact.

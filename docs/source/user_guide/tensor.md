@@ -113,9 +113,7 @@ b[i, j] = ...                   # canonical indexing in kernels still works
 
 Any permutation is supported, up to Quadrants' maximum number of tensor dimensions (`quadrants_max_num_indices`, a compile-time constant currently equal to 12). `layout=None` and the identity permutation (`(0, 1, ..., N-1)`) are equivalent and forward no permutation to the underlying allocator.
 
-For vector or matrix elements, pass the compound dtype to `qd.tensor`, or use `qd.Vector.tensor` / `qd.Matrix.tensor`.
-All three factories accept `layout=`. The permutation covers only the axes of `shape`; vector components and matrix
-rows/columns stay innermost in their original order:
+For vector or matrix elements, pass the compound dtype to `qd.tensor`, or use `qd.Vector.tensor` / `qd.Matrix.tensor`. All three factories accept `layout=`. The permutation covers only the axes of `shape`; vector components and matrix rows/columns stay innermost in their original order:
 
 ```python
 v = qd.tensor(qd.types.vector(3, qd.f32), shape=(4, 5), layout=(1, 0))
@@ -125,9 +123,7 @@ assert v.to_numpy().shape == (4, 5, 3)
 assert m.to_numpy().shape == (4, 5, 2, 3)
 ```
 
-The vector tensor above stores axis 1 outermost, then axis 0, then the three components. Indexing remains
-`v[i, j][component]`, and exports use canonical shape axes followed by component axes.
-The equivalent convenience-factory calls are:
+The vector tensor above stores axis 1 outermost, then axis 0, then the three components. Indexing remains `v[i, j][component]`, and exports use canonical shape axes followed by component axes. The equivalent convenience-factory calls are:
 
 ```python
 v = qd.Vector.tensor(3, qd.f32, shape=(4, 5), layout=(1, 0))
