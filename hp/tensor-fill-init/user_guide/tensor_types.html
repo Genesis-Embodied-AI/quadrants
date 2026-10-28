@@ -505,6 +505,19 @@
 <p>In this case, we provide the field to the kernel via a parameter, with typing type of <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code>.</p>
 </section>
 </section>
+<section id="initializing-fields">
+<h2>Initializing fields<a class="headerlink" href="#initializing-fields" title="Link to this heading">#</a></h2>
+<p>Use <code class="docutils literal notranslate"><span class="pre">fill=</span></code> to give a field an initial value:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">gravity</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(),</span> <span class="n">fill</span><span class="o">=-</span><span class="mf">9.81</span><span class="p">)</span>
+<span class="n">counter</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(),</span> <span class="n">fill</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">weights</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span> <span class="n">fill</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
+<span class="n">directions</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Vector</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">fill</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>Field allocation is deferred until Quadrants needs the storage. The initializer runs once at that point, before the first read or write, including access through a kernel or a zero-copy export. Declaring multiple fields with <code class="docutils literal notranslate"><span class="pre">fill=</span></code> lets Quadrants allocate them together. This avoids splitting the allocation with a separate <code class="docutils literal notranslate"><span class="pre">.fill()</span></code> call after each declaration, which can exhaust Metal’s buffer bindings when a kernel accesses many fields.</p>
+<p><code class="docutils literal notranslate"><span class="pre">fill=</span></code> also works with <code class="docutils literal notranslate"><span class="pre">qd.Matrix.field</span></code> and vector or matrix types passed to <code class="docutils literal notranslate"><span class="pre">qd.field</span></code>. A scalar initializes every component; a list, tuple, or Quadrants vector or matrix supplies per-component values. Mutable values are captured when the field is declared. Omitting <code class="docutils literal notranslate"><span class="pre">fill</span></code> or passing <code class="docutils literal notranslate"><span class="pre">None</span></code> preserves the existing allocation behavior. Only the field itself is initialized; its gradient and dual fields keep their default values. A field declared without <code class="docutils literal notranslate"><span class="pre">shape</span></code> must still be placed before use.</p>
+<p>For ndarray initialization, see <a class="reference internal" href="#ndarray">NDArray</a>.</p>
+</section>
 <section id="comparison-of-tensor-approaches">
 <h2>Comparison of tensor approaches<a class="headerlink" href="#comparison-of-tensor-approaches" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="table">
@@ -651,6 +664,7 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#field-args">Field args</a></li>
 </ul>
 </li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#initializing-fields">Initializing fields</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#comparison-of-tensor-approaches">Comparison of tensor approaches</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#under-the-covers-summary">Under the covers summary</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#encapsulation">Encapsulation</a></li>
