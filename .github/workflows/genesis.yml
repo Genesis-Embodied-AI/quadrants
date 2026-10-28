@@ -96,7 +96,7 @@ jobs:
       contents: read
       # To download the benchmark results of this very run.
       actions: read
-      # Keep checks permission while the shared workflow migrates from checks to commit statuses.
+      # FIXME: Keep checks permission while the shared workflow migrates from checks to commit statuses.
       checks: write
       statuses: write
       pull-requests: write
