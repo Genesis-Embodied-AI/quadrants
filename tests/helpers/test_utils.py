@@ -25,8 +25,8 @@ if TYPE_CHECKING:
 # Helper functions
 @qd.pyfunc
 def encode_index(I):
-    # Encode coordinates as an integer, e.g. [1, 2] -> 12.
-    # This encoding depends only on the index coordinates, not on the layout.
+    # Encode coordinates as an integer, e.g. [1, 2] -> 12. This encoding depends only on the index coordinates, not on
+    # the layout.
     index_code = 0
     for axis in qd.static(range(len(I))):
         index_code = index_code * 10 + I[axis]
@@ -38,8 +38,8 @@ def new_numpy_tensor_containing_index_codes(
 ) -> npt.NDArray[np.float32]:
     """Build NumPy values encoding every shape and component coordinate as decimal digits."""
     values = np.empty(shape + element_shape, dtype=np.float32)
-    # np.ndindex(values.shape) produces every index tuple in the array.
-    # E.g. for shape (2, 3), it yields (0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2).
+    # np.ndindex(values.shape) produces every index tuple in the array. E.g. for shape (2, 3), it yields (0, 0), (0, 1),
+    # (0, 2), (1, 0), (1, 1), (1, 2).
     for index in np.ndindex(values.shape):
         values[index] = encode_index(index)
     return values

@@ -147,9 +147,8 @@ def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
         backend (Backend, optional): Storage backend. Defaults to :attr:`Backend.NDARRAY`.
         layout (tuple of int, optional): Permutation of canonical axes describing the physical memory nesting order,
             outermost first. For a rank-N tensor, must be a permutation of ``range(N)``. ``None`` (default) and the
-            identity permutation both mean "natural row-major-like layout" (no permutation is applied).
-            For vector or matrix dtypes, only the shape axes are permuted; component axes remain innermost in their
-            original order.
+            identity permutation both mean "natural row-major-like layout" (no permutation is applied). For vector or
+            matrix dtypes, only the shape axes are permuted; component axes remain innermost in their original order.
 
             ``shape`` is always interpreted as the **canonical** shape (the shape you index inside kernels). The
             underlying allocation is automatically sized to the permuted *physical* shape, and kernel subscripts
