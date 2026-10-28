@@ -939,17 +939,15 @@ class Matrix(QuadrantsOperations):
         entries, entries_grad, entries_dual, entries_grad_checkbit = zip(*member_groups)
 
         field = MatrixField(entries, n, m, element_dim)
-        grad_field = MatrixField(entries_grad, n, m, element_dim) if all(entries_grad) else None
-        if grad_field is not None:
+        if all(entries_grad):
+            grad_field = MatrixField(entries_grad, n, m, element_dim)
             field._set_grad(grad_field)
-        dual_field = MatrixField(entries_dual, n, m, element_dim) if all(entries_dual) else None
-        if dual_field is not None:
+        if all(entries_dual):
+            dual_field = MatrixField(entries_dual, n, m, element_dim)
             field._set_dual(dual_field)
-        grad_checkbit_field = (
-            MatrixField(entries_grad_checkbit, n, m, element_dim)
-            if needs_grad and all(e is not None for e in entries_grad_checkbit)
-            else None
-        )
+        grad_checkbit_field = None
+        if needs_grad and all(e is not None for e in entries_grad_checkbit):
+            grad_checkbit_field = MatrixField(entries_grad_checkbit, n, m, element_dim)
 
         impl.get_runtime().matrix_fields.append(field)
 
