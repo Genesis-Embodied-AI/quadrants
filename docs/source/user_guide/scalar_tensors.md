@@ -29,7 +29,7 @@ Field allocation is deferred until Quadrants needs the storage. The initializer 
 
 `fill=` also works with `qd.Matrix.field` and vector or matrix types passed to `qd.field`. A scalar initializes every component; a list, tuple, or Quadrants vector or matrix supplies per-component values. Mutable values are captured when the field is declared. Omitting `fill` or passing `None` preserves the existing allocation behavior. Only the field itself is initialized; its gradient and dual fields keep their default values. A field declared without `shape` must still be placed before use.
 
-Calling `.fill()` retains its existing behavior: it submits a fill immediately, materializing pending allocations first. The `fill=` parameter applies to fields, not ndarrays.
+The `fill=` parameter applies to fields, not ndarrays.
 
 ## Accessing the value
 
