@@ -42,11 +42,21 @@ def test_fill_initializer_precedes_writes(operation):
                 field[i] += 2
 
         write()
-    qd.sync()
-    qd.sync()
     assert field[0] == 5
     assert field[1] == (3 if operation == "host" else 5)
     assert other[()] == 7
+
+
+@test_utils.test()
+def test_fill_initializer_is_not_replayed():
+    field = qd.field(qd.i32, shape=(), fill=3)
+    assert field[()] == 3
+    field[()] = 5
+
+    # Each sync calls materialize() again. Repeating it must not replay the initializer over the later write.
+    qd.sync()
+    qd.sync()
+    assert field[()] == 5
 
 
 @test_utils.test()
