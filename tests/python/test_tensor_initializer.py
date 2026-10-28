@@ -67,17 +67,18 @@ def test_tensor_initializer_components(backend, kind, scalar):
 @test_utils.test()
 def test_tensor_initializer_fields_share_tree():
     tensors = [qd.tensor(qd.i32, shape=(), backend=qd.Backend.FIELD, fill=i) for i in range(40)]
+    fields = [tensor._unwrap() for tensor in tensors]
     assert impl.get_runtime().get_num_compiled_functions() == 0
 
     @qd.kernel
     def total() -> qd.i32:
         result = 0
         for i in qd.static(range(40)):
-            result += tensors[i][None]
+            result += fields[i][None]
         return result
 
     assert total() == 780
-    assert len({tensor._unwrap().snode._snode_tree_id for tensor in tensors}) == 1
+    assert len({field.snode._snode_tree_id for field in fields}) == 1
     tensors[0].fill(9)
     assert total() == 789
 
