@@ -1971,7 +1971,7 @@
 <span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def take_slot():</span>
 <span class="sd">        &gt;&gt;&gt;     # Try to claim the slot only if it is currently empty (== 0).</span>
-<span class="sd">        &gt;&gt;&gt;     old = qd.atomic_cas(slot[None], 0, my_id)</span>
+<span class="sd">        &gt;&gt;&gt;     old = qd.atomic_cas(slot[()], 0, my_id)</span>
 <span class="sd">        &gt;&gt;&gt;     if old == 0:</span>
 <span class="sd">        &gt;&gt;&gt;         # we won the race; the slot is ours</span>
 <span class="sd">        &gt;&gt;&gt;         ...</span>
@@ -1981,11 +1981,11 @@
         <span class="k">if</span> <span class="n">old</span> <span class="o">==</span> <span class="n">expected</span><span class="p">:</span>
             <span class="n">x</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">desired</span>
         <span class="k">return</span> <span class="n">old</span>
-    <span class="c1"># Mirror @writeback_binary's Field guard: passing a raw Field (rather than `field[None]`) would otherwise</span>
+    <span class="c1"># Mirror @writeback_binary's Field guard: passing a raw Field (rather than `field[()]`) would otherwise</span>
     <span class="c1"># blow up later with a confusing AttributeError on `x.ptr`. Surface a clear QuadrantsSyntaxError instead.</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">Field</span><span class="p">):</span>
         <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-            <span class="s2">"cannot use a Field directly as the first operand of 'atomic_cas'; index it first (e.g. `field[None]`)"</span>
+            <span class="s2">"cannot use a Field directly as the first operand of 'atomic_cas'; index it first (e.g. `field[()]`)"</span>
         <span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">is_quadrants_expr</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="ow">and</span> <span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">is_lvalue</span><span class="p">()):</span>
         <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"cannot use a non-writable target as the first operand of 'atomic_cas'"</span><span class="p">)</span>
@@ -2047,7 +2047,7 @@
         <span class="k">return</span> <span class="n">target</span><span class="o">.</span><span class="n">item</span><span class="p">()</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="s2">"item"</span><span class="p">)</span> <span class="k">else</span> <span class="n">target</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="n">Field</span><span class="p">):</span>
         <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-            <span class="s2">"cannot pass a Field directly to 'qd.volatile_load'; index it first (e.g. `field[None]`)"</span>
+            <span class="s2">"cannot pass a Field directly to 'qd.volatile_load'; index it first (e.g. `field[()]`)"</span>
         <span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">is_quadrants_expr</span><span class="p">(</span><span class="n">target</span><span class="p">)</span> <span class="ow">and</span> <span class="n">target</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">is_lvalue</span><span class="p">()):</span>
         <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"qd.volatile_load requires an lvalue (field / ndarray subscript) as its argument"</span><span class="p">)</span>
