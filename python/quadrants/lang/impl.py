@@ -856,7 +856,7 @@ def _field(
     *,
     fill: _FillValue = None,
 ):
-    fill = capture_fill_value(fill)
+    captured_fill_value = capture_fill_value(fill)
     x, x_grad, x_dual, x_grad_checkbit = create_field_member(dtype, name, needs_grad, needs_dual)
     x = ScalarField(x)
     if x_grad:
@@ -942,7 +942,7 @@ def _field(
                 object.__setattr__(x_grad, "_qd_layout", _qd_layout)  # type: ignore[attr-defined]
             if x_dual is not None:
                 object.__setattr__(x_dual, "_qd_layout", _qd_layout)  # type: ignore[attr-defined]
-    get_runtime().field_initializers.add(x, fill)
+    get_runtime().field_initializers.add(x, captured_fill_value)
     return x
 
 
@@ -1005,10 +1005,10 @@ def field(dtype, shape=None, *args, fill: _FillValue = None, **kwargs):
                 shape = (*shape, dtype.n, dtype.m)
             dtype = dtype.dtype
         dtype = dtype_to_torch_dtype(dtype)
-        fill = capture_fill_value(fill, element_shape)
+        captured_fill_value = capture_fill_value(fill, element_shape)
         tensor = py_tensor.create_tensor(shape, dtype, batch_ndim=batch_ndim)
-        if fill is not None:
-            tensor.copy_(tensor.new_tensor(fill))
+        if captured_fill_value is not None:
+            tensor.copy_(tensor.new_tensor(captured_fill_value))
         return tensor
     if isinstance(dtype, MatrixType):
         if dtype.ndim == 1:
