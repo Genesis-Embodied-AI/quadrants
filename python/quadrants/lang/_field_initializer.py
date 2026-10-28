@@ -1,7 +1,7 @@
 """Allocation-time field initialization, replayed after placement is complete."""
 
 import numbers
-from typing import TYPE_CHECKING, TypeAlias, Union
+from typing import TYPE_CHECKING, Callable, TypeAlias, Union, cast
 
 import numpy as np
 
@@ -51,4 +51,7 @@ class FieldInitializers:
         # Fill kernels materialize recursively. Detach the queue before launching any of them.
         pending, self.pending = self.pending, []
         for field, value in pending:
-            field.fill(value)
+            # Field.fill's inherited annotation only covers scalars. Concrete fills also accept the component values
+            # already validated by the constructors.
+            fill = cast(Callable[[_FillValue], None], field.fill)
+            fill(value)
