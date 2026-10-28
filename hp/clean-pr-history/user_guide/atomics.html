@@ -596,9 +596,9 @@
     <span class="c1"># Atomically: x = max(x, candidate). The framework already has atomic_max for primitives, but the same</span>
     <span class="c1"># shape works for any reduction whose backend support is missing.</span>
     <span class="k">for</span> <span class="n">_attempt</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">MAX_RETRIES</span><span class="p">):</span>
-        <span class="n">cur</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span>
+        <span class="n">cur</span> <span class="o">=</span> <span class="n">x</span><span class="p">[()]</span>
         <span class="n">new</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">cur</span><span class="p">,</span> <span class="n">candidate</span><span class="p">)</span>
-        <span class="n">old</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">atomic_cas</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="kc">None</span><span class="p">],</span> <span class="n">cur</span><span class="p">,</span> <span class="n">new</span><span class="p">)</span>
+        <span class="n">old</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">atomic_cas</span><span class="p">(</span><span class="n">x</span><span class="p">[()],</span> <span class="n">cur</span><span class="p">,</span> <span class="n">new</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">old</span> <span class="o">==</span> <span class="n">cur</span><span class="p">:</span>
             <span class="k">break</span>  <span class="c1"># CAS landed; we're done.</span>
         <span class="c1"># Otherwise some other thread won the race; loop back and re-read.</span>
