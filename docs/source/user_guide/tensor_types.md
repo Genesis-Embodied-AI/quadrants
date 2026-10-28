@@ -37,6 +37,14 @@ Note that the typing for NDArray is `qd.types.NDArray[data_type, number_dimensio
 
 `number_dimensions` is optional: `qd.types.NDArray[qd.i32]` is also valid, and leaves `ndim` unspecified.
 
+Pass `fill=` to initialize an ndarray before the allocator returns:
+
+```python
+a = qd.ndarray(qd.f32, shape=(4, 5), fill=1.0)
+```
+
+Vector and matrix ndarrays also accept scalar or per-component initial values. See [Initial values](tensor.md#initial-values) for examples and supported value formats.
+
 ### Global field
 
 ```python
