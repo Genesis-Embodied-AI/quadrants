@@ -120,5 +120,6 @@ def test_tensor_initializer_dlpack(backend, matrix):
     else:
         tensor = qd.tensor(qd.f32, shape=(2, 3), backend=backend, layout=(1, 0), fill=7)
         expected = [[7] * 3] * 2
+    qd.sync()
     external = torch.utils.dlpack.from_dlpack(tensor.to_dlpack())
     np.testing.assert_array_equal(external.cpu().numpy(), expected)
