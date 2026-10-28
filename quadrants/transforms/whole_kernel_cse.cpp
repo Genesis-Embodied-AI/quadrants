@@ -124,6 +124,11 @@ class WholeKernelCSE : public BasicStmtVisitor {
   std::unordered_map<Stmt *, std::vector<Stmt *>> users_;
   UsersState users_state_ = UsersState::kUnbuilt;
 
+  // Statements eliminated in the current round. Erased together at the end of the round, one pass per block: the
+  // per-statement DelayedIRModifier::erase does a linear find + vector erase each, quadratic in the block size when
+  // many root-block statements are eliminated.
+  std::vector<Stmt *> to_erase_;
+
   // When true, only address-computation statements (Global/External/MatrixPtr) are eliminated; all other statements
   // are left untouched. Used pre-offload to merge same-address read/write pointers (the cheap, load-bearing part of
   // whole-kernel CSE) without doing the expensive whole-kernel compute dedup, which is deferred to per-task CSE.
@@ -257,6 +262,21 @@ class WholeKernelCSE : public BasicStmtVisitor {
     }
   }
 
+  bool erase_eliminated() {
+    if (to_erase_.empty()) {
+      return false;
+    }
+    std::unordered_map<Block *, std::unordered_set<Stmt *>> by_block;
+    for (auto *stmt : to_erase_) {
+      by_block[stmt->parent].insert(stmt);
+    }
+    for (auto &[block, stmts] : by_block) {
+      block->erase(std::move(stmts));
+    }
+    to_erase_.clear();
+    return true;
+  }
+
   void register_visible(std::size_t hash_value, Stmt *stmt) {
     visible_stmts_[hash_value].push_back(stmt);
     scope_inserts_.back().emplace_back(hash_value, stmt);
@@ -283,7 +303,7 @@ class WholeKernelCSE : public BasicStmtVisitor {
       for (auto *prev_stmt : it->second) {
         if (common_statement_eliminable(stmt, prev_stmt)) {
           replace_and_mark_undone(stmt, prev_stmt);
-          modifier_.erase(stmt);
+          to_erase_.push_back(stmt);
           return;
         }
       }
@@ -366,7 +386,10 @@ class WholeKernelCSE : public BasicStmtVisitor {
     while (true) {
       eliminator.begin_round(node);
       node->accept(&eliminator);
-      if (eliminator.modifier_.modify_ir())
+      // Inserts (if-branch hoisting) first, then erasures, as in DelayedIRModifier::modify_ir.
+      bool round_modified = eliminator.modifier_.modify_ir();
+      round_modified |= eliminator.erase_eliminated();
+      if (round_modified)
         modified = true;
       else
         break;
