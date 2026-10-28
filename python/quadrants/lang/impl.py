@@ -855,7 +855,7 @@ def _field(
     needs_grad=False,
     needs_dual=False,
     *,
-    fill: _FillValue = None,
+    fill: _FillValue | None = None,
 ):
     captured_fill_value = capture_fill_value(fill)
     x, x_grad, x_dual, x_grad_checkbit = create_field_member(dtype, name, needs_grad, needs_dual)
@@ -948,7 +948,7 @@ def _field(
 
 
 @python_scope
-def field(dtype, shape=None, *args, fill: _FillValue = None, **kwargs):
+def field(dtype, shape=None, *args, fill: _FillValue | None = None, **kwargs):
     """Defines a Quadrants field.
 
     A Quadrants field can be viewed as an abstract N-dimensional array, hiding away the complexity of how its
