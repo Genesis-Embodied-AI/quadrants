@@ -9,7 +9,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang.matrix import MatrixType
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 # Construction and indexing
 
