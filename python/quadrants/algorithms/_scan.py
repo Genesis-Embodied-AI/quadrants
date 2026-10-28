@@ -194,8 +194,8 @@ def _scan_total_scratch_slots(n, partials_cursor):
     Mirrors the level-by-level allocation that the recursion does internally: at each level we bump ``partials_cursor``
     by ``B = ceil(n / BLOCK_DIM)`` and recurse on ``B``, until ``B <= BLOCK_DIM`` (base case, no further partials).
     Callers (e.g. ``sort``) should use this helper for their *up-front* scratch check so they refuse the call before any
-    in-place mutation runs (see PR 693 review: a single-level estimate misses deeper recursion levels and lets
-    ``_twiddle_pass`` corrupt the user's keys before the recursive ``RuntimeError`` fires).
+    in-place mutation runs: a single-level estimate misses deeper recursion levels and lets ``_twiddle_pass`` corrupt
+    the user's keys before the recursive ``RuntimeError`` fires.
 
     Delegates to :func:`_level_partials_slots`, so it is host- **and** kernel-callable (branch-free arithmetic over
     an unrolled fixed loop); ``n`` / ``partials_cursor`` may be Python ``int`` s or device-read ``Expr`` s. The check

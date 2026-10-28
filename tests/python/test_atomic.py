@@ -964,7 +964,7 @@ def test_atomic_cas_on_float_field_raises(dtype):
 # Pins that atomic_cas on a Vector / Matrix destination is rejected at compile time. The other atomic ops fan
 # out to per-component scalar AtomicOpStmts via scalarize / lower_matrix_ptr, but those passes use the 3-arg
 # AtomicOpStmt constructor that drops `expected`. Until the scalarizers grow a 4-arg path, refusing tensor
-# CAS up front is the correct behaviour. Codex / alanray-tech P1 from PR #690 review.
+# CAS up front is the correct behaviour.
 @test_utils.test(arch=qd.gpu)
 def test_atomic_cas_on_vector_field_raises():
     f = qd.Vector.field(3, qd.i32, shape=())
@@ -981,7 +981,7 @@ def test_atomic_cas_on_vector_field_raises():
 # Pins that atomic_cas casts `expected` to match the destination element type, so plain Python int literals
 # work as the comparator on i64 destinations the same way they do for atomic_add. Without the cast in
 # AtomicOpExpression::type_check, this would either trip a backend type-mismatch assertion or silently
-# compare-then-corrupt at the codegen layer. Codex / alanray-tech P1 from PR #690 review.
+# compare-then-corrupt at the codegen layer.
 @test_utils.test(arch=qd.gpu)
 def test_atomic_cas_expected_int_literal_widens_to_i64():
     _skip_if_no_int64_atomic_rmw(qd.i64)
@@ -1002,7 +1002,7 @@ def test_atomic_cas_expected_int_literal_widens_to_i64():
 
 # Pins that passing a raw Field (instead of `field[()]`) to atomic_cas raises a clear QuadrantsSyntaxError
 # instead of a confusing AttributeError on x.ptr. Mirrors @writeback_binary's Field guard for the rest of the
-# qd.atomic_* family. alanray-tech nit from PR #690 review.
+# qd.atomic_* family.
 @test_utils.test()
 def test_atomic_cas_raw_field_raises_clear_error():
     f = qd.field(qd.i32, shape=())

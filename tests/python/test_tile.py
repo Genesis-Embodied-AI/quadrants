@@ -604,7 +604,7 @@ def test_solve_triangular_upper_raises(TILE, make_tile, tdim, m_size):
 
 
 # =============================================================================
-# Slice-syntax tests (PR 3: arr[r0:r1, c0:c1])
+# Slice-syntax tests (arr[r0:r1, c0:c1])
 # =============================================================================
 
 
@@ -1125,7 +1125,7 @@ def test_vec_slice_errors(TILE, make_tile, tdim, m_size, bad_slice):
 
 
 # =============================================================================
-# PR 4: public-API tests (TILE proxy, tensor_type, SharedArray)
+# Public-API tests (TILE proxy, tensor_type, SharedArray)
 # =============================================================================
 
 
