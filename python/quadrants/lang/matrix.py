@@ -904,7 +904,7 @@ class Matrix(QuadrantsOperations):
             mat_type = MatrixType(n, m, ndim=ndim if ndim is not None else 2, dtype=dtype)
             return impl.field(mat_type, shape=shape, fill=fill)
 
-        fill = capture_fill_value(fill, (n,) if ndim == 1 else (n, m))
+        captured_fill_value = capture_fill_value(fill, (n,) if ndim == 1 else (n, m))
         entries = []
         element_dim = ndim if ndim is not None else 2
         if isinstance(dtype, (list, tuple, np.ndarray)):
@@ -1035,7 +1035,7 @@ class Matrix(QuadrantsOperations):
                     entries_grad._qd_layout = _qd_layout
                 if needs_dual:
                     entries_dual._qd_layout = _qd_layout
-        impl.get_runtime().field_initializers.add(entries, fill)
+        impl.get_runtime().field_initializers.add(entries, captured_fill_value)
         return entries
 
     @classmethod
