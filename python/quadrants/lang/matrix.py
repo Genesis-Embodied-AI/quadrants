@@ -906,7 +906,7 @@ class Matrix(QuadrantsOperations):
             return impl.field(mat_type, shape=shape, fill=fill)
 
         captured_fill_value = capture_fill_value(fill, (n,) if ndim == 1 else (n, m))
-        entries = []
+        member_groups = []
         element_dim = ndim if ndim is not None else 2
         if isinstance(dtype, (list, tuple, np.ndarray)):
             # set different dtype for each element in Matrix — see #2135
@@ -915,7 +915,7 @@ class Matrix(QuadrantsOperations):
                     len(np.shape(dtype)) == 1 and len(dtype) == n
                 ), f"Please set correct dtype list for Vector. The shape of dtype list should be ({n}, ) instead of {np.shape(dtype)}"
                 for i in range(n):
-                    entries.append(
+                    member_groups.append(
                         impl.create_field_member(
                             dtype[i],
                             name=name,
@@ -929,7 +929,7 @@ class Matrix(QuadrantsOperations):
                 ), f"Please set correct dtype list for Matrix. The shape of dtype list should be ({n}, {m}) instead of {np.shape(dtype)}"
                 for i in range(n):
                     for j in range(m):
-                        entries.append(
+                        member_groups.append(
                             impl.create_field_member(
                                 dtype[i][j],
                                 name=name,
@@ -939,21 +939,25 @@ class Matrix(QuadrantsOperations):
                         )
         else:
             for _ in range(n * m):
-                entries.append(impl.create_field_member(dtype, name=name, needs_grad=needs_grad, needs_dual=needs_dual))
-        entries, entries_grad, entries_dual, entries_grad_checkbit = zip(*entries)
+                member_groups.append(
+                    impl.create_field_member(dtype, name=name, needs_grad=needs_grad, needs_dual=needs_dual)
+                )
+        entries, entries_grad, entries_dual, entries_grad_checkbit = zip(*member_groups)
 
-        entries = MatrixField(entries, n, m, element_dim)
-        if all(entries_grad):
-            entries_grad = MatrixField(entries_grad, n, m, element_dim)
-            entries._set_grad(entries_grad)
-        if all(entries_dual):
-            entries_dual = MatrixField(entries_dual, n, m, element_dim)
-            entries._set_dual(entries_dual)
-        entries_grad_checkbit_field = None
-        if needs_grad and all(e is not None for e in entries_grad_checkbit):
-            entries_grad_checkbit_field = MatrixField(entries_grad_checkbit, n, m, element_dim)
+        field = MatrixField(entries, n, m, element_dim)
+        grad_field = MatrixField(entries_grad, n, m, element_dim) if all(entries_grad) else None
+        if grad_field is not None:
+            field._set_grad(grad_field)
+        dual_field = MatrixField(entries_dual, n, m, element_dim) if all(entries_dual) else None
+        if dual_field is not None:
+            field._set_dual(dual_field)
+        grad_checkbit_field = (
+            MatrixField(entries_grad_checkbit, n, m, element_dim)
+            if needs_grad and all(e is not None for e in entries_grad_checkbit)
+            else None
+        )
 
-        impl.get_runtime().matrix_fields.append(entries)
+        impl.get_runtime().matrix_fields.append(field)
 
         if shape is None:
             if offset is not None:
@@ -996,48 +1000,42 @@ class Matrix(QuadrantsOperations):
             if order is not None and offset is not None:
                 phys_offset = tuple(offset[axis_seq[p]] for p in range(dim))
             if layout == Layout.SOA:
-                for e in entries._get_field_members():
-                    impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
-                        ScalarField(e), offset=phys_offset
-                    )
+                for e in field._get_field_members():
+                    impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(ScalarField(e), offset=phys_offset)
                 if needs_grad:
-                    for e in entries_grad._get_field_members():
+                    for e in grad_field._get_field_members():
                         impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
                             ScalarField(e), offset=phys_offset
                         )
-                    if entries_grad_checkbit_field is not None:
-                        for e in entries_grad_checkbit_field._get_field_members():
+                    if grad_checkbit_field is not None:
+                        for e in grad_checkbit_field._get_field_members():
                             impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
                                 ScalarField(e), offset=phys_offset
                             )
                 if needs_dual:
-                    for e in entries_dual._get_field_members():
+                    for e in dual_field._get_field_members():
                         impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
                             ScalarField(e), offset=phys_offset
                         )
             else:
-                impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(entries, offset=phys_offset)
+                impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(field, offset=phys_offset)
                 if needs_grad:
-                    impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
-                        entries_grad, offset=phys_offset
-                    )
-                    if entries_grad_checkbit_field is not None:
+                    impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(grad_field, offset=phys_offset)
+                    if grad_checkbit_field is not None:
                         impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
-                            entries_grad_checkbit_field, offset=phys_offset
+                            grad_checkbit_field, offset=phys_offset
                         )
                 if needs_dual:
-                    impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
-                        entries_dual, offset=phys_offset
-                    )
+                    impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(dual_field, offset=phys_offset)
             if order is not None:
                 _qd_layout = tuple(axis_seq)
-                entries._qd_layout = _qd_layout
+                field._qd_layout = _qd_layout
                 if needs_grad:
-                    entries_grad._qd_layout = _qd_layout
+                    grad_field._qd_layout = _qd_layout
                 if needs_dual:
-                    entries_dual._qd_layout = _qd_layout
-        impl.get_runtime().field_initializers.add(entries, captured_fill_value)
-        return entries
+                    dual_field._qd_layout = _qd_layout
+        impl.get_runtime().field_initializers.add(field, captured_fill_value)
+        return field
 
     @classmethod
     @python_scope
