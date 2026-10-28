@@ -12,7 +12,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 # These tests only run when QD_KERNEL_COVERAGE=1
 pytestmark = pytest.mark.skipif(
@@ -368,9 +368,9 @@ def test_kernel_coverage_autodiff():
 
     @qd.kernel
     def compute():
-        loss[None] = x[None] * x[None]
+        loss[()] = x[()] * x[()]
 
-    x[None] = 5.0
+    x[()] = 5.0
 
     probe_count_before = _kernel_coverage._probe_counter
 
@@ -390,8 +390,8 @@ def test_kernel_coverage_autodiff():
     assert len(fired) > 0, "Forward pass inside Tape should produce fired coverage probes"
 
     # Verify backward pass computes correct gradients
-    assert loss[None] == pytest.approx(25.0)
-    assert x.grad[None] == pytest.approx(10.0)
+    assert loss[()] == pytest.approx(25.0)
+    assert x.grad[()] == pytest.approx(10.0)
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda])

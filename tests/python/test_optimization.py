@@ -1,6 +1,6 @@
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test()
@@ -14,14 +14,14 @@ def test_advanced_store_forwarding_nested_loops():
         # we should pass the last local store into the loop, rather than use
         # an empty AllocaOptimize loop.
         # See https://github.com/taichi-dev/taichi/pull/849.
-        a = val[None]
+        a = val[()]
         for i in range(1):
             for j in range(1):
-                val[None] = a
+                val[()] = a
 
-    val[None] = 10
+    val[()] = 10
     func()
-    assert val[None] == 10
+    assert val[()] == 10
 
 
 @test_utils.test()
@@ -32,21 +32,21 @@ def test_advanced_unused_store_elimination_if():
     @qd.kernel
     def func():
         a = 1
-        if val[None]:
+        if val[()]:
             a = 2
-            if val[None]:
+            if val[()]:
                 a = 3
             else:
                 a = 4
-            val[None] = a
+            val[()] = a
         else:
-            val[None] = a
+            val[()] = a
 
-    val[None] = 0
+    val[()] = 0
     func()
-    assert val[None] == 1
+    assert val[()] == 1
     func()
-    assert val[None] == 3
+    assert val[()] == 3
 
 
 @test_utils.test()
@@ -94,16 +94,16 @@ def test_advanced_store_forwarding_continue_in_if():
                     continue
                 a = 100
             a = 1000
-            val[None] = a + b
+            val[()] = a + b
 
     func(1)
-    assert val[None] == 1010
+    assert val[()] == 1010
     func(5)
-    assert val[None] == 1410
+    assert val[()] == 1410
     func(6)
-    assert val[None] == 1510
+    assert val[()] == 1510
     func(7)
-    assert val[None] == 1515
+    assert val[()] == 1515
 
 
 @test_utils.test()
@@ -118,15 +118,15 @@ def test_advanced_store_elimination_in_loop():
             a = 1
             for i in range(5):
                 b = 1
-                val[None] = a + b
+                val[()] = a + b
                 b = 0
                 a = 2
                 a = 3
             a = 4
-            val[None] += a
+            val[()] += a
 
     func()
-    assert val[None] == 8
+    assert val[()] == 8
 
 
 @test_utils.test()

@@ -10,7 +10,7 @@ from quadrants.lang._fast_caching.args_hasher import FastcacheSkip
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import has_pytorch
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 if has_pytorch():
     import torch

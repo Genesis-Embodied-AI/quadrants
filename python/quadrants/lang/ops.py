@@ -1537,7 +1537,7 @@ def atomic_cas(x, expected, desired):
         >>> @qd.kernel
         >>> def take_slot():
         >>>     # Try to claim the slot only if it is currently empty (== 0).
-        >>>     old = qd.atomic_cas(slot[None], 0, my_id)
+        >>>     old = qd.atomic_cas(slot[()], 0, my_id)
         >>>     if old == 0:
         >>>         # we won the race; the slot is ours
         >>>         ...
@@ -1547,11 +1547,11 @@ def atomic_cas(x, expected, desired):
         if old == expected:
             x[()] = desired
         return old
-    # Mirror @writeback_binary's Field guard: passing a raw Field (rather than `field[None]`) would otherwise
+    # Mirror @writeback_binary's Field guard: passing a raw Field (rather than `field[()]`) would otherwise
     # blow up later with a confusing AttributeError on `x.ptr`. Surface a clear QuadrantsSyntaxError instead.
     if isinstance(x, Field):
         raise QuadrantsSyntaxError(
-            "cannot use a Field directly as the first operand of 'atomic_cas'; index it first (e.g. `field[None]`)"
+            "cannot use a Field directly as the first operand of 'atomic_cas'; index it first (e.g. `field[()]`)"
         )
     if not (is_quadrants_expr(x) and x.ptr.is_lvalue()):
         raise QuadrantsSyntaxError("cannot use a non-writable target as the first operand of 'atomic_cas'")
@@ -1610,7 +1610,7 @@ def volatile_load(target):
         return target.item() if hasattr(target, "item") else target
     if isinstance(target, Field):
         raise QuadrantsSyntaxError(
-            "cannot pass a Field directly to 'qd.volatile_load'; index it first (e.g. `field[None]`)"
+            "cannot pass a Field directly to 'qd.volatile_load'; index it first (e.g. `field[()]`)"
         )
     if not (is_quadrants_expr(target) and target.ptr.is_lvalue()):
         raise QuadrantsSyntaxError("qd.volatile_load requires an lvalue (field / ndarray subscript) as its argument")

@@ -12,7 +12,7 @@ silently mis-index or crash.
 import quadrants as qd
 from quadrants._tensor import _with_layout
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 def _allocate(M, N, layout=None, dtype=qd.i32):

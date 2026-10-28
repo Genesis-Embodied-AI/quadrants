@@ -5,7 +5,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 from tests.helpers.runtime import qd_init_same_arch
 
 _KERNEL_COVERAGE = os.environ.get("QD_KERNEL_COVERAGE") == "1"

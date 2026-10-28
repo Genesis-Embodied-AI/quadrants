@@ -10,7 +10,7 @@ import numpy as np
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 N = 128
 BLOCK = 32

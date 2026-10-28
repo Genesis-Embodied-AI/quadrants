@@ -16,7 +16,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 # ---------------------------------------------------------------------------
 # 1. Int + float members are runtime args: mutate between launches, values take effect without recompiling.
