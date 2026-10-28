@@ -15,7 +15,11 @@ from quadrants._lib.core.quadrants_python import (
     Program,
 )
 from quadrants._snode import fields_builder
-from quadrants.lang._field_initializer import FieldInitializers, _FillValue, prepare_fill
+from quadrants.lang._field_initializer import (
+    FieldInitializers,
+    _FillValue,
+    prepare_fill,
+)
 from quadrants.lang._ndarray import Ndarray, ScalarNdarray
 from quadrants.lang._ndarray_initializer import initialize_ndarray
 from quadrants.lang._ndrange import GroupedNDRange, _Ndrange
