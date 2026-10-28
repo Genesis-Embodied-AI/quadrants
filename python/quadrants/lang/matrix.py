@@ -950,9 +950,9 @@ class Matrix(QuadrantsOperations):
         if all(entries_dual):
             dual_field = MatrixField(entries_dual, n, m, element_dim)
             field._set_dual(dual_field)
-        grad_checkbit_field = None
+        entries_grad_checkbit_field = None
         if needs_grad and all(e is not None for e in entries_grad_checkbit):
-            grad_checkbit_field = MatrixField(entries_grad_checkbit, n, m, element_dim)
+            entries_grad_checkbit_field = MatrixField(entries_grad_checkbit, n, m, element_dim)
 
         impl.get_runtime().matrix_fields.append(field)
 
@@ -1006,8 +1006,8 @@ class Matrix(QuadrantsOperations):
                         impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
                             ScalarField(e), offset=phys_offset
                         )
-                    if grad_checkbit_field is not None:
-                        for e in grad_checkbit_field._get_field_members():
+                    if entries_grad_checkbit_field is not None:
+                        for e in entries_grad_checkbit_field._get_field_members():
                             impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
                                 ScalarField(e), offset=phys_offset
                             )
@@ -1020,9 +1020,9 @@ class Matrix(QuadrantsOperations):
                 impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(field, offset=phys_offset)
                 if needs_grad:
                     impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(grad_field, offset=phys_offset)
-                    if grad_checkbit_field is not None:
+                    if entries_grad_checkbit_field is not None:
                         impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
-                            grad_checkbit_field, offset=phys_offset
+                            entries_grad_checkbit_field, offset=phys_offset
                         )
                 if needs_dual:
                     impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(dual_field, offset=phys_offset)
