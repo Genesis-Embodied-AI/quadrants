@@ -847,7 +847,7 @@ Module Contents
        >>> @qd.kernel
        >>> def take_slot():
        >>>     # Try to claim the slot only if it is currently empty (== 0).
-       >>>     old = qd.atomic_cas(slot[None], 0, my_id)
+       >>>     old = qd.atomic_cas(slot[()], 0, my_id)
        >>>     if old == 0:
        >>>         # we won the race; the slot is ours
        >>>         ...
