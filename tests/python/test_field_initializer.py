@@ -10,19 +10,15 @@ from tests.helpers import test_utils
 @test_utils.test()
 def test_fill_initializer_shares_tree():
     fields = [qd.field(qd.f32, shape=(), fill=i) for i in range(40)]
-    total = qd.field(qd.f32, shape=())
     assert impl.get_runtime().get_num_compiled_functions() == 0
 
     @qd.kernel
-    def sum_fields():
-        acc = 0.0
-        for i in qd.static(range(40)):
-            acc += fields[i][None]
-        total[None] = acc
+    def read_field(field: qd.Template) -> qd.f32:
+        return field[None]
 
-    sum_fields()
-    assert total[None] == 780
-    assert len({field.snode._snode_tree_id for field in fields + [total]}) == 1
+    for i, field in enumerate(fields):
+        assert read_field(field) == i
+    assert len({field.snode._snode_tree_id for field in fields}) == 1
 
 
 @pytest.mark.parametrize("operation", ["fill", "host", "numpy", "kernel"])
