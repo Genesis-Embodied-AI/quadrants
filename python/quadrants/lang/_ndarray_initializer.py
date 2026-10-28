@@ -1,4 +1,4 @@
-"""Initialization for the ndarray branch of the tensor factories."""
+"""Allocation-time initialization for ndarray factories."""
 
 
 def initialize_ndarray(array, value):
@@ -11,6 +11,10 @@ def initialize_ndarray(array, value):
         prepare_fill,
     )
 
+    if impl.is_python_backend():
+        value = prepare_fill(value, tuple(array.size()[len(array.shape) :]))
+        array.copy_(array.new_tensor(value))
+        return array
     value = prepare_fill(value, array.element_shape)
     array.fill(value)
     # A consumer of to_dlpack() may use a different device queue. Complete allocation-time initialization before

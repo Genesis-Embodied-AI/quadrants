@@ -17,6 +17,7 @@ from quadrants._lib.core.quadrants_python import (
 from quadrants._snode import fields_builder
 from quadrants.lang._field_initializer import FieldInitializers, prepare_fill
 from quadrants.lang._ndarray import Ndarray, ScalarNdarray
+from quadrants.lang._ndarray_initializer import initialize_ndarray
 from quadrants.lang._ndrange import GroupedNDRange, _Ndrange
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.buffer_view import BufferView
@@ -1014,12 +1015,14 @@ def field(dtype, shape=None, *args, fill=None, **kwargs):
 
 
 @python_scope
-def ndarray(dtype, shape, needs_grad=False):
+def ndarray(dtype, shape, needs_grad=False, *, fill=None):
     """Defines a Quadrants ndarray with scalar elements.
 
     Args:
         dtype (Union[DataType, MatrixType]): Data type of each element. This can be either a scalar type like qd.f32 or a compound type like qd.types.vector(3, qd.i32).
         shape (Union[int, tuple[int]]): Shape of the ndarray.
+        fill (optional): Initial scalar or per-component values, applied before returning the ndarray. None (default)
+            preserves the allocator's default values. Gradient buffers are not filled.
 
     Example:
         The code below shows how a Quadrants ndarray with scalar elements can be declared and defined::
@@ -1047,7 +1050,7 @@ def ndarray(dtype, shape, needs_grad=False):
         if type(shape) == int:
             shape = (shape,)
         dtype = dtype_to_torch_dtype(dtype)
-        return py_tensor.create_tensor(shape, dtype, batch_ndim=batch_ndim)
+        return initialize_ndarray(py_tensor.create_tensor(shape, dtype, batch_ndim=batch_ndim), fill)
     if not all((isinstance(x, int) or isinstance(x, np.integer)) and x > 0 and x <= 2**31 - 1 for x in shape):
         raise QuadrantsRuntimeError(f"{shape} is not a valid shape for ndarray")
     if dtype in all_types:
@@ -1069,7 +1072,7 @@ def ndarray(dtype, shape, needs_grad=False):
             )
         x_grad = ndarray(dtype, shape, needs_grad=False)
         x._set_grad(x_grad)  # type: ignore[arg-type]
-    return x
+    return initialize_ndarray(x, fill)
 
 
 @quadrants_scope

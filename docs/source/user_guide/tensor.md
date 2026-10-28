@@ -71,6 +71,16 @@ A scalar fills every component. Vector and matrix tensors also accept per-compon
 
 With `Backend.FIELD`, initialization is deferred with allocation, so consecutive declarations can share storage allocation without an intervening kernel launch. With `Backend.NDARRAY`, initialization completes before the factory returns. Calling `.fill()` on an existing tensor keeps its existing behavior.
 
+The underlying ndarray allocators also accept `fill=` directly, with the same value formats and completed initialization before return:
+
+```python
+weights = qd.ndarray(qd.f32, shape=(4, 5), fill=1.0)
+directions = qd.Vector.ndarray(3, qd.f32, shape=8, fill=[0, 0, 1])
+matrices = qd.Matrix.ndarray(2, 2, qd.f32, shape=4, fill=[[1, 0], [0, 1]])
+```
+
+Vector and matrix types passed to `qd.ndarray` support `fill=` too. Gradient buffers retain their default values when `needs_grad=True`.
+
 ## Gradients
 
 `needs_grad=True` works on every tensor factory and on every backend, by passing the keyword through to the underlying `qd.field` / `qd.ndarray` call. Enabling it allocates a matching gradient buffer, reachable as `.grad`, alongside the tensor's own forward values (the *primal*):
