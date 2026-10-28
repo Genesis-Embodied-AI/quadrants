@@ -540,8 +540,6 @@ void SpirvOperations::init_random_function(Value global_tmp_) {
     // Yes, this is not an atomic operation, but just fine since no matter
     // how RAND_STATE changes, `gl_GlobalInvocationID.x` can still help
     // us to set different seeds for different threads.
-    // Discussion:
-    // https://github.com/taichi-dev/taichi/pull/912#discussion_r419021918
     Value tmp9 = load_var(rand_gtmp_, ir_.u32_type());
     Value tmp10 = ir_.new_value(ir_.u32_type(), ValueKind::kNormal);
     ir_.make_function_header_inst(spv::Op::OpIAdd, ir_.u32_type(), tmp10, tmp9, _1);

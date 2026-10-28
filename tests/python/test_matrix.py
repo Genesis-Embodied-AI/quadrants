@@ -298,7 +298,7 @@ def test_matrix_to_list():
 
 @test_utils.test()
 def test_matrix_needs_grad():
-    # Just make sure the usage doesn't crash, see https://github.com/taichi-dev/taichi/pull/1545
+    # Just make sure the usage doesn't crash.
     n = 8
     m1 = qd.Matrix.field(2, 2, qd.f32, n, needs_grad=True)
     m2 = qd.Matrix.field(2, 2, qd.f32, n, needs_grad=True)
