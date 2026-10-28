@@ -2,7 +2,6 @@
 
 import copy
 import pickle
-import sys
 
 import numpy as np
 import pytest
@@ -515,16 +514,8 @@ def test_compound_layout_dlpack_writes(backend: qd.Backend, dtype: MatrixType, l
     ],
 )
 @test_utils.test()
-def test_compound_layout_grad(backend: qd.Backend, dtype: MatrixType, request: pytest.FixtureRequest) -> None:
+def test_compound_layout_grad(backend: qd.Backend, dtype: MatrixType) -> None:
     """Check that gradients retain the layout and compute correct values across different input and output layouts."""
-    if sys.platform == "darwin" and qd.lang.impl.current_cfg().arch == qd.vulkan and backend == qd.Backend.NDARRAY:
-        request.node.add_marker(
-            pytest.mark.xfail(
-                reason="MoltenVK forwards ndarray gradient loads past the stores that clear them",
-                raises=AssertionError,
-                strict=True,
-            )
-        )
     shape = (2, 4, 5)
     x = qd.tensor(dtype, shape, backend=backend, layout=(2, 0, 1), needs_grad=True)
     y = qd.tensor(dtype, x.shape, backend=backend, layout=(1, 0, 2), needs_grad=True)
