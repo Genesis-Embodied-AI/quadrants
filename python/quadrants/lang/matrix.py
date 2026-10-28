@@ -903,7 +903,9 @@ class Matrix(QuadrantsOperations):
             mat_type = MatrixType(n, m, ndim=ndim if ndim is not None else 2, dtype=dtype)
             return impl.field(mat_type, shape=shape, fill=fill)
 
-        from quadrants.lang.field_initializer import prepare_fill  # pylint: disable=C0415
+        from quadrants.lang.field_initializer import (
+            prepare_fill,  # pylint: disable=C0415
+        )
 
         fill = prepare_fill(fill, (n,) if ndim == 1 else (n, m))
         entries = []
