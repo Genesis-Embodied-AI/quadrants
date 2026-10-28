@@ -17,6 +17,8 @@ annotation. Dispatch sites check ``annotation is Tensor`` (the class). See ``_fu
 
 from enum import IntEnum
 
+from quadrants._tensor_initializer import initialize_ndarray as _initialize_ndarray
+
 # Re-export so ``from quadrants._tensor import *`` still binds ``Tensor`` — keeps the wildcard import in
 # ``__init__.py`` simple and atomic.
 from quadrants._tensor_wrapper import Tensor
@@ -103,8 +105,8 @@ def _coerce_backend(backend):
 #
 # ``layout=`` is on the scalar ``qd.tensor`` factory only; the Vector/Matrix factories reject it because layout
 # semantics over an extra element axis are out of scope for now.
-_SCALAR_ACCEPTED_KWARGS = frozenset({"backend", "needs_grad", "layout"})
-_VEC_MAT_ACCEPTED_KWARGS = frozenset({"backend", "needs_grad"})
+_SCALAR_ACCEPTED_KWARGS = frozenset({"backend", "needs_grad", "layout", "fill"})
+_VEC_MAT_ACCEPTED_KWARGS = frozenset({"backend", "needs_grad", "fill"})
 
 
 def _validate_kwargs(kwargs, *, factory_name, accepted):
@@ -144,7 +146,7 @@ def _layout_to_order(layout, ndim):
     return "".join(chr(ord("i") + axis) for axis in layout)
 
 
-def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
+def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, fill=None, **kwargs):
     """Allocate a tensor on the chosen backend, optionally with a custom physical layout.
 
     Thin dispatcher over :func:`quadrants.field` and :func:`quadrants.ndarray` that selects between the two via the
@@ -162,6 +164,8 @@ def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
             underlying allocation is automatically sized to the permuted *physical* shape, and kernel subscripts
             ``x[i, j, ...]`` are rewritten to hit the right physical slot. Supported on both ``Backend.FIELD`` and
             ``Backend.NDARRAY``.
+        fill (optional): Initial scalar or per-component values. Field initialization is deferred with allocation;
+            ndarrays are initialized before returning. None (default) preserves the allocator's default values.
 
     Returns:
         A ``ScalarField`` when ``backend == Backend.FIELD``, or an ``Ndarray`` when ``backend == Backend.NDARRAY``. In
@@ -213,7 +217,7 @@ def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
     if backend is Backend.FIELD:
         if order is not None:
             forwarded["order"] = order
-        f = impl.field(dtype, shape, **forwarded)
+        f = impl.field(dtype, shape, fill=fill, **forwarded)
         # The canonical->physical layout permutation is attached by ``_field`` itself via ``_qd_layout`` (identical
         # attribute to the one ``Ndarray`` uses). The AST subscript rewrite in ``build_Subscript`` /
         # ``build_struct_for`` reads it to permute user-supplied canonical indices into physical storage order;
@@ -221,7 +225,7 @@ def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
         return _wrap_impl(f)
     if backend is Backend.NDARRAY:
         if order is None:
-            return _wrap_impl(impl.ndarray(dtype, shape, **forwarded))
+            return _wrap_impl(_initialize_ndarray(impl.ndarray(dtype, shape, **forwarded), fill))
         # Non-identity layout: allocate at the physical (permuted) shape and tag the result so the kernel-side
         # subscript rewrite picks up the canonical -> physical translation.
         assert layout is not None  # implied by `order is not None`
@@ -232,11 +236,11 @@ def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
         # kernel code reading x.grad[i, j, ...] goes through the same canonical->physical AST rewrite as the primal
         # access.
         _with_layout(arr, layout_t)
-        return _wrap_impl(arr)
+        return _wrap_impl(_initialize_ndarray(arr, fill))
     raise AssertionError(f"unhandled Backend member: {backend!r}")
 
 
-def _tensor_vec(n, dtype, shape, *, backend=Backend.NDARRAY, **kwargs):
+def _tensor_vec(n, dtype, shape, *, backend=Backend.NDARRAY, fill=None, **kwargs):
     """Private impl backing ``qd.Vector.tensor``.
 
     Dispatcher over ``qd.Vector.field`` and ``qd.Vector.ndarray`` selected by the ``backend=`` keyword. Not part of
@@ -251,13 +255,13 @@ def _tensor_vec(n, dtype, shape, *, backend=Backend.NDARRAY, **kwargs):
     from quadrants.lang.matrix import Vector
 
     if backend is Backend.FIELD:
-        return VectorTensor(Vector.field(n, dtype, shape, **forwarded))
+        return VectorTensor(Vector.field(n, dtype, shape, fill=fill, **forwarded))
     if backend is Backend.NDARRAY:
-        return VectorTensor(Vector.ndarray(n, dtype, shape, **forwarded))
+        return VectorTensor(_initialize_ndarray(Vector.ndarray(n, dtype, shape, **forwarded), fill))
     raise AssertionError(f"unhandled Backend member: {backend!r}")
 
 
-def _tensor_mat(n, m, dtype, shape, *, backend=Backend.NDARRAY, **kwargs):
+def _tensor_mat(n, m, dtype, shape, *, backend=Backend.NDARRAY, fill=None, **kwargs):
     """Private impl backing ``qd.Matrix.tensor``.
 
     Dispatcher over ``qd.Matrix.field`` and ``qd.Matrix.ndarray`` selected by the ``backend=`` keyword. Not part of
@@ -272,7 +276,7 @@ def _tensor_mat(n, m, dtype, shape, *, backend=Backend.NDARRAY, **kwargs):
     from quadrants.lang.matrix import Matrix
 
     if backend is Backend.FIELD:
-        return MatrixTensor(Matrix.field(n, m, dtype, shape, **forwarded))
+        return MatrixTensor(Matrix.field(n, m, dtype, shape, fill=fill, **forwarded))
     if backend is Backend.NDARRAY:
-        return MatrixTensor(Matrix.ndarray(n, m, dtype, shape, **forwarded))
+        return MatrixTensor(_initialize_ndarray(Matrix.ndarray(n, m, dtype, shape, **forwarded), fill))
     raise AssertionError(f"unhandled Backend member: {backend!r}")

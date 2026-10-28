@@ -56,6 +56,21 @@ u = qd.Vector.tensor(3, qd.f32, shape=(4,), backend=qd.Backend.FIELD)
 m = qd.Matrix.tensor(2, 2, qd.f32, shape=(3,))
 ```
 
+## Initial values
+
+Pass `fill=` to initialize a tensor at allocation. All three factories support it on both storage backends:
+
+```python
+weights = qd.tensor(qd.f32, shape=(4, 5), fill=1.0)
+gravity = qd.tensor(qd.f32, shape=(), backend=qd.Backend.FIELD, fill=-9.81)
+directions = qd.Vector.tensor(3, qd.f32, shape=8, fill=[0, 0, 1])
+matrices = qd.Matrix.tensor(2, 2, qd.f32, shape=4, fill=[[1, 0], [0, 1]])
+```
+
+A scalar fills every component. Vector and matrix tensors also accept per-component lists, tuples, or Quadrants vectors and matrices. The values are captured at declaration. Omitting `fill` or passing `None` preserves the allocator's defaults. `fill=` works with `layout=` and initializes only the tensor's forward values, leaving gradient buffers at their defaults.
+
+With `Backend.FIELD`, initialization is deferred with allocation, so consecutive declarations can share storage allocation without an intervening kernel launch. With `Backend.NDARRAY`, initialization completes before the factory returns. Calling `.fill()` on an existing tensor keeps its existing behavior.
+
 ## Gradients
 
 `needs_grad=True` works on every tensor factory and on every backend, by passing the keyword through to the underlying `qd.field` / `qd.ndarray` call. Enabling it allocates a matching gradient buffer, reachable as `.grad`, alongside the tensor's own forward values (the *primal*):
