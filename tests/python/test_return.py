@@ -360,3 +360,18 @@ def test_ret_4k():
     ret = foo()
     for i in range(1024):
         assert ret[i] == i
+
+
+@test_utils.test(print_full_traceback=False)
+def test_python_matrix_return_dimension_mismatch():
+    value = qd.Matrix([[1, 2], [3, 4]])
+
+    def matrix_value():
+        return value
+
+    @qd.kernel
+    def foo() -> qd.types.vector(4, qd.i32):
+        return matrix_value()
+
+    with pytest.raises(qd.QuadrantsCompilationError, match="Return matrix ndim mismatch, expecting=1, got=2"):
+        foo()

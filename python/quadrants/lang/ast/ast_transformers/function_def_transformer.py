@@ -548,7 +548,7 @@ class FunctionDefTransformer:
     def build_FunctionDef(
         ctx: ASTTransformerFuncContext,
         node: ast.FunctionDef,
-        build_stmts: Callable[[ASTTransformerFuncContext, list[ast.stmt]], None],
+        build_stmts: Callable[[ASTTransformerFuncContext, list[ast.stmt]], list[ast.stmt]],
     ) -> None:
         if ctx.visited_funcdef:
             raise QuadrantsSyntaxError(
