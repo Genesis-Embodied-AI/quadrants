@@ -1041,7 +1041,7 @@ class Matrix(QuadrantsOperations):
 
     @classmethod
     @python_scope
-    def ndarray(cls, n, m, dtype, shape, needs_grad=False, *, fill=None):
+    def ndarray(cls, n, m, dtype, shape, needs_grad=False, *, fill: _FillValue = None):
         """Defines a Quadrants ndarray with matrix elements.
         This function must be called in Python scope, and after `qd.init` is called.
 
@@ -1259,7 +1259,7 @@ class Vector(Matrix):
 
     @classmethod
     @python_scope
-    def ndarray(cls, n, dtype, shape, needs_grad=False, *, fill=None):
+    def ndarray(cls, n, dtype, shape, needs_grad=False, *, fill: _FillValue = None):
         """Defines a Quadrants ndarray with vector elements.
 
         Args:

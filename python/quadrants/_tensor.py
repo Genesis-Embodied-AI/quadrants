@@ -21,6 +21,7 @@ from enum import IntEnum
 # ``__init__.py`` simple and atomic.
 from quadrants._tensor_wrapper import Tensor
 from quadrants._tensor_wrapper import wrap as _wrap_impl
+from quadrants.lang._field_initializer import _FillValue
 
 __all__ = [
     "Backend",
@@ -144,7 +145,7 @@ def _layout_to_order(layout, ndim):
     return "".join(chr(ord("i") + axis) for axis in layout)
 
 
-def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, fill=None, **kwargs):
+def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, fill: _FillValue = None, **kwargs):
     """Allocate a tensor on the chosen backend, optionally with a custom physical layout.
 
     Thin dispatcher over :func:`quadrants.field` and :func:`quadrants.ndarray` that selects between the two via the
@@ -238,7 +239,7 @@ def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, fill=None, **k
     raise AssertionError(f"unhandled Backend member: {backend!r}")
 
 
-def _tensor_vec(n, dtype, shape, *, backend=Backend.NDARRAY, fill=None, **kwargs):
+def _tensor_vec(n, dtype, shape, *, backend=Backend.NDARRAY, fill: _FillValue = None, **kwargs):
     """Private impl backing ``qd.Vector.tensor``.
 
     Dispatcher over ``qd.Vector.field`` and ``qd.Vector.ndarray`` selected by the ``backend=`` keyword. Not part of
@@ -259,7 +260,7 @@ def _tensor_vec(n, dtype, shape, *, backend=Backend.NDARRAY, fill=None, **kwargs
     raise AssertionError(f"unhandled Backend member: {backend!r}")
 
 
-def _tensor_mat(n, m, dtype, shape, *, backend=Backend.NDARRAY, fill=None, **kwargs):
+def _tensor_mat(n, m, dtype, shape, *, backend=Backend.NDARRAY, fill: _FillValue = None, **kwargs):
     """Private impl backing ``qd.Matrix.tensor``.
 
     Dispatcher over ``qd.Matrix.field`` and ``qd.Matrix.ndarray`` selected by the ``backend=`` keyword. Not part of
