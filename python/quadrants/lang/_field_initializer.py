@@ -3,11 +3,13 @@
 import numbers
 from typing import TYPE_CHECKING, TypeAlias, Union
 
+import numpy as np
+
 if TYPE_CHECKING:
     from quadrants.lang.matrix import Matrix
 
 
-_FillValue: TypeAlias = Union[int, float, numbers.Number, list, tuple, "Matrix", None]
+_FillValue: TypeAlias = Union[int, float, numbers.Number, np.number, list, tuple, "Matrix", None]
 
 
 def prepare_fill(value: _FillValue, element_shape=()):
