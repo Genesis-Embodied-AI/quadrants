@@ -1,0 +1,54 @@
+quadrants.lang.field_initializer
+================================
+
+.. py:module:: quadrants.lang.field_initializer
+
+.. autoapi-nested-parse::
+
+   Allocation-time field initialization, replayed after placement is complete.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   quadrants.lang.field_initializer.FieldInitializers
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.lang.field_initializer.prepare_fill
+
+
+Module Contents
+---------------
+
+.. py:function:: prepare_fill(value, element_shape=())
+
+   Validate and snapshot an initializer without allocating or materializing any fields.
+
+
+.. py:class:: FieldInitializers
+
+   Runtime-owned initializers; ordinary field.fill calls never enter this queue.
+
+
+   .. py:attribute:: pending
+      :value: []
+
+
+
+   .. py:method:: add(field, value)
+
+
+   .. py:method:: clear()
+
+
+   .. py:method:: run(runtime)
+
+
