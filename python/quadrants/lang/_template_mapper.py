@@ -22,7 +22,7 @@ from ._template_mapper_hotpath import (
 # decision is per class; the paths themselves must stay per instance, since a @qd.data_oriented class can have a
 # different attribute structure per instance (Genesis ``DataManager``).
 # Weak keys avoid retaining user classes and their kernels, which can keep the runtime alive during shutdown.
-_arg_disposition: WeakKeyDictionary[type, object] = WeakKeyDictionary()
+_class_needs_ndarray_member_walk: WeakKeyDictionary[type, object] = WeakKeyDictionary()
 _SKIP = object()
 _PER_INSTANCE = object()
 
@@ -121,10 +121,10 @@ class TemplateMapper:
         for i in self.template_slot_locations:
             arg = args[i]
             cls = type(arg)
-            disposition = _arg_disposition.get(cls)
+            disposition = _class_needs_ndarray_member_walk.get(cls)
             if disposition is None:
                 disposition = _classify_disposition(arg)
-                _arg_disposition[cls] = disposition
+                _class_needs_ndarray_member_walk[cls] = disposition
             if disposition is _SKIP:
                 continue
             try:
