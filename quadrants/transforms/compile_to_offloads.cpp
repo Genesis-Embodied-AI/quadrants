@@ -164,6 +164,8 @@ void compile_to_offloads(IRNode *ir,
     irpass::cse_offloaded_tasks(ir);
   }
 
+  // NOTE: There was an additional CFG pass here, removed in
+  // https://github.com/taichi-dev/taichi/pull/8691
   irpass::flag_access(ir);
 
   irpass::full_simplify(ir, config, {false, /*autodiff_enabled*/ false, kernel->get_name(), verbose, "simplify_III"});

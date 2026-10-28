@@ -9,7 +9,8 @@ namespace quadrants::lang {
 // The EliminateImmutableLocalVars pass eliminates all immutable local vars
 // calculated from the GatherImmutableLocalVars pass. An immutable local var
 // can be eliminated by forwarding the value of its only store to all loads
-// after that store.
+// after that store. See https://github.com/taichi-dev/taichi/pull/6926 for
+// the background of this optimization.
 class EliminateImmutableLocalVars : public BasicStmtVisitor {
  private:
   using BasicStmtVisitor::visit;
