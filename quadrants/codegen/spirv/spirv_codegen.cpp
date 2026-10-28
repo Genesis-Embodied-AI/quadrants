@@ -901,7 +901,15 @@ void TaskCodegen::visit(ExternalPtrStmt *stmt) {
       ir_->decorate(spv::OpDecorate, linear_offset, spv::DecorationNoSignedWrap);
     }
   }
-  if (caps_->get(DeviceCapability::spirv_has_physical_storage_buffer)) {
+  bool use_physical_storage_buffer = caps_->get(DeviceCapability::spirv_has_physical_storage_buffer);
+#if defined(QD_PLATFORM_OSX)
+  // MoltenVK's SPIRV-Cross can forward physical-pointer loads past aliasing stores, even with Volatile loads.
+  // Keep ndarray arguments on descriptor buffers so writes invalidate the translator's deferred reads.
+  if (arch_ == Arch::vulkan && ctx_attribs_->arg_at(arg_id).is_array) {
+    use_physical_storage_buffer = false;
+  }
+#endif
+  if (use_physical_storage_buffer) {
     std::vector<int> indices = arg_id;
     // Pick the data or gradient pointer slot of the ndarray argument struct. Without this, reverse-mode AD kernels
     // accumulate into x.data instead of x.grad and host-side gradients stay at zero.
