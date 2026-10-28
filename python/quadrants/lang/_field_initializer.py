@@ -35,13 +35,10 @@ class FieldInitializers:
     def clear(self):
         self.pending.clear()
 
-    def run(self, runtime):
+    def run(self):
         if not self.pending:
             return
         # Fill kernels materialize recursively. Detach the queue before launching any of them.
         pending, self.pending = self.pending, []
         for field, value in pending:
             field.fill(value)
-        # Materialization can be triggered by a zero-copy export. Its consumer may use a different device queue,
-        # so allocation-time initialization must be complete before materialize() returns.
-        runtime.prog.synchronize()
