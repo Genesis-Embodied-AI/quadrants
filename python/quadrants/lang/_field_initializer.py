@@ -1,9 +1,16 @@
 """Allocation-time field initialization, replayed after placement is complete."""
 
 import numbers
+from typing import TYPE_CHECKING, TypeAlias, Union
+
+if TYPE_CHECKING:
+    from quadrants.lang.matrix import Matrix
 
 
-def prepare_fill(value, element_shape=()):
+_FillValue: TypeAlias = Union[int, float, numbers.Number, list, tuple, "Matrix", None]
+
+
+def prepare_fill(value: _FillValue, element_shape=()):
     """Validate and snapshot an initializer without allocating or materializing any fields."""
     if value is None or isinstance(value, numbers.Number):
         return value
