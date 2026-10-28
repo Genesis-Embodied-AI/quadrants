@@ -1019,7 +1019,7 @@ def field(dtype, shape=None, *args, fill: _FillValue | None = None, **kwargs):
 
 
 @python_scope
-def ndarray(dtype, shape, needs_grad=False, *, fill: _FillValue = None):
+def ndarray(dtype, shape, needs_grad=False, *, fill: _FillValue | None = None):
     """Defines a Quadrants ndarray with scalar elements.
 
     Args:
