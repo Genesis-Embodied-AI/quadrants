@@ -34,9 +34,9 @@ def test_tensor_initializer_scalar(backend, value, layout):
 def test_tensor_initializer_default_backend():
     tensor = qd.tensor(qd.i32, shape=(), fill=7)
     assert isinstance(tensor._unwrap(), qd.Ndarray)
-    assert tensor[None] == 7
+    assert tensor[()] == 7
     tensor.fill(3)
-    assert tensor[None] == 3
+    assert tensor[()] == 3
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
@@ -74,7 +74,7 @@ def test_tensor_initializer_fields_share_tree():
     def total() -> qd.i32:
         result = 0
         for i in qd.static(range(40)):
-            result += fields[i][None]
+            result += fields[i][()]
         return result
 
     assert total() == 780
