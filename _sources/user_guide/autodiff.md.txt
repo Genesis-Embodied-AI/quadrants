@@ -26,7 +26,7 @@ Three mechanisms are supported:
 
 1. Allocate an adjoint (`.grad`) buffer next to every primal field whose gradient you need.
 2. Run the forward kernel.
-3. Seed the loss gradient - typically `loss.grad[None] = 1.0`.
+3. Seed the loss gradient - typically `loss.grad[()] = 1.0`.
 4. Call `kernel.grad()`.
 5. Read the gradients from the `.grad` fields.
 
@@ -46,16 +46,16 @@ qd.root.place(y, y.grad)
 @qd.kernel
 def compute():
     for i in x:
-        y[None] += x[i] * x[i]
+        y[()] += x[i] * x[i]
 
 # Step 2: run the forward kernel.
 for i in range(16):
     x[i] = float(i)
-y[None] = 0.0
+y[()] = 0.0
 compute()
 
 # Step 3: seed the loss gradient.
-y.grad[None] = 1.0
+y.grad[()] = 1.0
 # (clear input adjoints before the reverse pass so they do not accumulate)
 for i in range(16):
     x.grad[i] = 0.0
@@ -83,7 +83,7 @@ Notes:
 
 Training loops typically chain several kernels - physics step, feature extraction, loss. Differentiating such a pipeline by hand means calling each `.grad()` in the correct reverse order, seeding the loss, and clearing adjoints on every iteration.
 
-`qd.ad.Tape` automates this. Kernel calls inside a `with qd.ad.Tape(loss=...)` block are recorded; on exit the tape replays them in reverse, seeds `loss.grad[None] = 1.0`, and writes the input gradients back into the `.grad` fields. Adjoints are cleared on entry, which is the desired behavior for almost every training iteration.
+`qd.ad.Tape` automates this. Kernel calls inside a `with qd.ad.Tape(loss=...)` block are recorded; on exit the tape replays them in reverse, seeds `loss.grad[()] = 1.0`, and writes the input gradients back into the `.grad` fields. Adjoints are cleared on entry, which is the desired behavior for almost every training iteration.
 
 ```python
 with qd.ad.Tape(loss=y):
@@ -161,7 +161,7 @@ qd.root.lazy_grad()
 @qd.kernel
 def accumulate(mul: qd.f32):
     for i in range(128):
-        qd.atomic_add(total[None], x[i] * mul)
+        qd.atomic_add(total[()], x[i] * mul)
 
 @qd.ad.grad_replaced
 def forward(mul):
@@ -191,25 +191,25 @@ Here is a kernel that violates the rule:
 ```python
 @qd.kernel
 def bad():
-    # Reads b[None] for loss, then overwrites b[None] -> invalid.
-    loss[None] = x[1] * b[None]
-    b[None] += 100
+    # Reads b[()] for loss, then overwrites b[()] -> invalid.
+    loss[()] = x[1] * b[()]
+    b[()] += 100
 ```
 
-This is the "read then overwrite" pattern: `b[None]` is read, then written, inside the same launch. The reverse pass would need the original `b[None]` to compute `dloss/dx[1]`, but by then it has been clobbered.
+This is the "read then overwrite" pattern: `b[()]` is read, then written, inside the same launch. The reverse pass would need the original `b[()]` to compute `dloss/dx[1]`, but by then it has been clobbered.
 
 To fix it, separate the read and the write into two distinct kernels. Each kernel launch becomes self-consistent: `compute_loss` only reads, `update_b` only writes, and the rule is obeyed because the constraint is per-launch.
 
 ```python
 @qd.kernel
 def compute_loss():
-    loss[None] = x[1] * b[None]
+    loss[()] = x[1] * b[()]
 
 @qd.kernel
 def update_b():
-    b[None] += 100
+    b[()] += 100
 
-# Call them in order. Each launch reads or writes b[None], never both.
+# Call them in order. Each launch reads or writes b[()], never both.
 compute_loss()
 update_b()
 ```
@@ -384,7 +384,7 @@ The compiler recognizes the following bound shapes for adstack-aware loops:
 | Bound shape | Example |
 | --- | --- |
 | Integer constant | `for i in range(42):` |
-| Scalar integer field (`i32` / `i64`) at a constant or loop index | `for i in range(n[None]):`, `for i in range(n[j]):` |
+| Scalar integer field (`i32` / `i64`) at a constant or loop index | `for i in range(n[()]):`, `for i in range(n[j]):` |
 | Ndarray argument shape along any axis | `for i in range(arr.shape[1]):` |
 | Scalar ndarray read at a constant or loop index, including multi-axis reads | `for i in range(arr[j]):`<br>`for i in range(arr[j, k]):` |
 | Two-argument `range(start, stop)` whose `start` and `stop` are any of the bound shapes above | `for k in range(start[j], stop[j]):` |

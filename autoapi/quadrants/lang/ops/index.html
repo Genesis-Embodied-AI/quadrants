@@ -1422,7 +1422,7 @@ target; constant expressions or scalars are not allowed.</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">take_slot</span><span class="p">():</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="c1"># Try to claim the slot only if it is currently empty (== 0).</span>
-<span class="gp">&gt;&gt;&gt; </span>    <span class="n">old</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">atomic_cas</span><span class="p">(</span><span class="n">slot</span><span class="p">[</span><span class="kc">None</span><span class="p">],</span> <span class="mi">0</span><span class="p">,</span> <span class="n">my_id</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">old</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">atomic_cas</span><span class="p">(</span><span class="n">slot</span><span class="p">[()],</span> <span class="mi">0</span><span class="p">,</span> <span class="n">my_id</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="k">if</span> <span class="n">old</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
 <span class="gp">&gt;&gt;&gt; </span>        <span class="c1"># we won the race; the slot is ours</span>
 <span class="gp">&gt;&gt;&gt; </span>        <span class="o">...</span>

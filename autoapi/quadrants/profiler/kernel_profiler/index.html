@@ -554,12 +554,12 @@ clear_kernel_profiler_info().</p>
 
 <span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">num_elements</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">y</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">())</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">y</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">y</span><span class="p">[()]</span> <span class="o">=</span> <span class="mi">0</span>
 
 <span class="gp">&gt;&gt;&gt; </span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">reduction</span><span class="p">():</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">x</span><span class="p">:</span>
-<span class="gp">&gt;&gt;&gt; </span>        <span class="n">y</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">+=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span>        <span class="n">y</span><span class="p">[()]</span> <span class="o">+=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
 
 <span class="gp">&gt;&gt;&gt; </span><span class="c1"># In the case of not parameter, Quadrants will print its pre-defined metrics list</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">qd</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">get_predefined_cupti_metrics</span><span class="p">()</span>
@@ -604,12 +604,12 @@ clear_kernel_profiler_info().</p>
 
 <span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">num_elements</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">y</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">())</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">y</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">y</span><span class="p">[()]</span> <span class="o">=</span> <span class="mi">0</span>
 
 <span class="gp">&gt;&gt;&gt; </span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">reduction</span><span class="p">():</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">x</span><span class="p">:</span>
-<span class="gp">&gt;&gt;&gt; </span>        <span class="n">y</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">+=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span>        <span class="n">y</span><span class="p">[()]</span> <span class="o">+=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
 
 <span class="gp">&gt;&gt;&gt; </span><span class="c1"># In the case of not parameter, Quadrants will print its pre-defined metrics list</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">qd</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">get_predefined_cupti_metrics</span><span class="p">()</span>
