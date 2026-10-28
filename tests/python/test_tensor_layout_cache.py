@@ -253,7 +253,7 @@ def test_compound_layout_offline_cache(backend: qd.Backend, dtype: MatrixType, t
     """Reload each layout from the offline cache and check every scalar value, with fastcache disabled."""
 
     @qd.kernel
-    def write(x: qd.Tensor) -> None:
+    def k1(x: qd.Tensor) -> None:
         test_utils.fill_tensor_with_index_codes(x)
 
     shape = (2, 4, 5)
@@ -262,17 +262,17 @@ def test_compound_layout_offline_cache(backend: qd.Backend, dtype: MatrixType, t
     for expect_hit in (False, True):
         # Reinitialization clears compiled kernels from memory and flushes the preceding runtime's disk cache.
         qd_init_same_arch(offline_cache=True, src_ll_cache=False, offline_cache_file_path=str(tmp_path))
-        assert not write._primal.compiled_kernel_data_by_key
-        assert not write._primal.materialized_kernels
+        assert not k1._primal.compiled_kernel_data_by_key
+        assert not k1._primal.materialized_kernels
 
         for layout in layouts:
             x = qd.tensor(dtype, shape, backend=backend, layout=layout)
             expected = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
             # The observation is cumulative, so reset it to check this particular layout's launch.
-            write._primal.fe_ll_cache_observations.cache_hit = False
-            write(x)
-            assert write._primal.fe_ll_cache_observations.cache_hit == expect_hit, layout
-            assert not write._primal.src_ll_cache_observations.cache_loaded
+            k1._primal.fe_ll_cache_observations.cache_hit = False
+            k1(x)
+            assert k1._primal.fe_ll_cache_observations.cache_hit == expect_hit, layout
+            assert not k1._primal.src_ll_cache_observations.cache_loaded
             np.testing.assert_array_equal(x.to_numpy(), expected)
 
 
