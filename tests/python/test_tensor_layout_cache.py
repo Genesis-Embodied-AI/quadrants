@@ -258,6 +258,7 @@ def test_compound_layout_offline_cache(backend: qd.Backend, dtype: MatrixType, t
 
     shape = (2, 4, 5)
     layouts = (None, (1, 0, 2), (2, 0, 1))
+    expected = test_utils.new_numpy_tensor_containing_index_codes(shape, dtype.get_shape())
 
     for expect_hit in (False, True):
         # Reinitialization clears compiled kernels from memory and flushes the preceding runtime's disk cache.
@@ -267,7 +268,6 @@ def test_compound_layout_offline_cache(backend: qd.Backend, dtype: MatrixType, t
 
         for layout in layouts:
             x = qd.tensor(dtype, shape, backend=backend, layout=layout)
-            expected = test_utils.new_numpy_tensor_containing_index_codes(shape, x.element_shape)
             # The observation is cumulative, so reset it to check this particular layout's launch.
             k1._primal.fe_ll_cache_observations.cache_hit = False
             k1(x)
