@@ -67,7 +67,7 @@ directions = qd.Vector.tensor(3, qd.f32, shape=8, fill=[0, 0, 1])
 matrices = qd.Matrix.tensor(2, 2, qd.f32, shape=4, fill=[[1, 0], [0, 1]])
 ```
 
-A scalar fills every component. Vector and matrix tensors also accept per-component lists, tuples, or Quadrants vectors and matrices. The values are captured at declaration. `fill=` works with `layout=` and initializes only the tensor's forward values, leaving gradient buffers at their defaults.
+A scalar fills every component. Vector and matrix tensors also accept per-component lists, tuples, or Quadrants vectors and matrices. The values are captured at declaration. `fill=` initializes only the tensor's forward values, leaving gradient buffers at their defaults.
 
 With `Backend.FIELD`, initialization is deferred with allocation, so consecutive declarations can share storage allocation without an intervening kernel launch. With `Backend.NDARRAY`, initialization completes before the factory returns.
 
