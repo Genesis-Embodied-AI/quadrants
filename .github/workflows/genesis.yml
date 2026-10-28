@@ -96,7 +96,7 @@ jobs:
       contents: read
       # To download the benchmark results of this very run.
       actions: read
-      # FIXME: Keep checks permission while the shared workflow migrates from checks to commit statuses.
+      # FIXME: Remove checks: write after genesis-world PR #3626 switches the shared workflow to commit statuses.
       checks: write
       statuses: write
       pull-requests: write
