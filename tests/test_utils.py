@@ -1,3 +1,5 @@
+# FIXME: Move this module into tests/helpers and update its callers.
+
 import copy
 import itertools
 import os
