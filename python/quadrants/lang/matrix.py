@@ -11,7 +11,7 @@ from quadrants._lib import core as qd_python_core
 from quadrants._lib.utils import qd_python_core as _qd_python_core
 from quadrants.lang import expr, impl, runtime_ops
 from quadrants.lang import ops as ops_mod
-from quadrants.lang._field_initializer import prepare_fill
+from quadrants.lang._field_initializer import _FillValue, prepare_fill
 from quadrants.lang._metal_interop import mps_sync_if_metal
 from quadrants.lang._ndarray import Ndarray, NdarrayHostAccess
 from quadrants.lang.common_ops import QuadrantsOperations
@@ -876,7 +876,7 @@ class Matrix(QuadrantsOperations):
         layout=Layout.AOS,
         ndim=None,
         *,
-        fill=None,
+        fill: _FillValue = None,
     ):
         """Construct a data container to hold all elements of the Matrix.
 

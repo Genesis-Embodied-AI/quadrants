@@ -15,7 +15,7 @@ from quadrants._lib.core.quadrants_python import (
     Program,
 )
 from quadrants._snode import fields_builder
-from quadrants.lang._field_initializer import FieldInitializers, prepare_fill
+from quadrants.lang._field_initializer import FieldInitializers, _FillValue, prepare_fill
 from quadrants.lang._ndarray import Ndarray, ScalarNdarray
 from quadrants.lang._ndrange import GroupedNDRange, _Ndrange
 from quadrants.lang.any_array import AnyArray
@@ -850,7 +850,7 @@ def _field(
     needs_grad=False,
     needs_dual=False,
     *,
-    fill=None,
+    fill: _FillValue = None,
 ):
     fill = prepare_fill(fill)
     x, x_grad, x_dual, x_grad_checkbit = create_field_member(dtype, name, needs_grad, needs_dual)
@@ -943,7 +943,7 @@ def _field(
 
 
 @python_scope
-def field(dtype, shape=None, *args, fill=None, **kwargs):
+def field(dtype, shape=None, *args, fill: _FillValue = None, **kwargs):
     """Defines a Quadrants field.
 
     A Quadrants field can be viewed as an abstract N-dimensional array, hiding away the complexity of how its
