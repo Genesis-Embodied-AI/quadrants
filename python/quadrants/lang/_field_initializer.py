@@ -10,10 +10,10 @@ if TYPE_CHECKING:
     from quadrants.lang.matrix import Matrix, MatrixField
 
 
-_FillValue: TypeAlias = Union[int, float, numbers.Number, np.number, list, tuple, "Matrix", None]
+_FillValue: TypeAlias = Union[int, float, numbers.Number, np.number, list, tuple, "Matrix"]
 
 
-def capture_fill_value(value: _FillValue, element_shape=()) -> _FillValue:
+def capture_fill_value(value: _FillValue | None, element_shape=()) -> _FillValue | None:
     """Validate and snapshot an initializer without allocating or materializing any fields."""
     if value is None or isinstance(value, numbers.Number):
         return value
@@ -38,7 +38,7 @@ class FieldInitializers:
     def __init__(self) -> None:
         self.pending: list[tuple["ScalarField | MatrixField", _FillValue]] = []
 
-    def add(self, field: "ScalarField | MatrixField", value: _FillValue) -> None:
+    def add(self, field: "ScalarField | MatrixField", value: _FillValue | None) -> None:
         if value is not None:
             self.pending.append((field, value))
 

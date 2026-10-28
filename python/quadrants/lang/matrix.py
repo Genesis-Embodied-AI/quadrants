@@ -876,7 +876,7 @@ class Matrix(QuadrantsOperations):
         layout=Layout.AOS,
         ndim=None,
         *,
-        fill: _FillValue = None,
+        fill: _FillValue | None = None,
     ):
         """Construct a data container to hold all elements of the Matrix.
 
