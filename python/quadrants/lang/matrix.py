@@ -1000,7 +1000,9 @@ class Matrix(QuadrantsOperations):
                 phys_offset = tuple(offset[axis_seq[p]] for p in range(dim))
             if layout == Layout.SOA:
                 for e in field._get_field_members():
-                    impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(ScalarField(e), offset=phys_offset)
+                    impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
+                        ScalarField(e), offset=phys_offset
+                    )
                 if needs_grad:
                     for e in grad_field._get_field_members():
                         impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
