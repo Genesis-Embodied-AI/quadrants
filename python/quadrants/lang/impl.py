@@ -15,6 +15,7 @@ from quadrants._lib.core.quadrants_python import (
     Program,
 )
 from quadrants._snode import fields_builder
+from quadrants.lang._field_initializer import FieldInitializers, prepare_fill
 from quadrants.lang._ndarray import Ndarray, ScalarNdarray
 from quadrants.lang._ndrange import GroupedNDRange, _Ndrange
 from quadrants.lang.any_array import AnyArray
@@ -28,7 +29,6 @@ from quadrants.lang.exception import (
 )
 from quadrants.lang.expr import Expr, make_expr_group
 from quadrants.lang.field import Field, ScalarField
-from quadrants.lang.field_initializer import FieldInitializers, prepare_fill
 from quadrants.lang.kernel import Kernel
 from quadrants.lang.kernel_arguments import SparseMatrixProxy
 from quadrants.lang.kernel_impl import BoundQuadrantsCallable, QuadrantsCallable
