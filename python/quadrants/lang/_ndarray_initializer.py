@@ -12,11 +12,11 @@ def initialize_ndarray(array, value):
     )
 
     if impl.is_python_backend():
-        value = capture_fill_value(value, tuple(array.size()[len(array.shape) :]))
-        array.copy_(array.new_tensor(value))
+        captured_fill_value = capture_fill_value(value, tuple(array.size()[len(array.shape) :]))
+        array.copy_(array.new_tensor(captured_fill_value))
         return array
-    value = capture_fill_value(value, array.element_shape)
-    array.fill(value)
+    captured_fill_value = capture_fill_value(value, array.element_shape)
+    array.fill(captured_fill_value)
     # A consumer of to_dlpack() may use a different device queue. Complete allocation-time initialization before
     # returning the tensor so it is safe to export without an intervening explicit sync.
     impl.get_runtime().prog.synchronize()
