@@ -98,7 +98,8 @@ TEST(RuntimeBitcodeCache, EntryAndPayloadLimitsAndOversizedBypass) {
 TEST(RuntimeBitcodeCache, PreservesPreparedIntrinsicAttributesAcrossSerialization) {
   llvm::LLVMContext source, destination;
   llvm::Module module("runtime", source);
-  auto *intrinsic = llvm::Intrinsic::getDeclaration(&module, llvm::Intrinsic::sqrt, {llvm::Type::getFloatTy(source)});
+  auto *intrinsic =
+      llvm::Intrinsic::getOrInsertDeclaration(&module, llvm::Intrinsic::sqrt, {llvm::Type::getFloatTy(source)});
   intrinsic->addFnAttr(llvm::Attribute::AlwaysInline);
   auto bytes = serialize_runtime_bitcode(module);
   EXPECT_EQ(module.getNamedMetadata(kRuntimeInlineIntrinsics), nullptr);
