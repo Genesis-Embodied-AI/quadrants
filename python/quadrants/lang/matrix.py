@@ -48,17 +48,6 @@ from quadrants.types.utils import is_signed
 _type_factory = _qd_python_core.get_type_factory_instance()
 
 
-def _scalar_tensors_to_items(arr):
-    """Recursively convert 0-d tensors to Python scalars in a nested list."""
-    import torch  # pylint: disable=C0415
-
-    if isinstance(arr, (list, tuple)):
-        return [_scalar_tensors_to_items(v) for v in arr]
-    if isinstance(arr, torch.Tensor) and arr.shape == ():
-        return arr.item()
-    return arr
-
-
 def _generate_swizzle_patterns(key_group: str, required_length=4):
     """Generate vector swizzle patterns from a given set of characters.
 
@@ -266,14 +255,6 @@ class Matrix(QuadrantsOperations):
     _is_quadrants_class = True
     _is_matrix_class = True
     __array_priority__ = 1000
-
-    def __new__(cls, arr, dt=None):
-        if impl.is_python_backend():
-            from . import _py_tensor as py_tensor  # pylint: disable=C0415
-
-            arr = _scalar_tensors_to_items(arr)
-            return py_tensor.PyTensor(arr)
-        return super().__new__(cls)
 
     def __init__(self, arr, dt=None):
         if not isinstance(arr, (list, tuple, np.ndarray)):
@@ -897,13 +878,6 @@ class Matrix(QuadrantsOperations):
         Returns:
             :class:`~quadrants.Matrix`: A matrix.
         """
-        if impl.is_python_backend():
-            if isinstance(shape, numbers.Number):
-                shape = (shape,)
-            if shape is None:
-                shape = ()
-            mat_type = MatrixType(n, m, ndim=ndim if ndim is not None else 2, dtype=dtype)
-            return impl.field(mat_type, shape=shape, fill=fill)
 
         captured_fill_value = capture_fill_value(fill, (n,) if ndim == 1 else (n, m))
         member_groups = []
@@ -1050,7 +1024,6 @@ class Matrix(QuadrantsOperations):
             shape (Union[int, tuple[int]]): Shape of the ndarray.
             needs_grad (bool, optional): If True, allocate a companion grad ndarray of the same shape and dtype,
                 accessible via ``arr.grad``. Requires ``dtype`` to be a real (floating-point) type. Defaults to False.
-                Silently ignored on the python backend (matches the scalar ``qd.ndarray`` behaviour).
 
         Example::
 
@@ -1060,13 +1033,6 @@ class Matrix(QuadrantsOperations):
         """
         if isinstance(shape, numbers.Number):
             shape = (shape,)
-        if impl.is_python_backend():
-            from . import _py_tensor as py_tensor  # pylint: disable=C0415
-            from .util import dtype_to_torch_dtype  # pylint: disable=C0415
-
-            batch_ndim = len(shape)
-            shape = (*shape, m, n)
-            return py_tensor.create_tensor(shape, dtype_to_torch_dtype(dtype), batch_ndim=batch_ndim)
         arr = MatrixNdarray(n, m, dtype, shape)
         if needs_grad:
             dt = cook_dtype(dtype)
@@ -1264,7 +1230,6 @@ class Vector(Matrix):
             shape (Union[int, tuple[int]]): Shape of the ndarray.
             needs_grad (bool, optional): If True, allocate a companion grad ndarray of the same shape and dtype,
                 accessible via ``arr.grad``. Requires ``dtype`` to be a real (floating-point) type. Defaults to False.
-                Silently ignored on the python backend (matches the scalar ``qd.ndarray`` behaviour).
 
         Example:
             The code below shows how a Quadrants ndarray with vector elements can be declared and defined::
@@ -1273,13 +1238,6 @@ class Vector(Matrix):
         """
         if isinstance(shape, numbers.Number):
             shape = (shape,)
-        if impl.is_python_backend():
-            from . import _py_tensor as py_tensor  # pylint: disable=C0415
-            from .util import dtype_to_torch_dtype  # pylint: disable=C0415
-
-            batch_ndim = len(shape)
-            shape = (*shape, n)
-            return py_tensor.create_tensor(shape, dtype_to_torch_dtype(dtype), batch_ndim=batch_ndim)
         arr = VectorNdarray(n, dtype, shape)
         if needs_grad:
             dt = cook_dtype(dtype)
