@@ -21,6 +21,10 @@ from tests.helpers import test_utils
         (qd.f64, 1.0000000000000002),
         (qd.f64, 1e300),
         (qd.f64, 1e-300),
+        (qd.f32, 2**40),
+        (qd.f32, -(2**40)),
+        (qd.f64, 2**40),
+        (qd.f64, -(2**40)),
     ],
 )
 @test_utils.test(require=qd.extension.data64, default_ip=qd.i32, default_fp=qd.f32)
