@@ -1388,6 +1388,8 @@ class OffloadedStmt : public Stmt {
   bool reversed{false};
   bool is_bit_vectorized{false};
   int num_cpu_threads{1};
+  // Pure range-bound expressions owned by the task body. Register them as operands so cloning and replacement keep
+  // these references current, even though the definitions follow this container in the IR.
   Stmt *begin_stmt{nullptr};
   Stmt *end_stmt{nullptr};
   std::string range_hint = "";
