@@ -1,6 +1,5 @@
 """Allocation-time fill validation and initialization for fields and ndarrays."""
 
-import numbers
 from typing import TYPE_CHECKING, Callable, TypeAlias, Union, cast
 
 import numpy as np
@@ -11,12 +10,14 @@ if TYPE_CHECKING:
     from quadrants.lang.matrix import Matrix, MatrixField
 
 
-_FillValue: TypeAlias = Union[int, float, numbers.Number, np.number, list, tuple, "Matrix"]
+_FillValue: TypeAlias = Union[bool, int, float, np.bool_, np.integer, np.floating, list, tuple, "Matrix"]
 
 
 def capture_fill_value(value: _FillValue | None, element_shape=()) -> _FillValue | None:
     """Validate and snapshot an initializer without allocating storage or materializing fields."""
-    if value is None or isinstance(value, numbers.Number):
+    if isinstance(value, np.bool_):
+        return bool(value)
+    if value is None or isinstance(value, (bool, int, float, np.integer, np.floating)):
         return value
     # Import lazily: matrix.py also uses this module when constructing fields.
     from quadrants.lang.matrix import Matrix  # pylint: disable=C0415

@@ -1,5 +1,7 @@
 """Allocation-time initialization through field, ndarray, and tensor factories."""
 
+from fractions import Fraction
+
 import numpy as np
 import pytest
 
@@ -9,6 +11,61 @@ from tests.helpers import test_utils
 from tests.helpers.test_utils import _create_array
 
 # Tests shared by fields, ndarrays, and tensors
+
+
+@pytest.mark.parametrize(
+    "container_type,backend",
+    [
+        pytest.param("field", None, id="field"),
+        pytest.param("ndarray", None, id="ndarray"),
+        pytest.param("tensor", qd.Backend.FIELD, id="tensor_field"),
+        pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
+    ],
+)
+@pytest.mark.parametrize("element_class,element_shape", [("scalar", ()), ("vector", (3,)), ("matrix", (2, 3))])
+@pytest.mark.parametrize("fill_value", [1 + 2j, np.complex64(1 + 2j), Fraction(1, 2)])
+@test_utils.test()
+def test_initializer_unsupported_number(
+    container_type: str,
+    backend: qd.Backend | None,
+    element_class: str,
+    element_shape: tuple[int, ...],
+    fill_value: complex | np.complexfloating | Fraction,
+) -> None:
+    # Unsupported numbers must fail at declaration, including inside vector and matrix component lists.
+    components = np.full(element_shape, fill_value, dtype=object).tolist()
+    with pytest.raises(ValueError, match="fill"):
+        _create_array(
+            container_type=container_type, backend=backend, element_class=element_class, shape=(), fill=components
+        )
+    array = _create_array(container_type=container_type, backend=backend, element_class=element_class, shape=(), fill=7)
+    np.testing.assert_array_equal(array.to_numpy(), np.full(element_shape, 7))
+
+
+@pytest.mark.parametrize(
+    "container_type,backend",
+    [
+        pytest.param("field", None, id="field"),
+        pytest.param("ndarray", None, id="ndarray"),
+        pytest.param("tensor", qd.Backend.FIELD, id="tensor_field"),
+        pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
+    ],
+)
+@pytest.mark.parametrize("element_class,element_shape", [("scalar", ()), ("vector", (3,)), ("matrix", (2, 3))])
+@pytest.mark.parametrize("fill_value", [True, 2, 2.5, np.bool_(True), np.int32(2), np.float32(2.5)])
+@test_utils.test()
+def test_initializer_supported_number(
+    container_type: str,
+    backend: qd.Backend | None,
+    element_class: str,
+    element_shape: tuple[int, ...],
+    fill_value: bool | int | float | np.bool_ | np.integer | np.floating,
+) -> None:
+    # Supported Python and NumPy scalars must initialize scalars and broadcast to vectors and matrices.
+    array = _create_array(
+        container_type=container_type, backend=backend, element_class=element_class, shape=(), fill=fill_value
+    )
+    np.testing.assert_array_equal(array.to_numpy(), np.full(element_shape, fill_value))
 
 
 @pytest.mark.parametrize(
