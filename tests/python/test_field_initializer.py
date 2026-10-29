@@ -39,11 +39,11 @@ def test_fill_initializer_precedes_writes(operation):
     elif operation == "kernel":
 
         @qd.kernel
-        def write():
+        def k_write():
             for i in field:
                 field[i] += 2
 
-        write()
+        k_write()
     assert field[0] == 5
     assert field[1] == (3 if operation == "host" else 5)
     assert other[()] == 7
