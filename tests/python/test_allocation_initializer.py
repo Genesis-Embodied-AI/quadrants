@@ -411,7 +411,7 @@ def test_initializer_dlpack(
 )
 @test_utils.test()
 def test_initializer_fields_share_tree(container_type: str, backend: qd.Backend | None) -> None:
-    # Declarations with fill= must defer compilation, share one allocation tree, and initialize every field.
+    # Field declarations with fill= must defer compilation, share one allocation tree, and initialize every field.
     num_fields = 40
     fields = [
         _create_array(container_type=container_type, backend=backend, element_class="scalar", shape=(), fill=i)
