@@ -98,10 +98,10 @@ def test_initializer_defaults(
         pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
     ],
 )
-@pytest.mark.parametrize("value", [0, -2.5])
+@pytest.mark.parametrize("value", [0, 0.0, 7, -7, 2.5, -2.5])
 @test_utils.test()
-def test_initializer_scalar(container_type: str, backend: qd.Backend | None, value: float) -> None:
-    # Scalar initializers must preserve zero and negative fractional values.
+def test_initializer_scalar(container_type: str, backend: qd.Backend | None, value: int | float) -> None:
+    # Scalar initializers must preserve zero, positive, and negative integer and floating-point values.
     shape = (2, 3)
     array = _create_array(
         container_type=container_type, backend=backend, element_class="scalar", shape=shape, fill=value
