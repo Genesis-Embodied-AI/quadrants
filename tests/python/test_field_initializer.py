@@ -67,7 +67,6 @@ def test_fill_initializer_after_materialization():
     assert first[()] == 2
     second = qd.field(qd.i32, shape=(), fill=4)
     third = qd.field(qd.i32, shape=(), fill=6)
-    qd.sync()
     assert second[()] == 4
     assert third[()] == 6
     assert second.snode._snode_tree_id == third.snode._snode_tree_id
