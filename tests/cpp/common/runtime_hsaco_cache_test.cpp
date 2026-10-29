@@ -10,22 +10,6 @@ namespace quadrants::lang {
 namespace {
 const RuntimeHsacoKey key{"runtime IR digest", "gfx900", "+wavefrontsize64,-wavefrontsize32", true};
 
-TEST(RuntimeHsacoCache, ReturnsOwnedBinaryBytes) {
-  RuntimeHsacoCache cache;
-  bool hit;
-  int compilations = 0;
-  auto compile = [&] {
-    ++compilations;
-    return std::string("a\0b", 3);
-  };
-  auto first = cache.get_or_compile(key, compile, hit);
-  EXPECT_FALSE(hit);
-  first[0] = 'x';
-  EXPECT_EQ(cache.get_or_compile(key, compile, hit), std::string("a\0b", 3));
-  EXPECT_TRUE(hit);
-  EXPECT_EQ(compilations, 1);
-}
-
 TEST(RuntimeHsacoCache, CompilationInputsInvalidate) {
   RuntimeHsacoCache cache;
   bool hit;
@@ -52,7 +36,7 @@ TEST(RuntimeHsacoCache, CompilationInputsInvalidate) {
   EXPECT_TRUE(hit);
 }
 
-TEST(RuntimeHsacoCache, ConcurrentLookupCompilesOnce) {
+TEST(RuntimeHsacoCache, ConcurrentLookupCompilesOnceAndReturnsOwnedBytes) {
   RuntimeHsacoCache cache;
   std::atomic<int> compilations{0};
   std::promise<void> start;
@@ -66,14 +50,19 @@ TEST(RuntimeHsacoCache, ConcurrentLookupCompilesOnce) {
           key,
           [&] {
             ++compilations;
-            return std::string("binary");
+            return std::string("a\0b", 3);
           },
           hit);
     }));
   }
   start.set_value();
-  for (auto &result : results)
-    EXPECT_EQ(result.get(), "binary");
+  auto first = results.front().get();
+  first[0] = 'x';
+  for (std::size_t i = 1; i < results.size(); ++i)
+    EXPECT_EQ(results[i].get(), std::string("a\0b", 3));
+  bool hit;
+  EXPECT_EQ(cache.get_or_compile(key, [] { return std::string("wrong"); }, hit), std::string("a\0b", 3));
+  EXPECT_TRUE(hit);
   EXPECT_EQ(compilations, 1);
 }
 
