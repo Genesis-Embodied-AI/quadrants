@@ -8,14 +8,14 @@ from tests.helpers import test_utils
 
 
 @test_utils.test()
-def test_fill_initializer_shares_tree():
+def test_fill_initializer_shares_tree() -> None:
     # Declarations with fill= must defer compilation, share one allocation tree, and initialize every field.
     fields = [qd.field(qd.f32, shape=(), fill=i) for i in range(40)]
     total = qd.field(qd.f32, shape=())
     assert impl.get_runtime().get_num_compiled_functions() == 0
 
     @qd.kernel
-    def add_field(field: qd.Template):
+    def add_field(field: qd.Template) -> None:
         total[()] += field[()]
 
     for field in fields:
@@ -26,7 +26,7 @@ def test_fill_initializer_shares_tree():
 
 @pytest.mark.parametrize("operation", ["fill", "host", "numpy", "kernel"])
 @test_utils.test()
-def test_fill_initializer_precedes_writes(operation):
+def test_fill_initializer_precedes_writes(operation: str) -> None:
     # Initialization must run before each kind of write.
     field = qd.field(qd.i32, shape=4, fill=3)
     if operation == "fill":
@@ -38,7 +38,7 @@ def test_fill_initializer_precedes_writes(operation):
     elif operation == "kernel":
 
         @qd.kernel
-        def k_write():
+        def k_write() -> None:
             for i in field:
                 field[i] += 2
 
@@ -47,7 +47,7 @@ def test_fill_initializer_precedes_writes(operation):
 
 
 @test_utils.test()
-def test_fill_initializer_is_not_replayed():
+def test_fill_initializer_is_not_replayed() -> None:
     # Once initialization has run, later synchronization must preserve writes made afterward.
     field = qd.field(qd.i32, shape=(), fill=3)
     assert field[()] == 3
@@ -61,7 +61,7 @@ def test_fill_initializer_is_not_replayed():
 
 
 @test_utils.test()
-def test_fill_initializer_after_materialization():
+def test_fill_initializer_after_materialization() -> None:
     # Fields declared after an earlier allocation must initialize together in a new allocation tree.
     first = qd.field(qd.i32, shape=(), fill=2)
     assert first[()] == 2
@@ -115,7 +115,7 @@ def test_fill_initializer_broadcast(kind: str, via_dtype: bool) -> None:
 
 
 @test_utils.test()
-def test_fill_initializer_matrix_value_snapshot():
+def test_fill_initializer_matrix_value_snapshot() -> None:
     # A Matrix used as an initializer must be captured before later changes to that Matrix.
     value = qd.Matrix([[1, 2], [3, 4]])
     field = qd.Matrix.field(2, 2, qd.i32, shape=(), fill=value)
@@ -124,7 +124,7 @@ def test_fill_initializer_matrix_value_snapshot():
 
 
 @test_utils.test()
-def test_fill_initializer_manual_placement():
+def test_fill_initializer_manual_placement() -> None:
     # A field declared without a shape must receive its initializer after manual placement.
     field = qd.field(qd.i32, fill=8)
     qd.root.dense(qd.i, 4).place(field)
@@ -132,7 +132,7 @@ def test_fill_initializer_manual_placement():
 
 
 @test_utils.test()
-def test_fill_initializer_gradients_and_offset():
+def test_fill_initializer_gradients_and_offset() -> None:
     # Initialization must respect the index offset and leave gradient and dual fields at zero.
     field = qd.field(qd.f32, shape=4, offset=-2, needs_grad=True, needs_dual=True, fill=2)
     assert field[-2] == 2
@@ -142,7 +142,7 @@ def test_fill_initializer_gradients_and_offset():
 
 
 @test_utils.test()
-def test_fill_initializer_reset():
+def test_fill_initializer_reset() -> None:
     # Reset must discard pending initializers and allow fresh fields to initialize in the new runtime.
     qd.field(qd.i32, shape=(), fill=8)
     runtime = impl.get_runtime()
@@ -156,7 +156,7 @@ def test_fill_initializer_reset():
 
 @pytest.mark.parametrize("value", [[1, 2], "invalid"])
 @test_utils.test()
-def test_fill_initializer_invalid_scalar(value):
+def test_fill_initializer_invalid_scalar(value: list[int] | str) -> None:
     # Invalid scalar initializers must raise at declaration without preventing later valid allocations.
     with pytest.raises(ValueError, match="fill"):
         qd.field(qd.i32, shape=(), fill=value)
@@ -166,7 +166,7 @@ def test_fill_initializer_invalid_scalar(value):
 
 @pytest.mark.parametrize("value", [[[1, 2]], [[1, 2], [3]], [1, 2], [[1, None], [2, 3]]])
 @test_utils.test()
-def test_fill_initializer_invalid_matrix(value):
+def test_fill_initializer_invalid_matrix(value: list[int] | list[list[int | None]]) -> None:
     # Invalid matrix shapes or components must raise without preventing later valid allocations.
     with pytest.raises(ValueError, match="fill"):
         qd.Matrix.field(2, 2, qd.i32, shape=(), fill=value)
@@ -175,7 +175,7 @@ def test_fill_initializer_invalid_matrix(value):
 
 
 @test_utils.test()
-def test_fill_initializer_preserves_immediate_fill():
+def test_fill_initializer_preserves_immediate_fill() -> None:
     # Calling .fill() must still compile immediately, placing later declarations in a separate tree.
     first = qd.field(qd.i32, shape=())
     first.fill(3)
@@ -188,7 +188,7 @@ def test_fill_initializer_preserves_immediate_fill():
 @pytest.mark.needs_torch
 @pytest.mark.parametrize("matrix", [False, True])
 @test_utils.test()
-def test_fill_initializer_dlpack(matrix):
+def test_fill_initializer_dlpack(matrix: bool) -> None:
     # After synchronization, PyTorch must see initialized scalar and vector values through DLPack.
     torch = test_utils.require_torch_dlpack(need_field_support=True)
     field = qd.Vector.field(2, qd.f32, shape=4, fill=[2, 3]) if matrix else qd.field(qd.f32, shape=4, fill=7)
