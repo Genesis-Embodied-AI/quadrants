@@ -37,7 +37,7 @@ Note that the typing for NDArray is `qd.types.NDArray[data_type, number_dimensio
 
 `number_dimensions` is optional: `qd.types.NDArray[qd.i32]` is also valid, and leaves `ndim` unspecified.
 
-Pass `fill=` to initialize an ndarray before the allocator returns:
+Pass `fill=` to initialize an ndarray during allocation:
 
 ```python
 a = qd.ndarray(qd.f32, shape=(4, 5), fill=1.0)
