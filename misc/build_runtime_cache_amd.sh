@@ -7,7 +7,8 @@ export PATH="$HOME/.local/bin:$PATH"
 export LLVM_DIR="$HOME/.cache/qd-build-cache/llvm-22.1.0-x86-202603120808"
 export VULKAN_SDK="$HOME/.cache/qd-build-cache/vulkan-1.4.321.1/x86_64"
 export PATH="$VULKAN_SDK/bin:$PATH"
-export LD_LIBRARY_PATH="$VULKAN_SDK/lib:${LD_LIBRARY_PATH:-}"
+export ROCM_PATH=/opt/rocm
+export LD_LIBRARY_PATH="$ROCM_PATH/lib:$VULKAN_SDK/lib:${LD_LIBRARY_PATH:-}"
 export TMPDIR="$workspace/tmp"
 export UV_CACHE_DIR="$workspace/tmp/uv-cache"
 export UV_PYTHON_INSTALL_DIR="$workspace/tmp/python"
@@ -22,8 +23,10 @@ if [ ! -x .venv/bin/python ]; then
   uv venv --python 3.10 --seed .venv
 fi
 source .venv/bin/activate
-uv pip install --group dev --group test
-python -m pip install -v --no-build-isolation -e . -Ceditable.rebuild=true
+if [ "${1:-}" != --test-only ]; then
+  uv pip install --group dev --group test
+  python -m pip install -v --no-build-isolation -e . -Ceditable.rebuild=true
+fi
 python tests/run_tests.py amdgpu_runtime_cache --arch amdgpu -t 1 -v
 python misc/profile_runtime_hsaco_cache.py --output "$TMPDIR/cache-toggle" 2>&1 | tee "$TMPDIR/cache-toggle.log"
 python misc/profile_ci_startup.py --arch amdgpu --output "$TMPDIR/startup" 2>&1 | tee "$TMPDIR/startup.log"
