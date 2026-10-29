@@ -12,10 +12,13 @@ from quadrants._lib import core as qd_python_core
 from quadrants._lib.utils import qd_python_core as _qd_python_core
 from quadrants.lang import expr, impl, runtime_ops
 from quadrants.lang import ops as ops_mod
-from quadrants.lang._fill_value import _FillValue, capture_fill_value
+from quadrants.lang._fill_initializer import (
+    _FillValue,
+    apply_initial_ndarray_fill,
+    capture_fill_value,
+)
 from quadrants.lang._metal_interop import mps_sync_if_metal
 from quadrants.lang._ndarray import Ndarray, NdarrayHostAccess
-from quadrants.lang._ndarray_initializer import apply_initial_ndarray_fill
 from quadrants.lang.common_ops import QuadrantsOperations
 from quadrants.lang.exception import (
     QuadrantsRuntimeError,
