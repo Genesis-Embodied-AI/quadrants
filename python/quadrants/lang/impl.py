@@ -21,7 +21,7 @@ from quadrants.lang._field_initializer import (
     capture_fill_value,
 )
 from quadrants.lang._ndarray import Ndarray, ScalarNdarray
-from quadrants.lang._ndarray_initializer import initialize_ndarray
+from quadrants.lang._ndarray_initializer import apply_initial_fill
 from quadrants.lang._ndrange import GroupedNDRange, _Ndrange
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.buffer_view import BufferView
@@ -1054,7 +1054,7 @@ def ndarray(dtype, shape, needs_grad=False, *, fill: _FillValue | None = None):
         if type(shape) == int:
             shape = (shape,)
         dtype = dtype_to_torch_dtype(dtype)
-        return initialize_ndarray(py_tensor.create_tensor(shape, dtype, batch_ndim=batch_ndim), fill)
+        return apply_initial_fill(py_tensor.create_tensor(shape, dtype, batch_ndim=batch_ndim), fill)
     if not all((isinstance(x, int) or isinstance(x, np.integer)) and x > 0 and x <= 2**31 - 1 for x in shape):
         raise QuadrantsRuntimeError(f"{shape} is not a valid shape for ndarray")
     if dtype in all_types:
@@ -1076,7 +1076,7 @@ def ndarray(dtype, shape, needs_grad=False, *, fill: _FillValue | None = None):
             )
         x_grad = ndarray(dtype, shape, needs_grad=False)
         x._set_grad(x_grad)  # type: ignore[arg-type]
-    return initialize_ndarray(x, fill)
+    return apply_initial_fill(x, fill)
 
 
 @quadrants_scope

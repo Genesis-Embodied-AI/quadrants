@@ -1,9 +1,22 @@
 """Allocation-time initialization for ndarray factories."""
 
 
-def initialize_ndarray(array, value):
+from typing import TYPE_CHECKING, TypeVar, cast
+
+from quadrants.lang._field_initializer import _FillValue
+
+if TYPE_CHECKING:
+    import torch
+
+    from quadrants.lang._ndarray import Ndarray
+
+
+_Array = TypeVar("_Array", bound="Ndarray | torch.Tensor")
+
+
+def apply_initial_fill(array: _Array, fill: _FillValue | None) -> _Array:
     """Initialize an allocated array."""
-    if value is None:
+    if fill is None:
         return array
 
     from quadrants.lang import impl  # pylint: disable=import-outside-toplevel
@@ -12,9 +25,11 @@ def initialize_ndarray(array, value):
     )
 
     if impl.is_python_backend():
-        captured_fill_value = capture_fill_value(value, tuple(array.size()[len(array.shape) :]))
-        array.copy_(array.new_tensor(captured_fill_value))
+        python_array = cast("torch.Tensor", array)
+        captured_fill_value = capture_fill_value(fill, tuple(python_array.size()[len(python_array.shape) :]))
+        python_array.copy_(python_array.new_tensor(captured_fill_value))
         return array
-    captured_fill_value = capture_fill_value(value, array.element_shape)
-    array.fill(captured_fill_value)
+    ndarray = cast("Ndarray", array)
+    captured_fill_value = capture_fill_value(fill, ndarray.element_shape)
+    ndarray.fill(captured_fill_value)
     return array
