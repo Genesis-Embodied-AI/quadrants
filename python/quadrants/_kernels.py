@@ -2,7 +2,7 @@
 
 from quadrants._funcs import field_fill_quadrants_scope  # noqa
 from quadrants.lang import ops
-from quadrants.lang._fill import make_fill_value
+from quadrants.lang._field_initializer import make_fill_value
 from quadrants.lang._ndrange import ndrange
 from quadrants.lang.expr import Expr
 from quadrants.lang.field import ScalarField

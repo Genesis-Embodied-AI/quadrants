@@ -1,16 +1,38 @@
-"""Allocation-time field initialization, replayed after placement is complete."""
+"""Fill value preparation and deferred field initialization."""
 
-from typing import TYPE_CHECKING, Callable, TypeAlias, Union, cast
+from typing import TYPE_CHECKING, Any, Callable, TypeAlias, Union, cast
 
 import numpy as np
 
+from quadrants.types.primitive_types import integer_types
+
 if TYPE_CHECKING:
-    from quadrants._lib.core.quadrants_python import SNodeCxx
+    from quadrants._lib.core.quadrants_python import DataTypeCxx, SNodeCxx
+    from quadrants.lang.expr import Expr
     from quadrants.lang.field import ScalarField
     from quadrants.lang.matrix import Matrix, MatrixField
 
 
 _FillValue: TypeAlias = Union[bool, int, float, np.bool_, np.integer, np.floating, list, tuple, "Matrix"]
+
+
+def make_fill_value(value: Any, dtype: "DataTypeCxx") -> "Expr":
+    """Construct integer constants with the destination type before the default type can truncate them."""
+    # Import lazily: matrix.py also uses this module when constructing fields.
+    from quadrants.lang.expr import Expr  # pylint: disable=C0415
+    from quadrants.lang.matrix import Matrix  # pylint: disable=C0415
+
+    if isinstance(value, Matrix):
+        value = value.to_list()
+
+    def convert(component: Any) -> Any:
+        if isinstance(component, (list, tuple)):
+            return tuple(convert(item) for item in component)
+        if isinstance(component, (int, np.integer)) and not isinstance(component, bool) and dtype in integer_types:
+            return Expr(component, dtype=dtype)
+        return component
+
+    return Expr(convert(value))
 
 
 def capture_fill_value(value: _FillValue | None, element_shape=()) -> _FillValue | None:
