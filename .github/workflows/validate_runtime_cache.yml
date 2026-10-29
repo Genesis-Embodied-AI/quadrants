@@ -87,6 +87,7 @@ jobs:
       - name: Reproduce allocation failure followed by field copies
         shell: bash
         run: |
+          set +e
           set -uo pipefail
           export PYTHONPATH="$GITHUB_WORKSPACE/misc:${PYTHONPATH:-}"
           export PYTEST_ADDOPTS="-p no:faulthandler -p amd_crash_probe"
@@ -103,6 +104,21 @@ jobs:
             done
           done
           exit "$failed"
+      - name: Native backtrace
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          export PYTHONPATH="$GITHUB_WORKSPACE/misc:${PYTHONPATH:-}"
+          export PYTEST_ADDOPTS="-p no:faulthandler -p amd_crash_probe"
+          if command -v gdb; then
+            for cache in off on; do
+              export AMD_CRASH_CACHE="$cache"
+              export AMD_CRASH_RESULTS="$TASK_ROOT/results/gdb-$cache"
+              mkdir -p "$AMD_CRASH_RESULTS"
+              gdb -batch -ex 'set pagination off' -ex run -ex 'thread apply all bt 20' --args python tests/run_tests.py fail_device_memory_allocation field --arch amdgpu -r 0 -t 1 -v -s -k 'huge_allocation or default_fp or default_ip or field_name or test_field_copy_from' > "$AMD_CRASH_RESULTS/gdb.log" 2>&1
+            done
+          fi
       - name: Kernel diagnostics
         if: always()
         run: |
@@ -112,21 +128,3 @@ jobs:
         with:
           name: cache-crash-probe
           path: ${{ env.TASK_ROOT }}/results
-  original-host-evidence:
-    runs-on: misc-slow-amd-primary
-    timeout-minutes: 5
-    steps:
-      - name: Preserve original crash evidence
-        shell: bash
-        run: |
-          task_root="$HOME/ais/misc_slow_amd/crash-evidence-${GITHUB_RUN_ID}"
-          mkdir -p "$task_root"
-          echo "EVIDENCE_DIR=$task_root" >> "$GITHUB_ENV"
-          sudo -n journalctl -k --since '2026-10-29 20:05:00 UTC' --until '2026-10-29 20:20:00 UTC' --no-pager > "$task_root/kernel.log" 2>&1 || true
-          sudo -n journalctl --since '2026-10-29 20:14:45 UTC' --until '2026-10-29 20:15:15 UTC' --no-pager > "$task_root/system.log" 2>&1 || true
-          { hostname; cat /proc/sys/kernel/core_pattern; ls -l /var/crash; } > "$task_root/host.log" 2>&1
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: original-crash-evidence
-          path: ${{ env.EVIDENCE_DIR }}
