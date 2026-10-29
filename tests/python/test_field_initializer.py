@@ -193,9 +193,9 @@ def test_fill_initializer_dlpack(matrix):
     torch = test_utils.require_torch_dlpack(need_field_support=True)
     field = qd.Vector.field(2, qd.f32, shape=4, fill=[2, 3]) if matrix else qd.field(qd.f32, shape=4, fill=7)
     qd.sync()
-    tensor = torch.utils.dlpack.from_dlpack(field.to_dlpack())
+    torch_view = torch.utils.dlpack.from_dlpack(field.to_dlpack())
     expected = [[2, 3]] * 4 if matrix else [7] * 4
-    np.testing.assert_array_equal(tensor.cpu().numpy(), expected)
+    np.testing.assert_array_equal(torch_view.cpu().numpy(), expected)
 
 
 @pytest.mark.needs_torch
