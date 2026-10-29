@@ -44,13 +44,15 @@ def pytest_summary(path):
             cases[nodeid][phase] = float(duration)
         if re.search(r"\bpassed\b.*\bin [0-9.]+s", line):
             outcome = line.strip("= ")
-    case_totals = [float(case.attrib["time"]) for case in ET.parse(path.with_suffix(".xml")).iter("testcase")]
+    case_totals = []
+    if path.with_suffix(".xml").exists():
+        case_totals = [float(case.attrib["time"]) for case in ET.parse(path.with_suffix(".xml")).iter("testcase")]
     return {
         "outcome": outcome,
         "junit_cases": {
             "count": len(case_totals),
             "sum_worker_seconds": round(sum(case_totals), 3),
-            "median_seconds": round(statistics.median(case_totals), 3),
+            "median_seconds": round(statistics.median(case_totals), 3) if case_totals else None,
         },
         "reported_duration_rows_only": {
             phase: {
@@ -75,14 +77,15 @@ def main():
     results = {}
     for directory in args.artifact_directories:
         result = {}
-        for label in ("no-torch", "with-torch", "torch-disabled", "trace"):
+        for label in (
+            "no-torch", "with-torch", "torch-disabled", "trace", "driver", "driver-torch",
+            "driver-bundled", "clean-bundled", "trace-bundled",
+        ):
             path = directory / f"{label}.log"
             if path.exists():
                 result[label] = startup_summary(path)
-        for workers in (1, 4):
-            path = directory / f"pytest-{workers}.log"
-            if path.exists():
-                result[f"pytest-{workers}"] = pytest_summary(path)
+        for path in sorted(directory.glob("pytest-*.log")):
+            result[path.stem] = pytest_summary(path)
         results[str(directory)] = result
     print(json.dumps(results, indent=2))
 
