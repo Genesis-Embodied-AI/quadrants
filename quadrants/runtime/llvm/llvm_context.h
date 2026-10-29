@@ -19,6 +19,7 @@ namespace quadrants::lang {
 
 class JITSessionCPU;
 class LlvmProgramImpl;
+struct RuntimeBitcodeInputs;
 
 /**
  * Manages an LLVMContext for Quadrants's usage.
@@ -64,7 +65,7 @@ class QuadrantsLLVMContext {
    */
   std::unique_ptr<llvm::Module> clone_runtime_module();
 
-  std::unique_ptr<llvm::Module> module_from_file(const std::string &file);
+  std::unique_ptr<llvm::Module> module_from_file(const std::string &file, const RuntimeBitcodeInputs *inputs = nullptr);
 
   llvm::Type *get_data_type(DataType dt);
 
@@ -132,7 +133,8 @@ class QuadrantsLLVMContext {
 
   void link_module_with_cuda_libdevice(std::unique_ptr<llvm::Module> &module);
 
-  void link_module_with_amdgpu_libdevice(std::unique_ptr<llvm::Module> &module);
+  void link_module_with_amdgpu_libdevice(std::unique_ptr<llvm::Module> &module,
+                                         const RuntimeBitcodeInputs *inputs = nullptr);
 
   static int num_instructions(llvm::Function *func);
 
@@ -172,6 +174,7 @@ class LlvmModuleBitcodeLoader {
   }
 
   std::unique_ptr<llvm::Module> load(llvm::LLVMContext *ctx) const;
+  std::unique_ptr<llvm::Module> load_bytes(llvm::LLVMContext *ctx, const std::string &bitcode) const;
 
  private:
   std::string bitcode_path_;
