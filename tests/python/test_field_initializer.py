@@ -55,6 +55,7 @@ def test_fill_initializer_is_not_replayed():
 
     # Each sync calls materialize() again. Repeating it must not replay the initializer over the later write.
     qd.sync()
+    assert field[()] == 5
     qd.sync()
     assert field[()] == 5
 
