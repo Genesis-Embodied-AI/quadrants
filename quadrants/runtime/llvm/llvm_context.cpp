@@ -47,6 +47,7 @@
 #include "quadrants/common/task.h"
 #include "quadrants/util/environ_config.h"
 #include "llvm_context.h"
+#include <chrono>
 #include "quadrants/runtime/program_impls/llvm/llvm_program.h"
 #include "quadrants/codegen/codegen_utils.h"
 
@@ -73,6 +74,9 @@
 namespace quadrants::lang {
 
 using namespace llvm;
+static double context_profile_time() {
+  return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
 
 QuadrantsLLVMContext::QuadrantsLLVMContext(const CompileConfig &config, Arch arch) : config_(config), arch_(arch) {
   QD_TRACE("Creating Quadrants llvm context for arch: {}", arch_name(arch));
@@ -120,8 +124,13 @@ QuadrantsLLVMContext::QuadrantsLLVMContext(const CompileConfig &config, Arch arc
   data_layout_ = QuadrantsLLVMContext::get_data_layout(arch);
   linking_context_data = std::make_unique<ThreadLocalData>(
       std::make_unique<llvm::orc::ThreadSafeContext>(std::make_unique<llvm::LLVMContext>()));
+  double profile_start = context_profile_time();
+  auto *profile_runtime = get_this_thread_runtime_module();
+  QD_INFO("CONTEXT_PROFILE runtime preparation {} ms", (context_profile_time() - profile_start) * 1000);
+  profile_start = context_profile_time();
   linking_context_data->runtime_module =
-      clone_module_to_context(get_this_thread_runtime_module(), linking_context_data->llvm_context);
+      clone_module_to_context(profile_runtime, linking_context_data->llvm_context);
+  QD_INFO("CONTEXT_PROFILE linking context copy {} ms", (context_profile_time() - profile_start) * 1000);
 
   QD_TRACE("Quadrants llvm context created.");
 }
@@ -290,8 +299,10 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::clone_runtime_module() {
 }
 
 std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::string &file) {
+  double profile_start = context_profile_time();
   auto ctx = get_this_thread_context();
   std::unique_ptr<llvm::Module> module = module_from_bitcode_file(fmt::format("{}/{}", runtime_lib_dir(), file), ctx);
+  QD_INFO("CONTEXT_PROFILE runtime parse {} ms", (context_profile_time() - profile_start) * 1000);
   if (arch_ == Arch::cuda || arch_ == Arch::amdgpu) {
     // Replace stub functions in the runtime bitcode with inline wrappers
     // around LLVM intrinsics. The runtime module is compiled from C++ with
@@ -738,6 +749,7 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
     strip_nvvmir_version(module.get());
   }
 
+  QD_INFO("CONTEXT_PROFILE prepared runtime {} ms", (context_profile_time() - profile_start) * 1000);
   return module;
 }
 
@@ -803,6 +815,7 @@ void QuadrantsLLVMContext::link_module_with_cuda_libdevice(std::unique_ptr<llvm:
 void QuadrantsLLVMContext::link_module_with_amdgpu_libdevice(std::unique_ptr<llvm::Module> &module) {
   QD_ASSERT(arch_ == Arch::amdgpu);
 #if defined(QD_WITH_AMDGPU)
+  double profile_start = context_profile_time();
   auto mcpu = AMDGPUContext::get_instance().get_mcpu();
   auto isa_version = mcpu.substr(3, 4);
 
@@ -835,6 +848,7 @@ void QuadrantsLLVMContext::link_module_with_amdgpu_libdevice(std::unique_ptr<llv
                                    "opencl.bc"};
 
   for (auto &libdevice : libdevice_files) {
+    double file_start = context_profile_time();
     auto libdevice_module = module_from_bitcode_file(lib_dir + libdevice, get_this_thread_context());
 
     if (libdevice == "ocml.bc")
@@ -857,7 +871,9 @@ void QuadrantsLLVMContext::link_module_with_amdgpu_libdevice(std::unique_ptr<llv
     if (failed) {
       QD_ERROR("AMDGPU libdevice linking failure.");
     }
+    QD_INFO("CONTEXT_PROFILE library {} {} ms", libdevice, (context_profile_time() - file_start) * 1000);
   }
+  QD_INFO("CONTEXT_PROFILE all libraries {} ms", (context_profile_time() - profile_start) * 1000);
 #endif
 }
 
