@@ -55,17 +55,17 @@ def test_initializer_defaults(
         pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
     ],
 )
-@pytest.mark.parametrize("value", [0, 0.0, 7, -7, 2.5, -2.5])
+@pytest.mark.parametrize("fill_value", [0, 0.0, 7, -7, 2.5, -2.5])
 @pytest.mark.parametrize("shape", [(), (4,), (2, 3)])
 @test_utils.test()
 def test_initializer_scalar(
-    container_type: str, backend: qd.Backend | None, value: int | float, shape: tuple[int, ...]
+    container_type: str, backend: qd.Backend | None, fill_value: int | float, shape: tuple[int, ...]
 ) -> None:
     # Scalar initializers must initialize every array element to the supplied value.
     array = _create_array(
-        container_type=container_type, backend=backend, element_class="scalar", shape=shape, fill=value
+        container_type=container_type, backend=backend, element_class="scalar", shape=shape, fill=fill_value
     )
-    np.testing.assert_array_equal(array.to_numpy(), np.full(shape, value))
+    np.testing.assert_array_equal(array.to_numpy(), np.full(shape, fill_value))
 
 
 @pytest.mark.parametrize(
@@ -119,19 +119,19 @@ def test_initializer_captures_components(
     # Every constructor must capture component lists before later mutations.
     num_elements = 3
     expected = test_utils.new_numpy_tensor_containing_index_codes(shape=(), element_shape=element_shape) + 1
-    value = expected.tolist()
+    fill_value = expected.tolist()
     array = _create_array(
         container_type=container_type,
         backend=backend,
         element_class=element_class,
         shape=(num_elements,),
         via_dtype=via_dtype,
-        fill=value,
+        fill=fill_value,
     )
     if element_class == "vector":
-        value[0] = 99
+        fill_value[0] = 99
     else:
-        value[0][0] = 99
+        fill_value[0][0] = 99
     np.testing.assert_array_equal(array.to_numpy(), np.broadcast_to(expected, (num_elements, *expected.shape)))
 
 
@@ -148,11 +148,11 @@ def test_initializer_captures_components(
 def test_initializer_captures_matrix(container_type: str, backend: qd.Backend | None) -> None:
     # A Matrix used as an initializer must be captured before later changes to that Matrix.
     expected = [[1, 2, 3], [4, 5, 6]]
-    value = qd.Matrix(expected)
+    fill_value = qd.Matrix(expected)
     array = _create_array(
-        container_type=container_type, backend=backend, element_class="matrix", shape=(), dtype=qd.i32, fill=value
+        container_type=container_type, backend=backend, element_class="matrix", shape=(), dtype=qd.i32, fill=fill_value
     )
-    value[0, 0] = 99
+    fill_value[0, 0] = 99
     np.testing.assert_array_equal(array.to_numpy(), expected)
 
 
@@ -195,12 +195,14 @@ def test_initializer_leaves_gradients_zero(
         pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
     ],
 )
-@pytest.mark.parametrize("value", [[1, 2], "invalid"])
+@pytest.mark.parametrize("fill_value", [[1, 2], "invalid"])
 @test_utils.test()
-def test_initializer_invalid_scalar(container_type: str, backend: qd.Backend | None, value: list[int] | str) -> None:
+def test_initializer_invalid_scalar(
+    container_type: str, backend: qd.Backend | None, fill_value: list[int] | str
+) -> None:
     # Invalid scalar initializers must raise at declaration without preventing later valid allocations.
     with pytest.raises(ValueError, match="fill"):
-        _create_array(container_type=container_type, backend=backend, element_class="scalar", shape=(), fill=value)
+        _create_array(container_type=container_type, backend=backend, element_class="scalar", shape=(), fill=fill_value)
     array = _create_array(container_type=container_type, backend=backend, element_class="scalar", shape=(), fill=7)
     assert array[()] == 7
 
@@ -251,14 +253,14 @@ def test_initializer_invalid_components(
         pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
     ],
 )
-@pytest.mark.parametrize("value", [[[1, 2]], [[1, 2], [3]], [[1, None, 3], [4, 5, 6]]])
+@pytest.mark.parametrize("fill_value", [[[1, 2]], [[1, 2], [3]], [[1, None, 3], [4, 5, 6]]])
 @test_utils.test()
 def test_initializer_invalid_matrix(
-    container_type: str, backend: qd.Backend | None, value: list[list[int | None]]
+    container_type: str, backend: qd.Backend | None, fill_value: list[list[int | None]]
 ) -> None:
     # Invalid matrix shapes or components must raise without preventing later valid allocations.
     with pytest.raises(ValueError, match="fill"):
-        _create_array(container_type=container_type, backend=backend, element_class="matrix", shape=(), fill=value)
+        _create_array(container_type=container_type, backend=backend, element_class="matrix", shape=(), fill=fill_value)
     array = _create_array(container_type=container_type, backend=backend, element_class="matrix", shape=(), fill=7)
     np.testing.assert_array_equal(array.to_numpy(), np.full((2, 3), 7))
 
@@ -349,18 +351,20 @@ def test_initializer_dlpack(
     torch = test_utils.require_torch_dlpack(need_field_support=is_field)
     shape = (2, 3)
     # Offset the index codes so the scalar initializer is nonzero too.
-    value = (test_utils.new_numpy_tensor_containing_index_codes(shape=(), element_shape=element_shape) + 1).tolist()
+    fill_value = (
+        test_utils.new_numpy_tensor_containing_index_codes(shape=(), element_shape=element_shape) + 1
+    ).tolist()
     array = _create_array(
         container_type=container_type,
         backend=backend,
         element_class=element_class,
         shape=shape,
         via_dtype=via_dtype,
-        fill=value,
+        fill=fill_value,
     )
     qd.sync()
     torch_view = torch.utils.dlpack.from_dlpack(array.to_dlpack())
-    np.testing.assert_array_equal(torch_view.cpu().numpy(), np.broadcast_to(value, (*shape, *element_shape)))
+    np.testing.assert_array_equal(torch_view.cpu().numpy(), np.broadcast_to(fill_value, (*shape, *element_shape)))
 
 
 # Tensor-only tests
@@ -387,7 +391,9 @@ def test_initializer_tensor_layout(
     # Initialization and later writes must use canonical indices when the physical shape axes are permuted.
     shape = (2, 3)
     # Offset the index codes so the scalar initializer is nonzero too.
-    value = (test_utils.new_numpy_tensor_containing_index_codes(shape=(), element_shape=element_shape) + 1).tolist()
+    fill_value = (
+        test_utils.new_numpy_tensor_containing_index_codes(shape=(), element_shape=element_shape) + 1
+    ).tolist()
     tensor = _create_array(
         container_type="tensor",
         backend=backend,
@@ -395,11 +401,11 @@ def test_initializer_tensor_layout(
         shape=shape,
         layout=(1, 0),
         via_dtype=via_dtype,
-        fill=value,
+        fill=fill_value,
         needs_grad=True,
     )
     assert isinstance(tensor, qd.Tensor)
-    expected = np.broadcast_to(value, (*shape, *element_shape)).copy()
+    expected = np.broadcast_to(fill_value, (*shape, *element_shape)).copy()
     np.testing.assert_array_equal(tensor.to_numpy(), expected)
     np.testing.assert_array_equal(tensor.grad.to_numpy(), np.zeros_like(expected))
 
