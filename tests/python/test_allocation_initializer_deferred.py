@@ -7,7 +7,12 @@ import quadrants as qd
 from quadrants.lang import impl
 
 from tests.helpers import test_utils
-from tests.helpers.allocation_initializer import _create_array, _get_underlying_field
+from tests.helpers.allocation_initializer import _create_array
+
+
+def _get_underlying_field(array: qd.Field | qd.Tensor) -> qd.Field:
+    # Return the underlying field so tests can inspect its allocation tree, unwrapping a Tensor if needed.
+    return array._unwrap() if isinstance(array, qd.Tensor) else array
 
 
 @pytest.mark.parametrize(

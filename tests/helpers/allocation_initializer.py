@@ -37,8 +37,3 @@ def _create_array(
             return scalar_factory(dtype=qd.types.matrix(n=2, m=3, dtype=dtype), shape=shape, **kwargs)
         return matrix_factory(n=2, m=3, dtype=dtype, shape=shape, **kwargs)
     raise ValueError(f"Unknown element class: {element_class}")
-
-
-def _get_underlying_field(array: qd.Field | qd.Tensor) -> qd.Field:
-    # Return the underlying field so tests can inspect its allocation tree, unwrapping a Tensor if needed.
-    return array._unwrap() if isinstance(array, qd.Tensor) else array
