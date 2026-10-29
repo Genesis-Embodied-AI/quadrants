@@ -33,15 +33,15 @@ def _allocate(
         raise ValueError(f"Unknown allocation API: {api}")
 
     if kind == "scalar":
-        return scalar_factory(dtype, shape=shape, **kwargs)
+        return scalar_factory(dtype=dtype, shape=shape, **kwargs)
     if kind == "vector":
         if via_dtype:
-            return scalar_factory(qd.types.vector(3, dtype), shape=shape, **kwargs)
-        return vector_factory(3, dtype, shape=shape, **kwargs)
+            return scalar_factory(dtype=qd.types.vector(n=3, dtype=dtype), shape=shape, **kwargs)
+        return vector_factory(n=3, dtype=dtype, shape=shape, **kwargs)
     if kind == "matrix":
         if via_dtype:
-            return scalar_factory(qd.types.matrix(2, 3, dtype), shape=shape, **kwargs)
-        return matrix_factory(2, 3, dtype, shape=shape, **kwargs)
+            return scalar_factory(dtype=qd.types.matrix(n=2, m=3, dtype=dtype), shape=shape, **kwargs)
+        return matrix_factory(n=2, m=3, dtype=dtype, shape=shape, **kwargs)
     raise ValueError(f"Unknown element kind: {kind}")
 
 
@@ -75,7 +75,7 @@ def test_initializer_defaults(
 ) -> None:
     # Omitting fill or passing None must preserve zero initialization for every constructor.
     num_elements = 4
-    array = _allocate(api, backend, kind, (num_elements,), via_dtype=via_dtype, **kwargs)
+    array = _allocate(api=api, backend=backend, kind=kind, shape=(num_elements,), via_dtype=via_dtype, **kwargs)
     element_shape = np.shape(_initial_value(kind))
     np.testing.assert_array_equal(array.to_numpy(), np.zeros((num_elements, *element_shape)))
 
@@ -94,7 +94,7 @@ def test_initializer_defaults(
 def test_initializer_scalar(api: str, backend: qd.Backend | None, value: float) -> None:
     # Scalar initializers must preserve zero and negative fractional values.
     shape = (2, 3)
-    array = _allocate(api, backend, "scalar", shape, fill=value)
+    array = _allocate(api=api, backend=backend, kind="scalar", shape=shape, fill=value)
     np.testing.assert_array_equal(array.to_numpy(), np.full(shape, value))
 
 
@@ -115,7 +115,7 @@ def test_initializer_broadcast(
     api: str, backend: qd.Backend | None, kind: str, via_dtype: bool, shape: tuple[int, ...]
 ) -> None:
     # A scalar initializer must fill every component of every allocated element.
-    array = _allocate(api, backend, kind, shape, via_dtype=via_dtype, fill=7)
+    array = _allocate(api=api, backend=backend, kind=kind, shape=shape, via_dtype=via_dtype, fill=7)
     element_shape = np.shape(_initial_value(kind))
     np.testing.assert_array_equal(array.to_numpy(), np.full((*shape, *element_shape), 7))
 
@@ -137,7 +137,7 @@ def test_initializer_captures_components(api: str, backend: qd.Backend | None, k
     num_elements = 3
     value = _initial_value(kind)
     expected = np.array(value)
-    array = _allocate(api, backend, kind, (num_elements,), via_dtype=via_dtype, fill=value)
+    array = _allocate(api=api, backend=backend, kind=kind, shape=(num_elements,), via_dtype=via_dtype, fill=value)
     if kind == "vector":
         value[0] = 99
     else:
@@ -159,7 +159,7 @@ def test_initializer_captures_matrix(api: str, backend: qd.Backend | None) -> No
     # A Matrix used as an initializer must be captured before later changes to that Matrix.
     expected = [[1, 2, 3], [4, 5, 6]]
     value = qd.Matrix(expected)
-    array = _allocate(api, backend, "matrix", (), dtype=qd.i32, fill=value)
+    array = _allocate(api=api, backend=backend, kind="matrix", shape=(), dtype=qd.i32, fill=value)
     value[0, 0] = 99
     np.testing.assert_array_equal(array.to_numpy(), expected)
 
@@ -179,7 +179,9 @@ def test_initializer_captures_matrix(api: str, backend: qd.Backend | None) -> No
 def test_initializer_leaves_gradients_zero(api: str, backend: qd.Backend | None, kind: str, via_dtype: bool) -> None:
     # Initializing forward values must leave the companion gradient values at zero.
     num_elements = 4
-    array = _allocate(api, backend, kind, (num_elements,), via_dtype=via_dtype, fill=7, needs_grad=True)
+    array = _allocate(
+        api=api, backend=backend, kind=kind, shape=(num_elements,), via_dtype=via_dtype, fill=7, needs_grad=True
+    )
     element_shape = np.shape(_initial_value(kind))
     np.testing.assert_array_equal(array.to_numpy(), np.full((num_elements, *element_shape), 7))
     np.testing.assert_array_equal(array.grad.to_numpy(), np.zeros((num_elements, *element_shape)))
@@ -199,8 +201,8 @@ def test_initializer_leaves_gradients_zero(api: str, backend: qd.Backend | None,
 def test_initializer_invalid_scalar(api: str, backend: qd.Backend | None, value: list[int] | str) -> None:
     # Invalid scalar initializers must raise at declaration without preventing later valid allocations.
     with pytest.raises(ValueError, match="fill"):
-        _allocate(api, backend, "scalar", (), fill=value)
-    array = _allocate(api, backend, "scalar", (), fill=7)
+        _allocate(api=api, backend=backend, kind="scalar", shape=(), fill=value)
+    array = _allocate(api=api, backend=backend, kind="scalar", shape=(), fill=7)
     assert array[()] == 7
 
 
@@ -219,8 +221,8 @@ def test_initializer_invalid_scalar(api: str, backend: qd.Backend | None, value:
 def test_initializer_invalid_components(api: str, backend: qd.Backend | None, kind: str, via_dtype: bool) -> None:
     # Component counts that do not match the element type must be rejected by every constructor.
     with pytest.raises(ValueError, match="fill"):
-        _allocate(api, backend, kind, (), via_dtype=via_dtype, fill=[1, 2])
-    array = _allocate(api, backend, kind, (), via_dtype=via_dtype, fill=7)
+        _allocate(api=api, backend=backend, kind=kind, shape=(), via_dtype=via_dtype, fill=[1, 2])
+    array = _allocate(api=api, backend=backend, kind=kind, shape=(), via_dtype=via_dtype, fill=7)
     np.testing.assert_array_equal(array.to_numpy(), np.full(np.shape(_initial_value(kind)), 7))
 
 
@@ -238,8 +240,8 @@ def test_initializer_invalid_components(api: str, backend: qd.Backend | None, ki
 def test_initializer_invalid_matrix(api: str, backend: qd.Backend | None, value: list[list[int | None]]) -> None:
     # Invalid matrix shapes or components must raise without preventing later valid allocations.
     with pytest.raises(ValueError, match="fill"):
-        _allocate(api, backend, "matrix", (), fill=value)
-    array = _allocate(api, backend, "matrix", (), fill=7)
+        _allocate(api=api, backend=backend, kind="matrix", shape=(), fill=value)
+    array = _allocate(api=api, backend=backend, kind="matrix", shape=(), fill=7)
     np.testing.assert_array_equal(array.to_numpy(), np.full((2, 3), 7))
 
 
@@ -257,7 +259,7 @@ def test_initializer_invalid_matrix(api: str, backend: qd.Backend | None, value:
 def test_initializer_precedes_writes(api: str, backend: qd.Backend | None, operation: str) -> None:
     # Initialization must run before each kind of write.
     num_elements = 4
-    array = _allocate(api, backend, "scalar", (num_elements,), dtype=qd.i32, fill=3)
+    array = _allocate(api=api, backend=backend, kind="scalar", shape=(num_elements,), dtype=qd.i32, fill=3)
     if operation == "fill":
         array.fill(5)
     elif operation == "host":
@@ -288,7 +290,7 @@ def test_initializer_precedes_writes(api: str, backend: qd.Backend | None, opera
 @test_utils.test()
 def test_initializer_first_kernel_read(api: str, backend: qd.Backend | None, dtype: DataTypeCxx) -> None:
     # The first kernel must see the initializer, and a later kernel must see an explicit fill.
-    array = _allocate(api, backend, "scalar", (4,), dtype=dtype, fill=3)
+    array = _allocate(api=api, backend=backend, kind="scalar", shape=(4,), dtype=dtype, fill=3)
 
     @qd.kernel
     def k_read(array: qd.Tensor) -> qd.i32:
@@ -319,7 +321,7 @@ def test_initializer_dlpack(api: str, backend: qd.Backend | None, kind: str, via
     shape = (2, 3)
     value = _initial_value(kind)
     kwargs = {"layout": (1, 0)} if api == "tensor" else {}
-    array = _allocate(api, backend, kind, shape, via_dtype=via_dtype, fill=value, **kwargs)
+    array = _allocate(api=api, backend=backend, kind=kind, shape=shape, via_dtype=via_dtype, fill=value, **kwargs)
     qd.sync()
     torch_view = torch.utils.dlpack.from_dlpack(array.to_dlpack())
     np.testing.assert_array_equal(torch_view.cpu().numpy(), np.broadcast_to(value, (*shape, *np.shape(value))))
@@ -336,8 +338,8 @@ def test_initializer_dlpack(api: str, backend: qd.Backend | None, kind: str, via
 def test_initializer_fields_share_tree(api: str, backend: qd.Backend | None) -> None:
     # Declarations with fill= must defer compilation, share one allocation tree, and initialize every field.
     num_fields = 40
-    fields = [_allocate(api, backend, "scalar", (), fill=i) for i in range(num_fields)]
-    total = _allocate(api, backend, "scalar", ())
+    fields = [_allocate(api=api, backend=backend, kind="scalar", shape=(), fill=i) for i in range(num_fields)]
+    total = _allocate(api=api, backend=backend, kind="scalar", shape=())
     assert impl.get_runtime().get_num_compiled_functions() == 0
 
     @qd.kernel
@@ -360,7 +362,7 @@ def test_initializer_fields_share_tree(api: str, backend: qd.Backend | None) -> 
 @test_utils.test()
 def test_initializer_is_not_replayed(api: str, backend: qd.Backend | None) -> None:
     # Once initialization has run, later synchronization must preserve writes made afterward.
-    field = _allocate(api, backend, "scalar", (), dtype=qd.i32, fill=3)
+    field = _allocate(api=api, backend=backend, kind="scalar", shape=(), dtype=qd.i32, fill=3)
     assert field[()] == 3
     field[()] = 5
 
@@ -381,10 +383,10 @@ def test_initializer_is_not_replayed(api: str, backend: qd.Backend | None) -> No
 @test_utils.test()
 def test_initializer_after_materialization(api: str, backend: qd.Backend | None) -> None:
     # Fields declared after an earlier allocation must initialize together in a new allocation tree.
-    first = _allocate(api, backend, "scalar", (), fill=2)
+    first = _allocate(api=api, backend=backend, kind="scalar", shape=(), fill=2)
     assert first[()] == 2
-    second = _allocate(api, backend, "scalar", (), fill=4)
-    third = _allocate(api, backend, "scalar", (), fill=6)
+    second = _allocate(api=api, backend=backend, kind="scalar", shape=(), fill=4)
+    third = _allocate(api=api, backend=backend, kind="scalar", shape=(), fill=6)
     assert second[()] == 4
     assert third[()] == 6
     assert _storage(second).snode._snode_tree_id == _storage(third).snode._snode_tree_id
@@ -395,7 +397,7 @@ def test_initializer_after_materialization(api: str, backend: qd.Backend | None)
 def test_initializer_manual_placement() -> None:
     # A field declared without a shape must receive its initializer after manual placement.
     num_elements = 4
-    field = qd.field(qd.i32, fill=8)
+    field = qd.field(dtype=qd.i32, fill=8)
     qd.root.dense(qd.i, num_elements).place(field)
     np.testing.assert_array_equal(field.to_numpy(), [8] * num_elements)
 
@@ -403,7 +405,7 @@ def test_initializer_manual_placement() -> None:
 @test_utils.test()
 def test_initializer_gradients_and_offset() -> None:
     # Initialization must respect the index offset and leave gradient and dual fields at zero.
-    field = qd.field(qd.f32, shape=4, offset=-2, needs_grad=True, needs_dual=True, fill=2)
+    field = qd.field(dtype=qd.f32, shape=4, offset=-2, needs_grad=True, needs_dual=True, fill=2)
     assert field[-2] == 2
     assert field[1] == 2
     assert field.grad[-2] == 0
@@ -413,23 +415,23 @@ def test_initializer_gradients_and_offset() -> None:
 @test_utils.test()
 def test_initializer_reset() -> None:
     # Reset must discard pending initializers and allow fresh fields to initialize in the new runtime.
-    qd.field(qd.i32, shape=(), fill=8)
+    qd.field(dtype=qd.i32, shape=(), fill=8)
     runtime = impl.get_runtime()
     arch = qd.cfg.arch
     qd.reset()
     assert not runtime.field_initializers.pending
     qd.init(arch=arch)
-    field = qd.field(qd.i32, shape=(), fill=4)
+    field = qd.field(dtype=qd.i32, shape=(), fill=4)
     assert field[()] == 4
 
 
 @test_utils.test()
 def test_initializer_preserves_immediate_fill() -> None:
     # Calling .fill() must still compile immediately, placing later declarations in a separate tree.
-    first = qd.field(qd.i32, shape=())
+    first = qd.field(dtype=qd.i32, shape=())
     first.fill(3)
     assert impl.get_runtime().get_num_compiled_functions() > 0
-    second = qd.field(qd.i32, shape=(), fill=4)
+    second = qd.field(dtype=qd.i32, shape=(), fill=4)
     assert second[()] == 4
     assert first.snode._snode_tree_id != second.snode._snode_tree_id
 
@@ -437,7 +439,7 @@ def test_initializer_preserves_immediate_fill() -> None:
 @test_utils.test()
 def test_initializer_tensor_default_backend() -> None:
     # The tensor factory must initialize its default ndarray backend and preserve later fills.
-    tensor = qd.tensor(qd.i32, shape=(), fill=7)
+    tensor = qd.tensor(dtype=qd.i32, shape=(), fill=7)
     assert isinstance(tensor, qd.Tensor)
     assert isinstance(tensor._unwrap(), qd.Ndarray)
     assert tensor[()] == 7
@@ -453,7 +455,16 @@ def test_initializer_tensor_layout(backend: qd.Backend, kind: str, via_dtype: bo
     # Initialization and later writes must use canonical indices when the physical shape axes are permuted.
     shape = (2, 3)
     value = _initial_value(kind)
-    tensor = _allocate("tensor", backend, kind, shape, layout=(1, 0), via_dtype=via_dtype, fill=value, needs_grad=True)
+    tensor = _allocate(
+        api="tensor",
+        backend=backend,
+        kind=kind,
+        shape=shape,
+        layout=(1, 0),
+        via_dtype=via_dtype,
+        fill=value,
+        needs_grad=True,
+    )
     assert isinstance(tensor, qd.Tensor)
     expected = np.broadcast_to(value, (*shape, *np.shape(value))).copy()
     np.testing.assert_array_equal(tensor.to_numpy(), expected)
