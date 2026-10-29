@@ -10,13 +10,42 @@ permissions:
   actions: read
 
 jobs:
+  runner_health:
+    runs-on: misc-slow-amd-amdgpu3
+    timeout-minutes: 5
+    steps:
+      - name: Inspect GPU visibility and permissions
+        shell: bash
+        run: |
+          task_root="$HOME/ais/misc_slow_amd/health-${GITHUB_RUN_ID}"
+          mkdir -p "$task_root"
+          echo "HEALTH_ROOT=$task_root" >> "$GITHUB_ENV"
+          {
+            hostname
+            id
+            uname -a
+            ls -l /dev/kfd /dev/dri
+            lspci -nnk
+            lsmod
+            ls -l /sys/class/drm
+            cat /sys/module/amdgpu/version
+            ldconfig -p | grep -E 'amdhip|hsa-runtime'
+            /opt/rocm/bin/rocminfo
+          } > "$task_root/health.log" 2>&1
+          cat "$task_root/health.log"
+          sudo -n dmesg > "$task_root/dmesg.log" 2>&1 || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: amdgpu3-health
+          path: ${{ env.HEALTH_ROOT }}
   profile:
     strategy:
       fail-fast: false
       matrix:
         include:
           - arch: amdgpu
-            runner: amdgpu
+            runner: misc-slow-amd-primary
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 35
     env:
