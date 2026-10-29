@@ -54,7 +54,7 @@ def _initial_value(element_class: str) -> float | list[int] | list[list[int]]:
     return [[1, 2, 3], [4, 5, 6]]
 
 
-def _storage(array: qd.Field | qd.Tensor) -> qd.Field:
+def _get_underlying_field(array: qd.Field | qd.Tensor) -> qd.Field:
     # Return the underlying field so tests can inspect its allocation tree, unwrapping a Tensor if needed.
     return array._unwrap() if isinstance(array, qd.Tensor) else array
 
@@ -426,7 +426,7 @@ def test_initializer_fields_share_tree(container_type: str, backend: qd.Backend 
     for field in fields:
         k_add_field(field, total)
     assert total[()] == sum(range(num_fields))
-    assert len({_storage(field).snode._snode_tree_id for field in fields + [total]}) == 1
+    assert len({_get_underlying_field(field).snode._snode_tree_id for field in fields + [total]}) == 1
 
 
 @pytest.mark.parametrize(
@@ -468,8 +468,8 @@ def test_initializer_after_materialization(container_type: str, backend: qd.Back
     third = _create_array(container_type=container_type, backend=backend, element_class="scalar", shape=(), fill=6)
     assert second[()] == 4
     assert third[()] == 6
-    assert _storage(second).snode._snode_tree_id == _storage(third).snode._snode_tree_id
-    assert _storage(first).snode._snode_tree_id != _storage(second).snode._snode_tree_id
+    assert _get_underlying_field(second).snode._snode_tree_id == _get_underlying_field(third).snode._snode_tree_id
+    assert _get_underlying_field(first).snode._snode_tree_id != _get_underlying_field(second).snode._snode_tree_id
 
 
 @test_utils.test()
