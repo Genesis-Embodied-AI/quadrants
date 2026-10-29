@@ -98,21 +98,23 @@ jobs:
           export PYTHONPATH="$GITHUB_WORKSPACE/misc:${PYTHONPATH:-}"
           export PYTEST_ADDOPTS="-p no:faulthandler -p amd_crash_probe"
           export AMD_CRASH_CACHE=on
-          for wheel in current baseline; do
+          for wheel in current-off current baseline; do
             if [ "$wheel" = baseline ]; then
               uv pip install --python "$TASK_ROOT/venv/bin/python" --reinstall baseline/*.whl || exit 1
               sha256sum baseline/*.whl > "$TASK_ROOT/results/baseline-sha256.txt"
             fi
+            export AMD_CRASH_CACHE=on
+            if [ "$wheel" = current-off ]; then export AMD_CRASH_CACHE=off; fi
             for files in 'field' 'fail_device_memory_allocation field'; do
               export AMD_CRASH_RESULTS="$TASK_ROOT/results/$wheel-${files// /-}"
               mkdir -p "$AMD_CRASH_RESULTS"
-              python tests/run_tests.py $files --arch amdgpu -r 0 -t 1 -v -k 'huge_allocation or default_fp or default_ip or field_name or test_field_copy_from' 2>&1 | tee "$AMD_CRASH_RESULTS/pytest.log"
+              timeout --kill-after=10s 120s python tests/run_tests.py $files --arch amdgpu -r 0 -t 1 -v -k 'huge_allocation or default_fp or default_ip or field_name or (test_field_copy_from and dtype0-shape0)' 2>&1 | tee "$AMD_CRASH_RESULTS/pytest.log"
               echo "${PIPESTATUS[0]}" > "$AMD_CRASH_RESULTS/exit-status.txt"
             done
             export AMD_CRASH_RESULTS="$TASK_ROOT/results/gdb-$wheel"
             mkdir -p "$AMD_CRASH_RESULTS"
             if command -v gdb; then
-              gdb -batch -ex 'set pagination off' -ex 'set print thread-events off' -ex run -ex 'bt 40' --args python tests/run_tests.py fail_device_memory_allocation field --arch amdgpu -r 0 -t 1 -v -s -k 'huge_allocation or default_fp or default_ip or field_name or test_field_copy_from' > "$AMD_CRASH_RESULTS/gdb.log" 2>&1
+              timeout --kill-after=10s 120s gdb -batch -ex 'set pagination off' -ex 'set print thread-events off' -ex run -ex 'bt 40' --args python tests/run_tests.py fail_device_memory_allocation field --arch amdgpu -r 0 -t 1 -v -s -k 'huge_allocation or default_fp or default_ip or field_name or (test_field_copy_from and dtype0-shape0)' > "$AMD_CRASH_RESULTS/gdb.log" 2>&1
             fi
           done
       - name: Kernel diagnostics
