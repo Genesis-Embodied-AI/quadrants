@@ -1,3 +1,5 @@
+from fractions import Fraction
+
 import numpy as np
 import pytest
 
@@ -202,3 +204,37 @@ def test_fill_initializer_dlpack(matrix: bool) -> None:
     torch_view = torch.utils.dlpack.from_dlpack(field.to_dlpack())
     expected = [[2, 3]] * 4 if matrix else [7] * 4
     np.testing.assert_array_equal(torch_view.cpu().numpy(), expected)
+
+
+@pytest.mark.parametrize("fill_value", [1 + 2j, np.complex64(1 + 2j), Fraction(1, 2)])
+@pytest.mark.parametrize("element_class", ["scalar", "vector", "matrix"])
+@test_utils.test()
+def test_fill_initializer_unsupported_number(
+    element_class: str, fill_value: complex | np.complexfloating | Fraction
+) -> None:
+    # Unsupported numbers must fail at declaration, including inside vector and matrix component lists.
+    with pytest.raises(ValueError, match="fill"):
+        if element_class == "scalar":
+            qd.field(dtype=qd.f32, shape=(), fill=fill_value)
+        elif element_class == "vector":
+            qd.Vector.field(n=2, dtype=qd.f32, shape=(), fill=[1, fill_value])
+        elif element_class == "matrix":
+            qd.Matrix.field(n=2, m=2, dtype=qd.f32, shape=(), fill=[[1, 2], [3, fill_value]])
+    field = qd.field(dtype=qd.f32, shape=(), fill=7)
+    assert field[()] == 7
+
+
+@pytest.mark.parametrize("fill_value", [True, 2, 2.5, np.bool_(True), np.int32(2), np.float32(2.5)])
+@pytest.mark.parametrize("element_class", ["scalar", "vector", "matrix"])
+@test_utils.test()
+def test_fill_initializer_supported_number(
+    element_class: str, fill_value: bool | int | float | np.bool_ | np.integer | np.floating
+) -> None:
+    # Supported Python and NumPy scalars must initialize scalar fields and broadcast to vector and matrix fields.
+    if element_class == "scalar":
+        field = qd.field(dtype=qd.f32, shape=(), fill=fill_value)
+    elif element_class == "vector":
+        field = qd.Vector.field(n=2, dtype=qd.f32, shape=(), fill=fill_value)
+    elif element_class == "matrix":
+        field = qd.Matrix.field(n=2, m=2, dtype=qd.f32, shape=(), fill=fill_value)
+    np.testing.assert_array_equal(field.to_numpy(), np.full(field.to_numpy().shape, fill_value))
