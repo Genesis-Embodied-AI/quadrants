@@ -467,7 +467,6 @@ Module Contents
       :type shape: Union[int, tuple[int]]
       :param needs_grad: If True, allocate a companion grad ndarray of the same shape and dtype,
                          accessible via ``arr.grad``. Requires ``dtype`` to be a real (floating-point) type. Defaults to False.
-                         Silently ignored on the python backend (matches the scalar ``qd.ndarray`` behaviour).
       :type needs_grad: bool, optional
 
       Example::
@@ -684,7 +683,6 @@ Module Contents
       :type shape: Union[int, tuple[int]]
       :param needs_grad: If True, allocate a companion grad ndarray of the same shape and dtype,
                          accessible via ``arr.grad``. Requires ``dtype`` to be a real (floating-point) type. Defaults to False.
-                         Silently ignored on the python backend (matches the scalar ``qd.ndarray`` behaviour).
       :type needs_grad: bool, optional
 
       .. rubric:: Example

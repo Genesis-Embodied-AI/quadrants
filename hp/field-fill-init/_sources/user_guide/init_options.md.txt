@@ -126,8 +126,6 @@ Metal and Vulkan lack the assertion extension that the field-bounds check relies
 
 Most `qd.init` keywords set a compiler-configuration option. Each option below can be passed as a keyword argument to `qd.init(...)`, and after initializing a compiled backend it is also readable and writable as an attribute on the configuration object `qd.cfg` (e.g. `qd.cfg.opt_level`). Because each option is both a `qd.init` argument and a `qd.cfg` attribute, the list below documents each as a *property* of `qd.cfg`, with its type, default value, and a short description.
 
-These are compiler settings, so most do not apply to the pure-Python `qd.python` backend, for which `qd.cfg` is `None`. A few instead set language defaults (such as the default numeric types `default_fp` and `default_ip`) and still take effect on `qd.python`.
-
 ```{eval-rst}
 .. autoclass:: quadrants._lib.core.quadrants_python.CompileConfig
    :members:
