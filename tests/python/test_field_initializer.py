@@ -187,7 +187,7 @@ def test_fill_initializer_preserves_immediate_fill():
 
 @pytest.mark.needs_torch
 @pytest.mark.parametrize("matrix", [False, True])
-@test_utils.test(exclude=[qd.vulkan])
+@test_utils.test()
 def test_fill_initializer_dlpack(matrix):
     # After synchronization, PyTorch must see initialized scalar and vector values through DLPack.
     torch = test_utils.require_torch_dlpack(need_field_support=True)
