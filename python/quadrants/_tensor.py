@@ -16,12 +16,16 @@ annotation. Dispatch sites check ``annotation is Tensor`` (the class). See ``_fu
 # lang/types subpackages.)
 
 from enum import IntEnum
+from typing import TYPE_CHECKING, Iterable, overload
 
 # Re-export so ``from quadrants._tensor import *`` still binds ``Tensor`` — keeps the wildcard import in
 # ``__init__.py`` simple and atomic.
 from quadrants._tensor_wrapper import Tensor
 from quadrants._tensor_wrapper import wrap as _wrap_impl
 from quadrants.lang._fill_initializer import _FillValue
+
+if TYPE_CHECKING:
+    from quadrants.lang._ndarray import Ndarray, _Ndarray
 
 __all__ = [
     "Backend",
@@ -39,7 +43,15 @@ _TENSOR_T_NDARRAY_MARKER = "__qd_tensor_t_ndarray__"
 # ----------------------------------------------------------------------------
 
 
-def _with_layout(ndarray, layout):
+@overload
+def _with_layout(ndarray: "_Ndarray", layout: Iterable[int]) -> "_Ndarray": ...
+
+
+@overload
+def _with_layout(ndarray: Tensor, layout: Iterable[int]) -> "Ndarray": ...
+
+
+def _with_layout(ndarray: "Ndarray | Tensor", layout: Iterable[int]) -> "Ndarray":
     """Tag ``ndarray`` with a canonical-axis permutation. Internal.
 
     Accepts either a bare ``Ndarray`` or a ``Tensor`` wrapper around one; in the wrapper case the tag goes on the

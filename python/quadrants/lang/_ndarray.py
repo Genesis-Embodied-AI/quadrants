@@ -1,6 +1,6 @@
 # type: ignore
 
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, TypeVar, Union
 
 import numpy as np
 
@@ -27,6 +27,9 @@ if TYPE_CHECKING:
     from quadrants.lang.matrix import MatrixNdarray, VectorNdarray
 
     TensorNdarray = Union["ScalarNdarray", VectorNdarray, MatrixNdarray]
+
+
+_Ndarray = TypeVar("_Ndarray", bound="Ndarray")
 
 
 def _invert_layout(layout):
