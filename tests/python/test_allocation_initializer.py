@@ -438,15 +438,15 @@ def test_initializer_fields_share_tree(container_type: str, backend: qd.Backend 
     ],
 )
 @test_utils.test()
-def test_initializer_is_not_replayed(container_type: str, backend: qd.Backend | None) -> None:
-    # Once initialization has run, later synchronization must preserve writes made afterward.
+def test_field_initializer_is_not_replayed(container_type: str, backend: qd.Backend | None) -> None:
+    # Once field initialization has run, later synchronization must preserve writes made afterward.
     field = _create_array(
         container_type=container_type, backend=backend, element_class="scalar", shape=(), dtype=qd.i32, fill=3
     )
     assert field[()] == 3
     field[()] = 5
 
-    # Each sync calls materialize() again. Repeating it must not replay the initializer over the later write.
+    # Each sync calls materialize() again. Repeating it must not replay the field initializer over the later write.
     qd.sync()
     assert field[()] == 5
     qd.sync()
@@ -461,7 +461,7 @@ def test_initializer_is_not_replayed(container_type: str, backend: qd.Backend | 
     ],
 )
 @test_utils.test()
-def test_initializer_after_materialization(container_type: str, backend: qd.Backend | None) -> None:
+def test_field_initializer_after_materialization(container_type: str, backend: qd.Backend | None) -> None:
     # Fields declared after an earlier allocation must initialize together in a new allocation tree.
     first = _create_array(container_type=container_type, backend=backend, element_class="scalar", shape=(), fill=2)
     assert first[()] == 2
@@ -474,7 +474,7 @@ def test_initializer_after_materialization(container_type: str, backend: qd.Back
 
 
 @test_utils.test()
-def test_initializer_manual_placement() -> None:
+def test_field_initializer_manual_placement() -> None:
     # A field declared without a shape must receive its initializer after manual placement.
     num_elements = 4
     field = qd.field(dtype=qd.i32, fill=8)
@@ -483,8 +483,8 @@ def test_initializer_manual_placement() -> None:
 
 
 @test_utils.test()
-def test_initializer_gradients_and_offset() -> None:
-    # Initialization must respect the index offset and leave gradient and dual fields at zero.
+def test_field_initializer_gradients_and_offset() -> None:
+    # Field initialization must respect the index offset and leave gradient and dual fields at zero.
     field = qd.field(dtype=qd.f32, shape=4, offset=-2, needs_grad=True, needs_dual=True, fill=2)
     assert field[-2] == 2
     assert field[1] == 2
@@ -493,8 +493,8 @@ def test_initializer_gradients_and_offset() -> None:
 
 
 @test_utils.test()
-def test_initializer_reset() -> None:
-    # Reset must discard pending initializers and allow fresh fields to initialize in the new runtime.
+def test_field_initializer_reset() -> None:
+    # Reset must discard pending field initializers and allow fresh fields to initialize in the new runtime.
     qd.field(dtype=qd.i32, shape=(), fill=8)
     runtime = impl.get_runtime()
     arch = qd.cfg.arch
@@ -506,8 +506,8 @@ def test_initializer_reset() -> None:
 
 
 @test_utils.test()
-def test_initializer_preserves_immediate_fill() -> None:
-    # Calling .fill() must still compile immediately, placing later declarations in a separate tree.
+def test_field_initializer_preserves_immediate_fill() -> None:
+    # Calling .fill() on a field must still compile immediately, placing later field declarations in a separate tree.
     first = qd.field(dtype=qd.i32, shape=())
     first.fill(3)
     assert impl.get_runtime().get_num_compiled_functions() > 0
