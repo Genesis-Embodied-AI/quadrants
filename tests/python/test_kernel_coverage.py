@@ -294,7 +294,7 @@ def test_kernel_coverage_survives_reinit():
     """
     from quadrants.lang import _kernel_coverage, impl
 
-    current_arch = impl.get_runtime()._arch
+    current_arch = impl.current_cfg().arch
     _kernel_coverage.ensure_field_allocated()
 
     probe_count_before = _kernel_coverage._probe_counter
