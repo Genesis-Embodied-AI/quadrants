@@ -490,6 +490,16 @@
 </pre></div>
 </div>
 </section>
+<section id="initial-values">
+<h2>Initial values<a class="headerlink" href="#initial-values" title="Link to this heading">#</a></h2>
+<p>Use <code class="docutils literal notranslate"><span class="pre">fill=</span></code> to initialize a vector or matrix field:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">directions</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Vector</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">fill</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span>
+<span class="n">velocities</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Vector</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">fill</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">rotations</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Matrix</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">fill</span><span class="o">=</span><span class="p">[[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]])</span>
+</pre></div>
+</div>
+<p>See <a class="reference internal" href="tensor_types.html#initializing-fields"><span class="std std-ref">Initializing fields</span></a> for accepted values, supported constructors, and allocation timing.</p>
+</section>
 <section id="type-annotations">
 <h2>Type annotations<a class="headerlink" href="#type-annotations" title="Link to this heading">#</a></h2>
 <p>For kernel and <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> parameters, use <code class="docutils literal notranslate"><span class="pre">qd.types.vector</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.types.matrix</span></code>:</p>
@@ -763,6 +773,7 @@
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#creating-vectors-and-matrices-in-kernels">Creating vectors and matrices in kernels</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#vector-and-matrix-fields">Vector and matrix fields</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#vector-and-matrix-ndarrays">Vector and matrix ndarrays</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#initial-values">Initial values</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#type-annotations">Type annotations</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#operations">Operations</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#size-limit">Size limit</a></li>

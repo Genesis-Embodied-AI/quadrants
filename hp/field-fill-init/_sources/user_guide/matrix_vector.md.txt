@@ -63,6 +63,18 @@ vel = qd.Vector.ndarray(3, qd.f32, shape=(50,))
 transforms = qd.Matrix.ndarray(4, 4, qd.f32, shape=(50,))
 ```
 
+## Initial values
+
+Use `fill=` to initialize a vector or matrix field:
+
+```python
+directions = qd.Vector.field(3, qd.f32, shape=100, fill=[0, 0, 1])
+velocities = qd.Vector.field(3, qd.f32, shape=100, fill=0)
+rotations = qd.Matrix.field(2, 2, qd.f32, shape=100, fill=[[1, 0], [0, 1]])
+```
+
+See [Initializing fields](tensor_types.md#initializing-fields) for accepted values, supported constructors, and allocation timing.
+
 ## Type annotations
 
 For kernel and `@qd.func` parameters, use `qd.types.vector` and `qd.types.matrix`:
