@@ -5,17 +5,91 @@ import pathlib
 import platform
 from errno import EEXIST
 from tempfile import NamedTemporaryFile, mkstemp
+from types import ModuleType
+from typing import TYPE_CHECKING
 
 import numpy as np
+import numpy.typing as npt
 import pytest
 
 import quadrants as qd
 from quadrants._lib import core as _qd_core
 from quadrants.lang import amdgpu, cpu, cuda, gpu, metal, vulkan
+from quadrants.lang.field import _TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET
 from quadrants.lang.misc import is_arch_supported
+
+if TYPE_CHECKING:
+    import torch
 
 
 # Helper functions
+@qd.pyfunc
+def encode_index(I):
+    # Encode coordinates as an integer, e.g. [1, 2] -> 12. This encoding depends only on the index coordinates, not on
+    # the layout.
+    index_code = 0
+    for axis in qd.static(range(len(I))):
+        index_code = index_code * 10 + I[axis]
+    return index_code
+
+
+def new_numpy_tensor_containing_index_codes(
+    shape: tuple[int, ...], element_shape: tuple[int, ...]
+) -> npt.NDArray[np.float32]:
+    """Build NumPy values encoding every shape and component coordinate as decimal digits."""
+    values = np.empty(shape + element_shape, dtype=np.float32)
+    # np.ndindex(values.shape) produces every index tuple in the array. E.g. for shape (2, 3), it yields (0, 0), (0, 1),
+    # (0, 2), (1, 0), (1, 1), (1, 2).
+    for index in np.ndindex(values.shape):
+        values[index] = encode_index(index)
+    return values
+
+
+@qd.func
+def fill_tensor_with_index_codes(x: qd.template()) -> None:
+    for I in qd.grouped(x):
+        element_shape = qd.static(x[I].get_shape())
+        position_code = encode_index(I)
+        for row in qd.static(range(element_shape[0])):
+            if qd.static(len(element_shape) == 1):
+                x[I][row] = encode_index([position_code, row])
+            else:
+                for column in qd.static(range(element_shape[1])):
+                    x[I][row, column] = encode_index([position_code, row, column])
+
+
+@qd.kernel
+def fill_index_codes(x: qd.Tensor, dtype: qd.template()) -> None:
+    """Write each scalar component's index code through canonical kernel indices."""
+    fill_tensor_with_index_codes(x)
+
+
+def require_torch_gpu_kernels() -> None:
+    # The CI Torch wheel cannot execute GPU kernels on the AMD V520; transfers and metadata access still work.
+    if os.environ.get("QD_AMDGPU_V520") == "1" and qd.lang.impl.current_cfg().arch == qd.amdgpu:
+        pytest.skip("The CI Torch wheel cannot execute GPU kernels on AMD V520")
+
+
+def require_torch_dlpack(need_field_support: bool) -> ModuleType:
+    torch = pytest.importorskip("torch")
+    if (
+        qd.lang.impl.current_cfg().arch == qd.metal
+        and need_field_support
+        and not _TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET
+    ):
+        pytest.skip("Metal field DLPack export requires PyTorch newer than 2.9.1")
+    return torch
+
+
+def torch_synchronize(device: "torch.device") -> None:
+    import torch
+
+    if device.type == "cuda":
+        torch.cuda.synchronize(device)
+    elif device.type == "mps":
+        torch.mps.synchronize()
+
+
 def verify_image(image, image_name, tolerance=0.1, regerate_groundtruth_images=False):
     if regerate_groundtruth_images:
         ground_truth_name = f"tests/python/expected/{image_name}.png"
