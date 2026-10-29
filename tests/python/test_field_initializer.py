@@ -160,8 +160,8 @@ def test_fill_initializer_invalid_scalar(value):
     # Invalid scalar initializers must raise at declaration without preventing later valid allocations.
     with pytest.raises(ValueError, match="fill"):
         qd.field(qd.i32, shape=(), fill=value)
-    field = qd.field(qd.i32, shape=(), fill=0)
-    assert field[()] == 0
+    field = qd.field(qd.i32, shape=(), fill=7)
+    assert field[()] == 7
 
 
 @pytest.mark.parametrize("value", [[[1, 2]], [[1, 2], [3]], [1, 2], [[1, None], [2, 3]]])
@@ -170,8 +170,8 @@ def test_fill_initializer_invalid_matrix(value):
     # Invalid matrix shapes or components must raise without preventing later valid allocations.
     with pytest.raises(ValueError, match="fill"):
         qd.Matrix.field(2, 2, qd.i32, shape=(), fill=value)
-    field = qd.field(qd.i32, shape=(), fill=0)
-    assert field[()] == 0
+    field = qd.field(qd.i32, shape=(), fill=7)
+    assert field[()] == 7
 
 
 @test_utils.test()
