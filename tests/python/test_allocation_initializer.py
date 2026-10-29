@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 import quadrants as qd
-from quadrants._lib.core import DataTypeCxx
+from quadrants._lib.core.quadrants_python import DataTypeCxx
 from quadrants.lang import impl
 
 from tests.helpers import test_utils
