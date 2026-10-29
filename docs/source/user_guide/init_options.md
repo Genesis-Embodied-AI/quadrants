@@ -68,7 +68,7 @@ Cutoff (in bytes) below which the gate-passing-count sizing path described in [M
 
 ### `external_metal_command_queue`
 
-An `MTLCommandQueue*` pointer (as an integer) to use instead of creating a new Metal command queue. Default `0` (create a new queue). When non-zero, Quadrants dispatches all GPU work on the provided queue, which enables GPU-side ordering with other frameworks that share the same queue (most notably PyTorch MPS).
+An `MTLCommandQueue*` pointer (as an integer) to use instead of creating a new Metal command queue. Default `0` (create a new queue). When non-zero, Quadrants dispatches all GPU work on the provided queue, which enables GPU-side ordering with other frameworks that share the same queue (most notably PyTorch's MPS backend, which runs on Apple GPUs via Metal Performance Shaders). See [Shared Metal command queue](./metal_shared_queue.md) for setup instructions.
 
 ### `external_metal_command_queue_is_torch_queue`
 

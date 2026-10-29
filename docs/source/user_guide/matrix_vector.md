@@ -97,9 +97,9 @@ def transform(
 
 Element-wise arithmetic, dot / cross / outer products, norms, transpose / determinant / trace / inverse, Frobenius inner product, and matrix-vector / matrix-matrix multiply all live on a separate page since they all run **per thread, in registers, with no cross-thread cooperation**. See [matrix_vector_per_thread](matrix_vector_per_thread.md).
 
-For per-thread *numerical* algorithms (SVD, symmetric eigendecomposition, polar decomposition, linear solve) see [linalg_per_thread](linalg_per_thread.md).
+For per-thread *numerical* algorithms (singular value decomposition (SVD), symmetric eigendecomposition, polar decomposition, linear solve) see [linalg_per_thread](linalg_per_thread.md).
 
-For cross-thread / sparse linear algebra (CG, sparse direct solvers) see `qd.linalg.*` (separate, not yet covered in user guide).
+For cross-thread / sparse linear algebra (conjugate gradient (CG), sparse direct solvers) see `qd.linalg.*` (separate, not yet covered in user guide).
 
 ## Size limit
 
@@ -109,11 +109,11 @@ Matrices and vectors are unrolled into scalar registers at compile time. Using m
 large = qd.field(qd.f32, shape=(64, 64))
 ```
 
-The 144-element threshold is set by the largest size officially supported by the per-thread linalg APIs (`Matrix.inverse` up to 12×12; `qd.sym_eig` and `qd.make_spd` cap lower, at 6×6) — those internal constructions stay below the warning threshold.
+The 144-element threshold is set by the largest size officially supported by the per-thread linear algebra APIs ([`Matrix.inverse`](matrix_vector_per_thread.md) up to 12×12; [`qd.sym_eig` and `qd.make_spd`](linalg_per_thread.md) cap lower, at 6×6).
 
-## Storage layout: packed vs unpacked vectors
+## Advanced: storage layout of packed vs unpacked vectors
 
-`qd.types.vector(N, dtype)` accepts an optional `unpacked: bool = False` kwarg that controls how the vector is laid out in per-thread memory when used as a `@qd.dataclass` field. The kwarg does not affect the *value type* — the field still holds a vector — it only affects the storage layout.
+`qd.types.vector(N, dtype)` accepts an optional `unpacked: bool = False` kwarg that controls how the vector is laid out in per-thread memory when used as a [`@qd.dataclass`](compound_types.md#qddataclass-qdtypesstruct) field. The kwarg does not affect the *value type* — the field still holds a vector — it only affects the storage layout.
 
 - `unpacked=False` (default): the field is stored as a single group of `N` scalars. The compiler keeps the whole vector in registers, or, if there is insufficient register storage, spills the whole vector to "local" memory (which despite the name lives in off-chip DRAM and is slow). It is all-or-nothing per vector.
 - `unpacked=True`: the field is stored as `N` independent scalar slots. The compiler can decide per slot whether to keep it in a register or spill it. Under register pressure this can be the difference between "most of the vector still lives in registers" and "the entire vector is in DRAM".
@@ -124,7 +124,7 @@ class Tile:
     r: qd.types.vector(32, qd.f32, unpacked=True)
 ```
 
-The flag is consumed at class-definition time. `@qd.dataclass` expands the field into `N` synthetic scalar members `_r0.._r{N-1}`, and each `obj.r[i]` (for python-int / `qd.static`-resolved `i`) is lowered to a direct reference to the i-th synthetic member. The generated LLVM IR / PTX is byte-identical to declaring `N` named scalar fields by hand (`r0: qd.f32`, `r1: qd.f32`, ...), but the source keeps the indexed read/write syntax.
+The flag is consumed at class-definition time. `@qd.dataclass` expands the field into `N` synthetic scalar members `_r0.._r{N-1}`, and each `obj.r[i]` (for python-int / [`qd.static`](static.md)-resolved `i`) is lowered to a direct reference to the i-th synthetic member. The generated LLVM IR / PTX is byte-identical to declaring `N` named scalar fields by hand (`r0: qd.f32`, `r1: qd.f32`, ...), but the source keeps the indexed read/write syntax.
 
 ### What works on each layout
 
