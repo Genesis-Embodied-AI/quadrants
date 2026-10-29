@@ -261,6 +261,7 @@ def test_initializer_invalid_components(
     container_type: str, backend: qd.Backend | None, element_class: str, via_dtype: bool
 ) -> None:
     # Component counts that do not match the element type must be rejected by every constructor.
+    # A valid allocation afterward must still initialize correctly, checking that the rejection left no broken state.
     with pytest.raises(ValueError, match="fill"):
         _create_array(
             container_type=container_type,
