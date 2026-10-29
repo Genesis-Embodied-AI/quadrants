@@ -37,6 +37,9 @@ class IRVerifier : public BasicStmtVisitor {
     for (auto &op : stmt->get_operands()) {
       if (op == nullptr)
         continue;
+      // Rematerialized range bounds live in the task body, so their definitions follow the container statement.
+      if (auto offload = stmt->cast<OffloadedStmt>(); offload && (op == offload->begin_stmt || op == offload->end_stmt))
+        continue;
       bool found = false;
       for (int depth = (int)visible_stmts_.size() - 1; depth >= 0; depth--) {
         if (visible_stmts_[depth].find(op) != visible_stmts_[depth].end()) {

@@ -622,6 +622,8 @@ class IRPrinter : public IRVisitor {
       std::string begin_str, end_str;
       if (stmt->const_begin) {
         begin_str = std::to_string(stmt->begin_value);
+      } else if (stmt->begin_stmt) {
+        begin_str = stmt->begin_stmt->name();
       } else {
         begin_str = fmt::format("tmp(offset={}B)", stmt->begin_offset);
       }

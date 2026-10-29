@@ -1388,6 +1388,7 @@ class OffloadedStmt : public Stmt {
   bool reversed{false};
   bool is_bit_vectorized{false};
   int num_cpu_threads{1};
+  Stmt *begin_stmt{nullptr};
   Stmt *end_stmt{nullptr};
   std::string range_hint = "";
   std::string loop_name;
@@ -1469,6 +1470,8 @@ class OffloadedStmt : public Stmt {
                      snode,
                      begin_offset,
                      end_offset,
+                     begin_stmt,
+                     end_stmt,
                      const_begin,
                      const_end,
                      begin_value,

@@ -99,6 +99,9 @@ class DIE : public IRVisitor {
   }
 
   void visit(OffloadedStmt *stmt) override {
+    if (stmt->begin_stmt) {
+      used.insert(stmt->begin_stmt->instance_id);
+    }
     // TODO: A hack to make sure end_stmt is registered.
     // Ideally end_stmt should be its own Block instead.
     if (stmt->end_stmt && used.find(stmt->end_stmt->instance_id) == used.end()) {

@@ -363,6 +363,8 @@ std::unique_ptr<Stmt> OffloadedStmt::clone() const {
   new_stmt->snode = snode;
   new_stmt->begin_offset = begin_offset;
   new_stmt->end_offset = end_offset;
+  new_stmt->begin_stmt = begin_stmt;
+  new_stmt->end_stmt = end_stmt;
   new_stmt->const_begin = const_begin;
   new_stmt->const_end = const_end;
   new_stmt->begin_value = begin_value;

@@ -3,6 +3,7 @@
 #include "quadrants/ir/transforms.h"
 #include "quadrants/ir/analysis.h"
 #include "quadrants/ir/visitors.h"
+#include "quadrants/ir/type_utils.h"
 #include "quadrants/program/program.h"
 
 #include <set>
@@ -13,7 +14,18 @@ namespace quadrants::lang {
 
 namespace irpass {
 namespace {
-bool demotable_axis_load(Stmt *stmt) {
+bool demotable_axis_load(Stmt *stmt, bool scalar_args = false) {
+  // CUDA only rematerializes scalar integer expressions. In particular, memory loads, calls, random values and
+  // thread-dependent expressions must keep their original evaluation point.
+  if (scalar_args) {
+    if (!is_integral(stmt->ret_type))
+      return false;
+    if (auto arg = stmt->cast<ArgLoadStmt>())
+      return !arg->is_ptr && arg->create_load;
+    if (!stmt->is<ConstStmt>() && !stmt->is<ExternalTensorShapeAlongAxisStmt>() && !stmt->is<UnaryOpStmt>() &&
+        !stmt->is<BinaryOpStmt>() && !stmt->is<TernaryOpStmt>())
+      return false;
+  }
   // Stmt involving simple arithmetic of ExternalTensorShapeAlongAxisStmt
   // shouldn't be saved in global tmp, just clone them to each shader
   // separately.
@@ -25,7 +37,7 @@ bool demotable_axis_load(Stmt *stmt) {
   }
   for (int i = 0; i < n_op; i++) {
     auto op = stmt->operand(i);
-    if (!demotable_axis_load(op))
+    if (!demotable_axis_load(op, scalar_args))
       return false;
   }
   return true;
@@ -65,7 +77,7 @@ struct OffloadedRanges {
 // For GPU backends this pass also determines the grid dim and block dims
 class Offloader {
  public:
-  static OffloadedRanges run(IRNode *root, const CompileConfig &config) {
+  static OffloadedRanges run(IRNode *root, const CompileConfig &config, bool rematerialize_cuda) {
     OffloadedRanges offloaded_ranges;
 
     auto root_block = dynamic_cast<Block *>(root);
@@ -172,6 +184,11 @@ class Offloader {
           offloaded->const_begin = true;
           offloaded->begin_value = val->val.val_int32();
         } else {
+          if (rematerialize_cuda && demotable_axis_load(s->begin, true)) {
+            auto begin_copy = s->begin->clone();
+            offloaded->begin_stmt = begin_copy.get();
+            offloaded->body->insert(std::move(begin_copy));
+          }
           offloaded_ranges.begin_stmts.insert(std::make_pair(offloaded.get(), s->begin));
         }
 
@@ -179,7 +196,8 @@ class Offloader {
           offloaded->const_end = true;
           offloaded->end_value = val->val.val_int32();
         } else {
-          if ((arch == Arch::vulkan || arch == Arch::metal) && demotable_axis_load(s->end)) {
+          if (((arch == Arch::vulkan || arch == Arch::metal) && demotable_axis_load(s->end)) ||
+              (rematerialize_cuda && demotable_axis_load(s->end, true))) {
             // TODO: We need to update codegen for each backend gradually
             auto end_copy = s->end->clone();
             offloaded->end_stmt = end_copy.get();
@@ -390,8 +408,12 @@ class IdentifyValuesUsedInOtherOffloads : public BasicStmtVisitor {
  private:
   IdentifyValuesUsedInOtherOffloads(const CompileConfig &config,
                                     const std::unordered_map<Stmt *, Stmt *> &stmt_to_offloaded,
-                                    OffloadedRanges *offloaded_ranges)
-      : config_(config), stmt_to_offloaded_(stmt_to_offloaded), offloaded_ranges_(offloaded_ranges) {
+                                    OffloadedRanges *offloaded_ranges,
+                                    bool rematerialize_cuda)
+      : config_(config),
+        rematerialize_cuda_(rematerialize_cuda),
+        stmt_to_offloaded_(stmt_to_offloaded),
+        offloaded_ranges_(offloaded_ranges) {
     allow_undefined_visitor = true;
     invoke_default_visitor = true;
     current_offloaded_ = nullptr;
@@ -452,7 +474,8 @@ class IdentifyValuesUsedInOtherOffloads : public BasicStmtVisitor {
     if (top_level_ptr->is<GlobalPtrStmt>() || stmt->is<ExternalPtrStmt>() ||
         (stmt->is<ArgLoadStmt>() && (stmt->as<ArgLoadStmt>()->is_ptr || !stmt->as<ArgLoadStmt>()->create_load)))
       return;
-    if ((config_.arch == Arch::vulkan || config_.arch == Arch::metal) && demotable_axis_load(stmt))
+    if (((config_.arch == Arch::vulkan || config_.arch == Arch::metal) && demotable_axis_load(stmt)) ||
+        (rematerialize_cuda_ && demotable_axis_load(stmt, true)))
       return;
     // Not yet allocated
     if (local_to_global_.find(top_level_ptr) == local_to_global_.end()) {
@@ -479,14 +502,16 @@ class IdentifyValuesUsedInOtherOffloads : public BasicStmtVisitor {
   static StmtToOffsetMap run(IRNode *root,
                              const CompileConfig &config,
                              const std::unordered_map<Stmt *, Stmt *> &stmt_to_offloaded,
-                             OffloadedRanges *offloaded_ranges) {
-    IdentifyValuesUsedInOtherOffloads pass(config, stmt_to_offloaded, offloaded_ranges);
+                             OffloadedRanges *offloaded_ranges,
+                             bool rematerialize_cuda) {
+    IdentifyValuesUsedInOtherOffloads pass(config, stmt_to_offloaded, offloaded_ranges, rematerialize_cuda);
     root->accept(&pass);
     return pass.local_to_global_;
   }
 
  private:
   CompileConfig config_;
+  bool rematerialize_cuda_;
   std::unordered_map<Stmt *, Stmt *> stmt_to_offloaded_;
   OffloadedRanges *const offloaded_ranges_;
   // Local variables to global temporary offsets (in bytes)
@@ -549,11 +574,15 @@ class FixCrossOffloadReferences : public BasicStmtVisitor {
       stmt->body->accept(this);
     if (stmt->task_type == OffloadedStmt::TaskType::range_for) {
       if (!stmt->const_begin) {
-        QD_ASSERT(offloaded_ranges_->begin_stmts.find(stmt) != offloaded_ranges_->begin_stmts.end())
-        QD_ASSERT_INFO(local_to_global_offset_.find(offloaded_ranges_->begin_stmts.find(stmt)->second) !=
-                           local_to_global_offset_.end(),
-                       "Begin fails.")
-        stmt->begin_offset = local_to_global_offset_.at(offloaded_ranges_->begin_stmts.find(stmt)->second);
+        if (stmt->begin_stmt) {
+          stmt->begin_stmt->accept(this);
+        } else {
+          QD_ASSERT(offloaded_ranges_->begin_stmts.find(stmt) != offloaded_ranges_->begin_stmts.end())
+          QD_ASSERT_INFO(local_to_global_offset_.find(offloaded_ranges_->begin_stmts.find(stmt)->second) !=
+                             local_to_global_offset_.end(),
+                         "Begin fails.")
+          stmt->begin_offset = local_to_global_offset_.at(offloaded_ranges_->begin_stmts.find(stmt)->second);
+        }
       }
       if (!stmt->const_end) {
         if (stmt->end_stmt) {
@@ -800,12 +829,17 @@ void associate_continue_scope(IRNode *root, const CompileConfig &config) {
 
 void offload(IRNode *root, const CompileConfig &config) {
   QD_AUTO_PROF;
-  auto offloaded_ranges = Offloader::run(root, config);
+  // The CUDA adstack launcher reads bound temporaries before launching a task. Keep that path intact until stack
+  // sizing can consume rematerialized bounds too; forward kernels without stacks can avoid the preparation launch.
+  const bool rematerialize_cuda = config.arch == Arch::cuda && analysis::gather_statements(root, [](Stmt *stmt) {
+                                                                 return stmt->is<AdStackAllocaStmt>();
+                                                               }).empty();
+  auto offloaded_ranges = Offloader::run(root, config, rematerialize_cuda);
   type_check(root, config);
   {
     auto stmt_to_offloaded = StmtToOffloaded::run(root);
     const auto local_to_global_offset =
-        IdentifyValuesUsedInOtherOffloads::run(root, config, stmt_to_offloaded, &offloaded_ranges);
+        IdentifyValuesUsedInOtherOffloads::run(root, config, stmt_to_offloaded, &offloaded_ranges, rematerialize_cuda);
     PromoteIntermediateToGlobalTmp::run(root, &local_to_global_offset);
     stmt_to_offloaded = StmtToOffloaded::run(root);
     FixCrossOffloadReferences::run(root, config, &local_to_global_offset, stmt_to_offloaded, &offloaded_ranges);

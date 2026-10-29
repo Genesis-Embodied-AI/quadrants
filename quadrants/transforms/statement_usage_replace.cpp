@@ -57,6 +57,7 @@ class StatementUsageReplace : public IRVisitor {
   }
 
   void visit(OffloadedStmt *stmt) override {
+    stmt->replace_operand_with(old_stmt, new_stmt);
     stmt->all_blocks_accept(this);
   }
 

@@ -2195,9 +2195,22 @@ void TaskCodeGenLLVM::finalize_offloaded_task_function() {
 }
 
 std::tuple<llvm::Value *, llvm::Value *> TaskCodeGenLLVM::get_range_for_bounds(OffloadedStmt *stmt) {
+  // The loop body was emitted in a separate LLVM function. Emit the bound's pure dependency DAG again in the
+  // task entry function instead of reusing LLVM values belonging to that body function.
+  std::unordered_set<Stmt *> emitted;
+  auto emit_bound = [&](auto &&self, Stmt *value) -> llvm::Value * {
+    if (emitted.insert(value).second) {
+      for (auto *operand : value->get_operands())
+        self(self, operand);
+      value->accept(this);
+    }
+    return llvm_val[value];
+  };
   llvm::Value *begin, *end;
   if (stmt->const_begin) {
     begin = tlctx->get_constant(stmt->begin_value);
+  } else if (stmt->begin_stmt) {
+    begin = emit_bound(emit_bound, stmt->begin_stmt);
   } else {
     auto begin_stmt = Stmt::make<GlobalTemporaryStmt>(stmt->begin_offset, PrimitiveType::i32);
     begin_stmt->accept(this);
@@ -2205,6 +2218,8 @@ std::tuple<llvm::Value *, llvm::Value *> TaskCodeGenLLVM::get_range_for_bounds(O
   }
   if (stmt->const_end) {
     end = tlctx->get_constant(stmt->end_value);
+  } else if (stmt->end_stmt) {
+    end = emit_bound(emit_bound, stmt->end_stmt);
   } else {
     auto end_stmt = Stmt::make<GlobalTemporaryStmt>(stmt->end_offset, PrimitiveType::i32);
     end_stmt->accept(this);
