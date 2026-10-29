@@ -6,6 +6,8 @@
 #include "llvm/Bitcode/BitcodeWriter.h"
 #include "llvm/Bitcode/BitcodeReader.h"
 #include "llvm/Support/Error.h"
+#include <atomic>
+#include <cstdlib>
 #include "llvm/IR/Module.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -14,6 +16,14 @@
 #endif
 
 namespace quadrants::lang {
+static void dump_template(llvm::Module &module) {
+  if (const char *path = std::getenv("QD_CONTEXT_COMPARE")) {
+    static std::atomic<int> sequence{0};
+    std::error_code ec;
+    llvm::raw_fd_ostream out(std::string(path) + std::to_string(sequence++) + ".ll", ec);
+    module.print(out, nullptr);
+  }
+}
 
 std::vector<std::string> amdgpu_libdevice_files(const std::string &mcpu) {
   return {"ocml.bc",
@@ -51,6 +61,7 @@ std::unique_ptr<llvm::Module> load_amdgpu_runtime_bitcode(QuadrantsLLVMContext &
       inputs.key(),
       [&] {
         prepared = context.module_from_file(file, &inputs);
+        dump_template(*prepared);
         std::string bytes;
         llvm::raw_string_ostream stream(bytes);
         llvm::WriteBitcodeToFile(*prepared, stream);
@@ -69,6 +80,7 @@ std::unique_ptr<llvm::Module> load_amdgpu_runtime_bitcode(QuadrantsLLVMContext &
   if (!module) {
     QD_ERROR("Failed to parse prepared AMD runtime bitcode: {}", llvm::toString(module.takeError()));
   }
+  dump_template(*module.get());
   return std::move(module.get());
 #else
   QD_NOT_IMPLEMENTED;
