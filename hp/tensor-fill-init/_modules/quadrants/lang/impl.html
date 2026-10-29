@@ -345,7 +345,6 @@
     <span class="n">Function</span><span class="p">,</span>
     <span class="n">KernelCxx</span><span class="p">,</span>
     <span class="n">Program</span><span class="p">,</span>
-    <span class="n">SNodeCxx</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._snode</span><span class="w"> </span><span class="kn">import</span> <span class="n">fields_builder</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._fill_initializer</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
@@ -353,7 +352,6 @@
     <span class="n">_FillValue</span><span class="p">,</span>
     <span class="n">apply_initial_ndarray_fill</span><span class="p">,</span>
     <span class="n">capture_fill_value</span><span class="p">,</span>
-    <span class="n">snode_belongs_to_tree</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._ndarray</span><span class="w"> </span><span class="kn">import</span> <span class="n">Ndarray</span><span class="p">,</span> <span class="n">ScalarNdarray</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._ndrange</span><span class="w"> </span><span class="kn">import</span> <span class="n">GroupedNDRange</span><span class="p">,</span> <span class="n">_Ndrange</span>
@@ -787,17 +785,6 @@
 
     <span class="k">def</span><span class="w"> </span><span class="nf">initialize_fields_builder</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">builder</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">unfinalized_fields_builder</span><span class="p">[</span><span class="n">builder</span><span class="p">]</span> <span class="o">=</span> <span class="n">get_traceback</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
-
-    <span class="k">def</span><span class="w"> </span><span class="nf">discard_fields_from_tree</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tree_root</span><span class="p">:</span> <span class="n">SNodeCxx</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">"""Remove pending initialization and validation references before a tree's nodes are freed."""</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">field_initializers</span><span class="o">.</span><span class="n">discard_tree</span><span class="p">(</span><span class="n">tree_root</span><span class="p">)</span>
-        <span class="k">for</span> <span class="n">variables</span> <span class="ow">in</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">global_vars</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">grad_vars</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dual_vars</span><span class="p">):</span>
-            <span class="n">variables</span><span class="p">[:]</span> <span class="o">=</span> <span class="p">[</span><span class="n">var</span> <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">variables</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">snode_belongs_to_tree</span><span class="p">(</span><span class="n">var</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">snode</span><span class="p">(),</span> <span class="n">tree_root</span><span class="p">)]</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">matrix_fields</span><span class="p">[:]</span> <span class="o">=</span> <span class="p">[</span>
-            <span class="n">field</span>
-            <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">matrix_fields</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="n">snode_belongs_to_tree</span><span class="p">(</span><span class="n">var</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">snode</span><span class="p">(),</span> <span class="n">tree_root</span><span class="p">)</span> <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">field</span><span class="o">.</span><span class="n">vars</span><span class="p">)</span>
-        <span class="p">]</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">clear_compiled_functions</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">kernels</span><span class="p">:</span>
