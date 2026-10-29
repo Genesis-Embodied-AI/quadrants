@@ -69,7 +69,7 @@ def _with_layout(ndarray: "Ndarray | Tensor", layout: Iterable[int]) -> "Ndarray
         ndarray = cast("Ndarray", ndarray._unwrap())
 
     layout = tuple(layout)
-    ndim = len(ndarray.shape)
+    ndim = len(cast(tuple[int, ...], ndarray.shape))
     if len(layout) != ndim:
         raise ValueError(f"layout has {len(layout)} entries but ndarray has {ndim} dims")
     if sorted(layout) != list(range(ndim)):
