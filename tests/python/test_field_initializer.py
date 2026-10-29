@@ -73,7 +73,7 @@ def test_fill_initializer_after_materialization():
     assert first.snode._snode_tree_id != second.snode._snode_tree_id
 
 
-@pytest.mark.parametrize("factory", ["vector", "matrix", "vector_type", "matrix_type"])
+@pytest.mark.parametrize("factory", ["vector", "matrix", "vector_via_dtype", "matrix_type"])
 @test_utils.test()
 def test_fill_initializer_components(factory):
     # All vector and matrix constructors must capture component lists before later mutations.
@@ -84,7 +84,7 @@ def test_fill_initializer_components(factory):
         field = qd.Vector.field(2, qd.i32, shape=num_elements, fill=value)
     elif factory == "matrix":
         field = qd.Matrix.field(2, 2, qd.i32, shape=num_elements, fill=value)
-    elif factory == "vector_type":
+    elif factory == "vector_via_dtype":
         field = qd.field(qd.types.vector(2, qd.i32), shape=num_elements, fill=value)
     else:
         field = qd.field(qd.types.matrix(2, 2, qd.i32), shape=num_elements, fill=value)
@@ -96,7 +96,7 @@ def test_fill_initializer_components(factory):
         np.testing.assert_array_equal(field[i].to_numpy(), expected)
 
 
-@pytest.mark.parametrize("factory", ["vector", "matrix", "vector_type", "matrix_type"])
+@pytest.mark.parametrize("factory", ["vector", "matrix", "vector_via_dtype", "matrix_type"])
 @test_utils.test()
 def test_fill_initializer_broadcast(factory):
     # A scalar initializer must fill every component of every vector or matrix element.
@@ -105,7 +105,7 @@ def test_fill_initializer_broadcast(factory):
         field = qd.Vector.field(2, qd.i32, shape=num_elements, fill=9)
     elif factory == "matrix":
         field = qd.Matrix.field(2, 2, qd.i32, shape=num_elements, fill=9)
-    elif factory == "vector_type":
+    elif factory == "vector_via_dtype":
         field = qd.field(qd.types.vector(2, qd.i32), shape=num_elements, fill=9)
     elif factory == "matrix_type":
         field = qd.field(qd.types.matrix(2, 2, qd.i32), shape=num_elements, fill=9)
