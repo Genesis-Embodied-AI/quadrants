@@ -558,7 +558,7 @@ class ScalarNdarray(Ndarray):
     def _fill_by_kernel(self, val):
         from quadrants._kernels import fill_ndarray  # pylint: disable=C0415
 
-        fill_ndarray(self, val)
+        fill_ndarray(self, val, self.dtype)
 
     def __repr__(self):
         return "<qd.ndarray>"
