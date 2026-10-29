@@ -74,27 +74,42 @@ def test_fill_initializer_after_materialization():
 
 
 @pytest.mark.parametrize("factory", ["vector", "matrix", "vector_type", "matrix_type"])
-@pytest.mark.parametrize("scalar", [False, True])
 @test_utils.test()
-def test_fill_initializer_components(factory, scalar):
-    # All vector and matrix constructors must broadcast scalars or capture component lists before mutation.
+def test_fill_initializer_components(factory):
+    # All vector and matrix constructors must capture component lists before later mutations.
     value = [1, 2] if "vector" in factory else [[1, 2], [3, 4]]
     expected = np.array(value)
-    fill = 9 if scalar else value
     if factory == "vector":
-        field = qd.Vector.field(2, qd.i32, shape=3, fill=fill)
+        field = qd.Vector.field(2, qd.i32, shape=3, fill=value)
     elif factory == "matrix":
-        field = qd.Matrix.field(2, 2, qd.i32, shape=3, fill=fill)
+        field = qd.Matrix.field(2, 2, qd.i32, shape=3, fill=value)
     elif factory == "vector_type":
-        field = qd.field(qd.types.vector(2, qd.i32), shape=3, fill=fill)
+        field = qd.field(qd.types.vector(2, qd.i32), shape=3, fill=value)
     else:
-        field = qd.field(qd.types.matrix(2, 2, qd.i32), shape=3, fill=fill)
+        field = qd.field(qd.types.matrix(2, 2, qd.i32), shape=3, fill=value)
     if "vector" in factory:
         value[0] = 99
     else:
         value[0][0] = 99
     for i in range(3):
-        np.testing.assert_array_equal(field[i].to_numpy(), np.full_like(expected, 9) if scalar else expected)
+        np.testing.assert_array_equal(field[i].to_numpy(), expected)
+
+
+@pytest.mark.parametrize("factory", ["vector", "matrix", "vector_type", "matrix_type"])
+@test_utils.test()
+def test_fill_initializer_broadcast(factory):
+    # A scalar initializer must fill every component of every vector or matrix element.
+    if factory == "vector":
+        field = qd.Vector.field(2, qd.i32, shape=3, fill=9)
+    elif factory == "matrix":
+        field = qd.Matrix.field(2, 2, qd.i32, shape=3, fill=9)
+    elif factory == "vector_type":
+        field = qd.field(qd.types.vector(2, qd.i32), shape=3, fill=9)
+    elif factory == "matrix_type":
+        field = qd.field(qd.types.matrix(2, 2, qd.i32), shape=3, fill=9)
+    expected = np.full((2,) if "vector" in factory else (2, 2), 9)
+    for i in range(3):
+        np.testing.assert_array_equal(field[i].to_numpy(), expected)
 
 
 @test_utils.test()
