@@ -70,7 +70,7 @@ class RuntimeBitcodeCache {
         return bytes;
       }
     }
-    auto bytes = build();
+    std::string bytes = build();
     if (bytes.empty() || bytes.size() > max_bytes_ || max_entries_ == 0) {
       return bytes;
     }
