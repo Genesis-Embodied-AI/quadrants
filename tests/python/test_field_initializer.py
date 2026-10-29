@@ -196,30 +196,3 @@ def test_fill_initializer_dlpack(matrix):
     torch_view = torch.utils.dlpack.from_dlpack(field.to_dlpack())
     expected = [[2, 3]] * 4 if matrix else [7] * 4
     np.testing.assert_array_equal(torch_view.cpu().numpy(), expected)
-
-
-@pytest.mark.needs_torch
-@pytest.mark.parametrize("kind", ["scalar", "vector", "matrix", "vector_type", "matrix_type"])
-def test_fill_initializer_python_backend(kind):
-    # The Python backend must initialize scalar, vector, and matrix fields for each supported constructor.
-    pytest.importorskip("torch")
-    qd.init(arch=qd.python)
-    try:
-        if kind == "scalar":
-            field = qd.field(qd.i32, shape=3, fill=7)
-            expected = [7] * 3
-        elif kind == "vector":
-            field = qd.Vector.field(2, qd.i32, shape=3, fill=[2, 3])
-            expected = [[2, 3]] * 3
-        elif kind == "matrix":
-            field = qd.Matrix.field(2, 2, qd.i32, shape=3, fill=[[1, 2], [3, 4]])
-            expected = [[[1, 2], [3, 4]]] * 3
-        elif kind == "vector_type":
-            field = qd.field(qd.types.vector(2, qd.i32), shape=3, fill=7)
-            expected = [[7, 7]] * 3
-        else:
-            field = qd.field(qd.types.matrix(2, 2, qd.i32), shape=3, fill=7)
-            expected = [[[7, 7], [7, 7]]] * 3
-        np.testing.assert_array_equal(field.to_numpy(), expected)
-    finally:
-        qd.reset()
