@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Callable, TypeAlias, Union, cast
 import numpy as np
 
 if TYPE_CHECKING:
+    from quadrants._lib.core.quadrants_python import SNodeCxx
     from quadrants.lang.field import ScalarField
     from quadrants.lang.matrix import Matrix, MatrixField
 
@@ -33,6 +34,15 @@ def capture_fill_value(value: _FillValue | None, element_shape=()) -> _FillValue
     return result
 
 
+def snode_belongs_to_tree(node: "SNodeCxx | None", root: "SNodeCxx") -> bool:
+    """Compare roots without relying on the default tree ID of an unfinalized tree."""
+    if node is None:
+        return False
+    while node.parent is not None:
+        node = node.parent
+    return node.id == root.id
+
+
 class FieldInitializers:
     """Runtime-owned initializers; ordinary field.fill calls never enter this queue."""
 
@@ -45,6 +55,14 @@ class FieldInitializers:
 
     def clear(self) -> None:
         self.pending.clear()
+
+    def discard_tree(self, root: "SNodeCxx") -> None:
+        """Discard pending fills before their allocation tree is destroyed."""
+        self.pending = [
+            (field, value)
+            for field, value in self.pending
+            if not any(snode_belongs_to_tree(var.ptr.snode(), root) for var in field.vars)
+        ]
 
     def run(self) -> None:
         if not self.pending:

@@ -266,3 +266,27 @@ def test_fill_initializer_retries_after_error(monkeypatch: pytest.MonkeyPatch) -
     assert first[()] == 2
     assert second[()] == 3
     assert calls == [first, second, second, third]
+
+
+@pytest.mark.parametrize("element_class", ["scalar", "vector", "matrix"])
+@test_utils.test(exclude=qd.metal)
+def test_fill_initializer_destroyed_tree(element_class: str) -> None:
+    # Destroying a field's tree must discard its pending fill and preserve fills for other and unplaced fields.
+    builder = qd.FieldsBuilder()
+    if element_class == "scalar":
+        doomed = qd.field(dtype=qd.i32, fill=2)
+    elif element_class == "vector":
+        doomed = qd.Vector.field(n=2, dtype=qd.i32, fill=2)
+    elif element_class == "matrix":
+        doomed = qd.Matrix.field(n=2, m=2, dtype=qd.i32, fill=2)
+    builder.dense(qd.i, 4).place(doomed)
+    tree = builder.finalize()
+    survivor = qd.field(dtype=qd.i32, shape=(), fill=7)
+    unplaced = qd.field(dtype=qd.i32, fill=9)
+    runtime = impl.get_runtime()
+    assert runtime.get_num_compiled_functions() == 0
+    tree.destroy()
+    assert [field for field, _ in runtime.field_initializers.pending] == [survivor, unplaced]
+    qd.root.place(unplaced)
+    assert survivor[()] == 7
+    assert unplaced[()] == 9
