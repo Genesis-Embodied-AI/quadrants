@@ -13,7 +13,7 @@ export UV_CACHE_DIR="$workspace/tmp/uv-cache"
 export UV_PYTHON_INSTALL_DIR="$workspace/tmp/python"
 export PIP_CACHE_DIR="$workspace/tmp/pip-cache"
 export CMAKE_BUILD_PARALLEL_LEVEL=8
-export CMAKE_ARGS="-DQD_WITH_AMDGPU=ON -DQD_WITH_CUDA=OFF -DQD_WITH_VULKAN=OFF -DQD_WITH_GGUI=OFF -DQD_BUILD_TESTS=ON -DCLANG_EXECUTABLE=$HOME/.local/bin/clang"
+export CMAKE_ARGS="-DQD_WITH_AMDGPU=ON -DQD_WITH_CUDA=OFF -DQD_WITH_VULKAN=OFF -DQD_WITH_GGUI=OFF -DQD_BUILD_TESTS=OFF -DCLANG_EXECUTABLE=$HOME/.local/bin/clang"
 mkdir -p "$TMPDIR"
 cd "$repo_root"
 git rev-parse HEAD
@@ -24,5 +24,8 @@ fi
 source .venv/bin/activate
 uv pip install --group dev --group test
 python -m pip install -v --no-build-isolation -e . -Ceditable.rebuild=true
-build/quadrants_cpp_tests --gtest_filter='RuntimeHsacoCache.*'
+LLVM_ROOT="$LLVM_DIR" CACHE_TEST_OUTPUT="$TMPDIR" bash misc/check_runtime_cache_cpp.sh
 python tests/run_tests.py amdgpu_runtime_cache --arch amdgpu -t 1 -v
+python misc/profile_runtime_hsaco_cache.py --output "$TMPDIR/cache-toggle" 2>&1 | tee "$TMPDIR/cache-toggle.log"
+python misc/profile_ci_startup.py --arch amdgpu --output "$TMPDIR/startup" 2>&1 | tee "$TMPDIR/startup.log"
+python tests/run_tests.py basics assign scalar_op amdgpu_context_cache --arch amdgpu -t 4 -v 2>&1 | tee "$TMPDIR/subset.log"
