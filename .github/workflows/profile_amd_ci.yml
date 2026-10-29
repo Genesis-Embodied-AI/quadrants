@@ -58,6 +58,7 @@ jobs:
           git -C suite rev-parse HEAD | tee "$task_root/results/suite-commit.txt"
           git -C profiler rev-parse HEAD | tee "$task_root/results/profiler-commit.txt"
       - name: Profile without Torch
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -68,6 +69,7 @@ jobs:
           python profiler/misc/profile_ci_startup.py --arch '${{ matrix.arch }}' --cycles 2 --trace \
             --output "$TASK_ROOT/results/trace" 2>&1 | tee "$TASK_ROOT/results/trace.log"
       - name: Compare one and four pytest workers
+        continue-on-error: true
         working-directory: suite
         shell: bash
         run: |
@@ -97,6 +99,28 @@ jobs:
             --output "$TASK_ROOT/results/with-torch" 2>&1 | tee "$TASK_ROOT/results/with-torch.log"
           QD_ENABLE_TORCH=0 python profiler/misc/profile_ci_startup.py --arch '${{ matrix.arch }}' \
             --output "$TASK_ROOT/results/torch-disabled" 2>&1 | tee "$TASK_ROOT/results/torch-disabled.log"
+      - name: Profile clean Python environment using the Torch-bundled HIP runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          torch_lib="$(python -c 'import importlib.util, pathlib; print(pathlib.Path(importlib.util.find_spec("torch").origin).parent / "lib")')"
+          uv venv --python '3.10' --seed "$TASK_ROOT/clean-venv"
+          uv pip install --python "$TASK_ROOT/clean-venv/bin/python" wheels/*.whl --group suite/pyproject.toml:test
+          export LD_LIBRARY_PATH="$torch_lib:${LD_LIBRARY_PATH:-}"
+          export PATH="$TASK_ROOT/clean-venv/bin:$PATH"
+          python profiler/misc/profile_ci_startup.py --arch '${{ matrix.arch }}' --driver-only \
+            --output "$TASK_ROOT/results/driver-bundled" 2>&1 | tee "$TASK_ROOT/results/driver-bundled.log"
+          python profiler/misc/profile_ci_startup.py --arch '${{ matrix.arch }}' \
+            --output "$TASK_ROOT/results/clean-bundled" 2>&1 | tee "$TASK_ROOT/results/clean-bundled.log"
+          python profiler/misc/profile_ci_startup.py --arch '${{ matrix.arch }}' --cycles 2 --trace \
+            --output "$TASK_ROOT/results/trace-bundled" 2>&1 | tee "$TASK_ROOT/results/trace-bundled.log"
+          cd suite
+          for workers in 1 4; do
+            export PYTEST_ADDOPTS="--durations=0 --durations-min=0 --junitxml=$TASK_ROOT/results/pytest-bundled-$workers.xml -p no:timeout -p pytest_hardtle --timeout=600"
+            python tests/run_tests.py basics assign scalar_op amdgpu_context_cache \
+              --timeout 0 -t "$workers" -v --arch '${{ matrix.arch }}' -m 'not needs_torch' \
+              2>&1 | tee "$TASK_ROOT/results/pytest-bundled-$workers.log"
+          done
       - name: Measure pytest phases with Torch installed
         working-directory: suite
         shell: bash

@@ -87,6 +87,11 @@ def driver_child(args):
         function.restype = ctypes.c_int
         result = measure(prefix + name, lambda: function(*values))
         if result:
+            if args.arch == "amdgpu":
+                error_string = library.hipGetErrorString
+                error_string.argtypes = [ctypes.c_int]
+                error_string.restype = ctypes.c_char_p
+                print(error_string(result).decode(), flush=True)
             raise RuntimeError(f"{prefix}{name} failed: {result}")
 
     version = ctypes.c_int()
