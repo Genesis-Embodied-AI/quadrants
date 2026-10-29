@@ -52,7 +52,7 @@ jobs:
       matrix:
         include:
           - arch: amdgpu
-            runner: misc-slow-amd-secondary
+            runner: misc-slow-amd-probe
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     env:
