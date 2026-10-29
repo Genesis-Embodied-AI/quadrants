@@ -187,15 +187,10 @@ def test_fill_initializer_preserves_immediate_fill():
 
 @pytest.mark.needs_torch
 @pytest.mark.parametrize("matrix", [False, True])
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.metal])
+@test_utils.test(exclude=[qd.vulkan])
 def test_fill_initializer_dlpack(matrix):
     # After synchronization, PyTorch must see initialized scalar and vector values through DLPack.
-    torch = pytest.importorskip("torch")
-    if qd.cfg.arch == qd.metal:
-        from quadrants.lang.field import _TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET
-
-        if not _TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET:
-            pytest.skip("Metal DLPack requires torch >= 2.9.2")
+    torch = test_utils.require_torch_dlpack(need_field_support=True)
     field = qd.Vector.field(2, qd.f32, shape=4, fill=[2, 3]) if matrix else qd.field(qd.f32, shape=4, fill=7)
     qd.sync()
     tensor = torch.utils.dlpack.from_dlpack(field.to_dlpack())
