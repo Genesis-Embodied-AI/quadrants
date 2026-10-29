@@ -29,4 +29,3 @@ def capture_fill_value(value: _FillValue | None, element_shape=()) -> _FillValue
     if len(element_shape) > 1 and any(not isinstance(item, tuple) for item in result):
         raise ValueError(f"fill must have element shape {element_shape}")
     return result
-
