@@ -10,8 +10,8 @@ from tests.helpers import test_utils
 @test_utils.test()
 def test_fill_initializer_shares_tree() -> None:
     # Declarations with fill= must defer compilation, share one allocation tree, and initialize every field.
-    fields = [qd.field(qd.f32, shape=(), fill=i) for i in range(40)]
-    total = qd.field(qd.f32, shape=())
+    fields = [qd.field(dtype=qd.f32, shape=(), fill=i) for i in range(40)]
+    total = qd.field(dtype=qd.f32, shape=())
     assert impl.get_runtime().get_num_compiled_functions() == 0
 
     @qd.kernel
@@ -28,7 +28,7 @@ def test_fill_initializer_shares_tree() -> None:
 @test_utils.test()
 def test_fill_initializer_precedes_writes(operation: str) -> None:
     # Initialization must run before each kind of write.
-    field = qd.field(qd.i32, shape=4, fill=3)
+    field = qd.field(dtype=qd.i32, shape=4, fill=3)
     if operation == "fill":
         field.fill(5)
     elif operation == "host":
@@ -49,7 +49,7 @@ def test_fill_initializer_precedes_writes(operation: str) -> None:
 @test_utils.test()
 def test_fill_initializer_is_not_replayed() -> None:
     # Once initialization has run, later synchronization must preserve writes made afterward.
-    field = qd.field(qd.i32, shape=(), fill=3)
+    field = qd.field(dtype=qd.i32, shape=(), fill=3)
     assert field[()] == 3
     field[()] = 5
 
@@ -63,10 +63,10 @@ def test_fill_initializer_is_not_replayed() -> None:
 @test_utils.test()
 def test_fill_initializer_after_materialization() -> None:
     # Fields declared after an earlier allocation must initialize together in a new allocation tree.
-    first = qd.field(qd.i32, shape=(), fill=2)
+    first = qd.field(dtype=qd.i32, shape=(), fill=2)
     assert first[()] == 2
-    second = qd.field(qd.i32, shape=(), fill=4)
-    third = qd.field(qd.i32, shape=(), fill=6)
+    second = qd.field(dtype=qd.i32, shape=(), fill=4)
+    third = qd.field(dtype=qd.i32, shape=(), fill=6)
     assert second[()] == 4
     assert third[()] == 6
     assert second.snode._snode_tree_id == third.snode._snode_tree_id
@@ -82,12 +82,12 @@ def test_fill_initializer_components(kind: str, via_dtype: bool) -> None:
     value = [1, 2] if kind == "vector" else [[1, 2], [3, 4]]
     expected = np.array(value)
     if via_dtype:
-        dtype = qd.types.vector(2, qd.i32) if kind == "vector" else qd.types.matrix(2, 2, qd.i32)
-        field = qd.field(dtype, shape=num_elements, fill=value)
+        dtype = qd.types.vector(n=2, dtype=qd.i32) if kind == "vector" else qd.types.matrix(n=2, m=2, dtype=qd.i32)
+        field = qd.field(dtype=dtype, shape=num_elements, fill=value)
     elif kind == "vector":
-        field = qd.Vector.field(2, qd.i32, shape=num_elements, fill=value)
+        field = qd.Vector.field(n=2, dtype=qd.i32, shape=num_elements, fill=value)
     else:
-        field = qd.Matrix.field(2, 2, qd.i32, shape=num_elements, fill=value)
+        field = qd.Matrix.field(n=2, m=2, dtype=qd.i32, shape=num_elements, fill=value)
     if kind == "vector":
         value[0] = 99
     else:
@@ -103,12 +103,12 @@ def test_fill_initializer_broadcast(kind: str, via_dtype: bool) -> None:
     # A scalar initializer must fill every component of every vector or matrix element.
     num_elements = 3
     if via_dtype:
-        dtype = qd.types.vector(2, qd.i32) if kind == "vector" else qd.types.matrix(2, 2, qd.i32)
-        field = qd.field(dtype, shape=num_elements, fill=9)
+        dtype = qd.types.vector(n=2, dtype=qd.i32) if kind == "vector" else qd.types.matrix(n=2, m=2, dtype=qd.i32)
+        field = qd.field(dtype=dtype, shape=num_elements, fill=9)
     elif kind == "vector":
-        field = qd.Vector.field(2, qd.i32, shape=num_elements, fill=9)
+        field = qd.Vector.field(n=2, dtype=qd.i32, shape=num_elements, fill=9)
     else:
-        field = qd.Matrix.field(2, 2, qd.i32, shape=num_elements, fill=9)
+        field = qd.Matrix.field(n=2, m=2, dtype=qd.i32, shape=num_elements, fill=9)
     expected = np.full((2,) if kind == "vector" else (2, 2), 9)
     for i in range(num_elements):
         np.testing.assert_array_equal(field[i].to_numpy(), expected)
@@ -118,7 +118,7 @@ def test_fill_initializer_broadcast(kind: str, via_dtype: bool) -> None:
 def test_fill_initializer_matrix_value_snapshot() -> None:
     # A Matrix used as an initializer must be captured before later changes to that Matrix.
     value = qd.Matrix([[1, 2], [3, 4]])
-    field = qd.Matrix.field(2, 2, qd.i32, shape=(), fill=value)
+    field = qd.Matrix.field(n=2, m=2, dtype=qd.i32, shape=(), fill=value)
     value[0, 0] = 99
     np.testing.assert_array_equal(field[()].to_numpy(), [[1, 2], [3, 4]])
 
@@ -126,7 +126,7 @@ def test_fill_initializer_matrix_value_snapshot() -> None:
 @test_utils.test()
 def test_fill_initializer_manual_placement() -> None:
     # A field declared without a shape must receive its initializer after manual placement.
-    field = qd.field(qd.i32, fill=8)
+    field = qd.field(dtype=qd.i32, fill=8)
     qd.root.dense(qd.i, 4).place(field)
     np.testing.assert_array_equal(field.to_numpy(), [8] * 4)
 
@@ -134,7 +134,7 @@ def test_fill_initializer_manual_placement() -> None:
 @test_utils.test()
 def test_fill_initializer_gradients_and_offset() -> None:
     # Initialization must respect the index offset and leave gradient and dual fields at zero.
-    field = qd.field(qd.f32, shape=4, offset=-2, needs_grad=True, needs_dual=True, fill=2)
+    field = qd.field(dtype=qd.f32, shape=4, offset=-2, needs_grad=True, needs_dual=True, fill=2)
     assert field[-2] == 2
     assert field[1] == 2
     assert field.grad[-2] == 0
@@ -144,13 +144,13 @@ def test_fill_initializer_gradients_and_offset() -> None:
 @test_utils.test()
 def test_fill_initializer_reset() -> None:
     # Reset must discard pending initializers and allow fresh fields to initialize in the new runtime.
-    qd.field(qd.i32, shape=(), fill=8)
+    qd.field(dtype=qd.i32, shape=(), fill=8)
     runtime = impl.get_runtime()
     arch = qd.cfg.arch
     qd.reset()
     assert not runtime.field_initializers.pending
     qd.init(arch=arch)
-    field = qd.field(qd.i32, shape=(), fill=4)
+    field = qd.field(dtype=qd.i32, shape=(), fill=4)
     assert field[()] == 4
 
 
@@ -159,8 +159,8 @@ def test_fill_initializer_reset() -> None:
 def test_fill_initializer_invalid_scalar(value: list[int] | str) -> None:
     # Invalid scalar initializers must raise at declaration without preventing later valid allocations.
     with pytest.raises(ValueError, match="fill"):
-        qd.field(qd.i32, shape=(), fill=value)
-    field = qd.field(qd.i32, shape=(), fill=7)
+        qd.field(dtype=qd.i32, shape=(), fill=value)
+    field = qd.field(dtype=qd.i32, shape=(), fill=7)
     assert field[()] == 7
 
 
@@ -169,18 +169,18 @@ def test_fill_initializer_invalid_scalar(value: list[int] | str) -> None:
 def test_fill_initializer_invalid_matrix(value: list[int] | list[list[int | None]]) -> None:
     # Invalid matrix shapes or components must raise without preventing later valid allocations.
     with pytest.raises(ValueError, match="fill"):
-        qd.Matrix.field(2, 2, qd.i32, shape=(), fill=value)
-    field = qd.field(qd.i32, shape=(), fill=7)
+        qd.Matrix.field(n=2, m=2, dtype=qd.i32, shape=(), fill=value)
+    field = qd.field(dtype=qd.i32, shape=(), fill=7)
     assert field[()] == 7
 
 
 @test_utils.test()
 def test_fill_initializer_preserves_immediate_fill() -> None:
     # Calling .fill() must still compile immediately, placing later declarations in a separate tree.
-    first = qd.field(qd.i32, shape=())
+    first = qd.field(dtype=qd.i32, shape=())
     first.fill(3)
     assert impl.get_runtime().get_num_compiled_functions() > 0
-    second = qd.field(qd.i32, shape=(), fill=4)
+    second = qd.field(dtype=qd.i32, shape=(), fill=4)
     assert second[()] == 4
     assert first.snode._snode_tree_id != second.snode._snode_tree_id
 
@@ -191,7 +191,9 @@ def test_fill_initializer_preserves_immediate_fill() -> None:
 def test_fill_initializer_dlpack(matrix: bool) -> None:
     # After synchronization, PyTorch must see initialized scalar and vector values through DLPack.
     torch = test_utils.require_torch_dlpack(need_field_support=True)
-    field = qd.Vector.field(2, qd.f32, shape=4, fill=[2, 3]) if matrix else qd.field(qd.f32, shape=4, fill=7)
+    field = (
+        qd.Vector.field(n=2, dtype=qd.f32, shape=4, fill=[2, 3]) if matrix else qd.field(dtype=qd.f32, shape=4, fill=7)
+    )
     qd.sync()
     torch_view = torch.utils.dlpack.from_dlpack(field.to_dlpack())
     expected = [[2, 3]] * 4 if matrix else [7] * 4
