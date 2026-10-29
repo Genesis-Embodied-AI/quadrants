@@ -7,7 +7,7 @@ import quadrants as qd
 from quadrants.lang import impl
 
 from tests.helpers import test_utils
-from tests.helpers.allocation_initializer import _create_array
+from tests.helpers.test_utils import _create_array
 
 
 def _get_underlying_field(array: qd.Field | qd.Tensor) -> qd.Field:

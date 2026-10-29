@@ -6,7 +6,7 @@ import pytest
 import quadrants as qd
 
 from tests.helpers import test_utils
-from tests.helpers.allocation_initializer import _create_array
+from tests.helpers.test_utils import _create_array
 
 # Tests shared by fields, ndarrays, and tensors
 
