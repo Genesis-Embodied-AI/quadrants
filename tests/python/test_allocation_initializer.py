@@ -55,6 +55,7 @@ def _initial_value(element_class: str) -> float | list[int] | list[list[int]]:
 
 
 def _storage(array: qd.Field | qd.Tensor) -> qd.Field:
+    # Return the underlying field so tests can inspect its allocation tree, unwrapping a Tensor if needed.
     return array._unwrap() if isinstance(array, qd.Tensor) else array
 
 
