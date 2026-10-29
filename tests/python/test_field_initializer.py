@@ -238,3 +238,31 @@ def test_fill_initializer_supported_number(
     elif element_class == "matrix":
         field = qd.Matrix.field(n=2, m=2, dtype=qd.f32, shape=(), fill=fill_value)
     np.testing.assert_array_equal(field.to_numpy(), np.full(field.to_numpy().shape, fill_value))
+
+
+@test_utils.test()
+def test_fill_initializer_retries_after_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A failed field fill must retain itself and later fills without replaying already successful fills.
+    first = qd.field(dtype=qd.i32, shape=(), fill=2)
+    second = qd.field(dtype=qd.i32, shape=(), fill=3)
+    third = qd.field(dtype=qd.i32, shape=(), fill=4)
+    original_fill = type(first).fill
+    calls: list[qd.Field] = []
+    should_fail = True
+
+    def fill(field: qd.Field, fill_value: int) -> None:
+        nonlocal should_fail
+        calls.append(field)
+        if field is second and should_fail:
+            should_fail = False
+            raise RuntimeError("injected fill failure")
+        original_fill(field, fill_value)
+
+    monkeypatch.setattr(type(first), "fill", fill)
+    with pytest.raises(RuntimeError, match="injected fill failure"):
+        qd.sync()
+    assert [field for field, _ in impl.get_runtime().field_initializers.pending] == [second, third]
+    assert third[()] == 4
+    assert first[()] == 2
+    assert second[()] == 3
+    assert calls == [first, second, second, third]

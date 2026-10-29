@@ -51,8 +51,12 @@ class FieldInitializers:
             return
         # Fill kernels materialize recursively. Detach the queue before launching any of them.
         pending, self.pending = self.pending, []
-        for field, value in pending:
+        for index, (field, value) in enumerate(pending):
             # Field.fill's inherited annotation only covers scalars. Concrete fills also accept the component values
             # already validated by the constructors.
             fill = cast(Callable[[_FillValue], None], field.fill)
-            fill(value)
+            try:
+                fill(value)
+            except Exception:
+                self.pending = pending[index:] + self.pending
+                raise
