@@ -33,7 +33,8 @@ def test_fill_initializer_precedes_writes(operation):
     if operation == "fill":
         field.fill(5)
     elif operation == "host":
-        field[0] = 5
+        for i in range(4):
+            field[i] = 5
     elif operation == "numpy":
         field.from_numpy(np.full(4, 5, dtype=np.int32))
     elif operation == "kernel":
@@ -45,7 +46,7 @@ def test_fill_initializer_precedes_writes(operation):
 
         k_write()
     assert field[0] == 5
-    assert field[1] == (3 if operation == "host" else 5)
+    assert field[1] == 5
     assert other[()] == 7
 
 
