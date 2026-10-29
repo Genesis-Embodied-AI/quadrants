@@ -2,7 +2,6 @@
 
 from quadrants._funcs import field_fill_quadrants_scope  # noqa
 from quadrants.lang import ops
-from quadrants.lang._fill_initializer import make_fill_value
 from quadrants.lang._ndrange import ndrange
 from quadrants.lang.expr import Expr
 from quadrants.lang.field import ScalarField
@@ -19,23 +18,21 @@ from quadrants.types.primitive_types import f16, f32, f64, i32, u8  # noqa pylin
 # A set of helper (meta)functions
 @kernel
 def fill_field(field: template(), val: template()):
-    value = ops.cast(make_fill_value(val, field.dtype), field.dtype)
+    value = ops.cast(val, field.dtype)
     for I in grouped(field):
         field[I] = value
 
 
 @kernel
-def fill_ndarray(ndarray: ndarray_type.ndarray(), val: template(), dtype: template()):
-    value = make_fill_value(val, dtype)
+def fill_ndarray(ndarray: ndarray_type.ndarray(), val: template()):
     for I in grouped(ndarray):
-        ndarray[I] = value
+        ndarray[I] = val
 
 
 @kernel
-def fill_ndarray_matrix(ndarray: ndarray_type.ndarray(), val: template(), dtype: template()):
-    value = make_fill_value(val, dtype)
+def fill_ndarray_matrix(ndarray: ndarray_type.ndarray(), val: template()):
     for I in grouped(ndarray):
-        ndarray[I] = value
+        ndarray[I] = val
 
 
 @kernel
@@ -211,7 +208,7 @@ def clear_gradients(_vars: template()):
 
 @kernel
 def field_fill_python_scope(F: template(), val: template()):
-    field_fill_quadrants_scope(F, make_fill_value(val, F.dtype))
+    field_fill_quadrants_scope(F, val)
 
 
 @kernel

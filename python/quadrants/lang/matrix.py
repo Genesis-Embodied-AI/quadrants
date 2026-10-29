@@ -1976,7 +1976,7 @@ class MatrixNdarray(Ndarray):
             value = val
         else:
             value = matrix_type(val)
-        fill_ndarray_matrix(self, value, self.dtype)
+        fill_ndarray_matrix(self, value)
 
     @python_scope
     def __repr__(self):
@@ -2124,7 +2124,7 @@ class VectorNdarray(Ndarray):
             value = val
         else:
             value = vector_type(val)
-        fill_ndarray_matrix(self, value, self.dtype)
+        fill_ndarray_matrix(self, value)
 
     @python_scope
     def __repr__(self):

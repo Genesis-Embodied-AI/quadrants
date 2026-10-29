@@ -1,41 +1,17 @@
-"""Fill value preparation and allocation-time initialization for fields and ndarrays."""
+"""Allocation-time fill validation and initialization for fields and ndarrays."""
 
-from typing import TYPE_CHECKING, Any, Callable, TypeAlias, Union, cast
+from typing import TYPE_CHECKING, Callable, TypeAlias, Union, cast
 
 import numpy as np
 
-from quadrants.types.primitive_types import integer_types, real_types
-
 if TYPE_CHECKING:
-    from quadrants._lib.core.quadrants_python import DataTypeCxx, SNodeCxx
+    from quadrants._lib.core.quadrants_python import SNodeCxx
     from quadrants.lang._ndarray import _Ndarray
-    from quadrants.lang.expr import Expr
     from quadrants.lang.field import ScalarField
     from quadrants.lang.matrix import Matrix, MatrixField
 
 
 _FillValue: TypeAlias = Union[bool, int, float, np.bool_, np.integer, np.floating, list, tuple, "Matrix"]
-
-
-def make_fill_value(value: Any, dtype: "DataTypeCxx") -> "Expr":
-    """Construct numeric constants with the destination type to preserve its range and precision."""
-    # Import lazily: matrix.py also uses this module when constructing fields.
-    from quadrants.lang.expr import Expr  # pylint: disable=C0415
-    from quadrants.lang.matrix import Matrix  # pylint: disable=C0415
-
-    if isinstance(value, Matrix):
-        value = value.to_list()
-
-    def convert(component: Any) -> Any:
-        if isinstance(component, (list, tuple)):
-            return tuple(convert(item) for item in component)
-        if isinstance(component, (int, np.integer)) and not isinstance(component, bool) and dtype in integer_types:
-            return Expr(component, dtype=dtype)
-        if isinstance(component, (int, float, np.integer, np.floating)) and dtype in real_types:
-            return Expr(float(component), dtype=dtype)
-        return component
-
-    return Expr(convert(value))
 
 
 def capture_fill_value(value: _FillValue | None, element_shape=()) -> _FillValue | None:
