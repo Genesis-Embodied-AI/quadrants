@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import re
 import statistics
+import xml.etree.ElementTree as ET
 
 
 def startup_summary(path):
@@ -43,9 +44,15 @@ def pytest_summary(path):
             cases[nodeid][phase] = float(duration)
         if re.search(r"\bpassed\b.*\bin [0-9.]+s", line):
             outcome = line.strip("= ")
+    case_totals = [float(case.attrib["time"]) for case in ET.parse(path.with_suffix(".xml")).iter("testcase")]
     return {
         "outcome": outcome,
-        "phases": {
+        "junit_cases": {
+            "count": len(case_totals),
+            "sum_worker_seconds": round(sum(case_totals), 3),
+            "median_seconds": round(statistics.median(case_totals), 3),
+        },
+        "reported_duration_rows_only": {
             phase: {
                 "count": len(values),
                 "sum_worker_seconds": round(sum(values), 3),
