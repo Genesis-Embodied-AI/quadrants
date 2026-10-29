@@ -75,9 +75,11 @@ Use `fill=` to give a field an initial value:
 weights = qd.field(qd.f32, shape=16, fill=1.0)
 ```
 
-Field allocation is deferred until Quadrants needs the storage. The initializer runs once at that point, before the first read or write, including access through a kernel or a zero-copy export. Declaring multiple fields with `fill=` lets Quadrants allocate them together. This avoids splitting the allocation with a separate `.fill()` call after each declaration, which can exhaust Metal's buffer bindings when a kernel accesses many fields.
+Field allocation is deferred until Quadrants needs the storage. The initializer runs once at that point, before the first read or write, including access through a kernel or a [zero-copy export](interop.md#zero-copy-interop-via-dlpack), which shares the field's memory with another library instead of copying it. Declaring multiple fields with `fill=` lets Quadrants allocate them together. This avoids splitting the allocation with a separate `.fill()` call after each declaration, which can exhaust Metal's buffer bindings when a kernel accesses many fields.
 
-`fill=` also works with `qd.Matrix.field` and vector or matrix types passed to `qd.field`. A scalar initializes every component; a list, tuple, or Quadrants vector or matrix supplies per-component values. Mutable values are captured when the field is declared. Omitting `fill` or passing `None` preserves the existing allocation behavior. Only the field itself is initialized; its gradient and dual fields keep their default values. A field declared without `shape` must still be placed before use.
+`fill=` also works with `qd.Matrix.field` and vector or matrix types passed to `qd.field`. A scalar initializes every component; a list, tuple, or Quadrants vector or matrix supplies per-component values. Mutable values are captured when the field is declared. Omitting `fill` or passing `None` preserves the existing allocation behavior. Only the field itself is initialized; its [gradient and dual fields](autodiff.md), which store derivatives for automatic differentiation, keep their default values.
+
+A field declared without `shape` must still be placed before use: placement assigns its storage layout using `qd.root` and `.place()`. For example, `qd.root.dense(qd.i, 16).place(weights)` gives a field 16 elements along its first axis. See the [manual placement example](autodiff.md#reverse-mode-autodiff).
 
 The `fill=` parameter applies to fields, not ndarrays.
 
