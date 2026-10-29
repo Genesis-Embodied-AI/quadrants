@@ -26,7 +26,7 @@ def _allocate(api, backend, kind, shape, *, dtype=qd.f32, **kwargs):
         return vector_factory(3, dtype, shape=shape, **kwargs)
     if kind == "matrix":
         return matrix_factory(2, 3, dtype, shape=shape, **kwargs)
-    if kind == "vector_type":
+    if kind == "vector_via_dtype":
         return scalar_factory(qd.types.vector(3, dtype), shape=shape, **kwargs)
     if kind == "matrix_type":
         return scalar_factory(qd.types.matrix(2, 3, dtype), shape=shape, **kwargs)
@@ -54,7 +54,7 @@ def _storage(array):
         pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
     ],
 )
-@pytest.mark.parametrize("kind", ["scalar", "vector", "matrix", "vector_type", "matrix_type"])
+@pytest.mark.parametrize("kind", ["scalar", "vector", "matrix", "vector_via_dtype", "matrix_type"])
 @pytest.mark.parametrize("kwargs", [{}, {"fill": None}], ids=["omitted", "none"])
 @test_utils.test()
 def test_initializer_defaults(api, backend, kind, kwargs):
@@ -92,7 +92,7 @@ def test_initializer_scalar(api, backend, value):
         pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
     ],
 )
-@pytest.mark.parametrize("kind", ["scalar", "vector", "matrix", "vector_type", "matrix_type"])
+@pytest.mark.parametrize("kind", ["scalar", "vector", "matrix", "vector_via_dtype", "matrix_type"])
 @pytest.mark.parametrize("shape", [(), (4,)])
 @test_utils.test()
 def test_initializer_broadcast(api, backend, kind, shape):
@@ -111,7 +111,7 @@ def test_initializer_broadcast(api, backend, kind, shape):
         pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
     ],
 )
-@pytest.mark.parametrize("kind", ["vector", "matrix", "vector_type", "matrix_type"])
+@pytest.mark.parametrize("kind", ["vector", "matrix", "vector_via_dtype", "matrix_type"])
 @test_utils.test()
 def test_initializer_captures_components(api, backend, kind):
     # Every constructor must capture component lists before later mutations.
@@ -154,7 +154,7 @@ def test_initializer_captures_matrix(api, backend):
         pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
     ],
 )
-@pytest.mark.parametrize("kind", ["scalar", "vector", "matrix", "vector_type", "matrix_type"])
+@pytest.mark.parametrize("kind", ["scalar", "vector", "matrix", "vector_via_dtype", "matrix_type"])
 @test_utils.test()
 def test_initializer_leaves_gradients_zero(api, backend, kind):
     # Initializing forward values must leave the companion gradient values at zero.
@@ -193,7 +193,7 @@ def test_initializer_invalid_scalar(api, backend, value):
         pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
     ],
 )
-@pytest.mark.parametrize("kind", ["vector", "matrix", "vector_type", "matrix_type"])
+@pytest.mark.parametrize("kind", ["vector", "matrix", "vector_via_dtype", "matrix_type"])
 @test_utils.test()
 def test_initializer_invalid_components(api, backend, kind):
     # Component counts that do not match the element type must be rejected by every constructor.
@@ -288,7 +288,7 @@ def test_initializer_first_kernel_read(api, backend, dtype):
         pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
     ],
 )
-@pytest.mark.parametrize("kind", ["scalar", "vector", "matrix", "vector_type", "matrix_type"])
+@pytest.mark.parametrize("kind", ["scalar", "vector", "matrix", "vector_via_dtype", "matrix_type"])
 @test_utils.test()
 def test_initializer_dlpack(api, backend, kind):
     # After synchronization, DLPack consumers must see initialized values from every allocation API.
@@ -424,7 +424,7 @@ def test_initializer_tensor_default_backend():
 
 
 @pytest.mark.parametrize("backend", [qd.Backend.FIELD, qd.Backend.NDARRAY], ids=["tensor_field", "tensor_ndarray"])
-@pytest.mark.parametrize("kind", ["scalar", "vector", "matrix", "vector_type", "matrix_type"])
+@pytest.mark.parametrize("kind", ["scalar", "vector", "matrix", "vector_via_dtype", "matrix_type"])
 @test_utils.test()
 def test_initializer_tensor_layout(backend, kind):
     # Initialization and later writes must use canonical indices when the physical shape axes are permuted.
