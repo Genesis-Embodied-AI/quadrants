@@ -1,0 +1,123 @@
+name: Validate AMD runtime cache
+on:
+  push:
+    branches: [hp/validate-amd-runtime-cache]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    container: quay.io/pypa/manylinux_2_28_x86_64:latest
+    timeout-minutes: 60
+    env:
+      CMAKE_BUILD_PARALLEL_LEVEL: '4'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build wheel and C++ tests
+        env:
+          GITLAB_PAT: ${{ secrets.GITLAB_PAT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          task_root="$HOME/ais/misc_slow_amd/build-${GITHUB_RUN_ID}"
+          mkdir -p "$task_root/tmp"
+          export TMPDIR="$task_root/tmp"
+          export XDG_CACHE_HOME="$task_root/cache"
+          /opt/python/cp310-cp310/bin/python -m venv "$task_root/venv"
+          export PATH="$task_root/venv/bin:$PATH"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config --global credential.https://gitlab.com.helper '!f() { if [ "$1" = get ] && [ -n "$GITLAB_PAT" ]; then printf "%s\n" "username=oauth2" "password=$GITLAB_PAT"; fi; }; f'
+          bash .github/workflows/scripts_new/manylinux_wheel/1_prerequisites.sh 2>&1 | tee build-prerequisites.log
+          bash .github/workflows/scripts_new/manylinux_wheel/2_build.sh 2>&1 | tee build.log
+          bash .github/workflows/scripts_new/manylinux_wheel/3_check.sh 2>&1 | tee wheel-check.log
+          build/quadrants_cpp_tests --gtest_filter='RuntimeHsacoCache.*' 2>&1 | tee cpp-cache.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cache-build
+          path: |
+            wheelhouse/*.whl
+            build/quadrants_cpp_tests
+            *.log
+  test:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amdgpu
+            runner: misc-slow-amd-primary
+          - arch: cuda
+            runner: gpu-t4-4-core
+          - arch: cpu
+            runner: ubuntu-22.04
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    env:
+      QD_AMDGPU_V520: '1'
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: fa9d90c3e
+          path: profiler
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/download-artifact@v4
+        with:
+          name: cache-build
+          path: artifacts
+      - name: Set up isolated environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          task_root="$HOME/ais/misc_slow_amd/cache-${GITHUB_RUN_ID}-${{ matrix.arch }}"
+          mkdir -p "$task_root/tmp" "$task_root/results"
+          echo "TASK_ROOT=$task_root" >> "$GITHUB_ENV"
+          echo "TMPDIR=$task_root/tmp" >> "$GITHUB_ENV"
+          echo "QD_TMP_DIR=$task_root/tmp" >> "$GITHUB_ENV"
+          uv venv --python '3.10' --seed "$task_root/venv"
+          echo "$task_root/venv/bin" >> "$GITHUB_PATH"
+          uv pip install --python "$task_root/venv/bin/python" artifacts/wheelhouse/*.whl --group test
+          { lscpu; free -h; uptime; } | tee "$task_root/results/hardware.txt"
+          sha256sum artifacts/wheelhouse/*.whl | tee "$task_root/results/wheel-sha256.txt"
+      - name: Cache regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x artifacts/build/quadrants_cpp_tests
+          artifacts/build/quadrants_cpp_tests --gtest_filter='RuntimeHsacoCache.*' 2>&1 | tee "$TASK_ROOT/results/cpp-cache.log"
+          python tests/run_tests.py amdgpu_runtime_cache --arch '${{ matrix.arch }}' -t 1 -v 2>&1 | tee "$TASK_ROOT/results/cache-regression.log"
+      - name: Profile repeated initialization
+        if: ${{ matrix.arch != 'cpu' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python profiler/misc/profile_ci_startup.py --arch '${{ matrix.arch }}' --output "$TASK_ROOT/results/no-torch" 2>&1 | tee "$TASK_ROOT/results/no-torch.log"
+          python profiler/misc/profile_ci_startup.py --arch '${{ matrix.arch }}' --cycles 2 --trace --output "$TASK_ROOT/results/trace" 2>&1 | tee "$TASK_ROOT/results/trace.log"
+      - name: Compare one and four pytest workers
+        shell: bash
+        run: |
+          set -euo pipefail
+          for workers in 1 4; do
+            export PYTEST_ADDOPTS="--durations=0 --durations-min=0 --junitxml=$TASK_ROOT/results/pytest-$workers.xml -p no:timeout -p pytest_hardtle --timeout=600"
+            python tests/run_tests.py basics assign scalar_op amdgpu_context_cache --timeout 0 -t "$workers" -v --arch '${{ matrix.arch }}' -m 'not needs_torch' 2>&1 | tee "$TASK_ROOT/results/pytest-$workers.log"
+          done
+      - name: Full AMD suite
+        if: ${{ matrix.arch == 'amdgpu' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tests/run_tests.py -r 1 -t 4 -v --arch amdgpu -m 'not needs_torch' 2>&1 | tee "$TASK_ROOT/results/full-amd.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cache-${{ matrix.arch }}
+          path: ${{ env.TASK_ROOT }}/results
