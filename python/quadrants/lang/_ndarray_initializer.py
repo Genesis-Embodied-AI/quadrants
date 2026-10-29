@@ -1,6 +1,5 @@
 """Allocation-time initialization for ndarray factories."""
 
-
 from typing import TYPE_CHECKING, TypeVar, cast
 
 from quadrants.lang._field_initializer import _FillValue
@@ -14,8 +13,8 @@ if TYPE_CHECKING:
 _Array = TypeVar("_Array", bound="Ndarray | torch.Tensor")
 
 
-def apply_initial_fill(array: _Array, fill: _FillValue | None) -> _Array:
-    """Initialize an allocated array."""
+def apply_initial_ndarray_fill(array: _Array, fill: _FillValue | None) -> _Array:
+    """Apply an optional initial fill to an allocated ndarray."""
     if fill is None:
         return array
 

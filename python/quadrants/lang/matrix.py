@@ -15,7 +15,7 @@ from quadrants.lang import ops as ops_mod
 from quadrants.lang._field_initializer import _FillValue, capture_fill_value
 from quadrants.lang._metal_interop import mps_sync_if_metal
 from quadrants.lang._ndarray import Ndarray, NdarrayHostAccess
-from quadrants.lang._ndarray_initializer import apply_initial_fill
+from quadrants.lang._ndarray_initializer import apply_initial_ndarray_fill
 from quadrants.lang.common_ops import QuadrantsOperations
 from quadrants.lang.exception import (
     QuadrantsRuntimeError,
@@ -1068,7 +1068,7 @@ class Matrix(QuadrantsOperations):
 
             batch_ndim = len(shape)
             shape = (*shape, n, m)
-            return apply_initial_fill(
+            return apply_initial_ndarray_fill(
                 py_tensor.create_tensor(shape, dtype_to_torch_dtype(dtype), batch_ndim=batch_ndim), fill
             )
         arr = MatrixNdarray(n, m, dtype, shape)
@@ -1079,7 +1079,7 @@ class Matrix(QuadrantsOperations):
                     f"{dtype} is not supported for Matrix.ndarray with needs_grad=True; element dtype must be real (floating-point)."
                 )
             arr._set_grad(cls.ndarray(n, m, dtype, shape, needs_grad=False))
-        return apply_initial_fill(arr, fill)
+        return apply_initial_ndarray_fill(arr, fill)
 
     @classmethod
     def tensor(cls, n, m, dtype, shape, **kwargs):
@@ -1285,7 +1285,7 @@ class Vector(Matrix):
 
             batch_ndim = len(shape)
             shape = (*shape, n)
-            return apply_initial_fill(
+            return apply_initial_ndarray_fill(
                 py_tensor.create_tensor(shape, dtype_to_torch_dtype(dtype), batch_ndim=batch_ndim), fill
             )
         arr = VectorNdarray(n, dtype, shape)
@@ -1296,7 +1296,7 @@ class Vector(Matrix):
                     f"{dtype} is not supported for Vector.ndarray with needs_grad=True; element dtype must be real (floating-point)."
                 )
             arr._set_grad(cls.ndarray(n, dtype, shape, needs_grad=False))
-        return apply_initial_fill(arr, fill)
+        return apply_initial_ndarray_fill(arr, fill)
 
     @classmethod
     def tensor(cls, n, dtype, shape, **kwargs):
