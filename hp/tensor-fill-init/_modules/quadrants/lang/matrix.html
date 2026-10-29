@@ -337,6 +337,7 @@
 <span class="kn">import</span><span class="w"> </span><span class="nn">numbers</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Iterable</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">itertools</span><span class="w"> </span><span class="kn">import</span> <span class="n">product</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">cast</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 
@@ -1499,8 +1500,7 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">tensor</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">"""Allocate a tensor whose elements are ``n``-by-``m`` matrices.</span>
 
-<span class="sd">        Per-tensor backend dispatcher, equivalent to scalar ``qd.tensor()`` for matrix-valued elements. Selects</span>
-<span class="sd">        between ``qd.Matrix.field`` and ``qd.Matrix.ndarray`` based on the ``backend=`` keyword.</span>
+<span class="sd">        Equivalent to ``qd.tensor(qd.types.matrix(n, m, dtype), shape, **kwargs)``.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            n (int): Number of rows of each matrix element.</span>
@@ -1508,17 +1508,20 @@
 <span class="sd">            dtype: Element data type (e.g. ``qd.f32``).</span>
 <span class="sd">            shape: Shape of the tensor (excluding the matrix dimensions) as an ``int`` or tuple of ``int``.</span>
 <span class="sd">            backend (qd.Backend, optional): Storage backend. Defaults to ``qd.Backend.NDARRAY``.</span>
+<span class="sd">            layout (tuple of int, optional): Permutation of shape axes, outermost first. Matrix component axes stay</span>
+<span class="sd">                innermost. Defaults to the natural axis order.</span>
 <span class="sd">            fill (optional): Initial scalar or per-component values, as in ``qd.tensor(..., fill=...)``.</span>
-<span class="sd">            **kwargs: Other supported keywords, such as ``needs_grad``, forwarded to the underlying allocator.</span>
+<span class="sd">            **kwargs: Additional options such as ``needs_grad``, forwarded to ``qd.tensor``.</span>
 
 <span class="sd">        Example::</span>
 
 <span class="sd">            &gt;&gt;&gt; a = qd.Matrix.tensor(2, 3, qd.f32, shape=(4,))</span>
 <span class="sd">            &gt;&gt;&gt; b = qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)</span>
 <span class="sd">        """</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor</span><span class="w"> </span><span class="kn">import</span> <span class="n">_tensor_mat</span>  <span class="c1"># pylint: disable=C0415</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor</span><span class="w"> </span><span class="kn">import</span> <span class="n">tensor</span>  <span class="c1"># pylint: disable=C0415</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor_wrapper</span><span class="w"> </span><span class="kn">import</span> <span class="n">MatrixTensor</span>  <span class="c1"># pylint: disable=C0415</span>
 
-        <span class="k">return</span> <span class="n">_tensor_mat</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+        <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="n">MatrixTensor</span><span class="p">,</span> <span class="n">tensor</span><span class="p">(</span><span class="n">MatrixType</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">),</span> <span class="n">shape</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span></div>
 
 
     <span class="nd">@staticmethod</span>
@@ -1744,25 +1747,27 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">tensor</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">"""Allocate a tensor whose elements are length-``n`` vectors.</span>
 
-<span class="sd">        Per-tensor backend dispatcher, equivalent to scalar ``qd.tensor()`` for vector-valued elements. Selects</span>
-<span class="sd">        between ``qd.Vector.field`` and ``qd.Vector.ndarray`` based on the ``backend=`` keyword.</span>
+<span class="sd">        Equivalent to ``qd.tensor(qd.types.vector(n, dtype), shape, **kwargs)``.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            n (int): Length of each vector element.</span>
 <span class="sd">            dtype: Element data type (e.g. ``qd.f32``).</span>
 <span class="sd">            shape: Shape of the tensor (excluding the vector dimension) as an ``int`` or tuple of ``int``.</span>
 <span class="sd">            backend (qd.Backend, optional): Storage backend. Defaults to ``qd.Backend.NDARRAY``.</span>
+<span class="sd">            layout (tuple of int, optional): Permutation of shape axes, outermost first. Vector components stay</span>
+<span class="sd">                innermost. Defaults to the natural axis order.</span>
 <span class="sd">            fill (optional): Initial scalar or per-component values, as in ``qd.tensor(..., fill=...)``.</span>
-<span class="sd">            **kwargs: Other supported keywords, such as ``needs_grad``, forwarded to the underlying allocator.</span>
+<span class="sd">            **kwargs: Additional options such as ``needs_grad``, forwarded to ``qd.tensor``.</span>
 
 <span class="sd">        Example::</span>
 
 <span class="sd">            &gt;&gt;&gt; v = qd.Vector.tensor(3, qd.f32, shape=(4,))</span>
 <span class="sd">            &gt;&gt;&gt; u = qd.Vector.tensor(3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)</span>
 <span class="sd">        """</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor</span><span class="w"> </span><span class="kn">import</span> <span class="n">_tensor_vec</span>  <span class="c1"># pylint: disable=C0415</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor</span><span class="w"> </span><span class="kn">import</span> <span class="n">tensor</span>  <span class="c1"># pylint: disable=C0415</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor_wrapper</span><span class="w"> </span><span class="kn">import</span> <span class="n">VectorTensor</span>  <span class="c1"># pylint: disable=C0415</span>
 
-        <span class="k">return</span> <span class="n">_tensor_vec</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+        <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="n">VectorTensor</span><span class="p">,</span> <span class="n">tensor</span><span class="p">(</span><span class="n">VectorType</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="p">),</span> <span class="n">shape</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span></div>
 </div>
 
 
@@ -2471,7 +2476,7 @@
 <span class="sd">            &gt;&gt;&gt; arr = np.ones((2, 1, 2, 2))</span>
 <span class="sd">            &gt;&gt;&gt; m.from_numpy(arr)</span>
 <span class="sd">        """</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_ndarray_matrix_from_numpy</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">as_vector</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_copy_from_numpy</span><span class="p">(</span><span class="n">arr</span><span class="p">)</span></div>
 
 
     <span class="nd">@python_scope</span>
@@ -2655,7 +2660,7 @@
 <span class="sd">            &gt;&gt;&gt; b = np.ones((2, 2, 3), dtype=np.float32)</span>
 <span class="sd">            &gt;&gt;&gt; a.from_numpy(b)</span>
 <span class="sd">        """</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_ndarray_matrix_from_numpy</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">as_vector</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_copy_from_numpy</span><span class="p">(</span><span class="n">arr</span><span class="p">)</span></div>
 
 
     <span class="nd">@python_scope</span>

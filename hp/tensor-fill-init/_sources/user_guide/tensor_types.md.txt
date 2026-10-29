@@ -84,10 +84,7 @@ In this case, we provide the field to the kernel via a parameter, with typing ty
 Use `fill=` to give a field an initial value:
 
 ```python
-gravity = qd.field(qd.f32, shape=(), fill=-9.81)
-counter = qd.field(qd.i32, shape=(), fill=0)
 weights = qd.field(qd.f32, shape=16, fill=1.0)
-directions = qd.Vector.field(3, qd.f32, shape=8, fill=[0, 0, 1])
 ```
 
 Field allocation is deferred until Quadrants needs the storage. The initializer runs once at that point, before the first read or write, including access through a kernel or a zero-copy export. Declaring multiple fields with `fill=` lets Quadrants allocate them together. This avoids splitting the allocation with a separate `.fill()` call after each declaration, which can exhaust Metal's buffer bindings when a kernel accesses many fields.
