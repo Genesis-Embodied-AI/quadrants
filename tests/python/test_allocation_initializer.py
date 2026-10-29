@@ -11,8 +11,8 @@ from tests.helpers import test_utils
 APIS = ["field", "ndarray", "tensor_field", "tensor_ndarray"]
 FIELD_APIS = ["field", "tensor_field"]
 TENSOR_BACKENDS = {"tensor_field": qd.Backend.FIELD, "tensor_ndarray": qd.Backend.NDARRAY}
-KINDS = ["scalar", "vector", "matrix", "vector_type", "matrix_type"]
-COMPONENT_KINDS = KINDS[1:]
+VECTOR_MATRIX_KINDS = ["vector", "matrix", "vector_type", "matrix_type"]
+KINDS = ["scalar", *VECTOR_MATRIX_KINDS]
 
 
 def _allocate(api, kind, shape, *, dtype=qd.f32, **kwargs):
@@ -85,7 +85,7 @@ def test_initializer_broadcast(api, kind, shape):
 
 
 @pytest.mark.parametrize("api", APIS)
-@pytest.mark.parametrize("kind", COMPONENT_KINDS)
+@pytest.mark.parametrize("kind", VECTOR_MATRIX_KINDS)
 @test_utils.test()
 def test_initializer_captures_components(api, kind):
     # Every constructor must capture component lists before later mutations.
@@ -135,7 +135,7 @@ def test_initializer_invalid_scalar(api, value):
 
 
 @pytest.mark.parametrize("api", APIS)
-@pytest.mark.parametrize("kind", COMPONENT_KINDS)
+@pytest.mark.parametrize("kind", VECTOR_MATRIX_KINDS)
 @test_utils.test()
 def test_initializer_invalid_components(api, kind):
     # Component counts that do not match the element type must be rejected by every constructor.
