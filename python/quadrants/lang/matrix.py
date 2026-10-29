@@ -4,6 +4,7 @@ import functools
 import numbers
 from collections.abc import Iterable
 from itertools import product
+from typing import cast
 
 import numpy as np
 
@@ -1084,8 +1085,7 @@ class Matrix(QuadrantsOperations):
     def tensor(cls, n, m, dtype, shape, **kwargs):
         """Allocate a tensor whose elements are ``n``-by-``m`` matrices.
 
-        Per-tensor backend dispatcher, equivalent to scalar ``qd.tensor()`` for matrix-valued elements. Selects
-        between ``qd.Matrix.field`` and ``qd.Matrix.ndarray`` based on the ``backend=`` keyword.
+        Equivalent to ``qd.tensor(qd.types.matrix(n, m, dtype), shape, **kwargs)``.
 
         Args:
             n (int): Number of rows of each matrix element.
@@ -1093,17 +1093,20 @@ class Matrix(QuadrantsOperations):
             dtype: Element data type (e.g. ``qd.f32``).
             shape: Shape of the tensor (excluding the matrix dimensions) as an ``int`` or tuple of ``int``.
             backend (qd.Backend, optional): Storage backend. Defaults to ``qd.Backend.NDARRAY``.
+            layout (tuple of int, optional): Permutation of shape axes, outermost first. Matrix component axes stay
+                innermost. Defaults to the natural axis order.
             fill (optional): Initial scalar or per-component values, as in ``qd.tensor(..., fill=...)``.
-            **kwargs: Other supported keywords, such as ``needs_grad``, forwarded to the underlying allocator.
+            **kwargs: Additional options such as ``needs_grad``, forwarded to ``qd.tensor``.
 
         Example::
 
             >>> a = qd.Matrix.tensor(2, 3, qd.f32, shape=(4,))
             >>> b = qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
         """
-        from quadrants._tensor import _tensor_mat  # pylint: disable=C0415
+        from quadrants._tensor import tensor  # pylint: disable=C0415
+        from quadrants._tensor_wrapper import MatrixTensor  # pylint: disable=C0415
 
-        return _tensor_mat(n, m, dtype, shape, **kwargs)
+        return cast(MatrixTensor, tensor(MatrixType(n, m, ndim=2, dtype=dtype), shape, **kwargs))
 
     @staticmethod
     def rows(rows):
@@ -1299,25 +1302,27 @@ class Vector(Matrix):
     def tensor(cls, n, dtype, shape, **kwargs):
         """Allocate a tensor whose elements are length-``n`` vectors.
 
-        Per-tensor backend dispatcher, equivalent to scalar ``qd.tensor()`` for vector-valued elements. Selects
-        between ``qd.Vector.field`` and ``qd.Vector.ndarray`` based on the ``backend=`` keyword.
+        Equivalent to ``qd.tensor(qd.types.vector(n, dtype), shape, **kwargs)``.
 
         Args:
             n (int): Length of each vector element.
             dtype: Element data type (e.g. ``qd.f32``).
             shape: Shape of the tensor (excluding the vector dimension) as an ``int`` or tuple of ``int``.
             backend (qd.Backend, optional): Storage backend. Defaults to ``qd.Backend.NDARRAY``.
+            layout (tuple of int, optional): Permutation of shape axes, outermost first. Vector components stay
+                innermost. Defaults to the natural axis order.
             fill (optional): Initial scalar or per-component values, as in ``qd.tensor(..., fill=...)``.
-            **kwargs: Other supported keywords, such as ``needs_grad``, forwarded to the underlying allocator.
+            **kwargs: Additional options such as ``needs_grad``, forwarded to ``qd.tensor``.
 
         Example::
 
             >>> v = qd.Vector.tensor(3, qd.f32, shape=(4,))
             >>> u = qd.Vector.tensor(3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
         """
-        from quadrants._tensor import _tensor_vec  # pylint: disable=C0415
+        from quadrants._tensor import tensor  # pylint: disable=C0415
+        from quadrants._tensor_wrapper import VectorTensor  # pylint: disable=C0415
 
-        return _tensor_vec(n, dtype, shape, **kwargs)
+        return cast(VectorTensor, tensor(VectorType(n, dtype), shape, **kwargs))
 
 
 class MatrixField(Field):
@@ -1966,7 +1971,7 @@ class MatrixNdarray(Ndarray):
             >>> arr = np.ones((2, 1, 2, 2))
             >>> m.from_numpy(arr)
         """
-        self._ndarray_matrix_from_numpy(arr, as_vector=0)
+        self._copy_from_numpy(arr)
 
     @python_scope
     def to_torch(self, device=None, *, copy=True):
@@ -2120,7 +2125,7 @@ class VectorNdarray(Ndarray):
             >>> b = np.ones((2, 2, 3), dtype=np.float32)
             >>> a.from_numpy(b)
         """
-        self._ndarray_matrix_from_numpy(arr, as_vector=1)
+        self._copy_from_numpy(arr)
 
     @python_scope
     def to_torch(self, device=None, *, copy=True):

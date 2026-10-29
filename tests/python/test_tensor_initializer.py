@@ -42,26 +42,32 @@ def test_tensor_initializer_default_backend():
 @pytest.mark.parametrize("backend", BACKENDS)
 @pytest.mark.parametrize("kind", ["vector", "matrix", "vector_type", "matrix_type"])
 @pytest.mark.parametrize("scalar", [False, True])
+@pytest.mark.parametrize("layout", [None, (1, 0)])
 @test_utils.test()
-def test_tensor_initializer_components(backend, kind, scalar):
+def test_tensor_initializer_components(backend, kind, scalar, layout):
+    shape = (2, 3)
     value = [2, 3] if "vector" in kind else [[1, 2], [3, 4]]
     expected = np.array(value)
     fill = 7 if scalar else value
     if kind == "vector":
-        tensor = qd.Vector.tensor(2, qd.f32, shape=3, backend=backend, fill=fill, needs_grad=True)
+        tensor = qd.Vector.tensor(2, qd.f32, shape=shape, backend=backend, layout=layout, fill=fill, needs_grad=True)
     elif kind == "matrix":
-        tensor = qd.Matrix.tensor(2, 2, qd.f32, shape=3, backend=backend, fill=fill, needs_grad=True)
+        tensor = qd.Matrix.tensor(2, 2, qd.f32, shape=shape, backend=backend, layout=layout, fill=fill, needs_grad=True)
     elif kind == "vector_type":
-        tensor = qd.tensor(qd.types.vector(2, qd.f32), shape=3, backend=backend, fill=fill, needs_grad=True)
+        tensor = qd.tensor(
+            qd.types.vector(2, qd.f32), shape=shape, backend=backend, layout=layout, fill=fill, needs_grad=True
+        )
     else:
-        tensor = qd.tensor(qd.types.matrix(2, 2, qd.f32), shape=3, backend=backend, fill=fill, needs_grad=True)
+        tensor = qd.tensor(
+            qd.types.matrix(2, 2, qd.f32), shape=shape, backend=backend, layout=layout, fill=fill, needs_grad=True
+        )
     if "vector" in kind:
         value[0] = 99
     else:
         value[0][0] = 99
     expected = np.full_like(expected, 7) if scalar else expected
-    np.testing.assert_array_equal(tensor.to_numpy(), np.broadcast_to(expected, (3, *expected.shape)))
-    np.testing.assert_array_equal(tensor.grad.to_numpy(), np.zeros((3, *expected.shape)))
+    np.testing.assert_array_equal(tensor.to_numpy(), np.broadcast_to(expected, (*shape, *expected.shape)))
+    np.testing.assert_array_equal(tensor.grad.to_numpy(), np.zeros((*shape, *expected.shape)))
 
 
 @test_utils.test()

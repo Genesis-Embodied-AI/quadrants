@@ -1,12 +1,11 @@
 """Tests for ``qd.Vector.tensor`` / ``qd.Matrix.tensor`` factory classmethods.
 
-These are the per-tensor backend dispatchers for vector- and matrix-element tensors, parallel to scalar
-``qd.tensor()``. The dispatch implementation lives in ``quadrants/_tensor.py`` as ``_tensor_vec`` / ``_tensor_mat``
-(private); the public surface is the classmethods exercised here.
+These classmethods delegate to ``qd.tensor()`` with vector and matrix dtypes.
 
 Each behavioural test is parametrized over both backends.
 """
 
+import numpy as np
 import pytest
 
 import quadrants as qd
@@ -61,17 +60,13 @@ def test_vector_tensor_invalid_backend_raises():
 
 @test_utils.test(arch=qd.cpu)
 def test_vector_tensor_rejects_unknown_kwarg():
-    """``qd.Vector.tensor`` shares the same kwarg-validation contract as ``qd.tensor``, minus ``layout=`` (layout
-    semantics over an extra element axis are out of scope for now). ``order=`` raises with a dedicated layout-pointing
-    message."""
+    """``qd.Vector.tensor`` shares the kwarg-validation contract of ``qd.tensor``, including the hint for order=."""
     with pytest.raises(TypeError, match="layout="):
         qd.Vector.tensor(3, qd.f32, shape=(4,), order="ji")
     with pytest.raises(TypeError, match="unexpected keyword"):
         qd.Vector.tensor(3, qd.f32, shape=(4,), offset=(1,))
     with pytest.raises(TypeError, match="unexpected keyword"):
         qd.Vector.tensor(3, qd.f32, shape=(4,), nonsense=42)
-    with pytest.raises(TypeError, match="unexpected keyword"):
-        qd.Vector.tensor(3, qd.f32, shape=(4,), layout=(0,))
 
 
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
@@ -133,17 +128,13 @@ def test_matrix_tensor_invalid_backend_raises():
 
 @test_utils.test(arch=qd.cpu)
 def test_matrix_tensor_rejects_unknown_kwarg():
-    """``qd.Matrix.tensor`` shares the same kwarg-validation contract as ``qd.tensor``, minus ``layout=`` (layout
-    semantics over an extra element axis are out of scope for now). ``order=`` raises with a dedicated layout-pointing
-    message."""
+    """``qd.Matrix.tensor`` shares the kwarg-validation contract of ``qd.tensor``, including the hint for order=."""
     with pytest.raises(TypeError, match="layout="):
         qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), order="ji")
     with pytest.raises(TypeError, match="unexpected keyword"):
         qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), offset=(1,))
     with pytest.raises(TypeError, match="unexpected keyword"):
         qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), nonsense=42)
-    with pytest.raises(TypeError, match="unexpected keyword"):
-        qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), layout=(0,))
 
 
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
@@ -187,22 +178,34 @@ def test_tensor_vec_mat_not_public():
     assert not hasattr(qd, "tensor_mat"), "qd.tensor_mat leaked into public API"
 
 
-@test_utils.test(arch=qd.cpu)
-def test_vector_tensor_order_hint_no_dead_end():
-    """The error message for order= on Vector.tensor must NOT suggest layout= since Vector.tensor doesn't accept
-    layout= either.
-    """
-    with pytest.raises(TypeError, match="does not accept order=") as exc_info:
-        qd.Vector.tensor(3, qd.f32, shape=(4,), order="ji")
-    msg = str(exc_info.value)
-    assert (
-        "pass layout=(...) instead" not in msg
-    ), f"Dead-end hint: message suggests layout= which is also rejected: {msg}"
+@pytest.mark.parametrize(
+    "backend,element_shape,layout",
+    [
+        (qd.Backend.FIELD, (3,), None),
+        (qd.Backend.NDARRAY, (2, 3), (0, 1, 2)),
+        (qd.Backend.FIELD, (2, 3), (2, 0, 1)),
+        (qd.Backend.NDARRAY, (3,), (2, 0, 1)),
+    ],
+)
+@test_utils.test()
+def test_compound_factory_layout(backend, element_shape, layout):
+    shape = (2, 4, 5)
+    factory = qd.Vector.tensor if len(element_shape) == 1 else qd.Matrix.tensor
+    x = factory(*element_shape, qd.f32, shape=shape, backend=backend, layout=layout, needs_grad=True)
+    initial = np.arange(np.prod(shape + element_shape), dtype=np.float32).reshape(shape + element_shape)
+    x.from_numpy(initial)
+    assert x.shape == shape
+    assert x.element_shape == element_shape
+    assert x.layout == (None if layout in (None, (0, 1, 2)) else layout)
+    assert x.grad.shape == x.shape
+    assert x.grad.layout == x.layout
 
+    @qd.kernel
+    def increment(x: qd.Tensor):
+        for I in qd.grouped(x):
+            x[I] += 1
+            x.grad[I] = 2 * x[I]
 
-@test_utils.test(arch=qd.cpu)
-def test_matrix_tensor_order_hint_no_dead_end():
-    with pytest.raises(TypeError, match="does not accept order=") as exc_info:
-        qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), order="ji")
-    msg = str(exc_info.value)
-    assert "pass layout=(...) instead" not in msg
+    increment(x)
+    np.testing.assert_array_equal(x.to_numpy(), initial + 1)
+    np.testing.assert_array_equal(x.grad.to_numpy(), 2 * (initial + 1))
