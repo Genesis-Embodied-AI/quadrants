@@ -63,6 +63,18 @@ vel = qd.Vector.ndarray(3, qd.f32, shape=(50,))
 transforms = qd.Matrix.ndarray(4, 4, qd.f32, shape=(50,))
 ```
 
+## Initial values
+
+Use `fill=` to initialize every vector or matrix in a field at allocation. A scalar fills all components; a sequence supplies the values for one vector or matrix, repeated across the field:
+
+```python
+directions = qd.Vector.field(3, qd.f32, shape=100, fill=[0, 0, 1])
+velocities = qd.Vector.field(3, qd.f32, shape=100, fill=0)
+rotations = qd.Matrix.field(2, 2, qd.f32, shape=100, fill=[[1, 0], [0, 1]])
+```
+
+`fill=` also works with vector or matrix types passed to `qd.field`. See [Initializing fields](tensor_types.md#initializing-fields) for accepted values and allocation timing.
+
 ## Type annotations
 
 For kernel and `@qd.func` parameters, use `qd.types.vector` and `qd.types.matrix`:
