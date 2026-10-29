@@ -50,6 +50,7 @@ def _initial_value(element_class: str) -> float | list[int] | list[list[int]]:
         return -2.5
     if element_class == "vector":
         return [1, 2, 3]
+    # elif "matrix"
     return [[1, 2, 3], [4, 5, 6]]
 
 
