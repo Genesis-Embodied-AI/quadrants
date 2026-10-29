@@ -8,6 +8,7 @@ permissions:
   actions: read
 jobs:
   build:
+    if: ${{ contains(github.event.head_commit.message, '[rebuild]') }}
     runs-on: ubuntu-22.04
     container: quay.io/pypa/manylinux_2_28_x86_64:latest
     timeout-minutes: 60
@@ -44,6 +45,7 @@ jobs:
             build/quadrants_cpp_tests
             *.log
   test:
+    if: ${{ always() && !cancelled() && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
     needs: build
     strategy:
       fail-fast: false
@@ -62,10 +64,6 @@ jobs:
       PYTHONUNBUFFERED: '1'
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
-        with:
-          ref: fa9d90c3e
-          path: profiler
       - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
@@ -73,6 +71,8 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: cache-build
+          run-id: ${{ needs.build.result == 'success' && github.run_id || '40941781497' }}
+          github-token: ${{ github.token }}
           path: artifacts
       - name: Set up isolated environment
         shell: bash
@@ -100,8 +100,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python profiler/misc/profile_ci_startup.py --arch '${{ matrix.arch }}' --output "$TASK_ROOT/results/no-torch" 2>&1 | tee "$TASK_ROOT/results/no-torch.log"
-          python profiler/misc/profile_ci_startup.py --arch '${{ matrix.arch }}' --cycles 2 --trace --output "$TASK_ROOT/results/trace" 2>&1 | tee "$TASK_ROOT/results/trace.log"
+          python misc/profile_ci_startup.py --arch '${{ matrix.arch }}' --output "$TASK_ROOT/results/no-torch" 2>&1 | tee "$TASK_ROOT/results/no-torch.log"
+          python misc/profile_ci_startup.py --arch '${{ matrix.arch }}' --cycles 2 --trace --output "$TASK_ROOT/results/trace" 2>&1 | tee "$TASK_ROOT/results/trace.log"
+      - name: Compare cache enabled and disabled on the same build
+        if: ${{ matrix.arch == 'amdgpu' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python misc/profile_runtime_hsaco_cache.py --output "$TASK_ROOT/results/cache-toggle" 2>&1 | tee "$TASK_ROOT/results/cache-toggle.log"
       - name: Compare one and four pytest workers
         shell: bash
         run: |
@@ -110,6 +116,10 @@ jobs:
             export PYTEST_ADDOPTS="--durations=0 --durations-min=0 --junitxml=$TASK_ROOT/results/pytest-$workers.xml -p no:timeout -p pytest_hardtle --timeout=600"
             python tests/run_tests.py basics assign scalar_op amdgpu_context_cache --timeout 0 -t "$workers" -v --arch '${{ matrix.arch }}' -m 'not needs_torch' 2>&1 | tee "$TASK_ROOT/results/pytest-$workers.log"
           done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cache-${{ matrix.arch }}-focused
+          path: ${{ env.TASK_ROOT }}/results
       - name: Full AMD suite
         if: ${{ matrix.arch == 'amdgpu' }}
         shell: bash
