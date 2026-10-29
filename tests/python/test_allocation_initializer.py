@@ -19,6 +19,7 @@ def _allocate(
     shape: tuple[int, ...],
     *,
     dtype: DataTypeCxx = qd.f32,
+    via_dtype: bool = False,
     **kwargs: Any,
 ) -> qd.Field | qd.Ndarray | qd.Tensor:
     if api == "field":
@@ -34,20 +35,20 @@ def _allocate(
     if kind == "scalar":
         return scalar_factory(dtype, shape=shape, **kwargs)
     if kind == "vector":
+        if via_dtype:
+            return scalar_factory(qd.types.vector(3, dtype), shape=shape, **kwargs)
         return vector_factory(3, dtype, shape=shape, **kwargs)
     if kind == "matrix":
+        if via_dtype:
+            return scalar_factory(qd.types.matrix(2, 3, dtype), shape=shape, **kwargs)
         return matrix_factory(2, 3, dtype, shape=shape, **kwargs)
-    if kind == "vector_via_dtype":
-        return scalar_factory(qd.types.vector(3, dtype), shape=shape, **kwargs)
-    if kind == "matrix_type":
-        return scalar_factory(qd.types.matrix(2, 3, dtype), shape=shape, **kwargs)
     raise ValueError(f"Unknown element kind: {kind}")
 
 
 def _initial_value(kind: str) -> float | list[int] | list[list[int]]:
     if kind == "scalar":
         return -2.5
-    if "vector" in kind:
+    if kind == "vector":
         return [1, 2, 3]
     return [[1, 2, 3], [4, 5, 6]]
 
@@ -65,13 +66,16 @@ def _storage(array: qd.Field | qd.Tensor) -> qd.Field:
         pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
     ],
 )
-@pytest.mark.parametrize("kind", ["scalar", "vector", "matrix", "vector_via_dtype", "matrix_type"])
+@pytest.mark.parametrize("kind", ["scalar", "vector", "matrix"])
+@pytest.mark.parametrize("via_dtype", [False, True], ids=["via_class", "via_dtype"])
 @pytest.mark.parametrize("kwargs", [{}, {"fill": None}], ids=["omitted", "none"])
 @test_utils.test()
-def test_initializer_defaults(api: str, backend: qd.Backend | None, kind: str, kwargs: dict[str, None]) -> None:
+def test_initializer_defaults(
+    api: str, backend: qd.Backend | None, kind: str, via_dtype: bool, kwargs: dict[str, None]
+) -> None:
     # Omitting fill or passing None must preserve zero initialization for every constructor.
     num_elements = 4
-    array = _allocate(api, backend, kind, (num_elements,), **kwargs)
+    array = _allocate(api, backend, kind, (num_elements,), via_dtype=via_dtype, **kwargs)
     element_shape = np.shape(_initial_value(kind))
     np.testing.assert_array_equal(array.to_numpy(), np.zeros((num_elements, *element_shape)))
 
@@ -103,12 +107,15 @@ def test_initializer_scalar(api: str, backend: qd.Backend | None, value: float) 
         pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
     ],
 )
-@pytest.mark.parametrize("kind", ["scalar", "vector", "matrix", "vector_via_dtype", "matrix_type"])
+@pytest.mark.parametrize("kind", ["scalar", "vector", "matrix"])
+@pytest.mark.parametrize("via_dtype", [False, True], ids=["via_class", "via_dtype"])
 @pytest.mark.parametrize("shape", [(), (4,)])
 @test_utils.test()
-def test_initializer_broadcast(api: str, backend: qd.Backend | None, kind: str, shape: tuple[int, ...]) -> None:
+def test_initializer_broadcast(
+    api: str, backend: qd.Backend | None, kind: str, via_dtype: bool, shape: tuple[int, ...]
+) -> None:
     # A scalar initializer must fill every component of every allocated element.
-    array = _allocate(api, backend, kind, shape, fill=7)
+    array = _allocate(api, backend, kind, shape, via_dtype=via_dtype, fill=7)
     element_shape = np.shape(_initial_value(kind))
     np.testing.assert_array_equal(array.to_numpy(), np.full((*shape, *element_shape), 7))
 
@@ -122,15 +129,16 @@ def test_initializer_broadcast(api: str, backend: qd.Backend | None, kind: str, 
         pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
     ],
 )
-@pytest.mark.parametrize("kind", ["vector", "matrix", "vector_via_dtype", "matrix_type"])
+@pytest.mark.parametrize("kind", ["vector", "matrix"])
+@pytest.mark.parametrize("via_dtype", [False, True], ids=["via_class", "via_dtype"])
 @test_utils.test()
-def test_initializer_captures_components(api: str, backend: qd.Backend | None, kind: str) -> None:
+def test_initializer_captures_components(api: str, backend: qd.Backend | None, kind: str, via_dtype: bool) -> None:
     # Every constructor must capture component lists before later mutations.
     num_elements = 3
     value = _initial_value(kind)
     expected = np.array(value)
-    array = _allocate(api, backend, kind, (num_elements,), fill=value)
-    if "vector" in kind:
+    array = _allocate(api, backend, kind, (num_elements,), via_dtype=via_dtype, fill=value)
+    if kind == "vector":
         value[0] = 99
     else:
         value[0][0] = 99
@@ -165,12 +173,13 @@ def test_initializer_captures_matrix(api: str, backend: qd.Backend | None) -> No
         pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
     ],
 )
-@pytest.mark.parametrize("kind", ["scalar", "vector", "matrix", "vector_via_dtype", "matrix_type"])
+@pytest.mark.parametrize("kind", ["scalar", "vector", "matrix"])
+@pytest.mark.parametrize("via_dtype", [False, True], ids=["via_class", "via_dtype"])
 @test_utils.test()
-def test_initializer_leaves_gradients_zero(api: str, backend: qd.Backend | None, kind: str) -> None:
+def test_initializer_leaves_gradients_zero(api: str, backend: qd.Backend | None, kind: str, via_dtype: bool) -> None:
     # Initializing forward values must leave the companion gradient values at zero.
     num_elements = 4
-    array = _allocate(api, backend, kind, (num_elements,), fill=7, needs_grad=True)
+    array = _allocate(api, backend, kind, (num_elements,), via_dtype=via_dtype, fill=7, needs_grad=True)
     element_shape = np.shape(_initial_value(kind))
     np.testing.assert_array_equal(array.to_numpy(), np.full((num_elements, *element_shape), 7))
     np.testing.assert_array_equal(array.grad.to_numpy(), np.zeros((num_elements, *element_shape)))
@@ -204,13 +213,14 @@ def test_initializer_invalid_scalar(api: str, backend: qd.Backend | None, value:
         pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
     ],
 )
-@pytest.mark.parametrize("kind", ["vector", "matrix", "vector_via_dtype", "matrix_type"])
+@pytest.mark.parametrize("kind", ["vector", "matrix"])
+@pytest.mark.parametrize("via_dtype", [False, True], ids=["via_class", "via_dtype"])
 @test_utils.test()
-def test_initializer_invalid_components(api: str, backend: qd.Backend | None, kind: str) -> None:
+def test_initializer_invalid_components(api: str, backend: qd.Backend | None, kind: str, via_dtype: bool) -> None:
     # Component counts that do not match the element type must be rejected by every constructor.
     with pytest.raises(ValueError, match="fill"):
-        _allocate(api, backend, kind, (), fill=[1, 2])
-    array = _allocate(api, backend, kind, (), fill=7)
+        _allocate(api, backend, kind, (), via_dtype=via_dtype, fill=[1, 2])
+    array = _allocate(api, backend, kind, (), via_dtype=via_dtype, fill=7)
     np.testing.assert_array_equal(array.to_numpy(), np.full(np.shape(_initial_value(kind)), 7))
 
 
@@ -299,16 +309,17 @@ def test_initializer_first_kernel_read(api: str, backend: qd.Backend | None, dty
         pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
     ],
 )
-@pytest.mark.parametrize("kind", ["scalar", "vector", "matrix", "vector_via_dtype", "matrix_type"])
+@pytest.mark.parametrize("kind", ["scalar", "vector", "matrix"])
+@pytest.mark.parametrize("via_dtype", [False, True], ids=["via_class", "via_dtype"])
 @test_utils.test()
-def test_initializer_dlpack(api: str, backend: qd.Backend | None, kind: str) -> None:
+def test_initializer_dlpack(api: str, backend: qd.Backend | None, kind: str, via_dtype: bool) -> None:
     # After synchronization, DLPack consumers must see initialized values from every allocation API.
     is_field = api == "field" or (api == "tensor" and backend == qd.Backend.FIELD)
     torch = test_utils.require_torch_dlpack(need_field_support=is_field)
     shape = (2, 3)
     value = _initial_value(kind)
     kwargs = {"layout": (1, 0)} if api == "tensor" else {}
-    array = _allocate(api, backend, kind, shape, fill=value, **kwargs)
+    array = _allocate(api, backend, kind, shape, via_dtype=via_dtype, fill=value, **kwargs)
     qd.sync()
     torch_view = torch.utils.dlpack.from_dlpack(array.to_dlpack())
     np.testing.assert_array_equal(torch_view.cpu().numpy(), np.broadcast_to(value, (*shape, *np.shape(value))))
@@ -435,13 +446,14 @@ def test_initializer_tensor_default_backend() -> None:
 
 
 @pytest.mark.parametrize("backend", [qd.Backend.FIELD, qd.Backend.NDARRAY], ids=["tensor_field", "tensor_ndarray"])
-@pytest.mark.parametrize("kind", ["scalar", "vector", "matrix", "vector_via_dtype", "matrix_type"])
+@pytest.mark.parametrize("kind", ["scalar", "vector", "matrix"])
+@pytest.mark.parametrize("via_dtype", [False, True], ids=["via_class", "via_dtype"])
 @test_utils.test()
-def test_initializer_tensor_layout(backend: qd.Backend, kind: str) -> None:
+def test_initializer_tensor_layout(backend: qd.Backend, kind: str, via_dtype: bool) -> None:
     # Initialization and later writes must use canonical indices when the physical shape axes are permuted.
     shape = (2, 3)
     value = _initial_value(kind)
-    tensor = _allocate("tensor", backend, kind, shape, layout=(1, 0), fill=value, needs_grad=True)
+    tensor = _allocate("tensor", backend, kind, shape, layout=(1, 0), via_dtype=via_dtype, fill=value, needs_grad=True)
     assert isinstance(tensor, qd.Tensor)
     expected = np.broadcast_to(value, (*shape, *np.shape(value))).copy()
     np.testing.assert_array_equal(tensor.to_numpy(), expected)
