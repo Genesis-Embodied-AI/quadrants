@@ -118,11 +118,11 @@ Matrices and vectors are unrolled into scalar registers at compile time. Using m
 large = qd.field(qd.f32, shape=(64, 64))
 ```
 
-The 144-element threshold is set by the largest size officially supported by the per-thread linear algebra APIs ([`Matrix.inverse`](matrix_vector_per_thread.md) up to 12×12; [`qd.sym_eig` and `qd.make_spd`](linalg_per_thread.md) cap lower, at 6×6).
+The 144-element threshold is set by the largest size officially supported by the per-thread linear algebra APIs ([`Matrix.inverse`](matrix_vector_per_thread.md) up to 12x12; [`qd.sym_eig` and `qd.make_spd`](linalg_per_thread.md) cap lower, at 6x6).
 
 ## Advanced: storage layout of packed vs unpacked vectors
 
-`qd.types.vector(N, dtype)` accepts an optional `unpacked: bool = False` kwarg that controls how the vector is laid out in per-thread memory when used as a [`@qd.dataclass`](compound_types.md#qddataclass-qdtypesstruct) field. The kwarg does not affect the *value type* — the field still holds a vector — it only affects the storage layout.
+`qd.types.vector(N, dtype)` accepts an optional `unpacked: bool = False` kwarg that controls how the vector is laid out in per-thread memory when used as a [`@qd.dataclass`](compound_types.md#qddataclass-qdtypesstruct) field. The kwarg does not affect the *value type* - the field still holds a vector - it only affects the storage layout.
 
 - `unpacked=False` (default): the field is stored as a single group of `N` scalars. The compiler keeps the whole vector in registers, or, if there is insufficient register storage, spills the whole vector to "local" memory (which despite the name lives in off-chip DRAM and is slow). It is all-or-nothing per vector.
 - `unpacked=True`: the field is stored as `N` independent scalar slots. The compiler can decide per slot whether to keep it in a register or spill it. Under register pressure this can be the difference between "most of the vector still lives in registers" and "the entire vector is in DRAM".
