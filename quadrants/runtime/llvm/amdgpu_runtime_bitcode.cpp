@@ -1,5 +1,6 @@
 #include "quadrants/runtime/llvm/amdgpu_runtime_bitcode.h"
 #include "quadrants/runtime/llvm/runtime_bitcode_cache.h"
+#include "quadrants/runtime/llvm/runtime_bitcode_serialization.h"
 #include "quadrants/runtime/llvm/llvm_context.h"
 #include "quadrants/util/environ_config.h"
 #include "quadrants/program/compile_config.h"
@@ -51,10 +52,7 @@ std::unique_ptr<llvm::Module> load_amdgpu_runtime_bitcode(QuadrantsLLVMContext &
       inputs.key(),
       [&] {
         prepared = context.module_from_file(file, &inputs);
-        std::string bytes;
-        llvm::raw_string_ostream stream(bytes);
-        llvm::WriteBitcodeToFile(*prepared, stream);
-        return bytes;
+        return serialize_runtime_bitcode(*prepared);
       },
       hit);
   QD_TRACE("AMDGPU runtime bitcode cache {}", hit ? "hit" : "miss");
@@ -62,10 +60,7 @@ std::unique_ptr<llvm::Module> load_amdgpu_runtime_bitcode(QuadrantsLLVMContext &
     return prepared;
   }
   // Parse into this program/thread's fresh context; mutations cannot reach any other program or cached template.
-  // Like clone_module_to_context, parse the prepared intermediate without running the verifier here: device-library
-  // functions still have CommonLinkage, which the later runtime/kernel linking passes resolve before code generation.
-  auto module = llvm::parseBitcodeFile(llvm::MemoryBufferRef(bitcode, "prepared_amdgpu_runtime"),
-                                       *context.get_this_thread_context());
+  auto module = parse_runtime_bitcode(bitcode, *context.get_this_thread_context());
   if (!module) {
     QD_ERROR("Failed to parse prepared AMD runtime bitcode: {}", llvm::toString(module.takeError()));
   }
