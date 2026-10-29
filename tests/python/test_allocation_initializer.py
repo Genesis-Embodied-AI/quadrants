@@ -8,21 +8,31 @@ from quadrants.lang import impl
 
 from tests.helpers import test_utils
 
-APIS = ["field", "ndarray", "tensor_field", "tensor_ndarray"]
-FIELD_APIS = ["field", "tensor_field"]
-TENSOR_BACKENDS = {"tensor_field": qd.Backend.FIELD, "tensor_ndarray": qd.Backend.NDARRAY}
+TENSOR_APIS = [
+    pytest.param("tensor", qd.Backend.FIELD, id="tensor_field"),
+    pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
+]
+APIS = [
+    pytest.param("field", None, id="field"),
+    pytest.param("ndarray", None, id="ndarray"),
+    *TENSOR_APIS,
+]
+FIELD_APIS = [
+    pytest.param("field", None, id="field"),
+    pytest.param("tensor", qd.Backend.FIELD, id="tensor_field"),
+]
 VECTOR_MATRIX_KINDS = ["vector", "matrix", "vector_type", "matrix_type"]
 KINDS = ["scalar", *VECTOR_MATRIX_KINDS]
 
 
-def _allocate(api, kind, shape, *, dtype=qd.f32, **kwargs):
+def _allocate(api, backend, kind, shape, *, dtype=qd.f32, **kwargs):
     if api == "field":
         scalar_factory, vector_factory, matrix_factory = qd.field, qd.Vector.field, qd.Matrix.field
     elif api == "ndarray":
         scalar_factory, vector_factory, matrix_factory = qd.ndarray, qd.Vector.ndarray, qd.Matrix.ndarray
-    elif api in TENSOR_BACKENDS:
+    elif api == "tensor":
         scalar_factory, vector_factory, matrix_factory = qd.tensor, qd.Vector.tensor, qd.Matrix.tensor
-        kwargs["backend"] = TENSOR_BACKENDS[api]
+        kwargs["backend"] = backend
     else:
         raise ValueError(f"Unknown allocation API: {api}")
 
@@ -51,48 +61,48 @@ def _storage(array):
     return array._unwrap() if isinstance(array, qd.Tensor) else array
 
 
-@pytest.mark.parametrize("api", APIS)
+@pytest.mark.parametrize("api,backend", APIS)
 @pytest.mark.parametrize("kind", KINDS)
 @pytest.mark.parametrize("kwargs", [{}, {"fill": None}], ids=["omitted", "none"])
 @test_utils.test()
-def test_initializer_defaults(api, kind, kwargs):
+def test_initializer_defaults(api, backend, kind, kwargs):
     # Omitting fill or passing None must preserve zero initialization for every constructor.
     num_elements = 4
-    array = _allocate(api, kind, (num_elements,), **kwargs)
+    array = _allocate(api, backend, kind, (num_elements,), **kwargs)
     element_shape = np.shape(_initial_value(kind))
     np.testing.assert_array_equal(array.to_numpy(), np.zeros((num_elements, *element_shape)))
 
 
-@pytest.mark.parametrize("api", APIS)
+@pytest.mark.parametrize("api,backend", APIS)
 @pytest.mark.parametrize("value", [0, -2.5])
 @test_utils.test()
-def test_initializer_scalar(api, value):
+def test_initializer_scalar(api, backend, value):
     # Scalar initializers must preserve zero and negative fractional values.
     shape = (2, 3)
-    array = _allocate(api, "scalar", shape, fill=value)
+    array = _allocate(api, backend, "scalar", shape, fill=value)
     np.testing.assert_array_equal(array.to_numpy(), np.full(shape, value))
 
 
-@pytest.mark.parametrize("api", APIS)
+@pytest.mark.parametrize("api,backend", APIS)
 @pytest.mark.parametrize("kind", KINDS)
 @pytest.mark.parametrize("shape", [(), (4,)])
 @test_utils.test()
-def test_initializer_broadcast(api, kind, shape):
+def test_initializer_broadcast(api, backend, kind, shape):
     # A scalar initializer must fill every component of every allocated element.
-    array = _allocate(api, kind, shape, fill=7)
+    array = _allocate(api, backend, kind, shape, fill=7)
     element_shape = np.shape(_initial_value(kind))
     np.testing.assert_array_equal(array.to_numpy(), np.full((*shape, *element_shape), 7))
 
 
-@pytest.mark.parametrize("api", APIS)
+@pytest.mark.parametrize("api,backend", APIS)
 @pytest.mark.parametrize("kind", VECTOR_MATRIX_KINDS)
 @test_utils.test()
-def test_initializer_captures_components(api, kind):
+def test_initializer_captures_components(api, backend, kind):
     # Every constructor must capture component lists before later mutations.
     num_elements = 3
     value = _initial_value(kind)
     expected = np.array(value)
-    array = _allocate(api, kind, (num_elements,), fill=value)
+    array = _allocate(api, backend, kind, (num_elements,), fill=value)
     if "vector" in kind:
         value[0] = 99
     else:
@@ -100,69 +110,69 @@ def test_initializer_captures_components(api, kind):
     np.testing.assert_array_equal(array.to_numpy(), np.broadcast_to(expected, (num_elements, *expected.shape)))
 
 
-@pytest.mark.parametrize("api", APIS)
+@pytest.mark.parametrize("api,backend", APIS)
 @test_utils.test()
-def test_initializer_captures_matrix(api):
+def test_initializer_captures_matrix(api, backend):
     # A Matrix used as an initializer must be captured before later changes to that Matrix.
     expected = [[1, 2, 3], [4, 5, 6]]
     value = qd.Matrix(expected)
-    array = _allocate(api, "matrix", (), dtype=qd.i32, fill=value)
+    array = _allocate(api, backend, "matrix", (), dtype=qd.i32, fill=value)
     value[0, 0] = 99
     np.testing.assert_array_equal(array.to_numpy(), expected)
 
 
-@pytest.mark.parametrize("api", APIS)
+@pytest.mark.parametrize("api,backend", APIS)
 @pytest.mark.parametrize("kind", KINDS)
 @test_utils.test()
-def test_initializer_leaves_gradients_zero(api, kind):
+def test_initializer_leaves_gradients_zero(api, backend, kind):
     # Initializing forward values must leave the companion gradient values at zero.
     num_elements = 4
-    array = _allocate(api, kind, (num_elements,), fill=7, needs_grad=True)
+    array = _allocate(api, backend, kind, (num_elements,), fill=7, needs_grad=True)
     element_shape = np.shape(_initial_value(kind))
     np.testing.assert_array_equal(array.to_numpy(), np.full((num_elements, *element_shape), 7))
     np.testing.assert_array_equal(array.grad.to_numpy(), np.zeros((num_elements, *element_shape)))
 
 
-@pytest.mark.parametrize("api", APIS)
+@pytest.mark.parametrize("api,backend", APIS)
 @pytest.mark.parametrize("value", [[1, 2], "invalid"])
 @test_utils.test()
-def test_initializer_invalid_scalar(api, value):
+def test_initializer_invalid_scalar(api, backend, value):
     # Invalid scalar initializers must raise at declaration without preventing later valid allocations.
     with pytest.raises(ValueError, match="fill"):
-        _allocate(api, "scalar", (), fill=value)
-    array = _allocate(api, "scalar", (), fill=7)
+        _allocate(api, backend, "scalar", (), fill=value)
+    array = _allocate(api, backend, "scalar", (), fill=7)
     assert array[()] == 7
 
 
-@pytest.mark.parametrize("api", APIS)
+@pytest.mark.parametrize("api,backend", APIS)
 @pytest.mark.parametrize("kind", VECTOR_MATRIX_KINDS)
 @test_utils.test()
-def test_initializer_invalid_components(api, kind):
+def test_initializer_invalid_components(api, backend, kind):
     # Component counts that do not match the element type must be rejected by every constructor.
     with pytest.raises(ValueError, match="fill"):
-        _allocate(api, kind, (), fill=[1, 2])
-    array = _allocate(api, kind, (), fill=7)
+        _allocate(api, backend, kind, (), fill=[1, 2])
+    array = _allocate(api, backend, kind, (), fill=7)
     np.testing.assert_array_equal(array.to_numpy(), np.full(np.shape(_initial_value(kind)), 7))
 
 
-@pytest.mark.parametrize("api", APIS)
+@pytest.mark.parametrize("api,backend", APIS)
 @pytest.mark.parametrize("value", [[[1, 2]], [[1, 2], [3]], [[1, None, 3], [4, 5, 6]]])
 @test_utils.test()
-def test_initializer_invalid_matrix(api, value):
+def test_initializer_invalid_matrix(api, backend, value):
     # Invalid matrix shapes or components must raise without preventing later valid allocations.
     with pytest.raises(ValueError, match="fill"):
-        _allocate(api, "matrix", (), fill=value)
-    array = _allocate(api, "matrix", (), fill=7)
+        _allocate(api, backend, "matrix", (), fill=value)
+    array = _allocate(api, backend, "matrix", (), fill=7)
     np.testing.assert_array_equal(array.to_numpy(), np.full((2, 3), 7))
 
 
-@pytest.mark.parametrize("api", APIS)
+@pytest.mark.parametrize("api,backend", APIS)
 @pytest.mark.parametrize("operation", ["fill", "host", "numpy", "kernel"])
 @test_utils.test()
-def test_initializer_precedes_writes(api, operation):
+def test_initializer_precedes_writes(api, backend, operation):
     # Initialization must run before each kind of write.
     num_elements = 4
-    array = _allocate(api, "scalar", (num_elements,), dtype=qd.i32, fill=3)
+    array = _allocate(api, backend, "scalar", (num_elements,), dtype=qd.i32, fill=3)
     if operation == "fill":
         array.fill(5)
     elif operation == "host":
@@ -180,12 +190,12 @@ def test_initializer_precedes_writes(api, operation):
     assert array[0] == 5
 
 
-@pytest.mark.parametrize("api", APIS)
+@pytest.mark.parametrize("api,backend", APIS)
 @pytest.mark.parametrize("dtype", [qd.i16, qd.i32, qd.f32])
 @test_utils.test()
-def test_initializer_first_kernel_read(api, dtype):
+def test_initializer_first_kernel_read(api, backend, dtype):
     # The first kernel must see the initializer, and a later kernel must see an explicit fill.
-    array = _allocate(api, "scalar", (4,), dtype=dtype, fill=3)
+    array = _allocate(api, backend, "scalar", (4,), dtype=dtype, fill=3)
 
     @qd.kernel
     def k_read(array: qd.Tensor) -> qd.i32:
@@ -197,29 +207,29 @@ def test_initializer_first_kernel_read(api, dtype):
 
 
 @pytest.mark.needs_torch
-@pytest.mark.parametrize("api", APIS)
+@pytest.mark.parametrize("api,backend", APIS)
 @pytest.mark.parametrize("kind", KINDS)
 @test_utils.test()
-def test_initializer_dlpack(api, kind):
+def test_initializer_dlpack(api, backend, kind):
     # After synchronization, DLPack consumers must see initialized values from every allocation API.
-    is_field = api in FIELD_APIS
+    is_field = api == "field" or (api == "tensor" and backend == qd.Backend.FIELD)
     torch = test_utils.require_torch_dlpack(need_field_support=is_field)
     shape = (2, 3)
     value = _initial_value(kind)
-    kwargs = {"layout": (1, 0)} if api in TENSOR_BACKENDS else {}
-    array = _allocate(api, kind, shape, fill=value, **kwargs)
+    kwargs = {"layout": (1, 0)} if api == "tensor" else {}
+    array = _allocate(api, backend, kind, shape, fill=value, **kwargs)
     qd.sync()
     torch_view = torch.utils.dlpack.from_dlpack(array.to_dlpack())
     np.testing.assert_array_equal(torch_view.cpu().numpy(), np.broadcast_to(value, (*shape, *np.shape(value))))
 
 
-@pytest.mark.parametrize("api", FIELD_APIS)
+@pytest.mark.parametrize("api,backend", FIELD_APIS)
 @test_utils.test()
-def test_initializer_fields_share_tree(api):
+def test_initializer_fields_share_tree(api, backend):
     # Declarations with fill= must defer compilation, share one allocation tree, and initialize every field.
     num_fields = 40
-    fields = [_allocate(api, "scalar", (), fill=i) for i in range(num_fields)]
-    total = _allocate(api, "scalar", ())
+    fields = [_allocate(api, backend, "scalar", (), fill=i) for i in range(num_fields)]
+    total = _allocate(api, backend, "scalar", ())
     assert impl.get_runtime().get_num_compiled_functions() == 0
 
     @qd.kernel
@@ -232,11 +242,11 @@ def test_initializer_fields_share_tree(api):
     assert len({_storage(field).snode._snode_tree_id for field in fields + [total]}) == 1
 
 
-@pytest.mark.parametrize("api", FIELD_APIS)
+@pytest.mark.parametrize("api,backend", FIELD_APIS)
 @test_utils.test()
-def test_initializer_is_not_replayed(api):
+def test_initializer_is_not_replayed(api, backend):
     # Once initialization has run, later synchronization must preserve writes made afterward.
-    field = _allocate(api, "scalar", (), dtype=qd.i32, fill=3)
+    field = _allocate(api, backend, "scalar", (), dtype=qd.i32, fill=3)
     assert field[()] == 3
     field[()] = 5
 
@@ -247,14 +257,14 @@ def test_initializer_is_not_replayed(api):
     assert field[()] == 5
 
 
-@pytest.mark.parametrize("api", FIELD_APIS)
+@pytest.mark.parametrize("api,backend", FIELD_APIS)
 @test_utils.test()
-def test_initializer_after_materialization(api):
+def test_initializer_after_materialization(api, backend):
     # Fields declared after an earlier allocation must initialize together in a new allocation tree.
-    first = _allocate(api, "scalar", (), fill=2)
+    first = _allocate(api, backend, "scalar", (), fill=2)
     assert first[()] == 2
-    second = _allocate(api, "scalar", (), fill=4)
-    third = _allocate(api, "scalar", (), fill=6)
+    second = _allocate(api, backend, "scalar", (), fill=4)
+    third = _allocate(api, backend, "scalar", (), fill=6)
     assert second[()] == 4
     assert third[()] == 6
     assert _storage(second).snode._snode_tree_id == _storage(third).snode._snode_tree_id
@@ -315,14 +325,14 @@ def test_initializer_tensor_default_backend():
     assert tensor[()] == 3
 
 
-@pytest.mark.parametrize("api", TENSOR_BACKENDS)
+@pytest.mark.parametrize("api,backend", TENSOR_APIS)
 @pytest.mark.parametrize("kind", KINDS)
 @test_utils.test()
-def test_initializer_tensor_layout(api, kind):
+def test_initializer_tensor_layout(api, backend, kind):
     # Initialization and later writes must use canonical indices when the physical shape axes are permuted.
     shape = (2, 3)
     value = _initial_value(kind)
-    tensor = _allocate(api, kind, shape, layout=(1, 0), fill=value, needs_grad=True)
+    tensor = _allocate(api, backend, kind, shape, layout=(1, 0), fill=value, needs_grad=True)
     assert isinstance(tensor, qd.Tensor)
     expected = np.broadcast_to(value, (*shape, *np.shape(value))).copy()
     np.testing.assert_array_equal(tensor.to_numpy(), expected)
