@@ -17,7 +17,13 @@ def test_runtime_cache_survives_reset(capfd):
         for cycle in range(3):
             qd.reset()
             capfd.readouterr()
-            qd.init(arch=qd.amdgpu, offline_cache=True, fast_math=fast_math, random_seed=cycle, log_level=qd.TRACE)
+            qd.init(
+                arch=qd.amdgpu,
+                offline_cache=True,
+                fast_math=fast_math,
+                random_seed=cycle,
+                log_level=qd.TRACE,
+            )
             output = "".join(capfd.readouterr())
             if cycle:
                 assert "AMDGPU runtime HSACO cache hit" in output
@@ -34,7 +40,14 @@ def test_runtime_cache_survives_reset(capfd):
 
 
 @pytest.mark.parametrize(
-    "diagnostic", [None, "print_kernel_llvm_ir", "print_kernel_llvm_ir_optimized", "print_kernel_amdgcn", "QD_DUMP_IR"]
+    "diagnostic",
+    [
+        None,
+        "print_kernel_llvm_ir",
+        "print_kernel_llvm_ir_optimized",
+        "print_kernel_amdgcn",
+        "QD_DUMP_IR",
+    ],
 )
 @test_utils.test(arch=qd.amdgpu, offline_cache=False)
 def test_runtime_cache_bypass(diagnostic, capfd, monkeypatch, tmp_path):
@@ -46,10 +59,17 @@ def test_runtime_cache_bypass(diagnostic, capfd, monkeypatch, tmp_path):
     for _ in range(2):
         qd.reset()
         capfd.readouterr()
-        qd.init(arch=qd.amdgpu, offline_cache=diagnostic is not None, log_level=qd.TRACE, **options)
+        qd.init(
+            arch=qd.amdgpu,
+            offline_cache=diagnostic is not None,
+            log_level=qd.TRACE,
+            **options,
+        )
         output = "".join(capfd.readouterr())
         assert "AMDGPU runtime HSACO cache bypass" in output
         assert "AMDGPU runtime HSACO cache hit" not in output
+        assert "AMDGPU runtime bitcode cache bypass" in output
+        assert "AMDGPU runtime bitcode cache hit" not in output
     qd.reset()
 
 
@@ -61,10 +81,22 @@ for fast_math in (True, True, False, False, True):
     qd.init(arch=qd.amdgpu, offline_cache=True, fast_math=fast_math, log_level=qd.TRACE)
     qd.reset()
 """
-    env = {key: value for key, value in os.environ.items() if key not in ("QD_OFFLINE_CACHE", "QD_DUMP_IR")}
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if key not in ("QD_OFFLINE_CACHE", "QD_DUMP_IR")
+    }
     for _ in range(2):
-        result = subprocess.run([sys.executable, "-c", script], env=env, capture_output=True, text=True, timeout=120)
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
         output = result.stdout + result.stderr
         assert result.returncode == 0, output
         assert output.count("AMDGPU runtime HSACO cache miss") == 2, output
         assert output.count("AMDGPU runtime HSACO cache hit") == 3, output
+        assert output.count("AMDGPU runtime bitcode cache miss") == 1, output
+        assert output.count("AMDGPU runtime bitcode cache hit") == 4, output
