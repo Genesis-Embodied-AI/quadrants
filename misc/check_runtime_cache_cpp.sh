@@ -9,8 +9,8 @@ cd "$repo_root"
 git rev-parse HEAD
 ${CXX:-g++} $("$LLVM_ROOT/bin/llvm-config" --cxxflags) -fexceptions -pthread \
   -I "$repo_root" -I external/googletest/googletest/include -I external/googletest/googletest \
-  tests/cpp/common/runtime_hsaco_cache_test.cpp tests/cpp/llvm/runtime_hsaco_cache_key_test.cpp \
+  tests/cpp/common/runtime_hsaco_cache_test.cpp tests/cpp/llvm/runtime_hsaco_cache_key_test.cpp tests/cpp/llvm/runtime_bitcode_cache_test.cpp \
   external/googletest/googletest/src/gtest-all.cc external/googletest/googletest/src/gtest_main.cc \
-  $("$LLVM_ROOT/bin/llvm-config" --ldflags --libs bitwriter core support --system-libs) \
+  $("$LLVM_ROOT/bin/llvm-config" --ldflags --libs bitreader bitwriter core support --system-libs) \
   -o "$CACHE_TEST_OUTPUT/runtime_cache_tests"
-"$CACHE_TEST_OUTPUT/runtime_cache_tests" --gtest_filter='RuntimeHsacoCache.*'
+"$CACHE_TEST_OUTPUT/runtime_cache_tests" --gtest_filter='RuntimeHsacoCache.*:RuntimeBitcodeCache.*'
