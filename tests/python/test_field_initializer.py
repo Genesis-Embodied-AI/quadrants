@@ -36,7 +36,7 @@ def test_fill_initializer_precedes_writes(operation):
         field[0] = 5
     elif operation == "numpy":
         field.from_numpy(np.full(4, 5, dtype=np.int32))
-    else:
+    elif operation == "kernel":
 
         @qd.kernel
         def write():
