@@ -9,17 +9,27 @@ from tests.helpers import test_utils
 
 @pytest.mark.parametrize("container_type,operation", [("field", "fill"), ("field", "allocation"), ("ndarray", "fill")])
 @pytest.mark.parametrize("element_class,element_shape", [("scalar", ()), ("vector", (2,)), ("matrix", (2, 2))])
-@pytest.mark.parametrize("dtype,fill_value", [(qd.i64, 2**40), (qd.i64, -(2**40)), (qd.u64, 2**63 + 5)])
-@test_utils.test(require=qd.extension.data64, default_ip=qd.i32)
-def test_fill_wide_integer(
+@pytest.mark.parametrize(
+    "dtype,fill_value",
+    [
+        (qd.i64, 2**40),
+        (qd.i64, -(2**40)),
+        (qd.u64, 2**63 + 5),
+        (qd.f64, 1.0000000000000002),
+        (qd.f64, 1e300),
+        (qd.f64, 1e-300),
+    ],
+)
+@test_utils.test(require=qd.extension.data64, default_ip=qd.i32, default_fp=qd.f32)
+def test_fill_destination_dtype(
     container_type: str,
     operation: str,
     element_class: str,
     element_shape: tuple[int, ...],
     dtype: DataTypeCxx,
-    fill_value: int,
+    fill_value: int | float,
 ) -> None:
-    # Both immediate and allocation-time fills must preserve wide integers despite the default i32 type.
+    # Immediate and allocation-time fills must preserve the destination's range and precision despite i32/f32 defaults.
     components = np.full(element_shape, fill_value).tolist()
     kwargs = {"fill": components} if operation == "allocation" else {}
     if element_class == "scalar":

@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any, Callable, TypeAlias, Union, cast
 
 import numpy as np
 
-from quadrants.types.primitive_types import integer_types
+from quadrants.types.primitive_types import integer_types, real_types
 
 if TYPE_CHECKING:
     from quadrants._lib.core.quadrants_python import DataTypeCxx, SNodeCxx
@@ -17,7 +17,7 @@ _FillValue: TypeAlias = Union[bool, int, float, np.bool_, np.integer, np.floatin
 
 
 def make_fill_value(value: Any, dtype: "DataTypeCxx") -> "Expr":
-    """Construct integer constants with the destination type before the default type can truncate them."""
+    """Construct numeric constants with the destination type to preserve its range and precision."""
     # Import lazily: matrix.py also uses this module when constructing fields.
     from quadrants.lang.expr import Expr  # pylint: disable=C0415
     from quadrants.lang.matrix import Matrix  # pylint: disable=C0415
@@ -29,6 +29,8 @@ def make_fill_value(value: Any, dtype: "DataTypeCxx") -> "Expr":
         if isinstance(component, (list, tuple)):
             return tuple(convert(item) for item in component)
         if isinstance(component, (int, np.integer)) and not isinstance(component, bool) and dtype in integer_types:
+            return Expr(component, dtype=dtype)
+        if isinstance(component, (float, np.floating)) and dtype in real_types:
             return Expr(component, dtype=dtype)
         return component
 
