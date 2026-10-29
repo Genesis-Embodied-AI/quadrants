@@ -6,7 +6,7 @@ import platform
 from errno import EEXIST
 from tempfile import NamedTemporaryFile, mkstemp
 from types import ModuleType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import numpy.typing as npt
@@ -14,6 +14,7 @@ import pytest
 
 import quadrants as qd
 from quadrants._lib import core as _qd_core
+from quadrants._lib.core.quadrants_python import DataTypeCxx
 from quadrants.lang import amdgpu, cpu, cuda, gpu, metal, vulkan
 from quadrants.lang.field import _TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET
 from quadrants.lang.misc import is_arch_supported
@@ -23,6 +24,39 @@ if TYPE_CHECKING:
 
 
 # Helper functions
+def _create_array(
+    container_type: str,
+    backend: qd.Backend | None,
+    element_class: str,
+    shape: tuple[int, ...],
+    *,
+    dtype: DataTypeCxx = qd.f32,
+    via_dtype: bool = False,
+    **kwargs: Any,
+) -> qd.Field | qd.Ndarray | qd.Tensor:
+    if container_type == "field":
+        scalar_factory, vector_factory, matrix_factory = qd.field, qd.Vector.field, qd.Matrix.field
+    elif container_type == "ndarray":
+        scalar_factory, vector_factory, matrix_factory = qd.ndarray, qd.Vector.ndarray, qd.Matrix.ndarray
+    elif container_type == "tensor":
+        scalar_factory, vector_factory, matrix_factory = qd.tensor, qd.Vector.tensor, qd.Matrix.tensor
+        kwargs["backend"] = backend
+    else:
+        raise ValueError(f"Unknown container type: {container_type}")
+
+    if element_class == "scalar":
+        return scalar_factory(dtype=dtype, shape=shape, **kwargs)
+    if element_class == "vector":
+        if via_dtype:
+            return scalar_factory(dtype=qd.types.vector(n=3, dtype=dtype), shape=shape, **kwargs)
+        return vector_factory(n=3, dtype=dtype, shape=shape, **kwargs)
+    if element_class == "matrix":
+        if via_dtype:
+            return scalar_factory(dtype=qd.types.matrix(n=2, m=3, dtype=dtype), shape=shape, **kwargs)
+        return matrix_factory(n=2, m=3, dtype=dtype, shape=shape, **kwargs)
+    raise ValueError(f"Unknown element class: {element_class}")
+
+
 @qd.pyfunc
 def encode_index(I):
     # Encode coordinates as an integer, e.g. [1, 2] -> 12. This encoding depends only on the index coordinates, not on

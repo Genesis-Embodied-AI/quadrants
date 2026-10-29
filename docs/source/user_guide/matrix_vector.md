@@ -75,6 +75,15 @@ rotations = qd.Matrix.field(2, 2, qd.f32, shape=100, fill=[[1, 0], [0, 1]])
 
 See [Initializing fields](tensor_types.md#initializing-fields) for accepted values, supported constructors, and allocation timing.
 
+The ndarray and tensor factories also accept `fill=`:
+
+```python
+velocities = qd.Vector.ndarray(3, qd.f32, shape=100, fill=0)
+rotations = qd.Matrix.tensor(2, 2, qd.f32, shape=100, fill=[[1, 0], [0, 1]])
+```
+
+This includes `qd.Matrix.ndarray`, `qd.Vector.tensor`, and vector or matrix types passed to `qd.ndarray` or `qd.tensor`. See [NDArray](tensor_types.md#ndarray) and [Initial values](tensor.md#initial-values) for details.
+
 ## Type annotations
 
 Use `qd.types.vector` and `qd.types.matrix` to define vector and matrix types. For an ndarray parameter, use [`qd.types.NDArray[element_type, ndim]`](tensor_types.md#ndarray): `element_type` is the type of each stored element, and `ndim` is the number of array dimensions, excluding the dimensions within each vector or matrix. In the example below, `1` means a one-dimensional array of vectors or matrices.

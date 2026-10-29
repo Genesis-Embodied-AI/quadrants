@@ -1,4 +1,4 @@
-"""Allocation-time field initialization, replayed after placement is complete."""
+"""Allocation-time fill validation and initialization for fields and ndarrays."""
 
 from typing import TYPE_CHECKING, Callable, TypeAlias, Union, cast
 
@@ -6,6 +6,7 @@ import numpy as np
 
 if TYPE_CHECKING:
     from quadrants._lib.core.quadrants_python import SNodeCxx
+    from quadrants.lang._ndarray import _Ndarray
     from quadrants.lang.field import ScalarField
     from quadrants.lang.matrix import Matrix, MatrixField
 
@@ -14,7 +15,7 @@ _FillValue: TypeAlias = Union[bool, int, float, np.bool_, np.integer, np.floatin
 
 
 def capture_fill_value(value: _FillValue | None, element_shape=()) -> _FillValue | None:
-    """Validate and snapshot an initializer without allocating or materializing any fields."""
+    """Validate and snapshot an initializer without allocating storage or materializing fields."""
     if isinstance(value, np.bool_):
         return bool(value)
     if value is None or isinstance(value, (bool, int, float, np.integer, np.floating)):
@@ -78,3 +79,13 @@ class FieldInitializers:
             except Exception:
                 self.pending = pending[index:] + self.pending
                 raise
+
+
+def apply_initial_ndarray_fill(array: "_Ndarray", fill: _FillValue | None) -> "_Ndarray":
+    """Apply an optional initial fill to an allocated ndarray."""
+    if fill is None:
+        return array
+
+    captured_fill_value = capture_fill_value(fill, array.element_shape)
+    array.fill(captured_fill_value)
+    return array

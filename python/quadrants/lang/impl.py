@@ -14,9 +14,10 @@ from quadrants._lib.core.quadrants_python import (
     Program,
 )
 from quadrants._snode import fields_builder
-from quadrants.lang._field_initializer import (
+from quadrants.lang._fill_initializer import (
     FieldInitializers,
     _FillValue,
+    apply_initial_ndarray_fill,
     capture_fill_value,
 )
 from quadrants.lang._ndarray import Ndarray, ScalarNdarray
@@ -991,12 +992,14 @@ def field(dtype, shape=None, *args, fill: _FillValue | None = None, **kwargs):
 
 
 @python_scope
-def ndarray(dtype, shape, needs_grad=False):
+def ndarray(dtype, shape, needs_grad=False, *, fill: _FillValue | None = None):
     """Defines a Quadrants ndarray with scalar elements.
 
     Args:
         dtype (Union[DataType, MatrixType]): Data type of each element. This can be either a scalar type like qd.f32 or a compound type like qd.types.vector(3, qd.i32).
         shape (Union[int, tuple[int]]): Shape of the ndarray.
+        fill (optional): Initial scalar or per-component values, applied before returning the ndarray. None (default)
+            preserves the allocator's default values. Gradient buffers are not filled.
 
     Example:
         The code below shows how a Quadrants ndarray with scalar elements can be declared and defined::
@@ -1031,7 +1034,7 @@ def ndarray(dtype, shape, needs_grad=False):
             )
         x_grad = ndarray(dtype, shape, needs_grad=False)
         x._set_grad(x_grad)  # type: ignore[arg-type]
-    return x
+    return apply_initial_ndarray_fill(x, fill)
 
 
 @quadrants_scope

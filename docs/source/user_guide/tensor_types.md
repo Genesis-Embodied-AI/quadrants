@@ -35,6 +35,18 @@ def f1(p1: qd.types.NDArray[qd.i32, 1]) -> None:
     p1[0] += 1
 ```
 
+Pass `fill=` to initialize an ndarray during allocation:
+
+```python
+a = qd.ndarray(qd.f32, shape=(4, 5), fill=1.0)
+directions = qd.Vector.ndarray(3, qd.f32, shape=8, fill=[0, 0, 1])
+matrices = qd.Matrix.ndarray(2, 2, qd.f32, shape=4, fill=[[1, 0], [0, 1]])
+```
+
+A scalar fills every component. Vector and matrix ndarrays also accept lists, tuples, or Quadrants vectors and matrices matching the element shape; that value is repeated across the array. Vector and matrix types passed to `qd.ndarray` support the same initializers.
+
+Only the array's forward values are initialized; gradient buffers retain their defaults when `needs_grad=True`.
+
 ### Global field
 
 ```python
@@ -81,7 +93,7 @@ On sparse fields, `fill=` fills only elements active when initialization runs. I
 
 A field declared without `shape` must still be placed before use: placement assigns its storage layout using `qd.root` and `.place()`. The axis identifier `qd.i` denotes the first axis, and `dense(qd.i, 16)` specifies storage for 16 elements along that axis. For example, declare `values = qd.field(qd.f32, fill=1.0)`, then call `qd.root.dense(qd.i, 16).place(values)` to assign that layout to the field. See the [manual placement example](autodiff.md#reverse-mode-autodiff).
 
-The `fill=` parameter applies to fields, not ndarrays.
+For ndarray initialization, see [NDArray](#ndarray).
 
 ## Comparison of tensor approaches
 

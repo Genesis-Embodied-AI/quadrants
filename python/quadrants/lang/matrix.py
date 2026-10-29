@@ -12,7 +12,11 @@ from quadrants._lib import core as qd_python_core
 from quadrants._lib.utils import qd_python_core as _qd_python_core
 from quadrants.lang import expr, impl, runtime_ops
 from quadrants.lang import ops as ops_mod
-from quadrants.lang._field_initializer import _FillValue, capture_fill_value
+from quadrants.lang._fill_initializer import (
+    _FillValue,
+    apply_initial_ndarray_fill,
+    capture_fill_value,
+)
 from quadrants.lang._metal_interop import mps_sync_if_metal
 from quadrants.lang._ndarray import Ndarray, NdarrayHostAccess
 from quadrants.lang.common_ops import QuadrantsOperations
@@ -1013,7 +1017,7 @@ class Matrix(QuadrantsOperations):
 
     @classmethod
     @python_scope
-    def ndarray(cls, n, m, dtype, shape, needs_grad=False):
+    def ndarray(cls, n, m, dtype, shape, needs_grad=False, *, fill: _FillValue | None = None):
         """Defines a Quadrants ndarray with matrix elements.
         This function must be called in Python scope, and after `qd.init` is called.
 
@@ -1024,6 +1028,7 @@ class Matrix(QuadrantsOperations):
             shape (Union[int, tuple[int]]): Shape of the ndarray.
             needs_grad (bool, optional): If True, allocate a companion grad ndarray of the same shape and dtype,
                 accessible via ``arr.grad``. Requires ``dtype`` to be a real (floating-point) type. Defaults to False.
+            fill (optional): Initial scalar or per-component values, submitted during allocation. Defaults to None.
 
         Example::
 
@@ -1041,7 +1046,7 @@ class Matrix(QuadrantsOperations):
                     f"{dtype} is not supported for Matrix.ndarray with needs_grad=True; element dtype must be real (floating-point)."
                 )
             arr._set_grad(cls.ndarray(n, m, dtype, shape, needs_grad=False))
-        return arr
+        return apply_initial_ndarray_fill(arr, fill)
 
     @classmethod
     def tensor(cls, n, m, dtype, shape, **kwargs):
@@ -1057,6 +1062,7 @@ class Matrix(QuadrantsOperations):
             backend (qd.Backend, optional): Storage backend. Defaults to ``qd.Backend.NDARRAY``.
             layout (tuple of int, optional): Permutation of shape axes, outermost first. Matrix component axes stay
                 innermost. Defaults to the natural axis order.
+            fill (optional): Initial scalar or per-component values, as in ``qd.tensor(..., fill=...)``.
             **kwargs: Additional options such as ``needs_grad``, forwarded to ``qd.tensor``.
 
         Example::
@@ -1221,7 +1227,7 @@ class Vector(Matrix):
 
     @classmethod
     @python_scope
-    def ndarray(cls, n, dtype, shape, needs_grad=False):
+    def ndarray(cls, n, dtype, shape, needs_grad=False, *, fill: _FillValue | None = None):
         """Defines a Quadrants ndarray with vector elements.
 
         Args:
@@ -1230,6 +1236,7 @@ class Vector(Matrix):
             shape (Union[int, tuple[int]]): Shape of the ndarray.
             needs_grad (bool, optional): If True, allocate a companion grad ndarray of the same shape and dtype,
                 accessible via ``arr.grad``. Requires ``dtype`` to be a real (floating-point) type. Defaults to False.
+            fill (optional): Initial scalar or per-component values, submitted during allocation. Defaults to None.
 
         Example:
             The code below shows how a Quadrants ndarray with vector elements can be declared and defined::
@@ -1246,7 +1253,7 @@ class Vector(Matrix):
                     f"{dtype} is not supported for Vector.ndarray with needs_grad=True; element dtype must be real (floating-point)."
                 )
             arr._set_grad(cls.ndarray(n, dtype, shape, needs_grad=False))
-        return arr
+        return apply_initial_ndarray_fill(arr, fill)
 
     @classmethod
     def tensor(cls, n, dtype, shape, **kwargs):
@@ -1261,6 +1268,7 @@ class Vector(Matrix):
             backend (qd.Backend, optional): Storage backend. Defaults to ``qd.Backend.NDARRAY``.
             layout (tuple of int, optional): Permutation of shape axes, outermost first. Vector components stay
                 innermost. Defaults to the natural axis order.
+            fill (optional): Initial scalar or per-component values, as in ``qd.tensor(..., fill=...)``.
             **kwargs: Additional options such as ``needs_grad``, forwarded to ``qd.tensor``.
 
         Example::
