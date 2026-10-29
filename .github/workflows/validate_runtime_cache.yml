@@ -1,7 +1,7 @@
 name: Validate AMD runtime cache
 on:
   push:
-    branches: [hp/validate-amd-runtime-cache]
+    branches: [hp/validate-amd-context]
   workflow_dispatch:
 permissions:
   contents: read
@@ -35,7 +35,7 @@ jobs:
           bash .github/workflows/scripts_new/manylinux_wheel/1_prerequisites.sh 2>&1 | tee build-prerequisites.log
           bash .github/workflows/scripts_new/manylinux_wheel/2_build.sh 2>&1 | tee build.log
           bash .github/workflows/scripts_new/manylinux_wheel/3_check.sh 2>&1 | tee wheel-check.log
-          build/quadrants_cpp_tests --gtest_filter='RuntimeHsacoCache.*' 2>&1 | tee cpp-cache.log
+          build/quadrants_cpp_tests --gtest_filter='RuntimeHsacoCache.*:RuntimeBitcodeCache.*' 2>&1 | tee cpp-cache.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -52,7 +52,11 @@ jobs:
       matrix:
         include:
           - arch: amdgpu
-            runner: misc-slow-amd-probe
+            runner: misc-slow-amd-primary
+          - arch: cuda
+            runner: gpu-t4-4-core
+          - arch: cpu
+            runner: ubuntu-22.04
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     env:
@@ -84,45 +88,46 @@ jobs:
           uv pip install --python "$task_root/venv/bin/python" artifacts/wheelhouse/*.whl --group test
           { lscpu; free -h; uptime; } | tee "$task_root/results/hardware.txt"
           sha256sum artifacts/wheelhouse/*.whl | tee "$task_root/results/wheel-sha256.txt"
-      - uses: actions/download-artifact@v4
-        with:
-          name: manylinux_wheel_cp310_ubuntu-22.04
-          run-id: '40896217880'
-          github-token: ${{ github.token }}
-          path: baseline
-      - name: Compare pre-PR wheel and isolate allocation test
+      - name: Cache regression tests
         shell: bash
         run: |
-          set +e
-          set -uo pipefail
-          export PYTHONPATH="$GITHUB_WORKSPACE/misc:${PYTHONPATH:-}"
-          export PYTEST_ADDOPTS="-p no:faulthandler -p amd_crash_probe"
-          export AMD_CRASH_CACHE=on
-          for wheel in current-off current baseline; do
-            if [ "$wheel" = baseline ]; then
-              uv pip install --python "$TASK_ROOT/venv/bin/python" --reinstall baseline/*.whl || exit 1
-              sha256sum baseline/*.whl > "$TASK_ROOT/results/baseline-sha256.txt"
-            fi
-            export AMD_CRASH_CACHE=on
-            if [ "$wheel" = current-off ]; then export AMD_CRASH_CACHE=off; fi
-            for files in 'field' 'fail_device_memory_allocation field'; do
-              export AMD_CRASH_RESULTS="$TASK_ROOT/results/$wheel-${files// /-}"
-              mkdir -p "$AMD_CRASH_RESULTS"
-              timeout --kill-after=10s 120s python tests/run_tests.py $files --arch amdgpu -r 0 -t 1 -v -k 'huge_allocation or default_fp or default_ip or field_name or (test_field_copy_from and dtype0-shape0)' 2>&1 | tee "$AMD_CRASH_RESULTS/pytest.log"
-              echo "${PIPESTATUS[0]}" > "$AMD_CRASH_RESULTS/exit-status.txt"
-            done
-            export AMD_CRASH_RESULTS="$TASK_ROOT/results/gdb-$wheel"
-            mkdir -p "$AMD_CRASH_RESULTS"
-            if command -v gdb; then
-              timeout --kill-after=10s 120s gdb -batch -ex 'set pagination off' -ex 'set print thread-events off' -ex run -ex 'bt 40' --args python tests/run_tests.py fail_device_memory_allocation field --arch amdgpu -r 0 -t 1 -v -s -k 'huge_allocation or default_fp or default_ip or field_name or (test_field_copy_from and dtype0-shape0)' > "$AMD_CRASH_RESULTS/gdb.log" 2>&1
-            fi
-          done
-      - name: Kernel diagnostics
-        if: always()
+          set -euo pipefail
+          chmod +x artifacts/build/quadrants_cpp_tests
+          artifacts/build/quadrants_cpp_tests --gtest_filter='RuntimeHsacoCache.*:RuntimeBitcodeCache.*' 2>&1 | tee "$TASK_ROOT/results/cpp-cache.log"
+          python tests/run_tests.py amdgpu_runtime_cache amdgpu_runtime_bitcode --arch '${{ matrix.arch }}' -t 1 -v 2>&1 | tee "$TASK_ROOT/results/cache-regression.log"
+      - name: Profile repeated initialization
+        if: ${{ matrix.arch != 'cpu' }}
+        shell: bash
         run: |
-          sudo -n journalctl -k --since '2026-10-29 20:00:00 UTC' --no-pager > "$TASK_ROOT/results/kernel.log" 2>&1 || true
+          set -euo pipefail
+          python misc/profile_ci_startup.py --arch '${{ matrix.arch }}' --output "$TASK_ROOT/results/no-torch" 2>&1 | tee "$TASK_ROOT/results/no-torch.log"
+          python misc/profile_ci_startup.py --arch '${{ matrix.arch }}' --cycles 2 --trace --output "$TASK_ROOT/results/trace" 2>&1 | tee "$TASK_ROOT/results/trace.log"
+      - name: Compare cache enabled and disabled on the same build
+        if: ${{ matrix.arch == 'amdgpu' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python misc/profile_runtime_hsaco_cache.py --output "$TASK_ROOT/results/cache-toggle" 2>&1 | tee "$TASK_ROOT/results/cache-toggle.log"
+      - name: Compare one and four pytest workers
+        shell: bash
+        run: |
+          set -euo pipefail
+          for workers in 1 4; do
+            export PYTEST_ADDOPTS="--durations=0 --durations-min=0 --junitxml=$TASK_ROOT/results/pytest-$workers.xml -p no:timeout -p pytest_hardtle --timeout=600"
+            python tests/run_tests.py basics assign scalar_op amdgpu_context_cache --timeout 0 -t "$workers" -v --arch '${{ matrix.arch }}' -m 'not needs_torch' 2>&1 | tee "$TASK_ROOT/results/pytest-$workers.log"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cache-${{ matrix.arch }}-focused
+          path: ${{ env.TASK_ROOT }}/results
+      - name: Full AMD suite
+        if: ${{ matrix.arch == 'amdgpu' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tests/run_tests.py -r 1 -t 4 -v --arch amdgpu -m 'not needs_torch' 2>&1 | tee "$TASK_ROOT/results/full-amd.log"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: cache-crash-baseline
+          name: cache-${{ matrix.arch }}
           path: ${{ env.TASK_ROOT }}/results

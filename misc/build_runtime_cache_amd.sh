@@ -27,7 +27,7 @@ if [ "${1:-}" != --test-only ]; then
   uv pip install --group dev --group test
   python -m pip install -v --no-build-isolation -e . -Ceditable.rebuild=true
 fi
-python tests/run_tests.py amdgpu_runtime_cache --arch amdgpu -t 1 -v
+python tests/run_tests.py amdgpu_runtime_cache amdgpu_runtime_bitcode --arch amdgpu -t 1 -v
 python misc/profile_runtime_hsaco_cache.py --output "$TMPDIR/cache-toggle" 2>&1 | tee "$TMPDIR/cache-toggle.log"
 python misc/profile_ci_startup.py --arch amdgpu --output "$TMPDIR/startup" 2>&1 | tee "$TMPDIR/startup.log"
 python tests/run_tests.py basics assign scalar_op amdgpu_context_cache --arch amdgpu -t 4 -v 2>&1 | tee "$TMPDIR/subset.log"
