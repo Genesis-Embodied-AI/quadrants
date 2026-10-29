@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "llvm/Support/SHA256.h"
+#include "llvm/ADT/StringRef.h"
 
 namespace quadrants::lang {
 

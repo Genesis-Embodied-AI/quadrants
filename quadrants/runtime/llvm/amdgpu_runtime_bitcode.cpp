@@ -2,6 +2,7 @@
 #include "quadrants/runtime/llvm/runtime_bitcode_cache.h"
 #include "quadrants/runtime/llvm/llvm_context.h"
 #include "quadrants/util/environ_config.h"
+#include "quadrants/program/compile_config.h"
 #include "llvm/Bitcode/BitcodeWriter.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/raw_ostream.h"
