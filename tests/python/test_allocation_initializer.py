@@ -389,7 +389,6 @@ def test_initializer_dlpack(
     torch = test_utils.require_torch_dlpack(need_field_support=is_field)
     shape = (2, 3)
     value = _initial_value(element_class)
-    kwargs = {"layout": (1, 0)} if container_type == "tensor" else {}
     array = _create_array(
         container_type=container_type,
         backend=backend,
@@ -397,7 +396,6 @@ def test_initializer_dlpack(
         shape=shape,
         via_dtype=via_dtype,
         fill=value,
-        **kwargs,
     )
     qd.sync()
     torch_view = torch.utils.dlpack.from_dlpack(array.to_dlpack())
