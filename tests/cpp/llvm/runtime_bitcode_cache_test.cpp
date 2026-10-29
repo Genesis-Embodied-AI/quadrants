@@ -1,5 +1,7 @@
 #include "gtest/gtest.h"
 #include "quadrants/runtime/llvm/runtime_bitcode_cache.h"
+#include "quadrants/runtime/llvm/runtime_bitcode_serialization.h"
+#include "llvm/IR/Intrinsics.h"
 #include "llvm/Bitcode/BitcodeReader.h"
 #include "llvm/Bitcode/BitcodeWriter.h"
 #include "llvm/IR/Constants.h"
@@ -91,6 +93,20 @@ TEST(RuntimeBitcodeCache, EntryAndPayloadLimitsAndOversizedBypass) {
     EXPECT_EQ(cache.get_or_build("large", [] { return "oversized"; }, hit), "oversized");
     EXPECT_FALSE(hit);
   }
+}
+
+TEST(RuntimeBitcodeCache, PreservesPreparedIntrinsicAttributesAcrossSerialization) {
+  llvm::LLVMContext source, destination;
+  llvm::Module module("runtime", source);
+  auto *intrinsic = llvm::Intrinsic::getDeclaration(&module, llvm::Intrinsic::sqrt, {llvm::Type::getFloatTy(source)});
+  intrinsic->addFnAttr(llvm::Attribute::AlwaysInline);
+  auto bytes = serialize_runtime_bitcode(module);
+  EXPECT_EQ(module.getNamedMetadata(kRuntimeInlineIntrinsics), nullptr);
+  auto parsed = parse_runtime_bitcode(bytes, destination);
+  ASSERT_TRUE(bool(parsed));
+  EXPECT_TRUE(parsed.get()->getFunction("llvm.sqrt.f32")->hasFnAttribute(llvm::Attribute::AlwaysInline));
+  EXPECT_EQ(parsed.get()->getNamedMetadata(kRuntimeInlineIntrinsics), nullptr);
+  EXPECT_EQ(bytes, serialize_runtime_bitcode(*parsed.get()));
 }
 
 TEST(RuntimeBitcodeCache, ModulesOutliveSourceContextAndMutateIndependently) {
