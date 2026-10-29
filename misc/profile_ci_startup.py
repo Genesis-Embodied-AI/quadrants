@@ -93,7 +93,8 @@ def driver_child(args):
     invoke("DriverGetVersion", [ctypes.POINTER(ctypes.c_int)], [ctypes.byref(version)])
     invoke("Init", [ctypes.c_uint], [0])
     count = ctypes.c_int()
-    invoke("DeviceGetCount", [ctypes.POINTER(ctypes.c_int)], [ctypes.byref(count)])
+    count_function = "GetDeviceCount" if args.arch == "amdgpu" else "DeviceGetCount"
+    invoke(count_function, [ctypes.POINTER(ctypes.c_int)], [ctypes.byref(count)])
     context = ctypes.c_void_p()
     invoke("DevicePrimaryCtxRetain", [ctypes.POINTER(ctypes.c_void_p), ctypes.c_int], [ctypes.byref(context), 0])
     print(json.dumps({"driver_version": version.value, "device_count": count.value}), flush=True)
