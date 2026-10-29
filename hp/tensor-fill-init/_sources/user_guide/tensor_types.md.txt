@@ -21,6 +21,8 @@ Let's first give an example of using each:
 
 ### NDArray
 
+Annotate ndarray parameters with `qd.types.NDArray[data_type, number_dimensions]`, where `data_type` is the type of each stored element and `number_dimensions` is the number of array dimensions. For example, `qd.types.NDArray[qd.i32, 1]` describes a one-dimensional array of 32-bit integers. The dimension count is optional: `qd.types.NDArray[qd.i32]` accepts any number of dimensions.
+
 ```python
 import quadrants as qd
 
@@ -32,10 +34,6 @@ a = qd.ndarray(qd.i32, shape=(10,))
 def f1(p1: qd.types.NDArray[qd.i32, 1]) -> None:
     p1[0] += 1
 ```
-
-Note that the typing for NDArray is `qd.types.NDArray[data_type, number_dimensions]`.
-
-`number_dimensions` is optional: `qd.types.NDArray[qd.i32]` is also valid, and leaves `ndim` unspecified.
 
 Pass `fill=` to initialize an ndarray during allocation:
 
@@ -91,7 +89,7 @@ Field allocation is deferred until Quadrants needs the storage. The initializer 
 
 `fill=` also works with `qd.Matrix.field` and vector or matrix types passed to `qd.field`. A scalar initializes every component; a list, tuple, or Quadrants vector or matrix supplies per-component values. Mutable values are captured when the field is declared. Omitting `fill` or passing `None` preserves the existing allocation behavior. Only the field itself is initialized; its [gradient and dual fields](autodiff.md), which store derivatives for automatic differentiation, keep their default values.
 
-A field declared without `shape` must still be placed before use: placement assigns its storage layout using `qd.root` and `.place()`. For example, declare `values = qd.field(qd.f32, fill=1.0)`, then call `qd.root.dense(qd.i, 16).place(values)` to give it 16 elements along its first axis. See the [manual placement example](autodiff.md#reverse-mode-autodiff).
+A field declared without `shape` must still be placed before use: placement assigns its storage layout using `qd.root` and `.place()`. The axis identifier `qd.i` denotes the first axis, and `dense(qd.i, 16)` specifies storage for 16 elements along that axis. For example, declare `values = qd.field(qd.f32, fill=1.0)`, then call `qd.root.dense(qd.i, 16).place(values)` to assign that layout to the field. See the [manual placement example](autodiff.md#reverse-mode-autodiff).
 
 For ndarray initialization, see [NDArray](#ndarray).
 
