@@ -17,8 +17,6 @@ jobs:
         include:
           - arch: amdgpu
             runner: amdgpu
-          - arch: cuda
-            runner: gpu-t4-4-core
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 35
     env:
@@ -50,6 +48,7 @@ jobs:
           mkdir -p "$task_root/tmp" "$task_root/results"
           echo "TASK_ROOT=$task_root" >> "$GITHUB_ENV"
           echo "TMPDIR=$task_root/tmp" >> "$GITHUB_ENV"
+          echo "QD_TMP_DIR=$task_root/tmp" >> "$GITHUB_ENV"
           uv venv --python '3.10' --seed "$task_root/venv"
           echo "$task_root/venv/bin" >> "$GITHUB_PATH"
           uv pip install --python "$task_root/venv/bin/python" wheels/*.whl --group suite/pyproject.toml:test
@@ -62,6 +61,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python profiler/misc/profile_ci_startup.py --arch '${{ matrix.arch }}' --driver-only \
+            --output "$TASK_ROOT/results/driver" 2>&1 | tee "$TASK_ROOT/results/driver.log"
           python profiler/misc/profile_ci_startup.py --arch '${{ matrix.arch }}' \
             --output "$TASK_ROOT/results/no-torch" 2>&1 | tee "$TASK_ROOT/results/no-torch.log"
           python profiler/misc/profile_ci_startup.py --arch '${{ matrix.arch }}' --cycles 2 --trace \
@@ -72,9 +73,9 @@ jobs:
         run: |
           set -euo pipefail
           for workers in 1 4; do
-            export PYTEST_ADDOPTS="--durations=0 --durations-min=0 --junitxml=$TASK_ROOT/results/pytest-$workers.xml"
+            export PYTEST_ADDOPTS="--durations=0 --durations-min=0 --junitxml=$TASK_ROOT/results/pytest-$workers.xml -p no:timeout -p pytest_hardtle --timeout=600"
             python tests/run_tests.py basics assign scalar_op amdgpu_context_cache \
-              -t "$workers" -v --arch '${{ matrix.arch }}' -m 'not needs_torch' \
+              --timeout 0 -t "$workers" -v --arch '${{ matrix.arch }}' -m 'not needs_torch' \
               2>&1 | tee "$TASK_ROOT/results/pytest-$workers.log"
           done
       - name: Install matching Torch wheel
@@ -90,10 +91,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python profiler/misc/profile_ci_startup.py --arch '${{ matrix.arch }}' --driver-only --torch-first \
+            --output "$TASK_ROOT/results/driver-torch" 2>&1 | tee "$TASK_ROOT/results/driver-torch.log"
           python profiler/misc/profile_ci_startup.py --arch '${{ matrix.arch }}' \
             --output "$TASK_ROOT/results/with-torch" 2>&1 | tee "$TASK_ROOT/results/with-torch.log"
           QD_ENABLE_TORCH=0 python profiler/misc/profile_ci_startup.py --arch '${{ matrix.arch }}' \
             --output "$TASK_ROOT/results/torch-disabled" 2>&1 | tee "$TASK_ROOT/results/torch-disabled.log"
+      - name: Measure pytest phases with Torch installed
+        working-directory: suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYTEST_ADDOPTS="--durations=0 --durations-min=0 -p no:timeout -p pytest_hardtle --timeout=600"
+          python tests/run_tests.py basics assign scalar_op amdgpu_context_cache \
+            --timeout 0 -t 4 -v --arch '${{ matrix.arch }}' -m 'not needs_torch' \
+            2>&1 | tee "$TASK_ROOT/results/pytest-torch-4.log"
       - name: Upload full logs and profiles
         if: always()
         uses: actions/upload-artifact@v4

@@ -2,6 +2,7 @@
 
 import argparse
 import cProfile
+import ctypes
 import gc
 import json
 import os
@@ -74,6 +75,31 @@ def child(args):
     print(json.dumps({"phase": "child_before_exit", "seconds": time.perf_counter() - START}), flush=True)
 
 
+def driver_child(args):
+    if args.torch_first:
+        measure("import_torch", lambda: __import__("torch"))
+    library_name, prefix = ("libamdhip64.so", "hip") if args.arch == "amdgpu" else ("libcuda.so.1", "cu")
+    library = measure("load_driver_library", lambda: ctypes.CDLL(library_name))
+
+    def invoke(name, types, values):
+        function = getattr(library, prefix + name)
+        function.argtypes = types
+        function.restype = ctypes.c_int
+        result = measure(prefix + name, lambda: function(*values))
+        if result:
+            raise RuntimeError(f"{prefix}{name} failed: {result}")
+
+    version = ctypes.c_int()
+    invoke("DriverGetVersion", [ctypes.POINTER(ctypes.c_int)], [ctypes.byref(version)])
+    invoke("Init", [ctypes.c_uint], [0])
+    count = ctypes.c_int()
+    invoke("DeviceGetCount", [ctypes.POINTER(ctypes.c_int)], [ctypes.byref(count)])
+    context = ctypes.c_void_p()
+    invoke("DevicePrimaryCtxRetain", [ctypes.POINTER(ctypes.c_void_p), ctypes.c_int], [ctypes.byref(context), 0])
+    print(json.dumps({"driver_version": version.value, "device_count": count.value}), flush=True)
+    print(json.dumps({"phase": "child_before_exit", "seconds": time.perf_counter() - START}), flush=True)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--arch", required=True, choices=["amdgpu", "cuda", "cpu"])
@@ -82,10 +108,15 @@ def main():
     parser.add_argument("--label", default="default")
     parser.add_argument("--child", action="store_true")
     parser.add_argument("--trace", action="store_true")
+    parser.add_argument("--driver-only", action="store_true")
+    parser.add_argument("--torch-first", action="store_true")
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     if args.child:
-        child(args)
+        if args.driver_only:
+            driver_child(args)
+        else:
+            child(args)
         return
     for index in range(3):
         command = [
@@ -95,6 +126,10 @@ def main():
         ]
         if args.trace:
             command.append("--trace")
+        if args.driver_only:
+            command.append("--driver-only")
+        if args.torch_first:
+            command.append("--torch-first")
         measure(f"process_{index}.including_exit", lambda: subprocess.run(command, check=True, timeout=240))
     print(json.dumps({"enable_torch": os.environ.get("QD_ENABLE_TORCH", "default")}), flush=True)
 
