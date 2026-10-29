@@ -8,14 +8,11 @@ from quadrants.lang import impl
 
 from tests.helpers import test_utils
 
-TENSOR_APIS = [
-    pytest.param("tensor", qd.Backend.FIELD, id="tensor_field"),
-    pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
-]
 APIS = [
     pytest.param("field", None, id="field"),
     pytest.param("ndarray", None, id="ndarray"),
-    *TENSOR_APIS,
+    pytest.param("tensor", qd.Backend.FIELD, id="tensor_field"),
+    pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
 ]
 FIELD_APIS = [
     pytest.param("field", None, id="field"),
@@ -325,14 +322,14 @@ def test_initializer_tensor_default_backend():
     assert tensor[()] == 3
 
 
-@pytest.mark.parametrize("api,backend", TENSOR_APIS)
+@pytest.mark.parametrize("backend", [qd.Backend.FIELD, qd.Backend.NDARRAY], ids=["tensor_field", "tensor_ndarray"])
 @pytest.mark.parametrize("kind", KINDS)
 @test_utils.test()
-def test_initializer_tensor_layout(api, backend, kind):
+def test_initializer_tensor_layout(backend, kind):
     # Initialization and later writes must use canonical indices when the physical shape axes are permuted.
     shape = (2, 3)
     value = _initial_value(kind)
-    tensor = _allocate(api, backend, kind, shape, layout=(1, 0), fill=value, needs_grad=True)
+    tensor = _allocate("tensor", backend, kind, shape, layout=(1, 0), fill=value, needs_grad=True)
     assert isinstance(tensor, qd.Tensor)
     expected = np.broadcast_to(value, (*shape, *np.shape(value))).copy()
     np.testing.assert_array_equal(tensor.to_numpy(), expected)
