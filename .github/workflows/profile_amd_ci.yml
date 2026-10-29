@@ -1,0 +1,102 @@
+name: Profile AMD CI overhead
+
+on:
+  push:
+    branches: [hp/profile-amd-ci]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  profile:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amdgpu
+            runner: amdgpu
+          - arch: cuda
+            runner: gpu-t4-4-core
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    env:
+      QD_AMDGPU_V520: '1'
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: profiler
+      - uses: actions/checkout@v4
+        with:
+          ref: 1a06f41047dfa98e5783fc039175a16a85134397
+          path: suite
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/download-artifact@v4
+        with:
+          name: manylinux_wheel_cp310_ubuntu-22.04
+          run-id: 40896217880
+          github-token: ${{ github.token }}
+          path: wheels
+      - name: Set up isolated environment and record hardware
+        shell: bash
+        run: |
+          set -euo pipefail
+          task_root="$HOME/ais/misc_slow_amd/profile-${GITHUB_RUN_ID}-${{ matrix.arch }}"
+          mkdir -p "$task_root/tmp" "$task_root/results"
+          echo "TASK_ROOT=$task_root" >> "$GITHUB_ENV"
+          echo "TMPDIR=$task_root/tmp" >> "$GITHUB_ENV"
+          uv venv --python '3.10' --seed "$task_root/venv"
+          echo "$task_root/venv/bin" >> "$GITHUB_PATH"
+          uv pip install --python "$task_root/venv/bin/python" wheels/*.whl --group suite/pyproject.toml:test
+          { lscpu; free -h; uptime; } | tee "$task_root/results/hardware.txt"
+          "$task_root/venv/bin/python" -m pip list | tee "$task_root/results/packages.txt"
+          sha256sum wheels/*.whl | tee "$task_root/results/wheel-sha256.txt"
+          git -C suite rev-parse HEAD | tee "$task_root/results/suite-commit.txt"
+          git -C profiler rev-parse HEAD | tee "$task_root/results/profiler-commit.txt"
+      - name: Profile without Torch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python profiler/misc/profile_ci_startup.py --arch '${{ matrix.arch }}' \
+            --output "$TASK_ROOT/results/no-torch" 2>&1 | tee "$TASK_ROOT/results/no-torch.log"
+          python profiler/misc/profile_ci_startup.py --arch '${{ matrix.arch }}' --cycles 2 --trace \
+            --output "$TASK_ROOT/results/trace" 2>&1 | tee "$TASK_ROOT/results/trace.log"
+      - name: Compare one and four pytest workers
+        working-directory: suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          for workers in 1 4; do
+            export PYTEST_ADDOPTS="--durations=0 --durations-min=0 --junitxml=$TASK_ROOT/results/pytest-$workers.xml"
+            python tests/run_tests.py basics assign scalar_op amdgpu_context_cache \
+              -t "$workers" -v --arch '${{ matrix.arch }}' -m 'not needs_torch' \
+              2>&1 | tee "$TASK_ROOT/results/pytest-$workers.log"
+          done
+      - name: Install matching Torch wheel
+        shell: bash
+        run: |
+          set -euo pipefail
+          index=cu128
+          if [ '${{ matrix.arch }}' = amdgpu ]; then index=rocm6.4; fi
+          python -m pip install torch --index-url "https://download.pytorch.org/whl/$index" \
+            2>&1 | tee "$TASK_ROOT/results/install-torch.log"
+          python -m pip list | tee "$TASK_ROOT/results/packages-torch.txt"
+      - name: Profile with Torch installed and disabled
+        shell: bash
+        run: |
+          set -euo pipefail
+          python profiler/misc/profile_ci_startup.py --arch '${{ matrix.arch }}' \
+            --output "$TASK_ROOT/results/with-torch" 2>&1 | tee "$TASK_ROOT/results/with-torch.log"
+          QD_ENABLE_TORCH=0 python profiler/misc/profile_ci_startup.py --arch '${{ matrix.arch }}' \
+            --output "$TASK_ROOT/results/torch-disabled" 2>&1 | tee "$TASK_ROOT/results/torch-disabled.log"
+      - name: Upload full logs and profiles
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: profile-${{ matrix.arch }}
+          path: ${{ env.TASK_ROOT }}/results
