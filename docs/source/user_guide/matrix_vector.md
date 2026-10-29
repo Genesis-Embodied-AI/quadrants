@@ -97,9 +97,9 @@ def transform(
 
 Element-wise arithmetic, dot / cross / outer products, norms, transpose / determinant / trace / inverse, Frobenius inner product, and matrix-vector / matrix-matrix multiply all live on a separate page since they all run **per thread, in registers, with no cross-thread cooperation**. See [matrix_vector_per_thread](matrix_vector_per_thread.md).
 
-For per-thread *numerical* algorithms (SVD, symmetric eigendecomposition, polar decomposition, linear solve) see [linalg_per_thread](linalg_per_thread.md).
+For per-thread *numerical* algorithms (singular value decomposition (SVD), symmetric eigendecomposition, polar decomposition, linear solve) see [linalg_per_thread](linalg_per_thread.md).
 
-For cross-thread / sparse linear algebra (CG, sparse direct solvers) see `qd.linalg.*` (separate, not yet covered in user guide).
+For cross-thread / sparse linear algebra (conjugate gradient (CG), sparse direct solvers) see `qd.linalg.*` (separate, not yet covered in user guide).
 
 ## Size limit
 
@@ -109,7 +109,7 @@ Matrices and vectors are unrolled into scalar registers at compile time. Using m
 large = qd.field(qd.f32, shape=(64, 64))
 ```
 
-The 144-element threshold is set by the largest size officially supported by the per-thread linalg APIs (`Matrix.inverse` up to 12×12; `qd.sym_eig` and `qd.make_spd` cap lower, at 6×6) — those internal constructions stay below the warning threshold.
+The 144-element threshold is set by the largest size officially supported by the per-thread linear algebra APIs ([`Matrix.inverse`](matrix_vector_per_thread.md) up to 12×12; [`qd.sym_eig` and `qd.make_spd`](linalg_per_thread.md) cap lower, at 6×6).
 
 ## Advanced: storage layout of packed vs unpacked vectors
 
