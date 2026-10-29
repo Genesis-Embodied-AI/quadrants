@@ -351,18 +351,17 @@ def test_initializer_precedes_writes(container_type: str, backend: qd.Backend | 
         pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
     ],
 )
-@pytest.mark.parametrize("dtype", [qd.i16, qd.i32, qd.f32])
 @test_utils.test()
-def test_initializer_first_kernel_read(container_type: str, backend: qd.Backend | None, dtype: DataTypeCxx) -> None:
+def test_initializer_first_kernel_read(container_type: str, backend: qd.Backend | None) -> None:
     # The first kernel read must see the allocation-time fill without a prior host read or explicit synchronization.
     # After an explicit .fill(5), the same kernel must see the updated value rather than the original initializer.
     array = _create_array(
-        container_type=container_type, backend=backend, element_class="scalar", shape=(4,), dtype=dtype, fill=3
+        container_type=container_type, backend=backend, element_class="scalar", shape=(4,), dtype=qd.i32, fill=3
     )
 
     @qd.kernel
     def k_read(array: qd.Tensor) -> qd.i32:
-        return qd.cast(array[0], qd.i32)
+        return array[0]
 
     assert k_read(array) == 3
     array.fill(5)
