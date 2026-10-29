@@ -352,7 +352,6 @@
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="unsupported_python.html">Python features in kernel scope</a></li>
-<li class="toctree-l1"><a class="reference internal" href="python_backend.html">Python backend</a></li>
 <li class="toctree-l1"><a class="reference internal" href="debug.html">Debug mode</a></li>
 <li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
@@ -465,14 +464,14 @@
 </div>
 <p>Note that the typing for NDArray is <code class="docutils literal notranslate"><span class="pre">qd.types.NDArray[data_type,</span> <span class="pre">number_dimensions]</span></code>.</p>
 <p><code class="docutils literal notranslate"><span class="pre">number_dimensions</span></code> is optional: <code class="docutils literal notranslate"><span class="pre">qd.types.NDArray[qd.i32]</span></code> is also valid, and leaves <code class="docutils literal notranslate"><span class="pre">ndim</span></code> unspecified.</p>
-<p>Pass <code class="docutils literal notranslate"><span class="pre">fill=</span></code> to initialize an ndarray before the allocator returns:</p>
+<p>Pass <code class="docutils literal notranslate"><span class="pre">fill=</span></code> to initialize an ndarray during allocation:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span> <span class="n">fill</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
 <span class="n">directions</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Vector</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">fill</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span>
 <span class="n">matrices</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Matrix</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">fill</span><span class="o">=</span><span class="p">[[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]])</span>
 </pre></div>
 </div>
 <p>A scalar fills every component. Vector and matrix ndarrays also accept lists, tuples, or Quadrants vectors and matrices matching the element shape; that value is repeated across the array. Vector and matrix types passed to <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code> support the same initializers.</p>
-<p>Omitting <code class="docutils literal notranslate"><span class="pre">fill</span></code> or passing <code class="docutils literal notranslate"><span class="pre">None</span></code> preserves the allocator’s default values. Initialization completes before the allocator returns, including for zero-copy exports. Only the array’s forward values are initialized; gradient buffers retain their defaults when <code class="docutils literal notranslate"><span class="pre">needs_grad=True</span></code>. Calling <code class="docutils literal notranslate"><span class="pre">.fill()</span></code> on an existing ndarray keeps its existing behavior.</p>
+<p>Only the array’s forward values are initialized; gradient buffers retain their defaults when <code class="docutils literal notranslate"><span class="pre">needs_grad=True</span></code>.</p>
 </section>
 <section id="global-field">
 <h3>Global field<a class="headerlink" href="#global-field" title="Link to this heading">#</a></h3>

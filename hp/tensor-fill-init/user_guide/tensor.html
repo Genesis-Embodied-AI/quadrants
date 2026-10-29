@@ -352,7 +352,6 @@
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="unsupported_python.html">Python features in kernel scope</a></li>
-<li class="toctree-l1"><a class="reference internal" href="python_backend.html">Python backend</a></li>
 <li class="toctree-l1"><a class="reference internal" href="debug.html">Debug mode</a></li>
 <li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
@@ -502,7 +501,7 @@
 </pre></div>
 </div>
 <p>A scalar fills every component. Vector and matrix tensors also accept per-component lists, tuples, or Quadrants vectors and matrices. The values are captured at declaration. <code class="docutils literal notranslate"><span class="pre">fill=</span></code> initializes only the tensor’s forward values, leaving gradient buffers at their defaults.</p>
-<p>With <code class="docutils literal notranslate"><span class="pre">Backend.FIELD</span></code>, initialization is deferred with allocation, so consecutive declarations can share storage allocation without an intervening kernel launch. With <code class="docutils literal notranslate"><span class="pre">Backend.NDARRAY</span></code>, initialization completes before the factory returns.</p>
+<p>With <code class="docutils literal notranslate"><span class="pre">Backend.FIELD</span></code>, initialization is deferred with allocation, so consecutive declarations can share storage allocation without an intervening kernel launch. With <code class="docutils literal notranslate"><span class="pre">Backend.NDARRAY</span></code>, initialization is submitted during allocation.</p>
 </section>
 <section id="gradients">
 <h2>Gradients<a class="headerlink" href="#gradients" title="Link to this heading">#</a></h2>

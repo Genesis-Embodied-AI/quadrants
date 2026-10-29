@@ -37,7 +37,7 @@ Note that the typing for NDArray is `qd.types.NDArray[data_type, number_dimensio
 
 `number_dimensions` is optional: `qd.types.NDArray[qd.i32]` is also valid, and leaves `ndim` unspecified.
 
-Pass `fill=` to initialize an ndarray before the allocator returns:
+Pass `fill=` to initialize an ndarray during allocation:
 
 ```python
 a = qd.ndarray(qd.f32, shape=(4, 5), fill=1.0)
@@ -47,7 +47,7 @@ matrices = qd.Matrix.ndarray(2, 2, qd.f32, shape=4, fill=[[1, 0], [0, 1]])
 
 A scalar fills every component. Vector and matrix ndarrays also accept lists, tuples, or Quadrants vectors and matrices matching the element shape; that value is repeated across the array. Vector and matrix types passed to `qd.ndarray` support the same initializers.
 
-Omitting `fill` or passing `None` preserves the allocator's default values. Initialization completes before the allocator returns, including for zero-copy exports. Only the array's forward values are initialized; gradient buffers retain their defaults when `needs_grad=True`. Calling `.fill()` on an existing ndarray keeps its existing behavior.
+Only the array's forward values are initialized; gradient buffers retain their defaults when `needs_grad=True`.
 
 ### Global field
 

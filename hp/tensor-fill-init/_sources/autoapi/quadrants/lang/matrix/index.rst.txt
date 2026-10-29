@@ -416,7 +416,7 @@ Module Contents
 
 
 
-   .. py:method:: field(n, m, dtype, shape=None, order=None, name='', offset=None, needs_grad=False, needs_dual=False, layout=Layout.AOS, ndim=None, *, fill: quadrants.lang._field_initializer._FillValue | None = None)
+   .. py:method:: field(n, m, dtype, shape=None, order=None, name='', offset=None, needs_grad=False, needs_dual=False, layout=Layout.AOS, ndim=None, *, fill: quadrants.lang._fill_initializer._FillValue | None = None)
       :classmethod:
 
 
@@ -450,7 +450,7 @@ Module Contents
 
 
 
-   .. py:method:: ndarray(n, m, dtype, shape, needs_grad=False, *, fill: quadrants.lang._field_initializer._FillValue | None = None)
+   .. py:method:: ndarray(n, m, dtype, shape, needs_grad=False, *, fill: quadrants.lang._fill_initializer._FillValue | None = None)
       :classmethod:
 
 
@@ -467,9 +467,8 @@ Module Contents
       :type shape: Union[int, tuple[int]]
       :param needs_grad: If True, allocate a companion grad ndarray of the same shape and dtype,
                          accessible via ``arr.grad``. Requires ``dtype`` to be a real (floating-point) type. Defaults to False.
-                         Silently ignored on the python backend (matches the scalar ``qd.ndarray`` behaviour).
       :type needs_grad: bool, optional
-      :param fill: Initial scalar or per-component values, applied before returning. Defaults to None.
+      :param fill: Initial scalar or per-component values, submitted during allocation. Defaults to None.
       :type fill: optional
 
       Example::
@@ -674,7 +673,7 @@ Module Contents
 
 
 
-   .. py:method:: ndarray(n, dtype, shape, needs_grad=False, *, fill: quadrants.lang._field_initializer._FillValue | None = None)
+   .. py:method:: ndarray(n, dtype, shape, needs_grad=False, *, fill: quadrants.lang._fill_initializer._FillValue | None = None)
       :classmethod:
 
 
@@ -688,9 +687,8 @@ Module Contents
       :type shape: Union[int, tuple[int]]
       :param needs_grad: If True, allocate a companion grad ndarray of the same shape and dtype,
                          accessible via ``arr.grad``. Requires ``dtype`` to be a real (floating-point) type. Defaults to False.
-                         Silently ignored on the python backend (matches the scalar ``qd.ndarray`` behaviour).
       :type needs_grad: bool, optional
-      :param fill: Initial scalar or per-component values, applied before returning. Defaults to None.
+      :param fill: Initial scalar or per-component values, submitted during allocation. Defaults to None.
       :type fill: optional
 
       .. rubric:: Example

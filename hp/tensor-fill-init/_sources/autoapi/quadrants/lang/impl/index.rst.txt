@@ -77,7 +77,7 @@ Module Contents
        >>> x = qd.field(qd.f32)
        >>> qd.root.pointer(qd.ij, 4).dense(qd.ij, 8).place(x)
 
-.. py:function:: field(dtype, shape=None, *args, fill: quadrants.lang._field_initializer._FillValue | None = None, **kwargs)
+.. py:function:: field(dtype, shape=None, *args, fill: quadrants.lang._fill_initializer._FillValue | None = None, **kwargs)
 
    Defines a Quadrants field.
 
@@ -125,7 +125,7 @@ Module Contents
 
 
 
-.. py:function:: ndarray(dtype, shape, needs_grad=False, *, fill: quadrants.lang._field_initializer._FillValue | None = None)
+.. py:function:: ndarray(dtype, shape, needs_grad=False, *, fill: quadrants.lang._fill_initializer._FillValue | None = None)
 
    Defines a Quadrants ndarray with scalar elements.
 
