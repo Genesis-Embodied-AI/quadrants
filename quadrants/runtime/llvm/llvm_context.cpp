@@ -1,6 +1,8 @@
 // A llvm backend helper
 
 #include "quadrants/runtime/llvm/llvm_context.h"
+#include "quadrants/runtime/llvm/amdgpu_runtime_bitcode.h"
+#include "quadrants/runtime/llvm/runtime_bitcode_cache.h"
 
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/ADT/APFloat.h"
@@ -226,6 +228,11 @@ std::unique_ptr<llvm::Module> LlvmModuleBitcodeLoader::load(llvm::LLVMContext *c
   std::ifstream ifs(bitcode_path_, std::ios::binary);
   QD_ERROR_IF(!ifs, "Bitcode file ({}) not found.", bitcode_path_);
   std::string bitcode(std::istreambuf_iterator<char>(ifs), (std::istreambuf_iterator<char>()));
+  return load_bytes(ctx, bitcode);
+}
+
+std::unique_ptr<llvm::Module> LlvmModuleBitcodeLoader::load_bytes(llvm::LLVMContext *ctx,
+                                                                  const std::string &bitcode) const {
   auto runtime = parseBitcodeFile(llvm::MemoryBufferRef(bitcode, buffer_id_), *ctx);
   if (!runtime) {
     auto error = runtime.takeError();
@@ -289,9 +296,16 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::clone_runtime_module() {
   return cloned;
 }
 
-std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::string &file) {
+std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::string &file,
+                                                                     const RuntimeBitcodeInputs *inputs) {
   auto ctx = get_this_thread_context();
-  std::unique_ptr<llvm::Module> module = module_from_bitcode_file(fmt::format("{}/{}", runtime_lib_dir(), file), ctx);
+  const auto path = fmt::format("{}/{}", runtime_lib_dir(), file);
+  LlvmModuleBitcodeLoader loader;
+  std::unique_ptr<llvm::Module> module = inputs ? loader.set_bitcode_path(path)
+                                                      .set_buffer_id("runtime_bitcode")
+                                                      .set_inline_funcs(true)
+                                                      .load_bytes(ctx, inputs->files.at(path))
+                                                : module_from_bitcode_file(path, ctx);
   if (arch_ == Arch::cuda || arch_ == Arch::amdgpu) {
     // Replace stub functions in the runtime bitcode with inline wrappers
     // around LLVM intrinsics. The runtime module is compiled from C++ with
@@ -713,7 +727,7 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       patch_fence("block_mem_fence", "workgroup");
       patch_fence("grid_mem_fence", "agent");
 
-      link_module_with_amdgpu_libdevice(module);
+      link_module_with_amdgpu_libdevice(module, inputs);
       patch_amdgpu_kernel_dim("block_dim", llvm::ConstantInt::get(llvm::Type::getInt32Ty(*ctx), 0));
       patch_amdgpu_kernel_dim("grid_dim", llvm::ConstantInt::get(llvm::Type::getInt32Ty(*ctx), 0));
 #endif
@@ -800,42 +814,25 @@ void QuadrantsLLVMContext::link_module_with_cuda_libdevice(std::unique_ptr<llvm:
   }
 }
 
-void QuadrantsLLVMContext::link_module_with_amdgpu_libdevice(std::unique_ptr<llvm::Module> &module) {
+void QuadrantsLLVMContext::link_module_with_amdgpu_libdevice(std::unique_ptr<llvm::Module> &module,
+                                                             const RuntimeBitcodeInputs *inputs) {
   QD_ASSERT(arch_ == Arch::amdgpu);
 #if defined(QD_WITH_AMDGPU)
   auto mcpu = AMDGPUContext::get_instance().get_mcpu();
-  auto isa_version = mcpu.substr(3, 4);
-
-  const std::string libdevice_subdir = "_rocm70";
-  const std::string lib_dir = runtime_lib_dir() + libdevice_subdir + "/";
-  const std::string isa_file = "oclc_isa_version_" + isa_version + ".bc";
-  std::ifstream test_file(lib_dir + isa_file);
-
-  if (!test_file.good()) {
-    QD_ERROR(
-        "AMDGPU ISA version file {} not found for {} and no fallback "
-        "available. Please ensure ROCm device libraries are properly "
-        "installed.",
-        isa_file, mcpu);
-  }
+  const std::string lib_dir = runtime_lib_dir() + "_rocm70/";
 
   // Force wave64 on every AMDGPU target (CDNA gfx9xx are wave64 by default; RDNA gfx10/11/12 default to wave32 but also
   // support wave64). Linking the wavefrontsize64=on libdevice variant aligns the ROCm device libraries with the wave64
   // codegen forced via target-features in llvm_context_pass.h::AMDGPUConvertAllocaInstAddressSpacePass and
   // jit_amdgpu.cpp's TargetMachine features.
-  std::string libdevice_files[] = {"ocml.bc",
-                                   "oclc_wavefrontsize64_on.bc",
-                                   "ockl.bc",
-                                   "oclc_abi_version_400.bc",
-                                   "oclc_correctly_rounded_sqrt_off.bc",
-                                   "oclc_daz_opt_off.bc",
-                                   "oclc_finite_only_off.bc",
-                                   "oclc_isa_version_" + isa_version + ".bc",
-                                   "oclc_unsafe_math_off.bc",
-                                   "opencl.bc"};
-
-  for (auto &libdevice : libdevice_files) {
-    auto libdevice_module = module_from_bitcode_file(lib_dir + libdevice, get_this_thread_context());
+  for (const auto &libdevice : amdgpu_libdevice_files(mcpu)) {
+    const auto path = lib_dir + libdevice;
+    LlvmModuleBitcodeLoader loader;
+    auto libdevice_module = inputs ? loader.set_bitcode_path(path)
+                                         .set_buffer_id("runtime_bitcode")
+                                         .set_inline_funcs(true)
+                                         .load_bytes(get_this_thread_context(), inputs->files.at(path))
+                                   : module_from_bitcode_file(path, get_this_thread_context());
 
     if (libdevice == "ocml.bc")
       module->setDataLayout(libdevice_module->getDataLayout());
@@ -1179,7 +1176,11 @@ llvm::Module *QuadrantsLLVMContext::get_this_thread_runtime_module() {
   QD_AUTO_PROF;
   auto data = get_this_thread_data();
   if (!data->runtime_module) {
-    data->runtime_module = module_from_file(get_runtime_fn(arch_));
+    if (arch_ == Arch::amdgpu) {
+      data->runtime_module = load_amdgpu_runtime_bitcode(*this, config_, get_runtime_fn(arch_));
+    } else {
+      data->runtime_module = module_from_file(get_runtime_fn(arch_));
+    }
   }
   return data->runtime_module.get();
 }

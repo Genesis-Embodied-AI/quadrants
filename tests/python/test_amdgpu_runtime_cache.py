@@ -28,6 +28,8 @@ def test_runtime_cache_bypass(diagnostic, capfd, monkeypatch, tmp_path):
         output = "".join(capfd.readouterr())
         assert "AMDGPU runtime HSACO cache bypass" in output
         assert "AMDGPU runtime HSACO cache hit" not in output
+        assert "AMDGPU runtime bitcode cache bypass" in output
+        assert "AMDGPU runtime bitcode cache hit" not in output
     qd.reset()
 
 
@@ -59,3 +61,5 @@ for cycle, fast_math in enumerate((True, True, False, False, True)):
         assert result.returncode == 0, output
         assert output.count("AMDGPU runtime HSACO cache miss") == 2, output
         assert output.count("AMDGPU runtime HSACO cache hit") == 3, output
+        assert output.count("AMDGPU runtime bitcode cache miss") == 1, output
+        assert output.count("AMDGPU runtime bitcode cache hit") >= 4, output
