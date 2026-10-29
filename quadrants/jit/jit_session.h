@@ -27,6 +27,10 @@ class JITSession {
 
   virtual JITModule *add_module(std::unique_ptr<llvm::Module> M, int max_reg = 0) = 0;
 
+#ifdef QD_WITH_LLVM
+  virtual JITModule *add_runtime_module(std::unique_ptr<llvm::Module> M, int max_reg = 0);
+#endif
+
   // virtual void remove_module(JITModule *module) = 0;
 
   virtual void *lookup(const std::string Name) {

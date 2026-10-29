@@ -122,6 +122,8 @@ class JITSessionAMDGPU : public JITSession {
 
   JITModule *add_module(std::unique_ptr<llvm::Module> M, int max_reg) override;
 
+  JITModule *add_runtime_module(std::unique_ptr<llvm::Module> M, int max_reg) override;
+
   llvm::DataLayout get_data_layout() override {
     return data_layout;
   }
@@ -146,6 +148,7 @@ class JITSessionAMDGPU : public JITSession {
   }
 
  private:
+  JITModule *load_hsaco_module(const std::string &hsaco);
   std::string compile_module_to_hsaco(std::unique_ptr<llvm::Module> &module);
   uint64_t random_num_;
   std::string tmp_dir_;
