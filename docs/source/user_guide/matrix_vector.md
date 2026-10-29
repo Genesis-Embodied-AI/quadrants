@@ -86,7 +86,7 @@ This includes `qd.Matrix.ndarray`, `qd.Vector.tensor`, and vector or matrix type
 
 ## Type annotations
 
-For kernel and `@qd.func` parameters, use `qd.types.vector` and `qd.types.matrix`:
+Use `qd.types.vector` and `qd.types.matrix` to define vector and matrix types. For an ndarray parameter, use [`qd.types.NDArray[element_type, ndim]`](tensor_types.md#ndarray): `element_type` is the type of each stored element, and `ndim` is the number of array dimensions, excluding the dimensions within each vector or matrix. In the example below, `1` means a one-dimensional array of vectors or matrices.
 
 ```python
 vec3f = qd.types.vector(3, qd.f32)
