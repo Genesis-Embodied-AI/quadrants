@@ -84,41 +84,37 @@ jobs:
           uv pip install --python "$task_root/venv/bin/python" artifacts/wheelhouse/*.whl --group test
           { lscpu; free -h; uptime; } | tee "$task_root/results/hardware.txt"
           sha256sum artifacts/wheelhouse/*.whl | tee "$task_root/results/wheel-sha256.txt"
-      - name: Reproduce allocation failure followed by field copies
+      - uses: actions/download-artifact@v4
+        with:
+          name: manylinux_wheel_cp310_ubuntu-22.04
+          run-id: '40896217880'
+          github-token: ${{ github.token }}
+          path: baseline
+      - name: Compare pre-PR wheel and isolate allocation test
         shell: bash
         run: |
           set +e
           set -uo pipefail
           export PYTHONPATH="$GITHUB_WORKSPACE/misc:${PYTHONPATH:-}"
           export PYTEST_ADDOPTS="-p no:faulthandler -p amd_crash_probe"
-          failed=0
-          for cache in on off; do
-            export AMD_CRASH_CACHE="$cache"
-            for workers in 1 4; do
-              for iteration in 1 2 3; do
-                export AMD_CRASH_RESULTS="$TASK_ROOT/results/$cache-$workers-$iteration"
-                mkdir -p "$AMD_CRASH_RESULTS"
-                python tests/run_tests.py fail_device_memory_allocation field --arch amdgpu -r 0 -t "$workers" -v -k 'huge_allocation or default_fp or default_ip or field_name or test_field_copy_from' 2>&1 | tee "$AMD_CRASH_RESULTS/pytest.log"
-                if [ "${PIPESTATUS[0]}" != 0 ]; then failed=1; fi
-              done
-            done
-          done
-          exit "$failed"
-      - name: Native backtrace
-        if: always()
-        shell: bash
-        run: |
-          set +e
-          export PYTHONPATH="$GITHUB_WORKSPACE/misc:${PYTHONPATH:-}"
-          export PYTEST_ADDOPTS="-p no:faulthandler -p amd_crash_probe"
-          if command -v gdb; then
-            for cache in off on; do
-              export AMD_CRASH_CACHE="$cache"
-              export AMD_CRASH_RESULTS="$TASK_ROOT/results/gdb-$cache"
+          export AMD_CRASH_CACHE=on
+          for wheel in current baseline; do
+            if [ "$wheel" = baseline ]; then
+              uv pip install --python "$TASK_ROOT/venv/bin/python" --reinstall baseline/*.whl || exit 1
+              sha256sum baseline/*.whl > "$TASK_ROOT/results/baseline-sha256.txt"
+            fi
+            for files in 'field' 'fail_device_memory_allocation field'; do
+              export AMD_CRASH_RESULTS="$TASK_ROOT/results/$wheel-${files// /-}"
               mkdir -p "$AMD_CRASH_RESULTS"
-              gdb -batch -ex 'set pagination off' -ex run -ex 'thread apply all bt 20' --args python tests/run_tests.py fail_device_memory_allocation field --arch amdgpu -r 0 -t 1 -v -s -k 'huge_allocation or default_fp or default_ip or field_name or test_field_copy_from' > "$AMD_CRASH_RESULTS/gdb.log" 2>&1
+              python tests/run_tests.py $files --arch amdgpu -r 0 -t 1 -v -k 'huge_allocation or default_fp or default_ip or field_name or test_field_copy_from' 2>&1 | tee "$AMD_CRASH_RESULTS/pytest.log"
+              echo "${PIPESTATUS[0]}" > "$AMD_CRASH_RESULTS/exit-status.txt"
             done
-          fi
+            export AMD_CRASH_RESULTS="$TASK_ROOT/results/gdb-$wheel"
+            mkdir -p "$AMD_CRASH_RESULTS"
+            if command -v gdb; then
+              gdb -batch -ex 'set pagination off' -ex 'set print thread-events off' -ex run -ex 'bt 40' --args python tests/run_tests.py fail_device_memory_allocation field --arch amdgpu -r 0 -t 1 -v -s -k 'huge_allocation or default_fp or default_ip or field_name or test_field_copy_from' > "$AMD_CRASH_RESULTS/gdb.log" 2>&1
+            fi
+          done
       - name: Kernel diagnostics
         if: always()
         run: |
@@ -126,5 +122,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: cache-crash-probe
+          name: cache-crash-baseline
           path: ${{ env.TASK_ROOT }}/results
