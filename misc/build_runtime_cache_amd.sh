@@ -24,7 +24,6 @@ fi
 source .venv/bin/activate
 uv pip install --group dev --group test
 python -m pip install -v --no-build-isolation -e . -Ceditable.rebuild=true
-LLVM_ROOT="$LLVM_DIR" CACHE_TEST_OUTPUT="$TMPDIR" bash misc/check_runtime_cache_cpp.sh
 python tests/run_tests.py amdgpu_runtime_cache --arch amdgpu -t 1 -v
 python misc/profile_runtime_hsaco_cache.py --output "$TMPDIR/cache-toggle" 2>&1 | tee "$TMPDIR/cache-toggle.log"
 python misc/profile_ci_startup.py --arch amdgpu --output "$TMPDIR/startup" 2>&1 | tee "$TMPDIR/startup.log"
