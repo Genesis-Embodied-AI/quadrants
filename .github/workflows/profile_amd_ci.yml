@@ -17,6 +17,7 @@ jobs:
       - name: Inspect GPU visibility and permissions
         shell: bash
         run: |
+          set +e
           task_root="$HOME/ais/misc_slow_amd/health-${GITHUB_RUN_ID}"
           mkdir -p "$task_root"
           echo "HEALTH_ROOT=$task_root" >> "$GITHUB_ENV"
@@ -29,6 +30,9 @@ jobs:
             lsmod
             ls -l /sys/class/drm
             cat /sys/module/amdgpu/version
+            modinfo amdgpu
+            dkms status
+            cat /proc/cmdline
             ldconfig -p | grep -E 'amdhip|hsa-runtime'
             /opt/rocm/bin/rocminfo
           } > "$task_root/health.log" 2>&1
@@ -40,6 +44,7 @@ jobs:
           name: amdgpu3-health
           path: ${{ env.HEALTH_ROOT }}
   profile:
+    if: ${{ !contains(github.event.head_commit.message, '[health-only]') }}
     strategy:
       fail-fast: false
       matrix:
