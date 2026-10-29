@@ -354,7 +354,8 @@ def test_initializer_precedes_writes(container_type: str, backend: qd.Backend | 
 @pytest.mark.parametrize("dtype", [qd.i16, qd.i32, qd.f32])
 @test_utils.test()
 def test_initializer_first_kernel_read(container_type: str, backend: qd.Backend | None, dtype: DataTypeCxx) -> None:
-    # The first kernel must see the initializer, and a later kernel must see an explicit fill.
+    # The first kernel read must see the allocation-time fill without a prior host read or explicit synchronization.
+    # After an explicit .fill(5), the same kernel must see the updated value rather than the original initializer.
     array = _create_array(
         container_type=container_type, backend=backend, element_class="scalar", shape=(4,), dtype=dtype, fill=3
     )
