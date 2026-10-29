@@ -20,7 +20,7 @@ class SNodeTree:
             raise QuadrantsRuntimeError("SNode tree has been destroyed")
         if self.prog != impl.get_runtime().prog:
             return
-        impl.get_runtime().discard_fields_from_tree(impl.get_runtime().prog.get_snode_root(self.id))
+        impl.get_runtime().field_initializers.discard_tree(impl.get_runtime().prog.get_snode_root(self.id))
         self.ptr.destroy_snode_tree(impl.get_runtime().prog)
 
         # FieldExpression holds a SNode* to the place-SNode associated with a SNodeTree

@@ -12,14 +12,12 @@ from quadrants._lib.core.quadrants_python import (
     Function,
     KernelCxx,
     Program,
-    SNodeCxx,
 )
 from quadrants._snode import fields_builder
 from quadrants.lang._field_initializer import (
     FieldInitializers,
     _FillValue,
     capture_fill_value,
-    snode_belongs_to_tree,
 )
 from quadrants.lang._ndarray import Ndarray, ScalarNdarray
 from quadrants.lang._ndrange import GroupedNDRange, _Ndrange
@@ -453,17 +451,6 @@ class PyQuadrants:
 
     def initialize_fields_builder(self, builder):
         self.unfinalized_fields_builder[builder] = get_traceback(2)
-
-    def discard_fields_from_tree(self, tree_root: SNodeCxx) -> None:
-        """Remove pending initialization and validation references before a tree's nodes are freed."""
-        self.field_initializers.discard_tree(tree_root)
-        for variables in (self.global_vars, self.grad_vars, self.dual_vars):
-            variables[:] = [var for var in variables if not snode_belongs_to_tree(var.ptr.snode(), tree_root)]
-        self.matrix_fields[:] = [
-            field
-            for field in self.matrix_fields
-            if not any(snode_belongs_to_tree(var.ptr.snode(), tree_root) for var in field.vars)
-        ]
 
     def clear_compiled_functions(self):
         for k in self.kernels:
