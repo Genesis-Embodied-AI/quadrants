@@ -6,15 +6,13 @@ from typing import TYPE_CHECKING, Callable, TypeAlias, TypeVar, Union, cast
 import numpy as np
 
 if TYPE_CHECKING:
-    import torch
-
     from quadrants.lang._ndarray import Ndarray
     from quadrants.lang.field import ScalarField
     from quadrants.lang.matrix import Matrix, MatrixField
 
 
 _FillValue: TypeAlias = Union[int, float, numbers.Number, np.number, list, tuple, "Matrix"]
-_NdarrayOrTorchTensor = TypeVar("_NdarrayOrTorchTensor", bound="Ndarray | torch.Tensor")
+_Ndarray = TypeVar("_Ndarray", bound="Ndarray")
 
 
 def capture_fill_value(value: _FillValue | None, element_shape=()) -> _FillValue | None:
@@ -61,19 +59,11 @@ class FieldInitializers:
             fill(value)
 
 
-def apply_initial_ndarray_fill(array: _NdarrayOrTorchTensor, fill: _FillValue | None) -> _NdarrayOrTorchTensor:
+def apply_initial_ndarray_fill(array: _Ndarray, fill: _FillValue | None) -> _Ndarray:
     """Apply an optional initial fill to an allocated ndarray."""
     if fill is None:
         return array
 
-    from quadrants.lang import impl  # pylint: disable=import-outside-toplevel
-
-    if impl.is_python_backend():
-        python_array = cast("torch.Tensor", array)
-        captured_fill_value = capture_fill_value(fill, tuple(python_array.size()[len(python_array.shape) :]))
-        python_array.copy_(python_array.new_tensor(captured_fill_value))
-        return array
-    ndarray = cast("Ndarray", array)
-    captured_fill_value = capture_fill_value(fill, ndarray.element_shape)
-    ndarray.fill(captured_fill_value)
+    captured_fill_value = capture_fill_value(fill, array.element_shape)
+    array.fill(captured_fill_value)
     return array

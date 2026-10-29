@@ -335,22 +335,3 @@ def test_initializer_tensor_layout(api, kind):
     k_write(tensor)
     expected[1, 2] += 2
     np.testing.assert_array_equal(tensor.to_numpy(), expected)
-
-
-@pytest.mark.needs_torch
-@pytest.mark.parametrize("kind", KINDS)
-@pytest.mark.parametrize("mode", ["none", "scalar", "components"])
-def test_initializer_ndarray_python_backend(kind, mode):
-    # The Python ndarray backend must initialize rectangular matrices with the correct component shape.
-    pytest.importorskip("torch")
-    qd.init(arch=qd.python)
-    try:
-        num_elements = 4
-        components = _initial_value(kind)
-        fill = None if mode == "none" else 7 if mode == "scalar" else components
-        array = _allocate("ndarray", kind, (num_elements,), fill=fill)
-        element_shape = np.shape(components)
-        expected = np.full(element_shape, 0 if mode == "none" else 7) if mode != "components" else components
-        np.testing.assert_array_equal(array.to_numpy(), np.broadcast_to(expected, (num_elements, *element_shape)))
-    finally:
-        qd.reset()

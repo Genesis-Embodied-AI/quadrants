@@ -8,7 +8,6 @@ import numpy as np
 
 from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import (
-    Arch,
     DataTypeCxx,
     Function,
     KernelCxx,
@@ -44,7 +43,6 @@ from quadrants.lang.matrix import (
     MatrixType,
     Vector,
     VectorNdarray,
-    VectorType,
     make_matrix,
 )
 from quadrants.lang.mesh import (
@@ -412,7 +410,6 @@ class PyQuadrants:
     def __init__(self, kernels=None):
         self.materialized = False
         self._prog: Program | None = None
-        self._arch: Arch | None = None
         self.src_info_stack = []
         self.inside_kernel: bool = False
         self.compilation_lock = threading.RLock()
@@ -610,8 +607,6 @@ class PyQuadrants:
         self.materialized = False
 
     def sync(self):
-        if is_python_backend():
-            return
         self.materialize()
         assert self._prog is not None
         try:
@@ -989,28 +984,6 @@ def field(dtype, shape=None, *args, fill: _FillValue | None = None, **kwargs):
     """
     if isinstance(shape, numbers.Number):
         shape = (shape,)
-    if is_python_backend():
-        if shape is None:
-            shape = ()
-        from . import _py_tensor as py_tensor  # pylint: disable=C0415
-        from .util import dtype_to_torch_dtype  # pylint: disable=C0415
-
-        batch_ndim = len(shape)
-        element_shape = ()
-        if isinstance(dtype, MatrixType):
-            if dtype.ndim == 1:
-                element_shape = (dtype.n,)
-                shape = (*shape, dtype.n)
-            else:
-                element_shape = (dtype.n, dtype.m)
-                shape = (*shape, dtype.n, dtype.m)
-            dtype = dtype.dtype
-        dtype = dtype_to_torch_dtype(dtype)
-        captured_fill_value = capture_fill_value(fill, element_shape)
-        tensor = py_tensor.create_tensor(shape, dtype, batch_ndim=batch_ndim)
-        if captured_fill_value is not None:
-            tensor.copy_(tensor.new_tensor(captured_fill_value))
-        return tensor
     if isinstance(dtype, MatrixType):
         if dtype.ndim == 1:
             return Vector.field(dtype.n, dtype.dtype, shape, *args, fill=fill, **kwargs)
@@ -1040,21 +1013,6 @@ def ndarray(dtype, shape, needs_grad=False, *, fill: _FillValue | None = None):
     # primal
     if isinstance(shape, numbers.Number):
         shape = (shape,)
-    if is_python_backend():
-        from . import _py_tensor as py_tensor  # pylint: disable=C0415
-        from .util import dtype_to_torch_dtype  # pylint: disable=C0415
-
-        batch_ndim = len(shape)
-        if type(dtype) is VectorType:
-            shape = (*shape, dtype.n)
-            dtype = dtype.dtype
-        elif type(dtype) is MatrixType:
-            shape = (*shape, dtype.n, dtype.m)
-            dtype = dtype.dtype
-        if type(shape) == int:
-            shape = (shape,)
-        dtype = dtype_to_torch_dtype(dtype)
-        return apply_initial_ndarray_fill(py_tensor.create_tensor(shape, dtype, batch_ndim=batch_ndim), fill)
     if not all((isinstance(x, int) or isinstance(x, np.integer)) and x > 0 and x <= 2**31 - 1 for x in shape):
         raise QuadrantsRuntimeError(f"{shape} is not a valid shape for ndarray")
     if dtype in all_types:
@@ -1377,11 +1335,6 @@ def grouped(x):
     """
     if isinstance(x, _Ndrange):
         return x.grouped()
-    if is_python_backend():
-        shape = x.shape
-        if len(shape) == 0:
-            return [Matrix([])]
-        return [Matrix(list(idx)) for idx in np.ndindex(*shape)]
     return x
 
 
@@ -1398,13 +1351,6 @@ def stop_grad(x):
 
 def current_cfg():
     return get_runtime().prog.config()
-
-
-_ARCH_PYTHON = _qd_core.Arch.python
-
-
-def is_python_backend() -> bool:
-    return get_runtime()._arch == _ARCH_PYTHON
 
 
 def default_cfg():

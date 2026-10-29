@@ -439,18 +439,9 @@ class ScalarNdarray(Ndarray):
     def __init__(self, dtype, arr_shape):
         super().__init__()
         self.dtype = cook_dtype(dtype)
-        if impl.is_python_backend():
-            import torch  # pylint: disable=C0415
-
-            from quadrants.lang.util import (  # pylint: disable=C0415
-                dtype_to_torch_dtype,
-            )
-
-            self.arr = torch.zeros(shape=arr_shape, dtype=dtype_to_torch_dtype(dtype))
-        else:
-            self.arr = impl.get_runtime().prog.create_ndarray(
-                self.dtype, arr_shape, layout=Layout.NULL, zero_fill=True, dbg_info=_qd_core.DebugInfo(get_traceback())
-            )
+        self.arr = impl.get_runtime().prog.create_ndarray(
+            self.dtype, arr_shape, layout=Layout.NULL, zero_fill=True, dbg_info=_qd_core.DebugInfo(get_traceback())
+        )
         self._physical_shape = tuple(self.arr.shape)
         self.element_type = dtype
 

@@ -90,9 +90,6 @@ Program::Program(Arch desired_arch)
 #else
     QD_ERROR("This quadrants is not compiled with Vulkan")
 #endif
-  } else if (config.arch == Arch::python) {
-    program_impl_ = nullptr;  // Python backend doesn't have a ProgramImpl
-    return;
   } else {
     QD_NOT_IMPLEMENTED
   }
@@ -393,13 +390,6 @@ void Program::dump_cache_data_to_disk() {
 
 void Program::finalize() {
   if (finalized_) {
-    return;
-  }
-
-  if (compile_config().arch == Arch::python) {
-    QD_TRACE("Python backend does not require finalization.");
-    finalized_ = true;
-    num_instances_ -= 1;
     return;
   }
 
