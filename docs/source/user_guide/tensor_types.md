@@ -47,7 +47,7 @@ matrices = qd.Matrix.ndarray(2, 2, qd.f32, shape=4, fill=[[1, 0], [0, 1]])
 
 A scalar fills every component. Vector and matrix ndarrays also accept lists, tuples, or Quadrants vectors and matrices matching the element shape; that value is repeated across the array. Vector and matrix types passed to `qd.ndarray` support the same initializers.
 
-Omitting `fill` or passing `None` preserves the allocator's default values. Initialization is submitted during allocation. Only the array's forward values are initialized; gradient buffers retain their defaults when `needs_grad=True`. Calling `.fill()` on an existing ndarray keeps its existing behavior.
+Only the array's forward values are initialized; gradient buffers retain their defaults when `needs_grad=True`. Calling `.fill()` on an existing ndarray keeps its existing behavior.
 
 ### Global field
 
