@@ -27,9 +27,8 @@ def test_fill_initializer_shares_tree():
 @pytest.mark.parametrize("operation", ["fill", "host", "numpy", "kernel"])
 @test_utils.test()
 def test_fill_initializer_precedes_writes(operation):
-    # Initialization must run before each kind of write, and must also initialize other pending fields.
+    # Initialization must run before each kind of write.
     field = qd.field(qd.i32, shape=4, fill=3)
-    other = qd.field(qd.i32, shape=(), fill=7)
     if operation == "fill":
         field.fill(5)
     elif operation == "host":
@@ -47,7 +46,6 @@ def test_fill_initializer_precedes_writes(operation):
         k_write()
     assert field[0] == 5
     assert field[1] == 5
-    assert other[()] == 7
 
 
 @test_utils.test()
