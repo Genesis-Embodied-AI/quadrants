@@ -16,7 +16,7 @@ annotation. Dispatch sites check ``annotation is Tensor`` (the class). See ``_fu
 # lang/types subpackages.)
 
 from enum import IntEnum
-from typing import TYPE_CHECKING, Iterable, overload
+from typing import TYPE_CHECKING, Iterable, cast, overload
 
 # Re-export so ``from quadrants._tensor import *`` still binds ``Tensor`` — keeps the wildcard import in
 # ``__init__.py`` simple and atomic.
@@ -66,7 +66,7 @@ def _with_layout(ndarray: "Ndarray | Tensor", layout: Iterable[int]) -> "Ndarray
     )
 
     if isinstance(ndarray, _TensorWrapper):
-        ndarray = ndarray._unwrap()
+        ndarray = cast("Ndarray", ndarray._unwrap())
 
     layout = tuple(layout)
     ndim = len(ndarray.shape)
