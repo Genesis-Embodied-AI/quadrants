@@ -201,15 +201,14 @@ def test_initializer_first_kernel_read(api, dtype):
 @pytest.mark.parametrize("kind", KINDS)
 @test_utils.test()
 def test_initializer_dlpack(api, kind):
-    # DLPack consumers must see initialized values; only field allocations require an explicit sync here.
+    # After synchronization, DLPack consumers must see initialized values from every allocation API.
     is_field = api in FIELD_APIS
     torch = test_utils.require_torch_dlpack(need_field_support=is_field)
     shape = (2, 3)
     value = _initial_value(kind)
     kwargs = {"layout": (1, 0)} if api in TENSOR_BACKENDS else {}
     array = _allocate(api, kind, shape, fill=value, **kwargs)
-    if is_field:
-        qd.sync()
+    qd.sync()
     torch_view = torch.utils.dlpack.from_dlpack(array.to_dlpack())
     np.testing.assert_array_equal(torch_view.cpu().numpy(), np.broadcast_to(value, (*shape, *np.shape(value))))
 

@@ -156,7 +156,7 @@ def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, fill: _FillVal
             ``x[i, j, ...]`` are rewritten to hit the right physical slot. Supported on both ``Backend.FIELD`` and
             ``Backend.NDARRAY``.
         fill (optional): Initial scalar or per-component values. Field initialization is deferred with allocation;
-            ndarrays are initialized before returning. None (default) preserves the allocator's default values.
+            ndarray initialization is submitted during allocation. None preserves the allocator's default values.
 
     Returns:
         A ``Tensor``, ``VectorTensor``, or ``MatrixTensor`` wrapper for the selected backend and element type.
