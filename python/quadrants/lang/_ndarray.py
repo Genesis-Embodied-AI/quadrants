@@ -29,6 +29,8 @@ if TYPE_CHECKING:
     TensorNdarray = Union["ScalarNdarray", VectorNdarray, MatrixNdarray]
 
 
+# Use this for a helper's argument and return annotations when it returns the same ndarray type it receives.
+# This preserves the concrete scalar, vector, or matrix subtype and its methods for type checking.
 _Ndarray = TypeVar("_Ndarray", bound="Ndarray")
 
 
