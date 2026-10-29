@@ -73,22 +73,24 @@ def test_fill_initializer_after_materialization() -> None:
     assert first.snode._snode_tree_id != second.snode._snode_tree_id
 
 
-@pytest.mark.parametrize("kind", ["vector", "matrix"])
+@pytest.mark.parametrize("element_class", ["vector", "matrix"])
 @pytest.mark.parametrize("via_dtype", [False, True], ids=["via_class", "via_dtype"])
 @test_utils.test()
-def test_fill_initializer_components(kind: str, via_dtype: bool) -> None:
+def test_fill_initializer_components(element_class: str, via_dtype: bool) -> None:
     # All vector and matrix constructors must capture component lists before later mutations.
     num_elements = 3
-    value = [1, 2] if kind == "vector" else [[1, 2], [3, 4]]
+    value = [1, 2] if element_class == "vector" else [[1, 2], [3, 4]]
     expected = np.array(value)
     if via_dtype:
-        dtype = qd.types.vector(n=2, dtype=qd.i32) if kind == "vector" else qd.types.matrix(n=2, m=2, dtype=qd.i32)
+        dtype = (
+            qd.types.vector(n=2, dtype=qd.i32) if element_class == "vector" else qd.types.matrix(n=2, m=2, dtype=qd.i32)
+        )
         field = qd.field(dtype=dtype, shape=num_elements, fill=value)
-    elif kind == "vector":
+    elif element_class == "vector":
         field = qd.Vector.field(n=2, dtype=qd.i32, shape=num_elements, fill=value)
     else:
         field = qd.Matrix.field(n=2, m=2, dtype=qd.i32, shape=num_elements, fill=value)
-    if kind == "vector":
+    if element_class == "vector":
         value[0] = 99
     else:
         value[0][0] = 99
@@ -96,20 +98,22 @@ def test_fill_initializer_components(kind: str, via_dtype: bool) -> None:
         np.testing.assert_array_equal(field[i].to_numpy(), expected)
 
 
-@pytest.mark.parametrize("kind", ["vector", "matrix"])
+@pytest.mark.parametrize("element_class", ["vector", "matrix"])
 @pytest.mark.parametrize("via_dtype", [False, True], ids=["via_class", "via_dtype"])
 @test_utils.test()
-def test_fill_initializer_broadcast(kind: str, via_dtype: bool) -> None:
+def test_fill_initializer_broadcast(element_class: str, via_dtype: bool) -> None:
     # A scalar initializer must fill every component of every vector or matrix element.
     num_elements = 3
     if via_dtype:
-        dtype = qd.types.vector(n=2, dtype=qd.i32) if kind == "vector" else qd.types.matrix(n=2, m=2, dtype=qd.i32)
+        dtype = (
+            qd.types.vector(n=2, dtype=qd.i32) if element_class == "vector" else qd.types.matrix(n=2, m=2, dtype=qd.i32)
+        )
         field = qd.field(dtype=dtype, shape=num_elements, fill=9)
-    elif kind == "vector":
+    elif element_class == "vector":
         field = qd.Vector.field(n=2, dtype=qd.i32, shape=num_elements, fill=9)
     else:
         field = qd.Matrix.field(n=2, m=2, dtype=qd.i32, shape=num_elements, fill=9)
-    expected = np.full((2,) if kind == "vector" else (2, 2), 9)
+    expected = np.full((2,) if element_class == "vector" else (2, 2), 9)
     for i in range(num_elements):
         np.testing.assert_array_equal(field[i].to_numpy(), expected)
 
