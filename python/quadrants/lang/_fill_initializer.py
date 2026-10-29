@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 
 _FillValue: TypeAlias = Union[int, float, numbers.Number, np.number, list, tuple, "Matrix"]
-_Array = TypeVar("_Array", bound="Ndarray | torch.Tensor")
+_NdarrayOrTorchTensor = TypeVar("_NdarrayOrTorchTensor", bound="Ndarray | torch.Tensor")
 
 
 def capture_fill_value(value: _FillValue | None, element_shape=()) -> _FillValue | None:
@@ -61,7 +61,7 @@ class FieldInitializers:
             fill(value)
 
 
-def apply_initial_ndarray_fill(array: _Array, fill: _FillValue | None) -> _Array:
+def apply_initial_ndarray_fill(array: _NdarrayOrTorchTensor, fill: _FillValue | None) -> _NdarrayOrTorchTensor:
     """Apply an optional initial fill to an allocated ndarray."""
     if fill is None:
         return array
