@@ -21,7 +21,7 @@ from enum import IntEnum
 # ``__init__.py`` simple and atomic.
 from quadrants._tensor_wrapper import Tensor
 from quadrants._tensor_wrapper import wrap as _wrap_impl
-from quadrants.lang._field_initializer import _FillValue
+from quadrants.lang._fill_value import _FillValue
 
 __all__ = [
     "Backend",

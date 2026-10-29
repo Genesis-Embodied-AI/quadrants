@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING, TypeVar, cast
 
-from quadrants.lang._field_initializer import _FillValue
+from quadrants.lang._fill_value import _FillValue, capture_fill_value
 
 if TYPE_CHECKING:
     import torch
@@ -19,9 +19,6 @@ def apply_initial_ndarray_fill(array: _Array, fill: _FillValue | None) -> _Array
         return array
 
     from quadrants.lang import impl  # pylint: disable=import-outside-toplevel
-    from quadrants.lang._field_initializer import (  # pylint: disable=import-outside-toplevel
-        capture_fill_value,
-    )
 
     if impl.is_python_backend():
         python_array = cast("torch.Tensor", array)
