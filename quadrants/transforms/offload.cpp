@@ -834,6 +834,11 @@ void offload(IRNode *root, const CompileConfig &config) {
   const bool rematerialize_cuda = config.arch == Arch::cuda && analysis::gather_statements(root, [](Stmt *stmt) {
                                                                  return stmt->is<AdStackAllocaStmt>();
                                                                }).empty();
+  if (rematerialize_cuda) {
+    // With CFG optimization disabled, typed immutable locals can still hide argument/shape expressions behind local
+    // loads. Reuse the existing single-store forwarding pass before deciding which bounds can be rematerialized.
+    eliminate_immutable_local_vars(root);
+  }
   auto offloaded_ranges = Offloader::run(root, config, rematerialize_cuda);
   type_check(root, config);
   {

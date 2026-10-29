@@ -117,3 +117,23 @@ def test_cuda_dynamic_range_autodiff():
         expected = np.zeros(16, dtype=np.float32)
         expected[:n] = 32
         np.testing.assert_allclose(x.grad.to_numpy(), expected)
+
+
+@test_utils.test(arch=qd.cuda, kernel_profiler=True, debug=True, offline_cache=False, cfg_optimization=False)
+def test_cuda_named_shape_bound_without_cfg():
+    @qd.kernel
+    def rounded_shape(out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        n = out.shape[0]
+        chunks = (24064 + n - 1) // n
+        for i in range(n * chunks):
+            if i < n:
+                out[i] = chunks
+
+    for n in (17, 1024):
+        out = qd.ndarray(qd.i32, shape=n)
+        qd.profiler.clear_kernel_profiler_info()
+        rounded_shape(out)
+        tasks = _tasks("rounded_shape")
+        assert len(tasks) == 1
+        assert tasks[0].endswith("range_for")
+        np.testing.assert_array_equal(out.to_numpy(), (24064 + n - 1) // n)
