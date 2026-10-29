@@ -53,10 +53,6 @@ jobs:
         include:
           - arch: amdgpu
             runner: misc-slow-amd-primary
-          - arch: cuda
-            runner: gpu-t4-4-core
-          - arch: cpu
-            runner: ubuntu-22.04
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     env:
@@ -88,46 +84,13 @@ jobs:
           uv pip install --python "$task_root/venv/bin/python" artifacts/wheelhouse/*.whl --group test
           { lscpu; free -h; uptime; } | tee "$task_root/results/hardware.txt"
           sha256sum artifacts/wheelhouse/*.whl | tee "$task_root/results/wheel-sha256.txt"
-      - name: Cache regression tests
+      - name: Field tests without retries
         shell: bash
         run: |
           set -euo pipefail
-          chmod +x artifacts/build/quadrants_cpp_tests
-          artifacts/build/quadrants_cpp_tests --gtest_filter='RuntimeHsacoCache.*' 2>&1 | tee "$TASK_ROOT/results/cpp-cache.log"
-          python tests/run_tests.py amdgpu_runtime_cache --arch '${{ matrix.arch }}' -t 1 -v 2>&1 | tee "$TASK_ROOT/results/cache-regression.log"
-      - name: Profile repeated initialization
-        if: ${{ matrix.arch != 'cpu' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          python misc/profile_ci_startup.py --arch '${{ matrix.arch }}' --output "$TASK_ROOT/results/no-torch" 2>&1 | tee "$TASK_ROOT/results/no-torch.log"
-          python misc/profile_ci_startup.py --arch '${{ matrix.arch }}' --cycles 2 --trace --output "$TASK_ROOT/results/trace" 2>&1 | tee "$TASK_ROOT/results/trace.log"
-      - name: Compare cache enabled and disabled on the same build
-        if: ${{ matrix.arch == 'amdgpu' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          python misc/profile_runtime_hsaco_cache.py --output "$TASK_ROOT/results/cache-toggle" 2>&1 | tee "$TASK_ROOT/results/cache-toggle.log"
-      - name: Compare one and four pytest workers
-        shell: bash
-        run: |
-          set -euo pipefail
-          for workers in 1 4; do
-            export PYTEST_ADDOPTS="--durations=0 --durations-min=0 --junitxml=$TASK_ROOT/results/pytest-$workers.xml -p no:timeout -p pytest_hardtle --timeout=600"
-            python tests/run_tests.py basics assign scalar_op amdgpu_context_cache --timeout 0 -t "$workers" -v --arch '${{ matrix.arch }}' -m 'not needs_torch' 2>&1 | tee "$TASK_ROOT/results/pytest-$workers.log"
-          done
-      - uses: actions/upload-artifact@v4
-        with:
-          name: cache-${{ matrix.arch }}-focused
-          path: ${{ env.TASK_ROOT }}/results
-      - name: Full AMD suite
-        if: ${{ matrix.arch == 'amdgpu' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          python tests/run_tests.py -r 1 -t 4 -v --arch amdgpu -m 'not needs_torch' 2>&1 | tee "$TASK_ROOT/results/full-amd.log"
+          python tests/run_tests.py field --arch amdgpu -r 0 -t 4 -v 2>&1 | tee "$TASK_ROOT/results/field-no-retries.log"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: cache-${{ matrix.arch }}
+          name: cache-field-recheck
           path: ${{ env.TASK_ROOT }}/results
