@@ -30,8 +30,8 @@ def make_fill_value(value: Any, dtype: "DataTypeCxx") -> "Expr":
             return tuple(convert(item) for item in component)
         if isinstance(component, (int, np.integer)) and not isinstance(component, bool) and dtype in integer_types:
             return Expr(component, dtype=dtype)
-        if isinstance(component, (float, np.floating)) and dtype in real_types:
-            return Expr(component, dtype=dtype)
+        if isinstance(component, (int, float, np.integer, np.floating)) and dtype in real_types:
+            return Expr(float(component), dtype=dtype)
         return component
 
     return Expr(convert(value))
