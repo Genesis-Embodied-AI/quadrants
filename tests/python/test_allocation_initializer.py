@@ -8,19 +8,6 @@ from quadrants.lang import impl
 
 from tests.helpers import test_utils
 
-APIS = [
-    pytest.param("field", None, id="field"),
-    pytest.param("ndarray", None, id="ndarray"),
-    pytest.param("tensor", qd.Backend.FIELD, id="tensor_field"),
-    pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
-]
-FIELD_APIS = [
-    pytest.param("field", None, id="field"),
-    pytest.param("tensor", qd.Backend.FIELD, id="tensor_field"),
-]
-VECTOR_MATRIX_KINDS = ["vector", "matrix", "vector_type", "matrix_type"]
-KINDS = ["scalar", *VECTOR_MATRIX_KINDS]
-
 
 def _allocate(api, backend, kind, shape, *, dtype=qd.f32, **kwargs):
     if api == "field":
@@ -58,8 +45,16 @@ def _storage(array):
     return array._unwrap() if isinstance(array, qd.Tensor) else array
 
 
-@pytest.mark.parametrize("api,backend", APIS)
-@pytest.mark.parametrize("kind", KINDS)
+@pytest.mark.parametrize(
+    "api,backend",
+    [
+        pytest.param("field", None, id="field"),
+        pytest.param("ndarray", None, id="ndarray"),
+        pytest.param("tensor", qd.Backend.FIELD, id="tensor_field"),
+        pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
+    ],
+)
+@pytest.mark.parametrize("kind", ["scalar", "vector", "matrix", "vector_type", "matrix_type"])
 @pytest.mark.parametrize("kwargs", [{}, {"fill": None}], ids=["omitted", "none"])
 @test_utils.test()
 def test_initializer_defaults(api, backend, kind, kwargs):
@@ -70,7 +65,15 @@ def test_initializer_defaults(api, backend, kind, kwargs):
     np.testing.assert_array_equal(array.to_numpy(), np.zeros((num_elements, *element_shape)))
 
 
-@pytest.mark.parametrize("api,backend", APIS)
+@pytest.mark.parametrize(
+    "api,backend",
+    [
+        pytest.param("field", None, id="field"),
+        pytest.param("ndarray", None, id="ndarray"),
+        pytest.param("tensor", qd.Backend.FIELD, id="tensor_field"),
+        pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
+    ],
+)
 @pytest.mark.parametrize("value", [0, -2.5])
 @test_utils.test()
 def test_initializer_scalar(api, backend, value):
@@ -80,8 +83,16 @@ def test_initializer_scalar(api, backend, value):
     np.testing.assert_array_equal(array.to_numpy(), np.full(shape, value))
 
 
-@pytest.mark.parametrize("api,backend", APIS)
-@pytest.mark.parametrize("kind", KINDS)
+@pytest.mark.parametrize(
+    "api,backend",
+    [
+        pytest.param("field", None, id="field"),
+        pytest.param("ndarray", None, id="ndarray"),
+        pytest.param("tensor", qd.Backend.FIELD, id="tensor_field"),
+        pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
+    ],
+)
+@pytest.mark.parametrize("kind", ["scalar", "vector", "matrix", "vector_type", "matrix_type"])
 @pytest.mark.parametrize("shape", [(), (4,)])
 @test_utils.test()
 def test_initializer_broadcast(api, backend, kind, shape):
@@ -91,8 +102,16 @@ def test_initializer_broadcast(api, backend, kind, shape):
     np.testing.assert_array_equal(array.to_numpy(), np.full((*shape, *element_shape), 7))
 
 
-@pytest.mark.parametrize("api,backend", APIS)
-@pytest.mark.parametrize("kind", VECTOR_MATRIX_KINDS)
+@pytest.mark.parametrize(
+    "api,backend",
+    [
+        pytest.param("field", None, id="field"),
+        pytest.param("ndarray", None, id="ndarray"),
+        pytest.param("tensor", qd.Backend.FIELD, id="tensor_field"),
+        pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
+    ],
+)
+@pytest.mark.parametrize("kind", ["vector", "matrix", "vector_type", "matrix_type"])
 @test_utils.test()
 def test_initializer_captures_components(api, backend, kind):
     # Every constructor must capture component lists before later mutations.
@@ -107,7 +126,15 @@ def test_initializer_captures_components(api, backend, kind):
     np.testing.assert_array_equal(array.to_numpy(), np.broadcast_to(expected, (num_elements, *expected.shape)))
 
 
-@pytest.mark.parametrize("api,backend", APIS)
+@pytest.mark.parametrize(
+    "api,backend",
+    [
+        pytest.param("field", None, id="field"),
+        pytest.param("ndarray", None, id="ndarray"),
+        pytest.param("tensor", qd.Backend.FIELD, id="tensor_field"),
+        pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
+    ],
+)
 @test_utils.test()
 def test_initializer_captures_matrix(api, backend):
     # A Matrix used as an initializer must be captured before later changes to that Matrix.
@@ -118,8 +145,16 @@ def test_initializer_captures_matrix(api, backend):
     np.testing.assert_array_equal(array.to_numpy(), expected)
 
 
-@pytest.mark.parametrize("api,backend", APIS)
-@pytest.mark.parametrize("kind", KINDS)
+@pytest.mark.parametrize(
+    "api,backend",
+    [
+        pytest.param("field", None, id="field"),
+        pytest.param("ndarray", None, id="ndarray"),
+        pytest.param("tensor", qd.Backend.FIELD, id="tensor_field"),
+        pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
+    ],
+)
+@pytest.mark.parametrize("kind", ["scalar", "vector", "matrix", "vector_type", "matrix_type"])
 @test_utils.test()
 def test_initializer_leaves_gradients_zero(api, backend, kind):
     # Initializing forward values must leave the companion gradient values at zero.
@@ -130,7 +165,15 @@ def test_initializer_leaves_gradients_zero(api, backend, kind):
     np.testing.assert_array_equal(array.grad.to_numpy(), np.zeros((num_elements, *element_shape)))
 
 
-@pytest.mark.parametrize("api,backend", APIS)
+@pytest.mark.parametrize(
+    "api,backend",
+    [
+        pytest.param("field", None, id="field"),
+        pytest.param("ndarray", None, id="ndarray"),
+        pytest.param("tensor", qd.Backend.FIELD, id="tensor_field"),
+        pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
+    ],
+)
 @pytest.mark.parametrize("value", [[1, 2], "invalid"])
 @test_utils.test()
 def test_initializer_invalid_scalar(api, backend, value):
@@ -141,8 +184,16 @@ def test_initializer_invalid_scalar(api, backend, value):
     assert array[()] == 7
 
 
-@pytest.mark.parametrize("api,backend", APIS)
-@pytest.mark.parametrize("kind", VECTOR_MATRIX_KINDS)
+@pytest.mark.parametrize(
+    "api,backend",
+    [
+        pytest.param("field", None, id="field"),
+        pytest.param("ndarray", None, id="ndarray"),
+        pytest.param("tensor", qd.Backend.FIELD, id="tensor_field"),
+        pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
+    ],
+)
+@pytest.mark.parametrize("kind", ["vector", "matrix", "vector_type", "matrix_type"])
 @test_utils.test()
 def test_initializer_invalid_components(api, backend, kind):
     # Component counts that do not match the element type must be rejected by every constructor.
@@ -152,7 +203,15 @@ def test_initializer_invalid_components(api, backend, kind):
     np.testing.assert_array_equal(array.to_numpy(), np.full(np.shape(_initial_value(kind)), 7))
 
 
-@pytest.mark.parametrize("api,backend", APIS)
+@pytest.mark.parametrize(
+    "api,backend",
+    [
+        pytest.param("field", None, id="field"),
+        pytest.param("ndarray", None, id="ndarray"),
+        pytest.param("tensor", qd.Backend.FIELD, id="tensor_field"),
+        pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
+    ],
+)
 @pytest.mark.parametrize("value", [[[1, 2]], [[1, 2], [3]], [[1, None, 3], [4, 5, 6]]])
 @test_utils.test()
 def test_initializer_invalid_matrix(api, backend, value):
@@ -163,7 +222,15 @@ def test_initializer_invalid_matrix(api, backend, value):
     np.testing.assert_array_equal(array.to_numpy(), np.full((2, 3), 7))
 
 
-@pytest.mark.parametrize("api,backend", APIS)
+@pytest.mark.parametrize(
+    "api,backend",
+    [
+        pytest.param("field", None, id="field"),
+        pytest.param("ndarray", None, id="ndarray"),
+        pytest.param("tensor", qd.Backend.FIELD, id="tensor_field"),
+        pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
+    ],
+)
 @pytest.mark.parametrize("operation", ["fill", "host", "numpy", "kernel"])
 @test_utils.test()
 def test_initializer_precedes_writes(api, backend, operation):
@@ -187,7 +254,15 @@ def test_initializer_precedes_writes(api, backend, operation):
     assert array[0] == 5
 
 
-@pytest.mark.parametrize("api,backend", APIS)
+@pytest.mark.parametrize(
+    "api,backend",
+    [
+        pytest.param("field", None, id="field"),
+        pytest.param("ndarray", None, id="ndarray"),
+        pytest.param("tensor", qd.Backend.FIELD, id="tensor_field"),
+        pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
+    ],
+)
 @pytest.mark.parametrize("dtype", [qd.i16, qd.i32, qd.f32])
 @test_utils.test()
 def test_initializer_first_kernel_read(api, backend, dtype):
@@ -204,8 +279,16 @@ def test_initializer_first_kernel_read(api, backend, dtype):
 
 
 @pytest.mark.needs_torch
-@pytest.mark.parametrize("api,backend", APIS)
-@pytest.mark.parametrize("kind", KINDS)
+@pytest.mark.parametrize(
+    "api,backend",
+    [
+        pytest.param("field", None, id="field"),
+        pytest.param("ndarray", None, id="ndarray"),
+        pytest.param("tensor", qd.Backend.FIELD, id="tensor_field"),
+        pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
+    ],
+)
+@pytest.mark.parametrize("kind", ["scalar", "vector", "matrix", "vector_type", "matrix_type"])
 @test_utils.test()
 def test_initializer_dlpack(api, backend, kind):
     # After synchronization, DLPack consumers must see initialized values from every allocation API.
@@ -220,7 +303,13 @@ def test_initializer_dlpack(api, backend, kind):
     np.testing.assert_array_equal(torch_view.cpu().numpy(), np.broadcast_to(value, (*shape, *np.shape(value))))
 
 
-@pytest.mark.parametrize("api,backend", FIELD_APIS)
+@pytest.mark.parametrize(
+    "api,backend",
+    [
+        pytest.param("field", None, id="field"),
+        pytest.param("tensor", qd.Backend.FIELD, id="tensor_field"),
+    ],
+)
 @test_utils.test()
 def test_initializer_fields_share_tree(api, backend):
     # Declarations with fill= must defer compilation, share one allocation tree, and initialize every field.
@@ -239,7 +328,13 @@ def test_initializer_fields_share_tree(api, backend):
     assert len({_storage(field).snode._snode_tree_id for field in fields + [total]}) == 1
 
 
-@pytest.mark.parametrize("api,backend", FIELD_APIS)
+@pytest.mark.parametrize(
+    "api,backend",
+    [
+        pytest.param("field", None, id="field"),
+        pytest.param("tensor", qd.Backend.FIELD, id="tensor_field"),
+    ],
+)
 @test_utils.test()
 def test_initializer_is_not_replayed(api, backend):
     # Once initialization has run, later synchronization must preserve writes made afterward.
@@ -254,7 +349,13 @@ def test_initializer_is_not_replayed(api, backend):
     assert field[()] == 5
 
 
-@pytest.mark.parametrize("api,backend", FIELD_APIS)
+@pytest.mark.parametrize(
+    "api,backend",
+    [
+        pytest.param("field", None, id="field"),
+        pytest.param("tensor", qd.Backend.FIELD, id="tensor_field"),
+    ],
+)
 @test_utils.test()
 def test_initializer_after_materialization(api, backend):
     # Fields declared after an earlier allocation must initialize together in a new allocation tree.
@@ -323,7 +424,7 @@ def test_initializer_tensor_default_backend():
 
 
 @pytest.mark.parametrize("backend", [qd.Backend.FIELD, qd.Backend.NDARRAY], ids=["tensor_field", "tensor_ndarray"])
-@pytest.mark.parametrize("kind", KINDS)
+@pytest.mark.parametrize("kind", ["scalar", "vector", "matrix", "vector_type", "matrix_type"])
 @test_utils.test()
 def test_initializer_tensor_layout(backend, kind):
     # Initialization and later writes must use canonical indices when the physical shape axes are permuted.
