@@ -99,10 +99,12 @@ def test_initializer_defaults(
     ],
 )
 @pytest.mark.parametrize("value", [0, 0.0, 7, -7, 2.5, -2.5])
+@pytest.mark.parametrize("shape", [(), (4,), (2, 3)])
 @test_utils.test()
-def test_initializer_scalar(container_type: str, backend: qd.Backend | None, value: int | float) -> None:
+def test_initializer_scalar(
+    container_type: str, backend: qd.Backend | None, value: int | float, shape: tuple[int, ...]
+) -> None:
     # Scalar initializers must initialize every array element to the supplied value.
-    shape = (2, 3)
     array = _create_array(
         container_type=container_type, backend=backend, element_class="scalar", shape=shape, fill=value
     )
@@ -118,7 +120,7 @@ def test_initializer_scalar(container_type: str, backend: qd.Backend | None, val
         pytest.param("tensor", qd.Backend.NDARRAY, id="tensor_ndarray"),
     ],
 )
-@pytest.mark.parametrize("element_class", ["scalar", "vector", "matrix"])
+@pytest.mark.parametrize("element_class", ["vector", "matrix"])
 @pytest.mark.parametrize("via_dtype", [False, True], ids=["via_class", "via_dtype"])
 @pytest.mark.parametrize("shape", [(), (4,)])
 @test_utils.test()
