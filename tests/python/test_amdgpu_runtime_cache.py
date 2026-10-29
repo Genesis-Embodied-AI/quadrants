@@ -81,11 +81,7 @@ for fast_math in (True, True, False, False, True):
     qd.init(arch=qd.amdgpu, offline_cache=True, fast_math=fast_math, log_level=qd.TRACE)
     qd.reset()
 """
-    env = {
-        key: value
-        for key, value in os.environ.items()
-        if key not in ("QD_OFFLINE_CACHE", "QD_DUMP_IR")
-    }
+    env = {key: value for key, value in os.environ.items() if key not in ("QD_OFFLINE_CACHE", "QD_DUMP_IR")}
     for _ in range(2):
         result = subprocess.run(
             [sys.executable, "-c", script],
