@@ -23,6 +23,8 @@ jobs:
       group: gh-pages-deploy
       cancel-in-progress: false
     steps:
+      # Without ref, check out the run's commit: main for scheduled runs, the selected branch for manual runs.
+      # This copy supplies the cleanup script; the separate gh-pages checkout below holds the published docs.
       - uses: actions/checkout@v4
         with:
           path: tooling
