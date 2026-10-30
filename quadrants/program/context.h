@@ -42,6 +42,9 @@ struct RuntimeContext {
   // via SPIR-V gate shaders that don't go through RuntimeContext).
   int32_t *checkpoint_resume_point_ptr{nullptr};
   int32_t *checkpoint_yield_signal_ptr{nullptr};
+
+  // Use runtime accessors in LLVM code generation; Clang can insert explicit padding between these fields.
+  int32_t cpu_block_idx{0};
 };
 
 #if defined(QD_RUNTIME_HOST)

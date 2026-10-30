@@ -2,7 +2,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 def _get_matrix_swizzle_apis():
@@ -59,6 +59,7 @@ user_api[qd] = [
     "Backend",
     "BitpackedFields",
     "BufferView",
+    "CPUWorkScheduling",
     "CRITICAL",
     "DEBUG",
     "DeviceCapability",
@@ -122,6 +123,7 @@ user_api[qd] = [
     "axes",
     "bit_cast",
     "bit_shr",
+    "block_idx",
     "block_local",
     "cache_read_only",
     "cast",
@@ -212,7 +214,6 @@ user_api[qd] = [
     "profiler",
     "pure",
     "pyfunc",
-    "python",
     "randn",
     "random",
     "raw_div",

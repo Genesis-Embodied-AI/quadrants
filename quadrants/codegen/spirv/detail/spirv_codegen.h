@@ -12,6 +12,7 @@
 #include "quadrants/codegen/spirv/snode_struct_compiler.h"
 #include "quadrants/codegen/spirv/kernel_utils.h"
 #include "quadrants/codegen/spirv/spirv_ir_builder.h"
+#include "quadrants/codegen/spirv/spirv_operations.h"
 #include "quadrants/codegen/spirv/kernel_utils.h"
 
 #include <spirv-tools/libspirv.hpp>
@@ -168,6 +169,7 @@ class TaskCodegen : public IRVisitor {
   spirv::Value ret_buffer_value_;
 
   std::shared_ptr<spirv::IRBuilder> ir_;  // spirv binary code builder
+  std::unique_ptr<spirv::SpirvOperations> ops_;
   std::unordered_map<std::pair<BufferInfo, int>, spirv::Value, BufferInfoTypeTupleHasher> buffer_value_map_;
   std::unordered_map<std::pair<BufferInfo, int>, uint32_t, BufferInfoTypeTupleHasher> buffer_binding_map_;
   // All existing type views of each underlying storage buffer, in creation order. When a second or later view is minted
@@ -250,7 +252,7 @@ class TaskCodegen : public IRVisitor {
   // `size_expr` trees and publishes them into the `AdStackMetadata` buffer; the shader reads the
   // per-dispatch values from the metadata buffer rather than using these immediates directly. The
   // compile-time values are still mirrored into `task_attribs.ad_stack.*` so the offline-cache-hit
-  // path with no symbolic bound captured reproduces the pre-PR shader layout.
+  // path with no symbolic bound captured uses the compile-time shader layout.
   uint32_t ad_stack_heap_per_thread_stride_float_{0};
   uint32_t ad_stack_heap_per_thread_stride_int_{0};
   // Total number of `AdStackAllocaStmt` the body will visit, pre-computed by the same scan that builds the heap

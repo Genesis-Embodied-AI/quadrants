@@ -8,7 +8,6 @@ import numpy as np
 
 from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import (
-    Arch,
     DataTypeCxx,
     Function,
     KernelCxx,
@@ -38,7 +37,6 @@ from quadrants.lang.matrix import (
     MatrixType,
     Vector,
     VectorNdarray,
-    VectorType,
     make_matrix,
 )
 from quadrants.lang.mesh import (
@@ -406,7 +404,6 @@ class PyQuadrants:
     def __init__(self, kernels=None):
         self.materialized = False
         self._prog: Program | None = None
-        self._arch: Arch | None = None
         self.src_info_stack = []
         self.inside_kernel: bool = False
         self.compilation_lock = threading.RLock()
@@ -601,8 +598,6 @@ class PyQuadrants:
         self.materialized = False
 
     def sync(self):
-        if is_python_backend():
-            return
         self.materialize()
         assert self._prog is not None
         try:
@@ -900,11 +895,10 @@ def _field(
         #     ``build_struct_for`` permute canonical user indices into physical storage order at the AST level (same
         #     rewrite mechanism as layout-tagged ndarrays).
         #
-        # This replaces the legacy scheme of building a nested stack of rank-1 dense SNodes (one per axis), which
-        # doubled the number of ``linearize`` / SNode ``lookup`` operations per subscript for no memory-layout benefit
-        # (physical byte order is determined by the shape-permutation, not by SNode nesting depth). See the CHI IR
-        # comparison in ``perso_hugh/doc/regression_2026apr23_stork_log.md`` (Experiment N+1) and the byte-identity
-        # regression tests in ``tests/python/test_tensor_layout_physical_bytes.py``.
+        # A nested stack of rank-1 dense SNodes (one per axis) doubles the number of ``linearize`` / SNode ``lookup``
+        # operations per subscript for no memory-layout benefit (physical byte order is determined by the
+        # shape-permutation, not by SNode nesting depth). See the byte-identity regression tests in
+        # ``tests/python/test_tensor_layout_physical_bytes.py``.
         flat_axis_seq = list(range(dim))
         phys_offset = offset
         if order is not None and offset is not None:
@@ -975,21 +969,6 @@ def field(dtype, shape=None, *args, **kwargs):
     """
     if isinstance(shape, numbers.Number):
         shape = (shape,)
-    if is_python_backend():
-        if shape is None:
-            shape = ()
-        from . import _py_tensor as py_tensor  # pylint: disable=C0415
-        from .util import dtype_to_torch_dtype  # pylint: disable=C0415
-
-        batch_ndim = len(shape)
-        if isinstance(dtype, MatrixType):
-            if dtype.ndim == 1:
-                shape = (*shape, dtype.n)
-            else:
-                shape = (*shape, dtype.n, dtype.m)
-            dtype = dtype.dtype
-        dtype = dtype_to_torch_dtype(dtype)
-        return py_tensor.create_tensor(shape, dtype, batch_ndim=batch_ndim)
     if isinstance(dtype, MatrixType):
         if dtype.ndim == 1:
             return Vector.field(dtype.n, dtype.dtype, shape, *args, **kwargs)
@@ -1017,21 +996,6 @@ def ndarray(dtype, shape, needs_grad=False):
     # primal
     if isinstance(shape, numbers.Number):
         shape = (shape,)
-    if is_python_backend():
-        from . import _py_tensor as py_tensor  # pylint: disable=C0415
-        from .util import dtype_to_torch_dtype  # pylint: disable=C0415
-
-        batch_ndim = len(shape)
-        if type(dtype) is VectorType:
-            shape = (*shape, dtype.n)
-            dtype = dtype.dtype
-        elif type(dtype) is MatrixType:
-            shape = (*shape, dtype.n, dtype.m)
-            dtype = dtype.dtype
-        if type(shape) == int:
-            shape = (shape,)
-        dtype = dtype_to_torch_dtype(dtype)
-        return py_tensor.create_tensor(shape, dtype, batch_ndim=batch_ndim)
     if not all((isinstance(x, int) or isinstance(x, np.integer)) and x > 0 and x <= 2**31 - 1 for x in shape):
         raise QuadrantsRuntimeError(f"{shape} is not a valid shape for ndarray")
     if dtype in all_types:
@@ -1354,11 +1318,6 @@ def grouped(x):
     """
     if isinstance(x, _Ndrange):
         return x.grouped()
-    if is_python_backend():
-        shape = x.shape
-        if len(shape) == 0:
-            return [Matrix([])]
-        return [Matrix(list(idx)) for idx in np.ndindex(*shape)]
     return x
 
 
@@ -1375,13 +1334,6 @@ def stop_grad(x):
 
 def current_cfg():
     return get_runtime().prog.config()
-
-
-_ARCH_PYTHON = _qd_core.Arch.python
-
-
-def is_python_backend() -> bool:
-    return get_runtime()._arch == _ARCH_PYTHON
 
 
 def default_cfg():

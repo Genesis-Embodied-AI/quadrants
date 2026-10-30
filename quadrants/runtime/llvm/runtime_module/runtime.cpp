@@ -27,6 +27,7 @@
 #include "quadrants/math/arithmetic.h"
 #include "llvm_runtime.h"
 #include "adstack_runtime.h"
+#include "cpu_range_for.h"
 
 // In llvm 15, host_printf_type will be saved as ptr instead of ptr of FunctionType. Add dummy function to save function
 // type for host_printf_type.
@@ -223,6 +224,9 @@ STRUCT_FIELD_ARRAY(PhysicalCoordinates, val);
 STRUCT_FIELD(RuntimeContext, runtime);
 STRUCT_FIELD(RuntimeContext, result_buffer)
 STRUCT_FIELD(RuntimeContext, cpu_assert_failed)
+STRUCT_FIELD(RuntimeContext, cpu_block_idx)
+STRUCT_FIELD(RuntimeContext, checkpoint_resume_point_ptr)
+STRUCT_FIELD(RuntimeContext, checkpoint_yield_signal_ptr)
 
 #include "quadrants/runtime/llvm/runtime_module/atomic.h"
 
@@ -1136,7 +1140,7 @@ i32 amdgpu_cross_half_shuffle_i32(i32 target_lane, i32 value) {
   // makes the constant-target case behave the same way).
   //
   // The ``+v`` constraint names the AMDGPU VGPR register class. clang accepts ``v`` as a constraint name on x86
-  // (where it historically means an SSE register) and on amdgcn, but rejects it outright on AArch64 -- the asm is
+  // (where it means an SSE register) and on amdgcn, but rejects it outright on AArch64 -- the asm is
   // parsed against the host's clang target even though the resulting bitcode is later re-targeted to amdgcn at JIT
   // time (see ``llvm_context.cpp`` setting the module triple to ``amdgcn-amd-amdhsa``). The constraint string is
   // preserved verbatim into the IR, so any host whose front-end accepts ``v`` produces bitcode that the AMDGPU
@@ -1650,6 +1654,7 @@ void cpu_struct_for_block_helper(void *ctx_, int thread_id, int task_id) {
 
   RuntimeContext this_thread_context = *ctx->context;
   this_thread_context.cpu_thread_id = thread_id;
+  this_thread_context.cpu_block_idx = task_id;
   this_thread_context.cpu_assert_failed = 0;
 
   if (lower < upper) {
@@ -1703,6 +1708,15 @@ void parallel_struct_for(RuntimeContext *context,
 #endif
 }
 
+i32 get_cpu_per_worker_block_start_index(i32 original_range_begin,
+                                         i32 original_range_end,
+                                         i32 num_blocks,
+                                         i32 min_block_size,
+                                         i32 boundary_index) {
+  return quadrants::lang::get_cpu_per_worker_block_start_index(original_range_begin, original_range_end, num_blocks,
+                                                               min_block_size, boundary_index);
+}
+
 using range_for_xlogue = void (*)(RuntimeContext *, /*TLS*/ char *tls_base);
 using mesh_for_xlogue = void (*)(RuntimeContext *,
                                  /*TLS*/ char *tls_base,
@@ -1730,6 +1744,7 @@ void cpu_parallel_range_for_task(void *range_context, int thread_id, int task_id
 
   RuntimeContext this_thread_context = *range_task_context.context;
   this_thread_context.cpu_thread_id = thread_id;
+  this_thread_context.cpu_block_idx = task_id;
   this_thread_context.cpu_assert_failed = 0;
 
   if (range_task_context.prologue) {
@@ -1842,6 +1857,7 @@ void cpu_parallel_mesh_for_task(void *range_context, int thread_id, int task_id)
 
   RuntimeContext this_thread_context = *ctx.context;
   this_thread_context.cpu_thread_id = thread_id;
+  this_thread_context.cpu_block_idx = task_id;
   this_thread_context.cpu_assert_failed = 0;
 
   int block_start = task_id * ctx.block_size;
@@ -1917,6 +1933,14 @@ void gpu_parallel_mesh_for(RuntimeContext *context,
     if (epilogue)
       epilogue(context, tls_ptr, idx);
   }
+}
+
+i32 global_block_idx(RuntimeContext *context) {
+#if ARCH_cuda || ARCH_amdgpu
+  return block_idx();
+#else
+  return context->cpu_block_idx;
+#endif
 }
 
 i32 linear_thread_idx(RuntimeContext *context) {

@@ -11,7 +11,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 # Coverage field allocation creates internal fill kernels that change cache file counts.
 # CI runs these tests in a separate phase without QD_KERNEL_COVERAGE (see 4_test.sh).
@@ -274,7 +274,7 @@ def test_offline_cache_per_kernel(curr_arch):
 # advance. A regression in the registry-seeding helper would leave the counter at zero (dispatcher gate skips).
 # Restricted to LLVM-GPU arches because the recognizer is gated on those
 # (`codegen_llvm.cpp::finalize_offloaded_task_function` skips it on CPU per #655); the SPIR-V backend has its own
-# runtime re-registration loop in `runtime/gfx/adstack_sizer_launch.cpp:236` that is unaffected by this PR.
+# runtime re-registration loop in `runtime/gfx/adstack_sizer_launch.cpp:236`.
 @pytest.mark.parametrize("curr_arch", {qd.cuda, qd.amdgpu} & set(test_utils.expected_archs()))
 @_test_offline_cache_dec
 def test_max_reducer_registry_seeded_on_offline_cache_reload(curr_arch):
@@ -303,7 +303,7 @@ def test_max_reducer_registry_seeded_on_offline_cache_reload(curr_arch):
                 n = a[i]
                 for _ in range(n):
                     v = v * 0.95 + 0.01
-                y[None] += v
+                y[()] += v
 
         a = qd.ndarray(qd.i32, shape=(N,))
         a.from_numpy(np.array([2, 3, 1, 2], dtype=np.int32))
@@ -313,7 +313,7 @@ def test_max_reducer_registry_seeded_on_offline_cache_reload(curr_arch):
         prog = impl.get_runtime().prog
         prog._reset_max_reducer_dispatch_count()
         compute(a)
-        y.grad[None] = 1.0
+        y.grad[()] = 1.0
         for i in range(N):
             x.grad[i] = 0.0
         compute.grad(a)
@@ -361,16 +361,16 @@ def test_multiple_ib_with_offline_cache(curr_arch):
         def compute_y():
             for j in range(2):
                 for i in range(3):
-                    y[None] += x[None]
+                    y[()] += x[()]
                 for i in range(3):
-                    y[None] += x[None]
+                    y[()] += x[()]
 
-        x[None] = 1.0
+        x[()] = 1.0
         with qd.ad.Tape(y):
             compute_y()
 
-        assert y[None] == 12.0
-        assert x.grad[None] == 12.0
+        assert y[()] == 12.0
+        assert x.grad[()] == 12.0
 
     qd.init(arch=curr_arch, enable_fallback=False, ad_stack_experimental_enabled=True, **current_thread_ext_options())
     helper()
@@ -436,15 +436,15 @@ def test_snode_reader_and_writer_with_offline_cache(curr_arch):
         x = qd.field(dtype=qd.f32, shape=())
         y = qd.field(dtype=qd.f32, shape=())
 
-        x[None] = 3.14
-        y[None] = 4.14
-        assert x[None] == test_utils.approx(3.14)
-        assert y[None] == test_utils.approx(4.14)
+        x[()] = 3.14
+        y[()] = 4.14
+        assert x[()] == test_utils.approx(3.14)
+        assert y[()] == test_utils.approx(4.14)
 
-        x[None] = 6.28
-        y[None] = 7.28
-        assert x[None] == test_utils.approx(6.28)
-        assert y[None] == test_utils.approx(7.28)
+        x[()] = 6.28
+        y[()] = 7.28
+        assert x[()] == test_utils.approx(6.28)
+        assert y[()] == test_utils.approx(7.28)
 
     assert added_files() == expected_num_cache_files()
     qd.init(arch=curr_arch, enable_fallback=False, **current_thread_ext_options())
@@ -565,20 +565,53 @@ def test_offline_cache_with_changing_compile_config(curr_arch):
             c += i
 
     assert added_files() == expected_num_cache_files()
-    qd.init(arch=curr_arch, enable_fallback=False, opt_level=0, **current_thread_ext_options())
+    qd.init(
+        arch=curr_arch,
+        enable_fallback=False,
+        opt_level=0,
+        # Use an explicit baseline so the later 16 -> 32 -> 16 cache checks do not depend on the default.
+        cpu_per_worker_min_block_dim=16,
+        **current_thread_ext_options(),
+    )
     helper()
 
-    qd.init(arch=curr_arch, enable_fallback=False, opt_level=1, **current_thread_ext_options())
+    qd.init(
+        arch=curr_arch,
+        enable_fallback=False,
+        opt_level=1,
+        cpu_per_worker_min_block_dim=16,
+        **current_thread_ext_options(),
+    )
     assert added_files() == expected_num_cache_files(1)
     helper()
 
     qd.reset()
     assert added_files() == expected_num_cache_files(2)
-    qd.init(arch=curr_arch, enable_fallback=False, default_fp=qd.f32, **current_thread_ext_options())
+    qd.init(
+        arch=curr_arch,
+        enable_fallback=False,
+        opt_level=1,
+        cpu_per_worker_min_block_dim=16,
+        default_fp=qd.f32,
+        **current_thread_ext_options(),
+    )
     helper()
 
     qd.reset()
     assert added_files() == expected_num_cache_files(2)
+
+    if curr_arch == qd.cpu:
+        for cpu_per_worker_min_block_dim in [32, 16]:
+            qd.init(
+                arch=curr_arch,
+                enable_fallback=False,
+                opt_level=1,
+                cpu_per_worker_min_block_dim=cpu_per_worker_min_block_dim,
+                **current_thread_ext_options(),
+            )
+            helper()
+            qd.reset()
+            assert added_files() == expected_num_cache_files(3)
 
 
 @pytest.mark.parametrize("curr_arch", supported_archs_offline_cache)

@@ -3,13 +3,11 @@ wrappers).
 
 The user-guide doc ``docs/source/user_guide/compound_types.md`` claims this pattern is not supported ("can contain
 ndarray? no" for ``@qd.data_oriented``). But the in-tree error message in ``python/quadrants/lang/impl.py`` lists
-``@qd.data_oriented / frozen-dataclass template`` as a *supported* route, and the ndarray-in-struct infrastructure
-added by ``#561 [Type] Tensor 24`` (2026-04-28) — specifically ``_predeclare_struct_ndarrays`` in
-``python/quadrants/lang/ast/ast_transformers/function_def_transformer.py`` — explicitly walks both
+``@qd.data_oriented / frozen-dataclass template`` as a *supported* route, and ``_predeclare_struct_ndarrays`` in
+``python/quadrants/lang/ast/ast_transformers/function_def_transformer.py`` explicitly walks both
 ``dataclasses.is_dataclass(val)`` and ``hasattr(val, "__dict__")`` containers, the latter being the data_oriented case.
 
-This file pins what actually works, and documents the gaps. See ``perso_hugh/doc/data_oriented_ndarray.md`` for the
-design analysis.
+This file pins what actually works, and documents the gaps.
 """
 
 import dataclasses
@@ -19,7 +17,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 # ---------------------------------------------------------------------------
 # 1. Single raw qd.ndarray attribute (scalar element type).
@@ -284,7 +282,7 @@ def test_data_oriented_distinct_instances():
 
 @test_utils.test(arch=qd.cpu)
 def test_data_oriented_ndarray_fastcache_cross_init(tmp_path, monkeypatch):
-    from quadrants._test_tools import qd_init_same_arch
+    from tests.helpers.runtime import qd_init_same_arch
 
     launch_kernel_orig = qd.lang.kernel_impl.Kernel.launch_kernel
     captured_compiled_kernel_data = []
@@ -330,7 +328,7 @@ def test_data_oriented_ndarray_fastcache_cross_init(tmp_path, monkeypatch):
 
 @test_utils.test(arch=qd.cpu)
 def test_data_oriented_nested_ndarray_fastcache_cross_init(tmp_path, monkeypatch):
-    from quadrants._test_tools import qd_init_same_arch
+    from tests.helpers.runtime import qd_init_same_arch
 
     launch_kernel_orig = qd.lang.kernel_impl.Kernel.launch_kernel
     captured = []
@@ -378,7 +376,7 @@ def test_data_oriented_nested_ndarray_fastcache_cross_init(tmp_path, monkeypatch
 
 @test_utils.test(arch=qd.cpu)
 def test_data_oriented_ndarray_fastcache_dtype_key_distinct(tmp_path, monkeypatch):
-    from quadrants._test_tools import qd_init_same_arch
+    from tests.helpers.runtime import qd_init_same_arch
 
     launch_kernel_orig = qd.lang.kernel_impl.Kernel.launch_kernel
     captured = []
@@ -428,7 +426,7 @@ def test_data_oriented_ndarray_fastcache_dtype_key_distinct(tmp_path, monkeypatc
 
 @test_utils.test(arch=qd.cpu)
 def test_data_oriented_field_disables_fastcache_but_runs(tmp_path, monkeypatch):
-    from quadrants._test_tools import qd_init_same_arch
+    from tests.helpers.runtime import qd_init_same_arch
 
     qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
 
@@ -665,14 +663,12 @@ def test_data_oriented_nested_ndarray_reassign():
 
 # ---------------------------------------------------------------------------
 # 15b. Reassignment through a FROZEN outer container that wraps a MUTABLE inner container holding the ndarray.
-# Reproducer for Codex review #1 on PR #704
-# (https://github.com/Genesis-Embodied-AI/quadrants/pull/704#discussion_r3253017477): the launch-time mutable-nd cache
-# guard only classified mutability of the *top-level* kernel arg. With a frozen dataclass at the root, the predicate
-# returned False and no per-call walk was inserted, so reassigning ``outer.inner.x`` between launches left the
-# launch-context cache bound to the *original* ndarray.
+# The launch-time mutable-nd cache guard must account for mutable containers nested inside a frozen dataclass.
+# Checking only the top-level kernel arg skips the per-call walk, so reassigning ``outer.inner.x`` between launches
+# leaves the launch-context cache bound to the original ndarray.
 #
-# Fixed by widening the predicate to OR-fold mutability across every intermediate container along the recorded
-# attr-chain (not just the root). See ``launch_kernel`` in ``python/quadrants/lang/kernel.py``.
+# The predicate must OR-fold mutability across every intermediate container along the recorded attr-chain, not just
+# the root. See ``launch_kernel`` in ``python/quadrants/lang/kernel.py``.
 # ---------------------------------------------------------------------------
 
 
@@ -1123,7 +1119,7 @@ def test_data_oriented_kernel_unused_opaque_member_does_not_affect_cache(tmp_pat
     attribute (no qualname-fallback, no spurious miss)."""
     import uuid
 
-    from quadrants._test_tools import qd_init_same_arch
+    from tests.helpers.runtime import qd_init_same_arch
 
     launch_kernel_orig = qd.lang.kernel_impl.Kernel.launch_kernel
     captured = []
@@ -1168,8 +1164,9 @@ def test_data_oriented_kernel_unused_opaque_member_does_not_affect_cache(tmp_pat
 def test_data_oriented_kernel_read_opaque_member_fails_fastcache(tmp_path, capfd) -> None:
     """Rule 2: when the kernel actually reads an unrecognised-type member, fastcache fails loudly with [UNKNOWN_TYPE]
     + [INVALID_FUNC] - no silent drop, no qualname fallback. The kernel still runs via normal compilation."""
-    from quadrants._test_tools import qd_init_same_arch
     from quadrants.lang._fast_caching.args_hasher import reset_unknown_type_warn_state
+
+    from tests.helpers.runtime import qd_init_same_arch
 
     qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
     reset_unknown_type_warn_state()
@@ -1209,7 +1206,7 @@ def test_data_oriented_kernel_read_primitive_distinguishes_cache_key(tmp_path, m
     """Rule 3 (data_oriented works) + pruning correctness: when the kernel reads a primitive member, its value is
     baked into the kernel and must drive a distinct cache entry per value. Two State instances differing only in
     ``n`` (read by the kernel) cold-compile separately and both load from disk on the second process."""
-    from quadrants._test_tools import qd_init_same_arch
+    from tests.helpers.runtime import qd_init_same_arch
 
     launch_kernel_orig = qd.lang.kernel_impl.Kernel.launch_kernel
     captured = []
@@ -1253,7 +1250,7 @@ def test_data_oriented_kernel_read_primitive_distinguishes_cache_key(tmp_path, m
 def test_data_oriented_kernel_unread_primitive_does_not_affect_cache(tmp_path, monkeypatch) -> None:
     """Rule 1: kernel-unused primitive members do not affect the cache key. Mirror of the opaque case for
     primitives. Two State instances differing only in ``unused_n`` must share the cache."""
-    from quadrants._test_tools import qd_init_same_arch
+    from tests.helpers.runtime import qd_init_same_arch
 
     launch_kernel_orig = qd.lang.kernel_impl.Kernel.launch_kernel
     captured = []
@@ -1297,7 +1294,7 @@ def test_data_oriented_qd_func_chain_propagation_distinguishes_cache_key(tmp_pat
     ``f(self.dofs)`` and ``f`` reads ``s.x``, the kernel's pruning set must include ``__qd_self__qd_dofs__qd_x`` so
     that changes to the inner ndarray's dtype invalidate the cache. Two States differing in ``dofs.x``'s dtype must
     cold-compile separately."""
-    from quadrants._test_tools import qd_init_same_arch
+    from tests.helpers.runtime import qd_init_same_arch
 
     launch_kernel_orig = qd.lang.kernel_impl.Kernel.launch_kernel
     captured = []
@@ -1359,7 +1356,7 @@ def test_data_oriented_nested_primitive_via_qd_func_distinguishes_cache_key(tmp_
     The fix in ``_pruning.py`` gates propagation on the *root Name* of the chain (``self``, not the flat result), so
     both ``f(self)`` and ``f(self.cfg)`` propagate, while already-flattened dataclass refs
     (``Name('__qd_state__qd_x')``) are still skipped."""
-    from quadrants._test_tools import qd_init_same_arch
+    from tests.helpers.runtime import qd_init_same_arch
 
     launch_kernel_orig = qd.lang.kernel_impl.Kernel.launch_kernel
     captured = []

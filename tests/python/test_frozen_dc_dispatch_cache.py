@@ -1,4 +1,4 @@
-"""Tests for frozen-dataclass dispatch caching (``hp/tensor-stork-25``).
+"""Tests for frozen-dataclass dispatch caching.
 
 Verifies that the per-launch field plan cache (``_frozen_dc_plans``) and the per-instance unwrapped-value cache
 (``_qd_dc_unwrapped``) in ``_func_base._recursive_set_args`` work correctly for frozen dataclasses with ndarray
@@ -14,7 +14,7 @@ import numpy as np
 import quadrants as qd
 from quadrants.lang._func_base import _frozen_dc_plans, _get_frozen_dc_plan
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 _M, _N = 3, 4
 

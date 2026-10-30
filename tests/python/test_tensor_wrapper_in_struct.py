@@ -1,4 +1,4 @@
-"""Wrapper-in-struct unwrap behaviour (`hp/tensor-stork-20`).
+"""Wrapper-in-struct unwrap behaviour.
 
 Pins the contract that a ``qd.Tensor`` wrapper stored as a *field* of a struct passed to a kernel is unwrapped to its
 bare impl before the kernel-side type resolution / template-mapper / fastcache validator / AST-build-time attribute
@@ -16,11 +16,9 @@ Genesis uses two different struct shapes depending on the global ``gs.use_ndarra
   Tests that mirror this shape are parametrised over the **ndarray** backend only.
 - ``gs.use_ndarray=False``: ``@qd.data_oriented`` struct, kernel takes the struct as ``qd.template()`` and accesses
   fields via attribute lookup at AST-build time. Tests that mirror this shape are parametrised over the **field**
-  backend only. (The other direction is forbidden by an existing pre-stork-20 check: "Ndarray shouldn't be passed in
+  backend only. (The other direction is forbidden by the check: "Ndarray shouldn't be passed in
   via ``qd.template()``".)
 
-Both shapes had a wrapper-unwrap gap before this branch. See ``perso_hugh/doc/quadrants-tensor.md`` §8.14 and
-``perso_hugh/doc/genesis_tensor_migration.md`` Phase-1 findings.
 """
 
 import dataclasses
@@ -31,7 +29,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 LAYOUTS = [(0, 1), (1, 0)]
 LAYOUT_IDS = ["identity", "transposed"]
@@ -142,7 +140,7 @@ def test_mixed_bare_and_wrapper_struct_fields():
 # ----------------------------------------------------------------------------
 # Fastcache: no PARAM_INVALID warning, fast path stays hot.
 #
-# Pins the soft-failure side of the §8.14 bug: even when the kernel eventually runs (via the slow path), the
+# Pins the soft-failure side of wrapper unwrapping: even when the kernel eventually runs (via the slow path), the
 # wrapper-as-struct-field would have tripped the fastcache's per-parameter validator
 # (``args_hasher.stringify_obj_type``) and emitted ``[FASTCACHE][PARAM_INVALID]``, killing the recompile-avoidance
 # for the whole call. Following the harness used by ``test_src_ll_cache_arg_warnings``: capfd + ``@qd.pure`` makes

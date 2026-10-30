@@ -6,6 +6,7 @@
 #include <string>
 
 #include "quadrants/codegen/spirv/spirv_ir_builder.h"
+#include "quadrants/codegen/spirv/spirv_operations.h"
 #include "quadrants/ir/adstack_size_expr_device.h"
 #include "quadrants/ir/type.h"
 
@@ -94,13 +95,13 @@ Value load_buf_u32(IRBuilder &ir, Value buffer, Value word_idx) {
 // Helper: assemble an i64 from two adjacent little-endian u32 words in a buffer. Assumes the buffer is
 // logically uint32[] - correct for both the bytecode buffer (encoder memcpys POD structs in their native
 // layout, which is little-endian on every platform Quadrants supports) and the kernel arg buffer (same).
-Value load_buf_i64(IRBuilder &ir, Value buffer, Value base_word_idx) {
+Value load_buf_i64(IRBuilder &ir, SpirvOperations &ops_, Value buffer, Value base_word_idx) {
   Value lo = load_buf_u32(ir, buffer, base_word_idx);
-  Value hi_idx = ir.add(base_word_idx, ir.uint_immediate_number(ir.u32_type(), 1u));
+  Value hi_idx = ops_.add(base_word_idx, ir.uint_immediate_number(ir.u32_type(), 1u));
   Value hi = load_buf_u32(ir, buffer, hi_idx);
   // Zero-extend both halves to u64, shift hi, OR them, reinterpret as i64.
-  Value lo64 = ir.cast(ir.u64_type(), lo);
-  Value hi64 = ir.cast(ir.u64_type(), hi);
+  Value lo64 = ops_.cast(ir.u64_type(), lo);
+  Value hi64 = ops_.cast(ir.u64_type(), hi);
   Value shift = ir.uint_immediate_number(ir.u64_type(), 32u);
   Value hi_shifted = ir.make_value(spv::OpShiftLeftLogical, ir.u64_type(), hi64, shift);
   Value or_val = ir.make_value(spv::OpBitwiseOr, ir.u64_type(), lo64, hi_shifted);
@@ -121,13 +122,21 @@ void store_buf_u32(IRBuilder &ir, Value buffer, Value word_idx, Value value) {
 // with `VK_ERROR_UNKNOWN`. Each per-array slice within a scratch SSBO has a fixed compile-time base index
 // (`base_in_elems`); element access is `base_in_elems + index` then `OpAccessChain` through the SSBO's runtime array.
 // The sizer dispatches `1x1x1` so cross-thread aliasing is impossible.
-Value array_i64_access_ptr(IRBuilder &ir, Value scratch_i64_buf, uint32_t base_in_elems, Value index) {
-  Value abs_idx = ir.add(ir.uint_immediate_number(ir.u32_type(), base_in_elems), ir.cast(ir.u32_type(), index));
+Value array_i64_access_ptr(IRBuilder &ir,
+                           SpirvOperations &ops_,
+                           Value scratch_i64_buf,
+                           uint32_t base_in_elems,
+                           Value index) {
+  Value abs_idx = ops_.add(ir.uint_immediate_number(ir.u32_type(), base_in_elems), ops_.cast(ir.u32_type(), index));
   return ir.struct_array_access(ir.i64_type(), scratch_i64_buf, abs_idx);
 }
 
-Value array_i32_access_ptr(IRBuilder &ir, Value scratch_i32_buf, uint32_t base_in_elems, Value index) {
-  Value abs_idx = ir.add(ir.uint_immediate_number(ir.u32_type(), base_in_elems), ir.cast(ir.u32_type(), index));
+Value array_i32_access_ptr(IRBuilder &ir,
+                           SpirvOperations &ops_,
+                           Value scratch_i32_buf,
+                           uint32_t base_in_elems,
+                           Value index) {
+  Value abs_idx = ops_.add(ir.uint_immediate_number(ir.u32_type(), base_in_elems), ops_.cast(ir.u32_type(), index));
   return ir.struct_array_access(ir.i32_type(), scratch_i32_buf, abs_idx);
 }
 
@@ -143,14 +152,15 @@ Value array_i32_access_ptr(IRBuilder &ir, Value scratch_i32_buf, uint32_t base_i
 // pattern SPIRV-Cross already knows how to lower on Metal / Vulkan without tripping the
 // rvalue-pointer-to-atomic MSL miscompile.
 Value psb_load_scalar(IRBuilder &ir,
+                      SpirvOperations &ops_,
                       Value base_u64,
                       Value elem_idx_i32,
                       const SType &elem_sty,
                       size_t elem_size_bytes) {
   Value elem_size_u64 = ir.uint_immediate_number(ir.u64_type(), elem_size_bytes);
-  Value elem_idx_u64 = ir.cast(ir.u64_type(), elem_idx_i32);
-  Value byte_off = ir.mul(elem_idx_u64, elem_size_u64);
-  Value target_u64 = ir.add(base_u64, byte_off);
+  Value elem_idx_u64 = ops_.cast(ir.u64_type(), elem_idx_i32);
+  Value byte_off = ops_.mul(elem_idx_u64, elem_size_u64);
+  Value target_u64 = ops_.add(base_u64, byte_off);
 
   SType ptr_elem_type = ir.get_pointer_type(elem_sty, spv::StorageClassPhysicalStorageBuffer);
   std::vector<std::tuple<SType, std::string, size_t>> members = {{elem_sty, "_m0", 0}};
@@ -231,39 +241,45 @@ struct ShaderState {
 // reachable within the [tree_start, root_idx] range and the kMaxNodes cap therefore applies only per-stack,
 // not per-kernel. All operand_a / operand_b / body_node_idx values are already in the same global frame so
 // subtracting `tree_start` keeps the addressing consistent across kinds.
-Value local_values_idx(IRBuilder &ir, const ShaderState &st, Value global_index_i32) {
+Value local_values_idx(IRBuilder &ir, SpirvOperations &ops_, const ShaderState &st, Value global_index_i32) {
   Value tree_start = ir.load_variable(st.tree_start_var, ir.i32_type());
-  return ir.sub(global_index_i32, tree_start);
+  return ops_.sub(global_index_i32, tree_start);
 }
 
-Value load_values_at(IRBuilder &ir, const ShaderState &st, Value index_i32) {
-  Value ptr = array_i64_access_ptr(ir, st.scratch_i64_buf, kI64BaseValuesArr, local_values_idx(ir, st, index_i32));
+Value load_values_at(IRBuilder &ir, SpirvOperations &ops_, const ShaderState &st, Value index_i32) {
+  Value ptr =
+      array_i64_access_ptr(ir, ops_, st.scratch_i64_buf, kI64BaseValuesArr, local_values_idx(ir, ops_, st, index_i32));
   return ir.load_variable(ptr, ir.i64_type());
 }
 
-void store_values_at(IRBuilder &ir, const ShaderState &st, Value index_i32, Value v_i64) {
-  Value ptr = array_i64_access_ptr(ir, st.scratch_i64_buf, kI64BaseValuesArr, local_values_idx(ir, st, index_i32));
+void store_values_at(IRBuilder &ir, SpirvOperations &ops_, const ShaderState &st, Value index_i32, Value v_i64) {
+  Value ptr =
+      array_i64_access_ptr(ir, ops_, st.scratch_i64_buf, kI64BaseValuesArr, local_values_idx(ir, ops_, st, index_i32));
   ir.store_variable(ptr, v_i64);
 }
 
-Value load_scope_at(IRBuilder &ir, const ShaderState &st, Value var_id_i32) {
-  Value ptr = array_i64_access_ptr(ir, st.scratch_i64_buf, kI64BaseScopeArr, var_id_i32);
+Value load_scope_at(IRBuilder &ir, SpirvOperations &ops_, const ShaderState &st, Value var_id_i32) {
+  Value ptr = array_i64_access_ptr(ir, ops_, st.scratch_i64_buf, kI64BaseScopeArr, var_id_i32);
   return ir.load_variable(ptr, ir.i64_type());
 }
 
-void store_scope_at(IRBuilder &ir, const ShaderState &st, Value var_id_i32, Value v_i64) {
-  Value ptr = array_i64_access_ptr(ir, st.scratch_i64_buf, kI64BaseScopeArr, var_id_i32);
+void store_scope_at(IRBuilder &ir, SpirvOperations &ops_, const ShaderState &st, Value var_id_i32, Value v_i64) {
+  Value ptr = array_i64_access_ptr(ir, ops_, st.scratch_i64_buf, kI64BaseScopeArr, var_id_i32);
   ir.store_variable(ptr, v_i64);
 }
 
 // Compute the u32 word offset of field `word_off` inside the device node at index `node_idx`.
-Value node_field_word_idx(IRBuilder &ir, Value nodes_base_word, Value node_idx_i32, int word_off_in_node) {
-  Value node_idx_u32 = ir.cast(ir.u32_type(), node_idx_i32);
+Value node_field_word_idx(IRBuilder &ir,
+                          SpirvOperations &ops_,
+                          Value nodes_base_word,
+                          Value node_idx_i32,
+                          int word_off_in_node) {
+  Value node_idx_u32 = ops_.cast(ir.u32_type(), node_idx_i32);
   Value node_words = ir.uint_immediate_number(ir.u32_type(), kNodeWords);
-  Value base = ir.mul(node_idx_u32, node_words);
-  Value base_plus = ir.add(nodes_base_word, base);
+  Value base = ops_.mul(node_idx_u32, node_words);
+  Value base_plus = ops_.add(nodes_base_word, base);
   Value off = ir.uint_immediate_number(ir.u32_type(), static_cast<uint32_t>(word_off_in_node));
-  return ir.add(base_plus, off);
+  return ops_.add(base_plus, off);
 }
 
 // `kExternalTensorRead` shares the pair-based indices layout `[idx_a_raw, elem_stride_a]` with `kFieldLoad`
@@ -278,6 +294,7 @@ Value node_field_word_idx(IRBuilder &ir, Value nodes_base_word, Value node_idx_i
 // `idx_a * stride_a` to the element index. Mirrors `compute_linear_index` for ETR but walks pairs and multiplies
 // in the per-axis stride read from the second half of each pair, matching how the host encoder emits the table.
 Value compute_field_load_elem_index(IRBuilder &ir,
+                                    SpirvOperations &ops_,
                                     const ShaderState &st,
                                     Value indices_base_word,  // u32
                                     Value indices_offset_i32,
@@ -298,18 +315,18 @@ Value compute_field_load_elem_index(IRBuilder &ir,
 
   ir.start_label(head);
   Value k_now = ir.load_variable(k_var, ir.i32_type());
-  Value cond = ir.lt(k_now, indices_count_i32);
+  Value cond = ops_.lt(k_now, indices_count_i32);
   ir.make_inst(spv::OpLoopMerge, merge, cont, spv::LoopControlMaskNone);
   ir.make_inst(spv::OpBranchConditional, cond, body, merge);
 
   ir.start_label(body);
-  Value indices_off_u32 = ir.cast(ir.u32_type(), indices_offset_i32);
+  Value indices_off_u32 = ops_.cast(ir.u32_type(), indices_offset_i32);
   // Pair offset for axis k = off + 2*k (idx at +0, elem_stride at +1).
-  Value k_u32 = ir.cast(ir.u32_type(), k_now);
+  Value k_u32 = ops_.cast(ir.u32_type(), k_now);
   Value two_u32 = ir.uint_immediate_number(ir.u32_type(), 2u);
-  Value pair_base_u32 = ir.add(indices_off_u32, ir.mul(k_u32, two_u32));
-  Value idx_word_u32 = ir.add(indices_base_word, pair_base_u32);
-  Value stride_word_u32 = ir.add(idx_word_u32, ir.uint_immediate_number(ir.u32_type(), 1u));
+  Value pair_base_u32 = ops_.add(indices_off_u32, ops_.mul(k_u32, two_u32));
+  Value idx_word_u32 = ops_.add(indices_base_word, pair_base_u32);
+  Value stride_word_u32 = ops_.add(idx_word_u32, ir.uint_immediate_number(ir.u32_type(), 1u));
   Value idx_raw_u32 = load_buf_u32(ir, st.bytecode_buf, idx_word_u32);
   Value idx_raw_i32 = ir.make_value(spv::OpBitcast, ir.i32_type(), idx_raw_u32);
   Value stride_u32 = load_buf_u32(ir, st.bytecode_buf, stride_word_u32);
@@ -319,7 +336,7 @@ Value compute_field_load_elem_index(IRBuilder &ir,
   Label const_lbl = ir.new_label();
   Label var_lbl = ir.new_label();
   Label sel_merge = ir.new_label();
-  Value is_const = ir.ge(idx_raw_i32, ir.int_immediate_number(ir.i32_type(), 0));
+  Value is_const = ops_.ge(idx_raw_i32, ir.int_immediate_number(ir.i32_type(), 0));
   ir.make_inst(spv::OpSelectionMerge, sel_merge, spv::SelectionControlMaskNone);
   ir.make_inst(spv::OpBranchConditional, is_const, const_lbl, var_lbl);
 
@@ -328,10 +345,10 @@ Value compute_field_load_elem_index(IRBuilder &ir,
   ir.make_inst(spv::OpBranch, sel_merge);
 
   ir.start_label(var_lbl);
-  Value raw_plus_1 = ir.add(idx_raw_i32, ir.int_immediate_number(ir.i32_type(), 1));
-  Value var_id_i32 = ir.sub(ir.int_immediate_number(ir.i32_type(), 0), raw_plus_1);
-  Value scope_val_i64 = load_scope_at(ir, st, var_id_i32);
-  Value v_var_i32 = ir.cast(ir.i32_type(), scope_val_i64);
+  Value raw_plus_1 = ops_.add(idx_raw_i32, ir.int_immediate_number(ir.i32_type(), 1));
+  Value var_id_i32 = ops_.sub(ir.int_immediate_number(ir.i32_type(), 0), raw_plus_1);
+  Value scope_val_i64 = load_scope_at(ir, ops_, st, var_id_i32);
+  Value v_var_i32 = ops_.cast(ir.i32_type(), scope_val_i64);
   Label var_lbl_end = ir.current_label();
   ir.make_inst(spv::OpBranch, sel_merge);
 
@@ -340,14 +357,14 @@ Value compute_field_load_elem_index(IRBuilder &ir,
   v.set_incoming(0, v_const_i32, const_lbl);
   v.set_incoming(1, v_var_i32, var_lbl_end);
 
-  Value contribution = ir.mul(Value(v), stride_i32);
+  Value contribution = ops_.mul(Value(v), stride_i32);
   Value acc_now = ir.load_variable(acc_var, ir.i32_type());
-  Value acc_next = ir.add(acc_now, contribution);
+  Value acc_next = ops_.add(acc_now, contribution);
   ir.store_variable(acc_var, acc_next);
   ir.make_inst(spv::OpBranch, cont);
 
   ir.start_label(cont);
-  Value k_next = ir.add(k_now, ir.int_immediate_number(ir.i32_type(), 1));
+  Value k_next = ops_.add(k_now, ir.int_immediate_number(ir.i32_type(), 1));
   ir.store_variable(k_var, k_next);
   ir.make_inst(spv::OpBranch, head);
 
@@ -358,7 +375,7 @@ Value compute_field_load_elem_index(IRBuilder &ir,
 // Returns `sizeof(prim_dt)` as an i64 SSA value, matching the primitive type the `kFieldLoad` / `kExternalTensorRead`
 // shader switch uses. Kept in one place so the element-size-of-prim-dt table stays in sync with `emit_psb_load_i64`.
 // Emit the switch-on-prim_dt + PSB load sequence. Returns an i64.
-Value emit_psb_load_i64(IRBuilder &ir, Value data_ptr_u64, Value linear_i32, Value prim_dt_i32) {
+Value emit_psb_load_i64(IRBuilder &ir, SpirvOperations &ops_, Value data_ptr_u64, Value linear_i32, Value prim_dt_i32) {
   // Use nested if-else tree (SPIR-V has OpSwitch too, but OpSwitch on integer types needs a literal case
   // list, which SPIRV-Cross handles fine - we use it here for compactness).
   Label merge = ir.new_label();
@@ -381,7 +398,7 @@ Value emit_psb_load_i64(IRBuilder &ir, Value data_ptr_u64, Value linear_i32, Val
 
   auto emit_case = [&](Label lbl, const SType &load_ty, size_t elem_size, bool is_signed) -> std::pair<Value, Label> {
     ir.start_label(lbl);
-    Value v = psb_load_scalar(ir, data_ptr_u64, linear_i32, load_ty, elem_size);
+    Value v = psb_load_scalar(ir, ops_, data_ptr_u64, linear_i32, load_ty, elem_size);
     // Sign-extend (signed) or zero-extend (unsigned) to i64.
     Value v_i64;
     if (is_signed) {
@@ -401,7 +418,7 @@ Value emit_psb_load_i64(IRBuilder &ir, Value data_ptr_u64, Value linear_i32, Val
   auto [v_i32, lbl_i32] = emit_case(case_i32, ir.i32_type(), 4, true);
   // i64 is the widest - OpSConvert i64->i64 is invalid, so just rebind.
   ir.start_label(case_i64);
-  Value v_i64_direct = psb_load_scalar(ir, data_ptr_u64, linear_i32, ir.i64_type(), 8);
+  Value v_i64_direct = psb_load_scalar(ir, ops_, data_ptr_u64, linear_i32, ir.i64_type(), 8);
   Label lbl_i64 = ir.current_label();
   ir.make_inst(spv::OpBranch, merge);
 
@@ -409,7 +426,7 @@ Value emit_psb_load_i64(IRBuilder &ir, Value data_ptr_u64, Value linear_i32, Val
   auto [v_u16, lbl_u16] = emit_case(case_u16, ir.u16_type(), 2, false);
   auto [v_u32, lbl_u32] = emit_case(case_u32, ir.u32_type(), 4, false);
   ir.start_label(case_u64);
-  Value v_u64_raw = psb_load_scalar(ir, data_ptr_u64, linear_i32, ir.u64_type(), 8);
+  Value v_u64_raw = psb_load_scalar(ir, ops_, data_ptr_u64, linear_i32, ir.u64_type(), 8);
   Value v_u64_as_i64 = ir.make_value(spv::OpBitcast, ir.i64_type(), v_u64_raw);
   Label lbl_u64 = ir.current_label();
   ir.make_inst(spv::OpBranch, merge);
@@ -437,7 +454,7 @@ Value emit_psb_load_i64(IRBuilder &ir, Value data_ptr_u64, Value linear_i32, Val
 // Emit the tree-eval inner loop for the current stack. On entry: `current_var`, `max_k_var`, `sp_var` are
 // initialised by the caller. On exit: `values_arr[root_idx]` holds the tree's root value. Uses the
 // pending-frames stack for `MaxOverRange` iteration. See the top-level module comment for the algorithm.
-void emit_tree_eval_loop(IRBuilder &ir, const ShaderState &st) {
+void emit_tree_eval_loop(IRBuilder &ir, SpirvOperations &ops_, const ShaderState &st) {
   Label head = ir.new_label();
   Label body = ir.new_label();
   Label cont = ir.new_label();
@@ -452,7 +469,7 @@ void emit_tree_eval_loop(IRBuilder &ir, const ShaderState &st) {
   Value current_now = ir.load_variable(st.current_var, ir.i32_type());
   Value max_k_now = ir.load_variable(st.max_k_var, ir.i32_type());
   Value sp_now = ir.load_variable(st.sp_var, ir.i32_type());
-  Value past_end = ir.gt(current_now, max_k_now);
+  Value past_end = ops_.gt(current_now, max_k_now);
 
   // Branch: if past the end, handle pending frame pop/continuation; else process the node.
   Label past_lbl = ir.new_label();
@@ -463,7 +480,7 @@ void emit_tree_eval_loop(IRBuilder &ir, const ShaderState &st) {
 
   // ---- past-end branch ----
   ir.start_label(past_lbl);
-  Value sp_is_zero = ir.eq(sp_now, ir.int_immediate_number(ir.i32_type(), 0));
+  Value sp_is_zero = ops_.eq(sp_now, ir.int_immediate_number(ir.i32_type(), 0));
 
   Label stop_lbl = ir.new_label();  // sp == 0 -> exit loop
   Label pop_lbl = ir.new_label();   // sp > 0 -> update pending frame
@@ -476,25 +493,25 @@ void emit_tree_eval_loop(IRBuilder &ir, const ShaderState &st) {
 
   ir.start_label(pop_lbl);
   // top_idx = sp - 1
-  Value top_idx = ir.sub(sp_now, ir.int_immediate_number(ir.i32_type(), 1));
+  Value top_idx = ops_.sub(sp_now, ir.int_immediate_number(ir.i32_type(), 1));
   // body_result = values[pending_body_end[top_idx]]
-  Value body_end_ptr = array_i32_access_ptr(ir, st.scratch_i32_buf, kI32BasePendingBodyEnd, top_idx);
+  Value body_end_ptr = array_i32_access_ptr(ir, ops_, st.scratch_i32_buf, kI32BasePendingBodyEnd, top_idx);
   Value body_end_node = ir.load_variable(body_end_ptr, ir.i32_type());
-  Value body_result = load_values_at(ir, st, body_end_node);
+  Value body_result = load_values_at(ir, ops_, st, body_end_node);
   // top_max = max(pending_max_accum[top_idx], body_result)
-  Value max_accum_ptr = array_i64_access_ptr(ir, st.scratch_i64_buf, kI64BasePendingMaxAccum, top_idx);
+  Value max_accum_ptr = array_i64_access_ptr(ir, ops_, st.scratch_i64_buf, kI64BasePendingMaxAccum, top_idx);
   Value cur_max_accum = ir.load_variable(max_accum_ptr, ir.i64_type());
-  Value body_gt_accum = ir.gt(body_result, cur_max_accum);
-  Value new_max_accum = ir.select(body_gt_accum, body_result, cur_max_accum);
+  Value body_gt_accum = ops_.gt(body_result, cur_max_accum);
+  Value new_max_accum = ops_.select(body_gt_accum, body_result, cur_max_accum);
   ir.store_variable(max_accum_ptr, new_max_accum);
   // top_cur_i = pending_cur_i[top_idx] + 1
-  Value cur_i_ptr = array_i64_access_ptr(ir, st.scratch_i64_buf, kI64BasePendingCurI, top_idx);
+  Value cur_i_ptr = array_i64_access_ptr(ir, ops_, st.scratch_i64_buf, kI64BasePendingCurI, top_idx);
   Value cur_i = ir.load_variable(cur_i_ptr, ir.i64_type());
-  Value next_i = ir.add(cur_i, ir.int_immediate_number(ir.i64_type(), 1));
+  Value next_i = ops_.add(cur_i, ir.int_immediate_number(ir.i64_type(), 1));
   // if next_i < pending_end[top_idx]: update cur_i, jump to body_start
-  Value end_ptr = array_i64_access_ptr(ir, st.scratch_i64_buf, kI64BasePendingEnd, top_idx);
+  Value end_ptr = array_i64_access_ptr(ir, ops_, st.scratch_i64_buf, kI64BasePendingEnd, top_idx);
   Value end_val = ir.load_variable(end_ptr, ir.i64_type());
-  Value more = ir.lt(next_i, end_val);
+  Value more = ops_.lt(next_i, end_val);
   Label more_lbl = ir.new_label();
   Label done_lbl = ir.new_label();
   Label past_step_merge = ir.new_label();
@@ -504,11 +521,11 @@ void emit_tree_eval_loop(IRBuilder &ir, const ShaderState &st) {
   ir.start_label(more_lbl);
   ir.store_variable(cur_i_ptr, next_i);
   // scope[pending_var_id[top_idx]] = next_i
-  Value var_id_ptr = array_i32_access_ptr(ir, st.scratch_i32_buf, kI32BasePendingVarId, top_idx);
+  Value var_id_ptr = array_i32_access_ptr(ir, ops_, st.scratch_i32_buf, kI32BasePendingVarId, top_idx);
   Value var_id = ir.load_variable(var_id_ptr, ir.i32_type());
-  store_scope_at(ir, st, var_id, next_i);
+  store_scope_at(ir, ops_, st, var_id, next_i);
   // current = pending_body_start[top_idx]
-  Value body_start_ptr = array_i32_access_ptr(ir, st.scratch_i32_buf, kI32BasePendingBodyStart, top_idx);
+  Value body_start_ptr = array_i32_access_ptr(ir, ops_, st.scratch_i32_buf, kI32BasePendingBodyStart, top_idx);
   Value body_start_val = ir.load_variable(body_start_ptr, ir.i32_type());
   ir.store_variable(st.current_var, body_start_val);
   // max_k stays (we're still iterating the same MOR body)
@@ -524,24 +541,24 @@ void emit_tree_eval_loop(IRBuilder &ir, const ShaderState &st) {
   // OOB PSB load (Metal: hung command buffer; Vulkan with robustBufferAccess: silent zero feeding a later
   // `Adstack overflow`). Zeroing here preserves the "scope[var_id] == 0 is a safe spurious-read target
   // because index 0 is always valid for any non-empty ndarray" invariant the outer walk relies on.
-  Value pop_var_id_ptr = array_i32_access_ptr(ir, st.scratch_i32_buf, kI32BasePendingVarId, top_idx);
+  Value pop_var_id_ptr = array_i32_access_ptr(ir, ops_, st.scratch_i32_buf, kI32BasePendingVarId, top_idx);
   Value pop_var_id = ir.load_variable(pop_var_id_ptr, ir.i32_type());
-  Value pop_scope_ptr = array_i64_access_ptr(ir, st.scratch_i64_buf, kI64BaseScopeArr, pop_var_id);
+  Value pop_scope_ptr = array_i64_access_ptr(ir, ops_, st.scratch_i64_buf, kI64BaseScopeArr, pop_var_id);
   ir.store_variable(pop_scope_ptr, ir.int_immediate_number(ir.i64_type(), 0));
 
   // values[pending_mor_idx[top_idx]] = new_max_accum
-  Value mor_idx_ptr = array_i32_access_ptr(ir, st.scratch_i32_buf, kI32BasePendingMorIdx, top_idx);
+  Value mor_idx_ptr = array_i32_access_ptr(ir, ops_, st.scratch_i32_buf, kI32BasePendingMorIdx, top_idx);
   Value mor_idx = ir.load_variable(mor_idx_ptr, ir.i32_type());
-  store_values_at(ir, st, mor_idx, new_max_accum);
+  store_values_at(ir, ops_, st, mor_idx, new_max_accum);
   // current = pending_mor_idx[top_idx] + 1. The encoder emits `MaxOverRange` in post-order, i.e. body nodes
   // come BEFORE the MOR node itself (the MOR is the subtree root). Setting `current = body_end + 1` would
   // land right back on the MOR node and re-enter it every pop, producing an unbounded loop on the first
   // reverse-mode kernel with an `ExternalTensorRead`-bounded MaxOverRange. Advance past the MOR instead so
   // the outer linear walk picks up with whatever sibling / parent node follows it in post-order.
-  Value cur_next = ir.add(mor_idx, ir.int_immediate_number(ir.i32_type(), 1));
+  Value cur_next = ops_.add(mor_idx, ir.int_immediate_number(ir.i32_type(), 1));
   ir.store_variable(st.current_var, cur_next);
   // max_k = pending_saved_max_k[top_idx]
-  Value saved_max_k_ptr = array_i32_access_ptr(ir, st.scratch_i32_buf, kI32BasePendingSavedMaxK, top_idx);
+  Value saved_max_k_ptr = array_i32_access_ptr(ir, ops_, st.scratch_i32_buf, kI32BasePendingSavedMaxK, top_idx);
   Value saved_max_k = ir.load_variable(saved_max_k_ptr, ir.i32_type());
   ir.store_variable(st.max_k_var, saved_max_k);
   // sp -= 1
@@ -558,23 +575,23 @@ void emit_tree_eval_loop(IRBuilder &ir, const ShaderState &st) {
   ir.start_label(exec_lbl);
   // Read node header words
   Value nodes_base_word = ir.load_variable(st.nodes_base_word_var, ir.u32_type());
-  Value kind_idx = node_field_word_idx(ir, nodes_base_word, current_now, kNodeOffKind);
+  Value kind_idx = node_field_word_idx(ir, ops_, nodes_base_word, current_now, kNodeOffKind);
   Value kind_u32 = load_buf_u32(ir, st.bytecode_buf, kind_idx);
   Value kind_i32 = ir.make_value(spv::OpBitcast, ir.i32_type(), kind_u32);
 
-  Value op_a_idx = node_field_word_idx(ir, nodes_base_word, current_now, kNodeOffOperandA);
+  Value op_a_idx = node_field_word_idx(ir, ops_, nodes_base_word, current_now, kNodeOffOperandA);
   Value op_a_u32 = load_buf_u32(ir, st.bytecode_buf, op_a_idx);
   Value op_a_i32 = ir.make_value(spv::OpBitcast, ir.i32_type(), op_a_u32);
 
-  Value op_b_idx = node_field_word_idx(ir, nodes_base_word, current_now, kNodeOffOperandB);
+  Value op_b_idx = node_field_word_idx(ir, ops_, nodes_base_word, current_now, kNodeOffOperandB);
   Value op_b_u32 = load_buf_u32(ir, st.bytecode_buf, op_b_idx);
   Value op_b_i32 = ir.make_value(spv::OpBitcast, ir.i32_type(), op_b_u32);
 
-  Value body_node_idx_word = node_field_word_idx(ir, nodes_base_word, current_now, kNodeOffBodyNodeIdx);
+  Value body_node_idx_word = node_field_word_idx(ir, ops_, nodes_base_word, current_now, kNodeOffBodyNodeIdx);
   Value body_node_u32 = load_buf_u32(ir, st.bytecode_buf, body_node_idx_word);
   Value body_node_i32 = ir.make_value(spv::OpBitcast, ir.i32_type(), body_node_u32);
 
-  Value var_id_idx = node_field_word_idx(ir, nodes_base_word, current_now, kNodeOffVarId);
+  Value var_id_idx = node_field_word_idx(ir, ops_, nodes_base_word, current_now, kNodeOffVarId);
   Value var_id_u32 = load_buf_u32(ir, st.bytecode_buf, var_id_idx);
   Value var_id_i32 = ir.make_value(spv::OpBitcast, ir.i32_type(), var_id_u32);
 
@@ -604,51 +621,51 @@ void emit_tree_eval_loop(IRBuilder &ir, const ShaderState &st) {
 
   auto emit_binary_advance = [&](Label start_lbl, auto compute_fn) {
     ir.start_label(start_lbl);
-    Value lhs = load_values_at(ir, st, op_a_i32);
-    Value rhs = load_values_at(ir, st, op_b_i32);
+    Value lhs = load_values_at(ir, ops_, st, op_a_i32);
+    Value rhs = load_values_at(ir, ops_, st, op_b_i32);
     Value v = compute_fn(lhs, rhs);
-    store_values_at(ir, st, current_now, v);
-    Value next_cur = ir.add(current_now, ir.int_immediate_number(ir.i32_type(), 1));
+    store_values_at(ir, ops_, st, current_now, v);
+    Value next_cur = ops_.add(current_now, ir.int_immediate_number(ir.i32_type(), 1));
     ir.store_variable(st.current_var, next_cur);
     ir.make_inst(spv::OpBranch, exec_merge);
   };
 
   // Const
   ir.start_label(case_const);
-  Value const_lo_idx = node_field_word_idx(ir, nodes_base_word, current_now, kNodeOffConstLo);
-  Value const_val = load_buf_i64(ir, st.bytecode_buf, const_lo_idx);
-  store_values_at(ir, st, current_now, const_val);
-  Value const_next_cur = ir.add(current_now, ir.int_immediate_number(ir.i32_type(), 1));
+  Value const_lo_idx = node_field_word_idx(ir, ops_, nodes_base_word, current_now, kNodeOffConstLo);
+  Value const_val = load_buf_i64(ir, ops_, st.bytecode_buf, const_lo_idx);
+  store_values_at(ir, ops_, st, current_now, const_val);
+  Value const_next_cur = ops_.add(current_now, ir.int_immediate_number(ir.i32_type(), 1));
   ir.store_variable(st.current_var, const_next_cur);
   ir.make_inst(spv::OpBranch, exec_merge);
 
   // Add
-  emit_binary_advance(case_add, [&](Value a, Value b) { return ir.add(a, b); });
+  emit_binary_advance(case_add, [&](Value a, Value b) { return ops_.add(a, b); });
   // Sub (clamped to 0)
   ir.start_label(case_sub);
   {
-    Value lhs = load_values_at(ir, st, op_a_i32);
-    Value rhs = load_values_at(ir, st, op_b_i32);
-    Value diff = ir.sub(lhs, rhs);
+    Value lhs = load_values_at(ir, ops_, st, op_a_i32);
+    Value rhs = load_values_at(ir, ops_, st, op_b_i32);
+    Value diff = ops_.sub(lhs, rhs);
     Value zero = ir.int_immediate_number(ir.i64_type(), 0);
-    Value neg = ir.lt(diff, zero);
-    Value clamped = ir.select(neg, zero, diff);
-    store_values_at(ir, st, current_now, clamped);
-    Value next_cur = ir.add(current_now, ir.int_immediate_number(ir.i32_type(), 1));
+    Value neg = ops_.lt(diff, zero);
+    Value clamped = ops_.select(neg, zero, diff);
+    store_values_at(ir, ops_, st, current_now, clamped);
+    Value next_cur = ops_.add(current_now, ir.int_immediate_number(ir.i32_type(), 1));
     ir.store_variable(st.current_var, next_cur);
     ir.make_inst(spv::OpBranch, exec_merge);
   }
   // Mul
-  emit_binary_advance(case_mul, [&](Value a, Value b) { return ir.mul(a, b); });
+  emit_binary_advance(case_mul, [&](Value a, Value b) { return ops_.mul(a, b); });
   // Max
   ir.start_label(case_max);
   {
-    Value lhs = load_values_at(ir, st, op_a_i32);
-    Value rhs = load_values_at(ir, st, op_b_i32);
-    Value a_gt = ir.gt(lhs, rhs);
-    Value v = ir.select(a_gt, lhs, rhs);
-    store_values_at(ir, st, current_now, v);
-    Value next_cur = ir.add(current_now, ir.int_immediate_number(ir.i32_type(), 1));
+    Value lhs = load_values_at(ir, ops_, st, op_a_i32);
+    Value rhs = load_values_at(ir, ops_, st, op_b_i32);
+    Value a_gt = ops_.gt(lhs, rhs);
+    Value v = ops_.select(a_gt, lhs, rhs);
+    store_values_at(ir, ops_, st, current_now, v);
+    Value next_cur = ops_.add(current_now, ir.int_immediate_number(ir.i32_type(), 1));
     ir.store_variable(st.current_var, next_cur);
     ir.make_inst(spv::OpBranch, exec_merge);
   }
@@ -656,9 +673,9 @@ void emit_tree_eval_loop(IRBuilder &ir, const ShaderState &st) {
   // BoundVariable
   ir.start_label(case_bv);
   {
-    Value v = load_scope_at(ir, st, var_id_i32);
-    store_values_at(ir, st, current_now, v);
-    Value next_cur = ir.add(current_now, ir.int_immediate_number(ir.i32_type(), 1));
+    Value v = load_scope_at(ir, ops_, st, var_id_i32);
+    store_values_at(ir, ops_, st, current_now, v);
+    Value next_cur = ops_.add(current_now, ir.int_immediate_number(ir.i32_type(), 1));
     ir.store_variable(st.current_var, next_cur);
     ir.make_inst(spv::OpBranch, exec_merge);
   }
@@ -666,24 +683,24 @@ void emit_tree_eval_loop(IRBuilder &ir, const ShaderState &st) {
   // ExternalTensorRead
   ir.start_label(case_etr);
   {
-    Value prim_dt_idx = node_field_word_idx(ir, nodes_base_word, current_now, kNodeOffPrimDt);
+    Value prim_dt_idx = node_field_word_idx(ir, ops_, nodes_base_word, current_now, kNodeOffPrimDt);
     Value prim_dt_u32 = load_buf_u32(ir, st.bytecode_buf, prim_dt_idx);
     Value prim_dt_i32 = ir.make_value(spv::OpBitcast, ir.i32_type(), prim_dt_u32);
 
-    Value arg_off_idx = node_field_word_idx(ir, nodes_base_word, current_now, kNodeOffArgBufferOffset);
+    Value arg_off_idx = node_field_word_idx(ir, ops_, nodes_base_word, current_now, kNodeOffArgBufferOffset);
     Value arg_off_u32 = load_buf_u32(ir, st.bytecode_buf, arg_off_idx);
     Value arg_off_i32 = ir.make_value(spv::OpBitcast, ir.i32_type(), arg_off_u32);
     // arg_buffer word index = arg_off / 4 (since arg buffer viewed as u32[])
     Value arg_word_i32 = ir.make_value(spv::OpShiftRightArithmetic, ir.i32_type(), arg_off_i32,
                                        ir.int_immediate_number(ir.i32_type(), 2));
-    Value arg_word_u32 = ir.cast(ir.u32_type(), arg_word_i32);
-    Value data_ptr_i64 = load_buf_i64(ir, st.args_buf, arg_word_u32);
+    Value arg_word_u32 = ops_.cast(ir.u32_type(), arg_word_i32);
+    Value data_ptr_i64 = load_buf_i64(ir, ops_, st.args_buf, arg_word_u32);
     Value data_ptr_u64 = ir.make_value(spv::OpBitcast, ir.u64_type(), data_ptr_i64);
 
-    Value indices_offset_idx = node_field_word_idx(ir, nodes_base_word, current_now, kNodeOffIndicesOffset);
+    Value indices_offset_idx = node_field_word_idx(ir, ops_, nodes_base_word, current_now, kNodeOffIndicesOffset);
     Value indices_offset_u32 = load_buf_u32(ir, st.bytecode_buf, indices_offset_idx);
     Value indices_offset_i32 = ir.make_value(spv::OpBitcast, ir.i32_type(), indices_offset_u32);
-    Value indices_count_idx = node_field_word_idx(ir, nodes_base_word, current_now, kNodeOffIndicesCount);
+    Value indices_count_idx = node_field_word_idx(ir, ops_, nodes_base_word, current_now, kNodeOffIndicesCount);
     Value indices_count_u32 = load_buf_u32(ir, st.bytecode_buf, indices_count_idx);
     Value indices_count_i32 = ir.make_value(spv::OpBitcast, ir.i32_type(), indices_count_u32);
 
@@ -693,10 +710,11 @@ void emit_tree_eval_loop(IRBuilder &ir, const ShaderState &st) {
     // rather than the stride-1 helper: without the per-axis multiply a multi-dim `a[i, j]` read would pick
     // up `a_flat[i + j]` instead of `a_flat[i * shape[1] + j]` and the sizer's inner loop max collapses to
     // a spurious low value, tripping an `Adstack overflow` at the next `qd.sync()`.
-    Value linear_i32 = compute_field_load_elem_index(ir, st, indices_base_word, indices_offset_i32, indices_count_i32);
-    Value elem_i64 = emit_psb_load_i64(ir, data_ptr_u64, linear_i32, prim_dt_i32);
-    store_values_at(ir, st, current_now, elem_i64);
-    Value next_cur = ir.add(current_now, ir.int_immediate_number(ir.i32_type(), 1));
+    Value linear_i32 =
+        compute_field_load_elem_index(ir, ops_, st, indices_base_word, indices_offset_i32, indices_count_i32);
+    Value elem_i64 = emit_psb_load_i64(ir, ops_, data_ptr_u64, linear_i32, prim_dt_i32);
+    store_values_at(ir, ops_, st, current_now, elem_i64);
+    Value next_cur = ops_.add(current_now, ir.int_immediate_number(ir.i32_type(), 1));
     ir.store_variable(st.current_var, next_cur);
     ir.make_inst(spv::OpBranch, exec_merge);
   }
@@ -708,27 +726,27 @@ void emit_tree_eval_loop(IRBuilder &ir, const ShaderState &st) {
   // ETR it is read out of the kernel arg buffer at `arg_buffer_offset`.
   ir.start_label(case_fl);
   {
-    Value prim_dt_idx = node_field_word_idx(ir, nodes_base_word, current_now, kNodeOffPrimDt);
+    Value prim_dt_idx = node_field_word_idx(ir, ops_, nodes_base_word, current_now, kNodeOffPrimDt);
     Value prim_dt_u32 = load_buf_u32(ir, st.bytecode_buf, prim_dt_idx);
     Value prim_dt_i32 = ir.make_value(spv::OpBitcast, ir.i32_type(), prim_dt_u32);
 
-    Value const_lo_idx = node_field_word_idx(ir, nodes_base_word, current_now, kNodeOffConstLo);
-    Value base_i64 = load_buf_i64(ir, st.bytecode_buf, const_lo_idx);
+    Value const_lo_idx = node_field_word_idx(ir, ops_, nodes_base_word, current_now, kNodeOffConstLo);
+    Value base_i64 = load_buf_i64(ir, ops_, st.bytecode_buf, const_lo_idx);
     Value base_u64 = ir.make_value(spv::OpBitcast, ir.u64_type(), base_i64);
 
-    Value indices_offset_idx = node_field_word_idx(ir, nodes_base_word, current_now, kNodeOffIndicesOffset);
+    Value indices_offset_idx = node_field_word_idx(ir, ops_, nodes_base_word, current_now, kNodeOffIndicesOffset);
     Value indices_offset_u32 = load_buf_u32(ir, st.bytecode_buf, indices_offset_idx);
     Value indices_offset_i32 = ir.make_value(spv::OpBitcast, ir.i32_type(), indices_offset_u32);
-    Value indices_count_idx = node_field_word_idx(ir, nodes_base_word, current_now, kNodeOffIndicesCount);
+    Value indices_count_idx = node_field_word_idx(ir, ops_, nodes_base_word, current_now, kNodeOffIndicesCount);
     Value indices_count_u32 = load_buf_u32(ir, st.bytecode_buf, indices_count_idx);
     Value indices_count_i32 = ir.make_value(spv::OpBitcast, ir.i32_type(), indices_count_u32);
 
     Value indices_base_word = ir.load_variable(st.indices_base_word_var, ir.u32_type());
     Value elem_idx_i32 =
-        compute_field_load_elem_index(ir, st, indices_base_word, indices_offset_i32, indices_count_i32);
-    Value elem_i64 = emit_psb_load_i64(ir, base_u64, elem_idx_i32, prim_dt_i32);
-    store_values_at(ir, st, current_now, elem_i64);
-    Value next_cur = ir.add(current_now, ir.int_immediate_number(ir.i32_type(), 1));
+        compute_field_load_elem_index(ir, ops_, st, indices_base_word, indices_offset_i32, indices_count_i32);
+    Value elem_i64 = emit_psb_load_i64(ir, ops_, base_u64, elem_idx_i32, prim_dt_i32);
+    store_values_at(ir, ops_, st, current_now, elem_i64);
+    Value next_cur = ops_.add(current_now, ir.int_immediate_number(ir.i32_type(), 1));
     ir.store_variable(st.current_var, next_cur);
     ir.make_inst(spv::OpBranch, exec_merge);
   }
@@ -736,9 +754,9 @@ void emit_tree_eval_loop(IRBuilder &ir, const ShaderState &st) {
   // MaxOverRange
   ir.start_label(case_mor);
   {
-    Value begin_i64 = load_values_at(ir, st, op_a_i32);
-    Value end_i64 = load_values_at(ir, st, op_b_i32);
-    Value empty = ir.ge(begin_i64, end_i64);
+    Value begin_i64 = load_values_at(ir, ops_, st, op_a_i32);
+    Value end_i64 = load_values_at(ir, ops_, st, op_b_i32);
+    Value empty = ops_.ge(begin_i64, end_i64);
 
     Label empty_lbl = ir.new_label();
     Label nonempty_lbl = ir.new_label();
@@ -749,8 +767,8 @@ void emit_tree_eval_loop(IRBuilder &ir, const ShaderState &st) {
     ir.start_label(empty_lbl);
     {
       Value zero_i64 = ir.int_immediate_number(ir.i64_type(), 0);
-      store_values_at(ir, st, current_now, zero_i64);
-      Value next_cur = ir.add(current_now, ir.int_immediate_number(ir.i32_type(), 1));
+      store_values_at(ir, ops_, st, current_now, zero_i64);
+      Value next_cur = ops_.add(current_now, ir.int_immediate_number(ir.i32_type(), 1));
       ir.store_variable(st.current_var, next_cur);
       ir.make_inst(spv::OpBranch, mor_merge);
     }
@@ -758,7 +776,7 @@ void emit_tree_eval_loop(IRBuilder &ir, const ShaderState &st) {
     ir.start_label(nonempty_lbl);
     {
       // scope[var_id] = begin
-      store_scope_at(ir, st, var_id_i32, begin_i64);
+      store_scope_at(ir, ops_, st, var_id_i32, begin_i64);
       // Push pending frame: pending[sp] = {...}; sp += 1. `pending_end_arr` is clamped to `begin` when the iteration
       // count exceeds the cap, so the advance loop walks zero iterations and the dispatch returns within bounded time
       // even on the worst-case shape; the cap-hit also writes 1 into the trailing overflow-flag slot of `metadata_buf`,
@@ -769,12 +787,12 @@ void emit_tree_eval_loop(IRBuilder &ir, const ShaderState &st) {
       // shapes whose iteration count exceeds the cap.
       constexpr int64_t kMaxOverRangeIterations = int64_t{1} << 24;
       Value cap_delta = ir.int_immediate_number(ir.i64_type(), kMaxOverRangeIterations);
-      Value cap_end = ir.add(begin_i64, cap_delta);
-      Value end_gt_cap = ir.gt(end_i64, cap_end);
+      Value cap_end = ops_.add(begin_i64, cap_delta);
+      Value end_gt_cap = ops_.gt(end_i64, cap_end);
       // Cap-hit collapses the walk: `effective_end = begin` so no iterations run. The overflow flag below is the signal
       // the host actually consumes; the cached `max_size` value falls through to its `max(_, 1)` floor and the heap is
       // never used because the host raises before the main kernel launches.
-      Value effective_end = ir.select(end_gt_cap, begin_i64, end_i64);
+      Value effective_end = ops_.select(end_gt_cap, begin_i64, end_i64);
 
       // Cap-hit overflow signal. Single-threaded dispatch, so a plain store rather than an atomic suffices. The slot is
       // initialised to 0 by the host before dispatch; the value sticks at 1 for the remainder of the dispatch once any
@@ -794,18 +812,21 @@ void emit_tree_eval_loop(IRBuilder &ir, const ShaderState &st) {
       ir.make_inst(spv::OpBranch, cap_merge);
       ir.start_label(cap_merge);
       Value sp_val = ir.load_variable(st.sp_var, ir.i32_type());
-      ir.store_variable(array_i32_access_ptr(ir, st.scratch_i32_buf, kI32BasePendingMorIdx, sp_val), current_now);
-      Value body_start = ir.add(op_b_i32, ir.int_immediate_number(ir.i32_type(), 1));
-      ir.store_variable(array_i32_access_ptr(ir, st.scratch_i32_buf, kI32BasePendingBodyStart, sp_val), body_start);
-      ir.store_variable(array_i32_access_ptr(ir, st.scratch_i32_buf, kI32BasePendingBodyEnd, sp_val), body_node_i32);
-      ir.store_variable(array_i64_access_ptr(ir, st.scratch_i64_buf, kI64BasePendingCurI, sp_val), begin_i64);
-      ir.store_variable(array_i64_access_ptr(ir, st.scratch_i64_buf, kI64BasePendingEnd, sp_val), effective_end);
-      ir.store_variable(array_i32_access_ptr(ir, st.scratch_i32_buf, kI32BasePendingVarId, sp_val), var_id_i32);
-      ir.store_variable(array_i64_access_ptr(ir, st.scratch_i64_buf, kI64BasePendingMaxAccum, sp_val),
+      ir.store_variable(array_i32_access_ptr(ir, ops_, st.scratch_i32_buf, kI32BasePendingMorIdx, sp_val), current_now);
+      Value body_start = ops_.add(op_b_i32, ir.int_immediate_number(ir.i32_type(), 1));
+      ir.store_variable(array_i32_access_ptr(ir, ops_, st.scratch_i32_buf, kI32BasePendingBodyStart, sp_val),
+                        body_start);
+      ir.store_variable(array_i32_access_ptr(ir, ops_, st.scratch_i32_buf, kI32BasePendingBodyEnd, sp_val),
+                        body_node_i32);
+      ir.store_variable(array_i64_access_ptr(ir, ops_, st.scratch_i64_buf, kI64BasePendingCurI, sp_val), begin_i64);
+      ir.store_variable(array_i64_access_ptr(ir, ops_, st.scratch_i64_buf, kI64BasePendingEnd, sp_val), effective_end);
+      ir.store_variable(array_i32_access_ptr(ir, ops_, st.scratch_i32_buf, kI32BasePendingVarId, sp_val), var_id_i32);
+      ir.store_variable(array_i64_access_ptr(ir, ops_, st.scratch_i64_buf, kI64BasePendingMaxAccum, sp_val),
                         ir.int_immediate_number(ir.i64_type(), 0));
-      ir.store_variable(array_i32_access_ptr(ir, st.scratch_i32_buf, kI32BasePendingSavedMaxK, sp_val), max_k_now);
+      ir.store_variable(array_i32_access_ptr(ir, ops_, st.scratch_i32_buf, kI32BasePendingSavedMaxK, sp_val),
+                        max_k_now);
 
-      Value new_sp = ir.add(sp_val, ir.int_immediate_number(ir.i32_type(), 1));
+      Value new_sp = ops_.add(sp_val, ir.int_immediate_number(ir.i32_type(), 1));
       ir.store_variable(st.sp_var, new_sp);
 
       // current = body_start; max_k = body_node
@@ -822,7 +843,7 @@ void emit_tree_eval_loop(IRBuilder &ir, const ShaderState &st) {
   // default: skip the node (advance current) - should not happen with a well-formed bytecode.
   ir.start_label(case_default);
   {
-    Value next_cur = ir.add(current_now, ir.int_immediate_number(ir.i32_type(), 1));
+    Value next_cur = ops_.add(current_now, ir.int_immediate_number(ir.i32_type(), 1));
     ir.store_variable(st.current_var, next_cur);
     ir.make_inst(spv::OpBranch, exec_merge);
   }
@@ -864,6 +885,7 @@ std::vector<uint32_t> build_adstack_sizer_spirv(Arch arch, const DeviceCapabilit
   }
 
   IRBuilder ir(arch, caps);
+  SpirvOperations ops_(ir);
   // `init_header` already calls `init_pre_defs` at the end; invoking both would duplicate every primitive
   // type declaration and trip `spirv-val`'s "Duplicate non-aggregate type declarations" check.
   ir.init_header();
@@ -884,7 +906,7 @@ std::vector<uint32_t> build_adstack_sizer_spirv(Arch arch, const DeviceCapabilit
 
   Value main_func = ir.new_function();
   ir.start_function(main_func);
-  ir.set_work_group_size({1, 1, 1});
+  ops_.set_work_group_size({1, 1, 1});
 
   ShaderState st;
   st.bytecode_buf = bytecode_buf;
@@ -912,7 +934,8 @@ std::vector<uint32_t> build_adstack_sizer_spirv(Arch arch, const DeviceCapabilit
   Value zero_i64_for_scope_init = ir.int_immediate_number(ir.i64_type(), 0);
   for (int vi = 0; vi < kMaxVars; ++vi) {
     Value idx = ir.int_immediate_number(ir.i32_type(), vi);
-    ir.store_variable(array_i64_access_ptr(ir, st.scratch_i64_buf, kI64BaseScopeArr, idx), zero_i64_for_scope_init);
+    ir.store_variable(array_i64_access_ptr(ir, ops_, st.scratch_i64_buf, kI64BaseScopeArr, idx),
+                      zero_i64_for_scope_init);
   }
 
   // Read header: n_stacks, total_nodes.
@@ -924,8 +947,8 @@ std::vector<uint32_t> build_adstack_sizer_spirv(Arch arch, const DeviceCapabilit
   // cap-hit (see `kMaxOverRangeIterations` branch in the per-stack tree-eval loop); the host post-readback in
   // `adstack_sizer_launch.cpp` checks the slot and raises if non-zero.
   st.overflow_flag_word_var = ir.alloca_variable(ir.u32_type());
-  Value overflow_word_idx = ir.add(ir.uint_immediate_number(ir.u32_type(), 2u),
-                                   ir.mul(n_stacks_u32, ir.uint_immediate_number(ir.u32_type(), 2u)));
+  Value overflow_word_idx = ops_.add(ir.uint_immediate_number(ir.u32_type(), 2u),
+                                     ops_.mul(n_stacks_u32, ir.uint_immediate_number(ir.u32_type(), 2u)));
   ir.store_variable(st.overflow_flag_word_var, overflow_word_idx);
 
   // Word-offsets inside the bytecode buffer for the nodes and indices arrays.
@@ -933,8 +956,8 @@ std::vector<uint32_t> build_adstack_sizer_spirv(Arch arch, const DeviceCapabilit
   Value stack_header_words_u32 = ir.uint_immediate_number(ir.u32_type(), kStackHeaderWords);
   Value node_words_u32 = ir.uint_immediate_number(ir.u32_type(), kNodeWords);
 
-  Value nodes_base = ir.add(header_words_u32, ir.mul(n_stacks_u32, stack_header_words_u32));
-  Value indices_base = ir.add(nodes_base, ir.mul(total_nodes_u32, node_words_u32));
+  Value nodes_base = ops_.add(header_words_u32, ops_.mul(n_stacks_u32, stack_header_words_u32));
+  Value indices_base = ops_.add(nodes_base, ops_.mul(total_nodes_u32, node_words_u32));
   ir.store_variable(st.nodes_base_word_var, nodes_base);
   ir.store_variable(st.indices_base_word_var, indices_base);
 
@@ -957,24 +980,24 @@ std::vector<uint32_t> build_adstack_sizer_spirv(Arch arch, const DeviceCapabilit
 
   ir.start_label(stacks_head);
   Value stack_i_now = ir.load_variable(stack_i_var, ir.u32_type());
-  Value more_stacks = ir.lt(stack_i_now, n_stacks_u32);
+  Value more_stacks = ops_.lt(stack_i_now, n_stacks_u32);
   ir.make_inst(spv::OpLoopMerge, stacks_merge, stacks_cont, spv::LoopControlMaskNone);
   ir.make_inst(spv::OpBranchConditional, more_stacks, stacks_body, stacks_merge);
 
   ir.start_label(stacks_body);
   {
     // Read stack header fields.
-    Value sh_base_word = ir.add(header_words_u32, ir.mul(stack_i_now, stack_header_words_u32));
+    Value sh_base_word = ops_.add(header_words_u32, ops_.mul(stack_i_now, stack_header_words_u32));
     Value root_idx_raw = load_buf_u32(
-        ir, bytecode_buf, ir.add(sh_base_word, ir.uint_immediate_number(ir.u32_type(), kStackOffRootNodeIdx)));
+        ir, bytecode_buf, ops_.add(sh_base_word, ir.uint_immediate_number(ir.u32_type(), kStackOffRootNodeIdx)));
     Value root_idx_i32 = ir.make_value(spv::OpBitcast, ir.i32_type(), root_idx_raw);
     Value max_size_ct = load_buf_u32(
-        ir, bytecode_buf, ir.add(sh_base_word, ir.uint_immediate_number(ir.u32_type(), kStackOffMaxSizeCompileTime)));
+        ir, bytecode_buf, ops_.add(sh_base_word, ir.uint_immediate_number(ir.u32_type(), kStackOffMaxSizeCompileTime)));
     Value heap_kind = load_buf_u32(ir, bytecode_buf,
-                                   ir.add(sh_base_word, ir.uint_immediate_number(ir.u32_type(), kStackOffHeapKind)));
+                                   ops_.add(sh_base_word, ir.uint_immediate_number(ir.u32_type(), kStackOffHeapKind)));
 
     // Resolve `max_size`.
-    Value has_tree = ir.ge(root_idx_i32, ir.int_immediate_number(ir.i32_type(), 0));
+    Value has_tree = ops_.ge(root_idx_i32, ir.int_immediate_number(ir.i32_type(), 0));
     Label tree_lbl = ir.new_label();
     Label no_tree_lbl = ir.new_label();
     Label resolve_merge = ir.new_label();
@@ -984,8 +1007,8 @@ std::vector<uint32_t> build_adstack_sizer_spirv(Arch arch, const DeviceCapabilit
     ir.start_label(no_tree_lbl);
     // max_size = max(max_size_compile_time, 1)
     Value one_u32 = ir.uint_immediate_number(ir.u32_type(), 1);
-    Value is_zero = ir.eq(max_size_ct, ir.uint_immediate_number(ir.u32_type(), 0));
-    Value no_tree_max = ir.select(is_zero, one_u32, max_size_ct);
+    Value is_zero = ops_.eq(max_size_ct, ir.uint_immediate_number(ir.u32_type(), 0));
+    Value no_tree_max = ops_.select(is_zero, one_u32, max_size_ct);
     Label no_tree_end = ir.current_label();
     ir.make_inst(spv::OpBranch, resolve_merge);
 
@@ -995,19 +1018,19 @@ std::vector<uint32_t> build_adstack_sizer_spirv(Arch arch, const DeviceCapabilit
     ir.store_variable(st.current_var, tree_start_val);
     ir.store_variable(st.max_k_var, root_idx_i32);
     ir.store_variable(st.sp_var, ir.int_immediate_number(ir.i32_type(), 0));
-    emit_tree_eval_loop(ir, st);
+    emit_tree_eval_loop(ir, ops_, st);
     // Pick up the root value and apply the lower `>= 1` guard. No upper clamp: `max_size_compile_time` is
     // the *fallback* used when there is no symbolic tree (see the `no_tree_lbl` branch), not a hard ceiling
     // on the runtime-evaluated size. An upper clamp here would silently undercount any tree whose evaluated
     // bound exceeds the structural default - exactly the scenario the per-launch SizeExpr machinery exists
     // to service - and the downstream heap path is already sized from this value, so there is no memory
     // safety reason to cap it either. Matches `llvm_runtime_executor.cpp`'s CPU branch (no upper clamp).
-    Value root_val_i64 = load_values_at(ir, st, root_idx_i32);
+    Value root_val_i64 = load_values_at(ir, ops_, st, root_idx_i32);
     Value one_i64 = ir.int_immediate_number(ir.i64_type(), 1);
-    Value too_small = ir.lt(root_val_i64, one_i64);
-    Value clamped = ir.select(too_small, one_i64, root_val_i64);
+    Value too_small = ops_.lt(root_val_i64, one_i64);
+    Value clamped = ops_.select(too_small, one_i64, root_val_i64);
     // Cast to u32 for metadata output.
-    Value tree_max_u32 = ir.cast(ir.u32_type(), clamped);
+    Value tree_max_u32 = ops_.cast(ir.u32_type(), clamped);
     Label tree_end = ir.current_label();
     ir.make_inst(spv::OpBranch, resolve_merge);
 
@@ -1018,12 +1041,12 @@ std::vector<uint32_t> build_adstack_sizer_spirv(Arch arch, const DeviceCapabilit
     Value max_size_u32 = Value(max_size_phi);
 
     // Route to float/int running-offset and write metadata entries.
-    Value slot_base_word = ir.add(ir.uint_immediate_number(ir.u32_type(), 2u),
-                                  ir.mul(stack_i_now, ir.uint_immediate_number(ir.u32_type(), 2u)));
+    Value slot_base_word = ops_.add(ir.uint_immediate_number(ir.u32_type(), 2u),
+                                    ops_.mul(stack_i_now, ir.uint_immediate_number(ir.u32_type(), 2u)));
     Value slot_off_word = slot_base_word;
-    Value slot_max_word = ir.add(slot_base_word, ir.uint_immediate_number(ir.u32_type(), 1u));
+    Value slot_max_word = ops_.add(slot_base_word, ir.uint_immediate_number(ir.u32_type(), 1u));
 
-    Value heap_is_float = ir.eq(heap_kind, ir.uint_immediate_number(ir.u32_type(), 0));
+    Value heap_is_float = ops_.eq(heap_kind, ir.uint_immediate_number(ir.u32_type(), 0));
     Label float_lbl = ir.new_label();
     Label int_lbl = ir.new_label();
     Label heap_merge = ir.new_label();
@@ -1036,8 +1059,8 @@ std::vector<uint32_t> build_adstack_sizer_spirv(Arch arch, const DeviceCapabilit
       store_buf_u32(ir, metadata_buf, slot_off_word, off_now);
       store_buf_u32(ir, metadata_buf, slot_max_word, max_size_u32);
       // Float heap: primal + adjoint interleaved, so advance by 2 * max_size.
-      Value add = ir.mul(ir.uint_immediate_number(ir.u32_type(), 2u), max_size_u32);
-      ir.store_variable(running_off_f_var, ir.add(off_now, add));
+      Value add = ops_.mul(ir.uint_immediate_number(ir.u32_type(), 2u), max_size_u32);
+      ir.store_variable(running_off_f_var, ops_.add(off_now, add));
       ir.make_inst(spv::OpBranch, heap_merge);
     }
 
@@ -1046,7 +1069,7 @@ std::vector<uint32_t> build_adstack_sizer_spirv(Arch arch, const DeviceCapabilit
       Value off_now = ir.load_variable(running_off_i_var, ir.u32_type());
       store_buf_u32(ir, metadata_buf, slot_off_word, off_now);
       store_buf_u32(ir, metadata_buf, slot_max_word, max_size_u32);
-      ir.store_variable(running_off_i_var, ir.add(off_now, max_size_u32));
+      ir.store_variable(running_off_i_var, ops_.add(off_now, max_size_u32));
       ir.make_inst(spv::OpBranch, heap_merge);
     }
 
@@ -1055,12 +1078,12 @@ std::vector<uint32_t> build_adstack_sizer_spirv(Arch arch, const DeviceCapabilit
     Label has_tree2 = ir.new_label();
     Label no_tree2 = ir.new_label();
     Label adv_merge = ir.new_label();
-    Value has_tree_again = ir.ge(root_idx_i32, ir.int_immediate_number(ir.i32_type(), 0));
+    Value has_tree_again = ops_.ge(root_idx_i32, ir.int_immediate_number(ir.i32_type(), 0));
     ir.make_inst(spv::OpSelectionMerge, adv_merge, spv::SelectionControlMaskNone);
     ir.make_inst(spv::OpBranchConditional, has_tree_again, has_tree2, no_tree2);
 
     ir.start_label(has_tree2);
-    Value next_tree_start = ir.add(root_idx_i32, ir.int_immediate_number(ir.i32_type(), 1));
+    Value next_tree_start = ops_.add(root_idx_i32, ir.int_immediate_number(ir.i32_type(), 1));
     ir.store_variable(st.tree_start_var, next_tree_start);
     ir.make_inst(spv::OpBranch, adv_merge);
 
@@ -1073,7 +1096,7 @@ std::vector<uint32_t> build_adstack_sizer_spirv(Arch arch, const DeviceCapabilit
 
   ir.start_label(stacks_cont);
   Value stack_i_loaded = ir.load_variable(stack_i_var, ir.u32_type());
-  Value stack_i_next = ir.add(stack_i_loaded, ir.uint_immediate_number(ir.u32_type(), 1));
+  Value stack_i_next = ops_.add(stack_i_loaded, ir.uint_immediate_number(ir.u32_type(), 1));
   ir.store_variable(stack_i_var, stack_i_next);
   ir.make_inst(spv::OpBranch, stacks_head);
 

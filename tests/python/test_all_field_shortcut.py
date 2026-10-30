@@ -19,7 +19,7 @@ import numpy as np
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 def _cached_all_field(obj, annotated):

@@ -12,7 +12,7 @@ import pytest
 import quadrants as qd
 
 try:
-    from tests import test_utils  # noqa: F401
+    from tests.helpers import test_utils  # noqa: F401
 except ImportError:  # standalone-run convenience
     test_utils = None  # type: ignore
 

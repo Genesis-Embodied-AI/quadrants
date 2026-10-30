@@ -7,7 +7,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @contextmanager
@@ -46,35 +46,6 @@ def patch_os_environ_helper(custom_environ: dict, excludes: dict):
         os.environ = cached_environ
 
 
-TF = [True, False]
-init_args = {
-    # 'key': [default, choices],
-    "log_level": ["info", ["error", "warn", "info", "debug", "trace"]],
-    "gdb_trigger": [False, TF],
-    "advanced_optimization": [True, TF],
-    "debug": [False, TF],
-    "print_ir": [False, TF],
-    "fast_math": [True, TF],
-    "flatten_if": [False, TF],
-    "kernel_profiler": [False, TF],
-    "check_out_of_bound": [False, TF],
-    "print_accessor_ir": [False, TF],
-    "print_struct_llvm_ir": [False, TF],
-    "print_kernel_llvm_ir": [False, TF],
-    "print_kernel_llvm_ir_optimized": [False, TF],
-    # FIXME: figure out why these two failed test:
-    #'device_memory_fraction': [0.0, [0.5, 1, 0]],
-    #'device_memory_GB': [1.0, [0.5, 1, 1.5, 2]],
-}
-
-env_configs = ["QD_" + key.upper() for key in init_args.keys()]
-
-special_init_cfgs = [
-    "log_level",
-    "gdb_trigger",
-]
-
-
 @pytest.mark.skipif(
     platform.system() == "Windows",
     reason="XDG Base Directory Specification is only supported on *nix.",
@@ -103,9 +74,43 @@ def test_xdg_basedir(tmpdir):
             os.environ["XDG_CACHE_HOME"] = orig_cache
 
 
+init_args = {
+    # 'key': [default, choices],
+    "log_level": ["info", ["error", "warn", "info", "debug", "trace"]],
+    "gdb_trigger": [False, [True, False]],
+    "advanced_optimization": [True, [True, False]],
+    "debug": [False, [True, False]],
+    "cpu_fixed_block_dim": [32, [1, 17, 64]],
+    "cpu_per_worker_min_block_dim": [512, [1, 16, 512]],
+    "print_ir": [False, [True, False]],
+    "fast_math": [True, [True, False]],
+    "flatten_if": [False, [True, False]],
+    "kernel_profiler": [False, [True, False]],
+    "check_out_of_bound": [False, [True, False]],
+    "print_accessor_ir": [False, [True, False]],
+    "print_struct_llvm_ir": [False, [True, False]],
+    "print_kernel_llvm_ir": [False, [True, False]],
+    "print_kernel_llvm_ir_optimized": [False, [True, False]],
+    # FIXME: figure out why these two failed test:
+    #'device_memory_fraction': [0.0, [0.5, 1, 0]],
+    #'device_memory_GB': [1.0, [0.5, 1, 1.5, 2]],
+}
+
+env_configs = ["QD_" + key.upper() for key in init_args.keys()]
+
+special_init_cfgs = [
+    "log_level",
+    "gdb_trigger",
+]
+
+
 @pytest.mark.parametrize("key,values", init_args.items())
 @test_utils.test()
 def test_init_arg(key, values):
+    # For each option, check that:
+    # 1. Omitting it gives the expected default.
+    # 2. Passing each listed value as a qd.init() keyword argument sets that value.
+    # 3. Setting its QD_... environment variable sets that value.
     default, values = values
 
     # helper function:

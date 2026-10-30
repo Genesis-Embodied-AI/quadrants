@@ -21,6 +21,10 @@ When to set it to `False`:
 
 For normal use, leave it at `True`; the caches are the main reason a repeated run starts up quickly.
 
+## CPU loop scheduling
+
+See [CPU parallelization](parallelization.md#cpu-parallelization) for scheduling modes, configuration options, examples, and tuning guidance.
+
 ## Compile-time tuning
 
 ### `cfg_optimization`
@@ -64,7 +68,7 @@ Cutoff (in bytes) below which the gate-passing-count sizing path described in [M
 
 ### `external_metal_command_queue`
 
-An `MTLCommandQueue*` pointer (as an integer) to use instead of creating a new Metal command queue. Default `0` (create a new queue). When non-zero, Quadrants dispatches all GPU work on the provided queue, which enables GPU-side ordering with other frameworks that share the same queue (most notably PyTorch MPS).
+An `MTLCommandQueue*` pointer (as an integer) to use instead of creating a new Metal command queue. Default `0` (create a new queue). When non-zero, Quadrants dispatches all GPU work on the provided queue, which enables GPU-side ordering with other frameworks that share the same queue (most notably PyTorch's MPS backend, which runs on Apple GPUs via Metal Performance Shaders). See [Shared Metal command queue](./metal_shared_queue.md) for setup instructions.
 
 ### `external_metal_command_queue_is_torch_queue`
 
@@ -122,8 +126,6 @@ Metal and Vulkan lack the assertion extension that the field-bounds check relies
 
 Most `qd.init` keywords set a compiler-configuration option. Each option below can be passed as a keyword argument to `qd.init(...)`, and after initializing a compiled backend it is also readable and writable as an attribute on the configuration object `qd.cfg` (e.g. `qd.cfg.opt_level`). Because each option is both a `qd.init` argument and a `qd.cfg` attribute, the list below documents each as a *property* of `qd.cfg`, with its type, default value, and a short description.
 
-These are compiler settings, so most do not apply to the pure-Python `qd.python` backend, for which `qd.cfg` is `None`. A few instead set language defaults (such as the default numeric types `default_fp` and `default_ip`) and still take effect on `qd.python`.
-
 ```{eval-rst}
 .. autoclass:: quadrants._lib.core.quadrants_python.CompileConfig
    :members:
@@ -146,4 +148,4 @@ These are compiler settings, so most do not apply to the pure-Python `qd.python`
 
 These options were accepted by `qd.init` in earlier versions but never had any effect (nothing in the compiler or runtime read their value), so they have been removed: `use_llvm`, `lower_access`, `simplify_before_lower_access`, `simplify_after_lower_access`, `verbose`, `verbose_kernel_launches`, `gpu_max_reg`, and `cpu_block_dim_adaptive`. Passing any of them to `qd.init` now raises a `KeyError` (they were previously ignored), and the corresponding `QD_<NAME>` environment variables are no longer read. If your code passed any of these, drop them: none of them changed behavior.
 
-The `block_dim_adaptive` keyword of `qd.loop_config` (the helper that sets directives such as GPU block size and CPU parallelization for the loop that immediately follows it) has also been removed. It was the only setter for `cpu_block_dim_adaptive` and equally had no effect, so `qd.loop_config(block_dim_adaptive=...)` now raises a `TypeError`; drop the argument. The CPU parallel-for block size is controlled by `default_cpu_block_dim`.
+The `block_dim_adaptive` keyword of `qd.loop_config` (the helper that sets directives such as GPU block size and CPU parallelization for the loop that immediately follows it) has also been removed. It was the only setter for `cpu_block_dim_adaptive` and equally had no effect, so `qd.loop_config(block_dim_adaptive=...)` now raises a `TypeError`; drop the argument. See [CPU parallelization](parallelization.md#cpu-parallelization) for CPU block-size settings.

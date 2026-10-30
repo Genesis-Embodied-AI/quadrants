@@ -27,7 +27,6 @@ def _kernel_coverage_enabled() -> bool:
 
 
 from quadrants._lib.core.quadrants_python import (
-    Arch,
     ASTBuilder,
     CompiledKernelData,
     CompileResult,
@@ -86,7 +85,6 @@ from ._quadrants_callable import QuadrantsCallable
 # Define proxies for fast lookup
 _NONE, _VALIDATION = AutodiffMode.NONE, AutodiffMode.VALIDATION
 _FLOAT, _INT, _UINT, _QD_ARRAY, _QD_ARRAY_WITH_GRAD = KernelBatchedArgType
-_ARCH_PYTHON = Arch.python
 
 
 class LaunchContextBufferCache:
@@ -995,13 +993,11 @@ class Kernel(FuncBase):
                 "qd_stream is not compatible with autograd Tape. Launch the kernel outside the Tape "
                 "context, or omit qd_stream."
             )
-        if impl.get_runtime()._arch == _ARCH_PYTHON:
-            return self.func(*py_args, **kwargs)
         config = impl.current_cfg()
 
         self.raise_on_templated_floats = config.raise_on_templated_floats
         py_args = self.fuse_args(is_func=False, is_pyfunc=False, py_args=py_args, kwargs=kwargs, global_context=None)
-        # Tensor-wrapper unwrap (stork-17). Canonicalize ``qd.Tensor`` slots, plus wrapper positions discovered on
+        # Tensor-wrapper unwrap. Canonicalize ``qd.Tensor`` slots, plus wrapper positions discovered on
         # the first launch, before the autograd tape and identity-keyed caches observe the arg tuple.
         #
         # PERF: On first call, record the candidate arg positions. On subsequent calls, skip entirely (empty

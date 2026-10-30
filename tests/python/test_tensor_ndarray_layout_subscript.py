@@ -21,7 +21,7 @@ import pytest
 import quadrants as qd
 from quadrants._tensor import _with_layout
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 # ----------------------------------------------------------------------------
 # Identity / no-tag: behaviour must be unchanged from legacy

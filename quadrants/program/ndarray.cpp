@@ -36,15 +36,16 @@ Ndarray::Ndarray(Program *prog,
       element_size_(data_type_size(dtype)),
       prog_(prog) {
   // Now that we have two shapes which may be concatenated differently
-  // depending on layout, total_shape_ comes handy.
-  total_shape_ = shape;
+  // depending on layout, total_physical_shape_ comes handy.
+  total_physical_shape_ = shape;
   auto element_shape = data_type_shape(dtype);
   if (layout == ExternalArrayLayout::kAOS) {
-    total_shape_.insert(total_shape_.end(), element_shape.begin(), element_shape.end());
+    total_physical_shape_.insert(total_physical_shape_.end(), element_shape.begin(), element_shape.end());
   } else if (layout == ExternalArrayLayout::kSOA) {
-    total_shape_.insert(total_shape_.begin(), element_shape.begin(), element_shape.end());
+    total_physical_shape_.insert(total_physical_shape_.begin(), element_shape.begin(), element_shape.end());
   }
-  auto total_num_scalar = std::accumulate(std::begin(total_shape_), std::end(total_shape_), 1LL, std::multiplies<>());
+  auto total_num_scalar =
+      std::accumulate(std::begin(total_physical_shape_), std::end(total_physical_shape_), 1LL, std::multiplies<>());
   if (total_num_scalar > std::numeric_limits<int>::max()) {
     ErrorEmitter(QuadrantsIndexWarning(), &dbg_info,
                  "Ndarray index might be out of int32 boundary but int64 indexing is "
@@ -71,14 +72,15 @@ Ndarray::Ndarray(DeviceAllocation &devalloc,
     layout = ExternalArrayLayout::kAOS;
   }
   // Now that we have two shapes which may be concatenated differently
-  // depending on layout, total_shape_ comes handy.
-  total_shape_ = shape;
+  // depending on layout, total_physical_shape_ comes handy.
+  total_physical_shape_ = shape;
   if (layout == ExternalArrayLayout::kAOS) {
-    total_shape_.insert(total_shape_.end(), element_shape.begin(), element_shape.end());
+    total_physical_shape_.insert(total_physical_shape_.end(), element_shape.begin(), element_shape.end());
   } else if (layout == ExternalArrayLayout::kSOA) {
-    total_shape_.insert(total_shape_.begin(), element_shape.begin(), element_shape.end());
+    total_physical_shape_.insert(total_physical_shape_.begin(), element_shape.begin(), element_shape.end());
   }
-  auto total_num_scalar = std::accumulate(std::begin(total_shape_), std::end(total_shape_), 1LL, std::multiplies<>());
+  auto total_num_scalar =
+      std::accumulate(std::begin(total_physical_shape_), std::end(total_physical_shape_), 1LL, std::multiplies<>());
   if (total_num_scalar > std::numeric_limits<int>::max()) {
     ErrorEmitter(QuadrantsIndexWarning(), &dbg_info,
                  "Ndarray index might be out of int32 boundary but int64 indexing is "
@@ -142,7 +144,7 @@ TypedConstant Ndarray::read(const std::vector<int> &I) const {
   // previous launch within one entry of the offending kernel even when the user never calls `qd.sync()`.
   prog_->check_adstack_overflow_and_assert();
   prog_->synchronize();
-  size_t index = flatten_index(total_shape_, I);
+  size_t index = flatten_index(total_physical_shape_, I);
   size_t size = data_type_size(get_element_data_type());
   quadrants::lang::Device::AllocParams alloc_params;
   alloc_params.host_write = false;
@@ -174,7 +176,7 @@ void Ndarray::write(const std::vector<int> &I, TypedConstant val) const {
     std::memcpy(&val.value_bits, &float16, 4);
   }
 
-  size_t index = flatten_index(total_shape_, I);
+  size_t index = flatten_index(total_physical_shape_, I);
   size_t size_ = data_type_size(get_element_data_type());
   quadrants::lang::Device::AllocParams alloc_params;
   alloc_params.host_write = true;

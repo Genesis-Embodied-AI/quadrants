@@ -22,7 +22,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang.util import to_numpy_type
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 # ---------------------------------------------------------------------------
 # Scratch-width helper. ``_FOURBYTE_DTYPES`` selects the u32-vs-u64 scratch element width used by the composable

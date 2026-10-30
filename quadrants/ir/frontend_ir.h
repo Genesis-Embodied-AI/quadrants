@@ -30,12 +30,11 @@ struct ForLoopConfig {
   // (without it, adjacent regions merge into one fork/join and the second can race the first).
   int graph_parallel_region_id{0};
   int graph_do_while_level_id{-1};
-  // `cp_id` (see design doc `perso_hugh/doc/qipc/reentrant.md` section 5.1) of the enclosing `qd.checkpoint(...)` block
+  // `cp_id` of the enclosing `qd.checkpoint(...)` block
   // when this for-loop is emitted, or `-1` when the for-loop is outside any checkpoint. Assigned by the AST builder's
   // `current_checkpoint_id_` at `begin_frontend_*_for` time. Propagated through `FrontendForStmt` -> `RangeForStmt` /
   // `StructForStmt` / `MeshForStmt` -> `OffloadedStmt` -> `OffloadedTask` so the GraphManager can group consecutive
-  // tasks by their `checkpoint_id` and wrap each group in an IF conditional node (slice 1c). Pure plumbing here in
-  // slice 1b; the runtime does not yet consume this field, so behaviour is unchanged for non- checkpoint code paths.
+  // tasks by their `checkpoint_id` and wrap each group in an IF conditional node.
   int checkpoint_id{-1};
   std::string loop_name{""};
 };

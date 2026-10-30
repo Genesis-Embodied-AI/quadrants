@@ -2,9 +2,8 @@
 """Device-wide exclusive-scan primitives.
 
 Provides the graph-composable ``qd.algorithms.exclusive_scan_{add,min,max}`` on top of the block-tier
-``block.exclusive_scan`` primitive, plus :func:`exclusive_scan_scratch_slots` for sizing the caller-owned scratch. See
-the design doc at ``perso_hugh/doc/qipc/qipc_device_algos_design.md`` (Blelloch 1990 / Harris-Sengupta-Owens 2007,
-three-pass formulation).
+``block.exclusive_scan`` primitive, plus :func:`exclusive_scan_scratch_slots` for sizing the caller-owned scratch.
+Uses the Blelloch 1990 / Harris-Sengupta-Owens 2007 three-pass formulation.
 
 Each ``exclusive_scan_{add,min,max}`` is a fixed-depth three-pass staircase of ``@qd.func`` phases - pass 1 tile-reduce
 (:func:`_reduce_phase`), pass 2 in-place scan of the partials (:func:`_emit_scan_inplace`), pass 3 per-tile downsweep
@@ -195,8 +194,8 @@ def _scan_total_scratch_slots(n, partials_cursor):
     Mirrors the level-by-level allocation that the recursion does internally: at each level we bump ``partials_cursor``
     by ``B = ceil(n / BLOCK_DIM)`` and recurse on ``B``, until ``B <= BLOCK_DIM`` (base case, no further partials).
     Callers (e.g. ``sort``) should use this helper for their *up-front* scratch check so they refuse the call before any
-    in-place mutation runs (see PR 693 review: a single-level estimate misses deeper recursion levels and lets
-    ``_twiddle_pass`` corrupt the user's keys before the recursive ``RuntimeError`` fires).
+    in-place mutation runs: a single-level estimate misses deeper recursion levels and lets ``_twiddle_pass`` corrupt
+    the user's keys before the recursive ``RuntimeError`` fires.
 
     Delegates to :func:`_level_partials_slots`, so it is host- **and** kernel-callable (branch-free arithmetic over
     an unrolled fixed loop); ``n`` / ``partials_cursor`` may be Python ``int`` s or device-read ``Expr`` s. The check
@@ -353,8 +352,7 @@ def exclusive_scan_scratch_slots(n, log256_max_n: int = None) -> int:
 # phases. ``exclusive_scan_{add,min,max}`` are the graph-composable entries: call them at the **top level** of your
 # own ``@qd.kernel`` with a device-resident count ``n`` (i32 Expr) and a compile-time ``log256_max_n``, so one captured
 # graph replays for any count ``<= BLOCK_DIM ** log256_max_n``. The scan is out-of-place (``arr`` -> ``out``);
-# ``scratch`` stages the per-tile partials staircase (``bit_cast`` through ``u32`` / ``u64``). See
-# ``perso_hugh/doc/qipc/qipc_device_algos_design.md``.
+# ``scratch`` stages the per-tile partials staircase (``bit_cast`` through ``u32`` / ``u64``).
 
 
 def _scan_identity(dtype, op):
@@ -538,7 +536,7 @@ def exclusive_scan_max(
 # scan: a fixed-depth staircase of ``@qd.func`` phases (in place) emitted at kernel-compile time, so ``n`` flows as a
 # device ``Expr`` while the recursion depth is a compile-time Python int (constant launch topology). Kept separate from
 # the generic typed staircase above (``_emit_scan``) because the histogram scan is always ``u32`` / add and operates in
-# place. See ``perso_hugh/doc/qipc/qipc_device_algos_design.md``.
+# place.
 
 
 @_func
