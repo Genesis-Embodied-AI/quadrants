@@ -255,6 +255,7 @@ class WholeKernelCSE : public BasicStmtVisitor {
     for (auto *user : duplicate_stmt_users) {
       // Entries go stale when an earlier elimination already rewrote that operand; has_operand filters them.
       if (user->has_operand(duplicate_stmt)) {
+        // Mark the user dirty: remove its ID from the already-checked set so CSE can check its changed operands again.
         visited_.erase(user->instance_id);
         user->replace_operand_with(duplicate_stmt, replacement_stmt);
         replacement_stmt_users.push_back(user);
