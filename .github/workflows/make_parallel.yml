@@ -1,0 +1,61 @@
+name: Make parallel CI PR
+on:
+  issue_comment:
+    types: [created]
+permissions:
+  contents: read
+  pull-requests: write
+concurrency:
+  group: make-parallel-${{ github.event.issue.number }}
+  cancel-in-progress: false
+jobs:
+  parallel:
+    if: github.event.issue.pull_request && contains(github.event.comment.body, '/make_parallel')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # issue_comment's SHA is on the default branch. Never check out or execute the PR's code here.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: .github/workflows/scripts/parallel_pr
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Check command and current repository permissions
+        id: authorize
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python .github/workflows/scripts/parallel_pr/authorize.py
+      - name: Create or update parallel draft PR
+        id: sync
+        if: steps.authorize.outputs.authorized == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.PARALLEL_PR_TOKEN }}
+          PR_URL: ${{ github.event.issue.html_url }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo '::error::Configure the PARALLEL_PR_TOKEN repository secret; see the parallel_pr README.'
+            exit 1
+          fi
+          python .github/workflows/scripts/parallel_pr/parallel_pr.py "$PR_URL" | tee "$RUNNER_TEMP/parallel-pr.log"
+          echo "url=$(tail -n 1 "$RUNNER_TEMP/parallel-pr.log")" >> "$GITHUB_OUTPUT"
+      - name: Reply to the command
+        if: always() && steps.authorize.outputs.authorized == 'true'
+        uses: actions/github-script@v8
+        env:
+          PARALLEL_URL: ${{ steps.sync.outputs.url }}
+          SYNC_OUTCOME: ${{ steps.sync.outcome }}
+        with:
+          script: |
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = process.env.SYNC_OUTCOME === 'success'
+              ? `Parallel draft PR for internal CI: ${process.env.PARALLEL_URL}`
+              : `Could not create or update the parallel PR. See the [workflow log](${runUrl}).`;
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.issue.number,
+              body,
+            });
