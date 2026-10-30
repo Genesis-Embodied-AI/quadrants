@@ -29,6 +29,7 @@ PROTECTED = {
 
 
 def preview_directories(files: Iterable[str]) -> list[str]:
+    # Find outermost Sphinx and pdoc previews, excluding the root site and protected documentation.
     files = set(files)
     candidates = set()
     for filename in files:
@@ -54,6 +55,7 @@ def preview_directories(files: Iterable[str]) -> list[str]:
 
 
 def last_updated(repository: str, revision: str, directory: str) -> datetime:
+    # Ask GitHub when this directory last changed, using the checkout's exact revision.
     query = urlencode({"sha": revision, "path": directory + "/", "per_page": 1})
     result = subprocess.run(
         ["gh", "api", f"repos/{repository}/commits?{query}"], check=True, capture_output=True, text=True
@@ -65,7 +67,9 @@ def last_updated(repository: str, revision: str, directory: str) -> datetime:
 
 
 def cleanup(site: Path, repository: str, *, apply: bool = False, now: datetime | None = None) -> list[str]:
+    # Report expired previews and optionally stage their deletion after validating the checkout and all dates.
     def git(*args: str) -> str:
+        # Run Git in the site checkout, returning stdout and raising if the command fails.
         return subprocess.check_output(["git", "-C", str(site), *args], text=True)
 
     if git("branch", "--show-current").strip() != "gh-pages":
@@ -91,6 +95,7 @@ def cleanup(site: Path, repository: str, *, apply: bool = False, now: datetime |
 
 
 def main() -> None:
+    # Parse command-line options and run cleanup, defaulting to a dry run.
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--site", type=Path, required=True, help="Clean, shallow gh-pages checkout")
     parser.add_argument("--repository", required=True, help="GitHub OWNER/REPO")

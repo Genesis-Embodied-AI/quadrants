@@ -22,7 +22,9 @@ def test_discovers_sphinx_and_legacy_previews_without_main_or_releases() -> None
 
 
 def make_site(tmp_path: Path) -> Callable[..., str]:
+    # Commit a small gh-pages fixture containing the root site, protected docs, and previews of different ages.
     def git(*args: str) -> str:
+        # Run Git in the temporary test repository and return its stdout.
         return subprocess.check_output(["git", "-C", str(tmp_path), *args], text=True)
 
     git("init", "-b", "gh-pages")
@@ -54,6 +56,7 @@ def test_history_error_does_not_partially_delete(tmp_path: Path, monkeypatch: py
     git = make_site(tmp_path)
 
     def updated(repo: str, revision: str, directory: str) -> datetime:
+        # Simulate a history lookup failure after an earlier preview has already been classified as expired.
         if directory == "hp/new":
             raise RuntimeError("API unavailable")
         return datetime(2000, 1, 1, tzinfo=timezone.utc)
