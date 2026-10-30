@@ -20,7 +20,7 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
           sparse-checkout: .github/workflows/scripts/parallel_pr
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.10'
       - name: Check command and current repository permissions
