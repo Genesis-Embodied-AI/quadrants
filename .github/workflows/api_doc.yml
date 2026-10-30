@@ -45,11 +45,14 @@ jobs:
         run: |
           cd docs
           make html
+      - name: Mark branch preview
+        if: github.head_ref != ''
+        run: touch docs/build/html/.preview
       - name: Deploy docs
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./docs/build/html
-          destination_dir: ${{ github.event.inputs.head_ref || github.head_ref }}
+          destination_dir: ${{ github.head_ref && format('previews/{0}', github.head_ref) || '' }}
           keep_files: true
           publish_branch: gh-pages

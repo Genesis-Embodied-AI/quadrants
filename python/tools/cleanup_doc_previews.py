@@ -1,52 +1,26 @@
 """Stage deletion of gh-pages previews whose content has not changed for seven days.
 
-Recognizes both Sphinx previews and legacy pdoc previews. The root site, main/master, and release/version directories
-are preserved. Uses GitHub's commit history API so the Pages checkout can remain shallow. Requires git and gh.
+Only marked directories under previews/ are eligible; the main site and release docs outside that directory are
+preserved. Uses GitHub's commit history API so the Pages checkout can remain shallow. Requires git and gh.
 """
 
 import argparse
 import json
-import re
 import subprocess
 from collections.abc import Iterable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
 from urllib.parse import urlencode
 
-PROTECTED = {
-    "main",
-    "master",
-    "stable",
-    "latest",
-    "release",
-    "releases",
-    "versions",
-    "autoapi",
-    "taichi",
-    "user_guide",
-    "contributor_guide",
-}
-
 
 def preview_directories(files: Iterable[str]) -> list[str]:
-    # Find outermost Sphinx and pdoc previews, excluding the root site and protected documentation.
-    files = set(files)
-    candidates = set()
-    for filename in files:
-        if "/_static/" in filename:
-            directory = filename.split("/_static/", 1)[0]
-        elif filename.endswith("/search.js"):
-            directory = filename.removesuffix("/search.js")
-        else:
-            continue
-        parts = PurePosixPath(directory).parts
-        if not parts or any(part in (".", "..") for part in parts) or directory.startswith("/"):
-            continue
-        if parts[0] in PROTECTED or parts[0].startswith(("_", ".")) or re.match(r"v?\d+(?:\.|$)", parts[0]):
-            continue
-        if f"{directory}/index.html" in files:
-            candidates.add(directory)
-    # A retained parent also retains nested previews; never remove a child independently of its parent.
+    # Find explicitly marked previews; branch names may contain slashes, so directory depth is not fixed.
+    candidates = {
+        str(PurePosixPath(path).parent)
+        for path in files
+        if path.startswith("previews/") and path.endswith("/.preview") and path != "previews/.preview"
+    }
+    # Keep nested previews with their parent so a recent child also protects the enclosing preview.
     return sorted(
         path
         for path in candidates
