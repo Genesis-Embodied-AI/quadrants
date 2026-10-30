@@ -234,10 +234,10 @@ class WholeKernelCSE : public BasicStmtVisitor {
     users_state_ = UsersState::kUnbuilt;
   }
 
-  // Same effect as ReplaceAndMarkUndone::run(&visited_, old_stmt, new_stmt).
-  void replace_and_mark_for_reconsideration(Stmt *old_stmt, Stmt *new_stmt) {
+  // Same effect as ReplaceAndMarkUndone::run(&visited_, duplicate_stmt, replacement_stmt).
+  void replace_uses_and_mark_users_dirty(Stmt *duplicate_stmt, Stmt *replacement_stmt) {
     if (users_state_ == UsersState::kStale) {
-      ReplaceAndMarkUndone::run(&visited_, old_stmt, new_stmt);
+      ReplaceAndMarkUndone::run(&visited_, duplicate_stmt, replacement_stmt);
       return;
     }
     if (users_state_ == UsersState::kUnbuilt) {
@@ -245,18 +245,18 @@ class WholeKernelCSE : public BasicStmtVisitor {
       root_->accept(&collect);
       users_state_ = UsersState::kValid;
     }
-    auto it = users_.find(old_stmt);
+    auto it = users_.find(duplicate_stmt);
     if (it == users_.end()) {
       return;
     }
     std::vector<Stmt *> old_users = std::move(it->second);
     users_.erase(it);
-    auto &new_users = users_[new_stmt];
+    auto &new_users = users_[replacement_stmt];
     for (auto *user : old_users) {
       // Entries go stale when an earlier elimination already rewrote that operand; has_operand filters them.
-      if (user->has_operand(old_stmt)) {
+      if (user->has_operand(duplicate_stmt)) {
         visited_.erase(user->instance_id);
-        user->replace_operand_with(old_stmt, new_stmt);
+        user->replace_operand_with(duplicate_stmt, replacement_stmt);
         new_users.push_back(user);
       }
     }
@@ -302,7 +302,7 @@ class WholeKernelCSE : public BasicStmtVisitor {
     if (it != visible_stmts_.end()) {
       for (auto *prev_stmt : it->second) {
         if (common_statement_eliminable(stmt, prev_stmt)) {
-          replace_and_mark_for_reconsideration(stmt, prev_stmt);
+          replace_uses_and_mark_users_dirty(stmt, prev_stmt);
           to_erase_.push_back(stmt);
           return;
         }
