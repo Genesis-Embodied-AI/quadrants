@@ -51,6 +51,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         working-directory: site
         run: |
+          # If no deletions are staged, finish successfully without committing, pushing, or rebuilding Pages.
           if git diff --cached --quiet; then exit 0; fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
