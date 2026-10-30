@@ -58,4 +58,5 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'Remove documentation previews older than seven days'
           git push origin HEAD:gh-pages
+          # Queue a rebuild from the configured Pages source (gh-pages); this does not wait for deployment to finish.
           gh api --method POST "repos/$GITHUB_REPOSITORY/pages/builds"
