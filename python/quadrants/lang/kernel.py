@@ -825,6 +825,12 @@ class Kernel(FuncBase):
                     "qd_stream is not compatible with graph=True kernels. "
                     "See docs/source/user_guide/streams.md for details."
                 )
+            if self.use_graph and self.autodiff_mode != _NONE:
+                raise RuntimeError(
+                    f"graph=True kernels do not support autodiff mode {self.autodiff_mode} "
+                    "(e.g. qd.ad.FwdMode or qd.ad.Tape(validation=True)). "
+                    "Only the adjoint kernel, via .grad() or qd.ad.Tape, can follow a graph=True kernel."
+                )
             for _gdw_level in self.graph_do_while_levels:
                 launch_ctx.add_graph_do_while_level(_gdw_level.cond_cpp_arg_id, _gdw_level.parent_id)
             # Single `use_checkpoints` gate around the entire checkpoint-wiring block so non-checkpoint kernels skip

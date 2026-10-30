@@ -472,3 +472,23 @@ def test_graph_ndarray_grad_pointer_refreshed_on_replay():
         assert _graph_used() == platform_supports_graph
         assert np.allclose(w.to_numpy(), (grad_value + 1.0) * 2.0)
     assert _graph_cache_size() == (1 if platform_supports_graph else 0)
+
+
+@pytest.mark.parametrize("mode", ["fwd", "tape_validation"])
+@test_utils.test()
+def test_graph_rejects_non_primal_autodiff_mode(mode):
+    """Autodiff modes that rewrite the primal kernel itself must raise rather than run through the graph."""
+    x = qd.field(qd.f32, shape=(), needs_grad=True, needs_dual=True)
+    loss = qd.field(qd.f32, shape=(), needs_grad=True, needs_dual=True)
+
+    @qd.kernel(graph=True)
+    def compute():
+        loss[None] = x[None] * x[None]
+
+    with pytest.raises(RuntimeError, match="graph=True kernels do not support autodiff mode"):
+        if mode == "fwd":
+            with qd.ad.FwdMode(loss=loss, param=x):
+                compute()
+        else:
+            with qd.ad.Tape(loss=loss, validation=True):
+                compute()
