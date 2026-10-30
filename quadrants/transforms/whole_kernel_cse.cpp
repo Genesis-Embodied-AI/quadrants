@@ -235,7 +235,7 @@ class WholeKernelCSE : public BasicStmtVisitor {
   }
 
   // Same effect as ReplaceAndMarkUndone::run(&visited_, old_stmt, new_stmt).
-  void replace_and_mark_undone(Stmt *old_stmt, Stmt *new_stmt) {
+  void replace_and_mark_for_reconsideration(Stmt *old_stmt, Stmt *new_stmt) {
     if (users_state_ == UsersState::kStale) {
       ReplaceAndMarkUndone::run(&visited_, old_stmt, new_stmt);
       return;
@@ -302,7 +302,7 @@ class WholeKernelCSE : public BasicStmtVisitor {
     if (it != visible_stmts_.end()) {
       for (auto *prev_stmt : it->second) {
         if (common_statement_eliminable(stmt, prev_stmt)) {
-          replace_and_mark_undone(stmt, prev_stmt);
+          replace_and_mark_for_reconsideration(stmt, prev_stmt);
           to_erase_.push_back(stmt);
           return;
         }
