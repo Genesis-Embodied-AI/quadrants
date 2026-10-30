@@ -1,6 +1,7 @@
 """Stage deletion of gh-pages previews whose content has not changed for seven days.
 
-Only directories containing a .preview marker are eligible; the root site and unmarked documentation are preserved. Uses GitHub's commit history API so the Pages checkout can remain shallow. Requires git and gh.
+Only directories containing a .preview marker are eligible; the root site and unmarked documentation are preserved.
+Uses GitHub's commit history API so the Pages checkout can remain shallow. Requires git and gh.
 """
 
 import argparse
