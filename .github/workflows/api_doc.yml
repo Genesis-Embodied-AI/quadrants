@@ -53,6 +53,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./docs/build/html
-          destination_dir: ${{ github.event.inputs.head_ref || github.head_ref }}
+          # Keep branch names such as user_guide separate from permanent documentation directories.
+          destination_dir: ${{ github.head_ref && format('preview/{0}', github.head_ref) || '' }}
           keep_files: true
           publish_branch: gh-pages

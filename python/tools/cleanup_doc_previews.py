@@ -1,6 +1,6 @@
 """Stage deletion of gh-pages previews whose content has not changed for seven days.
 
-Only directories containing a .preview marker are eligible; the root site and unmarked documentation are preserved.
+Only marked directories below preview/ are eligible; the root site and permanent documentation are preserved.
 Uses GitHub's commit history API so the Pages checkout can remain shallow. Requires git and gh.
 """
 
@@ -38,7 +38,9 @@ def cleanup(site: Path, repository: str, *, apply: bool = False, now: datetime |
     cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=7)
     # -z returns unquoted, NUL-separated filenames, so splitting on \0 also handles names containing newlines.
     directories = [
-        str(PurePosixPath(path).parent) for path in git("ls-files", "-z").split("\0") if path.endswith("/.preview")
+        str(PurePosixPath(path).parent)
+        for path in git("ls-files", "-z").split("\0")
+        if path.startswith("preview/") and path.endswith("/.preview") and path != "preview/.preview"
     ]
     expired = []
     print(f"Preview cutoff: {cutoff.isoformat()}", flush=True)
