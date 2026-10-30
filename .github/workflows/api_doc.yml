@@ -57,3 +57,19 @@ jobs:
           destination_dir: ${{ github.head_ref && format('preview/{0}', github.head_ref) || '' }}
           keep_files: true
           publish_branch: gh-pages
+      - name: Link to documentation preview
+        if: github.head_ref != ''
+        env:
+          PREVIEW_BRANCH: ${{ github.head_ref }}
+        run: |
+          python - <<'PY'
+          import os
+          from urllib.parse import quote
+
+          owner, repo = os.environ["GITHUB_REPOSITORY"].split("/")
+          branch = quote(os.environ["PREVIEW_BRANCH"], safe="/")
+          url = f"https://{owner}.github.io/{repo}/preview/{branch}/"
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write(f"[View documentation preview]({url})\n\n")
+              summary.write("GitHub Pages may take a few minutes to publish this update.\n")
+          PY
