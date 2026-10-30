@@ -8,6 +8,7 @@ import argparse
 import json
 import re
 import subprocess
+from collections.abc import Iterable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
 from urllib.parse import urlencode
@@ -27,7 +28,7 @@ PROTECTED = {
 }
 
 
-def preview_directories(files):
+def preview_directories(files: Iterable[str]) -> list[str]:
     files = set(files)
     candidates = set()
     for filename in files:
@@ -52,7 +53,7 @@ def preview_directories(files):
     )
 
 
-def last_updated(repository, revision, directory):
+def last_updated(repository: str, revision: str, directory: str) -> datetime:
     query = urlencode({"sha": revision, "path": directory + "/", "per_page": 1})
     result = subprocess.run(
         ["gh", "api", f"repos/{repository}/commits?{query}"], check=True, capture_output=True, text=True
@@ -63,8 +64,8 @@ def last_updated(repository, revision, directory):
     return datetime.fromisoformat(commits[0]["commit"]["committer"]["date"].replace("Z", "+00:00"))
 
 
-def cleanup(site, repository, *, apply=False, now=None):
-    def git(*args):
+def cleanup(site: Path, repository: str, *, apply: bool = False, now: datetime | None = None) -> list[str]:
+    def git(*args: str) -> str:
         return subprocess.check_output(["git", "-C", str(site), *args], text=True)
 
     if git("branch", "--show-current").strip() != "gh-pages":
@@ -89,7 +90,7 @@ def cleanup(site, repository, *, apply=False, now=None):
     return expired
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--site", type=Path, required=True, help="Clean, shallow gh-pages checkout")
     parser.add_argument("--repository", required=True, help="GitHub OWNER/REPO")

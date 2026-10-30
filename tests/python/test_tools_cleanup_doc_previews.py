@@ -1,5 +1,6 @@
 import importlib.util
 import subprocess
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -11,7 +12,7 @@ tool = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(tool)
 
 
-def test_discovers_sphinx_and_legacy_previews_without_main_or_releases():
+def test_discovers_sphinx_and_legacy_previews_without_main_or_releases() -> None:
     # Recognize both preview formats while preserving the root site, main docs, and release docs.
     files = {"index.html", "_static/theme.css", "search.js"}
     for name in ("hp/current", "main", "master", "v0.4.0", "0.4.0", "releases/v1", "user_guide", "_sources/example"):
@@ -20,8 +21,8 @@ def test_discovers_sphinx_and_legacy_previews_without_main_or_releases():
     assert tool.preview_directories(files) == ["hp/current", "hp/legacy"]
 
 
-def make_site(tmp_path):
-    def git(*args):
+def make_site(tmp_path: Path) -> Callable[..., str]:
+    def git(*args: str) -> str:
         return subprocess.check_output(["git", "-C", str(tmp_path), *args], text=True)
 
     git("init", "-b", "gh-pages")
@@ -36,7 +37,7 @@ def make_site(tmp_path):
 
 
 @pytest.mark.parametrize("apply", [False, True])
-def test_cleanup_only_stages_expired_previews(tmp_path, monkeypatch, apply):
+def test_cleanup_only_stages_expired_previews(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, apply: bool) -> None:
     # Delete only previews older than seven days; a dry run must leave every tracked file unchanged.
     git = make_site(tmp_path)
     now = datetime(2026, 10, 30, tzinfo=timezone.utc)
@@ -48,11 +49,11 @@ def test_cleanup_only_stages_expired_previews(tmp_path, monkeypatch, apply):
     assert git("diff", "--name-only") == ""
 
 
-def test_history_error_does_not_partially_delete(tmp_path, monkeypatch):
+def test_history_error_does_not_partially_delete(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # An API failure after finding an expired preview must leave the entire checkout untouched.
     git = make_site(tmp_path)
 
-    def updated(repo, revision, directory):
+    def updated(repo: str, revision: str, directory: str) -> datetime:
         if directory == "hp/new":
             raise RuntimeError("API unavailable")
         return datetime(2000, 1, 1, tzinfo=timezone.utc)
