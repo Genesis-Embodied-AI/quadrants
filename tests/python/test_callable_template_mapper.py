@@ -2,7 +2,7 @@ import quadrants as qd
 from quadrants.lang._template_mapper import TemplateMapper
 from quadrants.lang.kernel_arguments import ArgMetadata
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test()

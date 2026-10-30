@@ -7,7 +7,7 @@ torch = pytest.importorskip("torch")
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 pytestmark = pytest.mark.needs_torch
 

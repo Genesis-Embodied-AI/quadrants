@@ -6,8 +6,7 @@ take effect without re-specialisation. Decorating the class ``@qd.data_oriented(
 lifts every primitive the kernel actually accesses into a runtime scalar kernel argument, read fresh on every launch.
 
 This file pins the runtime-lifting behaviour, the pruning (only accessed primitives become kernel args), the
-``qd.static`` hard error, and the opt-in boundary (default stays baked). See
-``perso_hugh/doc/data_oriented_template_primitives.md`` for the design.
+``qd.static`` hard error, and the opt-in boundary (default stays baked).
 """
 
 import dataclasses
@@ -17,7 +16,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 # ---------------------------------------------------------------------------
 # 1. Int + float members are runtime args: mutate between launches, values take effect without recompiling.

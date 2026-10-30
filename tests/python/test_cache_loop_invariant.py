@@ -2,7 +2,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test(require=qd.extension.assertion)
@@ -177,7 +177,7 @@ def test_loop_index_load_not_cached_over_aliasing_store(use_ndarray: bool) -> No
 @pytest.mark.parametrize("use_ndarray", [False, True])
 @test_utils.test()
 def test_vector_element_aliasing_store_no_miscompile(use_ndarray: bool) -> None:
-    """Guard test for the vector/matrix *element* variant of issue #810, raised in the PR #811 review.
+    """Guard test for the vector/matrix *element* variant of issue #810.
 
     The concern: when the aliasing accesses are vector/matrix elements they reach the caching pass as
     MatrixPtrStmts over ExternalPtr/GlobalPtr origins (a[i_c][0] store vs guarded a[0][0] read), and
@@ -229,7 +229,7 @@ def test_vector_element_aliasing_store_no_miscompile(use_ndarray: bool) -> None:
 )
 @test_utils.test(arch=qd.cpu)
 def test_cross_parameter_ndarray_aliasing_store_stale_read() -> None:
-    """Known gap (issue #810 / PR #812 review): the #810 hazard split across two ndarray parameters that
+    """Known gap (issue #810): the #810 hazard split across two ndarray parameters that
     the caller binds to the SAME ndarray at launch.  The loop-variable-index store goes through one
     parameter (a[i_c]) and the guarded literal-index load through the other (b[0]); both are the same
     ndarray, so b[0] aliases a[i_c] when i_c == 0.

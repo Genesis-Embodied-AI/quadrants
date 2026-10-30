@@ -1,5 +1,6 @@
 from quadrants._lib import core as _qd_core
 
+CPUWorkScheduling = _qd_core.CPUWorkScheduling
 Layout = _qd_core.Layout
 AutodiffMode = _qd_core.AutodiffMode
 SNodeGradType = _qd_core.SNodeGradType
@@ -16,9 +17,7 @@ def to_boundary_enum(boundary):
 
 
 class DeviceCapability:
-    spirv_version_1_3 = "spirv_version=66304"
-    spirv_version_1_4 = "spirv_version=66560"
-    spirv_version_1_5 = "spirv_version=66816"
+    spirv_version_1_5 = f"spirv_version={0x10500}"
     spirv_has_int8 = "spirv_has_int8"
     spirv_has_int16 = "spirv_has_int16"
     spirv_has_int64 = "spirv_has_int64"
@@ -44,4 +43,4 @@ class DeviceCapability:
     spirv_has_no_integer_wrap_decoration = "spirv_has_no_integer_wrap_decoration"
 
 
-__all__ = ["Layout", "AutodiffMode", "SNodeGradType", "Format", "BoundaryMode", "DeviceCapability"]
+__all__ = ["CPUWorkScheduling", "Layout", "AutodiffMode", "SNodeGradType", "Format", "BoundaryMode", "DeviceCapability"]

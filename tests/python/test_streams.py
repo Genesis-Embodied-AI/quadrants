@@ -6,7 +6,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang.stream import Event, Stream
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test(arch=[qd.cuda, qd.amdgpu])
@@ -311,7 +311,7 @@ def test_stream_with_tape_raises():
 
     @qd.kernel
     def compute():
-        loss[None] = x[None] ** 2
+        loss[()] = x[()] ** 2
 
     s = qd.create_stream()
     with pytest.raises(RuntimeError, match="not compatible with autograd Tape"):
@@ -327,7 +327,7 @@ def test_stream_with_autodiff_kernel_raises():
 
     @qd.kernel
     def compute():
-        loss[None] = x[None] ** 2
+        loss[()] = x[()] ** 2
 
     s = qd.create_stream()
     with pytest.raises(RuntimeError, match="not compatible with autodiff"):

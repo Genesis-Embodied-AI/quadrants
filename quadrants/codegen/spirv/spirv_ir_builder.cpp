@@ -93,6 +93,7 @@ size_t IRBuilder::find_instruction(const std::vector<uint32_t> &spirv_module, sp
 using cap = DeviceCapability;
 
 void IRBuilder::init_header() {
+  QD_ASSERT_INFO(caps_->get(cap::spirv_version) >= 0x10500, "SPIR-V 1.5 or newer is required");
   QD_ASSERT(header_.size() == 0U);
   header_.push_back(spv::MagicNumber);
 
@@ -200,10 +201,7 @@ void IRBuilder::init_header() {
     // from `VK_SUBGROUP_FEATURE_BASIC_BIT`, and the spec permits a conformant device to advertise
     // BASIC without SHUFFLE. A strict validator on such a device would reject every Quadrants
     // SPIR-V module here — even kernels that do not actually use shuffle — because the declared
-    // capability is unsupported. No such device has been observed in the wild (the codepath this
-    // change broadens was already exposed pre-PR for any kernel emitting
-    // `OpGroupNonUniformShuffle*`), so this PR does not make it worse, but it does extend the
-    // surface. Fix: introduce `spirv_has_subgroup_shuffle{,_relative}` device caps in
+    // capability is unsupported. Fix: introduce `spirv_has_subgroup_shuffle{,_relative}` device caps in
     // `rhi/rhi_constants.inc.h`, populate them from the two Vulkan bits in
     // `vulkan_device_creator.cpp::populate_subgroup_caps`, and gate the two
     // `CapabilityGroupNonUniformShuffle{,Relative}` emissions on those caps individually.
@@ -576,12 +574,7 @@ SType IRBuilder::get_pointer_type(const SType &value_type, spv::StorageClass sto
 }
 
 SType IRBuilder::get_storage_pointer_type(const SType &value_type) {
-  spv::StorageClass storage_class;
-  if (caps_->get(cap::spirv_version) < 0x10300) {
-    storage_class = spv::StorageClassUniform;
-  } else {
-    storage_class = spv::StorageClassStorageBuffer;
-  }
+  const auto storage_class = spv::StorageClassStorageBuffer;
 
   return get_pointer_type(value_type, storage_class);
 }
@@ -656,16 +649,7 @@ SType IRBuilder::get_struct_array_type(const SType &value_type, uint32_t num_ele
   // decorate the array type.
   ib_.begin(spv::OpMemberDecorate).add_seq(struct_type, 0, spv::DecorationOffset, 0).commit(&decorate_);
 
-  if (caps_->get(cap::spirv_version) < 0x10300) {
-    // NOTE: BufferBlock was deprecated in SPIRV 1.3
-    // use StorageClassStorageBuffer instead.
-    // runtime array are always decorated as BufferBlock(shader storage buffer)
-    if (num_elems == 0) {
-      this->decorate(spv::OpDecorate, struct_type, spv::DecorationBufferBlock);
-    }
-  } else {
-    this->decorate(spv::OpDecorate, struct_type, spv::DecorationBlock);
-  }
+  this->decorate(spv::OpDecorate, struct_type, spv::DecorationBlock);
 
   return struct_type;
 }
@@ -697,25 +681,11 @@ Value IRBuilder::buffer_struct_argument(const SType &struct_type,
                                         uint32_t descriptor_set,
                                         uint32_t binding,
                                         const std::string &name) {
-  // NOTE: BufferBlock was deprecated in SPIRV 1.3
-  // use StorageClassStorageBuffer instead.
-  spv::StorageClass storage_class;
-  if (caps_->get(cap::spirv_version) < 0x10300) {
-    storage_class = spv::StorageClassUniform;
-  } else {
-    storage_class = spv::StorageClassStorageBuffer;
-  }
+  const auto storage_class = spv::StorageClassStorageBuffer;
 
   this->debug_name(spv::OpName, struct_type, name + "_t");
 
-  if (caps_->get(cap::spirv_version) < 0x10300) {
-    // NOTE: BufferBlock was deprecated in SPIRV 1.3
-    // use StorageClassStorageBuffer instead.
-    // runtime array are always decorated as BufferBlock(shader storage buffer)
-    this->decorate(spv::OpDecorate, struct_type, spv::DecorationBufferBlock);
-  } else {
-    this->decorate(spv::OpDecorate, struct_type, spv::DecorationBlock);
-  }
+  this->decorate(spv::OpDecorate, struct_type, spv::DecorationBlock);
 
   SType ptr_type = get_pointer_type(struct_type, storage_class);
 
@@ -735,8 +705,6 @@ Value IRBuilder::uniform_struct_argument(const SType &struct_type,
                                          uint32_t descriptor_set,
                                          uint32_t binding,
                                          const std::string &name) {
-  // NOTE: BufferBlock was deprecated in SPIRV 1.3
-  // use StorageClassStorageBuffer instead.
   spv::StorageClass storage_class = spv::StorageClassUniform;
 
   this->debug_name(spv::OpName, struct_type, name + "_t");
@@ -761,14 +729,7 @@ Value IRBuilder::buffer_argument(const SType &value_type,
                                  uint32_t descriptor_set,
                                  uint32_t binding,
                                  const std::string &name) {
-  // NOTE: BufferBlock was deprecated in SPIRV 1.3
-  // use StorageClassStorageBuffer instead.
-  spv::StorageClass storage_class;
-  if (caps_->get(cap::spirv_version) < 0x10300) {
-    storage_class = spv::StorageClassUniform;
-  } else {
-    storage_class = spv::StorageClassStorageBuffer;
-  }
+  const auto storage_class = spv::StorageClassStorageBuffer;
 
   SType sarr_type = get_struct_array_type(value_type, 0);
 
@@ -794,12 +755,7 @@ Value IRBuilder::struct_array_access(const SType &res_type, Value buffer, Value 
   QD_ASSERT(buffer.flag == ValueKind::kStructArrayPtr);
   QD_ASSERT(res_type.flag == TypeKind::kPrimitive);
 
-  spv::StorageClass storage_class;
-  if (caps_->get(cap::spirv_version) < 0x10300) {
-    storage_class = spv::StorageClassUniform;
-  } else {
-    storage_class = spv::StorageClassStorageBuffer;
-  }
+  const auto storage_class = spv::StorageClassStorageBuffer;
 
   SType ptr_type = this->get_pointer_type(res_type, storage_class);
   Value ret = new_value(ptr_type, ValueKind::kVariablePtr);

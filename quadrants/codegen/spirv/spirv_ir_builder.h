@@ -387,10 +387,8 @@ class IRBuilder {
     for (const auto &arg : args) {
       ib_.add(arg);
     }
-    if (caps_->get(DeviceCapability::spirv_version) >= 0x10400) {
-      for (const auto &v : global_values) {
-        ib_.add(v);
-      }
+    for (const auto &v : global_values) {
+      ib_.add(v);
     }
     for (const auto &input : entry_point_inputs_) {
       ib_.add(input);

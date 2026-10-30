@@ -4,7 +4,7 @@ from pytest import approx
 import quadrants as qd
 from quadrants.lang.misc import get_host_arch_list
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test()
@@ -353,20 +353,20 @@ def test_copy_python_scope_struct_to_quadrants_scope():
 @test_utils.test(debug=True)
 def test_copy_struct_field_element_to_quadrants_scope():
     a = qd.Struct.field({"a": qd.i32, "b": qd.i32}, shape=())
-    a[None].a = 2
-    a[None].b = 3
+    a[()].a = 2
+    a[()].b = 3
 
     @qd.kernel
     def test():
-        b = a[None]
+        b = a[()]
         assert b.a == 2
         assert b.b == 3
         b.a = 5
         b.b = 9
         assert b.a == 5
         assert b.b == 9
-        assert a[None].a == 2
-        assert a[None].b == 3
+        assert a[()].a == 2
+        assert a[()].b == 3
 
     test()
 
