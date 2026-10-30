@@ -7,16 +7,9 @@ Uses GitHub's commit history API so the Pages checkout can remain shallow. Requi
 import argparse
 import json
 import subprocess
-from collections.abc import Iterable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
 from urllib.parse import urlencode
-
-
-def preview_directories(files: Iterable[str]) -> list[str]:
-    # Find explicitly marked previews; branch names may contain slashes, so directory depth is not fixed.
-    candidates = {str(PurePosixPath(path).parent) for path in files if path.endswith("/.preview")}
-    return sorted(candidates)
 
 
 def last_updated(repository: str, revision: str, directory: str) -> datetime:
@@ -43,7 +36,9 @@ def cleanup(site: Path, repository: str, *, apply: bool = False, now: datetime |
         raise RuntimeError("Expected a clean checkout")
     revision = git("rev-parse", "HEAD").strip()
     cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=7)
-    directories = preview_directories(git("ls-files", "-z").split("\0"))
+    directories = [
+        str(PurePosixPath(path).parent) for path in git("ls-files", "-z").split("\0") if path.endswith("/.preview")
+    ]
     expired = []
     print(f"Preview cutoff: {cutoff.isoformat()}", flush=True)
     # Finish all history lookups before changing the index: API errors must leave the site untouched.

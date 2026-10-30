@@ -12,19 +12,6 @@ tool = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(tool)
 
 
-def test_discovers_only_marked_previews() -> None:
-    # Ignore the main site, releases, and unmarked directories; recognize previews with slash-containing names.
-    files = {
-        ".preview",
-        "main/index.html",
-        "v0.4.0/index.html",
-        "unmarked/_static/theme.css",
-        "hp/current/.preview",
-        "simple/.preview",
-    }
-    assert tool.preview_directories(files) == ["hp/current", "simple"]
-
-
 def make_site(tmp_path: Path) -> Callable[..., str]:
     # Commit a small gh-pages fixture containing the root site, protected docs, and previews of different ages.
     def git(*args: str) -> str:
@@ -32,12 +19,13 @@ def make_site(tmp_path: Path) -> Callable[..., str]:
         return subprocess.check_output(["git", "-C", str(tmp_path), *args], text=True)
 
     git("init", "-b", "gh-pages")
-    for name in ("", "main/", "hp/old/", "hp/new/", "hp/boundary/"):
+    for name in ("", "main/", "v0.4.0/", "hp/old/", "hp/new/", "hp/boundary/"):
         directory = tmp_path / name
         directory.mkdir(parents=True, exist_ok=True)
         (directory / "index.html").write_text("docs\n")
         if name.startswith("hp/"):
             (directory / ".preview").touch()
+    (tmp_path / ".preview").touch()
     git("add", ".")
     git("-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "Initial site")
     return git
