@@ -245,7 +245,7 @@ Quadrants comprises at least three important parts:
 
 ### Running hand-edited IR or PTX
 
-A dump written by `QD_DUMP_IR` (see [Dumping compiled IR](./debug.md#dumping-compiled-ir)) can be edited and fed back in, which is a quick way to try an instruction sequence by hand before changing codegen. `QD_LOAD_IR=1` makes the LLVM backends reparse `<debug_dump_path>/<task>_llvm.ll` instead of using the module they just built, and `QUADRANTS_LOAD_PTX=1` makes the CUDA backend read `<debug_dump_path>/<name>.ptx` instead of the PTX it just compiled. Both are read as integers, so `0` leaves them off.
+A dump written by `QD_DUMP_IR` (see [Dumping compiled IR](../user_guide/debug.md#dumping-compiled-ir)) can be edited and fed back in, which is a quick way to try an instruction sequence by hand before changing codegen. `QD_LOAD_IR=1` makes the LLVM backends reparse `<debug_dump_path>/<task>_llvm.ll` instead of using the module they just built, and `QUADRANTS_LOAD_PTX=1` makes the CUDA backend read `<debug_dump_path>/<name>.ptx` instead of the PTX it just compiled. Both are read as integers, so `0` leaves them off.
 
 Both caches have to be off in the script under test, since the replacement files are only read while a kernel is being compiled and a cached kernel is handed back without compiling. `qd.init` raises a `ValueError` rather than let an already-cached kernel keep silently running its old code. `offline_cache` has an environment variable, `src_ll_cache` does not, so the latter has to be passed to `qd.init`:
 

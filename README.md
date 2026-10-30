@@ -31,7 +31,7 @@ While the repository still resembles upstream in structure, major changes includ
 
 ### CI
 
-* Kernel-level [code coverage](https://genesis-embodied-ai.github.io/quadrants/user_guide/kernel_coverage.html) — device-side branch coverage in standard `coverage.py` format, integrated with pytest-cov
+* Kernel-level [code coverage](https://genesis-embodied-ai.github.io/quadrants/contributor_guide/kernel_coverage.html) -- device-side branch coverage in standard `coverage.py` format, integrated with pytest-cov
 * AI-driven checks for line wrapping, deleted comments, test coverage, and feature factorization
 
 ### Structural improvements

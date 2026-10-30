@@ -80,15 +80,6 @@ init_options
 ```
 
 ```{toctree}
-:caption: Testing
-:maxdepth: 1
-:titlesonly:
-
-unit_testing
-kernel_coverage
-```
-
-```{toctree}
 :caption: Reference
 :maxdepth: 1
 :titlesonly:
@@ -105,14 +96,6 @@ troubleshooting
 :titlesonly:
 
 optimization_passes
-```
-
-```{toctree}
-:caption: Contributing
-:maxdepth: 1
-:titlesonly:
-
-contributing
 ```
 
 ```{toctree}
