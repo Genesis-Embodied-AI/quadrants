@@ -58,11 +58,11 @@ def cleanup(site: Path, repository: str, *, apply: bool = False, now: datetime |
 def main() -> None:
     # Parse command-line options and run cleanup, defaulting to a dry run.
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--site", type=Path, required=True, help="Clean, shallow gh-pages checkout")
+    parser.add_argument("--site-dir", type=Path, required=True, help="Clean, shallow gh-pages checkout")
     parser.add_argument("--repository", required=True, help="GitHub OWNER/REPO")
     parser.add_argument("--apply", action="store_true", help="Stage deletions; default is a dry run")
     args = parser.parse_args()
-    cleanup(args.site, args.repository, apply=args.apply)
+    cleanup(args.site_dir, args.repository, apply=args.apply)
 
 
 if __name__ == "__main__":
