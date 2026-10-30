@@ -249,15 +249,15 @@ class WholeKernelCSE : public BasicStmtVisitor {
     if (it == users_.end()) {
       return;
     }
-    std::vector<Stmt *> old_users = std::move(it->second);
+    std::vector<Stmt *> users_to_update = std::move(it->second);
     users_.erase(it);
-    auto &new_users = users_[replacement_stmt];
-    for (auto *user : old_users) {
+    auto &replacement_users = users_[replacement_stmt];
+    for (auto *user : users_to_update) {
       // Entries go stale when an earlier elimination already rewrote that operand; has_operand filters them.
       if (user->has_operand(duplicate_stmt)) {
         visited_.erase(user->instance_id);
         user->replace_operand_with(duplicate_stmt, replacement_stmt);
-        new_users.push_back(user);
+        replacement_users.push_back(user);
       }
     }
   }
