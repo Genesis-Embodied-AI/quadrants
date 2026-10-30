@@ -16,14 +16,14 @@ def test_discovers_only_marked_previews() -> None:
     # Ignore the main site, releases, and unmarked directories; recognize previews with slash-containing names.
     files = {
         ".preview",
-        "main/.preview",
-        "v0.4.0/.preview",
-        "previews/.preview",
-        "previews/hp/current/.preview",
-        "previews/hp/current/nested/.preview",
-        "previews/unmarked/index.html",
+        "main/index.html",
+        "v0.4.0/index.html",
+        "unmarked/_static/theme.css",
+        "hp/current/.preview",
+        "hp/current/nested/.preview",
+        "simple/.preview",
     }
-    assert tool.preview_directories(files) == ["previews/hp/current"]
+    assert tool.preview_directories(files) == ["hp/current", "simple"]
 
 
 def make_site(tmp_path: Path) -> Callable[..., str]:
@@ -33,11 +33,12 @@ def make_site(tmp_path: Path) -> Callable[..., str]:
         return subprocess.check_output(["git", "-C", str(tmp_path), *args], text=True)
 
     git("init", "-b", "gh-pages")
-    for name in ("", "main/", "previews/hp/old/", "previews/hp/new/", "previews/hp/boundary/"):
+    for name in ("", "main/", "hp/old/", "hp/new/", "hp/boundary/"):
         directory = tmp_path / name
         directory.mkdir(parents=True, exist_ok=True)
         (directory / "index.html").write_text("docs\n")
-        (directory / ".preview").touch()
+        if name.startswith("hp/"):
+            (directory / ".preview").touch()
     git("add", ".")
     git("-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "Initial site")
     return git
@@ -48,11 +49,11 @@ def test_cleanup_only_stages_expired_previews(tmp_path: Path, monkeypatch: pytes
     # Delete only previews older than seven days; a dry run must leave every tracked file unchanged.
     git = make_site(tmp_path)
     now = datetime(2026, 10, 30, tzinfo=timezone.utc)
-    ages = {"previews/hp/old": 8, "previews/hp/new": 1, "previews/hp/boundary": 7}
+    ages = {"hp/old": 8, "hp/new": 1, "hp/boundary": 7}
     monkeypatch.setattr(tool, "last_updated", lambda repo, revision, directory: now - timedelta(days=ages[directory]))
-    assert tool.cleanup(tmp_path, "owner/repo", apply=apply, now=now) == ["previews/hp/old"]
+    assert tool.cleanup(tmp_path, "owner/repo", apply=apply, now=now) == ["hp/old"]
     changed = git("diff", "--cached", "--name-status").splitlines()
-    assert changed == (["D\tpreviews/hp/old/.preview", "D\tpreviews/hp/old/index.html"] if apply else [])
+    assert changed == (["D\thp/old/.preview", "D\thp/old/index.html"] if apply else [])
     assert git("diff", "--name-only") == ""
 
 
@@ -62,7 +63,7 @@ def test_history_error_does_not_partially_delete(tmp_path: Path, monkeypatch: py
 
     def updated(repo: str, revision: str, directory: str) -> datetime:
         # Simulate a history lookup failure after an earlier preview has already been classified as expired.
-        if directory == "previews/hp/new":
+        if directory == "hp/new":
             raise RuntimeError("API unavailable")
         return datetime(2000, 1, 1, tzinfo=timezone.utc)
 

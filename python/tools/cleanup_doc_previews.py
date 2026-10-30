@@ -1,7 +1,6 @@
 """Stage deletion of gh-pages previews whose content has not changed for seven days.
 
-Only marked directories under previews/ are eligible; the main site and release docs outside that directory are
-preserved. Uses GitHub's commit history API so the Pages checkout can remain shallow. Requires git and gh.
+Only directories containing a .preview marker are eligible; the root site and unmarked documentation are preserved. Uses GitHub's commit history API so the Pages checkout can remain shallow. Requires git and gh.
 """
 
 import argparse
@@ -15,11 +14,7 @@ from urllib.parse import urlencode
 
 def preview_directories(files: Iterable[str]) -> list[str]:
     # Find explicitly marked previews; branch names may contain slashes, so directory depth is not fixed.
-    candidates = {
-        str(PurePosixPath(path).parent)
-        for path in files
-        if path.startswith("previews/") and path.endswith("/.preview") and path != "previews/.preview"
-    }
+    candidates = {str(PurePosixPath(path).parent) for path in files if path.endswith("/.preview")}
     # Keep nested previews with their parent so a recent child also protects the enclosing preview.
     return sorted(
         path
