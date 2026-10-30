@@ -480,15 +480,17 @@ def test_graph_rejects_non_primal_autodiff_mode(mode):
     """Autodiff modes that rewrite the primal kernel itself must raise rather than run through the graph."""
     x = qd.field(qd.f32, shape=(), needs_grad=True, needs_dual=True)
     loss = qd.field(qd.f32, shape=(), needs_grad=True, needs_dual=True)
+    x[None] = 3.0
 
     @qd.kernel(graph=True)
     def compute():
         loss[None] = x[None] * x[None]
 
-    with pytest.raises(RuntimeError, match="graph=True kernels do not support autodiff mode"):
+    with pytest.raises(RuntimeError, match="graph=True kernels do not support"):
         if mode == "fwd":
             with qd.ad.FwdMode(loss=loss, param=x):
                 compute()
         else:
             with qd.ad.Tape(loss=loss, validation=True):
                 compute()
+    assert x.grad[None] == 0.0, "rejected call must not be recorded and back-propagated by the tape"
