@@ -43,6 +43,7 @@ jobs:
         run: |
           args=()
           if [ "$DRY_RUN" != "true" ]; then args+=(--apply); fi
+          # The --site value must match path: site in the earlier gh-pages checkout.
           python tooling/python/tools/cleanup_doc_previews.py \
             --site site --repository "$GITHUB_REPOSITORY" "${args[@]}"
       - name: Publish cleanup
