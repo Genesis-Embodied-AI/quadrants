@@ -17,7 +17,7 @@ Code-review agents: flag PRs that unnecessarily expand the contact area with exi
 Any change that modifies the public API in any way, or changes its usage, should have associated changes or additions to the docs in the `docs/` folder.
 
 - Very low-level things (e.g. tightening up of exception messages and similar) do not need to be documented.
-- Documentation should be targeted at end-users of Quadrants, not at Quadrants developers.
+- User-guide documentation should be targeted at end-users of Quadrants. Contributor documentation belongs in `docs/source/contributor_guide/`, with compiler implementation material clearly marked as internals.
 
 Code-review agents: flag PRs that change the public API or its usage without corresponding `docs/` updates.
 

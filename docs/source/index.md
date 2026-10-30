@@ -28,4 +28,5 @@ hello(a)
 :maxdepth: 2
 
 user_guide/index
+contributor_guide/index
 ```
