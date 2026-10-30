@@ -5,14 +5,13 @@ on:
 permissions:
   contents: read
   pull-requests: write
-concurrency:
-  group: make-parallel-${{ github.event.issue.number }}
-  cancel-in-progress: false
 jobs:
-  parallel:
+  authorize:
     if: github.event.issue.pull_request && contains(github.event.comment.body, '/make_parallel')
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      authorized: ${{ steps.authorize.outputs.authorized }}
     steps:
       # issue_comment's SHA is on the default branch. Never check out or execute the PR's code here.
       - uses: actions/checkout@v4
@@ -28,9 +27,27 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python .github/workflows/scripts/parallel_pr/authorize.py
+  parallel:
+    needs: authorize
+    if: needs.authorize.outputs.authorized == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Only authorized commands enter the shared queue; later commands do not replace pending ones.
+    concurrency:
+      group: make-parallel-${{ github.event.issue.number }}
+      cancel-in-progress: false
+      queue: max
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: .github/workflows/scripts/parallel_pr
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.10'
       - name: Create or update parallel draft PR
         id: sync
-        if: steps.authorize.outputs.authorized == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.PARALLEL_PR_TOKEN }}
@@ -43,7 +60,7 @@ jobs:
           python .github/workflows/scripts/parallel_pr/parallel_pr.py "$PR_URL" | tee "$RUNNER_TEMP/parallel-pr.log"
           echo "url=$(tail -n 1 "$RUNNER_TEMP/parallel-pr.log")" >> "$GITHUB_OUTPUT"
       - name: Reply to the command
-        if: always() && steps.authorize.outputs.authorized == 'true'
+        if: always()
         uses: actions/github-script@v8
         env:
           PARALLEL_URL: ${{ steps.sync.outputs.url }}
