@@ -112,7 +112,11 @@ class QuadrantsCallable:
         Use only on ``@qd.kernel(graph=True, checkpoints=True)`` kernels with at least one ``qd.checkpoint(cp_id,
         yield_on=flag)`` block. ``from_checkpoint`` is a ``cp_id`` label (typically an ``IntEnum`` value, often
         ``status.checkpoint`` from the previous launch): everything before that label in source order is skipped on this
-        launch, and execution continues from there. The host loop pattern is::
+        launch, and execution continues from there. Inside ``qd.graph.do_while``, the skip applies only to the first
+        resumed iteration. Later iterations run the full loop body. The source and target checkpoints must be in the
+        same loop body at the same nesting level.
+
+        The host loop pattern is::
 
             from enum import IntEnum
 

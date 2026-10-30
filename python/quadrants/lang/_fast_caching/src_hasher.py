@@ -62,7 +62,8 @@ _L1_MARKER = "l1"
 _L2_MARKER = "l2"
 
 # Bumped whenever the persisted L1CacheValue / CacheValue schema changes.
-_CACHE_VALUE_SCHEMA_VERSION = "cachevalue-v6-property-values"
+# v6 added used data-oriented property values; v7 adds each graph_do_while level's enclosing checkpoint id.
+_CACHE_VALUE_SCHEMA_VERSION = "cachevalue-v7-property-values-graph-level-checkpoint"
 
 
 def _intenum_member_qualname(value: Any) -> str | None:
@@ -191,8 +192,8 @@ class L1CacheValue(BaseModel):
     ``graph_do_while_levels`` is only a pre-compile seed for the L1-hit / L2-miss path (the AST walk clears and
     rebuilds the table anyway); a fast-cache *restore* takes the table from ``CacheValue`` instead, since a
     ``qd.graph_do_while`` nested inside a ``qd.static`` branch belongs to some specializations and not others. Each
-    entry is ``(cond_arg_name, parent_id, cond_cpp_arg_id)``, indexed by level id (outer before inner); see
-    ``CacheValue`` for why the launch path needs the AST-resolved ``cond_cpp_arg_id``.
+    entry is ``(cond_arg_name, parent_id, cond_cpp_arg_id, checkpoint_id)``, indexed by level id (outer before inner);
+    see ``CacheValue`` for why the launch path needs the two AST-resolved ids.
 
     ``hashed_function_source_infos`` rejects an L1 hit when a helper's source changed, which the key itself cannot
     catch: ``kernel_hash`` covers only the entry point.
@@ -200,14 +201,14 @@ class L1CacheValue(BaseModel):
 
     used_py_dataclass_parameters: set[str]
     hashed_function_source_infos: list[HashedFunctionSourceInfo]
-    graph_do_while_levels: list[tuple[str, int, int]] | None = None
+    graph_do_while_levels: list[tuple[str, int, int, int]] | None = None
 
 
 def store_pruning_info(
     source_config_key: str,
     function_source_infos: Iterable[FunctionSourceInfo],
     used_py_dataclass_parameters: set[str],
-    graph_do_while_levels: list[tuple[str, int, int]] | None = None,
+    graph_do_while_levels: list[tuple[str, int, int, int]] | None = None,
 ) -> None:
     """Persist the L1 entry, or re-persist it with a grown union. See ``L1CacheValue`` for what's stored / why."""
     if not source_config_key:
@@ -228,7 +229,7 @@ def persist_l1_and_set_l2_key(
     kernel_source_info: FunctionSourceInfo | None,
     used_py_dataclass_parameters: set[str] | None,
     visited_functions: Iterable[FunctionSourceInfo],
-    graph_do_while_levels: list[tuple[str, int, int]] | None,
+    graph_do_while_levels: list[tuple[str, int, int, int]] | None,
     pruning_paths_from_l1: set[str] | None,
     fast_checksum: str | None,
     raise_on_templated_floats: bool,
@@ -293,7 +294,7 @@ def persist_l1_and_set_l2_key(
 
 def load_pruning_info(
     source_config_key: str,
-) -> tuple[set[str], list[tuple[str, int, int]] | None] | tuple[None, None]:
+) -> tuple[set[str], list[tuple[str, int, int, int]] | None] | tuple[None, None]:
     """Look up L1 cache. Returns (pruning_paths, graph_do_while_levels) on hit, (None, None) on miss.
 
     A changed helper source invalidates the entry, which is reported as a miss so the caller cold-compiles and
@@ -323,12 +324,11 @@ class CacheValue(BaseModel):
     frontend_cache_key: str
     hashed_function_source_infos: list[HashedFunctionSourceInfo]
     used_py_dataclass_parameters: set[str]
-    # Nested graph_do_while level table as (cond_arg_name, parent_id, cond_cpp_arg_id) triples, indexed by level id.
-    # None / empty for kernels without graph_do_while. ``cond_cpp_arg_id`` is the flat C++ arg-id resolved at AST-build
-    # time by ``ASTTransformer._resolve_ndarray_kernel_arg_id`` and is required by the launch path to support
-    # `@qd.data_oriented` member conditions (`qd.graph_do_while(self.counter)`) -- name-matching against ``arg_metas``
-    # only resolves top-level parameters.
-    graph_do_while_levels: list[tuple[str, int, int]] | None = None
+    # Nested graph_do_while level table as (cond_arg_name, parent_id, cond_cpp_arg_id, checkpoint_id) tuples, indexed by
+    # level id. None / empty for kernels without graph_do_while. ``cond_cpp_arg_id`` is the flat C++ arg-id resolved at
+    # AST-build time and supports member conditions; ``checkpoint_id`` records the lexical checkpoint containing the
+    # WHILE node so GraphManager can nest that node under one checkpoint IF even when there are no direct parent tasks.
+    graph_do_while_levels: list[tuple[str, int, int, int]] | None = None
     # AST-build-time-resolved checkpoint metadata, indexed by internal cp_id. Empty for kernels without any `with
     # qd.checkpoint(...)` block. See `Kernel.checkpoint_yield_on_args` / `Kernel.checkpoint_yield_on_cpp_arg_ids` /
     # `Kernel.checkpoint_user_labels_by_cp_id` for what each entry means. Restored alongside the C++-side cached
@@ -352,7 +352,7 @@ def store(
     fast_cache_key: str,
     function_source_infos: Iterable[FunctionSourceInfo],
     used_py_dataclass_parameters: set[str],
-    graph_do_while_levels: list[tuple[str, int, int]] | None = None,
+    graph_do_while_levels: list[tuple[str, int, int, int]] | None = None,
     checkpoint_yield_on_args: list[str | None] | None = None,
     checkpoint_yield_on_cpp_arg_ids: list[int] | None = None,
     checkpoint_user_labels_by_cp_id: list[int | None] | None = None,
