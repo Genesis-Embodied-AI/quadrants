@@ -54,6 +54,7 @@ jobs:
           # If no deletions are staged, finish successfully without committing, pushing, or rebuilding Pages.
           if git diff --cached --quiet; then exit 0; fi
           git config user.name 'github-actions[bot]'
+          # GitHub's bot commit email: <account-id>+<username>@users.noreply.github.com; 41898282 is the Actions bot ID.
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'Remove documentation previews older than seven days'
           git push origin HEAD:gh-pages
