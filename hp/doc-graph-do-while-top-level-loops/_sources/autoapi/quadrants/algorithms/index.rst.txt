@@ -1,6 +1,0 @@
-quadrants.algorithms
-====================
-
-.. py:module:: quadrants.algorithms
-
-

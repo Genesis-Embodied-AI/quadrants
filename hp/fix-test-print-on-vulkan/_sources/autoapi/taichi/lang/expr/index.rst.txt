@@ -1,6 +1,0 @@
-taichi.lang.expr
-================
-
-.. py:module:: taichi.lang.expr
-
-

@@ -1,6 +1,0 @@
-taichi.tools.diagnose
-=====================
-
-.. py:module:: taichi.tools.diagnose
-
-

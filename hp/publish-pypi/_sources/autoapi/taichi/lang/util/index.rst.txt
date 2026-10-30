@@ -1,6 +1,0 @@
-taichi.lang.util
-================
-
-.. py:module:: taichi.lang.util
-
-

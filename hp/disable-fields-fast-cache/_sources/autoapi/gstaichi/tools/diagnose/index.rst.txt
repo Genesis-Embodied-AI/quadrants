@@ -1,6 +1,0 @@
-gstaichi.tools.diagnose
-=======================
-
-.. py:module:: gstaichi.tools.diagnose
-
-
