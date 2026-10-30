@@ -16,12 +16,7 @@ from urllib.parse import urlencode
 def preview_directories(files: Iterable[str]) -> list[str]:
     # Find explicitly marked previews; branch names may contain slashes, so directory depth is not fixed.
     candidates = {str(PurePosixPath(path).parent) for path in files if path.endswith("/.preview")}
-    # Keep nested previews with their parent so a recent child also protects the enclosing preview.
-    return sorted(
-        path
-        for path in candidates
-        if not any(parent.as_posix() in candidates for parent in PurePosixPath(path).parents)
-    )
+    return sorted(candidates)
 
 
 def last_updated(repository: str, revision: str, directory: str) -> datetime:

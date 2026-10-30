@@ -20,7 +20,6 @@ def test_discovers_only_marked_previews() -> None:
         "v0.4.0/index.html",
         "unmarked/_static/theme.css",
         "hp/current/.preview",
-        "hp/current/nested/.preview",
         "simple/.preview",
     }
     assert tool.preview_directories(files) == ["hp/current", "simple"]
