@@ -36,6 +36,7 @@ def cleanup(site: Path, repository: str, *, apply: bool = False, now: datetime |
         raise RuntimeError("Expected a clean checkout")
     revision = git("rev-parse", "HEAD").strip()
     cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=7)
+    # -z returns unquoted, NUL-separated filenames, so splitting on \0 also handles names containing newlines.
     directories = [
         str(PurePosixPath(path).parent) for path in git("ls-files", "-z").split("\0") if path.endswith("/.preview")
     ]
