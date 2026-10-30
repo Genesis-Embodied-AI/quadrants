@@ -421,7 +421,7 @@ def test_graph_annotation_cross_platform(tensor_type):
     assert np.allclose(y_np, 4.0), f"Expected 4.0, got {y_np[:5]}"
 
 
-@test_utils.test()
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.metal])  # archs with ndarray autodiff, see test_ad_ndarray.py
 def test_graph_ndarray_with_grad():
     """An ndarray that owns a gradient buffer is accepted by a graph=True kernel, and its adjoint still works."""
     platform_supports_graph = _platform_supports_graph()
