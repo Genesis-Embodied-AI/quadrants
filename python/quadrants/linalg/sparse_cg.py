@@ -6,6 +6,7 @@ from quadrants._lib import core as _qd_core
 from quadrants.lang._ndarray import Ndarray, ScalarNdarray
 from quadrants.lang.exception import QuadrantsRuntimeError
 from quadrants.lang.impl import get_runtime
+from quadrants.linalg._csr import CSRMatrix
 from quadrants.types import f32, f64
 
 
@@ -23,6 +24,8 @@ class SparseCG:
     """
 
     def __init__(self, A, b, x0=None, max_iter=50, atol=1e-6):
+        if isinstance(A, CSRMatrix):
+            raise QuadrantsRuntimeError("SparseCG requires a native SparseMatrix; CSRMatrix is not supported.")
         self.dtype = A.dtype
         self.qd_arch = get_runtime().prog.config().arch
         self.matrix = A
