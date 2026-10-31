@@ -85,13 +85,13 @@ def bls_test_template(dim, N, bs, stencil, block_dim=None, scatter=False, benchm
         for I in qd.grouped(y2):
             if y[I] != y2[I]:
                 print("check failed", I, y[I], y2[I])
-                mismatch[None] = 1
+                mismatch[()] = 1
 
     check()
 
     qd.profiler.print_kernel_profiler_info()
 
-    assert mismatch[None] == 0
+    assert mismatch[()] == 0
 
 
 def bls_particle_grid(
@@ -257,17 +257,17 @@ def bls_particle_grid(
         for i in range(grid_offset[0], grid_offset[0] + N):
             for j in range(grid_offset[1], grid_offset[1] + N):
                 if abs(m1[i, j] - m3[i, j]) > 1e-4:
-                    err[None] = 1
+                    err[()] = 1
                 if abs(m2[i, j] - m3[i, j]) > 1e-4:
-                    err[None] = 1
+                    err[()] = 1
 
     @qd.kernel
     def check_s():
         for i in range(M):
             if abs(s1[i] - s2[i]) > 1e-4:
-                err[None] = 1
+                err[()] = 1
             if abs(s1[i] - s3[i]) > 1e-4:
-                err[None] = 1
+                err[()] = 1
 
     if scatter:
         for i in range(max(benchmark, 1)):
@@ -282,4 +282,4 @@ def bls_particle_grid(
             g2p_naive(s3)
         check_s()
 
-    assert not err[None]
+    assert not err[()]

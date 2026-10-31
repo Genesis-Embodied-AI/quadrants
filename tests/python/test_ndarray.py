@@ -16,7 +16,7 @@ from quadrants.lang.misc import get_host_arch_list
 from quadrants.lang.util import has_pytorch
 from quadrants.math import ivec3, vec3
 
-from tests import test_utils
+from tests.helpers import test_utils
 from tests.helpers.kernel_loading import load_kernel_from_string
 
 if has_pytorch():
@@ -327,7 +327,7 @@ def test_ndarray_rw_cache():
     for i in range(n):
         c_a = copy.deepcopy(a)
         c_b = copy.deepcopy(b)
-        c_a[None] = c_b[10]
+        c_a[()] = c_b[10]
 
 
 def _test_ndarray_numpy_io():
@@ -883,35 +883,6 @@ def test_mismatched_index_python_scope():
         x[0, 0, 0]
 
 
-@test_utils.test(arch=supported_archs_quadrants_ndarray)
-def test_0dim_ndarray_read_write_python_scope():
-    x = qd.ndarray(dtype=qd.f32, shape=())
-
-    x[()] = 1.0
-    assert x[None] == 1.0
-
-    y = qd.ndarray(dtype=qd.math.vec2, shape=())
-    y[()] = [1.0, 2.0]
-    assert y[None] == [1.0, 2.0]
-
-
-@test_utils.test(arch=supported_archs_quadrants_ndarray)
-def test_0dim_ndarray_read_write_quadrants_scope():
-    x = qd.ndarray(dtype=qd.f32, shape=())
-
-    @qd.kernel
-    def write(x: qd.types.NDArray):
-        a = x[()] + 1
-        x[None] = 2 * a
-
-    write(x)
-    assert x[None] == 2.0
-
-    y = qd.ndarray(dtype=qd.math.vec2, shape=())
-    write(y)
-    assert y[None] == [2.0, 2.0]
-
-
 @test_utils.test(arch=supported_archs_quadrants_ndarray, require=qd.extension.data64)
 def test_read_write_f64_python_scope():
     x = qd.ndarray(dtype=qd.f64, shape=2)
@@ -1132,10 +1103,10 @@ def test_ndarray_clamp_verify():
 def test_ndarray_arg_builtin_float_type():
     @qd.kernel
     def foo(x: qd.types.NDArray[float, 0]) -> qd.f32:
-        return x[None]
+        return x[()]
 
     x = qd.ndarray(qd.f32, shape=())
-    x[None] = 42
+    x[()] = 42
     assert foo(x) == 42
 
 

@@ -8,7 +8,7 @@ from pytest import approx
 import quadrants as qd
 from quadrants.lang.simt import block, subgroup
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 def _skip_if_f64_unsupported(dtype):

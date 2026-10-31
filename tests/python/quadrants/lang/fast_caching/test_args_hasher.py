@@ -10,7 +10,7 @@ from quadrants.lang._fast_caching.args_hasher import FastcacheSkip
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import has_pytorch
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 if has_pytorch():
     import torch
@@ -241,8 +241,6 @@ def _qd_init_same_arch() -> None:
 def test_args_hasher_field() -> None:
     """
     Check fields are correctly disabled.
-
-    More context: https://github.com/Genesis-Embodied-AI/quadrants/pull/163
     """
     for dtype in [qd.i32, qd.i64, qd.f32, qd.f64]:
         for shape in [(2,), (5,), (2, 5)]:

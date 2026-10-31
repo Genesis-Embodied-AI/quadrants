@@ -8,8 +8,7 @@ from quadrants.lang.ast.ast_transformers.function_def_transformer import (
     FunctionDefTransformer,
 )
 
-from tests import test_utils
-from tests.helpers import dataclass_helpers
+from tests.helpers import dataclass_helpers, test_utils
 
 
 @dataclasses.dataclass

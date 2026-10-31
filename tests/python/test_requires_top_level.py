@@ -19,7 +19,7 @@ import quadrants as qd
 from quadrants.lang.exception import QuadrantsSyntaxError
 from quadrants.types.annotations import template
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test(arch=qd.cpu)

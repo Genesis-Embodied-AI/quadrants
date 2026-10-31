@@ -9,7 +9,7 @@ import quadrants as qd
 from quadrants.lang.exception import QuadrantsSyntaxError
 from quadrants.types.ndarray_type import NdarrayType
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 # Parse + normalization (decoration-time): the union spelling is accepted and marks the slot optional.
 

@@ -4,6 +4,7 @@ import functools
 import numbers
 from collections.abc import Iterable
 from itertools import product
+from typing import cast
 
 import numpy as np
 
@@ -44,17 +45,6 @@ from quadrants.types.enums import Layout
 from quadrants.types.utils import is_signed
 
 _type_factory = _qd_python_core.get_type_factory_instance()
-
-
-def _scalar_tensors_to_items(arr):
-    """Recursively convert 0-d tensors to Python scalars in a nested list."""
-    import torch  # pylint: disable=C0415
-
-    if isinstance(arr, (list, tuple)):
-        return [_scalar_tensors_to_items(v) for v in arr]
-    if isinstance(arr, torch.Tensor) and arr.shape == ():
-        return arr.item()
-    return arr
 
 
 def _generate_swizzle_patterns(key_group: str, required_length=4):
@@ -264,14 +254,6 @@ class Matrix(QuadrantsOperations):
     _is_quadrants_class = True
     _is_matrix_class = True
     __array_priority__ = 1000
-
-    def __new__(cls, arr, dt=None):
-        if impl.is_python_backend():
-            from . import _py_tensor as py_tensor  # pylint: disable=C0415
-
-            arr = _scalar_tensors_to_items(arr)
-            return py_tensor.PyTensor(arr)
-        return super().__new__(cls)
 
     def __init__(self, arr, dt=None):
         if not isinstance(arr, (list, tuple, np.ndarray)):
@@ -892,15 +874,8 @@ class Matrix(QuadrantsOperations):
         Returns:
             :class:`~quadrants.Matrix`: A matrix.
         """
-        if impl.is_python_backend():
-            if isinstance(shape, numbers.Number):
-                shape = (shape,)
-            if shape is None:
-                shape = ()
-            mat_type = MatrixType(n, m, ndim=ndim if ndim is not None else 2, dtype=dtype)
-            return impl.field(mat_type, shape=shape)
 
-        entries = []
+        member_groups = []
         element_dim = ndim if ndim is not None else 2
         if isinstance(dtype, (list, tuple, np.ndarray)):
             # set different dtype for each element in Matrix — see #2135
@@ -909,7 +884,7 @@ class Matrix(QuadrantsOperations):
                     len(np.shape(dtype)) == 1 and len(dtype) == n
                 ), f"Please set correct dtype list for Vector. The shape of dtype list should be ({n}, ) instead of {np.shape(dtype)}"
                 for i in range(n):
-                    entries.append(
+                    member_groups.append(
                         impl.create_field_member(
                             dtype[i],
                             name=name,
@@ -923,7 +898,7 @@ class Matrix(QuadrantsOperations):
                 ), f"Please set correct dtype list for Matrix. The shape of dtype list should be ({n}, {m}) instead of {np.shape(dtype)}"
                 for i in range(n):
                     for j in range(m):
-                        entries.append(
+                        member_groups.append(
                             impl.create_field_member(
                                 dtype[i][j],
                                 name=name,
@@ -933,21 +908,23 @@ class Matrix(QuadrantsOperations):
                         )
         else:
             for _ in range(n * m):
-                entries.append(impl.create_field_member(dtype, name=name, needs_grad=needs_grad, needs_dual=needs_dual))
-        entries, entries_grad, entries_dual, entries_grad_checkbit = zip(*entries)
+                member_groups.append(
+                    impl.create_field_member(dtype, name=name, needs_grad=needs_grad, needs_dual=needs_dual)
+                )
+        entries, entries_grad, entries_dual, entries_grad_checkbit = zip(*member_groups)
 
-        entries = MatrixField(entries, n, m, element_dim)
+        field = MatrixField(entries, n, m, element_dim)
         if all(entries_grad):
-            entries_grad = MatrixField(entries_grad, n, m, element_dim)
-            entries._set_grad(entries_grad)
+            grad_field = MatrixField(entries_grad, n, m, element_dim)
+            field._set_grad(grad_field)
         if all(entries_dual):
-            entries_dual = MatrixField(entries_dual, n, m, element_dim)
-            entries._set_dual(entries_dual)
+            dual_field = MatrixField(entries_dual, n, m, element_dim)
+            field._set_dual(dual_field)
         entries_grad_checkbit_field = None
         if needs_grad and all(e is not None for e in entries_grad_checkbit):
             entries_grad_checkbit_field = MatrixField(entries_grad_checkbit, n, m, element_dim)
 
-        impl.get_runtime().matrix_fields.append(entries)
+        impl.get_runtime().matrix_fields.append(field)
 
         if shape is None:
             if offset is not None:
@@ -990,12 +967,12 @@ class Matrix(QuadrantsOperations):
             if order is not None and offset is not None:
                 phys_offset = tuple(offset[axis_seq[p]] for p in range(dim))
             if layout == Layout.SOA:
-                for e in entries._get_field_members():
+                for e in field._get_field_members():
                     impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
                         ScalarField(e), offset=phys_offset
                     )
                 if needs_grad:
-                    for e in entries_grad._get_field_members():
+                    for e in grad_field._get_field_members():
                         impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
                             ScalarField(e), offset=phys_offset
                         )
@@ -1005,32 +982,28 @@ class Matrix(QuadrantsOperations):
                                 ScalarField(e), offset=phys_offset
                             )
                 if needs_dual:
-                    for e in entries_dual._get_field_members():
+                    for e in dual_field._get_field_members():
                         impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
                             ScalarField(e), offset=phys_offset
                         )
             else:
-                impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(entries, offset=phys_offset)
+                impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(field, offset=phys_offset)
                 if needs_grad:
-                    impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
-                        entries_grad, offset=phys_offset
-                    )
+                    impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(grad_field, offset=phys_offset)
                     if entries_grad_checkbit_field is not None:
                         impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
                             entries_grad_checkbit_field, offset=phys_offset
                         )
                 if needs_dual:
-                    impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
-                        entries_dual, offset=phys_offset
-                    )
+                    impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(dual_field, offset=phys_offset)
             if order is not None:
                 _qd_layout = tuple(axis_seq)
-                entries._qd_layout = _qd_layout
+                field._qd_layout = _qd_layout
                 if needs_grad:
-                    entries_grad._qd_layout = _qd_layout
+                    grad_field._qd_layout = _qd_layout
                 if needs_dual:
-                    entries_dual._qd_layout = _qd_layout
-        return entries
+                    dual_field._qd_layout = _qd_layout
+        return field
 
     @classmethod
     @python_scope
@@ -1045,7 +1018,6 @@ class Matrix(QuadrantsOperations):
             shape (Union[int, tuple[int]]): Shape of the ndarray.
             needs_grad (bool, optional): If True, allocate a companion grad ndarray of the same shape and dtype,
                 accessible via ``arr.grad``. Requires ``dtype`` to be a real (floating-point) type. Defaults to False.
-                Silently ignored on the python backend (matches the scalar ``qd.ndarray`` behaviour).
 
         Example::
 
@@ -1055,13 +1027,6 @@ class Matrix(QuadrantsOperations):
         """
         if isinstance(shape, numbers.Number):
             shape = (shape,)
-        if impl.is_python_backend():
-            from . import _py_tensor as py_tensor  # pylint: disable=C0415
-            from .util import dtype_to_torch_dtype  # pylint: disable=C0415
-
-            batch_ndim = len(shape)
-            shape = (*shape, m, n)
-            return py_tensor.create_tensor(shape, dtype_to_torch_dtype(dtype), batch_ndim=batch_ndim)
         arr = MatrixNdarray(n, m, dtype, shape)
         if needs_grad:
             dt = cook_dtype(dtype)
@@ -1076,8 +1041,7 @@ class Matrix(QuadrantsOperations):
     def tensor(cls, n, m, dtype, shape, **kwargs):
         """Allocate a tensor whose elements are ``n``-by-``m`` matrices.
 
-        Per-tensor backend dispatcher, equivalent to scalar ``qd.tensor()`` for matrix-valued elements. Selects
-        between ``qd.Matrix.field`` and ``qd.Matrix.ndarray`` based on the ``backend=`` keyword.
+        Equivalent to ``qd.tensor(qd.types.matrix(n, m, dtype), shape, **kwargs)``.
 
         Args:
             n (int): Number of rows of each matrix element.
@@ -1085,16 +1049,19 @@ class Matrix(QuadrantsOperations):
             dtype: Element data type (e.g. ``qd.f32``).
             shape: Shape of the tensor (excluding the matrix dimensions) as an ``int`` or tuple of ``int``.
             backend (qd.Backend, optional): Storage backend. Defaults to ``qd.Backend.NDARRAY``.
-            **kwargs: Forwarded verbatim to the underlying ``qd.Matrix.field`` / ``qd.Matrix.ndarray`` call.
+            layout (tuple of int, optional): Permutation of shape axes, outermost first. Matrix component axes stay
+                innermost. Defaults to the natural axis order.
+            **kwargs: Additional options such as ``needs_grad``, forwarded to ``qd.tensor``.
 
         Example::
 
             >>> a = qd.Matrix.tensor(2, 3, qd.f32, shape=(4,))
             >>> b = qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
         """
-        from quadrants._tensor import _tensor_mat  # pylint: disable=C0415
+        from quadrants._tensor import tensor  # pylint: disable=C0415
+        from quadrants._tensor_wrapper import MatrixTensor  # pylint: disable=C0415
 
-        return _tensor_mat(n, m, dtype, shape, **kwargs)
+        return cast(MatrixTensor, tensor(MatrixType(n, m, ndim=2, dtype=dtype), shape, **kwargs))
 
     @staticmethod
     def rows(rows):
@@ -1257,7 +1224,6 @@ class Vector(Matrix):
             shape (Union[int, tuple[int]]): Shape of the ndarray.
             needs_grad (bool, optional): If True, allocate a companion grad ndarray of the same shape and dtype,
                 accessible via ``arr.grad``. Requires ``dtype`` to be a real (floating-point) type. Defaults to False.
-                Silently ignored on the python backend (matches the scalar ``qd.ndarray`` behaviour).
 
         Example:
             The code below shows how a Quadrants ndarray with vector elements can be declared and defined::
@@ -1266,13 +1232,6 @@ class Vector(Matrix):
         """
         if isinstance(shape, numbers.Number):
             shape = (shape,)
-        if impl.is_python_backend():
-            from . import _py_tensor as py_tensor  # pylint: disable=C0415
-            from .util import dtype_to_torch_dtype  # pylint: disable=C0415
-
-            batch_ndim = len(shape)
-            shape = (*shape, n)
-            return py_tensor.create_tensor(shape, dtype_to_torch_dtype(dtype), batch_ndim=batch_ndim)
         arr = VectorNdarray(n, dtype, shape)
         if needs_grad:
             dt = cook_dtype(dtype)
@@ -1287,24 +1246,26 @@ class Vector(Matrix):
     def tensor(cls, n, dtype, shape, **kwargs):
         """Allocate a tensor whose elements are length-``n`` vectors.
 
-        Per-tensor backend dispatcher, equivalent to scalar ``qd.tensor()`` for vector-valued elements. Selects
-        between ``qd.Vector.field`` and ``qd.Vector.ndarray`` based on the ``backend=`` keyword.
+        Equivalent to ``qd.tensor(qd.types.vector(n, dtype), shape, **kwargs)``.
 
         Args:
             n (int): Length of each vector element.
             dtype: Element data type (e.g. ``qd.f32``).
             shape: Shape of the tensor (excluding the vector dimension) as an ``int`` or tuple of ``int``.
             backend (qd.Backend, optional): Storage backend. Defaults to ``qd.Backend.NDARRAY``.
-            **kwargs: Forwarded verbatim to the underlying ``qd.Vector.field`` / ``qd.Vector.ndarray`` call.
+            layout (tuple of int, optional): Permutation of shape axes, outermost first. Vector components stay
+                innermost. Defaults to the natural axis order.
+            **kwargs: Additional options such as ``needs_grad``, forwarded to ``qd.tensor``.
 
         Example::
 
             >>> v = qd.Vector.tensor(3, qd.f32, shape=(4,))
             >>> u = qd.Vector.tensor(3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
         """
-        from quadrants._tensor import _tensor_vec  # pylint: disable=C0415
+        from quadrants._tensor import tensor  # pylint: disable=C0415
+        from quadrants._tensor_wrapper import VectorTensor  # pylint: disable=C0415
 
-        return _tensor_vec(n, dtype, shape, **kwargs)
+        return cast(VectorTensor, tensor(VectorType(n, dtype), shape, **kwargs))
 
 
 class MatrixField(Field):
@@ -1953,7 +1914,7 @@ class MatrixNdarray(Ndarray):
             >>> arr = np.ones((2, 1, 2, 2))
             >>> m.from_numpy(arr)
         """
-        self._ndarray_matrix_from_numpy(arr, as_vector=0)
+        self._copy_from_numpy(arr)
 
     @python_scope
     def to_torch(self, device=None, *, copy=True):
@@ -2107,7 +2068,7 @@ class VectorNdarray(Ndarray):
             >>> b = np.ones((2, 2, 3), dtype=np.float32)
             >>> a.from_numpy(b)
         """
-        self._ndarray_matrix_from_numpy(arr, as_vector=1)
+        self._copy_from_numpy(arr)
 
     @python_scope
     def to_torch(self, device=None, *, copy=True):

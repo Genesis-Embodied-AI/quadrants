@@ -3,7 +3,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 """
 A_psd used in the tests is a random positive definite matrix with a given number of rows and columns:

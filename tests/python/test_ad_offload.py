@@ -1,6 +1,6 @@
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test()
@@ -16,7 +16,7 @@ def test_offload_order():
             y[i] = x[i]
 
         # for i in x:
-        #     z[None] += y[i]
+        #     z[()] += y[i]
 
     with qd.ad.Tape(z):
         forward()

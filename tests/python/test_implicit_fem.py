@@ -2,7 +2,7 @@ import numpy as np
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 # `SparseMatrixBuilder` below is only wired up for x64/arm64/cuda — see
