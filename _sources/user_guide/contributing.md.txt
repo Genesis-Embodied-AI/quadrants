@@ -24,7 +24,7 @@ A fresh, empty cache directory is created for each test session by pytest's [`tm
 
 ## Creating your build/dev environment
 
-It is recommended to use a virtual env. Quadrants supports Python 3.10–3.13 for building and testing. However, `pre-commit` is configured with a pinned Python `3.10` to ensure consistent formatting, so you will need Python 3.10 available for running pre-commit hooks.
+It is recommended to use a virtual env. Quadrants supports Python 3.12-3.14 for building and testing. However, `pre-commit` is configured with a pinned Python `3.12` to ensure consistent formatting, so you will need Python 3.12 available for running pre-commit hooks.
 
 After cloning, make sure to initialize submodules:
 
@@ -36,7 +36,7 @@ git submodule update --init --recursive
 
 ```
 # create the venv for development
-uv venv --python 3.10
+uv venv --python 3.12
 
 # activate it
 source .venv/bin/activate
@@ -82,12 +82,12 @@ To build the release package:
 ./build.py wheel
 ```
 
-We use `cmake` to build the C++ core. scikit-build-core puts the CMake build tree under `build/{wheel_tag}`, where the wheel tag encodes the Python version and host platform. For example: `build/cp310-cp310-linux_x86_64`.
+We use `cmake` to build the C++ core. scikit-build-core puts the CMake build tree under `build/{wheel_tag}`, where the wheel tag encodes the Python version and host platform. For example: `build/cp312-cp312-linux_x86_64`.
 
 You can modify the cmake options to your liking in order to enable or disable some features you need or don't need. To discover them, you can use [ccmake](https://cmake.org/cmake/help/latest/manual/ccmake.1.html):
 
 ```
-ccmake build/cp310-cp310-linux_x86_64
+ccmake build/cp312-cp312-linux_x86_64
 ```
 
 You could then set the environment variable `CMAKE_ARGS` (scikit-build-core's CMake-args passthrough) to configure the build. `build.py` reads it, layers on the toolchain options it manages, and exports it back. For instance, to disable the CUDA and AMDGPU backends:

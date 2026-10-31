@@ -3,7 +3,7 @@
 ## CI Tested systems
 
 We test the following systems in our CI servers:
-- Python 3.10-Python 3.13
+- Python 3.12-Python 3.14
 - Mac OS X 14 and 15
 - Ubuntu 22.04 and Ubuntu 24.04
 - Windows Server 2025
