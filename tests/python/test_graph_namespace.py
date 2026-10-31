@@ -16,7 +16,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang.ast.ast_transformers import graph_api
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 def _func(expr_src):

@@ -2,7 +2,7 @@ import functools
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 has_autograd = False
 
@@ -35,7 +35,7 @@ def test_ad_tensor_store_load():
     def test(tmp: qd.f32):
         b = qd.Vector([tmp, tmp, tmp, tmp])
         b[0] = tmp * 4
-        y[None] = b * x[None]
+        y[()] = b * x[()]
 
     y.grad.fill(2.0)
     test.grad(10)

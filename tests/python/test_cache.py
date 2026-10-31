@@ -3,7 +3,7 @@ import pathlib
 import quadrants as qd
 from quadrants.lang.misc import get_host_arch_list
 
-from tests import test_utils
+from tests.helpers import test_utils
 from tests.helpers.runtime import qd_init_same_arch
 
 
@@ -17,7 +17,7 @@ def test_cache_primitive_args():
     def fun(static_args: qd.template(), constant: qd.template(), value: qd.types.ndarray()):
         if qd.static(static_args.flag):
             if qd.static(constant > 0):
-                value[None] = value[None] + 1
+                value[()] = value[()] + 1
             else:
                 assert "Invalid 'constant' branch"
         else:
@@ -32,10 +32,10 @@ def test_cache_primitive_args():
     static_args = StructStaticConfig()
     constant = 1234567890
     value = qd.ndarray(qd.i32, shape=())
-    value[None] = 1
+    value[()] = 1
 
     fun(static_args, constant, value)
-    assert value[None] == 2
+    assert value[()] == 2
     assert len(fun._primal.compiled_kernel_data_by_key) == 1
     assert len(fun._primal.mapper._mapping_cache) == 1
     assert len(fun._primal.mapper._mapping_cache_tracker) == 1
@@ -43,7 +43,7 @@ def test_cache_primitive_args():
     assert len(fun._primal.launch_context_buffer_cache._launch_ctx_cache_tracker) == 1
 
     fun(static_args, 1234567890, value)
-    assert value[None] == 3
+    assert value[()] == 3
     assert len(fun._primal.compiled_kernel_data_by_key) == 1
     assert len(fun._primal.mapper._mapping_cache) == 1
     assert len(fun._primal.mapper._mapping_cache_tracker) == 1
@@ -53,7 +53,7 @@ def test_cache_primitive_args():
     static_args_2 = StructStaticConfig()
     assert id(static_args) != id(static_args_2)
     fun(static_args_2, constant, value)
-    assert value[None] == 4
+    assert value[()] == 4
     assert len(fun._primal.compiled_kernel_data_by_key) == 2
     assert len(fun._primal.mapper._mapping_cache) == 2
     assert len(fun._primal.mapper._mapping_cache_tracker) == 2
@@ -66,9 +66,9 @@ def test_cache_multi_entry_static():
     @qd.kernel
     def fun(flag: qd.template(), value: qd.template()):
         if qd.static(flag):
-            value[None] = value[None] + 1
+            value[()] = value[()] + 1
         else:
-            value[None] = value[None] - 1
+            value[()] = value[()] - 1
 
     assert len(fun._primal.compiled_kernel_data_by_key) == 0
     assert len(fun._primal.mapper._mapping_cache) == 0
@@ -77,10 +77,10 @@ def test_cache_multi_entry_static():
     assert len(fun._primal.launch_context_buffer_cache._launch_ctx_cache_tracker) == 0
 
     value = qd.field(qd.i32, shape=())
-    value[None] = 1
+    value[()] = 1
 
     fun(True, value)
-    assert value[None] == 2
+    assert value[()] == 2
     assert len(fun._primal.compiled_kernel_data_by_key) == 1
     assert len(fun._primal.mapper._mapping_cache) == 1
     assert len(fun._primal.mapper._mapping_cache_tracker) == 1
@@ -88,7 +88,7 @@ def test_cache_multi_entry_static():
     assert len(fun._primal.launch_context_buffer_cache._launch_ctx_cache_tracker) == 1
 
     fun(True, value)
-    assert value[None] == 3
+    assert value[()] == 3
     assert len(fun._primal.compiled_kernel_data_by_key) == 1
     assert len(fun._primal.mapper._mapping_cache) == 1
     assert len(fun._primal.mapper._mapping_cache_tracker) == 1
@@ -96,7 +96,7 @@ def test_cache_multi_entry_static():
     assert len(fun._primal.launch_context_buffer_cache._launch_ctx_cache_tracker) == 1
 
     fun(False, value)
-    assert value[None] == 2
+    assert value[()] == 2
     assert len(fun._primal.compiled_kernel_data_by_key) == 2
     assert len(fun._primal.mapper._mapping_cache) == 2
     assert len(fun._primal.mapper._mapping_cache_tracker) == 2
@@ -109,7 +109,7 @@ def test_cache_fields_only():
     @qd.kernel
     def fun(flag: qd.template(), value: qd.template()):
         if qd.static(flag):
-            value[None] = value[None] + 1
+            value[()] = value[()] + 1
         else:
             assert "Invalid 'static_args.flag_1' branch"
 
@@ -121,10 +121,10 @@ def test_cache_fields_only():
 
     flag = True
     value = qd.field(qd.i32, shape=())
-    value[None] = 1
+    value[()] = 1
 
     fun(flag, value)
-    assert value[None] == 2
+    assert value[()] == 2
     assert len(fun._primal.compiled_kernel_data_by_key) == 1
     assert len(fun._primal.mapper._mapping_cache) == 1
     assert len(fun._primal.mapper._mapping_cache_tracker) == 1
@@ -132,7 +132,7 @@ def test_cache_fields_only():
     assert len(fun._primal.launch_context_buffer_cache._launch_ctx_cache_tracker) == 1
 
     fun(flag, value)
-    assert value[None] == 3
+    assert value[()] == 3
     assert len(fun._primal.compiled_kernel_data_by_key) == 1
     assert len(fun._primal.mapper._mapping_cache) == 1
     assert len(fun._primal.mapper._mapping_cache_tracker) == 1
@@ -144,7 +144,7 @@ def test_cache_fields_only():
 def test_cache_ndarray_only():
     @qd.kernel
     def fun(value: qd.types.ndarray()):
-        value[None] = value[None] + 1
+        value[()] = value[()] + 1
 
     assert len(fun._primal.compiled_kernel_data_by_key) == 0
     assert len(fun._primal.mapper._mapping_cache) == 0
@@ -153,10 +153,10 @@ def test_cache_ndarray_only():
     assert len(fun._primal.launch_context_buffer_cache._launch_ctx_cache_tracker) == 0
 
     value = qd.ndarray(qd.i32, shape=())
-    value[None] = 1
+    value[()] = 1
 
     fun(value)
-    assert value[None] == 2
+    assert value[()] == 2
     assert len(fun._primal.compiled_kernel_data_by_key) == 1
     assert len(fun._primal.mapper._mapping_cache) == 1
     assert len(fun._primal.mapper._mapping_cache_tracker) == 1
@@ -164,7 +164,7 @@ def test_cache_ndarray_only():
     assert len(fun._primal.launch_context_buffer_cache._launch_ctx_cache_tracker) == 1
 
     fun(value)
-    assert value[None] == 3
+    assert value[()] == 3
     assert len(fun._primal.compiled_kernel_data_by_key) == 1
     assert len(fun._primal.mapper._mapping_cache) == 1
     assert len(fun._primal.mapper._mapping_cache_tracker) == 1
@@ -177,7 +177,7 @@ def test_cache_primitive():
     @qd.kernel
     def fun(value: qd.template(), offset: int):
         if offset > 0:
-            value[None] = value[None] + offset
+            value[()] = value[()] + offset
 
     assert len(fun._primal.compiled_kernel_data_by_key) == 0
     assert len(fun._primal.mapper._mapping_cache) == 0
@@ -186,21 +186,21 @@ def test_cache_primitive():
     assert len(fun._primal.launch_context_buffer_cache._launch_ctx_cache_tracker) == 0
 
     value = qd.field(qd.i32, shape=())
-    value[None] = 1
+    value[()] = 1
 
     for i_arg, offset in enumerate((1, 256, -1), 1):
         for i in range(2):
             fun(value, offset)
-            assert value[None] == 1 + (offset * (i + 1) if offset > 0 else 0)
+            assert value[()] == 1 + (offset * (i + 1) if offset > 0 else 0)
             assert len(fun._primal.compiled_kernel_data_by_key) == 1
             assert len(fun._primal.mapper._mapping_cache) == i_arg
             assert len(fun._primal.mapper._mapping_cache_tracker) == i_arg
             assert len(fun._primal.launch_context_buffer_cache._launch_ctx_cache) == i_arg
             assert len(fun._primal.launch_context_buffer_cache._launch_ctx_cache_tracker) == i_arg
-        value[None] = 1
+        value[()] = 1
 
     fun(value, 10000)
-    assert value[None] == 10001
+    assert value[()] == 10001
     assert len(fun._primal.compiled_kernel_data_by_key) == 1
     assert len(fun._primal.mapper._mapping_cache) == i_arg + 1
     assert len(fun._primal.mapper._mapping_cache_tracker) == i_arg + 1
@@ -226,17 +226,17 @@ def test_fastcache(tmp_path: pathlib.Path, monkeypatch):
 
     @qd.kernel(fastcache=True)
     def fun(value: qd.types.ndarray(), offset: qd.template()):
-        value[None] = value[None] + offset
+        value[()] = value[()] + offset
 
     assert len(fun._primal.compiled_kernel_data_by_key) == 0
 
     value = qd.ndarray(qd.i32, shape=())
-    value[None] = 1
+    value[()] = 1
 
     assert not is_valid
     fun(value, 3)
     assert is_valid
-    assert value[None] == 4
+    assert value[()] == 4
     assert len(fun._primal.compiled_kernel_data_by_key) == 1
 
     qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
@@ -251,10 +251,10 @@ def test_fastcache(tmp_path: pathlib.Path, monkeypatch):
     monkeypatch.setattr("quadrants.lang.kernel_impl.Kernel.launch_kernel", launch_kernel)
 
     value = qd.ndarray(qd.i32, shape=())
-    value[None] = 1
+    value[()] = 1
 
     assert not is_valid
     fun(value, 3)
     assert is_valid
-    assert value[None] == 4
+    assert value[()] == 4
     assert len(fun._primal.compiled_kernel_data_by_key) == 1

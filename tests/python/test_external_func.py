@@ -7,7 +7,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang.util import has_clangpp
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @pytest.mark.skipif(not has_clangpp(), reason="Clang not installed.")

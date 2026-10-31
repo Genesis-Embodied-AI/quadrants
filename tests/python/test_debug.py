@@ -4,7 +4,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 u = platform.uname()
 
@@ -13,9 +13,9 @@ def test_cpu_debug_snode_reader():
     qd.init(arch=qd.x64, debug=True)
 
     x = qd.field(qd.f32, shape=())
-    x[None] = 10.0
+    x[()] = 10.0
 
-    assert x[None] == 10.0
+    assert x[()] == 10.0
 
 
 @pytest.mark.skipif(

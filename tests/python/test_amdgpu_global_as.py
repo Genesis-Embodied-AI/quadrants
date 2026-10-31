@@ -8,7 +8,7 @@ import glob
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test(arch=qd.amdgpu, print_kernel_amdgcn=True, offline_cache=False)

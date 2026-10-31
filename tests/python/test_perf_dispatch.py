@@ -13,7 +13,7 @@ from quadrants.lang._perf_dispatch import (
 )
 from quadrants.lang.exception import QuadrantsSyntaxError
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 # Work amounts for perf_dispatch timing tests.
 #

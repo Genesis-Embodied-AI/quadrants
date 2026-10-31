@@ -2,7 +2,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 def _get_matrix_swizzle_apis():
@@ -214,7 +214,6 @@ user_api[qd] = [
     "profiler",
     "pure",
     "pyfunc",
-    "python",
     "randn",
     "random",
     "raw_div",

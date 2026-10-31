@@ -18,7 +18,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 from tests.helpers.runtime import qd_init_same_arch
 
 

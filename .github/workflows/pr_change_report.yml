@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 permissions:
   contents: read
-  pull-requests: write
+  statuses: write
 jobs:
   pr-change-report:
     name: PR change report
@@ -214,7 +214,7 @@ jobs:
             cat /tmp/pr_change_report/report_check.md >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      - name: Post PR comment
+      - name: Publish files changed status
         if: steps.inputs.outputs.skip != 'true' && github.event_name == 'pull_request'
         uses: actions/github-script@v8
         with:
@@ -230,10 +230,13 @@ jobs:
             // Link to this run's summary page, which hosts the full per-file / per-function report.
             const url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}` +
               `/actions/runs/${context.runId}`;
-            const body = `[${text}](${url})`;
-            await github.rest.issues.createComment({
+            await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.payload.pull_request.number,
-              body: body,
+              sha: context.payload.pull_request.head.sha,
+              state: 'success',
+              context: 'Files changed',
+              // GitHub limits commit status descriptions to 140 characters.
+              description: text.substring(0, 140),
+              target_url: url,
             });

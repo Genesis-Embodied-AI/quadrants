@@ -3,7 +3,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang.misc import get_host_arch_list
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test(arch=get_host_arch_list())
@@ -98,7 +98,7 @@ def test_oop():
         @qd.kernel
         def reduce(self):
             for i, j in self.val:
-                self.total[None] += self.val[i, j] * 4
+                self.total[()] += self.val[i, j] * 4
 
     arr = Array2D(128, 128, 3)
 
@@ -122,7 +122,7 @@ def test_oop():
 
     @qd.kernel
     def double():
-        double_total[None] = 2 * arr.total[None]
+        double_total[()] = 2 * arr.total[()]
 
     with qd.ad.Tape(loss=double_total):
         arr.reduce()
@@ -155,7 +155,7 @@ def test_oop_two_items():
         @qd.kernel
         def reduce(self):
             for i, j in self.val:
-                self.total[None] += self.val[i, j] * self.multiplier
+                self.total[()] += self.val[i, j] * self.multiplier
 
     arr1_inc, arr1_mult = 3, 4
     arr2_inc, arr2_mult = 6, 8
@@ -200,7 +200,7 @@ def test_oop_inherit_ok():
         @qd.kernel
         def reduce(self):
             for i, j in self.val:
-                self.total[None] += self.val[i, j] * self.mul
+                self.total[()] += self.val[i, j] * self.mul
 
     arr = Array1D(128, 42)
 
@@ -227,7 +227,7 @@ def test_oop_class_must_be_data_oriented():
         @qd.kernel
         def reduce(self):
             for i, j in self.val:
-                self.total[None] += self.val[i, j] * self.mul
+                self.total[()] += self.val[i, j] * self.mul
 
     arr = Array1D(128, 42)
 
