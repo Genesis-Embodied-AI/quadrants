@@ -60,25 +60,20 @@ jobs:
           publish_branch: gh-pages
       - name: Link to documentation preview
         if: github.head_ref != ''
-        env:
-          PREVIEW_BRANCH: ${{ github.head_ref }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          python - <<'PY'
-          import os
-          import subprocess
-          from urllib.parse import quote
-
-          owner, repo = os.environ["GITHUB_REPOSITORY"].split("/")
-          branch = quote(os.environ["PREVIEW_BRANCH"], safe="/")
-          url = f"https://{owner}.github.io/{repo}/preview/{branch}/"
-          # Attach the link to the PR head, rather than GitHub's temporary merge commit.
-          subprocess.run([
-              "gh", "api", "--method", "POST",
-              f"repos/{owner}/{repo}/statuses/{os.environ['PR_HEAD_SHA']}",
-              "-f", "state=success", "-f", "context=Docs preview",
-              "-f", "description=Open docs preview (publishing may take a few minutes)",
-              "-f", f"target_url={url}",
-          ], check=True)
-          PY
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            // Encode each path segment so slashes in branch names remain directory separators.
+            const branch = context.payload.pull_request.head.ref.split('/').map(encodeURIComponent).join('/');
+            const url = `https://${owner}.github.io/${repo}/preview/${branch}/`;
+            await github.rest.repos.createCommitStatus({
+              owner,
+              repo,
+              // Attach the link to the PR head, rather than GitHub's temporary merge commit.
+              sha: context.payload.pull_request.head.sha,
+              state: 'success',
+              context: 'Docs preview',
+              description: 'Open docs preview (publishing may take a few minutes)',
+              target_url: url,
+            });
