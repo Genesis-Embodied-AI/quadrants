@@ -560,8 +560,13 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       //     ``SIInstrInfo::getInstSizeInBytes`` during branch relaxation (genesis-world #2962). So on CDNA we patch
       //     ``amdgpu_permlane64`` to the identity, which neutralises the helper's (RDNA-shaped) cross-SIMD branch
       //     without ever emitting the intrinsic.
-      //   * RDNA3/4 (gfx11 / gfx12): ``ds_bpermute`` is SIMD32-scoped (lane mask 31), so the top half is reached via
+      //   * RDNA3 (gfx11): ``ds_bpermute`` is SIMD32-scoped (lane mask 31), so the top half is reached via
       //     the native single-instruction ``v_permlane64_b32``.
+      //   * RDNA4 (gfx12): like CDNA, ``ds_bpermute`` addresses the full wave64. Unlike CDNA, ``v_permlane64_b32``
+      //     does exist on RDNA4, so ``amdgpu_permlane64`` is still patched to the native intrinsic; the helper's
+      //     ``mask == 31`` guard makes its result dead. (Note the predicates below split the two properties:
+      //     ``ds_bpermute_is_wave64_wide`` covers gfx9xx *and* gfx12, while ``is_gcn_cdna`` stays CDNA-only and drives
+      //     the permlane64 identity patch.)
       //   * RDNA1/2 (gfx10.x): ``ds_bpermute`` is SIMD32-scoped (lane mask 31), but ``v_permlane64_b32`` does not
       //     exist yet, so we emulate the lane ``i`` <-> ``i ^ 32`` swap with an LDS roundtrip (below).
       //
@@ -578,16 +583,19 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       // ``CreateIntrinsic`` segfaults inside ``getDeclaration()`` while resolving the mangled name.
       auto mcpu_str = AMDGPUContext::get_instance().get_mcpu();
       bool is_gcn_cdna = (mcpu_str.substr(0, 4) == "gfx9");
-      bool has_native_permlane64 = (mcpu_str.substr(0, 5) == "gfx11" || mcpu_str.substr(0, 5) == "gfx12");
+      bool is_rdna4 = (mcpu_str.substr(0, 5) == "gfx12");
+      bool has_native_permlane64 = (mcpu_str.substr(0, 5) == "gfx11" || is_rdna4);
+      bool ds_bpermute_is_wave64_wide = (is_gcn_cdna || is_rdna4);
 
       // Patch the ds_bpermute lane mask used by ``amdgpu_cross_half_shuffle_i32``: 63 where ``ds_bpermute`` is
-      // wave64-wide (GCN/CDNA), 31 where it is SIMD32-scoped (RDNA, paired with the permlane64 swap above).
+      // wave64-wide (GCN/CDNA and RDNA4), 31 where it is SIMD32-scoped (RDNA1-3, paired with the permlane64 swap above).
       if (auto mask_func = module->getFunction("amdgpu_ds_bpermute_lane_mask")) {
         mask_func->deleteBody();
         auto bb = llvm::BasicBlock::Create(*ctx, "entry", mask_func);
         IRBuilder<> builder(*ctx);
         builder.SetInsertPoint(bb);
-        builder.CreateRet(llvm::ConstantInt::get(llvm::Type::getInt32Ty(*ctx), is_gcn_cdna ? 63 : 31));
+        builder.CreateRet(
+            llvm::ConstantInt::get(llvm::Type::getInt32Ty(*ctx), ds_bpermute_is_wave64_wide ? 63 : 31));
         QuadrantsLLVMContext::mark_inline(mask_func);
       }
 
