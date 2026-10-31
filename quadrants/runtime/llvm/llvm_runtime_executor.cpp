@@ -894,7 +894,7 @@ LLVMRuntime *LlvmRuntimeExecutor::get_llvm_runtime() {
 
 void LlvmRuntimeExecutor::init_runtime_jit_module(std::unique_ptr<llvm::Module> module) {
   llvm_context_->init_runtime_module(module.get());
-  runtime_jit_module_ = create_jit_module(std::move(module));
+  runtime_jit_module_ = jit_session_->add_runtime_module(std::move(module));
 }
 
 }  // namespace quadrants::lang

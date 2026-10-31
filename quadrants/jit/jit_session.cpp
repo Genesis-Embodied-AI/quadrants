@@ -2,6 +2,7 @@
 
 #ifdef QD_WITH_LLVM
 #include "llvm/IR/DataLayout.h"
+#include "llvm/IR/Module.h"
 #endif
 
 namespace quadrants::lang {
@@ -25,6 +26,12 @@ std::unique_ptr<JITSession> create_llvm_jit_session_amdgpu(QuadrantsLLVMContext 
 
 JITSession::JITSession(QuadrantsLLVMContext *tlctx, const CompileConfig &config) : tlctx_(tlctx), config_(config) {
 }
+
+#ifdef QD_WITH_LLVM
+JITModule *JITSession::add_runtime_module(std::unique_ptr<llvm::Module> M, int max_reg) {
+  return add_module(std::move(M), max_reg);
+}
+#endif
 
 std::unique_ptr<JITSession> JITSession::create(QuadrantsLLVMContext *tlctx,
                                                const CompileConfig &config,
