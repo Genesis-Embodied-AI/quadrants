@@ -23,11 +23,20 @@ from quadrants.lang import (
 )
 from quadrants.lang import ops as qd_ops
 from quadrants.lang._dataclass_util import create_flat_name
+from quadrants.lang._final_dataclass_fields import (
+    final_field_names,
+    is_final_annotation,
+)
+from quadrants.lang._optional_annotation import OPTIONAL_ABSENT
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
 )
+from quadrants.lang.ast.ast_transformers import graph_api
 from quadrants.lang.ast.ast_transformers.checkpoint_transformer import (
     CheckpointTransformer,
+)
+from quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer import (
+    predeclare_struct_primitives,
 )
 from quadrants.lang.ast.symbol_resolver import ASTResolver
 from quadrants.lang.buffer_view import BufferView
@@ -57,6 +66,13 @@ class FunctionDefTransformer:
         full_name = prefix_name + "_" + name
         if not isinstance(annotation, primitive_types.RefType):
             ctx.kernel_args.append(name)
+        # Optional ndarray + None declares no runtime arg; bind the name to the injected None global so
+        # qd.static(x is not None) specializes the present-only body away.
+        if this_arg_features is OPTIONAL_ABSENT:
+            if name in ctx.template_vars:
+                return True, ctx.template_vars[name]
+            assert ctx.global_vars is not None
+            return True, ctx.global_vars.get(name)
         # qd.Tensor value-dispatch. The first slot of this_arg_features is a string marker placed by
         # _template_mapper_hotpath. The annotation is the wrapper class itself (``qd.Tensor``).
         if annotation is _TensorClass:
@@ -139,14 +155,25 @@ class FunctionDefTransformer:
         argument_name: str,
         argument_type: Any,
         this_arg_features: tuple[Any, ...],
+        arg_value: Any = None,
     ) -> None:
         pruning = ctx.global_context.pruning
         func_id = ctx.func.func_id
         if dataclasses.is_dataclass(argument_type):
             ctx.create_variable(argument_name, argument_type)
+            final_names = final_field_names(argument_type)
             for field_idx, field in enumerate(dataclasses.fields(argument_type)):
                 flat_name = create_flat_name(argument_name, field.name)
                 if pruning.enforcing and flat_name not in pruning.used_vars_by_func_id[func_id]:
+                    continue
+                # Bind ``flat_name`` to the value off the instance so a rewritten ``config.field`` resolves to a Python
+                # constant in ``build_Name`` - what makes ``qd.static(config.field)`` legal on a plain frozen dataclass.
+                if field.name in final_names:
+                    assert arg_value is not None, (
+                        f"Final-annotated dataclass field {field.name!r} needs the runtime dataclass instance to "
+                        f"bake its value; kernel-arg dispatch omitted ``arg_value``"
+                    )
+                    ctx.create_variable(flat_name, getattr(arg_value, field.name))
                     continue
                 # if a field is a dataclass, then feed back into process_kernel_arg recursively
                 if dataclasses.is_dataclass(field.type):
@@ -155,15 +182,12 @@ class FunctionDefTransformer:
                         flat_name,
                         field.type,
                         this_arg_features[field_idx],
+                        getattr(arg_value, field.name) if arg_value is not None else None,
                     )
                 elif isinstance(field.type, type) and getattr(field.type, "_data_oriented", False):
-                    # ``@qd.data_oriented`` field type inside a typed-dataclass kernel arg. The two patterns are
-                    # semantically incompatible at this layer: dataclass kernel-arg recursion uses annotations to
-                    # flatten leaf fields into per-leaf kernel args at compile time, but data_oriented containers don't
-                    # carry per-attribute type annotations — they need a value-driven walk
-                    # (``_predeclare_struct_ndarrays``), which only fires for ``qd.template()`` / ``qd.Tensor``
-                    # annotations. Rather than silently miscompile, raise a clear error pointing users to the
-                    # recommended pattern.
+                    # The two patterns don't compose here: dataclass flattening is annotation-driven, while a
+                    # data_oriented container has no per-attribute annotations and needs the value-driven walk that only
+                    # ``qd.template()`` / ``qd.Tensor`` annotations trigger.
                     raise QuadrantsSyntaxError(
                         f"Kernel arg {argument_name!r}: field {field.name!r} has @qd.data_oriented type "
                         f"{field.type.__name__!r}, which cannot be flattened into a typed-dataclass kernel arg. "
@@ -218,9 +242,11 @@ class FunctionDefTransformer:
                 arg_meta.name,
                 arg_meta.annotation,
                 ctx.arg_features[i] if ctx.arg_features is not None else (),
+                ctx.py_args[i] if ctx.py_args is not None else None,
             )
 
         FunctionDefTransformer._predeclare_struct_ndarrays(ctx)
+        predeclare_struct_primitives(ctx)
         compiling_callable.finalize_params()
         # remove original args
         node.args.args = []
@@ -234,20 +260,31 @@ class FunctionDefTransformer:
         Also stores ``(arg_id, template_arg_idx, attr_chain)`` tuples in
         ``ctx.global_context.struct_ndarray_launch_info`` so the launch path can populate the corresponding slots in the
         launch context.
+
+        Pruning: the enforcing pass registers only the ndarrays the first pass saw accessed
+        (``pruning.used_struct_ndarray_ids``), dropping the rest from the kernel's parameter list. The first pass must
+        register everything, since that is what lets ``build_Attribute`` resolve the accesses that populate the set.
         """
+        from quadrants.lang._pruning import Pruning  # pylint: disable=C0415
         from quadrants.lang.util import cook_dtype  # pylint: disable=C0415
 
         cache = ctx.global_context.ndarray_to_any_array
         launch_info = ctx.global_context.struct_ndarray_launch_info
+        pruning = ctx.global_context.pruning
+        used_ids = getattr(pruning, "used_struct_ndarray_ids", None)
+        prune = pruning.enforcing and used_ids is not None and getattr(pruning, "pass_0_ran", False)
+        # A fastcache hit skips pass 0, so there are no ids to prune by - but the cached flat-name set describes the
+        # same ndarrays, and must be used: registering every reachable ndarray instead would bind the kernel's arg slots
+        # to different ndarrays than the compile that produced the artifact.
+        prune_from_flat_names = pruning.enforcing and not getattr(pruning, "pass_0_ran", False)
+        kernel_used_flat_names = (
+            pruning.used_vars_by_func_id.get(Pruning.KERNEL_FUNC_ID, set()) if prune_from_flat_names else None
+        )
 
-        # ``_seen`` set guards against attribute-graph cycles in user containers (e.g. Genesis ``sim.solver.sim is
-        # sim``). Without it this walker recurses infinitely on the back-edge and blows the Python stack at compile
-        # time. Tracked by ``id(obj)`` to avoid relying on ``__hash__`` for arbitrary user types.
+        # ``seen`` is required, not defensive: Genesis object graphs have cross-references (solver <-> scene <-> sim).
+        # Sharing it across the whole arg is safe because the ndarray set rooted at a node does not depend on the path
+        # taken to reach it.
         def _walk_obj(obj, arg_idx, path, seen):
-            obj_id = id(obj)
-            if obj_id in seen:
-                return
-            seen.add(obj_id)
             if is_dataclass_instance(obj):
                 for field in dataclasses.fields(obj):
                     child = getattr(obj, field.name)
@@ -256,6 +293,10 @@ class FunctionDefTransformer:
                     if isinstance(child, _ndarray.Ndarray):
                         _register_ndarray(child, arg_idx, (*path, field.name))
                     elif is_dataclass_instance(child) or is_data_oriented(child):
+                        child_id = id(child)
+                        if child_id in seen:
+                            continue
+                        seen.add(child_id)
                         _walk_obj(child, arg_idx, (*path, field.name), seen)
             else:
                 for attr_name, attr_val in vars(obj).items():
@@ -264,12 +305,29 @@ class FunctionDefTransformer:
                     if isinstance(attr_val, _ndarray.Ndarray):
                         _register_ndarray(attr_val, arg_idx, (*path, attr_name))
                     elif is_dataclass_instance(attr_val) or is_data_oriented(attr_val):
+                        attr_id = id(attr_val)
+                        if attr_id in seen:
+                            continue
+                        seen.add(attr_id)
                         _walk_obj(attr_val, arg_idx, (*path, attr_name), seen)
 
         def _register_ndarray(nd, arg_idx, attr_chain):
             key = id(nd)
             if key in cache:
                 return
+            if prune and key not in used_ids:
+                return
+            if prune_from_flat_names:
+                if arg_idx < 0 or arg_idx >= len(ctx.func.arg_metas):
+                    return
+                arg_name = ctx.func.arg_metas[arg_idx].name
+                if not arg_name:
+                    return
+                flat = arg_name
+                for attr in attr_chain:
+                    flat = create_flat_name(flat, attr)
+                if flat not in kernel_used_flat_names:
+                    return
             from quadrants._lib import core as _qd_core  # pylint: disable=C0415
 
             element_type = cook_dtype(nd.element_type)
@@ -284,6 +342,9 @@ class FunctionDefTransformer:
                 _qd_core.make_external_tensor_expr(element_type, ndim, arg_id_vec, needs_grad, BoundaryMode.UNSAFE),
                 _qd_layout=layout,
             )
+            # Lets ``_promote_ndarray_if_declared`` still mark the ndarray used when an access reaches it through this
+            # proxy rather than the ndarray itself, as happens inside an inlined ``@qd.func`` body.
+            arr._qd_source_ndarray_id = key
             cache[key] = arr
             launch_info.append((arg_id_vec[0], arg_idx, attr_chain))
 
@@ -300,9 +361,9 @@ class FunctionDefTransformer:
             if isinstance(val, _ndarray.Ndarray):
                 continue
             if is_dataclass_instance(val):
-                _walk_obj(val, i, (), set())
+                _walk_obj(val, i, (), {id(val)})
             elif hasattr(val, "__dict__"):
-                _walk_obj(val, i, (), set())
+                _walk_obj(val, i, (), {id(val)})
 
     @staticmethod
     def _unwrap_tensor(data: Any) -> Any:
@@ -318,6 +379,16 @@ class FunctionDefTransformer:
         argument_type: Any,
         data: Any,
     ) -> None:
+        # Lets ``build_Name`` seed ``_qd_arg_chain`` for chains rooted at this param, so that a member read inside a
+        # ``@qd.func`` (``static_rigid_sim_config.para_level``) reaches the kernel's pruning set - without it the
+        # args-hasher never sees the value and configurations that differ only there collide in the fastcache key.
+        ctx.fn_param_names.add(argument_name)
+
+        # A ``Final[T]`` leaf @qd.func arg: ``data`` already carries the resolved Python value, so bind it directly for
+        # ``qd.static(cfg.field)``. Before the ``annotations.template`` check (``Final[T]`` is not a ``template``).
+        if is_final_annotation(argument_type):
+            ctx.create_variable(argument_name, data)
+            return None
         # Template arguments are passed by reference.
         if isinstance(argument_type, annotations.template):
             ctx.create_variable(argument_name, data)
@@ -514,6 +585,7 @@ class FunctionDefTransformer:
                 # different argument shape) start from an empty list. Mirrors how `graph_do_while_arg` gets overwritten
                 # unconditionally during AST traversal.
                 kernel.checkpoint_yield_on_args = []
+                kernel.checkpoint_yield_on_cpp_arg_ids = []
                 kernel.checkpoint_user_labels_by_cp_id = []
                 # Auto-wrap pass for `@qd.kernel(graph=True, checkpoints=True)` kernels. Mutates `node.body` in place so
                 # every top-level for-loop (and every for-loop inside a `qd.graph_do_while` body) that the user did not
@@ -557,18 +629,13 @@ class FunctionDefTransformer:
 
     @staticmethod
     def _is_graph_do_while_while(stmt: ast.stmt) -> bool:
-        """Syntactic check matching ASTTransformer._is_graph_do_while_call: a ``while qd.graph_do_while(var):`` loop."""
+        """Syntactic check matching ASTTransformer._is_graph_do_while_call: a ``while qd.graph.do_while(var):`` loop (or
+        the deprecated ``while qd.graph_do_while(var):``)."""
         if not isinstance(stmt, ast.While):
             return False
-        test = stmt.test
-        if not isinstance(test, ast.Call):
+        if not isinstance(stmt.test, ast.Call):
             return False
-        func = test.func
-        if isinstance(func, ast.Attribute) and func.attr == "graph_do_while":
-            return True
-        if isinstance(func, ast.Name) and func.id == "graph_do_while":
-            return True
-        return False
+        return graph_api.matches(stmt.test.func, "do_while")
 
     @staticmethod
     def _is_checkpoint_with(stmt: ast.With) -> bool:
@@ -599,6 +666,28 @@ class FunctionDefTransformer:
         if isinstance(func, ast.Name) and func.id == "loop_config":
             return True
         return False
+
+    @staticmethod
+    def _is_graph_parallel_context_with(stmt: ast.stmt) -> bool:
+        """Syntactic check matching GraphParallelTransformer.is_graph_parallel_context_call: a
+        ``with qd.graph.parallel_context():`` fork/join region (or the deprecated ``qd.graph_parallel_context()``)."""
+        if not isinstance(stmt, ast.With) or len(stmt.items) != 1:
+            return False
+        ctx_expr = stmt.items[0].context_expr
+        if not isinstance(ctx_expr, ast.Call):
+            return False
+        return graph_api.matches(ctx_expr.func, "parallel_context")
+
+    @staticmethod
+    def _is_parallel_section_with(stmt: ast.stmt) -> bool:
+        """Syntactic check matching GraphParallelTransformer.is_parallel_section_call: a ``with qd.graph.parallel():``
+        section of a ``qd.graph.parallel_context()`` region (or the deprecated ``qd.graph_parallel()``)."""
+        if not isinstance(stmt, ast.With) or len(stmt.items) != 1:
+            return False
+        ctx_expr = stmt.items[0].context_expr
+        if not isinstance(ctx_expr, ast.Call):
+            return False
+        return graph_api.matches(ctx_expr.func, "parallel")
 
     @staticmethod
     def _validate_graph_do_while_structure(body: list[ast.stmt]) -> None:
@@ -659,10 +748,31 @@ class FunctionDefTransformer:
                 # `CheckpointTransformer.build_checkpoint_with`.
                 FunctionDefTransformer._validate_graph_do_while_stmt_list(stmt.body, is_kernel_top=is_kernel_top)
                 continue
-            where = "the kernel body" if is_kernel_top else "a qd.graph_do_while() body"
+            if FunctionDefTransformer._is_graph_parallel_context_with(stmt):
+                # A `with qd.graph_parallel_context()` region groups concurrent `with qd.graph_parallel()`
+                # sections; it is a legal sibling of for-loops / checkpoints. Its body must be
+                # `qd.graph_parallel` section blocks (optionally under `if qd.static(...)`); the full check
+                # is in GraphParallelTransformer.build_graph_parallel_context_with. Each `qd.graph_parallel` section's
+                # body is task territory, validated here with the in-loop rules. Descend through `if` members
+                # so `qd.graph_parallel` sections inside an optional `if qd.static(...)` are reached too.
+                pending = list(stmt.body)
+                while pending:
+                    member = pending.pop()
+                    if FunctionDefTransformer._is_parallel_section_with(member):
+                        FunctionDefTransformer._validate_graph_do_while_stmt_list(member.body, is_kernel_top=False)
+                    elif isinstance(member, ast.If):
+                        pending.extend(member.body)
+                        pending.extend(member.orelse)
+                    elif isinstance(member, ast.For):
+                        # `for ... in qd.static(...)` generates sections; descend so each unrolled section
+                        # body is still validated with the in-loop rules (a runtime for here is rejected
+                        # earlier by GraphParallelTransformer.build_graph_parallel_context_with).
+                        pending.extend(member.body)
+                continue
+            where = "the kernel body" if is_kernel_top else "a qd.graph.do_while() body"
             raise QuadrantsSyntaxError(
-                f"When a kernel uses qd.graph_do_while(), {where} may not contain a {type(stmt).__name__} "
-                f"statement. Allowed: for-loops, qd.graph_do_while() while-loops, bare assignments, and "
+                f"When a kernel uses qd.graph.do_while(), {where} may not contain a {type(stmt).__name__} "
+                f"statement. Allowed: for-loops, qd.graph.do_while() while-loops, bare assignments, and "
                 f"@qd.func calls (freely mixed and nested). [offending stmt {i}: {type(stmt).__name__}]"
             )
 

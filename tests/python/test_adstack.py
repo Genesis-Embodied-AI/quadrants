@@ -15,7 +15,10 @@ from quadrants.lang import impl
 from quadrants.lang.exception import QuadrantsAssertionError
 from quadrants.lang.misc import is_extension_supported
 
-from tests import test_utils
+from tests.helpers import test_utils
+
+TEST_RAN = "test ran"
+RET_SUCCESS = 42
 
 # Diffable unary ops whose reverse formula accumulates a constant coefficient onto `stmt->operand` and therefore
 # does not need per-iteration operand spilling on the adstack. Update this set and `unary_collections` in
@@ -70,13 +73,13 @@ def _run_unary_loop_carried(qd_dtype, op_name, step, offset, x_val, n_iter, rel_
             for j in range(n_iter):
                 a = x[i] + qd.cast(j, qd_dtype) * step + offset
                 acc += qd_op(a)
-            y[None] += acc
+            y[()] += acc
 
     for i in range(n):
         x[i] = x_val + i * 0.05
-    y[None] = 0.0
+    y[()] = 0.0
     compute()
-    y.grad[None] = 1.0
+    y.grad[()] = 1.0
     for i in range(n):
         x.grad[i] = 0.0
     compute.grad()
@@ -96,7 +99,7 @@ def _run_unary_loop_carried(qd_dtype, op_name, step, offset, x_val, n_iter, rel_
     # Metal); that floor silently defeats the f64 variant's tight tolerance and makes it validate identical
     # precision to a loose f32 assertion. The backend-aware floor is not wanted here because the f64 variant
     # specifically exists to detect an f32-precision regression in an f64 backward pass.
-    assert y[None] == pytest.approx(y_t.item(), rel=rel_tol)
+    assert y[()] == pytest.approx(y_t.item(), rel=rel_tol)
     for i in range(n):
         assert x.grad[i] == pytest.approx(x_t.grad[i].item(), rel=rel_tol)
 
@@ -169,7 +172,7 @@ def test_unary_forward_mode_derivative(op_name):
     @qd.kernel
     def kern():
         for i in x:
-            loss[None] += qd_op(x[i])
+            loss[()] += qd_op(x[i])
 
     for i in range(N):
         x[i] = 0.1 * (i + 1)
@@ -183,7 +186,7 @@ def test_unary_forward_mode_derivative(op_name):
     l_t.backward()
     expected = float(x_t.grad.sum().item())
 
-    assert loss.dual[None] == pytest.approx(expected, rel=1e-5)
+    assert loss.dual[()] == pytest.approx(expected, rel=1e-5)
 
 
 def test_unary_collections_audit():
@@ -296,16 +299,16 @@ def test_adstack_nan_propagation(op_name, x_val):
 
     @qd.kernel
     def compute():
-        y[None] = qd_op(x[None])
+        y[()] = qd_op(x[()])
 
-    x[None] = x_val
-    y[None] = 0.0
+    x[()] = x_val
+    y[()] = 0.0
     compute()
-    y.grad[None] = 1.0
-    x.grad[None] = 0.0
+    y.grad[()] = 1.0
+    x.grad[()] = 0.0
     compute.grad()
 
-    assert math.isnan(x.grad[None])
+    assert math.isnan(x.grad[()])
 
 
 @pytest.mark.xfail(
@@ -329,16 +332,16 @@ def test_adstack_nan_propagation_f64(op_name, x_val):
 
     @qd.kernel
     def compute():
-        y[None] = qd_op(x[None])
+        y[()] = qd_op(x[()])
 
-    x[None] = x_val
-    y[None] = 0.0
+    x[()] = x_val
+    y[()] = 0.0
     compute()
-    y.grad[None] = 1.0
-    x.grad[None] = 0.0
+    y.grad[()] = 1.0
+    x.grad[()] = 0.0
     compute.grad()
 
-    assert math.isnan(x.grad[None])
+    assert math.isnan(x.grad[()])
 
 
 def _run_basic_gradient(qd_dtype, n_iter, rel_tol, approx=test_utils.approx, abs_tol=None):
@@ -363,14 +366,14 @@ def _run_basic_gradient(qd_dtype, n_iter, rel_tol, approx=test_utils.approx, abs
             v = x[i]
             for _ in range(n_iter):
                 v = v * 0.95 + 0.01
-            y[None] += v
+            y[()] += v
 
     x_vals = [0.1, 0.3, 0.5, 0.8]
     for i, v in enumerate(x_vals):
         x[i] = v
-    y[None] = 0.0
+    y[()] = 0.0
     compute()
-    y.grad[None] = 1.0
+    y.grad[()] = 1.0
     for i in range(n):
         x.grad[i] = 0.0
 
@@ -420,7 +423,7 @@ def test_adstack_basic_gradient_f64(n_iter):
 @test_utils.test(require=qd.extension.adstack)
 def test_eliminate_recomputable_pushes_preserves_zero_body_store():
     # Cross-checks `dloss/dc` against the analytic value `2 * cos(c) * cos(sin(c))` for an adstack-mode kernel where
-    # `tmp` receives one recomputable body push (`tmp = qd.sin(c[None])`) plus one conditional zero body store
+    # `tmp` receives one recomputable body push (`tmp = qd.sin(c[()])`) plus one conditional zero body store
     # (`if reset[i] != 0: tmp = 0.0`). The reset mask `[0, 1, 0, 1]` zeros `tmp` for two of four iterations so only
     # the other two contribute to the gradient.
     #
@@ -445,7 +448,7 @@ def test_eliminate_recomputable_pushes_preserves_zero_body_store():
             # Recomputable body push: sin of a globally-loaded scalar. The chain `sin(GlobalLoad(c))` has interior
             # side-effect-free ops only and no LoopIndex / LocalLoad leaves, so RecomputableChainAnalyzer returns
             # true.
-            tmp = qd.sin(c[None])
+            tmp = qd.sin(c[()])
             if reset[i] != 0:
                 # Real `tmp = 0.0` body store. Lowers to AdStackPushStmt with value zero. A weaker eligibility gate
                 # misclassifies this push as an init prologue push and silently erases it.
@@ -454,18 +457,18 @@ def test_eliminate_recomputable_pushes_preserves_zero_body_store():
             # visit(UnaryOpStmt) rule, which is what makes this an AdStack in the first place (the load+store rule
             # does not fire here because the offload-level for-loop is outside the IB and `dynamic_for_depth_` stays
             # 0).
-            loss[None] += qd.sin(tmp)
+            loss[()] += qd.sin(tmp)
 
-    c[None] = 0.5
+    c[()] = 0.5
     reset[0] = 0
     reset[1] = 1
     reset[2] = 0
     reset[3] = 1
-    loss[None] = 0.0
-    c.grad[None] = 0.0
+    loss[()] = 0.0
+    c.grad[()] = 0.0
 
     compute()
-    loss.grad[None] = 1.0
+    loss.grad[()] = 1.0
     compute.grad()
 
     # Forward semantics: tmp_i = sin(c) when reset[i]==0, 0 when reset[i]!=0. Two of four iterations are not reset,
@@ -474,8 +477,8 @@ def test_eliminate_recomputable_pushes_preserves_zero_body_store():
     n_no_reset = 2
     expected_loss = n_no_reset * math.sin(math.sin(0.5))
     expected_grad = n_no_reset * math.cos(0.5) * math.cos(math.sin(0.5))
-    assert loss[None] == pytest.approx(expected_loss, rel=1e-5)
-    assert c.grad[None] == pytest.approx(expected_grad, rel=1e-5)
+    assert loss[()] == pytest.approx(expected_loss, rel=1e-5)
+    assert c.grad[()] == pytest.approx(expected_grad, rel=1e-5)
 
 
 @test_utils.test(require=qd.extension.adstack, cfg_optimization=False, ad_stack_experimental_enabled=True)
@@ -627,7 +630,7 @@ def test_adstack_basic_gradient_negative(wrap_inner_in_func, n_iter):
         @qd.kernel
         def compute():
             for i in x:
-                y[None] += inner(x[i])
+                y[()] += inner(x[i])
 
     else:
 
@@ -637,12 +640,12 @@ def test_adstack_basic_gradient_negative(wrap_inner_in_func, n_iter):
                 v = x[i]
                 for _ in range(n_iter):
                     v = v * 0.95 + 0.01
-                y[None] += v
+                y[()] += v
 
     x_vals = [0.1, 0.3, 0.5, 0.8]
     for i, v in enumerate(x_vals):
         x[i] = v
-    y[None] = 0.0
+    y[()] = 0.0
     compute()
 
     with pytest.raises(qd.QuadrantsCompilationError, match=r"non static range"):
@@ -687,14 +690,14 @@ def _run_reverse_global_cross_iter(has_outer_for, in_func, load_kind, expect_rai
     def func_body_cross_iter():
         for i in range(n):
             if i == 0:
-                out[i] = x[None]
+                out[i] = x[()]
             else:
-                out[i] = out[i - 1] + x[None]
+                out[i] = out[i - 1] + x[()]
 
     @qd.func
     def func_body_constant_outside():
         for i in range(n):
-            out[i] = out[n] + x[None]
+            out[i] = out[n] + x[()]
 
     @qd.kernel
     def compute():
@@ -708,14 +711,14 @@ def _run_reverse_global_cross_iter(has_outer_for, in_func, load_kind, expect_rai
                 if qd.static(load_kind == "cross_iter"):
                     for i in range(n):
                         if i == 0:
-                            out[i] = x[None]
+                            out[i] = x[()]
                         else:
-                            out[i] = out[i - 1] + x[None]
+                            out[i] = out[i - 1] + x[()]
                 else:
                     for i in range(n):
-                        out[i] = out[n] + x[None]
+                        out[i] = out[n] + x[()]
 
-    x[None] = 1.0
+    x[()] = 1.0
     if load_kind == "constant_outside_iter_range":
         out[n] = 0.5
     compute()
@@ -728,7 +731,7 @@ def _run_reverse_global_cross_iter(has_outer_for, in_func, load_kind, expect_rai
         for i in range(n):
             out.grad[i] = 1.0
         expected_x_grad = float(n)
-    x.grad[None] = 0.0
+    x.grad[()] = 0.0
     if expect_raise:
         with pytest.raises(
             (qd.QuadrantsCompilationError, RuntimeError),
@@ -737,7 +740,7 @@ def _run_reverse_global_cross_iter(has_outer_for, in_func, load_kind, expect_rai
             compute.grad()
     else:
         compute.grad()
-        assert float(x.grad[None]) == pytest.approx(expected_x_grad, rel=1e-6)
+        assert float(x.grad[()]) == pytest.approx(expected_x_grad, rel=1e-6)
 
 
 @pytest.mark.parametrize("has_outer_for, in_func, load_kind", _REVERSE_GLOBAL_CROSS_ITER_PATTERNS)
@@ -800,7 +803,7 @@ def _run_reverse_sibling_component_correct_gradient(has_outer_for, in_func):
     @qd.func
     def func_body():
         for i in range(n):
-            out[i, 1] = x[None]
+            out[i, 1] = x[()]
             out[i, 0] = out[i, 1] * 2.0
 
     @qd.kernel
@@ -810,19 +813,19 @@ def _run_reverse_sibling_component_correct_gradient(has_outer_for, in_func):
                 func_body()
             else:
                 for i in range(n):
-                    out[i, 1] = x[None]
+                    out[i, 1] = x[()]
                     out[i, 0] = out[i, 1] * 2.0
 
-    x[None] = 1.0
+    x[()] = 1.0
     compute()
     for i in range(n):
         out.grad[i, 0] = 1.0
         out.grad[i, 1] = 0.0
-    x.grad[None] = 0.0
+    x.grad[()] = 0.0
     compute.grad()
     # `out[i, 0] = (out[i, 1] = x) * 2.0 = 2x` per iter; seed `out.grad[i, 0] = 1` for every i.
     # `d(out[i, 0]) / d(x) = 2` per iter -> `x.grad = 2 * n`.
-    assert float(x.grad[None]) == pytest.approx(2.0 * n, rel=1e-6)
+    assert float(x.grad[()]) == pytest.approx(2.0 * n, rel=1e-6)
 
 
 @pytest.mark.parametrize("has_outer_for, in_func", _REVERSE_SIBLING_COMPONENT_PATTERNS)
@@ -840,7 +843,7 @@ def test_reverse_sibling_component_correct_gradient_with_adstack(has_outer_for, 
 
 def _run_reverse_kernel_top_indep_iters_correct_gradient():
     # Independent-iteration kernel-top range-for (no cross-iteration RAW). Both adstack settings must
-    # produce the analytical gradient `2 * n` for the per-iteration store `out[i] = x[None] * 2`.
+    # produce the analytical gradient `2 * n` for the per-iteration store `out[i] = x[()] * 2`.
     n = 4
     x = qd.field(qd.f32, shape=(), needs_grad=True)
     out = qd.field(qd.f32, shape=n, needs_grad=True)
@@ -848,15 +851,15 @@ def _run_reverse_kernel_top_indep_iters_correct_gradient():
     @qd.kernel
     def compute():
         for i in range(n):
-            out[i] = x[None] * 2.0
+            out[i] = x[()] * 2.0
 
-    x[None] = 1.0
+    x[()] = 1.0
     compute()
     for i in range(n):
         out.grad[i] = 1.0
-    x.grad[None] = 0.0
+    x.grad[()] = 0.0
     compute.grad()
-    assert float(x.grad[None]) == pytest.approx(2.0 * n, rel=1e-6)
+    assert float(x.grad[()]) == pytest.approx(2.0 * n, rel=1e-6)
 
 
 @test_utils.test(require=qd.extension.adstack)
@@ -865,7 +868,7 @@ def test_reverse_kernel_top_indep_iters_with_adstack():
     # produce the analytical gradient with adstack on.
     #
     # Internal details: the offload-level guard pairs only same-SNode `(store, load)`, so a body
-    # that only stores `out[i] = x[None] * 2` (no load on `out`) compiles cleanly. Adstack itself has
+    # that only stores `out[i] = x[()] * 2` (no load on `out`) compiles cleanly. Adstack itself has
     # nothing to do here either - each iteration is independent.
     _run_reverse_kernel_top_indep_iters_correct_gradient()
 
@@ -882,7 +885,7 @@ def test_reverse_kernel_top_indep_iters_without_adstack():
 
 
 def _run_reverse_kernel_top_in_place_accum_correct_gradient():
-    # In-place accumulation `out[i] = out[i] + x[None]` at the kernel-top range-for. Sanity check that
+    # In-place accumulation `out[i] = out[i] + x[()]` at the kernel-top range-for. Sanity check that
     # the offload-level guard's pointer-equality on index `Stmt*`s allows this shape - store and
     # load on `out` share the same `LoopIndexStmt` so `indices_pointer_match` returns true and the
     # guard does not fire.
@@ -893,24 +896,24 @@ def _run_reverse_kernel_top_in_place_accum_correct_gradient():
     @qd.kernel
     def compute():
         for i in range(n):
-            out[i] = out[i] + x[None]
+            out[i] = out[i] + x[()]
 
-    x[None] = 1.0
+    x[()] = 1.0
     for i in range(n):
         out[i] = 0.0
     compute()
     for i in range(n):
         out.grad[i] = 1.0
-    x.grad[None] = 0.0
+    x.grad[()] = 0.0
     compute.grad()
     # `out[i] = out[i] + x` reduces to `out[i] += x`; with `out[i]` initialised to 0, the per-iteration
     # adjoint accumulates 1 into `x.grad` for each of n elements when `out.grad[i] = 1`.
-    assert float(x.grad[None]) == pytest.approx(float(n), rel=1e-6)
+    assert float(x.grad[()]) == pytest.approx(float(n), rel=1e-6)
 
 
 @test_utils.test(require=qd.extension.adstack)
 def test_reverse_kernel_top_in_place_accum_with_adstack():
-    # In-place accumulation `out[i] = out[i] + x[None]` at the offload-level loop must compile and
+    # In-place accumulation `out[i] = out[i] + x[()]` at the offload-level loop must compile and
     # produce the analytical gradient: the offload-level guard intentionally exempts this shape.
     #
     # Internal details: the store dest `out[i]` and the load src `out[i]` reference the same
@@ -943,13 +946,13 @@ def test_adstack_large_capacity_heap_backed():
         for i in x:
             v = x[i]
             for _ in range(128):
-                y[None] += qd.sin(v)
+                y[()] += qd.sin(v)
                 v = v + 1.0
 
     x[0] = 0.1
-    y[None] = 0.0
+    y[()] = 0.0
     compute()
-    y.grad[None] = 1.0
+    y.grad[()] = 1.0
     x.grad[0] = 0.0
     compute.grad()
 
@@ -978,14 +981,14 @@ def test_adstack_mixed_f32_and_non_f32():
             v = x[i]
             j = 0
             for _ in range(5):
-                y[None] += v * qd.cast(j + 1, qd.f32)
+                y[()] += v * qd.cast(j + 1, qd.f32)
                 j = j + 1
                 v = v + 0.1
 
     x[0] = 1.0
-    y[None] = 0.0
+    y[()] = 0.0
     compute()
-    y.grad[None] = 1.0
+    y.grad[()] = 1.0
     x.grad[0] = 0.0
     compute.grad()
     # d y / d x[0] = sum_{k=0..4} (k+1): v at iter k is x[0] + 0.1*k, weight is k+1, so coefficient on x[0] is
@@ -1050,14 +1053,14 @@ def test_adstack_many_non_f32_stacks_heap_backed():
                     v = v + 0.05
                 else:
                     v = v * 1.03
-            y[None] += v
+            y[()] += v
 
     x_vals = [1.0, 2.0, 3.0]
     for i in range(n):
         x[i] = x_vals[i]
-    y[None] = 0.0
+    y[()] = 0.0
     compute()
-    y.grad[None] = 1.0
+    y.grad[()] = 1.0
     for i in range(n):
         x.grad[i] = 0.0
     compute.grad()
@@ -1072,13 +1075,13 @@ def test_adstack_many_non_f32_stacks_heap_backed():
     h = 1e-2
     for i in range(n):
         x[i] = x_vals[i] + h
-        y[None] = 0.0
+        y[()] = 0.0
         compute()
-        y_plus = y[None]
+        y_plus = y[()]
         x[i] = x_vals[i] - h
-        y[None] = 0.0
+        y[()] = 0.0
         compute()
-        y_minus = y[None]
+        y_minus = y[()]
         x[i] = x_vals[i]
         expected = (y_plus - y_minus) / (2.0 * h)
         assert x.grad[i] == pytest.approx(expected, rel=1e-3, abs=1e-4)
@@ -1127,19 +1130,19 @@ def test_adstack_rejects_unsupported_type():
             v = x[i]
             for _ in range(4):
                 v = v + qd.cast(1, qd.i8)
-            y[None] += qd.cast(v, qd.f32)
+            y[()] += qd.cast(v, qd.f32)
 
     x[0] = 0
-    y[None] = 0.0
+    y[()] = 0.0
     compute()
-    y.grad[None] = 1.0
+    y.grad[()] = 1.0
     if is_spirv:
         with pytest.raises(RuntimeError, match=r"f32, i32, and u1"):
             compute.grad()
     else:
         compute.grad()
         # Forward: v starts at 0, increments by 1 four times, writes 4 as f32 into y. No overflow expected.
-        assert y[None] == pytest.approx(4.0, rel=1e-6)
+        assert y[()] == pytest.approx(4.0, rel=1e-6)
 
 
 def _overflowing_compute(n_elements=1, n_iter=64):
@@ -1158,14 +1161,14 @@ def _overflowing_compute(n_elements=1, n_iter=64):
         for i in x:
             v = x[i]
             for _ in range(n_iter):
-                y[None] += qd.sin(v)
+                y[()] += qd.sin(v)
                 v = v + 1.0
 
     for i in range(n_elements):
         x[i] = 0.1 + 0.01 * i
-    y[None] = 0.0
+    y[()] = 0.0
     compute()
-    y.grad[None] = 1.0
+    y.grad[()] = 1.0
     for i in range(n_elements):
         x.grad[i] = 0.0
     return compute, x, y
@@ -1268,13 +1271,13 @@ def test_adstack_heap_backed_exceeds_old_threadstack_budget():
                 a5 = a5 * 0.9 + x[i]
                 a6 = a6 * 0.9 + x[i]
                 a7 = a7 * 0.9 + x[i]
-            y[None] += a0 + a1 + a2 + a3 + a4 + a5 + a6 + a7
+            y[()] += a0 + a1 + a2 + a3 + a4 + a5 + a6 + a7
 
     for i in range(n):
         x[i] = 0.1 * (i + 1)
-    y[None] = 0.0
+    y[()] = 0.0
     compute()
-    y.grad[None] = 1.0
+    y.grad[()] = 1.0
     for i in range(n):
         x.grad[i] = 0.0
     compute.grad()
@@ -1347,13 +1350,13 @@ def test_adstack_overflow_caught_then_clean_teardown(tmp_path, force_sync):
             for i in x:
                 v = x[i]
                 for _ in range(64):
-                    y[None] += qd.sin(v)
+                    y[()] += qd.sin(v)
                     v = v + 1.0
 
         x[0] = 0.1
-        y[None] = 0.0
+        y[()] = 0.0
         compute()
-        y.grad[None] = 1.0
+        y.grad[()] = 1.0
         x.grad[0] = 0.0
 
         # CPU is the only arch the child runs on for now; synchronous-backend semantics apply.
@@ -1396,7 +1399,7 @@ def test_adstack_overflow_diagnostic_and_auto_recovery():
     import torch
 
     # Cross-backend regression for the always-on overflow detection + diagnostic + auto-recovery
-    # contract shipped on this branch. The kernel's inner trip count is bounded by `n[0]`, an `int32`
+    # contract. The kernel's inner trip count is bounded by `n[0]`, an `int32`
     # ndarray. The per-task adstack metadata cache invalidation tracks `Ndarray.write` /
     # `Ndarray.fill` via `Program::ndarray_data_gen_` - mutations that route through Quadrants APIs
     # invalidate cleanly. DLPack zero-copy mutations (`.to_torch(copy=False)`) bypass that tracking,
@@ -1424,15 +1427,15 @@ def test_adstack_overflow_diagnostic_and_auto_recovery():
         for i in x:
             v = x[i]
             for _ in range(n_arr[0]):
-                y[None] += qd.sin(v)
+                y[()] += qd.sin(v)
                 v = v + 1.0
 
     # Step 1: small `n[0]`, kernel runs cleanly, cache populated with `max_size = 2`.
     n[0] = 2
     x[0] = 0.1
-    y[None] = 0.0
+    y[()] = 0.0
     compute(n)
-    y.grad[None] = 1.0
+    y.grad[()] = 1.0
     x.grad[0] = 0.0
     compute.grad(n)
     qd.sync()
@@ -1443,9 +1446,9 @@ def test_adstack_overflow_diagnostic_and_auto_recovery():
     # kernel runs to completion without raising. This pins the clean-invalidation contract on every backend
     # (no DLPack involvement, no overflow, no recovery exception).
     n[0] = 8
-    y[None] = 0.0
+    y[()] = 0.0
     compute(n)
-    y.grad[None] = 1.0
+    y.grad[()] = 1.0
     x.grad[0] = 0.0
     compute.grad(n)
     qd.sync()
@@ -1455,9 +1458,9 @@ def test_adstack_overflow_diagnostic_and_auto_recovery():
     # Reset state for the DLPack-bypass scenario: bring `n[0]` back down to 2 through the Quadrants-tracked
     # setter so the next cached `max_size` is the small value the bypass mutation will outgrow.
     n[0] = 2
-    y[None] = 0.0
+    y[()] = 0.0
     compute(n)
-    y.grad[None] = 1.0
+    y.grad[()] = 1.0
     x.grad[0] = 0.0
     compute.grad(n)
     qd.sync()
@@ -1494,9 +1497,9 @@ def test_adstack_overflow_diagnostic_and_auto_recovery():
     # mismatch - that path never raises here, so the second compute.grad call returns cleanly. The
     # `pytest.raises if shortcut else nullcontext` pattern handles both paths uniformly without arch-narrowing the
     # test.
-    y[None] = 0.0
+    y[()] = 0.0
     compute(n)
-    y.grad[None] = 1.0
+    y.grad[()] = 1.0
     x.grad[0] = 0.0
     backend_uses_per_task_cache_shortcut = qd.lang.impl.get_runtime().prog.config().arch != qd.cpu
     raises_overflow = pytest.raises(QuadrantsAssertionError, match=r"[Aa]dstack overflow")
@@ -1521,9 +1524,9 @@ def test_adstack_overflow_diagnostic_and_auto_recovery():
     # the kernel runs cleanly with no second overflow. Either way (stale-cache backend that
     # recovered or auto-invalidating CPU backend that never overflowed), the closed-form gradient
     # below is the contract for every backend.
-    y[None] = 0.0
+    y[()] = 0.0
     compute(n)
-    y.grad[None] = 1.0
+    y.grad[()] = 1.0
     x.grad[0] = 0.0
     compute.grad(n)
     qd.sync()
@@ -1558,15 +1561,15 @@ def test_adstack_near_capacity(n_iter):
     def compute():
         for i in x:
             v = x[i]
-            for _ in range(n_iter_fld[None]):
-                y[None] += qd.sin(v)
+            for _ in range(n_iter_fld[()]):
+                y[()] += qd.sin(v)
                 v = v + 1.0
 
     x[0] = 0.1
-    n_iter_fld[None] = n_iter
-    y[None] = 0.0
+    n_iter_fld[()] = n_iter
+    y[()] = 0.0
     compute()
-    y.grad[None] = 1.0
+    y.grad[()] = 1.0
     x.grad[0] = 0.0
 
     compute.grad()
@@ -1590,16 +1593,16 @@ def _run_sum_linear(
             v = x[i]
             for a in qd.static(range(n_iter)) if qd.static(use_static_loop) else range(n_iter):
                 if qd.static(use_varying_coeff):
-                    y[None] += v * qd.cast(a + 1, qd_dtype)
+                    y[()] += v * qd.cast(a + 1, qd_dtype)
                 else:
-                    y[None] += v
+                    y[()] += v
 
     x_vals = [0.1, 0.3, 0.5, 0.8]
     for i, v in enumerate(x_vals):
         x[i] = v
-    y[None] = 0.0
+    y[()] = 0.0
     compute()
-    y.grad[None] = 1.0
+    y.grad[()] = 1.0
     for i in range(n):
         x.grad[i] = 0.0
     compute.grad()
@@ -1674,20 +1677,20 @@ def test_adstack_runtime_if_wrapping_loop_with_carried_var():
     @qd.kernel
     def compute():
         for i in range(n_max):
-            if i < n_arr[None]:
+            if i < n_arr[()]:
                 v = x[i]
                 acc = 0.0
                 for _ in range(n_iter):
                     acc = acc + v
                     v = v * 0.95 + 0.01
-                y[None] += acc
+                y[()] += acc
 
     for i in range(n_max):
         x[i] = 1.0 + 0.1 * i
-    n_arr[None] = n_active
-    y[None] = 0.0
+    n_arr[()] = n_active
+    y[()] = 0.0
     compute()
-    y.grad[None] = 1.0
+    y.grad[()] = 1.0
     for i in range(n_max):
         x.grad[i] = 0.0
     compute.grad()
@@ -1714,7 +1717,7 @@ def test_adstack_if_cond_snapshot_through_dynamic_for():
     # `qd.ndrange` (not a plain Python `for`) is required: the plain-`for` variant keeps the outer index as
     # a direct loop index rather than a cast alloca, and the enclosing-loop cast is what forces the inner
     # cond alloca to be stack-promoted. `qd.cast(i_b, qd.i32)` is also load-bearing for the same reason -
-    # without it the cond alloca stays unpromoted and the bug does not surface. The inner-loop bound `n[None]`
+    # without it the cond alloca stays unpromoted and the bug does not surface. The inner-loop bound `n[()]`
     # pulled from a field, not a Python literal, forces the inner for to be compiled as a runtime-dynamic
     # range rather than statically unrolled; the buggy stack clone cannot arise on the fully-unrolled path.
     # The min shape is 2 iterations (`i == 0` writes a vector from `x`; else reads a constant `c[i]`); the
@@ -1731,7 +1734,7 @@ def test_adstack_if_cond_snapshot_through_dynamic_for():
     def my_kernel():
         for i_batch in qd.ndrange(outputs.shape[1]):
             i_batch = qd.cast(i_batch, qd.i32)
-            for i_inner in range(n_iter[None]):
+            for i_inner in range(n_iter[()]):
                 if i_inner == 0:
                     outputs[i_inner, i_batch] = qd.Vector(
                         [inputs[0, i_batch], inputs[1, i_batch], inputs[2, i_batch]], dt=qd.f32
@@ -1740,7 +1743,7 @@ def test_adstack_if_cond_snapshot_through_dynamic_for():
                     outputs[i_inner, i_batch] = constants[i_inner]
 
     outputs.grad.from_numpy(np.ones((2, 1, 3), dtype=np.float32))
-    n_iter[None] = 2
+    n_iter[()] = 2
 
     my_kernel.grad()
 
@@ -1782,7 +1785,7 @@ def test_adstack_if_cond_snapshot_adaptive_sizing():
     def my_kernel():
         for i_batch in qd.ndrange(outputs.shape[1]):
             i_batch = qd.cast(i_batch, qd.i32)
-            for i_inner in range(n_iter[None]):
+            for i_inner in range(n_iter[()]):
                 if i_inner == 0:
                     outputs[i_inner, i_batch] = qd.Vector(
                         [inputs[0, i_batch], inputs[1, i_batch], inputs[2, i_batch]], dt=qd.f32
@@ -1799,7 +1802,7 @@ def test_adstack_if_cond_snapshot_adaptive_sizing():
                     outputs[i_inner, i_batch] = constants[i_inner]
 
     outputs.grad.from_numpy(np.ones((4, 1, 3), dtype=np.float32))
-    n_iter[None] = 4
+    n_iter[()] = 4
 
     my_kernel.grad()
 
@@ -1825,7 +1828,7 @@ def test_adstack_sibling_for_loops_reverse_order():
     # statements (range-bound loads, alloca, etc.) stay at their original positions so SSA operands still dominate both
     # swapped fors. The outer `for _ in range(1)` dummy is the smallest shape that places the two siblings inside a
     # non-IB container (the frontend rejects a bare sequence of top-level for-loops as "mixed usage of for-loops and
-    # statements without looping"); `n[None]` from a field forces the inner ranges to be dynamic so the bug manifests
+    # statements without looping"); `n[()]` from a field forces the inner ranges to be dynamic so the bug manifests
     # (static-unrolled ranges go through a different path that already works).
     size = 3
     n = qd.field(qd.i32, shape=())
@@ -1838,12 +1841,12 @@ def test_adstack_sibling_for_loops_reverse_order():
     @qd.kernel
     def my_kernel():
         for _ in range(1):
-            for i in range(n[None]):
+            for i in range(n[()]):
                 scratch[i] = inputs[i]
-            for i in range(n[None]):
+            for i in range(n[()]):
                 outputs[i] = scratch[i] * weights[i]
 
-    n[None] = size
+    n[()] = size
     for i in range(size):
         inputs[i] = float(i + 1)
         weights[i] = float(i + 1) * 0.5
@@ -1896,17 +1899,17 @@ def test_adstack_inner_for_bound_is_enclosing_loop_index(n):
                     s = 0.0
                     for k in range(j):
                         s = s + x[k] * x[k]
-                    w[None] += qd.cast(j, qd.f32) * x[i]
-                    y[None] += qd.sqrt(qd.math.clamp(x[i] + 1.0 - s, 0.01, 1e9))
+                    w[()] += qd.cast(j, qd.f32) * x[i]
+                    y[()] += qd.sqrt(qd.math.clamp(x[i] + 1.0 - s, 0.01, 1e9))
 
     x_vals = [0.1 * (k + 1) for k in range(n)]
     for k in range(n):
         x[k] = x_vals[k]
-    y[None] = 0.0
-    w[None] = 0.0
+    y[()] = 0.0
+    w[()] = 0.0
     compute()
-    y.grad[None] = 1.0
-    w.grad[None] = 1.0
+    y.grad[()] = 1.0
+    w.grad[()] = 1.0
     for k in range(n):
         x.grad[k] = 0.0
     compute.grad()
@@ -1962,13 +1965,13 @@ def test_adstack_vector_subscript_selfop_no_warnings(tmp_path):
 
         @qd.kernel
         def k():
-            q = f(x[None])
-            y[None] = q[0] + q[1] + q[2] + q[3]
+            q = f(x[()])
+            y[()] = q[0] + q[1] + q[2] + q[3]
 
 
-        x[None] = 1.5
+        x[()] = 1.5
         k()
-        y.grad[None] = 1.0
+        y.grad[()] = 1.0
         k.grad()
         """
     )
@@ -2083,14 +2086,14 @@ def test_adstack_bounded_inner_loop_sized_by_structural_prepass():
             v = x[i]
             for _ in range(5):
                 v = qd.sin(v) + 0.1
-            y[None] += v
+            y[()] += v
 
     n_iter = 5
 
     x[0] = 0.3
-    y[None] = 0.0
+    y[()] = 0.0
     compute()
-    y.grad[None] = 1.0
+    y.grad[()] = 1.0
     x.grad[0] = 0.0
     compute.grad()
 
@@ -2129,12 +2132,12 @@ def test_adstack_bounded_inner_loop_pre_pass_handles_i64_bounds():
             v = x[i]
             for _ in range(3):
                 v = qd.sin(v) + 0.1
-            y[None] += v
+            y[()] += v
 
     x[0] = 0.2
-    y[None] = 0.0
+    y[()] = 0.0
     compute()
-    y.grad[None] = 1.0
+    y.grad[()] = 1.0
     x.grad[0] = 0.0
     compute.grad()
 
@@ -2176,13 +2179,13 @@ def test_adstack_nested_tripcount_gradient(trip_mode):
                 accum = 0.0
                 for j in range(n[i_l]) if qd.static(IS_ELEMENT) else range(n.shape[0]):
                     accum = accum + x[j] * x[j]
-                loss[None] += accum
+                loss[()] += accum
 
     for i in range(N_X):
         x[i] = 0.1
     n_np = np.array([2, 3, 4, 1], dtype=np.int32)
     compute(n_np)
-    loss.grad[None] = 1.0
+    loss.grad[()] = 1.0
     for i in range(N_X):
         x.grad[i] = 0.0
     compute.grad(n_np)
@@ -2199,7 +2202,7 @@ def test_adstack_nested_tripcount_gradient(trip_mode):
                 expected_loss += 0.1 * 0.1
                 expected_grad[j] += 2.0 * 0.1
 
-    assert loss[None] == pytest.approx(expected_loss, rel=1e-5)
+    assert loss[()] == pytest.approx(expected_loss, rel=1e-5)
     for k in range(N_X):
         if expected_grad[k] == 0.0:
             assert x.grad[k] == pytest.approx(0.0, abs=1e-7)
@@ -2249,20 +2252,20 @@ def test_adstack_sizer_trip_count_ndarray_mutated_after_launch_read():
             accum = 0.0
             for j in range(n[i_e]):
                 accum = accum + x[j] * x[j]
-            loss[None] += accum
+            loss[()] += accum
 
     for i in range(N_X):
         x[i] = 0.1
     n_np = np.zeros(N, dtype=np.int32)
     compute(n_np)
     n_np[:] = 0
-    loss.grad[None] = 1.0
+    loss.grad[()] = 1.0
     for i in range(N_X):
         x.grad[i] = 0.0
     compute.grad(n_np)
     qd.sync()
 
-    assert loss[None] == pytest.approx(4 * 10 * 0.1 * 0.1, rel=1e-5)
+    assert loss[()] == pytest.approx(4 * 10 * 0.1 * 0.1, rel=1e-5)
     for k in range(10):
         assert x.grad[k] == pytest.approx(4 * 2.0 * 0.1, rel=1e-5)
 
@@ -2311,7 +2314,7 @@ def test_adstack_sizer_trip_count_qd_ndarray_mutated_by_separate_kernel():
     def use_bound(a: qd.types.ndarray(dtype=qd.i32, ndim=1)):
         for i_e in range(a.shape[0]):
             for j in range(a[i_e]):
-                loss[None] += x[j] * x[j]
+                loss[()] += x[j] * x[j]
 
     for i in range(N_X):
         x[i] = 0.1
@@ -2319,13 +2322,13 @@ def test_adstack_sizer_trip_count_qd_ndarray_mutated_by_separate_kernel():
     init_to_5(a)
     use_bound(a)
     overwrite_to_10(a)
-    loss.grad[None] = 1.0
+    loss.grad[()] = 1.0
     for i in range(N_X):
         x.grad[i] = 0.0
     use_bound.grad(a)
     qd.sync()
 
-    assert loss[None] == pytest.approx(4 * 5 * 0.1 * 0.1, rel=1e-5)
+    assert loss[()] == pytest.approx(4 * 5 * 0.1 * 0.1, rel=1e-5)
     for k in range(N_X):
         if k < 5:
             assert x.grad[k] == pytest.approx(2 * 4 * 0.1, rel=1e-5)
@@ -2338,7 +2341,7 @@ def test_adstack_field_load_bounded_loop_evaluated_per_launch():
     # Pins the host-evaluated SizeExpr path end-to-end: a reverse-mode adstack whose inner-loop bound is a scalar i32
     # field load must size the per-thread heap slice from the live field value at each launch. The structural pre-pass
     # captures a `SizeExpr::FieldLoad` leaf; the launcher evaluates it via `SNodeRwAccessorsBank` before each dispatch
-    # and resizes the heap accordingly. The kernel is run with `n_iter_fld[None]` set to 1, 20 and then 50 in sequence:
+    # and resizes the heap accordingly. The kernel is run with `n_iter_fld[()]` set to 1, 20 and then 50 in sequence:
     # each launch picks up the current field value, resizes the adstack heap, and runs to completion with the analytical
     # gradient `0.95 ** n_iter`.
     #
@@ -2358,16 +2361,16 @@ def test_adstack_field_load_bounded_loop_evaluated_per_launch():
     def compute():
         for i in x:
             v = x[i]
-            for _ in range(n_iter_fld[None]):
+            for _ in range(n_iter_fld[()]):
                 v = v * 0.95 + 0.01
-            y[None] += v
+            y[()] += v
 
     for n_iter in (1, 20, 50):
         x[0] = 0.1
-        n_iter_fld[None] = n_iter
-        y[None] = 0.0
+        n_iter_fld[()] = n_iter
+        y[()] = 0.0
         compute()
-        y.grad[None] = 1.0
+        y.grad[()] = 1.0
         x.grad[0] = 0.0
         compute.grad()
         qd.sync()
@@ -2412,7 +2415,7 @@ def test_adstack_inner_range_bounded_by_ndarray_read_at_outer_index(ndarray_kind
             n = a[i]
             for _ in range(n):
                 v = v * 0.95 + 0.01
-            y[None] += v
+            y[()] += v
 
     for i in range(N):
         x[i] = 0.1
@@ -2424,7 +2427,7 @@ def test_adstack_inner_range_bounded_by_ndarray_read_at_outer_index(ndarray_kind
         a.from_numpy(arr_data)
 
     compute(a)
-    y.grad[None] = 1.0
+    y.grad[()] = 1.0
     for i in range(N):
         x.grad[i] = 0.0
     compute.grad(a)
@@ -2472,7 +2475,7 @@ def test_adstack_metadata_cache_invalidates_on_host_mutation(trip_count_source):
                 accum = 0.0
                 for j in range(n[i_e]):
                     accum = accum + x[j] * x[j]
-                loss[None] += accum
+                loss[()] += accum
 
         def set_n(val):
             for i in range(N):
@@ -2493,7 +2496,7 @@ def test_adstack_metadata_cache_invalidates_on_host_mutation(trip_count_source):
                 accum = 0.0
                 for j in range(n_obj[i_e]):
                     accum = accum + x[j] * x[j]
-                loss[None] += accum
+                loss[()] += accum
 
         def set_n(val):
             for i in range(N):
@@ -2508,14 +2511,14 @@ def test_adstack_metadata_cache_invalidates_on_host_mutation(trip_count_source):
     set_n(8)
     for i in range(N_X):
         x[i] = 0.1
-    loss[None] = 0.0
+    loss[()] = 0.0
     call_compute()
-    loss.grad[None] = 1.0
+    loss.grad[()] = 1.0
     for i in range(N_X):
         x.grad[i] = 0.0
     call_compute_grad()
     qd.sync()
-    assert loss[None] == pytest.approx(N * 8 * 0.01, rel=1e-5)
+    assert loss[()] == pytest.approx(N * 8 * 0.01, rel=1e-5)
     for k in range(8):
         assert x.grad[k] == pytest.approx(N * 2 * 0.1, rel=1e-5)
     for k in range(8, N_X):
@@ -2524,14 +2527,14 @@ def test_adstack_metadata_cache_invalidates_on_host_mutation(trip_count_source):
     set_n(16)
     for i in range(N_X):
         x[i] = 0.1
-    loss[None] = 0.0
+    loss[()] = 0.0
     call_compute()
-    loss.grad[None] = 1.0
+    loss.grad[()] = 1.0
     for i in range(N_X):
         x.grad[i] = 0.0
     call_compute_grad()
     qd.sync()
-    assert loss[None] == pytest.approx(N * 16 * 0.01, rel=1e-5)
+    assert loss[()] == pytest.approx(N * 16 * 0.01, rel=1e-5)
     for k in range(N_X):
         assert x.grad[k] == pytest.approx(N * 2 * 0.1, rel=1e-5)
 
@@ -2583,13 +2586,13 @@ def test_adstack_inner_range_bounded_by_multidim_ndarray_read():
                 v = x[0]
                 for _ in range(a[i, j]):
                     v = v * 0.95 + 0.01
-                y[None] += v
+                y[()] += v
 
     for i in range(N_X):
         x[i] = 0.1
 
     compute(arr_np)
-    y.grad[None] = 1.0
+    y.grad[()] = 1.0
     for i in range(N_X):
         x.grad[i] = 0.0
     compute.grad(arr_np)
@@ -2652,13 +2655,13 @@ def test_adstack_ext_tensor_read_indexed_by_stashed_outer_loop_var(outer_bound):
                 for i_j_ in range(n_joints):
                     i_j = i_j_ + joint_start[i_l]
                     accum = accum + x[i_j] * x[i_j]
-                loss[None] += accum
+                loss[()] += accum
 
     for i in range(N_X):
         x[i] = 0.1
 
     compute(link_start_np, link_end_np, joint_start_np, joint_end_np, parent_idx_np)
-    loss.grad[None] = 1.0
+    loss.grad[()] = 1.0
     for i in range(N_X):
         x.grad[i] = 0.0
     compute.grad(link_start_np, link_end_np, joint_start_np, joint_end_np, parent_idx_np)
@@ -2707,7 +2710,7 @@ def test_adstack_field_ptr_indexed_by_stashed_outer_loop_var():
                 v = x[i_inner] * 0.5
                 for _ in range(2):
                     v = v * 0.95 + 0.01
-                loss[None] += v
+                loss[()] += v
 
     link_start[0] = 0
     link_start[1] = 1
@@ -2722,7 +2725,7 @@ def test_adstack_field_ptr_indexed_by_stashed_outer_loop_var():
 
     arr = np.zeros(N_OUTER, dtype=np.float32)
     compute(arr)
-    loss.grad[None] = 1.0
+    loss.grad[()] = 1.0
     for i in range(N_X):
         x.grad[i] = 0.0
     compute.grad(arr)
@@ -2874,7 +2877,7 @@ def test_adstack_structural_pre_pass_fuses_sub_of_max_over_range_with_matching_s
             for i_j_ in range(s, e) if qd.static(IS_BEGIN_END) else range(e - s):
                 i_j = i_j_ if qd.static(IS_BEGIN_END) else (i_j_ + s)
                 accum = accum + x[i_j] * x[i_j] * qd.cast(e - s, qd.f32)
-            loss[None] += accum
+            loss[()] += accum
 
     # `start = [0, 3]`, `end = [3, 4]`: per-slot trips are (3, 1). `e - s` per slot is (3, 1) so the inner
     # body adds `trip * x[i_j]^2` across 4 inner iterations.
@@ -2884,7 +2887,7 @@ def test_adstack_structural_pre_pass_fuses_sub_of_max_over_range_with_matching_s
     end_np = np.array([3, 4], dtype=np.int32)
 
     compute(start_np, end_np)
-    loss.grad[None] = 1.0
+    loss.grad[()] = 1.0
     for i in range(N_X):
         x.grad[i] = 0.0
     compute.grad(start_np, end_np)
@@ -2892,7 +2895,7 @@ def test_adstack_structural_pre_pass_fuses_sub_of_max_over_range_with_matching_s
 
     # loss = sum over i_j in [0, 3) of `3 * x[i_j]^2` + sum over i_j in [3, 4) of `1 * x[i_j]^2`
     #      = 3 * 3 * 0.01 + 1 * 0.01 = 0.10.
-    assert loss[None] == pytest.approx(0.10, rel=1e-5)
+    assert loss[()] == pytest.approx(0.10, rel=1e-5)
     # d(loss)/dx[j] = 2 * trip * x[j]; j in 0..2 has trip=3, j=3 has trip=1, j>=4 never visited.
     for j in range(3):
         assert x.grad[j] == pytest.approx(2 * 3 * 0.1, rel=1e-5)
@@ -2932,7 +2935,7 @@ def test_adstack_structural_pre_pass_fuses_sub_of_max_over_range_with_mismatched
                     if n > 0:
                         for k in range(n):
                             accum = accum + x[k] * x[k]
-            loss[None] += accum
+            loss[()] += accum
 
     for i in range(N_X):
         x[i] = 0.1
@@ -2940,7 +2943,7 @@ def test_adstack_structural_pre_pass_fuses_sub_of_max_over_range_with_mismatched
     arr_b_np = np.array([4, 0], dtype=np.int32)
 
     compute(arr_a_np, arr_b_np)
-    loss.grad[None] = 1.0
+    loss.grad[()] = 1.0
     for i in range(N_X):
         x.grad[i] = 0.0
     compute.grad(arr_a_np, arr_b_np)
@@ -2951,7 +2954,7 @@ def test_adstack_structural_pre_pass_fuses_sub_of_max_over_range_with_mismatched
     # 1 + 5) * x[0..4]^2 = 0.07 with every x[i] = 0.1. x.grad[k] = 2 * (count of inner iterations that visit index k) *
     # 0.1. k = 0 is visited by every non-empty pair (3 visits), k in [1, 4] is visited only by the (1, 1) pair (1 visit
     # each), k >= 5 is never visited.
-    assert loss[None] == pytest.approx(0.07, rel=1e-5)
+    assert loss[()] == pytest.approx(0.07, rel=1e-5)
     assert x.grad[0] == pytest.approx(0.6, rel=1e-5)
     for k in range(1, 5):
         assert x.grad[k] == pytest.approx(0.2, rel=1e-5)
@@ -2994,7 +2997,7 @@ def test_adstack_fuses_sub_of_max_over_range_with_mismatched_lengths_is_safe(arr
                     if n > 0:
                         for k in range(n):
                             accum = accum + x[k] * x[k]
-            loss[None] += accum
+            loss[()] += accum
 
     for i in range(N_X):
         x[i] = 0.1
@@ -3002,7 +3005,7 @@ def test_adstack_fuses_sub_of_max_over_range_with_mismatched_lengths_is_safe(arr
     arr_b_np = np.array(arr_b_values, dtype=np.int32)
 
     compute(arr_a_np, arr_b_np)
-    loss.grad[None] = 1.0
+    loss.grad[()] = 1.0
     for i in range(N_X):
         x.grad[i] = 0.0
     compute.grad(arr_a_np, arr_b_np)
@@ -3016,7 +3019,7 @@ def test_adstack_fuses_sub_of_max_over_range_with_mismatched_lengths_is_safe(arr
             expected_pushes += n
             for k in range(min(n, N_X)):
                 expected_visits[k] += 1
-    assert loss[None] == pytest.approx(expected_pushes * 0.01, rel=1e-5)
+    assert loss[()] == pytest.approx(expected_pushes * 0.01, rel=1e-5)
     for k in range(N_X):
         if expected_visits[k] == 0:
             assert x.grad[k] == pytest.approx(0.0, abs=1e-7)
@@ -3070,7 +3073,7 @@ def test_adstack_sub_of_max_over_range_fusion_does_not_mix_fieldload_and_extread
                 if n > 0:
                     for k in range(n):
                         accum = accum + x[k] * x[k]
-            loss[None] += accum
+            loss[()] += accum
 
     for i in range(N_X):
         x[i] = 0.1 if i < 8 else x_unused_val
@@ -3079,7 +3082,7 @@ def test_adstack_sub_of_max_over_range_fusion_does_not_mix_fieldload_and_extread
     arr_np = np.array([2, 2, 2, 2], dtype=np.int32)
 
     compute(arr_np)
-    loss.grad[None] = 1.0
+    loss.grad[()] = 1.0
     for i in range(N_X):
         x.grad[i] = 0.0
     compute.grad(arr_np)
@@ -3088,7 +3091,7 @@ def test_adstack_sub_of_max_over_range_fusion_does_not_mix_fieldload_and_extread
     # Each of the 4 outer iterations runs `fld[i] - arr[i] = 10 - 2 = 8` inner iters. Total pushes = 32.
     # x[0..7] is visited 4 times (once per outer iter); x[8..] is never visited, so the loss and gradients
     # are independent of `x_unused_val`.
-    assert loss[None] == pytest.approx(4 * 8 * 0.01, rel=1e-5)
+    assert loss[()] == pytest.approx(4 * 8 * 0.01, rel=1e-5)
     for k in range(8):
         assert x.grad[k] == pytest.approx(4 * 2 * 0.1, rel=1e-5)
     for k in range(8, N_X):
@@ -3181,13 +3184,13 @@ def test_adstack_linear_only_accumulator_with_nonlinear_operand(n_iter):
             for j in qd.static(range(n_iter)):
                 a = x[i] + qd.cast(j, qd.f32) * step
                 acc = acc + qd.sin(a)
-            y[None] += acc
+            y[()] += acc
 
     for i in range(n):
         x[i] = 0.18 + i * 0.05
-    y[None] = 0.0
+    y[()] = 0.0
     compute()
-    y.grad[None] = 1.0
+    y.grad[()] = 1.0
     for i in range(n):
         x.grad[i] = 0.0
     compute.grad()
@@ -3202,7 +3205,7 @@ def test_adstack_linear_only_accumulator_with_nonlinear_operand(n_iter):
         y_t = y_t + acc_t
     y_t.backward()
 
-    assert y[None] == pytest.approx(y_t.item(), rel=1e-6)
+    assert y[()] == pytest.approx(y_t.item(), rel=1e-6)
     for i in range(n):
         assert x.grad[i] == pytest.approx(x_t.grad[i].item(), rel=1e-6)
 
@@ -3235,13 +3238,13 @@ def test_adstack_repeated_load_top_of_outer_value_in_unrolled_inner_loop(n_inner
             acc = 0.0
             for j in qd.static(range(n_inner)):
                 acc = acc + qd.cos(a) * (1.0 + qd.cast(j, qd.f32) * 0.01)
-            y[None] += acc
+            y[()] += acc
 
     for i in range(n):
         x[i] = 0.21 + i * 0.05
-    y[None] = 0.0
+    y[()] = 0.0
     compute()
-    y.grad[None] = 1.0
+    y.grad[()] = 1.0
     for i in range(n):
         x.grad[i] = 0.0
     compute.grad()
@@ -3263,7 +3266,7 @@ def test_adstack_repeated_load_top_of_outer_value_in_unrolled_inner_loop(n_inner
     # SPIR-V both observed). The test's purpose is to pin slot-pointer / count-recurrence correctness under
     # repeated LoadTop, not bit-exact float behavior; 5e-6 is the smallest tolerance that still passes on every
     # backend while staying inside the f32 noise band.
-    assert y[None] == pytest.approx(y_t.item(), rel=5e-6)
+    assert y[()] == pytest.approx(y_t.item(), rel=5e-6)
     for i in range(n):
         assert x.grad[i] == pytest.approx(x_t.grad[i].item(), rel=5e-6)
 
@@ -3288,7 +3291,7 @@ def test_adstack_f16_unrolled_pushes_alignment(n_iter):
     # slot indices where the alignment claim matters most. Tolerance `rel=4e-3` is the f16 precision
     # floor for sums of ~16 `sin` values. SPIR-V backends (Metal / MoltenVK / Vulkan) are excluded
     # from the arch list because their MSL / Vulkan shader compilation fails on the reverse-mode
-    # `y[None] += acc` adstack shape with `qd.f16` fields - the host-side type-check warns
+    # `y[()] += acc` adstack shape with `qd.f16` fields - the host-side type-check warns
     # `Atomic add may lose precision: f16 <- f32` and the underlying compute pipeline build then
     # rejects the shader, so the alignment regression this test pins on the LLVM CUDA / AMDGPU
     # backends cannot run on the SPIR-V backends regardless of slot alignment correctness.
@@ -3306,13 +3309,13 @@ def test_adstack_f16_unrolled_pushes_alignment(n_iter):
             for j in qd.static(range(n_iter)):
                 a = x[i] + qd.cast(j, qd.f16) * qd.f16(step)
                 acc = acc + qd.sin(a)
-            y[None] += acc
+            y[()] += acc
 
     for i in range(n):
         x[i] = 0.21 + i * 0.05
-    y[None] = 0.0
+    y[()] = 0.0
     compute()
-    y.grad[None] = 1.0
+    y.grad[()] = 1.0
     for i in range(n):
         x.grad[i] = 0.0
     compute.grad()
@@ -3327,7 +3330,7 @@ def test_adstack_f16_unrolled_pushes_alignment(n_iter):
         y_t = y_t + acc_t
     y_t.backward()
 
-    assert float(y[None]) == pytest.approx(y_t.item(), rel=4e-3)
+    assert float(y[()]) == pytest.approx(y_t.item(), rel=4e-3)
     for i in range(n):
         assert float(x.grad[i]) == pytest.approx(x_t.grad[i].item(), rel=4e-3)
 
@@ -3368,13 +3371,13 @@ def test_adstack_unrolled_many_pushes_across_multiple_stacks(n_iter, n_stacks):
                 for j in qd.static(range(n_iter)):
                     a = x[i] + qd.cast(j, qd.f32) * step + s_offset
                     acc += qd.sin(a)
-            y[None] += acc
+            y[()] += acc
 
     for i in range(n):
         x[i] = 0.21 + i * 0.05
-    y[None] = 0.0
+    y[()] = 0.0
     compute()
-    y.grad[None] = 1.0
+    y.grad[()] = 1.0
     for i in range(n):
         x.grad[i] = 0.0
     compute.grad()
@@ -3391,7 +3394,7 @@ def test_adstack_unrolled_many_pushes_across_multiple_stacks(n_iter, n_stacks):
         y_t = y_t + acc_t
     y_t.backward()
 
-    assert y[None] == pytest.approx(y_t.item(), rel=1e-6)
+    assert y[()] == pytest.approx(y_t.item(), rel=1e-6)
     for i in range(n):
         assert x.grad[i] == pytest.approx(x_t.grad[i].item(), rel=1e-6)
 
@@ -3425,13 +3428,13 @@ def test_adstack_min_loop_carried_serial_range_for(n_inner):
             acc = 1.0
             for j in range(n_inner):
                 acc = qd.min(acc * 0.5 + 0.05, x[i] + qd.cast(j, qd.f32) * 0.05)
-            y[None] += acc
+            y[()] += acc
 
     for i in range(n):
         x[i] = 0.31 + i * 0.07
-    y[None] = 0.0
+    y[()] = 0.0
     compute()
-    y.grad[None] = 1.0
+    y.grad[()] = 1.0
     for i in range(n):
         x.grad[i] = 0.0
     compute.grad()
@@ -3445,7 +3448,7 @@ def test_adstack_min_loop_carried_serial_range_for(n_inner):
         y_t = y_t + acc_t
     y_t.backward()
 
-    assert y[None] == pytest.approx(y_t.item(), rel=1e-6)
+    assert y[()] == pytest.approx(y_t.item(), rel=1e-6)
     for i in range(n):
         assert x.grad[i] == pytest.approx(x_t.grad[i].item(), rel=1e-4)
 
@@ -3699,7 +3702,7 @@ def test_adstack_static_bound_expr_snode_gate_grad_correct(gated_fraction):
                 v = x[i]
                 for _ in range(n_iter):
                     v = v * 1.05 + 0.05
-                out[None] += v
+                out[()] += v
 
     np.random.seed(1)
     x_np = (0.1 + 0.001 * np.arange(n)).astype(np.float32)
@@ -3710,8 +3713,8 @@ def test_adstack_static_bound_expr_snode_gate_grad_correct(gated_fraction):
     for i in range(n):
         x[i] = float(x_np[i])
         selector[i] = float(selector_np[i])
-    out[None] = 0.0
-    out.grad[None] = 1.0
+    out[()] = 0.0
+    out.grad[()] = 1.0
     for i in range(n):
         x.grad[i] = 0.0
 
@@ -3857,7 +3860,7 @@ def test_adstack_static_bound_expr_snode_gate_non_bijective_index_grad_correct(g
                 v = x[i]
                 for _ in range(n_iter):
                     v = v * 1.05 + 0.05
-                out[None] += v
+                out[()] += v
 
     np.random.seed(2)
     x_np = (0.1 + 0.001 * np.arange(n)).astype(np.float32)
@@ -3867,8 +3870,8 @@ def test_adstack_static_bound_expr_snode_gate_non_bijective_index_grad_correct(g
     for i in range(n):
         x[i] = float(x_np[i])
         idx_field[i] = int(idx_field_np[i])
-    out[None] = 0.0
-    out.grad[None] = 1.0
+    out[()] = 0.0
+    out.grad[()] = 1.0
     for i in range(n):
         x.grad[i] = 0.0
 
@@ -3921,15 +3924,15 @@ def test_adstack_static_bound_expr_snode_gate_bijective_decomposed_index_grad_co
                 v = x[i]
                 for _ in range(n_iter):
                     v = v * 1.05 + 0.05
-                out[None] += v
+                out[()] += v
 
     np.random.seed(11)
     x_np = (0.1 + 0.001 * np.arange(n)).astype(np.float32)
     selector_np = (np.random.rand(n_rows, K) < 0.3).astype(np.float32)
     x.from_numpy(x_np)
     selector.from_numpy(selector_np)
-    out[None] = 0.0
-    out.grad[None] = 1.0
+    out[()] = 0.0
+    out.grad[()] = 1.0
     x.grad.from_numpy(np.zeros_like(x_np))
     compute()
     compute.grad()
@@ -3961,15 +3964,15 @@ def test_adstack_static_bound_expr_snode_gate_bijective_linear_range_grad_correc
                 v = x[i]
                 for _ in range(n_iter):
                     v = v * 1.05 + 0.05
-                out[None] += v
+                out[()] += v
 
     np.random.seed(7)
     x_np = (0.1 + 0.001 * np.arange(n)).astype(np.float32)
     field_np = (np.random.rand(n) < 0.3).astype(np.float32)
     x.from_numpy(x_np)
     field.from_numpy(field_np)
-    out[None] = 0.0
-    out.grad[None] = 1.0
+    out[()] = 0.0
+    out.grad[()] = 1.0
     x.grad.from_numpy(np.zeros_like(x_np))
     compute()
     compute.grad()
@@ -3998,15 +4001,15 @@ def test_adstack_static_bound_expr_snode_gate_bijective_multi_axis_structfor_gra
                 v = x[I, J, K]
                 for _ in range(n_iter):
                     v = v * 1.05 + 0.05
-                out[None] += v
+                out[()] += v
 
     np.random.seed(7)
     x_np = (0.1 + 0.001 * np.arange(n**3).reshape(n, n, n)).astype(np.float32)
     field_np = (np.random.rand(n, n, n) < 0.3).astype(np.float32)
     x.from_numpy(x_np)
     field3d.from_numpy(field_np)
-    out[None] = 0.0
-    out.grad[None] = 1.0
+    out[()] = 0.0
+    out.grad[()] = 1.0
     x.grad.from_numpy(np.zeros_like(x_np))
     compute()
     compute.grad()
@@ -4038,15 +4041,15 @@ def test_adstack_static_bound_expr_snode_gate_bijective_multi_axis_ndrange_grad_
                 v = x[ii, jj, kk]
                 for _ in range(n_iter):
                     v = v * 1.05 + 0.05
-                out[None] += v
+                out[()] += v
 
     np.random.seed(7)
     x_np = (0.1 + 0.001 * np.arange(n**3).reshape(n, n, n)).astype(np.float32)
     grid_np = (np.random.rand(n, n, n) < 0.3).astype(np.float32)
     x.from_numpy(x_np)
     grid.from_numpy(grid_np)
-    out[None] = 0.0
-    out.grad[None] = 1.0
+    out[()] = 0.0
+    out.grad[()] = 1.0
     x.grad.from_numpy(np.zeros_like(x_np))
     compute()
     compute.grad()
@@ -4078,15 +4081,15 @@ def test_adstack_static_bound_expr_snode_gate_bijective_slice_with_iter_grad_cor
                 v = x[i, 0]
                 for _ in range(n_iter):
                     v = v * 1.05 + 0.05
-                out[None] += v
+                out[()] += v
 
     np.random.seed(7)
     x_np = (0.1 + 0.001 * np.arange(n * cols).reshape(n, cols)).astype(np.float32)
     grid_np = (np.random.rand(n, cols) < 0.3).astype(np.float32)
     x.from_numpy(x_np)
     grid.from_numpy(grid_np)
-    out[None] = 0.0
-    out.grad[None] = 1.0
+    out[()] = 0.0
+    out.grad[()] = 1.0
     x.grad.from_numpy(np.zeros_like(x_np))
     compute()
     compute.grad()
@@ -4124,15 +4127,15 @@ def test_adstack_static_bound_expr_snode_gate_multi_axis_ndrange_with_arg_index_
                 v = x[f, ii, jj, kk, ib]
                 for _ in range(n_iter):
                     v = v * 1.05 + 0.05
-                out[None] += v
+                out[()] += v
 
     np.random.seed(3)
     x_np = (0.1 + 0.001 * np.arange(F * n * n * n * B).reshape(F, n, n, n, B)).astype(np.float32)
     grid_np = (np.random.rand(F, n, n, n, B) < 0.4).astype(np.float32)
     grid.from_numpy(grid_np)
     x.from_numpy(x_np)
-    out[None] = 0.0
-    out.grad[None] = 1.0
+    out[()] = 0.0
+    out.grad[()] = 1.0
     x.grad.from_numpy(np.zeros_like(x_np))
 
     f_active = 0
@@ -4181,7 +4184,7 @@ def test_adstack_static_bound_expr_snode_gate_primal_dependent_grad_correct():
                 v = x[i]
                 for _ in range(n_iter):
                     v = v * v + 0.05
-                out[None] += v
+                out[()] += v
 
     np.random.seed(1)
     x_np = (0.001 * np.ones(n)).astype(np.float32)
@@ -4191,8 +4194,8 @@ def test_adstack_static_bound_expr_snode_gate_primal_dependent_grad_correct():
     selector_np[gated_indices] = 1.0
     x.from_numpy(x_np)
     selector.from_numpy(selector_np)
-    out[None] = 0.0
-    out.grad[None] = 1.0
+    out[()] = 0.0
+    out.grad[()] = 1.0
     x.grad.from_numpy(np.zeros(n, dtype=np.float32))
 
     compute()
@@ -4260,7 +4263,7 @@ def test_adstack_static_bound_expr_snode_gate_multileaf_dense_grad_correct():
                 v = x[i]
                 for _ in range(n_iter):
                     v = v * v + 0.05
-                out[None] += v
+                out[()] += v
 
     np.random.seed(1)
     # `x` varies with `i` so any cross-row aliasing under a mis-sized adstack heap surfaces as a gradient mismatch (the
@@ -4275,8 +4278,8 @@ def test_adstack_static_bound_expr_snode_gate_multileaf_dense_grad_correct():
         x[i] = float(x_np[i])
         field_f32[i] = float(selector_np[i])
         field_f64[i] = 1.0
-    out[None] = 0.0
-    out.grad[None] = 1.0
+    out[()] = 0.0
+    out.grad[()] = 1.0
     for i in range(n):
         x.grad[i] = 0.0
 
@@ -4340,7 +4343,7 @@ def test_adstack_static_bound_expr_memory_savings_runs_clean(bound_shape):
     n_field = qd.field(qd.i32, shape=())
     start_arr = qd.ndarray(qd.i32, shape=(1,))
     stop_arr = qd.ndarray(qd.i32, shape=(1,))
-    n_field[None] = n
+    n_field[()] = n
     bound_arr.from_numpy(np.full(n, n, dtype=np.int32))
     start_arr.from_numpy(np.array([0], dtype=np.int32))
     stop_arr.from_numpy(np.array([n], dtype=np.int32))
@@ -4361,7 +4364,7 @@ def test_adstack_static_bound_expr_memory_savings_runs_clean(bound_shape):
             range(n)
             if qd.static(bound_shape == "int_const")
             else (
-                range(n_field[None])
+                range(n_field[()])
                 if qd.static(bound_shape == "scalar_field")
                 else (
                     range(selector.shape[0])
@@ -4634,13 +4637,13 @@ def test_adstack_static_bound_expr_device_sizer_per_kind_offsets_grad_correct():
                 v0 = v0 * 0.95 + 0.01
                 j = j + 1
                 v1 = v1 * 0.9 + 0.02
-            y[None] += v0 + v1 + qd.cast(j, qd.f32) * 0.0
+            y[()] += v0 + v1 + qd.cast(j, qd.f32) * 0.0
 
     for i in range(n_outer):
         x[i] = 0.1 + 0.05 * i
 
     compute(a_np)
-    y.grad[None] = 1.0
+    y.grad[()] = 1.0
     for i in range(n_outer):
         x.grad[i] = 0.0
     compute.grad(a_np)
@@ -4768,7 +4771,7 @@ def test_max_reducer_pins_stride_for_oversized_axis(shape, body_kind):
     # Closed `FieldLoad` leaf for the `field_in_body` variant. Set to zero so the body's max value remains `N_X`
     # regardless of the body kind, keeping the asserted gradient uniform across the parametrized matrix.
     gate = qd.field(qd.i32, shape=())
-    gate[None] = 0
+    gate[()] = 0
 
     @qd.kernel
     def compute(a: qd.types.ndarray(dtype=qd.i32, ndim=1)):
@@ -4784,7 +4787,7 @@ def test_max_reducer_pins_stride_for_oversized_axis(shape, body_kind):
                     a[i_e] + (a.shape[0] - a.shape[0])
                     if qd.static(body_kind == "shape_in_body")
                     else (
-                        max(a[i_e], gate[None])
+                        max(a[i_e], gate[()])
                         if qd.static(body_kind == "field_in_body")
                         else max(a[i_e] + 0, a[i_e] * 1 - 0)
                     )
@@ -4793,7 +4796,7 @@ def test_max_reducer_pins_stride_for_oversized_axis(shape, body_kind):
             accum = 0.0
             for j in range(n):
                 accum = accum + x[j] * x[j]
-            loss[None] += accum
+            loss[()] += accum
 
     for i in range(N_X):
         x[i] = 0.1
@@ -4802,7 +4805,7 @@ def test_max_reducer_pins_stride_for_oversized_axis(shape, body_kind):
     prog._reset_max_reducer_dispatch_count()
 
     compute(arr)
-    loss.grad[None] = 1.0
+    loss.grad[()] = 1.0
     for i in range(N_X):
         x.grad[i] = 0.0
     compute.grad(arr)
@@ -4841,7 +4844,7 @@ def test_max_reducer_dispatch_counts_advance_on_input_mutation():
             n = a[i]
             for _ in range(n):
                 v = v * 0.95 + 0.01
-            y[None] += v
+            y[()] += v
 
     a = qd.ndarray(qd.i32, shape=(N,))
     a.from_numpy(np.array([2, 3, 1, 2], dtype=np.int32))
@@ -4852,7 +4855,7 @@ def test_max_reducer_dispatch_counts_advance_on_input_mutation():
     prog._reset_max_reducer_dispatch_count()
 
     compute(a)
-    y.grad[None] = 1.0
+    y.grad[()] = 1.0
     for i in range(N):
         x.grad[i] = 0.0
     compute.grad(a)
@@ -4863,12 +4866,76 @@ def test_max_reducer_dispatch_counts_advance_on_input_mutation():
     a.from_numpy(np.array([3, 3, 1, 2], dtype=np.int32))
     pre_mutation = prog._get_max_reducer_dispatch_count()
     compute(a)
-    y.grad[None] = 1.0
+    y.grad[()] = 1.0
     for i in range(N):
         x.grad[i] = 0.0
     compute.grad(a)
     qd.sync()
     assert prog._get_max_reducer_dispatch_count() > pre_mutation
+
+
+def _sizer_overflow_child(args: list[str]) -> None:
+    qd.init(
+        arch=qd.vulkan,
+        # Disable fallback so an unavailable Vulkan backend fails instead of silently testing another backend.
+        enable_fallback=False,
+        # Disable control-flow optimization to match the original input-mutation regression's configuration.
+        cfg_optimization=False,
+        # Enable experimental adstacks, which is disabled by default.
+        ad_stack_experimental_enabled=True,
+        # Print full tracebacks so failures captured from this child include the details needed to diagnose them.
+        print_full_traceback=True,
+    )
+
+    @qd.kernel
+    def compute(
+        num_its: qd.types.ndarray(dtype=qd.i32, ndim=1),
+        x: qd.types.ndarray(dtype=qd.f32, ndim=1),
+        y: qd.types.ndarray(dtype=qd.f32, ndim=0),
+    ):
+        for i in range(num_its.shape[0]):
+            v = x[i]
+            for _ in range(num_its[i]):
+                v = v * 0.95 + 0.01
+            y[()] += v
+
+    N = 4
+    num_its = qd.ndarray(qd.i32, shape=(N,))
+    x = qd.ndarray(qd.f32, shape=(N,), needs_grad=True)
+    y = qd.ndarray(qd.f32, shape=(), needs_grad=True)
+    num_its.from_numpy(np.array([2, 3, 1, 2], dtype=np.int32))
+    x.fill(0.1)
+    y.fill(0.0)
+
+    compute(num_its, x, y)
+    y.grad[()] = 1.0
+    x.grad.fill(0.0)
+    # Run the backward kernel, which uses adstack to store values needed for gradient calculations.
+    # adstack first determines the required sizing, as part of this call.
+    # The allocator poisons the sizing metadata buffer; the runtime must clear it before the sizing shader runs.
+    compute.grad(num_its, x, y)
+    qd.sync()
+
+    print(TEST_RAN)
+    sys.exit(RET_SUCCESS)
+
+
+# The original issue occurred on Vulkan; poisoning only Vulkan allocations keeps the test setup simple for now.
+@test_utils.test(arch=qd.vulkan, require=qd.extension.adstack)
+def test_sizer_overflow_word_is_cleared_after_poisoning():
+    """Clear poisoned metadata before sizing; the shader only writes the overflow word when its range cap is exceeded."""
+    env = os.environ.copy()
+    env["PYTHONPATH"] = "."
+    env["QD_TEST_VULKAN_POISON_ALLOCATIONS"] = "1"
+    env["QD_DEBUG_ADSTACK"] = "1"
+    proc = subprocess.run(
+        [sys.executable, __file__, _sizer_overflow_child.__name__], env=env, capture_output=True, text=True
+    )
+    assert proc.returncode == RET_SUCCESS, proc.stdout + "\n" + proc.stderr
+    assert TEST_RAN in proc.stdout, proc.stdout + "\n" + proc.stderr
+    assert "[vulkan_allocator] poisoned allocation" in proc.stderr, proc.stdout + "\n" + proc.stderr
+    # Confirm GPU sizing ran; CPU sizing or cached metadata would bypass the buffer clear being tested.
+    assert "[adstack_sizer] kernel=" in proc.stderr, proc.stdout + "\n" + proc.stderr
 
 
 @test_utils.test(arch=[qd.cuda, qd.amdgpu, qd.vulkan, qd.metal], require=qd.extension.adstack)
@@ -4897,9 +4964,9 @@ def test_max_reducer_per_kernel_registry_id_isolation():
             for j in range(a[i]):
                 accum = accum + x[j] * x[j]
             if qd.static(flag):
-                loss_a[None] += accum
+                loss_a[()] += accum
             else:
-                loss_b[None] += accum
+                loss_b[()] += accum
 
     prog = impl.get_runtime().prog
     prog._reset_max_reducer_dispatch_count()
@@ -4936,7 +5003,7 @@ def test_max_reducer_grammar_fallback():
             v = x[i]
             for _ in range(K):
                 v = v * 0.95 + 0.01
-            y[None] += v
+            y[()] += v
 
     for i in range(N):
         x[i] = 0.1
@@ -4945,7 +5012,7 @@ def test_max_reducer_grammar_fallback():
     prog._reset_max_reducer_dispatch_count()
 
     compute()
-    y.grad[None] = 1.0
+    y.grad[()] = 1.0
     for i in range(N):
         x.grad[i] = 0.0
     compute.grad()
@@ -5048,7 +5115,7 @@ def test_max_reducer_field_load_bound_var_dispatch(body_kind):
             accum = 0.0
             for j in range(n):
                 accum = accum + x[j] * x[j]
-            loss[None] += accum
+            loss[()] += accum
 
     for i in range(N_X):
         x[i] = 0.1
@@ -5057,7 +5124,7 @@ def test_max_reducer_field_load_bound_var_dispatch(body_kind):
     prog._reset_max_reducer_dispatch_count()
 
     compute(arr)
-    loss.grad[None] = 1.0
+    loss.grad[()] = 1.0
     for i in range(N_X):
         x.grad[i] = 0.0
     compute.grad(arr)
@@ -5108,7 +5175,7 @@ def test_max_reducer_field_load_bound_var_cache_invalidates_on_snode_mutation():
             accum = 0.0
             for j in range(n):
                 accum = accum + x[j] * x[j]
-            loss[None] += accum
+            loss[()] += accum
 
     for i in range(N_X):
         x[i] = 0.1
@@ -5117,7 +5184,7 @@ def test_max_reducer_field_load_bound_var_cache_invalidates_on_snode_mutation():
     prog._reset_max_reducer_dispatch_count()
 
     compute()
-    loss.grad[None] = 1.0
+    loss.grad[()] = 1.0
     for i in range(N_X):
         x.grad[i] = 0.0
     compute.grad()
@@ -5130,7 +5197,7 @@ def test_max_reducer_field_load_bound_var_cache_invalidates_on_snode_mutation():
     field_a[M - 1] = 4
     pre_mutation = prog._get_max_reducer_dispatch_count()
     compute()
-    loss.grad[None] = 1.0
+    loss.grad[()] = 1.0
     for i in range(N_X):
         x.grad[i] = 0.0
     compute.grad()
@@ -5183,7 +5250,7 @@ def test_above_cap_out_of_grammar_kernel_raises():
                 accum = 0.0
                 for k in range(n):
                     accum = accum + x[k] * x[k]
-                loss[None] += accum
+                loss[()] += accum
 
     for i in range(N_X):
         x[i] = 0.1
@@ -5193,8 +5260,183 @@ def test_above_cap_out_of_grammar_kernel_raises():
     # the overflow flag is polled. The match-set covers both backends uniformly.
     with pytest.raises((QuadrantsAssertionError, RuntimeError)):
         compute(a)
-        loss.grad[None] = 1.0
+        loss.grad[()] = 1.0
         for i in range(N_X):
             x.grad[i] = 0.0
         compute.grad(a)
         qd.sync()
+
+
+@test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
+def test_adstack_scalarized_tensor_component_loop_trip_grad_correct():
+    # A tensor-valued loop-carried variable divided by a scalar (`q / q.norm()`) stays tensor-typed past
+    # `determine_ad_stack_size`, which records a `size_expr` on the tensor adstack while leaving `max_size` at the
+    # seed 1. The later scalarize pass splits the tensor stack into per-component scalar stacks; before the fix the
+    # split dropped `size_expr`, so each component kept only the seed and overflowed once the loop ran more than once
+    # (loud on SPIR-V, silently per-lane-replicated gradients on a `__debug__`-disabled build).
+    n_iter_val = 3
+    denom_val = 2.0
+    x_np = np.array([0.3, 0.7], dtype=np.float32)
+    n_env = x_np.size
+
+    n_iter = qd.field(qd.i32, shape=())
+    denom = qd.field(qd.f32, shape=())
+    x = qd.field(qd.f32, shape=n_env, needs_grad=True)
+    out = qd.field(qd.f32, shape=n_env, needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        for i in range(n_env):
+            q = qd.Vector([x[i], x[i] * 0.5], dt=qd.f32)
+            s = denom[()]
+            for _ in range(n_iter[()]):
+                q = qd.Vector([q[0] + q[1] * 0.1, q[1] + q[0] * 0.2], dt=qd.f32)
+                q = q / s
+            out[i] = q[0] + q[1]
+
+    n_iter[()] = n_iter_val
+    denom[()] = denom_val
+    x.from_numpy(x_np)
+    compute()
+    out.grad.from_numpy(np.ones(n_env, dtype=np.float32))
+    x.grad.fill(0.0)
+    compute.grad()
+
+    # The recurrence q <- (M @ q) / s with M = [[1, 0.1], [0.2, 1]] is linear, so d(out)/d(x[i]) is the same for
+    # every env: sum of the columns of (M / s)^n_iter applied to the initial jacobian (1, 0.5).
+    mat = np.array([[1.0, 0.1], [0.2, 1.0]], dtype=np.float64) / denom_val
+    jac = np.array([1.0, 0.5], dtype=np.float64)
+    for _ in range(n_iter_val):
+        jac = mat @ jac
+    expected = float(jac.sum())
+    grad = x.grad.to_numpy()
+    for i in range(n_env):
+        assert grad[i] == pytest.approx(expected, rel=1e-5)
+
+
+@test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
+def test_adstack_loop_carried_vector_component_grad_correct():
+    # A multi-component `qd.Vector` carried across a field-bounded loop and rebuilt from its own previous components
+    # each iteration must have its reverse-mode gradient read each iteration's component value, not the last one. The
+    # loop-carried tensor local is read component-wise through a `MatrixPtr`, so before the fix the adstack judge never
+    # saw a load of it and left it a single overwrite-each-iteration slot; the reverse then read the final iteration's
+    # component for every reverse step, scaling the second-order term of the gradient by a spurious extra factor. The
+    # scalar-valued analogue was already correct, so this guards specifically the tensor component read off the stack.
+    n_env = 2
+    x_np = np.array([0.3, 0.7], dtype=np.float32)
+
+    n_iter = qd.field(qd.i32, shape=())
+    x = qd.field(qd.f32, shape=n_env, needs_grad=True)
+    out = qd.field(qd.f32, shape=n_env, needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        for i_env in range(n_env):
+            q = qd.Vector([x[i_env], x[i_env] * 0.5], dt=qd.f32)
+            for _ in range(n_iter[()]):
+                q = qd.Vector([q[0] * q[0], q[1] + q[0] * 0.1], dt=qd.f32)
+            out[i_env] = q[1]
+
+    n_iter[()] = 2
+    x.from_numpy(x_np)
+    compute()
+    out.grad.from_numpy(np.ones(n_env, dtype=np.float32))
+    x.grad.fill(0.0)
+    compute.grad()
+
+    # After two iterations out = 0.6 * x + 0.1 * x^2, so d(out)/dx = 0.6 + 0.2 * x.
+    grad = x.grad.to_numpy()
+    for i in range(n_env):
+        assert grad[i] == pytest.approx(0.6 + 0.2 * x_np[i], rel=1e-5)
+
+
+@test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
+def test_adstack_offset_array_difference_loop_trip_grad_correct():
+    # Inner loop trip count is the difference of two adjacent offset-array reads (`starts[i + 1] - starts[i]`, the
+    # ragged-segment length pattern); the adstack must be sized for the widest segment. The outer parallel `ndrange`
+    # forces the reverse pass to spill and recover the loop index, so both reads index through an opaque expression
+    # and each takes a whole-shape `MaxOverRange` fallback with alpha-equal shape ends. Before the fix `expr_sub`
+    # fused those into `MaxOverRange(starts[v] - starts[v]) = 0`, zeroing the loop's push multiplier: the stack was
+    # sized for the root pushes only and overflowed for any segment longer than one (loud on SPIR-V, silently
+    # per-lane-replicated gradients on a `__debug__`-disabled build).
+    starts_np = np.array([0, 2, 3, 6], dtype=np.int32)  # segment lengths 2, 1, 3
+    n_seg = starts_np.size - 1
+    total = int(starts_np[-1])
+    n_env = 2
+    x_np = np.linspace(0.2, 0.9, total * n_env).astype(np.float32).reshape(total, n_env)
+
+    starts = qd.field(qd.i32, shape=n_seg + 1)
+    x = qd.field(qd.f32, shape=(total, n_env), needs_grad=True)
+    out = qd.field(qd.f32, shape=(n_seg, n_env), needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        for i, i_env in qd.ndrange(n_seg, n_env):
+            seg_start = starts[i]
+            seg_end = starts[i + 1]
+            acc = qd.f32(0.0)
+            for j in range(seg_end - seg_start):
+                acc = acc + x[seg_start + j, i_env] * x[seg_start + j, i_env]
+            out[i, i_env] = acc
+
+    starts.from_numpy(starts_np)
+    x.from_numpy(x_np)
+    compute()
+    out.grad.from_numpy(np.ones((n_seg, n_env), dtype=np.float32))
+    x.grad.fill(0.0)
+    compute.grad()
+
+    # out[i, e] = sum_{j in segment i} x[j, e]^2, so d(out)/d(x[j, e]) = 2 * x[j, e] for the owning segment.
+    grad = x.grad.to_numpy()
+    for j in range(total):
+        for e in range(n_env):
+            assert grad[j, e] == pytest.approx(2.0 * x_np[j, e], rel=1e-5)
+
+
+@test_utils.test(require=qd.extension.adstack, ad_stack_experimental_enabled=True)
+def test_adstack_stride_load_dominates_sibling_branch_grad_distinct_per_thread():
+    # The reverse pass of a kernel whose first f32 adstack heap access sits inside one arm of a runtime `if` while
+    # the sibling arm also hits the heap must keep per-thread gradients distinct. The memoized per-thread stride
+    # load from the AdStackMetadata buffer is emitted at the task entry block so its SSA id dominates both arms;
+    # emitting it lazily at the first heap access would define it inside the first arm and reuse it from the
+    # sibling arm, which violates SPIR-V dominance and lands on Metal as an uninitialized stride register: every
+    # thread then computes the same heap row base and the whole dispatch races on one row, collapsing the per-env
+    # adjoints to a single value. The taken `else` arm below runs a field-bounded loop whose multiply spills the
+    # operand on the f32 heap; the compiled-but-untaken `if` arm reads both a reduction and a component of a
+    # vector, which is what places the first f32 heap access of the module inside that arm.
+    n_env = 2
+    dt = 0.01
+
+    jtype = qd.field(qd.i32, shape=())
+    q_end = qd.field(qd.i32, shape=())
+    qpos = qd.field(qd.f32, shape=(2, n_env), needs_grad=True)
+    vel = qd.field(qd.f32, shape=(2, n_env), needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        for i_env in range(n_env):
+            if jtype[()] == 3:
+                rv = qd.Vector([vel[0, i_env], vel[1, i_env]], dt=qd.f32)
+                qpos[0, i_env] = rv.norm_sqr()
+                qpos[1, i_env] = rv[0]
+            else:
+                for j in range(q_end[()]):
+                    qpos[j, i_env] = vel[j, i_env] * dt
+
+    jtype[()] = 2
+    q_end[()] = 1
+    qpos.fill(0.0)
+    vel.fill(0.0)
+    vel.grad.fill(0.0)
+    seed = np.zeros((2, n_env), dtype=np.float32)
+    seed[0, :] = np.arange(1, n_env + 1, dtype=np.float32)
+    qpos.grad.from_numpy(seed)
+    compute.grad()
+
+    grad = vel.grad.to_numpy()[0]
+    for i in range(n_env):
+        assert grad[i] == pytest.approx((i + 1) * dt, rel=1e-6)
+
+
+if __name__ == "__main__":
+    globals()[sys.argv[1]](sys.argv[2:])

@@ -105,10 +105,10 @@ class Ndarray:
         """
         if impl.current_cfg().arch == _arch_metal:
             impl.get_runtime().sync()
-        layout = getattr(self, "_qd_layout", None)
-        if _is_identity_layout(layout):
+        total_physical_layout = self._total_physical_layout()
+        if _is_identity_layout(total_physical_layout):
             return impl.get_runtime().prog.ndarray_to_dlpack(self, self.arr, versioned=versioned)
-        return impl.get_runtime().prog.ndarray_to_dlpack(self, self.arr, list(layout), versioned=versioned)
+        return impl.get_runtime().prog.ndarray_to_dlpack(self, self.arr, total_physical_layout, versioned=versioned)
 
     def _reset(self):
         """
@@ -154,6 +154,17 @@ class Ndarray:
             return phys
         inv = _invert_layout(layout)
         return tuple(phys[inv[i]] for i in range(len(phys)))
+
+    def _total_physical_layout(self):
+        """Return canonical axis numbers in physical order, with component axes unchanged at the end."""
+        layout = self._qd_layout
+        if layout is None:
+            layout = tuple(range(len(self.shape)))
+        return list(layout) + list(range(len(layout), len(layout) + len(self.element_shape)))
+
+    def _total_canonical_shape(self):
+        """Return canonical shape axes followed by element component axes."""
+        return tuple(self.shape) + self.element_shape
 
     def get_type(self):
         return NdarrayTypeMetadata(self.element_type, self._physical_shape, self.grad is not None)
@@ -229,13 +240,13 @@ class Ndarray:
         return arr
 
     @python_scope
-    def _ndarray_matrix_to_numpy(self, as_vector):
+    def _copy_to_new_numpy(self, as_vector):
         """Converts matrix ndarray to a numpy array.
 
         Returns:
             numpy.ndarray: The result numpy array.
         """
-        arr = np.zeros(shape=self.arr.total_shape(), dtype=to_numpy_type(self.dtype))
+        arr = np.zeros(shape=self._total_canonical_shape(), dtype=to_numpy_type(self.dtype))
         from quadrants._kernels import (  # pylint: disable=C0415
             ndarray_matrix_to_ext_arr,  # pylint: disable=C0415
         )
@@ -246,43 +257,40 @@ class Ndarray:
         return arr
 
     @python_scope
-    def _ndarray_from_numpy(self, arr):
-        """Loads all values from a numpy array.
-
-        ``arr.shape`` is validated against the *canonical* shape (what ``self.shape`` reports). The
-        ``ext_arr_to_ndarray`` kernel iterates ``arr`` canonically and writes through ``ndarray[I]``, so on
-        layout-tagged destinations the AST permutation routes canonical positions into the underlying physical buffer
-        without any python-side transpose.
-
-        Args:
-            arr (numpy.ndarray): The source numpy array, in canonical axis order.
-        """
+    def _copy_from_numpy(self, arr):
+        """Copy a NumPy array in canonical axis order into this ndarray's existing storage."""
         if not isinstance(arr, np.ndarray):
             raise TypeError(f"{np.ndarray} expected, but {type(arr)} provided")
-        canonical_shape = tuple(self.shape)
+        canonical_shape = self._total_canonical_shape()
         if canonical_shape != tuple(arr.shape):
             raise ValueError(f"Mismatch shape: {canonical_shape} expected, but {tuple(arr.shape)} provided")
         if not arr.flags.c_contiguous:
             arr = np.ascontiguousarray(arr)
 
-        from quadrants._kernels import ext_arr_to_ndarray  # pylint: disable=C0415
+        from quadrants._kernels import (  # pylint: disable=C0415
+            ext_arr_to_ndarray,
+            ext_arr_to_ndarray_matrix,
+        )
 
-        ext_arr_to_ndarray(arr, self)
+        if self.element_shape:
+            ext_arr_to_ndarray_matrix(arr, self, layout_is_aos=1, as_vector=len(self.element_shape) == 1)
+        else:
+            ext_arr_to_ndarray(arr, self)
         impl.get_runtime().sync()
 
     @python_scope
-    def _ndarray_matrix_to_torch(self, as_vector, device=None):
-        """Mirror of ``_ndarray_matrix_to_numpy`` that fills a torch tensor instead of a numpy array.
+    def _copy_to_new_torch(self, as_vector, device=None):
+        """Mirror of ``_copy_to_new_numpy`` that fills a torch tensor instead of a numpy array.
 
-        Allocates a ``torch.zeros`` of ``self.arr.total_shape()`` (the canonical-major shape including the trailing
-        element-axis extents) and dispatches the same ``ndarray_matrix_to_ext_arr`` bridge kernel — torch tensors
-        expose the same external-array interface to the kernel as numpy arrays do.
+        Allocates a ``torch.zeros`` of the canonical shape including any trailing element-axis extents and dispatches
+        the same ``ndarray_matrix_to_ext_arr`` bridge kernel - torch tensors expose the same external-array interface
+        to the kernel as numpy arrays do.
         """
         import torch  # pylint: disable=C0415
 
         from quadrants.lang.util import to_pytorch_type  # pylint: disable=C0415
 
-        out = torch.zeros(size=tuple(self.arr.total_shape()), dtype=to_pytorch_type(self.dtype), device=device)
+        out = torch.zeros(size=self._total_canonical_shape(), dtype=to_pytorch_type(self.dtype), device=device)
         from quadrants._kernels import (  # pylint: disable=C0415
             ndarray_matrix_to_ext_arr,  # pylint: disable=C0415
         )
@@ -294,44 +302,19 @@ class Ndarray:
         return out
 
     @python_scope
-    def _ndarray_matrix_from_torch(self, arr, as_vector):
-        """Mirror of ``_ndarray_matrix_from_numpy`` that ingests a torch tensor. ``.contiguous()`` is forced so the
-        bridge kernel sees a tightly-packed external array."""
+    def _copy_from_torch(self, arr, as_vector):
+        """Mirror of ``_copy_from_numpy`` that ingests a torch tensor. ``.contiguous()`` is forced so the bridge kernel
+        sees a tightly-packed external array."""
         contig = arr.contiguous()
-        if tuple(self.arr.total_shape()) != tuple(contig.shape):
-            raise ValueError(
-                f"Mismatch shape: {tuple(self.arr.total_shape())} expected, but {tuple(contig.shape)} provided"
-            )
+        canonical_shape = self._total_canonical_shape()
+        if canonical_shape != tuple(contig.shape):
+            raise ValueError(f"Mismatch shape: {canonical_shape} expected, but {tuple(contig.shape)} provided")
         from quadrants._kernels import (  # pylint: disable=C0415
             ext_arr_to_ndarray_matrix,  # pylint: disable=C0415
         )
 
         layout_is_aos = 1
         ext_arr_to_ndarray_matrix(contig, self, layout_is_aos, as_vector)
-        impl.get_runtime().sync()
-
-    @python_scope
-    def _ndarray_matrix_from_numpy(self, arr, as_vector):
-        """Loads all values from a numpy array.
-
-        Args:
-            arr (numpy.ndarray): The source numpy array.
-        """
-        if not isinstance(arr, np.ndarray):
-            raise TypeError(f"{np.ndarray} expected, but {type(arr)} provided")
-        if tuple(self.arr.total_shape()) != tuple(arr.shape):
-            raise ValueError(
-                f"Mismatch shape: {tuple(self.arr.total_shape())} expected, but {tuple(arr.shape)} provided"
-            )
-        if not arr.flags.c_contiguous:
-            arr = np.ascontiguousarray(arr)
-
-        from quadrants._kernels import (  # pylint: disable=C0415
-            ext_arr_to_ndarray_matrix,  # pylint: disable=C0415
-        )
-
-        layout_is_aos = 1
-        ext_arr_to_ndarray_matrix(arr, self, layout_is_aos, as_vector)
         impl.get_runtime().sync()
 
     @python_scope
@@ -425,13 +408,16 @@ class Ndarray:
         return BufferView(self, start, size)
 
     @python_scope
-    def _pad_key(self, key):
+    def _normalize_index(self, key):
+        """Normalize None and scalar indices to tuples, and validate the number of indices including component axes."""
         if key is None:
             key = ()
         if not isinstance(key, (tuple, list)):
             key = (key,)
-        if len(key) != len(self.arr.total_shape()):
-            raise QuadrantsIndexError(f"{len(self.arr.total_shape())}d ndarray indexed with {len(key)}d indices: {key}")
+        if len(key) != len(self.arr.total_physical_shape()):
+            raise QuadrantsIndexError(
+                f"{len(self.arr.total_physical_shape())}d ndarray indexed with {len(key)}d indices: {key}"
+            )
         return key
 
     @python_scope
@@ -453,18 +439,9 @@ class ScalarNdarray(Ndarray):
     def __init__(self, dtype, arr_shape):
         super().__init__()
         self.dtype = cook_dtype(dtype)
-        if impl.is_python_backend():
-            import torch  # pylint: disable=C0415
-
-            from quadrants.lang.util import (  # pylint: disable=C0415
-                dtype_to_torch_dtype,
-            )
-
-            self.arr = torch.zeros(shape=arr_shape, dtype=dtype_to_torch_dtype(dtype))
-        else:
-            self.arr = impl.get_runtime().prog.create_ndarray(
-                self.dtype, arr_shape, layout=Layout.NULL, zero_fill=True, dbg_info=_qd_core.DebugInfo(get_traceback())
-            )
+        self.arr = impl.get_runtime().prog.create_ndarray(
+            self.dtype, arr_shape, layout=Layout.NULL, zero_fill=True, dbg_info=_qd_core.DebugInfo(get_traceback())
+        )
         self._physical_shape = tuple(self.arr.shape)
         self.element_type = dtype
 
@@ -475,14 +452,14 @@ class ScalarNdarray(Ndarray):
     @python_scope
     def __setitem__(self, key, value):
         self._initialize_host_accessor()
-        self.host_accessor.setter(value, *self._pad_key(key))
+        self.host_accessor.setter(value, *self._normalize_index(key))
 
     @python_scope
     def __getitem__(self, key):
         if isinstance(key, slice):
             return self._slice_to_buffer_view(key)
         self._initialize_host_accessor()
-        return self.host_accessor.getter(*self._pad_key(key))
+        return self.host_accessor.getter(*self._normalize_index(key))
 
     @python_scope
     def to_numpy(self, dtype=None, *, copy=True):
@@ -514,7 +491,7 @@ class ScalarNdarray(Ndarray):
 
     @python_scope
     def from_numpy(self, arr):
-        self._ndarray_from_numpy(arr)
+        self._copy_from_numpy(arr)
 
     @python_scope
     def to_torch(self, device=None, *, copy=True):
@@ -626,11 +603,11 @@ class NdarrayHostAccess:
 
         def getter():
             self.ndarr._initialize_host_accessor()
-            return self.ndarr.host_accessor.getter(*self.ndarr._pad_key(self.indices))
+            return self.ndarr.host_accessor.getter(*self.ndarr._normalize_index(self.indices))
 
         def setter(value):
             self.ndarr._initialize_host_accessor()
-            self.ndarr.host_accessor.setter(value, *self.ndarr._pad_key(self.indices))
+            self.ndarr.host_accessor.setter(value, *self.ndarr._normalize_index(self.indices))
 
         self.getter = getter
         self.setter = setter

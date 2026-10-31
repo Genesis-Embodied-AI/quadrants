@@ -27,7 +27,6 @@ def _kernel_coverage_enabled() -> bool:
 
 
 from quadrants._lib.core.quadrants_python import (
-    Arch,
     ASTBuilder,
     CompiledKernelData,
     CompileResult,
@@ -35,6 +34,7 @@ from quadrants._lib.core.quadrants_python import (
     KernelLaunchContext,
 )
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
+from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import _kernel_impl_dataclass, impl, runtime_ops
 
 # `qd.checkpoint` pause / resume model helpers. See `kernel_checkpoint.py` for the full extracted surface; `Kernel`
@@ -61,6 +61,7 @@ from quadrants.lang.impl import Program
 from quadrants.lang.shell import _shell_pop_print
 from quadrants.lang.util import cook_dtype, is_data_oriented
 from quadrants.types import (
+    ndarray_type,
     primitive_types,
     template,
 )
@@ -84,7 +85,6 @@ from ._quadrants_callable import QuadrantsCallable
 # Define proxies for fast lookup
 _NONE, _VALIDATION = AutodiffMode.NONE, AutodiffMode.VALIDATION
 _FLOAT, _INT, _UINT, _QD_ARRAY, _QD_ARRAY_WITH_GRAD = KernelBatchedArgType
-_ARCH_PYTHON = Arch.python
 
 
 class LaunchContextBufferCache:
@@ -344,9 +344,20 @@ class Kernel(FuncBase):
         self._graph_do_while_level_stack: list[int] = []
         # Per-checkpoint metadata, one entry per `with qd.checkpoint(...)` block (explicit AND auto-injected implicit)
         # in declaration order. List index is the checkpoint's internal `cp_id` (0, 1, 2, ... dense, flat across the
-        # kernel). Each entry is the name of the `yield_on=` kernel parameter, or `None` for implicit checkpoints (which
-        # never yield). Populated by the AST transformer; empty means the kernel uses no checkpoints.
+        # kernel). Each entry is the readable label of the `yield_on=` argument (e.g. "flag" or "self.flag"), or
+        # `None` for implicit checkpoints (which never yield). Populated by the AST transformer; empty means the
+        # kernel uses no checkpoints. Used for error messages / introspection only -- the runtime forwards the flat
+        # C++ arg-id from `checkpoint_yield_on_cpp_arg_ids` below.
         self.checkpoint_yield_on_args: list[str | None] = []
+        # Flat C++ arg-ids (post-template) of each explicit checkpoint's `yield_on=` ndarray, resolved at AST-build time
+        # by `CheckpointTransformer.build_checkpoint_with` via `ASTTransformer._resolve_ndarray_kernel_arg_id`. Same
+        # indexing as `checkpoint_yield_on_args`: entry `i` is the flat arg-id the runtime uses to look up the ndarray's
+        # device pointer for the checkpoint whose internal cp_id is `i`. `-1` for implicit checkpoints (which never
+        # yield). Resolving at AST-build time uniformly handles bare kernel parameters (`yield_on=flag`),
+        # `@qd.data_oriented` member ndarrays (`yield_on=self.flag`), and `@dataclasses.dataclass` parameter members
+        # (`yield_on=params.flag`); the attribute forms cannot be resolved by the per-launch name match because
+        # `arg_metas[i].name` only carries top-level parameter names.
+        self.checkpoint_yield_on_cpp_arg_ids: list[int] = []
         # User-facing labels for explicit checkpoints. Same indexing as `checkpoint_yield_on_args`: entry `i` is the int
         # (or IntEnum value) the user passed as the first positional arg of `qd.checkpoint(cp_id, yield_on)` for the
         # checkpoint whose internal cp_id is `i`. Implicit checkpoints (auto-wrapped) get `None` (they have no
@@ -373,6 +384,9 @@ class Kernel(FuncBase):
 
         self.launch_context_buffer_cache = LaunchContextBufferCache()
         self._struct_ndarray_launch_info_by_key: dict[CompiledKernelKeyType, list] = {}
+        # Launch info for primitives lifted from ``@qd.data_oriented(template_primitives=False)`` template args (see
+        # ``predeclare_struct_primitives``). Maps key -> list of ``(arg_id, template_arg_idx, attr_chain, kind)``.
+        self._struct_primitive_launch_info_by_key: dict[CompiledKernelKeyType, list] = {}
         self._mutable_nd_cached_key: CompiledKernelKeyType | None = None
         self._mutable_nd_cached_val: list = []
         self._tensor_unwrap_indices: tuple[int, ...] | None = None
@@ -390,23 +404,49 @@ class Kernel(FuncBase):
         self.fe_ll_cache_observations = FeLlCacheObservations()
 
     def _try_load_fastcache(self, args: tuple[Any, ...], key: "CompiledKernelKeyType") -> set[str] | None:
-        frontend_cache_key: str | None = None
+        """Two-phase fastcache lookup: L1 (source+config, no args) for pruning info, then a narrow args walk over
+        those paths for the L2 key, its entry, and the artifact.
+
+        Returns non-None - letting ``materialize`` skip pass 0 - only if all of phase 2 succeeds, artifact load
+        included. Pass 0 is what populates pruning info for every called ``@qd.func``, so it can only be skipped when
+        pass 1 runs in ``only_parse_function_def`` mode and never enters a callee body; otherwise the build fails
+        looking up callee variables in an empty used-set ("Name __qd_... is not defined").
+
+        Sets ``self._l1_key``, ``self._pruning_paths_from_l1`` and ``self.fast_checksum``, all read after the compile
+        by ``_maybe_persist_l1_and_set_l2_key``.
+        """
+        self._l1_key = None  # type: ignore[attr-defined]
+        self._pruning_paths_from_l1 = None  # type: ignore[attr-defined]
+        self.fast_checksum = None
         if self.runtime.src_ll_cache and self.quadrants_callable and self.quadrants_callable.is_pure:
             kernel_source_info, _src = get_source_info_and_src(self.func)
-            self.fast_checksum = src_hasher.create_cache_key(
-                self.raise_on_templated_floats, kernel_source_info, args, self.arg_metas
+            self._kernel_source_info_cached = kernel_source_info  # reused by materialize / launch_kernel
+            self._l1_key = src_hasher.make_source_config_key(kernel_source_info)
+
+            # Phase 1: L1 lookup - pruning info only, no args walk yet.
+            pruning_paths, cached_graph_do_while_levels = src_hasher.load_pruning_info(self._l1_key)
+            if pruning_paths is None:
+                # ``cache_key_generated`` stays False: it means "fastcache produced a valid L2 args hash", and whether
+                # the narrow args walk will succeed isn't known until after the compile.
+                return None
+            self._pruning_paths_from_l1 = pruning_paths
+
+            # Phase 2: narrow args hash + L2 lookup.
+            narrow_args_hash = src_hasher.compute_narrow_args_hash(
+                self.raise_on_templated_floats, kernel_source_info, args, self.arg_metas, pruning_paths
             )
-            used_py_dataclass_parameters = None
-            cached_graph_do_while_levels: list[tuple[str, int]] | None = None
-            if self.fast_checksum:
-                self.src_ll_cache_observations.cache_key_generated = True
-                used_py_dataclass_parameters, frontend_cache_key, cached_graph_do_while_levels = src_hasher.load(  # type: ignore[reportAssignmentType]
-                    self.fast_checksum
-                )
-            if used_py_dataclass_parameters is not None and frontend_cache_key is not None:
+            if narrow_args_hash is None:
+                # Recognised-but-unsupported tensor-like (Field / MatrixField): leaving ``fast_checksum`` None keeps any
+                # L2 entry from being written for this call.
+                return None
+            self.fast_checksum = src_hasher.make_full_cache_key(self._l1_key, narrow_args_hash)
+            self.src_ll_cache_observations.cache_key_generated = True
+
+            cache_value = src_hasher.load(self.fast_checksum)
+            if cache_value is not None:
+                frontend_cache_key = cache_value.frontend_cache_key
                 self.src_ll_cache_observations.cache_validated = True
                 prog = impl.get_runtime().prog
-                assert self.fast_checksum is not None
                 self.compiled_kernel_data_by_key[key] = prog.load_fast_cache(
                     frontend_cache_key,
                     self.func.__name__,
@@ -415,18 +455,50 @@ class Kernel(FuncBase):
                 )
                 if self.compiled_kernel_data_by_key[key]:
                     self.src_ll_cache_observations.cache_loaded = True
-                    self.used_py_dataclass_parameters_by_key_enforcing[key] = used_py_dataclass_parameters
-                    # Fast-cache restore skips AST transformation, so rebuild the gdw level table (and the legacy
-                    # outermost-arg alias) from the cached (cond_arg_name, parent_id) pairs.
-                    if cached_graph_do_while_levels:
+                    self.used_py_dataclass_parameters_by_key_enforcing[key] = cache_value.used_py_dataclass_parameters
+                    # Fast-cache restore skips AST transformation, so rebuild the AST-transformer-produced metadata from
+                    # the cache value: nested graph_do_while level table (with the AST-resolved flat C++ arg-id) plus
+                    # the per-checkpoint yield_on / user-label tables. Mirrors what `function_def_transformer.py` +
+                    # `checkpoint_transformer.py` + `build_While` would have written. L1's copy of the level table is
+                    # deliberately not consulted here: it is shared by every specialization, and a `qd.graph_do_while`
+                    # inside a `qd.static` branch belongs to only some of them.
+                    _cached_levels = cache_value.graph_do_while_levels
+                    if _cached_levels:
                         self.graph_do_while_levels = [
-                            GraphDoWhileLevel(cond_arg_name=name, parent_id=parent)
-                            for name, parent in cached_graph_do_while_levels
+                            GraphDoWhileLevel(cond_arg_name=name, parent_id=parent, cond_cpp_arg_id=cpp_arg_id)
+                            for name, parent, cpp_arg_id in _cached_levels
                         ]
                         self.graph_do_while_arg = self.graph_do_while_levels[0].cond_arg_name
-                    return used_py_dataclass_parameters
+                    if cache_value.checkpoint_yield_on_args:
+                        self.checkpoint_yield_on_args = list(cache_value.checkpoint_yield_on_args)
+                        self.checkpoint_yield_on_cpp_arg_ids = list(cache_value.checkpoint_yield_on_cpp_arg_ids)
+                        # Pydantic coerces IntEnum -> int at CacheValue construction time, so the raw labels are plain
+                        # ints after JSON round-trip. ``checkpoint_user_label_enum_qualnames`` carries the parallel
+                        # ``module.ClassQualName.MEMBER`` strings that ``_resolve_intenum_member`` uses to rebuild the
+                        # original ``IntEnum`` member -- preserving the documented contract that
+                        # ``qd.checkpoint(Stage.X, ...)`` surfaces as ``Stage.X`` (not the raw int) on
+                        # ``status.checkpoint``. Older v3 caches predate the qualname column, so we default any missing
+                        # slots to ``None`` -> raw-int fallback (the same behaviour they had on v3).
+                        raw_labels = list(cache_value.checkpoint_user_labels_by_cp_id)
+                        qualnames = list(cache_value.checkpoint_user_label_enum_qualnames) or [None] * len(raw_labels)
+                        if len(qualnames) != len(raw_labels):
+                            qualnames = [None] * len(raw_labels)
+                        self.checkpoint_user_labels_by_cp_id = [
+                            src_hasher._resolve_intenum_member(qn, lbl) for qn, lbl in zip(qualnames, raw_labels)
+                        ]
+                    return cache_value.used_py_dataclass_parameters
+            # L2 miss or artifact load failed: report cold, so ``materialize`` runs pass 0 + pass 1 and populates
+            # per-callee pruning info. ``fast_checksum`` stays set, so a fresh L2 entry is written after the compile.
+            # L1's level table seeds the cold-compile path until the AST transformer repopulates it.
+            if cached_graph_do_while_levels and not self.graph_do_while_levels:
+                self.graph_do_while_levels = [
+                    GraphDoWhileLevel(cond_arg_name=name, parent_id=parent, cond_cpp_arg_id=cpp_arg_id)
+                    for name, parent, cpp_arg_id in cached_graph_do_while_levels
+                ]
+                self.graph_do_while_arg = self.graph_do_while_levels[0].cond_arg_name
+            return None
 
-        elif self.quadrants_callable and not self.quadrants_callable.is_pure and self.runtime.print_non_pure:
+        if self.quadrants_callable and not self.quadrants_callable.is_pure and self.runtime.print_non_pure:
             # The bit in caps should not be modified without updating corresponding test
             # freetext can be freely modified.
             # As for why we are using `print` rather than eg logger.info, it is because this is only printed when
@@ -437,7 +509,6 @@ class Kernel(FuncBase):
     def materialize(self, key: "CompiledKernelKeyType | None", py_args: tuple[Any, ...], arg_features=None):
         if key is None:
             key = (self.func, 0, self.autodiff_mode)
-        self.fast_checksum = None
         if key in self.materialized_kernels:
             return
 
@@ -481,6 +552,8 @@ class Kernel(FuncBase):
             range_begin = 0 if used_py_dataclass_parameters is None else 1
             runtime = impl.get_runtime()
             for _pass in range(range_begin, 2):
+                if _pass == 0:
+                    pruning.pass_0_ran = True
                 if _pass >= 1:
                     pruning.enforce()
                 tree, ctx = self.get_tree_and_ctx(
@@ -514,7 +587,24 @@ class Kernel(FuncBase):
                     self._struct_ndarray_launch_info_by_key[key] = getattr(
                         ctx.global_context, "struct_ndarray_launch_info", []
                     )
+                    # Both folds bring data_oriented member accesses into the kernel's used-flat-names set, which
+                    # dataclass-arg expansion is the only other contributor to. Without them the narrow args hash walks
+                    # nothing for a data_oriented arg, and a change of member dtype or value cannot invalidate the cache
+                    # entry.
+                    pruning.fold_struct_nd_paths(self._struct_ndarray_launch_info_by_key.get(key, []), self.arg_metas)
+                    pruning.fold_kernel_arg_chain_paths()
+                    # Only record an entry when this key actually lifts primitives, so the dict stays empty for the
+                    # overwhelming majority of kernels (none use template_primitives=False). launch_kernel can then
+                    # skip the whole primitive-binding path with a single empty-dict check instead of paying a
+                    # per-launch ``.get(key)`` (tuple hash) on every cache-missing launch -- which is the hot path for
+                    # CPU / unbatched genesis steps that launch many tiny kernels.
+                    struct_primitive_launch_info = getattr(ctx.global_context, "struct_primitive_launch_info", [])
+                    if struct_primitive_launch_info:
+                        self._struct_primitive_launch_info_by_key[key] = struct_primitive_launch_info
                 else:
+                    # Propagate used-sets across call edges to a fixpoint (order-independent) before
+                    # collapsing flat names to their used prefixes below.
+                    pruning.propagate_fixpoint()
                     for used_parameters in pruning.used_vars_by_func_id.values():
                         new_used_parameters = set()
                         for param in used_parameters:
@@ -530,6 +620,30 @@ class Kernel(FuncBase):
                         Pruning.KERNEL_FUNC_ID
                     ]
                 runtime._current_global_context = None
+
+            self._maybe_persist_l1_and_set_l2_key(key, py_args)
+
+    def _maybe_persist_l1_and_set_l2_key(self, key: "CompiledKernelKeyType", py_args: tuple[Any, ...]) -> None:
+        """Thin delegate to ``src_hasher.persist_l1_and_set_l2_key``; see that function's docstring for behaviour."""
+        new_fast_checksum, generated = src_hasher.persist_l1_and_set_l2_key(
+            l1_key=getattr(self, "_l1_key", None),
+            kernel_source_info=getattr(self, "_kernel_source_info_cached", None),
+            used_py_dataclass_parameters=self.used_py_dataclass_parameters_by_key_enforcing.get(key),
+            visited_functions=self.visited_functions,
+            graph_do_while_levels=[
+                (level.cond_arg_name, level.parent_id, level.cond_cpp_arg_id) for level in self.graph_do_while_levels
+            ]
+            or None,
+            pruning_paths_from_l1=getattr(self, "_pruning_paths_from_l1", None),
+            fast_checksum=self.fast_checksum,
+            raise_on_templated_floats=self.raise_on_templated_floats,
+            py_args=py_args,
+            arg_metas=self.arg_metas,
+        )
+        # Assigned even when ``generated`` is False: that is also how a re-keyed L2 entry comes back.
+        self.fast_checksum = new_fast_checksum
+        if generated:
+            self.src_ll_cache_observations.cache_key_generated = True
 
     def launch_kernel(
         self,
@@ -561,7 +675,10 @@ class Kernel(FuncBase):
         # container wrapping a mutable inner container that holds the ndarray (e.g. frozen dataclass -> data_oriented
         # -> ndarray), id(outer) alone does not capture leaf rebinding because the inner container can still reassign
         # ``.x``. So we OR-fold the mutability check across every parent along ``chain`` from the root down to (but
-        # excluding) the leaf attribute.
+        # excluding) the leaf attribute - see ``chain_has_mutable_container``.
+        #
+        # ``@qd.data_oriented(stable_members=True)`` opts out of the walk below: the user has promised that ndarray
+        # members are never reassigned. It is a launch-time hint only, with no bearing on fastcache keys.
         if key != self._mutable_nd_cached_key:
             if self._struct_ndarray_launch_info_by_key:
                 struct_nd_info = self._struct_ndarray_launch_info_by_key.get(key)
@@ -569,7 +686,8 @@ class Kernel(FuncBase):
                     self._mutable_nd_cached_val = [
                         (idx, chain)
                         for _, idx, chain in struct_nd_info
-                        if chain_has_mutable_container(args, idx, chain)
+                        if not type(args[idx]).__dict__.get("_qd_stable_members")
+                        and chain_has_mutable_container(args, idx, chain)
                     ]
                 else:
                     self._mutable_nd_cached_val = []
@@ -587,32 +705,35 @@ class Kernel(FuncBase):
             is_launch_ctx_cacheable = True
             template_num = 0
             i_out = 0
-            # Hoist the `kernel has any yield_on= checkpoint` predicate out of the per-arg loop so non-checkpoint
-            # kernels (the overwhelming majority) skip the helper function call entirely on every arg. Gated on
-            # `use_checkpoints` first so non-checkpoint kernels pay only one attribute lookup, not the list-truthy
-            # check on every cache-miss build.
-            _kernel_has_yield_on_checkpoint = self.use_checkpoints and bool(self.checkpoint_yield_on_args)
-            if _kernel_has_yield_on_checkpoint:
-                _checkpoint_helpers.init_yield_on_arg_id_table(self)
+            # `checkpoint_yield_on_cpp_arg_ids` is populated at AST-build time (see
+            # `CheckpointTransformer.build_checkpoint_with`); no per-arg name match is needed here. The launch path
+            # below forwards the table to the launch context with a single `forward_yield_on_table_to_ctx` call.
             for i_in, val in enumerate(args):
                 needed_ = self.arg_metas[i_in].annotation
                 if needed_ is template or type(needed_) is template:
                     template_num += 1
                     i_out += 1
                     continue
-                # FIXME: This shortcut skips _recursive_set_args() solely when val._qd_all_field is true and the annotation is
-                # a dataclass, but _recursive_set_args() is where the strict provided_arg_type-is-needed_arg_type check lives.
-                # As a result, once an instance has _qd_all_field=True, passing it to a kernel parameter annotated with a
-                # different all-Field dataclass type can be silently accepted instead of raising the previous runtime type error,
-                # which weakens API/type safety and can route the wrong struct type through launch.
-                if getattr(val, "_qd_all_field", False) and getattr(needed_, _FIELDS, None) is not None:
+                if (
+                    val is None
+                    and self.arg_metas[i_in].optional
+                    and type(self.arg_metas[i_in].annotation) is ndarray_type.NdarrayType
+                ):
+                    # Optional ndarray + None is specialized away at compile time, so it consumes no runtime arg.
                     continue
-                if self.graph_do_while_levels:
-                    for _gdw_level in self.graph_do_while_levels:
-                        if self.arg_metas[i_in].name == _gdw_level.cond_arg_name:
-                            _gdw_level.cond_cpp_arg_id = i_out - template_num
-                if _kernel_has_yield_on_checkpoint:
-                    _checkpoint_helpers.maybe_record_yield_on_arg(self, self.arg_metas[i_in].name, i_out - template_num)
+                # An all-Field dataclass unwraps to zero launch-context slots, so skip _recursive_set_args(). That also
+                # skips its provided-is-needed type check, so only shortcut when _qd_all_field is cached True for THIS
+                # exact annotation (proof the check already ran and passed for it) - hence the per-annotation id() key.
+                _all_field_cache = getattr(val, "_qd_all_field", None)
+                if _all_field_cache is not None and getattr(needed_, _FIELDS, None) is not None:
+                    _af_hit = _all_field_cache.get(id(needed_))
+                    if _af_hit is not None and _af_hit[0] is needed_ and _af_hit[1]:
+                        continue
+                # `graph_do_while_levels[*].cond_cpp_arg_id` is also populated at AST-build time (see
+                # `ASTTransformer.build_While` -> `_resolve_ndarray_kernel_arg_id`), so the launch path forwards it
+                # directly below without per-arg name matching here. This uniformly handles bare parameter conditions
+                # (`qd.graph_do_while(counter)`) and `@qd.data_oriented` member conditions
+                # (`qd.graph_do_while(self.counter)`).
                 num_args_, is_launch_ctx_cacheable_ = self._recursive_set_args(
                     self.used_py_dataclass_parameters_by_key_enforcing[key],
                     self.arg_metas[i_in].name,
@@ -631,6 +752,18 @@ class Kernel(FuncBase):
             struct_nd_info = self._struct_ndarray_launch_info_by_key.get(key)
             if struct_nd_info:
                 self._set_struct_ndarray_args(struct_nd_info, args, launch_ctx_buffer, is_launch_ctx_cacheable)
+
+            # Empty for every kernel that doesn't use template_primitives=False (the common case), so this guard
+            # short-circuits without hashing ``key`` -- keeping the per-launch hot path free of added overhead.
+            if self._struct_primitive_launch_info_by_key:
+                struct_prim_info = self._struct_primitive_launch_info_by_key.get(key)
+                if struct_prim_info:
+                    self._set_struct_primitive_args(struct_prim_info, args, launch_ctx_buffer)
+                    # Lifted primitives are read fresh from the live object on every launch (that is the whole point),
+                    # so the prepared launch context must not be cached under ``args_hash`` (the hash keys on object
+                    # id, not primitive value, so a cached context would serve stale values when the user mutates the
+                    # member). Marking it non-cacheable keeps this kernel correct at the cost of rebuilding each launch.
+                    is_launch_ctx_cacheable = False
 
             kernel_args_count_by_type = defaultdict(int)
             kernel_args_count_by_type.update(
@@ -675,8 +808,12 @@ class Kernel(FuncBase):
                         self.visited_functions,
                         self.used_py_dataclass_parameters_by_key_enforcing[key],
                         graph_do_while_levels=[  # type: ignore[reportCallIssue]
-                            (level.cond_arg_name, level.parent_id) for level in self.graph_do_while_levels
+                            (level.cond_arg_name, level.parent_id, level.cond_cpp_arg_id)
+                            for level in self.graph_do_while_levels
                         ],
+                        checkpoint_yield_on_args=list(self.checkpoint_yield_on_args),
+                        checkpoint_yield_on_cpp_arg_ids=list(self.checkpoint_yield_on_cpp_arg_ids),
+                        checkpoint_user_labels_by_cp_id=list(self.checkpoint_user_labels_by_cp_id),
                     )
                     self.src_ll_cache_observations.cache_stored = True
             self._last_compiled_kernel_data = compiled_kernel_data
@@ -776,6 +913,39 @@ class Kernel(FuncBase):
             else:
                 launch_ctx_buffer[_QD_ARRAY_WITH_GRAD].append((arg_id, v_primal, v_grad))
 
+    @staticmethod
+    def _set_struct_primitive_args(
+        launch_info: list,
+        args: tuple,
+        launch_ctx_buffer: dict,
+    ) -> None:
+        """Set scalar kernel args lifted from ``@qd.data_oriented(template_primitives=False)`` template-arg primitive
+        members. Walks each recorded attr-chain to read the live value and buckets it by declared dtype kind (``'f'``
+        float, ``'i'`` signed int, ``'u'`` unsigned int), so the value is bound fresh on every launch.
+
+        The dtype kind is frozen at first compile (see ``struct_primitive_predeclarer``). Binding a ``float`` to an
+        arg that was lifted as an integer would silently truncate (``int(1.5) == 1``), so that one lossy direction is
+        rejected here rather than corrupting the value; the lossless directions (``int``/``bool`` -> float, and
+        ``bool`` <-> ``int``) still coerce, matching typed-scalar-arg semantics."""
+        for arg_id, template_arg_idx, attr_chain, kind in launch_info:
+            obj = args[template_arg_idx]
+            for attr_name in attr_chain:
+                obj = getattr(obj, attr_name)
+            if kind == "f":
+                launch_ctx_buffer[_FLOAT].append((arg_id, float(obj)))
+            else:
+                if type(obj) is float:
+                    raise TypeError(
+                        f"Primitive member '{'.'.join(attr_chain)}' of a @qd.data_oriented(template_primitives=False) "
+                        f"object was lifted as an integer kernel argument (its type at first compile), but is now a "
+                        f"float ({obj!r}); coercing it would truncate. Keep the member's type stable across launches, "
+                        f"or use the default template_primitives=True to re-specialise the kernel per type."
+                    )
+                if kind == "u":
+                    launch_ctx_buffer[_UINT].append((arg_id, int(obj)))
+                else:
+                    launch_ctx_buffer[_INT].append((arg_id, int(obj)))
+
     def ensure_compiled(self, *py_args: tuple[Any, ...]) -> tuple[Callable, int, AutodiffMode]:
         try:
             instance_id, arg_features = self.mapper.lookup(self.raise_on_templated_floats, py_args)
@@ -817,44 +987,39 @@ class Kernel(FuncBase):
                 "qd_stream is not compatible with autograd Tape. Launch the kernel outside the Tape "
                 "context, or omit qd_stream."
             )
-        if impl.get_runtime()._arch == _ARCH_PYTHON:
-            return self.func(*py_args, **kwargs)
         config = impl.current_cfg()
 
         self.raise_on_templated_floats = config.raise_on_templated_floats
         py_args = self.fuse_args(is_func=False, is_pyfunc=False, py_args=py_args, kwargs=kwargs, global_context=None)
-        # Tensor-wrapper unwrap (stork-17). Substitute each ``qd.Tensor`` instance (including ``VectorTensor`` /
-        # ``MatrixTensor`` subclasses) with its underlying ``Ndarray`` / ``ScalarField`` impl *before* anything
-        # downstream observes the arg tuple — including the autograd tape (uses identity), the template mapper
-        # (cache-keys on ``id(arg)``), ``_extract_arg``, and the AST builder. This guarantees JIT cache stability:
-        # ``id(Tensor(impl))`` differs across constructions, but ``id(impl)`` is stable, so wrapper-or-not yields
-        # identical cache keys.
+        # Tensor-wrapper unwrap. Canonicalize ``qd.Tensor`` slots, plus wrapper positions discovered on
+        # the first launch, before the autograd tape and identity-keyed caches observe the arg tuple.
         #
-        # PERF: On first call, record which arg positions are Tensor wrappers. On subsequent calls, skip entirely
-        # (empty indices) or unwrap only the cached positions (no full-arg scan). For a kernel with 30 args and 1
+        # PERF: On first call, record the candidate arg positions. On subsequent calls, skip entirely (empty
+        # candidates) or type-check only the cached positions (no full-arg scan). For a kernel with 30 args and 1
         # Tensor, this reduces per-call type checks from 30 to 1.
         #
-        # Safety of caching: kernel parameter annotations are fixed per position (they come from the function
-        # signature and are stored in ``self.mapper.arguments``). Whether a given position receives a Tensor wrapper
-        # or a bare impl is determined by the caller's annotation pattern, which is stable across calls — a user who
-        # passes ``qd.Tensor(impl)`` at position *i* will do so on every call, because the annotation (``qd.Tensor``,
-        # ``qd.Template``, ``qd.types.ndarray()``, or a dataclass type) doesn't change. The template mapper
-        # enforces a fixed arg count (``len(args) == self.num_args``), so cached indices cannot go out of bounds.
+        # ``qd.Tensor`` slots may alternate wrappers, ``None``, and bare impls, so annotation positions remain
+        # candidates even when the first value is not wrapped. Other annotations retain first-call discovery. The
+        # template mapper enforces a fixed arg count, so cached indices cannot go out of bounds.
         if _tensor_wrapper._any_tensor_constructed:  # pyright: ignore[reportOptionalMemberAccess]
             _indices = self._tensor_unwrap_indices
             if _indices is None:
-                _indices = tuple(i for i, a in enumerate(py_args) if type(a) in _TENSOR_WRAPPER_TYPES)
+                _indices = tuple(
+                    i
+                    for i, (a, m) in enumerate(zip(py_args, self.arg_metas))
+                    if type(a) in _TENSOR_WRAPPER_TYPES or m.annotation is _TensorClass
+                )
                 self._tensor_unwrap_indices = _indices
-                if _indices:
-                    py_args_l = list(py_args)
-                    for i in _indices:
-                        py_args_l[i] = py_args_l[i]._impl  # pyright: ignore[reportAttributeAccessIssue]
-                    py_args = tuple(py_args_l)
-            elif _indices:
-                py_args_l = list(py_args)
+            if _indices:
+                py_args_l = None
                 for i in _indices:
-                    py_args_l[i] = py_args_l[i]._impl  # pyright: ignore[reportAttributeAccessIssue]
-                py_args = tuple(py_args_l)
+                    _arg = py_args[i]
+                    if type(_arg) in _TENSOR_WRAPPER_TYPES:
+                        if py_args_l is None:
+                            py_args_l = list(py_args)
+                        py_args_l[i] = _arg._impl
+                if py_args_l is not None:
+                    py_args = tuple(py_args_l)
 
         # Transform the primal kernel to forward mode grad kernel
         # then recover to primal when exiting the forward mode manager

@@ -81,6 +81,7 @@ PER_CUDA_FUNCTION(import_external_semaphore, cuImportExternalSemaphore,CUexterna
 // Graph management
 PER_CUDA_FUNCTION(graph_create, cuGraphCreate, void **, uint32);
 PER_CUDA_FUNCTION(graph_add_kernel_node, cuGraphAddKernelNode, void **, void *, const void *, std::size_t, const void *);
+PER_CUDA_FUNCTION(graph_add_empty_node, cuGraphAddEmptyNode, void **, void *, const void *, std::size_t);
 PER_CUDA_FUNCTION(graph_add_node, cuGraphAddNode, void **, void *, const void *, std::size_t, void *);
 PER_CUDA_FUNCTION(graph_instantiate, cuGraphInstantiate, void **, void *, void *, char *, std::size_t);
 PER_CUDA_FUNCTION(graph_launch, cuGraphLaunch, void *, void *);

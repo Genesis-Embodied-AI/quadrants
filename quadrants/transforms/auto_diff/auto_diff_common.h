@@ -60,6 +60,48 @@ class NonLinearOps {
                                                                 BinaryOpType::min,   BinaryOpType::max};
 };
 
+// Recognize the stack-materialization shape `ReplaceLocalVarWithStacks` emits to subscript a stack-backed tensor's
+// current top: a `LocalLoadStmt(MatrixPtrStmt(alloca, const_offset))` where `alloca` is a fresh `AllocaStmt` written by
+// exactly one full-tensor `LocalStoreStmt` (no partial or atomic writes), placed before the load in the same block.
+// That single store's value is the loaded tensor top; the alloca exists only so the forward store-to-load walker can
+// trace the read (`AdStackPushStmt` is not a reaching def). Returns the store's value, or nullptr when the load does
+// not match. The reverse pass uses this to reconstruct the per-iteration component from the recomputable top instead
+// of spilling the last iteration's value through a single overwrite-each-iteration alloca.
+inline Stmt *ad_stack_materialization_source(LocalLoadStmt *ll) {
+  auto *mp = ll->src != nullptr ? ll->src->cast<MatrixPtrStmt>() : nullptr;
+  if (mp == nullptr || mp->offset == nullptr || !mp->offset->is<ConstStmt>())
+    return nullptr;
+  auto *alloca = mp->origin != nullptr ? mp->origin->cast<AllocaStmt>() : nullptr;
+  Block *block = ll->parent;
+  if (alloca == nullptr || block == nullptr || alloca->parent != block)
+    return nullptr;
+  Stmt *store_val = nullptr;
+  int store_pos = -1;
+  int load_pos = -1;
+  int write_count = 0;
+  for (int i = 0; i < (int)block->statements.size(); i++) {
+    Stmt *s = block->statements[i].get();
+    if (s == ll) {
+      load_pos = i;
+    } else if (auto *st = s->cast<LocalStoreStmt>()) {
+      if (st->dest == alloca) {
+        store_val = st->val;
+        store_pos = i;
+        write_count++;
+      } else if (auto *dst_mp = st->dest->cast<MatrixPtrStmt>()) {
+        if (dst_mp->origin == alloca)
+          write_count++;
+      }
+    } else if (auto *ao = s->cast<AtomicOpStmt>()) {
+      if (ao->dest == alloca)
+        write_count++;
+    }
+  }
+  if (store_val == nullptr || write_count != 1 || store_pos < 0 || load_pos < 0 || store_pos >= load_pos)
+    return nullptr;
+  return store_val;
+}
+
 // ----------------------------------------------------------------------------
 // Recomputable chain analyzer + cloner: decide whether a forward SSA value can be reconstructed in the reverse-pass
 // scope from already-stack-backed allocas, kernel args, constants, and loop indices, and clone the DAG at a target

@@ -11,7 +11,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 BACKENDS = [qd.Backend.FIELD, qd.Backend.NDARRAY]
 BACKEND_IDS = ["field", "ndarray"]
@@ -92,8 +92,7 @@ def test_tensor_rejects_unknown_kwarg():
 def test_tensor_kernel_roundtrip(backend):
     """Allocate via ``qd.tensor()``, fill in a kernel, read back via numpy.
 
-    Uses the backend-appropriate annotation (``qd.template()`` for FIELD, ``qd.types.ndarray()`` for NDARRAY); the
-    polymorphic ``qd.Tensor`` annotation is not yet available on this branch.
+    Uses the backend-appropriate annotation (``qd.template()`` for FIELD, ``qd.types.ndarray()`` for NDARRAY).
     """
     a = qd.tensor(qd.i32, shape=(4,), backend=backend)
 
@@ -160,3 +159,10 @@ def test_tensor_compound_vector_roundtrip(backend):
     arr = a.to_numpy()
     assert arr.shape == (4, 3)
     assert arr[2, 1] == 21.0
+
+
+@test_utils.test(arch=qd.cpu)
+def test_scalar_tensor_order_hint_still_suggests_layout():
+    """The scalar qd.tensor() factory DOES accept layout=, so the hint should still point to it."""
+    with pytest.raises(TypeError, match="pass layout="):
+        qd.tensor(qd.f32, shape=(4,), order="ji")

@@ -10,8 +10,10 @@ from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import Extension
 from quadrants._lib.utils import get_os_name
 from quadrants.lang import impl, util
+from quadrants.lang._environment_configurator import _EnvironmentConfigurator
 from quadrants.lang.checkpoint import checkpoint
 from quadrants.lang.expr import Expr
+from quadrants.lang.graph_parallel import graph_parallel, graph_parallel_context
 from quadrants.lang.graph_status import GraphStatus
 from quadrants.lang.impl import axes, get_runtime
 from quadrants.profiler.kernel_profiler import get_default_kernel_profiler
@@ -135,8 +137,6 @@ vulkan = _qd_core.vulkan
 """
 # ----------------------
 
-"""The python backend"""
-python = _qd_core.python
 
 gpu = [cuda, metal, vulkan, amdgpu]
 """A list of GPU backends supported on the current system.
@@ -194,7 +194,7 @@ def reset():
     Example::
 
         >>> a = qd.field(qd.i32, shape=())
-        >>> a[None] = 1
+        >>> a[()] = 1
         >>> print("before reset: ", a)
         before rest: 1
         >>>
@@ -205,39 +205,37 @@ def reset():
     impl.reset()
 
 
-class _EnvironmentConfigurator:
-    def __init__(self, kwargs, _cfg):
-        self.cfg = _cfg
-        self.kwargs = kwargs
-        self.keys = []
+def normalize_deprecated_cpu_scheduling_aliases(env_comp: _EnvironmentConfigurator) -> None:
+    kwargs = env_comp.kwargs
+    if env_comp.is_supplied("make_cpu_multithreading_loop") and env_comp.is_supplied("cpu_work_scheduling"):
+        raise ValueError(
+            "Cannot specify both make_cpu_multithreading_loop and cpu_work_scheduling, including through environment variables"
+        )
+    if env_comp.is_supplied("default_cpu_block_dim") and env_comp.is_supplied("cpu_fixed_block_dim"):
+        raise ValueError(
+            "Cannot specify both default_cpu_block_dim and cpu_fixed_block_dim, including through environment variables"
+        )
 
-    def add(self, key, _cast=None):
-        _cast = _cast or self.bool_int
+    if env_comp.is_supplied("make_cpu_multithreading_loop"):
+        warnings.warn(
+            "make_cpu_multithreading_loop is deprecated; use cpu_work_scheduling instead.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        value = env_comp.read("make_cpu_multithreading_loop")
+        if not isinstance(value, (bool, int)) or value not in (False, True):
+            raise TypeError("make_cpu_multithreading_loop must be a boolean")
+        kwargs["cpu_work_scheduling"] = (
+            _qd_core.CPUWorkScheduling.PER_WORKER if value else _qd_core.CPUWorkScheduling.FIXED_SIZE
+        )
 
-        self.keys.append(key)
-
-        # QD_OFFLINE_CACHE=   : no effect
-        # QD_OFFLINE_CACHE=0  : False
-        # QD_OFFLINE_CACHE=1  : True
-        name = "QD_" + key.upper()
-        value = os.environ.get(name, "")
-        if key in self.kwargs:
-            self[key] = self.kwargs[key]
-            if value:
-                _qd_core.warn(f'Environment variable {name}={value} overridden by qd.init argument "{key}"')
-            del self.kwargs[key]  # mark as recognized
-        elif value:
-            self[key] = _cast(value)
-
-    def __getitem__(self, key):
-        return getattr(self.cfg, key)
-
-    def __setitem__(self, key, value):
-        setattr(self.cfg, key, value)
-
-    @staticmethod
-    def bool_int(x):
-        return bool(int(x))
+    if env_comp.is_supplied("default_cpu_block_dim"):
+        warnings.warn(
+            "default_cpu_block_dim is deprecated; use cpu_fixed_block_dim instead.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        kwargs["cpu_fixed_block_dim"] = env_comp.read("default_cpu_block_dim", int)
 
 
 class _SpecialConfig:
@@ -303,28 +301,29 @@ def check_require_version(require_version):
         )
 
 
-_FLOAT_DTYPES = frozenset({f32, f64})
+def _check_ir_load_envs_against_caching(cfg, src_ll_cache: bool) -> None:
+    """Reject QD_LOAD_IR / QUADRANTS_LOAD_PTX when caching could stop codegen from ever reading the files.
 
-
-_dtype_call_installed = False
-
-
-def _install_python_backend_dtype_call():
-    """Make DataType callable for the python backend (e.g. qd.f32(0.0) → 0.0)."""
-    global _dtype_call_installed
-    if _dtype_call_installed:
+    A cached kernel skips codegen, so edited IR / PTX in ``debug_dump_path`` is silently ignored. Call after arch
+    selection: each variable is read by only some backends, and ``adaptive_arch_select`` may not have picked the
+    requested arch.
+    """
+    active = []
+    # codegen_llvm.cpp reads QD_LOAD_IR via get_environ_config, which parses the value as an int, so "0" leaves it off.
+    # It lives in the LLVM codegen, so the SPIR-V backends (Vulkan, Metal) never read it.
+    if os.getenv("QD_LOAD_IR", "0") not in ("", "0") and _qd_core.arch_uses_llvm(cfg.arch):
+        active.append("QD_LOAD_IR")
+    # jit_cuda.cpp reads QUADRANTS_LOAD_PTX the same way, but it lives in the CUDA JIT, so only CUDA reads it.
+    if os.getenv("QUADRANTS_LOAD_PTX", "0") not in ("", "0") and cfg.arch == _qd_core.cuda:
+        active.append("QUADRANTS_LOAD_PTX")
+    if not active or not (cfg.offline_cache or src_ll_cache):
         return
-    _dtype_call_installed = True
-
-    DataTypeCxx = type(f32)
-    _original = DataTypeCxx.__call__
-
-    def _dtype_call(self, value):
-        if impl.is_python_backend():
-            return float(value) if self in _FLOAT_DTYPES else int(value)
-        return _original(self, value)
-
-    DataTypeCxx.__call__ = _dtype_call  # type: ignore[assignment]
+    names = " and ".join(active)
+    raise ValueError(
+        f"Caching must be disabled when using {names}: replacement IR/PTX is read from debug_dump_path only for a "
+        "kernel that is actually compiled, and cached kernels are returned without running codegen, so the files would "
+        f"be silently ignored. Pass offline_cache=False and src_ll_cache=False to qd.init, or unset {names}."
+    )
 
 
 def init(
@@ -348,22 +347,23 @@ def init(
         default_fp (Optional[type]): Default floating-point type.
         default_ip (Optional[type]): Default integral type.
         require_version: A version string.
-        print_non_pure: Print the names of kernels, at the time they are executed, which are not annotated with
-                        @qd.pure
+        print_non_pure: Print the names of kernels, at the time they are executed, which are not declared with
+                        @qd.kernel(fastcache=True) (or the deprecated @qd.kernel(pure=True))
         src_ll_cache: enable SRC-LL-CACHE, which will accelerate loading from cache, across all architectures,
-                      for pure kernels (i.e. kernels declared as @qd.pure)
+                      for pure kernels (i.e. kernels declared with @qd.kernel(fastcache=True), or the deprecated
+                      @qd.kernel(pure=True))
         **kwargs: Quadrants provides highly customizable compilation through
             ``kwargs``, which allows for fine grained control of Quadrants compiler
-            behavior. Below we list some of the most frequently used ones. For a
-            complete list, please check out
-            https://github.com/Genesis-Embodied-AI/quadrants/blob/master/quadrants/program/compile_config.h.
+            behavior. Below we list some of the most frequently used ones. For the full configuration reference, see
+            `qd.init options <https://genesis-embodied-ai.github.io/quadrants/user_guide/init_options.html#all-options>`_.
 
             * ``cpu_max_num_threads`` (int): Sets the number of threads used by the CPU thread pool.
             * ``debug`` (bool): Enables the debug mode, under which Quadrants does a few more things like boundary checks.
             * ``print_ir`` (bool): Prints the CHI IR of the Quadrants kernels.
             *``offline_cache`` (bool): Enables offline cache of the compiled kernels. Default to True. When this is enabled Quadrants will cache compiled kernel on your local disk to accelerate future calls.
             *``random_seed`` (int): Sets the seed of the random generator. The default is 0.
-            *``debug_dump_path`` (str): used as the base path for QD_DUMP_IR and similar
+            *``debug_dump_path`` (str): base path for QD_DUMP_IR and similar. QD_LOAD_IR and QUADRANTS_LOAD_PTX read
+              replacement IR / PTX from this directory, and require ``offline_cache=False`` and ``src_ll_cache=False``.
     """
     # FIXME(https://github.com/taichi-dev/taichi/issues/4811): save the current working directory since it may be
     # changed by the Vulkan backend initialization on OS X.
@@ -424,20 +424,20 @@ def init(
         impl.get_runtime().set_default_ip(default_ip)
 
     # submodule configurations (spec_cfg):
-    env_spec.add("log_level", str)
-    env_spec.add("gdb_trigger")
-    env_spec.add("short_circuit_operators")
-    env_spec.add("print_full_traceback")
-    env_spec.add("unrolling_limit")
+    env_spec.configure("log_level", str)
+    env_spec.configure("gdb_trigger")
+    env_spec.configure("short_circuit_operators")
+    env_spec.configure("print_full_traceback")
+    env_spec.configure("unrolling_limit")
+
+    normalize_deprecated_cpu_scheduling_aliases(env_comp)
 
     # compiler configurations (qd.cfg):
     for key in dir(cfg):
+        # These options are handled separately above.
         if key in ["arch", "default_fp", "default_ip"]:
             continue
-        _cast = type(getattr(cfg, key))
-        if _cast is bool:
-            _cast = None
-        env_comp.add(key, _cast)
+        env_comp.configure(key)
 
     unexpected_keys = kwargs.keys()
 
@@ -465,33 +465,33 @@ def init(
     # select arch (backend):
     env_arch = os.environ.get("QD_ARCH")
     if env_arch is not None:
-        _logging.info(f"Following QD_ARCH setting up for arch={env_arch}")
-        arch = _qd_core.arch_from_name(env_arch)
+        if arch is not None:
+            _qd_core.warn(f'Environment variable QD_ARCH={env_arch} overridden by qd.init argument "arch"')
+        else:
+            _logging.info(f"Following QD_ARCH setting up for arch={env_arch}")
+            arch = _qd_core.arch_from_name(env_arch)
     cfg.arch = adaptive_arch_select(arch, enable_fallback)
     print(f"[Quadrants] Starting on arch={_qd_core.arch_name(cfg.arch)}")
 
     if cfg.arch == _qd_core.amdgpu and get_os_name() == "win":
         _logging.warn("AMDGPU support on Windows is experimental and may not work as expected.")
 
+    _check_ir_load_envs_against_caching(cfg, src_ll_cache)
+
     if _test_mode:
         return spec_cfg
 
     get_default_kernel_profiler().set_kernel_profiler_mode(cfg.kernel_profiler)
 
-    impl.get_runtime()._arch = cfg.arch
+    # Create a new program:
+    impl.get_runtime().create_program()
+    _logging.trace("Materializing runtime...")
+    impl.get_runtime().prog.materialize_runtime()
 
-    # create a new program (skip for python backend — no C++ runtime needed):
-    if cfg.arch != _qd_core.python:
-        impl.get_runtime().create_program()
-        _logging.trace("Materializing runtime...")
-        impl.get_runtime().prog.materialize_runtime()
+    impl._root_fb = _snode.FieldsBuilder()
 
-        impl._root_fb = _snode.FieldsBuilder()
-
-        if cfg.debug:
-            impl.get_runtime()._register_signal_handlers()
-    else:
-        _install_python_backend_dtype_call()
+    if cfg.debug:
+        impl.get_runtime()._register_signal_handlers()
 
     # Recover the current working directory (https://github.com/taichi-dev/taichi/issues/4811)
     os.chdir(current_dir)
@@ -631,14 +631,6 @@ def _block_dim(dim):
     get_runtime().compiling_callable.ast_builder().block_dim(dim)
 
 
-def _block_dim_adaptive(block_dim_adaptive):
-    """Enable/Disable backends set block_dim adaptively."""
-    if get_runtime().prog.config().arch != cpu:
-        _logging.warn("Adaptive block_dim is supported on CPU backend only")
-    else:
-        get_runtime().prog.config().cpu_block_dim_adaptive = block_dim_adaptive
-
-
 def _bit_vectorize():
     """Enable bit vectorization of struct fors on quant_arrays."""
     get_runtime().compiling_callable.ast_builder().bit_vectorize()
@@ -649,7 +641,6 @@ def loop_config(
     block_dim=None,
     serialize=False,
     parallelize=None,
-    block_dim_adaptive=True,
     bit_vectorize=False,
     name=None,
 ):
@@ -659,7 +650,6 @@ def loop_config(
         block_dim (int): The number of threads in a block on GPU
         serialize (bool): Whether to let the for loop execute serially, `serialize=True` equals to `parallelize=1`
         parallelize (int): The number of threads to use on CPU
-        block_dim_adaptive (bool): Whether to allow backends set block_dim adaptively, enabled by default
         bit_vectorize (bool): Whether to enable bit vectorization of struct fors on quant_arrays.
         name (str): Optional name for this loop, used in GPU kernel names for profiling and debugging.
 
@@ -700,8 +690,6 @@ def loop_config(
             for i, j in x:
                 y[i, j] = x[i, j]
     """
-    if impl.is_python_backend():
-        return
 
     if block_dim is not None:
         _block_dim(block_dim)
@@ -710,9 +698,6 @@ def loop_config(
         _parallelize(1)
     elif parallelize is not None:
         _parallelize(parallelize)
-
-    if not block_dim_adaptive:
-        _block_dim_adaptive(block_dim_adaptive)
 
     if bit_vectorize:
         _bit_vectorize()
@@ -724,13 +709,13 @@ def loop_config(
 def graph_do_while(condition) -> bool:
     """Marks a while loop as a CUDA graph do-while conditional node.
 
-    Used as ``while qd.graph_do_while(flag):`` inside a ``@qd.kernel(graph=True)`` kernel. The loop body repeats while
+    Used as ``while qd.graph.do_while(flag):`` inside a ``@qd.kernel(graph=True)`` kernel. The loop body repeats while
     ``flag`` (a scalar ``qd.i32`` ndarray) is non-zero.
 
     On SM 9.0+ (Hopper) GPUs this compiles to a native CUDA graph conditional while node. On older CUDA GPUs and
     non-CUDA backends it falls back to a host-side do-while loop.
 
-    Only statements **inside** the ``while qd.graph_do_while(...):`` block repeat. Work placed before or after the block
+    Only statements **inside** the ``while qd.graph.do_while(...):`` block repeat. Work placed before or after the block
     at the kernel top level -- a ``for``-loop or a bare statement -- runs exactly once, so one-time init / writeback can
     live in the same kernel (or in separate non-graph kernels). Loop-carried state held in global memory carries
     normally between iterations because nothing outside the loop body resets it.
@@ -741,14 +726,22 @@ def graph_do_while(condition) -> bool:
         (a bare top-level statement runs once) or on the host between launches (``counter.fill(N)``).
 
     Bare statements (assignments, ``if``, ``@qd.func`` calls) are allowed at the kernel top level and inside a
-    ``graph_do_while`` body; each runs at the loop level it is written at (top level = once, inside a loop = every
-    iteration). The one structural rule is that a ``qd.graph_do_while`` ``while``-loop may appear only at the kernel top
-    level or directly inside another ``graph_do_while`` body, not inside a ``for``-loop.
+    ``qd.graph.do_while`` body; each runs at the loop level it is written at (top level = once, inside a loop = every
+    iteration). The one structural rule is that a ``qd.graph.do_while`` ``while``-loop may appear only at the kernel top
+    level or directly inside another ``qd.graph.do_while`` body, not inside a ``for``-loop.
 
-    This function should not be called directly at runtime; it is recognised and transformed during AST compilation.
+    This function should not be called directly at runtime; it is recognized and transformed during AST compilation.
     Requires ``@qd.kernel(graph=True)``.
     """
     return bool(condition)
+
+
+@util.quadrants_scope
+def block_idx():
+    """Return the current CPU scheduling block or GPU thread-block index."""
+    if impl.current_cfg().arch in (vulkan, metal):
+        return impl.call_internal("workgroupId")
+    return impl.call_internal("global_block_idx")
 
 
 def global_thread_idx():
@@ -800,7 +793,6 @@ def is_arch_supported(arch):
         metal: _qd_core.with_metal,
         vulkan: _qd_core.with_vulkan,
         cpu: lambda: True,
-        python: util.has_pytorch,
     }
     with_arch = arch_table.get(arch, lambda: False)
     try:
@@ -884,14 +876,16 @@ __all__ = [
     "amdgpu",
     "gpu",
     "metal",
-    "python",
     "vulkan",
     "extension",
     "GraphStatus",
     "checkpoint",
     "graph_do_while",
+    "graph_parallel_context",
+    "graph_parallel",
     "loop_config",
     "global_thread_idx",
+    "block_idx",
     "assume_in_range",
     "block_local",
     "cache_read_only",

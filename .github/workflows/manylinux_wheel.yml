@@ -44,9 +44,21 @@ jobs:
           ls /opt/python/
           df -h
       - name: manylinux wheel prerequisites
+        env:
+          # Token setup and renewal: docs/source/user_guide/contributing.md#gitlab-token-for-ci
+          GITLAB_PAT: ${{ secrets.GITLAB_PAT }}
         run: |
           export PATH=/opt/python/${{ matrix.PYTHON_CP_VERSION }}-${{ matrix.PYTHON_CP_VERSION }}/bin:$PATH
           python -V
+          if ! command -v git > /dev/null; then
+            yum install -y git
+          fi
+          git config --global credential.https://gitlab.com.helper \
+            '!f() {
+              if [ "$1" = get ] && [ -n "$GITLAB_PAT" ]; then
+                printf "%s\n" "username=oauth2" "password=$GITLAB_PAT"
+              fi
+            }; f'
           bash .github/workflows/scripts_new/manylinux_wheel/1_prerequisites.sh
       - name: manylinux wheel build
         run: |

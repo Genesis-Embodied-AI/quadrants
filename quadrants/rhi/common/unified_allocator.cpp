@@ -69,7 +69,7 @@ void *UnifiedAllocator::allocate(std::size_t size, std::size_t alignment, bool e
   void *ptr = HostMemoryPool::get_instance().allocate_raw_memory(allocation_size);
   chunk.data = ptr;
   chunk.head = (void *)((std::size_t)chunk.data + size);
-  chunk.tail = (void *)((std::size_t)chunk.head + allocation_size);
+  chunk.tail = (void *)((std::size_t)chunk.data + allocation_size);
   chunk.is_exclusive = exclusive;
 
   QD_ASSERT(chunk.data != nullptr);

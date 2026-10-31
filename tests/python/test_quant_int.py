@@ -2,7 +2,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test(require=qd.extension.quant_basic)
@@ -16,10 +16,10 @@ def test_quant_int_implicit_cast():
 
     @qd.kernel
     def foo():
-        x[None] = 10.3
+        x[()] = 10.3
 
     foo()
-    assert x[None] == 10
+    assert x[()] == 10
 
 
 @test_utils.test(

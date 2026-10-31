@@ -3,7 +3,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test()
@@ -20,7 +20,7 @@ def test_no_grad():
     @qd.kernel
     def func():
         for i in range(N):
-            qd.atomic_add(loss[None], x[i] ** 2)
+            qd.atomic_add(loss[()], x[i] ** 2)
 
     with qd.ad.Tape(loss):
         func()
@@ -34,10 +34,10 @@ def test_raise_no_gradient():
 
     @qd.kernel
     def func(x: qd.template()):
-        y[None] = x.grad[None] * x.grad[None]
-        z[0] = x.grad[None]
+        y[()] = x.grad[()] * x.grad[()]
+        z[0] = x.grad[()]
 
-    x[None] = 5.0
+    x[()] = 5.0
     with pytest.raises(
         qd.QuadrantsCompilationError,
         match="Gradient x.grad has not been placed, check whether `needs_grad=True`",

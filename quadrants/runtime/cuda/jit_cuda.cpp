@@ -4,6 +4,7 @@
 #include "quadrants/runtime/cuda/jit_cuda.h"
 #include "quadrants/runtime/llvm/llvm_context.h"
 #include "quadrants/codegen/ir_dump.h"
+#include "quadrants/util/environ_config.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Transforms/Scalar/LoopStrengthReduce.h"
 #include "llvm/Transforms/Scalar/EarlyCSE.h"
@@ -86,16 +87,18 @@ JITSessionCUDA::JITSessionCUDA(QuadrantsLLVMContext *tlctx,
 }
 
 JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M, int max_reg) {
-  const char *dump_ir_env = std::getenv(DUMP_IR_ENV.data());
-  const char *load_ptx_env = std::getenv("QUADRANTS_LOAD_PTX");
+  // Read through get_environ_config, as codegen_llvm.cpp does for QD_DUMP_IR and QD_LOAD_IR, so that a value of 0
+  // turns the variable off here too rather than only its absence.
+  const bool dump_ir = get_environ_config(DUMP_IR_ENV.data()) != 0;
+  const bool load_ptx_from_dump = get_environ_config(LOAD_PTX_ENV.data()) != 0;
 
   // Capture the dump name before compile_module_to_ptx renames functions via convert().
   std::string dump_name;
-  if (dump_ir_env != nullptr || load_ptx_env != nullptr) {
+  if (dump_ir || load_ptx_from_dump) {
     dump_name = moduleToDumpName(M.get());
   }
 
-  if (dump_ir_env != nullptr && std::string(dump_ir_env) == "1" && !dump_name.empty()) {
+  if (dump_ir && !dump_name.empty()) {
     std::filesystem::path ir_dump_dir = config_.debug_dump_path;
     std::filesystem::create_directories(ir_dump_dir);
     std::filesystem::path filename = ir_dump_dir / (dump_name + "_before_ptx.ll");
@@ -115,7 +118,7 @@ JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M, int max_r
     writer.write(ptx);
   }
 
-  if (dump_ir_env != nullptr && !dump_name.empty()) {
+  if (dump_ir && !dump_name.empty()) {
     std::filesystem::path ir_dump_dir = config_.debug_dump_path;
     std::filesystem::create_directories(ir_dump_dir);
     std::filesystem::path ptx_path = ir_dump_dir / (dump_name + ".ptx");
@@ -125,7 +128,7 @@ JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M, int max_r
     }
   }
 
-  if (load_ptx_env != nullptr && !dump_name.empty()) {
+  if (load_ptx_from_dump && !dump_name.empty()) {
     std::filesystem::path ir_dump_dir = config_.debug_dump_path;
     std::filesystem::path ptx_path = ir_dump_dir / (dump_name + ".ptx");
     std::ifstream in_file(ptx_path);

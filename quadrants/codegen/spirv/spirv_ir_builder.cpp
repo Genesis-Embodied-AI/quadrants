@@ -1,13 +1,99 @@
 #include "quadrants/codegen/spirv/spirv_ir_builder.h"
 #include "fp16.h"
+#include <cstdint>
+#include <iterator>
+
+#include "spirv-tools/linker.hpp"
+#include "workgroup_spv.h"
 
 namespace quadrants::lang {
 
 namespace spirv {
 
+// Link the kernel with the supplied compiled GLSL helper libraries, resolving imported functions to their
+// implementations. Return the combined SPIR-V module, or report an error if linking fails.
+std::vector<uint32_t> IRBuilder::link_shader_helpers(const std::vector<uint32_t> &kernel,
+                                                     std::vector<std::vector<uint32_t>> libraries) {
+  // These helper libraries use Input and Function pointers. Match their addressing model to the kernel.
+  // Any required physical-storage capability and extension must already be declared by the kernel.
+  uint32_t addressing_model = get_module_addressing_model(kernel);
+  for (auto &library : libraries) {
+    set_module_addressing_model(library, addressing_model);
+  }
+  // Accept inputs through SPIR-V 1.6; SetUseHighestVersion below keeps the output at the highest input version,
+  // so a 1.5 kernel linked with our 1.0 helper stays at 1.5 and does not require a device that supports 1.6.
+  spvtools::Context context(SPV_ENV_UNIVERSAL_1_6);
+  std::string error;
+  context.SetMessageConsumer([&](spv_message_level_t, const char *, const spv_position_t &, const char *message) {
+    error += message;
+    error += '\n';
+  });
+  spvtools::LinkerOptions options;
+  options.SetUseHighestVersion(true);
+  std::vector<uint32_t> linked;
+  libraries.insert(libraries.begin(), kernel);
+  auto result = spvtools::Link(context, libraries, &linked, options);
+  QD_ERROR_IF(result != SPV_SUCCESS, "Failed to link GLSL shader helpers: {}", error);
+  return linked;
+}
+
+// Return the module's addressing model, defaulting to Logical if OpMemoryModel is absent.
+uint32_t IRBuilder::get_module_addressing_model(const std::vector<uint32_t> &spirv_module) {
+  // OpMemoryModel has two operands: 0 is the addressing model (how pointers are represented), and 1 is the memory
+  // model (rules for memory operations). For example, OpMemoryModel Logical GLSL450 uses Logical addressing and
+  // GLSL450 memory rules. Read and update operand 0 to match the libraries' addressing model to the kernel's.
+  return get_instruction_operand(spirv_module, spv::OpMemoryModel, /* operand_index= */ 0,
+                                 /* default_value= */ spv::AddressingModelLogical);
+}
+
+// Update the module's addressing model if OpMemoryModel is present.
+void IRBuilder::set_module_addressing_model(std::vector<uint32_t> &spirv_module, uint32_t addressing_model) {
+  set_instruction_operand(spirv_module, spv::OpMemoryModel, /* operand_index= */ 0, addressing_model);
+}
+
+// Read a zero-based operand of the first matching instruction, or return default_value if the instruction is absent.
+uint32_t IRBuilder::get_instruction_operand(const std::vector<uint32_t> &spirv_module,
+                                            spv::Op opcode,
+                                            size_t operand_index,
+                                            uint32_t default_value) {
+  size_t instruction_index = find_instruction(spirv_module, opcode);
+  if (instruction_index == spirv_module.size()) {
+    return default_value;
+  }
+  // Add one because the instruction's word count includes its first word, which holds the opcode and word count.
+  QD_ASSERT(operand_index + 1 < (spirv_module[instruction_index] >> 16));
+  return spirv_module.at(instruction_index + 1 + operand_index);
+}
+
+// Update a zero-based operand of the first matching instruction; leave the module unchanged if it is absent.
+void IRBuilder::set_instruction_operand(std::vector<uint32_t> &spirv_module,
+                                        spv::Op opcode,
+                                        size_t operand_index,
+                                        uint32_t value) {
+  size_t instruction_index = find_instruction(spirv_module, opcode);
+  if (instruction_index == spirv_module.size()) {
+    return;
+  }
+  // Add one because the instruction's word count includes its first word, which holds the opcode and word count.
+  QD_ASSERT(operand_index + 1 < (spirv_module[instruction_index] >> 16));
+  spirv_module.at(instruction_index + 1 + operand_index) = value;
+}
+
+// Return the word index of the first matching instruction, or spirv_module.size() if it is absent.
+size_t IRBuilder::find_instruction(const std::vector<uint32_t> &spirv_module, spv::Op opcode) {
+  // Skip the five-word module header. Each instruction encodes its word count above its 16-bit opcode.
+  for (size_t i = 5; i < spirv_module.size(); i += spirv_module[i] >> 16) {
+    if ((spirv_module[i] & 0xffff) == opcode) {
+      return i;
+    }
+  }
+  return spirv_module.size();
+}
+
 using cap = DeviceCapability;
 
 void IRBuilder::init_header() {
+  QD_ASSERT_INFO(caps_->get(cap::spirv_version) >= 0x10500, "SPIR-V 1.5 or newer is required");
   QD_ASSERT(header_.size() == 0U);
   header_.push_back(spv::MagicNumber);
 
@@ -23,36 +109,36 @@ void IRBuilder::init_header() {
   header_.push_back(0U);
 
   // capability
-  ib_.begin(spv::OpCapability).add(spv::CapabilityShader).commit(&header_);
+  ib_.begin(spv::OpCapability).add(spv::CapabilityShader).commit(&capabilities_extensions_imports_);
 
   if (caps_->get(cap::spirv_has_atomic_float64_add)) {
-    ib_.begin(spv::OpCapability).add(spv::CapabilityAtomicFloat64AddEXT).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityAtomicFloat64AddEXT).commit(&capabilities_extensions_imports_);
   }
 
   if (caps_->get(cap::spirv_has_atomic_float_add)) {
-    ib_.begin(spv::OpCapability).add(spv::CapabilityAtomicFloat32AddEXT).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityAtomicFloat32AddEXT).commit(&capabilities_extensions_imports_);
   }
 
   if (caps_->get(cap::spirv_has_atomic_float_minmax)) {
-    ib_.begin(spv::OpCapability).add(spv::CapabilityAtomicFloat32MinMaxEXT).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityAtomicFloat32MinMaxEXT).commit(&capabilities_extensions_imports_);
   }
 
   if (caps_->get(cap::spirv_has_variable_ptr)) {
     /*
     ib_.begin(spv::OpCapability)
         .add(spv::CapabilityVariablePointers)
-        .commit(&header_);
+        .commit(&capabilities_extensions_imports_);
     ib_.begin(spv::OpCapability)
         .add(spv::CapabilityVariablePointersStorageBuffer)
-        .commit(&header_);
+        .commit(&capabilities_extensions_imports_);
         */
   }
 
   if (caps_->get(cap::spirv_has_int8)) {
-    ib_.begin(spv::OpCapability).add(spv::CapabilityInt8).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityInt8).commit(&capabilities_extensions_imports_);
   }
   if (caps_->get(cap::spirv_has_int16)) {
-    ib_.begin(spv::OpCapability).add(spv::CapabilityInt16).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityInt16).commit(&capabilities_extensions_imports_);
   }
   // `CapabilityStorageBuffer{8,16}BitAccess` gate narrow-typed loads / stores through a
   // descriptor-bound `StorageBuffer` pointer (e.g. `OpLoad %_ptr_StorageBuffer_ushort`). The
@@ -65,30 +151,32 @@ void IRBuilder::init_header() {
   // ndarray access is spec-compliant on drivers that enforce the letter of
   // `SPV_KHR_{8,16}bit_storage`.
   if (caps_->get(cap::spirv_has_storage_buffer_8bit_access)) {
-    ib_.begin(spv::OpCapability).add(spv::CapabilityStorageBuffer8BitAccess).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityStorageBuffer8BitAccess).commit(&capabilities_extensions_imports_);
   }
   if (caps_->get(cap::spirv_has_storage_buffer_16bit_access)) {
-    ib_.begin(spv::OpCapability).add(spv::CapabilityStorageBuffer16BitAccess).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityStorageBuffer16BitAccess).commit(&capabilities_extensions_imports_);
   }
   if (caps_->get(cap::spirv_has_int64)) {
-    ib_.begin(spv::OpCapability).add(spv::CapabilityInt64).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityInt64).commit(&capabilities_extensions_imports_);
   }
   if (caps_->get(cap::spirv_has_atomic_int64)) {
     // Required for OpAtomicLoad/OpAtomicCompareExchange on u64, used by
     // the CAS-based f64 shared float atomic emulation path.
-    ib_.begin(spv::OpCapability).add(spv::CapabilityInt64Atomics).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityInt64Atomics).commit(&capabilities_extensions_imports_);
   }
   if (caps_->get(cap::spirv_has_float16)) {
-    ib_.begin(spv::OpCapability).add(spv::CapabilityFloat16).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityFloat16).commit(&capabilities_extensions_imports_);
   }
   if (caps_->get(cap::spirv_has_float64)) {
-    ib_.begin(spv::OpCapability).add(spv::CapabilityFloat64).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityFloat64).commit(&capabilities_extensions_imports_);
   }
   if (caps_->get(cap::spirv_has_physical_storage_buffer)) {
-    ib_.begin(spv::OpCapability).add(spv::CapabilityPhysicalStorageBufferAddresses).commit(&header_);
+    ib_.begin(spv::OpCapability)
+        .add(spv::CapabilityPhysicalStorageBufferAddresses)
+        .commit(&capabilities_extensions_imports_);
   }
   if (caps_->get(cap::spirv_has_shader_clock)) {
-    ib_.begin(spv::OpCapability).add(spv::CapabilityShaderClockKHR).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityShaderClockKHR).commit(&capabilities_extensions_imports_);
   }
 
   // Subgroup / GroupNonUniform capabilities. Required by every SPIR-V module that lowers any
@@ -100,7 +188,7 @@ void IRBuilder::init_header() {
   // subgroup feature; the underlying caps are gated by Vulkan's
   // `VkPhysicalDeviceSubgroupProperties::supportedOperations` query in `vulkan_device_creator.cpp`.
   if (caps_->get(cap::spirv_has_subgroup_basic)) {
-    ib_.begin(spv::OpCapability).add(spv::CapabilityGroupNonUniform).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityGroupNonUniform).commit(&capabilities_extensions_imports_);
     // `Broadcast` / `Shuffle` and the relative variants used by `_exclusive_scan_tiled` / shuffle
     // intrinsics. The two are separate SPIR-V caps but every desktop/mobile Vulkan implementation
     // that advertises basic GroupNonUniform also advertises both shuffle variants in practice
@@ -113,65 +201,66 @@ void IRBuilder::init_header() {
     // from `VK_SUBGROUP_FEATURE_BASIC_BIT`, and the spec permits a conformant device to advertise
     // BASIC without SHUFFLE. A strict validator on such a device would reject every Quadrants
     // SPIR-V module here — even kernels that do not actually use shuffle — because the declared
-    // capability is unsupported. No such device has been observed in the wild (the codepath this
-    // change broadens was already exposed pre-PR for any kernel emitting
-    // `OpGroupNonUniformShuffle*`), so this PR does not make it worse, but it does extend the
-    // surface. Fix: introduce `spirv_has_subgroup_shuffle{,_relative}` device caps in
+    // capability is unsupported. Fix: introduce `spirv_has_subgroup_shuffle{,_relative}` device caps in
     // `rhi/rhi_constants.inc.h`, populate them from the two Vulkan bits in
     // `vulkan_device_creator.cpp::populate_subgroup_caps`, and gate the two
     // `CapabilityGroupNonUniformShuffle{,Relative}` emissions on those caps individually.
-    ib_.begin(spv::OpCapability).add(spv::CapabilityGroupNonUniformShuffle).commit(&header_);
-    ib_.begin(spv::OpCapability).add(spv::CapabilityGroupNonUniformShuffleRelative).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityGroupNonUniformShuffle).commit(&capabilities_extensions_imports_);
+    ib_.begin(spv::OpCapability)
+        .add(spv::CapabilityGroupNonUniformShuffleRelative)
+        .commit(&capabilities_extensions_imports_);
   }
   if (caps_->get(cap::spirv_has_subgroup_vote)) {
-    ib_.begin(spv::OpCapability).add(spv::CapabilityGroupNonUniformVote).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityGroupNonUniformVote).commit(&capabilities_extensions_imports_);
   }
   if (caps_->get(cap::spirv_has_subgroup_arithmetic)) {
-    ib_.begin(spv::OpCapability).add(spv::CapabilityGroupNonUniformArithmetic).commit(&header_);
+    ib_.begin(spv::OpCapability)
+        .add(spv::CapabilityGroupNonUniformArithmetic)
+        .commit(&capabilities_extensions_imports_);
   }
   if (caps_->get(cap::spirv_has_subgroup_ballot)) {
-    ib_.begin(spv::OpCapability).add(spv::CapabilityGroupNonUniformBallot).commit(&header_);
+    ib_.begin(spv::OpCapability).add(spv::CapabilityGroupNonUniformBallot).commit(&capabilities_extensions_imports_);
   }
 
-  ib_.begin(spv::OpExtension).add("SPV_KHR_storage_buffer_storage_class").commit(&header_);
+  ib_.begin(spv::OpExtension).add("SPV_KHR_storage_buffer_storage_class").commit(&capabilities_extensions_imports_);
 
   // `SPV_KHR_{8,16}bit_storage` is paired with `CapabilityStorageBuffer{8,16}BitAccess` above.
   // Both the capability and the extension are needed for narrow-typed `StorageBuffer` loads /
   // stores to validate on Vulkan; declaring only the capability without the extension is
   // ill-formed SPIR-V.
   if (caps_->get(cap::spirv_has_storage_buffer_8bit_access)) {
-    ib_.begin(spv::OpExtension).add("SPV_KHR_8bit_storage").commit(&header_);
+    ib_.begin(spv::OpExtension).add("SPV_KHR_8bit_storage").commit(&capabilities_extensions_imports_);
   }
   if (caps_->get(cap::spirv_has_storage_buffer_16bit_access)) {
-    ib_.begin(spv::OpExtension).add("SPV_KHR_16bit_storage").commit(&header_);
+    ib_.begin(spv::OpExtension).add("SPV_KHR_16bit_storage").commit(&capabilities_extensions_imports_);
   }
 
   if (caps_->get(cap::spirv_has_no_integer_wrap_decoration)) {
-    ib_.begin(spv::OpExtension).add("SPV_KHR_no_integer_wrap_decoration").commit(&header_);
+    ib_.begin(spv::OpExtension).add("SPV_KHR_no_integer_wrap_decoration").commit(&capabilities_extensions_imports_);
   }
 
   if (caps_->get(cap::spirv_has_non_semantic_info)) {
-    ib_.begin(spv::OpExtension).add("SPV_KHR_non_semantic_info").commit(&header_);
+    ib_.begin(spv::OpExtension).add("SPV_KHR_non_semantic_info").commit(&capabilities_extensions_imports_);
   }
 
   if (caps_->get(cap::spirv_has_variable_ptr)) {
-    ib_.begin(spv::OpExtension).add("SPV_KHR_variable_pointers").commit(&header_);
+    ib_.begin(spv::OpExtension).add("SPV_KHR_variable_pointers").commit(&capabilities_extensions_imports_);
   }
 
   if (caps_->get(cap::spirv_has_atomic_float_add)) {
-    ib_.begin(spv::OpExtension).add("SPV_EXT_shader_atomic_float_add").commit(&header_);
+    ib_.begin(spv::OpExtension).add("SPV_EXT_shader_atomic_float_add").commit(&capabilities_extensions_imports_);
   }
 
   if (caps_->get(cap::spirv_has_atomic_float_minmax)) {
-    ib_.begin(spv::OpExtension).add("SPV_EXT_shader_atomic_float_min_max").commit(&header_);
+    ib_.begin(spv::OpExtension).add("SPV_EXT_shader_atomic_float_min_max").commit(&capabilities_extensions_imports_);
   }
 
   if (caps_->get(cap::spirv_has_shader_clock)) {
-    ib_.begin(spv::OpExtension).add("SPV_KHR_shader_clock").commit(&header_);
+    ib_.begin(spv::OpExtension).add("SPV_KHR_shader_clock").commit(&capabilities_extensions_imports_);
   }
 
   if (caps_->get(cap::spirv_has_physical_storage_buffer)) {
-    ib_.begin(spv::OpExtension).add("SPV_KHR_physical_storage_buffer").commit(&header_);
+    ib_.begin(spv::OpExtension).add("SPV_KHR_physical_storage_buffer").commit(&capabilities_extensions_imports_);
 
     // memory model
     ib_.begin(spv::OpMemoryModel)
@@ -185,32 +274,55 @@ void IRBuilder::init_header() {
 }
 
 std::vector<uint32_t> IRBuilder::finalize() {
-  std::vector<uint32_t> data;
-  // set bound
+  // SPIR-V module layout, in order (each element is a 32-bit word):
+  // 1. Five-word header: magic number, version, generator ID, ID bound, reserved word.
+  // 2. Required capabilities, extensions, and extended-instruction-set imports.
+  // 3. Memory model, entry points, and execution modes.
+  // 4. Debug information and annotations.
+  // 5. Types, constants, and global variables.
+  // 6. Function declarations without bodies, then function definitions with bodies.
+  std::vector<uint32_t> spirv_module;
+
+  // 1. Five-word header: magic number, version, generator ID, ID bound, reserved word.
   const int bound_loc = 3;
   header_[bound_loc] = id_counter_;
-  data.insert(data.end(), header_.begin(), header_.end());
-  data.insert(data.end(), entry_.begin(), entry_.end());
-  data.insert(data.end(), exec_mode_.begin(), exec_mode_.end());
-  data.insert(data.end(), strings_.begin(), strings_.end());
-  data.insert(data.end(), names_.begin(), names_.end());
-  data.insert(data.end(), decorate_.begin(), decorate_.end());
-  data.insert(data.end(), global_.begin(), global_.end());
-  data.insert(data.end(), func_header_.begin(), func_header_.end());
-  data.insert(data.end(), function_.begin(), function_.end());
-  return data;
+  spirv_module.insert(spirv_module.end(), header_.begin(), header_.end());
+
+  // 2. Required capabilities, extensions, and extended-instruction-set imports.
+  if (!imported_glsl_function_declarations_.empty()) {
+    spirv_module.insert(spirv_module.end(), {(2u << 16) | spv::OpCapability, spv::CapabilityLinkage});
+  }
+  spirv_module.insert(spirv_module.end(), capabilities_extensions_imports_.begin(),
+                      capabilities_extensions_imports_.end());
+
+  // 3. Memory model, entry points, and execution modes.
+  spirv_module.insert(spirv_module.end(), entry_.begin(), entry_.end());
+  spirv_module.insert(spirv_module.end(), exec_mode_.begin(), exec_mode_.end());
+
+  // 4. Debug information and annotations.
+  spirv_module.insert(spirv_module.end(), strings_.begin(), strings_.end());
+  spirv_module.insert(spirv_module.end(), names_.begin(), names_.end());
+  spirv_module.insert(spirv_module.end(), decorate_.begin(), decorate_.end());
+
+  // 5. Types, constants, and global variables.
+  spirv_module.insert(spirv_module.end(), global_.begin(), global_.end());
+
+  // 6. Function declarations without bodies, then function definitions with bodies.
+  spirv_module.insert(spirv_module.end(), imported_glsl_function_declarations_.begin(),
+                      imported_glsl_function_declarations_.end());
+  spirv_module.insert(spirv_module.end(), func_header_.begin(), func_header_.end());
+  spirv_module.insert(spirv_module.end(), function_.begin(), function_.end());
+
+  // Link the completed module.
+  if (!imported_glsl_function_declarations_.empty()) {
+    std::vector<uint32_t> workgroup_library(std::begin(workgroup_helper_spv), std::end(workgroup_helper_spv));
+    return link_shader_helpers(spirv_module, {std::move(workgroup_library)});
+  }
+  return spirv_module;
 }
 
 void IRBuilder::init_pre_defs() {
   ext_glsl450_ = ext_inst_import("GLSL.std.450");
-  // `debug_printf_` is imported lazily in `call_debugprintf` on first use rather than here. A declared-but-unused
-  // `OpExtInstImport "NonSemantic.DebugPrintf"` at the top of a SPIR-V module is accepted by native Vulkan
-  // drivers but rejected by MoltenVK: the SPIRV-Cross -> MSL translator emits an unconditional stub that calls
-  // `debugPrintfEXT` even when no `OpExtInst` targets the import, and the subsequent MSL compile fails with
-  // `use of undeclared identifier 'debugPrintfEXT'`. Skipping the import entirely when no call site needs it
-  // keeps kernels without `print` or debug assert traffic compatible with MoltenVK even while the
-  // `spirv_has_non_semantic_info` capability is advertised by the Vulkan device.
-
   t_bool_ = declare_primitive_type(get_data_type<bool>());
   if (caps_->get(cap::spirv_has_int8)) {
     t_int8_ = declare_primitive_type(get_data_type<int8>());
@@ -462,12 +574,7 @@ SType IRBuilder::get_pointer_type(const SType &value_type, spv::StorageClass sto
 }
 
 SType IRBuilder::get_storage_pointer_type(const SType &value_type) {
-  spv::StorageClass storage_class;
-  if (caps_->get(cap::spirv_version) < 0x10300) {
-    storage_class = spv::StorageClassUniform;
-  } else {
-    storage_class = spv::StorageClassStorageBuffer;
-  }
+  const auto storage_class = spv::StorageClassStorageBuffer;
 
   return get_pointer_type(value_type, storage_class);
 }
@@ -542,16 +649,7 @@ SType IRBuilder::get_struct_array_type(const SType &value_type, uint32_t num_ele
   // decorate the array type.
   ib_.begin(spv::OpMemberDecorate).add_seq(struct_type, 0, spv::DecorationOffset, 0).commit(&decorate_);
 
-  if (caps_->get(cap::spirv_version) < 0x10300) {
-    // NOTE: BufferBlock was deprecated in SPIRV 1.3
-    // use StorageClassStorageBuffer instead.
-    // runtime array are always decorated as BufferBlock(shader storage buffer)
-    if (num_elems == 0) {
-      this->decorate(spv::OpDecorate, struct_type, spv::DecorationBufferBlock);
-    }
-  } else {
-    this->decorate(spv::OpDecorate, struct_type, spv::DecorationBlock);
-  }
+  this->decorate(spv::OpDecorate, struct_type, spv::DecorationBlock);
 
   return struct_type;
 }
@@ -583,25 +681,11 @@ Value IRBuilder::buffer_struct_argument(const SType &struct_type,
                                         uint32_t descriptor_set,
                                         uint32_t binding,
                                         const std::string &name) {
-  // NOTE: BufferBlock was deprecated in SPIRV 1.3
-  // use StorageClassStorageBuffer instead.
-  spv::StorageClass storage_class;
-  if (caps_->get(cap::spirv_version) < 0x10300) {
-    storage_class = spv::StorageClassUniform;
-  } else {
-    storage_class = spv::StorageClassStorageBuffer;
-  }
+  const auto storage_class = spv::StorageClassStorageBuffer;
 
   this->debug_name(spv::OpName, struct_type, name + "_t");
 
-  if (caps_->get(cap::spirv_version) < 0x10300) {
-    // NOTE: BufferBlock was deprecated in SPIRV 1.3
-    // use StorageClassStorageBuffer instead.
-    // runtime array are always decorated as BufferBlock(shader storage buffer)
-    this->decorate(spv::OpDecorate, struct_type, spv::DecorationBufferBlock);
-  } else {
-    this->decorate(spv::OpDecorate, struct_type, spv::DecorationBlock);
-  }
+  this->decorate(spv::OpDecorate, struct_type, spv::DecorationBlock);
 
   SType ptr_type = get_pointer_type(struct_type, storage_class);
 
@@ -621,8 +705,6 @@ Value IRBuilder::uniform_struct_argument(const SType &struct_type,
                                          uint32_t descriptor_set,
                                          uint32_t binding,
                                          const std::string &name) {
-  // NOTE: BufferBlock was deprecated in SPIRV 1.3
-  // use StorageClassStorageBuffer instead.
   spv::StorageClass storage_class = spv::StorageClassUniform;
 
   this->debug_name(spv::OpName, struct_type, name + "_t");
@@ -647,14 +729,7 @@ Value IRBuilder::buffer_argument(const SType &value_type,
                                  uint32_t descriptor_set,
                                  uint32_t binding,
                                  const std::string &name) {
-  // NOTE: BufferBlock was deprecated in SPIRV 1.3
-  // use StorageClassStorageBuffer instead.
-  spv::StorageClass storage_class;
-  if (caps_->get(cap::spirv_version) < 0x10300) {
-    storage_class = spv::StorageClassUniform;
-  } else {
-    storage_class = spv::StorageClassStorageBuffer;
-  }
+  const auto storage_class = spv::StorageClassStorageBuffer;
 
   SType sarr_type = get_struct_array_type(value_type, 0);
 
@@ -680,12 +755,7 @@ Value IRBuilder::struct_array_access(const SType &res_type, Value buffer, Value 
   QD_ASSERT(buffer.flag == ValueKind::kStructArrayPtr);
   QD_ASSERT(res_type.flag == TypeKind::kPrimitive);
 
-  spv::StorageClass storage_class;
-  if (caps_->get(cap::spirv_version) < 0x10300) {
-    storage_class = spv::StorageClassUniform;
-  } else {
-    storage_class = spv::StorageClassStorageBuffer;
-  }
+  const auto storage_class = spv::StorageClassStorageBuffer;
 
   SType ptr_type = this->get_pointer_type(res_type, storage_class);
   Value ret = new_value(ptr_type, ValueKind::kVariablePtr);
@@ -694,288 +764,63 @@ Value IRBuilder::struct_array_access(const SType &res_type, Value buffer, Value 
   return ret;
 }
 
-void IRBuilder::set_work_group_size(const std::array<int, 3> group_size) {
-  Value size_x = uint_immediate_number(t_uint32_, static_cast<uint64_t>(group_size[0]));
-  Value size_y = uint_immediate_number(t_uint32_, static_cast<uint64_t>(group_size[1]));
-  Value size_z = uint_immediate_number(t_uint32_, static_cast<uint64_t>(group_size[2]));
-
-  if (gl_work_group_size_.id == 0) {
-    gl_work_group_size_.id = id_counter_++;
+// Emit a call to a named GLSL function taking and returning a uint32, and return the value representing its result.
+//
+// glslang represents this GLSL value parameter as a pointer in SPIR-V. SPIR-V also supports value parameters; the
+// pointer representation is glslang's choice. The caller must match the compiled helper. Equivalent C++-style
+// pseudocode:
+//
+// GLSL source, with an illustrative caller:
+//   uint get_work_group_id(uint dim_index) {
+//     return gl_WorkGroupID[dim_index];
+//   }
+//
+//   void caller() {
+//     uint result = get_work_group_id(0);
+//   }
+//
+// Equivalent pointer passing, not literal generated source:
+//   uint get_work_group_id(uint* dim_index_ptr) {
+//     return gl_WorkGroupID[*dim_index_ptr];
+//   }
+//
+//   void caller() {
+//     uint argument = 0;  // Function storage: private to this thread's call.
+//     uint result = get_work_group_id(&argument);
+//   }
+//
+// This method emits the two statements inside caller() into the kernel being compiled; it does not create a separate
+// caller function. On first use, it also declares the imported helper and caches its reference in
+// ref_to_imported_function_declaration. glslang supplies the helper body. The GLSL parameter retains value semantics: a
+// write through the pointer changes only the temporary argument, not the caller's original input.
+Value IRBuilder::call_glsl_u32_to_u32(Value &ref_to_imported_function_declaration,
+                                      const char *name,
+                                      uint32_t argument_value) {
+  // On first use, declare the imported helper and cache its reference in ref_to_imported_function_declaration.
+  if (ref_to_imported_function_declaration.id == 0) {
+    SType p_uint32_type = get_pointer_type(t_uint32_, spv::StorageClassFunction);
+    SType ref_to_function_type_declaration;
+    ref_to_function_type_declaration.id = id_counter_++;
+    // The function type declaration is stored in global_, and ref_to_function_type_declaration holds a reference to it.
+    // A function type declaration is like a function declaration, but is not named.
+    ib_.begin(spv::OpTypeFunction).add_seq(ref_to_function_type_declaration, t_uint32_, p_uint32_type).commit(&global_);
+    ref_to_imported_function_declaration = new_value(ref_to_function_type_declaration, ValueKind::kFunction);
+    decorate(spv::OpDecorate, ref_to_imported_function_declaration, spv::DecorationLinkageAttributes, name,
+             spv::LinkageTypeImport);
+    ib_.begin(spv::OpFunction)
+        .add_seq(/* return_type= */ t_uint32_,
+                 /* result_id= */ ref_to_imported_function_declaration,
+                 /* function_control= */ 0,
+                 /* function_type= */ ref_to_function_type_declaration)
+        .commit(&imported_glsl_function_declarations_);
+    Value parameter = new_value(p_uint32_type, ValueKind::kVariablePtr);
+    ib_.begin(spv::OpFunctionParameter).add_seq(p_uint32_type, parameter).commit(&imported_glsl_function_declarations_);
+    ib_.begin(spv::OpFunctionEnd).commit(&imported_glsl_function_declarations_);
   }
-  ib_.begin(spv::OpConstantComposite).add_seq(t_v3_uint_, gl_work_group_size_, size_x, size_y, size_z).commit(&global_);
-  this->decorate(spv::OpDecorate, gl_work_group_size_, spv::DecorationBuiltIn, spv::BuiltInWorkgroupSize);
-}
-
-Value IRBuilder::get_num_work_groups(uint32_t dim_index) {
-  if (gl_num_work_groups_.id == 0) {
-    SType ptr_type = this->get_pointer_type(t_v3_uint_, spv::StorageClassInput);
-    gl_num_work_groups_ = new_value(ptr_type, ValueKind::kVectorPtr);
-    ib_.begin(spv::OpVariable).add_seq(ptr_type, gl_num_work_groups_, spv::StorageClassInput).commit(&global_);
-    this->decorate(spv::OpDecorate, gl_num_work_groups_, spv::DecorationBuiltIn, spv::BuiltInNumWorkgroups);
-  }
-  SType pint_type = this->get_pointer_type(t_uint32_, spv::StorageClassInput);
-  Value ptr = this->make_value(spv::OpAccessChain, pint_type, gl_num_work_groups_,
-                               uint_immediate_number(t_uint32_, static_cast<uint64_t>(dim_index)));
-
-  return this->make_value(spv::OpLoad, t_uint32_, ptr);
-}
-
-Value IRBuilder::get_local_invocation_id(uint32_t dim_index) {
-  if (gl_local_invocation_id_.id == 0) {
-    SType ptr_type = this->get_pointer_type(t_v3_uint_, spv::StorageClassInput);
-    gl_local_invocation_id_ = new_value(ptr_type, ValueKind::kVectorPtr);
-    ib_.begin(spv::OpVariable).add_seq(ptr_type, gl_local_invocation_id_, spv::StorageClassInput).commit(&global_);
-    this->decorate(spv::OpDecorate, gl_local_invocation_id_, spv::DecorationBuiltIn, spv::BuiltInLocalInvocationId);
-  }
-  SType pint_type = this->get_pointer_type(t_uint32_, spv::StorageClassInput);
-  Value ptr = this->make_value(spv::OpAccessChain, pint_type, gl_local_invocation_id_,
-                               uint_immediate_number(t_uint32_, static_cast<uint64_t>(dim_index)));
-
-  return this->make_value(spv::OpLoad, t_uint32_, ptr);
-}
-
-Value IRBuilder::get_global_invocation_id(uint32_t dim_index) {
-  if (gl_global_invocation_id_.id == 0) {
-    SType ptr_type = this->get_pointer_type(t_v3_uint_, spv::StorageClassInput);
-    gl_global_invocation_id_ = new_value(ptr_type, ValueKind::kVectorPtr);
-    ib_.begin(spv::OpVariable).add_seq(ptr_type, gl_global_invocation_id_, spv::StorageClassInput).commit(&global_);
-    this->decorate(spv::OpDecorate, gl_global_invocation_id_, spv::DecorationBuiltIn, spv::BuiltInGlobalInvocationId);
-  }
-  SType pint_type = this->get_pointer_type(t_uint32_, spv::StorageClassInput);
-  Value ptr = this->make_value(spv::OpAccessChain, pint_type, gl_global_invocation_id_,
-                               uint_immediate_number(t_uint32_, static_cast<uint64_t>(dim_index)));
-
-  return this->make_value(spv::OpLoad, t_uint32_, ptr);
-}
-
-Value IRBuilder::get_subgroup_invocation_id() {
-  if (subgroup_local_invocation_id_.id == 0) {
-    SType ptr_type = this->get_pointer_type(t_uint32_, spv::StorageClassInput);
-    subgroup_local_invocation_id_ = new_value(ptr_type, ValueKind::kVariablePtr);
-    ib_.begin(spv::OpVariable)
-        .add_seq(ptr_type, subgroup_local_invocation_id_, spv::StorageClassInput)
-        .commit(&global_);
-    this->decorate(spv::OpDecorate, subgroup_local_invocation_id_, spv::DecorationBuiltIn,
-                   spv::BuiltInSubgroupLocalInvocationId);
-    global_values.push_back(subgroup_local_invocation_id_);
-  }
-
-  return this->make_value(spv::OpLoad, t_uint32_, subgroup_local_invocation_id_);
-}
-
-Value IRBuilder::popcnt(Value x) {
-  QD_ASSERT(is_integral(x.stype.dt));
-  return make_value(spv::OpBitCount, x.stype, x);
-}
-
-#define DEFINE_BUILDER_BINARY_USIGN_OP(_OpName, _Op)   \
-  Value IRBuilder::_OpName(Value a, Value b) {         \
-    QD_ASSERT(a.stype.id == b.stype.id);               \
-    if (is_integral(a.stype.dt)) {                     \
-      return make_value(spv::OpI##_Op, a.stype, a, b); \
-    } else {                                           \
-      QD_ASSERT(is_real(a.stype.dt));                  \
-      return make_value(spv::OpF##_Op, a.stype, a, b); \
-    }                                                  \
-  }
-
-#define DEFINE_BUILDER_BINARY_SIGN_OP(_OpName, _Op)         \
-  Value IRBuilder::_OpName(Value a, Value b) {              \
-    QD_ASSERT(a.stype.id == b.stype.id);                    \
-    if (is_integral(a.stype.dt) && is_signed(a.stype.dt)) { \
-      return make_value(spv::OpS##_Op, a.stype, a, b);      \
-    } else if (is_integral(a.stype.dt)) {                   \
-      return make_value(spv::OpU##_Op, a.stype, a, b);      \
-    } else {                                                \
-      QD_ASSERT(is_real(a.stype.dt));                       \
-      return make_value(spv::OpF##_Op, a.stype, a, b);      \
-    }                                                       \
-  }
-
-DEFINE_BUILDER_BINARY_USIGN_OP(add, Add);
-DEFINE_BUILDER_BINARY_USIGN_OP(sub, Sub);
-DEFINE_BUILDER_BINARY_USIGN_OP(mul, Mul);
-DEFINE_BUILDER_BINARY_SIGN_OP(div, Div);
-
-Value IRBuilder::mod(Value a, Value b) {
-  QD_ASSERT(a.stype.id == b.stype.id);
-  if (is_integral(a.stype.dt) && is_signed(a.stype.dt)) {
-    // FIXME: figure out why OpSRem does not work
-    return sub(a, mul(b, div(a, b)));
-  } else if (is_integral(a.stype.dt)) {
-    return make_value(spv::OpUMod, a.stype, a, b);
-  } else {
-    QD_ASSERT(is_real(a.stype.dt));
-    return make_value(spv::OpFRem, a.stype, a, b);
-  }
-}
-
-#define DEFINE_BUILDER_CMP_OP(_OpName, _Op)                                \
-  Value IRBuilder::_OpName(Value a, Value b) {                             \
-    QD_ASSERT(a.stype.id == b.stype.id);                                   \
-    const auto &bool_type = t_bool_; /* TODO: Only scalar supported now */ \
-    if (is_integral(a.stype.dt) && is_signed(a.stype.dt)) {                \
-      return make_value(spv::OpS##_Op, bool_type, a, b);                   \
-    } else if (is_integral(a.stype.dt)) {                                  \
-      return make_value(spv::OpU##_Op, bool_type, a, b);                   \
-    } else {                                                               \
-      QD_ASSERT(is_real(a.stype.dt));                                      \
-      return make_value(spv::OpFOrd##_Op, bool_type, a, b);                \
-    }                                                                      \
-  }
-
-DEFINE_BUILDER_CMP_OP(lt, LessThan);
-DEFINE_BUILDER_CMP_OP(le, LessThanEqual);
-DEFINE_BUILDER_CMP_OP(gt, GreaterThan);
-DEFINE_BUILDER_CMP_OP(ge, GreaterThanEqual);
-
-#define DEFINE_BUILDER_CMP_UOP(_OpName, _Op)                               \
-  Value IRBuilder::_OpName(Value a, Value b) {                             \
-    QD_ASSERT(a.stype.id == b.stype.id);                                   \
-    const auto &bool_type = t_bool_; /* TODO: Only scalar supported now */ \
-    if (a.stype.id == bool_type.id) {                                      \
-      return make_value(spv::OpLogical##_Op, bool_type, a, b);             \
-    } else if (is_integral(a.stype.dt)) {                                  \
-      return make_value(spv::OpI##_Op, bool_type, a, b);                   \
-    } else {                                                               \
-      QD_ASSERT(is_real(a.stype.dt));                                      \
-      return make_value(spv::OpFOrd##_Op, bool_type, a, b);                \
-    }                                                                      \
-  }
-
-DEFINE_BUILDER_CMP_UOP(eq, Equal);
-DEFINE_BUILDER_CMP_UOP(ne, NotEqual);
-
-#define DEFINE_BUILDER_LOGICAL_OP(_OpName, _Op)                                                 \
-  Value IRBuilder::_OpName(Value a, Value b) {                                                  \
-    QD_ASSERT(a.stype.id == b.stype.id);                                                        \
-    if (a.stype.id == t_bool_.id) {                                                             \
-      return make_value(spv::OpLogical##_Op, t_bool_, a, b);                                    \
-    } else if (is_integral(a.stype.dt)) {                                                       \
-      Value val_a = make_value(spv::OpINotEqual, t_bool_, a, int_immediate_number(a.stype, 0)); \
-      Value val_b = make_value(spv::OpINotEqual, t_bool_, b, int_immediate_number(b.stype, 0)); \
-      Value val_ret = make_value(spv::OpLogical##_Op, t_bool_, val_a, val_b);                   \
-      return cast(a.stype, val_ret);                                                            \
-    } else {                                                                                    \
-      QD_ERROR("Logical ops on real types are not supported.");                                 \
-      return Value();                                                                           \
-    }                                                                                           \
-  }
-
-DEFINE_BUILDER_LOGICAL_OP(logical_and, And);
-DEFINE_BUILDER_LOGICAL_OP(logical_or, Or);
-
-Value IRBuilder::bit_field_extract(Value base, Value offset, Value count) {
-  QD_ASSERT(is_integral(base.stype.dt));
-  QD_ASSERT(is_integral(offset.stype.dt));
-  QD_ASSERT(is_integral(count.stype.dt));
-  return make_value(spv::OpBitFieldUExtract, base.stype, base, offset, count);
-}
-
-Value IRBuilder::select(Value cond, Value a, Value b) {
-  QD_ASSERT(a.stype.id == b.stype.id);
-  QD_ASSERT(cond.stype.id == t_bool_.id);
-  return make_value(spv::OpSelect, a.stype, cond, a, b);
-}
-
-Value IRBuilder::cast(const SType &dst_type, Value value) {
-  QD_ASSERT(value.stype.id > 0U);
-  if (value.stype.id == dst_type.id)
-    return value;
-  const DataType &from = value.stype.dt;
-  const DataType &to = dst_type.dt;
-  if (from->is_primitive(PrimitiveTypeID::u1)) {  // Bool
-    if (is_integral(to) && is_signed(to)) {       // Bool -> Int
-      return select(value, int_immediate_number(dst_type, 1), int_immediate_number(dst_type, 0));
-    } else if (is_integral(to) && is_unsigned(to)) {  // Bool -> UInt
-      return select(value, uint_immediate_number(dst_type, 1), uint_immediate_number(dst_type, 0));
-    } else if (is_real(to)) {  // Bool -> Float
-      return make_value(spv::OpConvertUToF, dst_type,
-                        select(value, uint_immediate_number(t_uint32_, 1), uint_immediate_number(t_uint32_, 0)));
-    } else {
-      QD_ERROR("do not support type cast from {} to {}", from.to_string(), to.to_string());
-      return Value();
-    }
-  } else if (to->is_primitive(PrimitiveTypeID::u1)) {  // Bool
-    if (is_integral(from) && is_signed(from)) {        // Int -> Bool
-      return ne(value, int_immediate_number(value.stype, 0));
-    } else if (is_integral(from) && is_unsigned(from)) {  // UInt -> Bool
-      return ne(value, uint_immediate_number(value.stype, 0));
-    } else {
-      QD_ERROR("do not support type cast from {} to {}", from.to_string(), to.to_string());
-      return Value();
-    }
-  } else if (is_integral(from) && is_integral(to)) {
-    auto ret = value;
-
-    if (data_type_bits(from) == data_type_bits(to)) {
-      // Same width conversion
-      ret = make_value(spv::OpBitcast, dst_type, ret);
-    } else {
-      // Different width
-      // Step 1. Sign extend / truncate value to width of `to`
-      // Step 2. Bitcast to signess of `to`
-      auto get_signed_type = [](DataType dt) -> DataType {
-        // Create a output signed type with the same width as `dt`
-        if (data_type_bits(dt) == 8)
-          return PrimitiveType::i8;
-        else if (data_type_bits(dt) == 16)
-          return PrimitiveType::i16;
-        else if (data_type_bits(dt) == 32)
-          return PrimitiveType::i32;
-        else if (data_type_bits(dt) == 64)
-          return PrimitiveType::i64;
-        else
-          return PrimitiveType::unknown;
-      };
-      auto get_unsigned_type = [](DataType dt) -> DataType {
-        // Create a output unsigned type with the same width as `dt`
-        if (data_type_bits(dt) == 8)
-          return PrimitiveType::u8;
-        else if (data_type_bits(dt) == 16)
-          return PrimitiveType::u16;
-        else if (data_type_bits(dt) == 32)
-          return PrimitiveType::u32;
-        else if (data_type_bits(dt) == 64)
-          return PrimitiveType::u64;
-        else
-          return PrimitiveType::unknown;
-      };
-
-      DataType intermediate_dt;
-      if (is_signed(from)) {
-        intermediate_dt = get_signed_type(to);
-        ret = make_value(spv::OpSConvert, get_primitive_type(intermediate_dt), ret);
-      } else {
-        intermediate_dt = get_unsigned_type(to);
-        ret = make_value(spv::OpUConvert, get_primitive_type(intermediate_dt), ret);
-      }
-
-      // OpBitcast(T, T) is invalid per SPIR-V spec ("Result Type must not equal Operand Type"). When the
-      // intermediate dtype (same signedness as the source but width-matched to the destination) already
-      // matches the caller's destination type, skip the trailing bitcast so the widening / narrowing SConvert
-      // / UConvert above is the final instruction. The trailing bitcast still runs in the mixed-signedness
-      // case, which is the scenario it was written for.
-      if (intermediate_dt != to) {
-        ret = make_value(spv::OpBitcast, dst_type, ret);
-      }
-    }
-
-    return ret;
-  } else if (is_real(from) && is_integral(to) && is_signed(to)) {  // Float -> Int
-    return make_value(spv::OpConvertFToS, dst_type, value);
-  } else if (is_real(from) && is_integral(to) && is_unsigned(to)) {  // Float -> UInt
-    return make_value(spv::OpConvertFToU, dst_type, value);
-  } else if (is_integral(from) && is_signed(from) && is_real(to)) {  // Int -> Float
-    return make_value(spv::OpConvertSToF, dst_type, value);
-  } else if (is_integral(from) && is_unsigned(from) && is_real(to)) {  // UInt -> Float
-    return make_value(spv::OpConvertUToF, dst_type, value);
-  } else if (is_real(from) && is_real(to)) {  // Float -> Float
-    return make_value(spv::OpFConvert, dst_type, value);
-  } else {
-    QD_ERROR("do not support type cast from {} to {}", from.to_string(), to.to_string());
-    return Value();
-  }
+  // GLSL passes scalar function arguments through Function-storage pointers.
+  Value argument = alloca_variable(t_uint32_);
+  store_variable(argument, uint_immediate_number(t_uint32_, argument_value));
+  return make_value(spv::OpFunctionCall, t_uint32_, ref_to_imported_function_declaration, argument);
 }
 
 Value IRBuilder::alloca_variable(const SType &type) {
@@ -1066,163 +911,6 @@ bool IRBuilder::check_value_existence(const std::string &name) const {
   return value_name_tbl_.find(name) != value_name_tbl_.end();
 }
 
-Value IRBuilder::float_atomic(AtomicOpType op_type, Value addr_ptr, Value data, const DataType &dt) {
-  // Use dt-derived type instead of t_fp32_ so FMin/FMax work for f16/f64.
-  auto float_type = get_primitive_type(dt);
-  if (op_type == AtomicOpType::add) {
-    return atomic_operation(addr_ptr, data, [&](Value lhs, Value rhs) { return add(lhs, rhs); }, dt);
-  } else if (op_type == AtomicOpType::sub) {
-    return atomic_operation(addr_ptr, data, [&](Value lhs, Value rhs) { return sub(lhs, rhs); }, dt);
-  } else if (op_type == AtomicOpType::mul) {
-    return atomic_operation(addr_ptr, data, [&](Value lhs, Value rhs) { return mul(lhs, rhs); }, dt);
-  } else if (op_type == AtomicOpType::min) {
-    return atomic_operation(
-        addr_ptr, data, [&](Value lhs, Value rhs) { return call_glsl450(float_type, /*FMin*/ 37, lhs, rhs); }, dt);
-  } else if (op_type == AtomicOpType::max) {
-    return atomic_operation(
-        addr_ptr, data, [&](Value lhs, Value rhs) { return call_glsl450(float_type, /*FMax*/ 40, lhs, rhs); }, dt);
-  } else {
-    QD_NOT_IMPLEMENTED
-  }
-}
-
-Value IRBuilder::integer_atomic(AtomicOpType op_type, Value addr_ptr, Value data, const DataType &dt) {
-  if (op_type == AtomicOpType::mul) {
-    return atomic_operation(addr_ptr, data, [&](Value lhs, Value rhs) { return mul(lhs, rhs); }, dt);
-  } else {
-    QD_NOT_IMPLEMENTED
-  }
-}
-
-Value IRBuilder::atomic_operation(Value addr_ptr,
-                                  Value data,
-                                  std::function<Value(Value, Value)> op,
-                                  const DataType &dt) {
-  SType out_type = get_primitive_type(dt);
-  // Device-buffer pointers are uint-typed (from at_buffer), so CAS uses uint.
-  // Workgroup (shared) pointers keep their original type (e.g. i32). Using uint
-  // on a signed pointer causes Metal's atomic_compare_exchange to reject the
-  // shader due to signed/unsigned type mismatch.
-  const bool is_workgroup = addr_ptr.stype.storage_class == spv::StorageClassWorkgroup;
-  SType res_type = is_workgroup ? out_type : get_primitive_uint_type(dt);
-  Value ret_val_int = alloca_variable(res_type);
-
-  // do-while
-  Label head = new_label();
-  Label body = new_label();
-  Label branch_true = new_label();
-  Label branch_false = new_label();
-  Label merge = new_label();
-  Label exit = new_label();
-
-  make_inst(spv::OpBranch, head);
-  start_label(head);
-  make_inst(spv::OpLoopMerge, branch_true, merge, 0);
-  make_inst(spv::OpBranch, body);
-  make_inst(spv::OpLabel, body);
-  // while (true)
-  {
-    // Use OpAtomicLoad so SPIRV-Cross emits a function call expression
-    // (atomic_load_explicit) that it cannot inline.  A plain OpLoad would
-    // be inlined as a device-memory dereference, causing SPIRV-Cross's CAS
-    // emulation loop to re-read (and see the post-CAS value), breaking the
-    // compare-and-swap logic on Metal.
-    Value old_val = make_value(spv::OpAtomicLoad, res_type, addr_ptr,
-                               /*scope=*/const_i32_one_,
-                               /*semantics=*/const_i32_zero_);
-    // Bitcast uint<->float for the operation. Skip when types already match
-    // (integer workgroup path where res_type == out_type).
-    Value old_data_value = (out_type.id != res_type.id) ? make_value(spv::OpBitcast, out_type, old_val) : old_val;
-    Value new_data_value = op(old_data_value, data);
-    Value new_val =
-        (out_type.id != res_type.id) ? make_value(spv::OpBitcast, res_type, new_data_value) : new_data_value;
-    // int loaded = atomicCompSwap(vals[0], old, new);
-    /*
-    * Don't need this part, theoretically
-    auto semantics = uint_imm ediate_number(
-        t_uint32_, spv::MemorySemanticsAcquireReleaseMask |
-                       spv::MemorySemanticsUniformMemoryMask);
-    make_inst(spv::OpMemoryBarrier, const_i32_one_, semantics);
-    */
-    Value loaded = make_value(spv::OpAtomicCompareExchange, res_type, addr_ptr,
-                              /*scope=*/const_i32_one_, /*semantics if equal=*/const_i32_zero_,
-                              /*semantics if unequal=*/const_i32_zero_, new_val, old_val);
-    // bool ok = (loaded == old);
-    Value ok = make_value(spv::OpIEqual, t_bool_, loaded, old_val);
-    // int ret_val_int = loaded;
-    store_variable(ret_val_int, loaded);
-    // if (ok)
-    make_inst(spv::OpSelectionMerge, branch_false, 0);
-    make_inst(spv::OpBranchConditional, ok, branch_true, branch_false);
-    {
-      make_inst(spv::OpLabel, branch_true);
-      make_inst(spv::OpBranch, exit);
-    }
-    // else
-    {
-      make_inst(spv::OpLabel, branch_false);
-      make_inst(spv::OpBranch, merge);
-    }
-    // continue;
-    make_inst(spv::OpLabel, merge);
-    make_inst(spv::OpBranch, head);
-  }
-  start_label(exit);
-
-  Value ret_loaded = load_variable(ret_val_int, res_type);
-  return (out_type.id != res_type.id) ? make_value(spv::OpBitcast, out_type, ret_loaded) : ret_loaded;
-}
-
-Value IRBuilder::rand_u32(Value global_tmp_) {
-  if (!init_rand_) {
-    init_random_function(global_tmp_);
-  }
-
-  Value _11u = uint_immediate_number(t_uint32_, 11u);
-  Value _19u = uint_immediate_number(t_uint32_, 19u);
-  Value _8u = uint_immediate_number(t_uint32_, 8u);
-  Value _1000000007u = uint_immediate_number(t_uint32_, 1000000007u);
-  Value tmp0 = load_variable(rand_x_, t_uint32_);
-  Value tmp1 = make_value(spv::OpShiftLeftLogical, t_uint32_, tmp0, _11u);
-  Value tmp_t = make_value(spv::OpBitwiseXor, t_uint32_, tmp0, tmp1);  // t
-  store_variable(rand_x_, load_variable(rand_y_, t_uint32_));
-  store_variable(rand_y_, load_variable(rand_z_, t_uint32_));
-  Value tmp_w = load_variable(rand_w_, t_uint32_);  // reuse w
-  store_variable(rand_z_, tmp_w);
-  Value tmp2 = make_value(spv::OpShiftRightLogical, t_uint32_, tmp_w, _19u);
-  Value tmp3 = make_value(spv::OpBitwiseXor, t_uint32_, tmp_w, tmp2);
-  Value tmp4 = make_value(spv::OpShiftRightLogical, t_uint32_, tmp_t, _8u);
-  Value tmp5 = make_value(spv::OpBitwiseXor, t_uint32_, tmp_t, tmp4);
-  Value new_w = make_value(spv::OpBitwiseXor, t_uint32_, tmp3, tmp5);
-  store_variable(rand_w_, new_w);
-  Value val = make_value(spv::OpIMul, t_uint32_, new_w, _1000000007u);
-
-  return val;
-}
-
-Value IRBuilder::rand_f32(Value global_tmp_) {
-  if (!init_rand_) {
-    init_random_function(global_tmp_);
-  }
-
-  Value _1_4294967296f = float_immediate_number(t_fp32_, 1.0f / 4294967296.0f);
-  Value tmp0 = rand_u32(global_tmp_);
-  Value tmp1 = cast(t_fp32_, tmp0);
-  Value val = mul(tmp1, _1_4294967296f);
-
-  return val;
-}
-
-Value IRBuilder::rand_i32(Value global_tmp_) {
-  if (!init_rand_) {
-    init_random_function(global_tmp_);
-  }
-
-  Value tmp0 = rand_u32(global_tmp_);
-  Value val = cast(t_int32_, tmp0);
-  return val;
-}
-
 Value IRBuilder::get_const(const SType &dtype, const uint64_t *pvalue, bool cache) {
   auto key = std::make_pair(dtype.id, pvalue[0]);
   if (cache) {
@@ -1283,112 +971,6 @@ SType IRBuilder::declare_primitive_type(DataType dt) {
   }
 
   return t;
-}
-
-void IRBuilder::init_random_function(Value global_tmp_) {
-  // variables declare
-  SType local_type = get_pointer_type(t_uint32_, spv::StorageClassPrivate);
-  rand_x_ = new_value(local_type, ValueKind::kVariablePtr);
-  rand_y_ = new_value(local_type, ValueKind::kVariablePtr);
-  rand_z_ = new_value(local_type, ValueKind::kVariablePtr);
-  rand_w_ = new_value(local_type, ValueKind::kVariablePtr);
-  global_values.push_back(rand_x_);
-  global_values.push_back(rand_y_);
-  global_values.push_back(rand_z_);
-  global_values.push_back(rand_w_);
-  ib_.begin(spv::OpVariable).add_seq(local_type, rand_x_, spv::StorageClassPrivate).commit(&global_);
-  ib_.begin(spv::OpVariable).add_seq(local_type, rand_y_, spv::StorageClassPrivate).commit(&global_);
-  ib_.begin(spv::OpVariable).add_seq(local_type, rand_z_, spv::StorageClassPrivate).commit(&global_);
-  ib_.begin(spv::OpVariable).add_seq(local_type, rand_w_, spv::StorageClassPrivate).commit(&global_);
-  debug_name(spv::OpName, rand_x_, "_rand_x");
-  debug_name(spv::OpName, rand_y_, "_rand_y");
-  debug_name(spv::OpName, rand_z_, "_rand_z");
-  debug_name(spv::OpName, rand_w_, "_rand_w");
-  SType gtmp_type = get_pointer_type(t_uint32_, spv::StorageClassStorageBuffer);
-  Value rand_gtmp_ = new_value(gtmp_type, ValueKind::kVariablePtr);
-  debug_name(spv::OpName, rand_gtmp_, "rand_gtmp");
-
-  auto load_var = [&](Value pointer, const SType &res_type) {
-    QD_ASSERT(pointer.flag == ValueKind::kVariablePtr || pointer.flag == ValueKind::kStructArrayPtr);
-    Value ret = new_value(res_type, ValueKind::kNormal);
-    ib_.begin(spv::OpLoad).add_seq(res_type, ret, pointer).commit(&func_header_);
-    return ret;
-  };
-
-  auto store_var = [&](Value pointer, Value value) {
-    QD_ASSERT(pointer.flag == ValueKind::kVariablePtr);
-    QD_ASSERT(value.stype.id == pointer.stype.element_type_id);
-    ib_.begin(spv::OpStore).add_seq(pointer, value).commit(&func_header_);
-  };
-
-  // Constant Number
-  Value _7654321u = uint_immediate_number(t_uint32_, 7654321u);
-  Value _1234567u = uint_immediate_number(t_uint32_, 1234567u);
-  Value _9723451u = uint_immediate_number(t_uint32_, 9723451u);
-  Value _123456789u = uint_immediate_number(t_uint32_, 123456789u);
-  Value _1000000007u = uint_immediate_number(t_uint32_, 1000000007u);
-  Value _362436069u = uint_immediate_number(t_uint32_, 362436069u);
-  Value _521288629u = uint_immediate_number(t_uint32_, 521288629u);
-  Value _88675123u = uint_immediate_number(t_uint32_, 88675123u);
-  Value _1 = int_immediate_number(t_uint32_, 1);
-  Value _1024 = int_immediate_number(t_uint32_, 1024);
-
-  // init_rand_ segment (inline to main)
-  // ad-hoc: hope no kernel will use more than 1024 gtmp variables...
-  ib_.begin(spv::OpAccessChain)
-      .add_seq(gtmp_type, rand_gtmp_, global_tmp_, const_i32_zero_, _1024)
-      .commit(&func_header_);
-  // Get gl_GlobalInvocationID.x, assert it has be visited
-  // (in generate_serial_kernel/generate_range_for_kernel
-  SType pint_type = this->get_pointer_type(t_uint32_, spv::StorageClassInput);
-  Value tmp0 = new_value(pint_type, ValueKind::kVariablePtr);
-  ib_.begin(spv::OpAccessChain)
-      .add_seq(pint_type, tmp0, gl_global_invocation_id_, uint_immediate_number(t_uint32_, 0))
-      .commit(&func_header_);
-  Value tmp1 = load_var(tmp0, t_uint32_);
-  Value tmp2_ = load_var(rand_gtmp_, t_uint32_);
-  Value tmp2 = new_value(t_uint32_, ValueKind::kNormal);
-  ib_.begin(spv::OpBitcast).add_seq(t_uint32_, tmp2, tmp2_).commit(&func_header_);
-  Value tmp3 = new_value(t_uint32_, ValueKind::kNormal);
-  ib_.begin(spv::OpIAdd).add_seq(t_uint32_, tmp3, _7654321u, tmp1).commit(&func_header_);
-  Value tmp4 = new_value(t_uint32_, ValueKind::kNormal);
-  ib_.begin(spv::OpIMul).add_seq(t_uint32_, tmp4, _9723451u, tmp2).commit(&func_header_);
-  Value tmp5 = new_value(t_uint32_, ValueKind::kNormal);
-  ib_.begin(spv::OpIAdd).add_seq(t_uint32_, tmp5, _1234567u, tmp4).commit(&func_header_);
-  Value tmp6 = new_value(t_uint32_, ValueKind::kNormal);
-  ib_.begin(spv::OpIMul).add_seq(t_uint32_, tmp6, tmp3, tmp5).commit(&func_header_);
-  Value tmp7 = new_value(t_uint32_, ValueKind::kNormal);
-  ib_.begin(spv::OpIMul).add_seq(t_uint32_, tmp7, _123456789u, tmp6).commit(&func_header_);
-  Value tmp8 = new_value(t_uint32_, ValueKind::kNormal);
-  ib_.begin(spv::OpIMul).add_seq(t_uint32_, tmp8, _1000000007u, tmp7).commit(&func_header_);
-  store_var(rand_x_, tmp8);
-  store_var(rand_y_, _362436069u);
-  store_var(rand_z_, _521288629u);
-  store_var(rand_w_, _88675123u);
-
-  // enum spv::Op add_op = spv::OpIAdd;
-  bool use_atomic_increment = false;
-
-  if (use_atomic_increment) {
-    Value tmp9 = new_value(t_uint32_, ValueKind::kNormal);
-    ib_.begin(spv::Op::OpAtomicIIncrement)
-        .add_seq(t_uint32_, tmp9, rand_gtmp_,
-                 /*scope_id*/ const_i32_one_,
-                 /*semantics*/ const_i32_zero_)
-        .commit(&func_header_);
-  } else {
-    // Yes, this is not an atomic operation, but just fine since no matter
-    // how RAND_STATE changes, `gl_GlobalInvocationID.x` can still help
-    // us to set different seeds for different threads.
-    // Discussion:
-    // https://github.com/taichi-dev/taichi/pull/912#discussion_r419021918
-    Value tmp9 = load_var(rand_gtmp_, t_uint32_);
-    Value tmp10 = new_value(t_uint32_, ValueKind::kNormal);
-    ib_.begin(spv::Op::OpIAdd).add_seq(t_uint32_, tmp10, tmp9, _1).commit(&func_header_);
-    store_var(rand_gtmp_, tmp10);
-  }
-
-  init_rand_ = true;
 }
 
 Value IRBuilder::make_access_chain(const SType &out_type, Value base, const std::vector<int> &indices) {

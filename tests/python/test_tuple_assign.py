@@ -3,7 +3,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang.misc import get_host_arch_list
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test()
@@ -34,11 +34,11 @@ def test_assign2():
 
     @qd.kernel
     def func():
-        a[None], b[None] = 2, 3
+        a[()], b[()] = 2, 3
 
     func()
-    assert a[None] == 2
-    assert b[None] == 3
+    assert a[()] == 2
+    assert b[()] == 3
 
 
 @test_utils.test(arch=get_host_arch_list())
@@ -48,7 +48,7 @@ def test_assign2_mismatch3():
 
     @qd.kernel
     def func():
-        a[None], b[None] = 2, 3, 4
+        a[()], b[()] = 2, 3, 4
 
     with pytest.raises(qd.QuadrantsCompilationError):
         func()
@@ -61,7 +61,7 @@ def test_assign2_mismatch1():
 
     @qd.kernel
     def func():
-        a[None], b[None] = 2
+        a[()], b[()] = 2
 
     with pytest.raises(qd.QuadrantsCompilationError):
         func()
@@ -74,13 +74,13 @@ def test_swap2():
 
     @qd.kernel
     def func():
-        a[None], b[None] = b[None], a[None]
+        a[()], b[()] = b[()], a[()]
 
-    a[None] = 2
-    b[None] = 3
+    a[()] = 2
+    b[()] = 3
     func()
-    assert a[None] == 3
-    assert b[None] == 2
+    assert a[()] == 3
+    assert b[()] == 2
 
 
 @test_utils.test(arch=get_host_arch_list())
@@ -92,11 +92,11 @@ def test_assign2_static():
     def func():
         # XXX: why a, b = qd.static(b, a) doesn't work?
         c, d = qd.static(b, a)
-        c[None], d[None] = 2, 3
+        c[()], d[()] = 2, 3
 
     func()
-    assert a[None] == 3
-    assert b[None] == 2
+    assert a[()] == 3
+    assert b[()] == 2
 
 
 @test_utils.test(arch=get_host_arch_list())
@@ -107,15 +107,15 @@ def test_swap3():
 
     @qd.kernel
     def func():
-        a[None], b[None], c[None] = b[None], c[None], a[None]
+        a[()], b[()], c[()] = b[()], c[()], a[()]
 
-    a[None] = 2
-    b[None] = 3
-    c[None] = 4
+    a[()] = 2
+    b[()] = 3
+    c[()] = 4
     func()
-    assert a[None] == 3
-    assert b[None] == 4
-    assert c[None] == 2
+    assert a[()] == 3
+    assert b[()] == 4
+    assert c[()] == 2
 
 
 @test_utils.test(arch=get_host_arch_list())
@@ -128,12 +128,12 @@ def test_unpack_from_tuple():
 
     @qd.kernel
     def func():
-        a[None], b[None], c[None] = list
+        a[()], b[()], c[()] = list
 
     func()
-    assert a[None] == 2
-    assert b[None] == 3
-    assert c[None] == 4
+    assert a[()] == 2
+    assert b[()] == 3
+    assert c[()] == 4
 
 
 @test_utils.test(arch=get_host_arch_list())
@@ -145,7 +145,7 @@ def test_unpack_mismatch_tuple():
 
     @qd.kernel
     def func():
-        a[None], b[None] = list
+        a[()], b[()] = list
 
     with pytest.raises(qd.QuadrantsCompilationError):
         func()
@@ -160,12 +160,12 @@ def test_unpack_from_vector():
     @qd.kernel
     def func():
         vector = qd.Vector([2, 3, 4])
-        a[None], b[None], c[None] = vector
+        a[()], b[()], c[()] = vector
 
     func()
-    assert a[None] == 2
-    assert b[None] == 3
-    assert c[None] == 4
+    assert a[()] == 2
+    assert b[()] == 3
+    assert c[()] == 4
 
 
 @test_utils.test(arch=get_host_arch_list())
@@ -176,7 +176,7 @@ def test_unpack_mismatch_vector():
     @qd.kernel
     def func():
         vector = qd.Vector([2, 3, 4])
-        a[None], b[None] = vector
+        a[()], b[()] = vector
 
     with pytest.raises(qd.QuadrantsCompilationError):
         func()
@@ -191,7 +191,7 @@ def test_unpack_mismatch_type():
 
     @qd.kernel
     def func():
-        a[None], b[None] = bad
+        a[()], b[()] = bad
 
     with pytest.raises(qd.QuadrantsCompilationError):
         func()
@@ -207,7 +207,7 @@ def test_unpack_mismatch_matrix():
     @qd.kernel
     def func():
         bad = qd.Matrix([[2, 3], [4, 5]])
-        a[None], b[None], c[None], d[None] = bad
+        a[()], b[()], c[()], d[()] = bad
 
     with pytest.raises(qd.QuadrantsCompilationError):
         func()
@@ -222,9 +222,9 @@ def test_unpack_from_shape():
 
     @qd.kernel
     def func():
-        a[None], b[None], c[None] = d.shape
+        a[()], b[()], c[()] = d.shape
 
     func()
-    assert a[None] == 2
-    assert b[None] == 3
-    assert c[None] == 4
+    assert a[()] == 2
+    assert b[()] == 3
+    assert c[()] == 4

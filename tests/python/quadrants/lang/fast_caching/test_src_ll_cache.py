@@ -1,9 +1,12 @@
+import dataclasses
+import functools
 import importlib
 import os
 import pathlib
 import subprocess
 import sys
 
+import numpy as np
 import pydantic
 import pytest
 
@@ -11,10 +14,11 @@ import quadrants as qd
 
 _KERNEL_COVERAGE = os.environ.get("QD_KERNEL_COVERAGE") == "1"
 import quadrants.lang
-from quadrants._test_tools import qd_init_same_arch
+from quadrants.lang._fast_caching import args_hasher
 from quadrants.lang._kernel_types import SrcLlCacheObservations
 
-from tests import test_utils
+from tests.helpers import test_utils
+from tests.helpers.runtime import qd_init_same_arch
 
 TEST_RAN = "test ran"
 RET_SUCCESS = 42
@@ -142,10 +146,12 @@ def test_src_ll_cache_arg_warnings(tmp_path: pathlib.Path, capfd) -> None:
 
     k1(foo=RandomClass())
     _out, err = capfd.readouterr()
-    assert "[FASTCACHE][PARAM_INVALID]" in err
+    # An unrecognised type at a kernel-read path fails fastcache loudly: ``[UNKNOWN_TYPE]`` names the type and
+    # ``[INVALID_FUNC]`` reports the disabled cache. See ``args_hasher.py::_fail_unknown_type``.
+    assert "[FASTCACHE][UNKNOWN_TYPE]" in err
     assert RandomClass.__name__ in err
     assert "[FASTCACHE][INVALID_FUNC]" in err
-    assert k1.__name__ in err
+    assert "[FASTCACHE][PARAM_INVALID]" not in err
 
     @qd.kernel
     def not_pure_k1(foo: qd.Template) -> None:
@@ -153,8 +159,9 @@ def test_src_ll_cache_arg_warnings(tmp_path: pathlib.Path, capfd) -> None:
 
     not_pure_k1(foo=RandomClass())
     _out, err = capfd.readouterr()
+    # Without ``@qd.pure``, fastcache is not active at all, so none of its diagnostics should fire.
+    assert "[FASTCACHE][UNKNOWN_TYPE]" not in err
     assert "[FASTCACHE][PARAM_INVALID]" not in err
-    assert RandomClass.__name__ not in err
     assert "[FASTCACHE][INVALID_FUNC]" not in err
     assert k1.__name__ not in err
 
@@ -294,14 +301,14 @@ def src_ll_cache_has_return_child(args: list[str]) -> None:
 
     @qd.pure
     @qd.kernel
-    def k1(a: qd.i32, output: qd.types.NDArray[qd.i32, 1]) -> bool:
+    def k1(a: qd.i32, output: qd.types.NDArray[qd.i32, 1], return_something: qd.Template) -> bool:
         output[0] = a
-        if qd.static(args_obj.return_something):
+        if qd.static(return_something):
             return True
 
     output = qd.ndarray(qd.i32, (10,))
     if args_obj.return_something:
-        assert k1(3, output)
+        assert k1(3, output, args_obj.return_something)
         # Sanity check that the kernel actually ran, and did something.
         assert output[0] == 3
         assert k1._primal.src_ll_cache_observations.cache_key_generated == args_obj.expect_used_src_ll_cache
@@ -314,7 +321,7 @@ def src_ll_cache_has_return_child(args: list[str]) -> None:
         with pytest.raises(
             qd.QuadrantsSyntaxError, match="Kernel has a return type but does not have a return statement"
         ):
-            k1(3, output)
+            k1(3, output, args_obj.return_something)
     print(TEST_RAN)
     sys.exit(RET_SUCCESS)
 
@@ -431,6 +438,310 @@ def test_src_ll_cache_self_arg_checked(tmp_path: pathlib.Path) -> None:
     assert tuple(my_do.k1()) == (7, 30)
     assert my_do.k1._primal.src_ll_cache_observations.cache_key_generated
     assert my_do.k1._primal.src_ll_cache_observations.cache_validated
+
+
+@test_utils.test()
+def test_src_ll_cache_needs_grad_distinguishes_args_hash(tmp_path: pathlib.Path) -> None:
+    """Pin: the narrow args_hash must fold in ``needs_grad`` for every ndarray leaf, or two scenes differing only by
+    ``requires_grad`` collide on the L2 key.
+
+    ``insert_ndarray_param`` bakes grad-presence into the compiled parameter slot, while the launch path picks
+    ``_QD_ARRAY`` vs ``_QD_ARRAY_WITH_GRAD`` off ``v.grad is not None``. Bind a with-grad ndarray to a slot declared
+    without one and the primal pointer lands at the wrong offset: wrong results or OOB.
+
+    This is the Genesis ``kernel_init_link_fields`` shape at minimum size - a frozen dataclass of two ndarrays, a
+    kernel that writes the second - run across two ``qd.init`` cycles sharing a cache directory.
+    """
+    arch = getattr(qd, qd.lang.impl.current_cfg().arch.name)
+    N = 4
+
+    @dataclasses.dataclass(frozen=True)
+    class State:
+        a: qd.types.NDArray[qd.f32, 1]
+        b: qd.types.NDArray[qd.f32, 1]
+
+    @qd.pure
+    @qd.kernel
+    def write_b(s: State) -> None:
+        for i in range(N):
+            s.b[i] = qd.cast(i + 1, qd.f32) * 7.0
+
+    # Cold run, needs_grad=False: the stored artifact declares ``s.b``'s slot without a grad pointer.
+    qd.reset()
+    qd.init(arch=arch, offline_cache_file_path=str(tmp_path), offline_cache=True)
+    a1 = qd.ndarray(qd.f32, shape=(N,))
+    b1 = qd.ndarray(qd.f32, shape=(N,))
+    state1 = State(a=a1, b=b1)
+    write_b(state1)
+    assert write_b._primal.src_ll_cache_observations.cache_key_generated
+    assert not write_b._primal.src_ll_cache_observations.cache_loaded
+    expected = np.array([7, 14, 21, 28], dtype=np.float32)
+    np.testing.assert_allclose(b1.to_numpy(), expected)
+
+    # Hot run, needs_grad=True: this must miss L2. Were the args_hash to collide with the run above, the launch would
+    # route ``b2`` through ``_QD_ARRAY_WITH_GRAD`` against a slot compiled as plain ``_QD_ARRAY``.
+    qd.reset()
+    qd.init(arch=arch, offline_cache_file_path=str(tmp_path), offline_cache=True)
+    a2 = qd.ndarray(qd.f32, shape=(N,), needs_grad=True)
+    b2 = qd.ndarray(qd.f32, shape=(N,), needs_grad=True)
+    state2 = State(a=a2, b=b2)
+    write_b(state2)
+    assert not write_b._primal.src_ll_cache_observations.cache_loaded, (
+        "fastcache hit between needs_grad=False (cold) and needs_grad=True (hot) - narrow args_hash is "
+        "missing needs_grad, the without-grad artifact will be launched against with-grad ndarrays"
+    )
+    np.testing.assert_allclose(b2.to_numpy(), expected)
+    # A misaligned param struct would smear primal data into the (unwritten) grad slot.
+    np.testing.assert_allclose(b2.grad.to_numpy(), np.zeros(N, dtype=np.float32))
+
+
+@test_utils.test()
+def test_src_ll_cache_hit_predeclare_struct_ndarrays_pruned(tmp_path: pathlib.Path) -> None:
+    """Pin ``_predeclare_struct_ndarrays`` on the fastcache-hit path, where pass 0 is skipped and the ``id(nd)``-keyed
+    used-ndarray set is therefore empty: registration has to be gated on the cached flat-name set instead, so that the
+    same ndarray set is registered as by the compile that produced the artifact.
+
+    Registering every reachable ndarray instead scrambles the arg-slot bindings, and the write lands in ``state.a``
+    (first in insertion order) rather than ``state.b``. Both the cold and hot paths run here via ``qd.reset()``.
+    """
+    arch = getattr(qd, qd.lang.impl.current_cfg().arch.name)
+    N = 4
+
+    @qd.data_oriented
+    class State:
+        def __init__(self) -> None:
+            self.a = qd.ndarray(qd.i32, shape=(N,))
+            self.b = qd.ndarray(qd.i32, shape=(N,))
+            self.c = qd.ndarray(qd.i32, shape=(N,))
+
+    @qd.pure
+    @qd.kernel
+    def write_b(s: qd.template()) -> None:
+        for i in range(N):
+            s.b[i] = (i + 1) * 17
+
+    # Cold: populates the fastcache, flat-name set included.
+    qd.reset()
+    qd.init(arch=arch, offline_cache_file_path=str(tmp_path), offline_cache=True)
+    state = State()
+    write_b(state)
+    assert write_b._primal.src_ll_cache_observations.cache_key_generated
+    assert not write_b._primal.src_ll_cache_observations.cache_loaded
+    np.testing.assert_array_equal(state.b.to_numpy(), np.array([17, 34, 51, 68], dtype=np.int32))
+    np.testing.assert_array_equal(state.a.to_numpy(), np.zeros(N, dtype=np.int32))
+    np.testing.assert_array_equal(state.c.to_numpy(), np.zeros(N, dtype=np.int32))
+
+    # Hot: the cache-hit path, which skips pass 0.
+    qd.reset()
+    qd.init(arch=arch, offline_cache_file_path=str(tmp_path), offline_cache=True)
+    state = State()
+    write_b(state)
+    assert write_b._primal.src_ll_cache_observations.cache_loaded, "expected a fastcache hit on the second run"
+    np.testing.assert_array_equal(state.b.to_numpy(), np.array([17, 34, 51, 68], dtype=np.int32))
+    np.testing.assert_array_equal(state.a.to_numpy(), np.zeros(N, dtype=np.int32))
+    np.testing.assert_array_equal(state.c.to_numpy(), np.zeros(N, dtype=np.int32))
+
+
+@test_utils.test()
+def test_src_ll_cache_pruning_union_across_static_branches(tmp_path: pathlib.Path) -> None:
+    """Pin: the L1 pruning entry is shared by every specialization of a kernel source, so it must hold the *union* of
+    the paths they read - ``qd.static`` makes those paths specialization-dependent.
+
+    With only the first specialization's paths (``flag=True``, reading ``s.flag`` and ``s.x``), the sibling
+    specialization (``flag=False``, reading ``s.y``) derives an L2 key that ignores ``s.y``, and a later process whose
+    ``s.y`` has a different dtype is served the artifact compiled for the old one - f32 bits land in an i32 ndarray
+    (``1073741824`` instead of ``2``).
+
+    Run 4 pins the other side: growing the union must converge, not recompile on every launch.
+    """
+    arch = getattr(qd, qd.lang.impl.current_cfg().arch.name)
+    N = 4
+
+    @qd.data_oriented
+    class State:
+        def __init__(self, flag, x, y) -> None:
+            self.flag = flag
+            self.x = x
+            self.y = y
+
+    @qd.pure
+    @qd.kernel
+    def write_branch(s: qd.template()) -> None:
+        if qd.static(s.flag):
+            for i in range(N):
+                s.x[i] = 1
+        else:
+            for i in range(N):
+                s.y[i] = 2
+
+    def run(flag: bool, y_dtype):
+        qd.reset()
+        qd.init(arch=arch, offline_cache_file_path=str(tmp_path), offline_cache=True)
+        x = qd.ndarray(qd.f32, shape=(N,))
+        y = qd.ndarray(y_dtype, shape=(N,))
+        write_branch(State(flag, x, y))
+        return write_branch._primal.src_ll_cache_observations.cache_loaded, y.to_numpy()
+
+    # Run 1: L1 records ``s.flag`` + ``s.x``, not ``s.y``.
+    loaded, _ = run(True, qd.f32)
+    assert not loaded
+
+    # Run 2: this specialization reads ``s.y``, so the union has to grow before its L2 key is derived.
+    loaded, y_values = run(False, qd.f32)
+    assert not loaded
+    np.testing.assert_array_equal(y_values, np.full(N, 2, dtype=np.float32))
+
+    loaded, y_values = run(False, qd.i32)
+    assert not loaded, (
+        "fastcache hit after a dtype change on s.y - the L2 key was narrowed by a pruning set that omits s.y, "
+        "so the artifact compiled for f32 is being launched against an i32 ndarray"
+    )
+    np.testing.assert_array_equal(y_values, np.full(N, 2, dtype=np.int32))
+
+    loaded, y_values = run(False, qd.i32)
+    assert loaded, "expected a fastcache hit once the pruning union stopped growing"
+    np.testing.assert_array_equal(y_values, np.full(N, 2, dtype=np.int32))
+
+
+@pytest.mark.parametrize("template_primitives", [True, False])
+@pytest.mark.parametrize("fastcache", [True, False])
+@test_utils.test()
+def test_src_ll_cache_data_oriented_property_value_in_key(
+    tmp_path: pathlib.Path, fastcache: bool, template_primitives: bool
+) -> None:
+    """Pin: a member a kernel reads only through a ``@property`` of a ``@qd.data_oriented`` template arg keys the
+    fastcache via the property's value, and results match with fastcache off.
+    """
+    arch = getattr(qd, qd.lang.impl.current_cfg().arch.name)
+
+    @qd.data_oriented(template_primitives=template_primitives)
+    class Config:
+        def __init__(self, flag: bool) -> None:
+            self.flag = flag
+
+        @property
+        def n_rows(self) -> int:
+            return 3 if self.flag else 1
+
+    @qd.kernel(fastcache=fastcache)
+    def fill_n_rows(cfg: qd.template(), out: qd.types.ndarray()) -> None:
+        n_rows = qd.static(cfg.n_rows)
+        out[0] = n_rows
+
+    def run(flag: bool):
+        qd.reset()
+        qd.init(arch=arch, offline_cache_file_path=str(tmp_path), offline_cache=True)
+        out = qd.ndarray(qd.i32, shape=(1,))
+        fill_n_rows(Config(flag), out)
+        return fill_n_rows._primal.src_ll_cache_observations.cache_loaded, int(out.to_numpy()[0])
+
+    # (flag, expected value, whether the artifact is already cached): the second run changes only cfg.flag, so a hit
+    # there would mean the key omits the property's value.
+    for flag, expected, cached in ((False, 1, False), (True, 3, False), (True, 3, True), (False, 1, True)):
+        loaded, value = run(flag)
+        assert value == expected
+        assert loaded == (fastcache and cached), f"flag={flag}: cache_loaded={loaded}"
+
+
+@pytest.mark.parametrize("template_primitives", [True, False])
+@pytest.mark.parametrize("fastcache", [True, False])
+@test_utils.test()
+def test_src_ll_cache_data_oriented_unhashable_property_disables_fastcache(
+    tmp_path: pathlib.Path, capfd, fastcache: bool, template_primitives: bool
+) -> None:
+    """A kernel-read property whose value fastcache cannot hash disables fastcache for the call rather than being left
+    out of the key, like any other kernel-read value of an unrecognised type."""
+    # The warning is once per process, so an earlier test on this worker may already have printed it.
+    args_hasher.reset_unknown_type_warn_state()
+    arch = getattr(qd, qd.lang.impl.current_cfg().arch.name)
+
+    @qd.data_oriented(template_primitives=template_primitives)
+    class Config:
+        def __init__(self, n: int) -> None:
+            self.n = n
+
+        @property
+        def dims(self) -> tuple[int, int]:
+            return (self.n, 2 * self.n)
+
+    @qd.kernel(fastcache=fastcache)
+    def fill_dims(cfg: qd.template(), out: qd.types.ndarray()) -> None:
+        dim = qd.static(cfg.dims[1])
+        out[0] = dim
+
+    def run(n: int):
+        qd.reset()
+        qd.init(arch=arch, offline_cache_file_path=str(tmp_path), offline_cache=True)
+        out = qd.ndarray(qd.i32, shape=(1,))
+        fill_dims(Config(n), out)
+        return fill_dims._primal.src_ll_cache_observations.cache_loaded, int(out.to_numpy()[0])
+
+    # A new value, then the same value again: the repeat would be a cache hit if fastcache were on.
+    for n in (1, 2, 2):
+        loaded, value = run(n)
+        assert not loaded, "a tuple-valued property cannot be hashed, so fastcache must stay off"
+        assert value == 2 * n
+    # capfd does not capture stderr on Windows.
+    if not sys.platform.startswith("win"):
+        _out, err = capfd.readouterr()
+        assert ("[FASTCACHE][UNKNOWN_TYPE]" in err) == fastcache
+
+
+@pytest.mark.parametrize(
+    "template_primitives",
+    [
+        True,
+        pytest.param(
+            False,
+            marks=pytest.mark.xfail(
+                strict=True,
+                raises=qd.QuadrantsSyntaxError,
+                reason="with template_primitives=False, a computed cached_property sits in __dict__ and is lifted to a "
+                "runtime arg, which qd.static() rejects - with or without fastcache",
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize("fastcache", [True, False])
+@test_utils.test(arch=qd.cpu)
+def test_src_ll_cache_data_oriented_cached_property_disables_fastcache(
+    tmp_path: pathlib.Path, capfd, fastcache: bool, template_primitives: bool
+) -> None:
+    """A kernel-read ``functools.cached_property`` disables fastcache for the call, with a warning: once read it is
+    stored as a member, so the same object would give different keys before and after its first read."""
+    # The warning is once per process, so an earlier test on this worker may already have printed it.
+    args_hasher.reset_unknown_type_warn_state()
+
+    @qd.data_oriented(template_primitives=template_primitives)
+    class Config:
+        def __init__(self, n: int) -> None:
+            self.n = n
+
+        @functools.cached_property
+        def twice_n(self) -> int:
+            return 2 * self.n
+
+    @qd.kernel(fastcache=fastcache)
+    def fill_twice_n(cfg: qd.template(), out: qd.types.ndarray()) -> None:
+        twice_n = qd.static(cfg.twice_n)
+        out[0] = twice_n
+
+    def run(n: int):
+        qd.reset()
+        qd.init(arch=qd.cpu, offline_cache_file_path=str(tmp_path), offline_cache=True)
+        out = qd.ndarray(qd.i32, shape=(1,))
+        fill_twice_n(Config(n), out)
+        return fill_twice_n._primal.src_ll_cache_observations.cache_loaded, int(out.to_numpy()[0])
+
+    # A new value, then the same value again: the repeat would be a cache hit if fastcache were on.
+    for n in (1, 2, 2):
+        loaded, value = run(n)
+        assert not loaded, "a kernel-read cached_property must keep fastcache off"
+        assert value == 2 * n
+    # capfd does not capture stderr on Windows.
+    if not sys.platform.startswith("win"):
+        _out, err = capfd.readouterr()
+        assert ("[FASTCACHE][CACHED_PROPERTY]" in err) == fastcache
 
 
 class ModifySubFuncKernelArgs(pydantic.BaseModel):

@@ -1,6 +1,7 @@
 #include "compile_config.h"
 
 #include <thread>
+#include "quadrants/common/logging.h"
 #include "quadrants/rhi/arch.h"
 #include "quadrants/util/offline_cache.h"
 
@@ -14,7 +15,6 @@ CompileConfig::CompileConfig() {
   print_ir = false;
   print_preprocessed_ir = false;
   print_accessor_ir = false;
-  use_llvm = true;
   demote_dense_struct_fors = true;
   advanced_optimization = true;
   constant_folding = true;
@@ -23,20 +23,13 @@ CompileConfig::CompileConfig() {
   cfg_optimization = true;
   check_out_of_bound = false;
   serial_schedule = false;
-  simplify_before_lower_access = true;
-  lower_access = true;
-  simplify_after_lower_access = true;
   move_loop_invariant_outside_if = false;
   default_fp = PrimitiveType::f32;
   default_ip = PrimitiveType::i32;
   default_up = PrimitiveType::u32;
-  verbose_kernel_launches = false;
   kernel_profiler = false;
-  default_cpu_block_dim = 32;
-  cpu_block_dim_adaptive = true;
+  cpu_fixed_block_dim = 32;
   default_gpu_block_dim = 128;
-  gpu_max_reg = 0;  // 0 means using the default value from the CUDA driver.
-  verbose = true;
   fast_math = true;
   flatten_if = false;
   make_thread_local = true;
@@ -45,11 +38,12 @@ CompileConfig::CompileConfig() {
   real_matrix_scalarize = true;
   force_scalarize_matrix = false;
   half2_vectorization = false;
-  make_cpu_multithreading_loop = true;
+  cpu_work_scheduling = CPUWorkScheduling::PER_WORKER;
 
   saturating_grid_dim = 0;
   max_block_dim = 0;
   cpu_max_num_threads = std::thread::hardware_concurrency();
+  cpu_per_worker_min_block_dim = 512;
   random_seed = 0;
 
   // LLVM backend options:
@@ -65,6 +59,9 @@ CompileConfig::CompileConfig() {
 }
 
 void CompileConfig::fit() {
+  QD_ERROR_IF(cpu_fixed_block_dim < 1, "cpu_fixed_block_dim must be >= 1, but got {}.", cpu_fixed_block_dim);
+  QD_ERROR_IF(cpu_per_worker_min_block_dim < 1, "cpu_per_worker_min_block_dim must be >= 1, but got {}.",
+              cpu_per_worker_min_block_dim);
   if (debug) {
     // TODO: allow users to run in debug mode without out-of-bound checks
     check_out_of_bound = true;

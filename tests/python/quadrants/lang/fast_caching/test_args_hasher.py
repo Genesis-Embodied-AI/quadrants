@@ -10,7 +10,7 @@ from quadrants.lang._fast_caching.args_hasher import FastcacheSkip
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import has_pytorch
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 if has_pytorch():
     import torch
@@ -56,6 +56,28 @@ def test_args_hasher_numeric_maybe_template(annotation: object, cache_value: boo
             assert hash1 != hash2
         else:
             assert hash1 == hash2
+
+
+@test_utils.test()
+def test_args_hasher_none_is_cacheable() -> None:
+    """A ``None`` argument must hash to a stable key rather than disabling fast cache.
+
+    Reaching the catch-all in ``stringify_obj_type`` makes ``hash_args`` return ``FastcacheSkip.WARN``, which disables
+    fast cache for the whole call. ``None`` is a singleton, so it is tagged with a constant instead: it hashes, the
+    hash is stable across calls, and it does not poison the other arguments in the same call.
+    """
+    for annotation in (None, qd.Tensor, qd.template(), qd.Template):
+        arg_meta = ArgMetadata(name="", annotation=annotation)
+        hash1 = args_hasher.hash_args(False, [None], [arg_meta])
+        assert not isinstance(hash1, FastcacheSkip)
+        assert hash1
+        hash2 = args_hasher.hash_args(False, [None], [arg_meta])
+        assert hash1 == hash2
+
+    # A None argument does not disable fast cache for the other (valid) arguments in the same call.
+    mixed = args_hasher.hash_args(False, [None, 3], [None, None])
+    assert not isinstance(mixed, FastcacheSkip)
+    assert mixed
 
 
 @test_utils.test()
@@ -105,6 +127,58 @@ def test_args_hasher_data_oriented() -> None:
 
     foo = Foo()
     assert args_hasher.hash_args(False, [foo], [None]) is not None
+
+
+@test_utils.test()
+def test_args_hasher_data_oriented_template_primitives_value_not_keyed() -> None:
+    """A normal @qd.data_oriented bakes primitive members into the kernel, so the fastcache key includes their value.
+    @qd.data_oriented(template_primitives=False) lifts them to runtime scalar args instead, so the key must depend on
+    the primitive's *type* only - otherwise fastcache would recompile on every value change, defeating the feature."""
+
+    @qd.data_oriented(template_primitives=False)
+    class Runtime:
+        def __init__(self, k):
+            self.k = k
+
+    @qd.data_oriented
+    class Baked:
+        def __init__(self, k):
+            self.k = k
+
+    h = args_hasher.hash_args
+
+    # Lifted (runtime) primitive: value change -> same key.
+    h_rt = h(False, [Runtime(3)], [None])
+    assert h_rt is not None and not isinstance(h_rt, FastcacheSkip)
+    assert h_rt == h(False, [Runtime(7)], [None])
+
+    # Baked primitive (default): value change -> different key.
+    h_baked = h(False, [Baked(3)], [None])
+    assert h_baked is not None and not isinstance(h_baked, FastcacheSkip)
+    assert h_baked != h(False, [Baked(7)], [None])
+
+
+@test_utils.test()
+def test_args_hasher_data_oriented_template_primitives_nested_value_not_keyed() -> None:
+    """The type-only keying applies through nested template_primitives=False data_oriented members and alongside
+    ndarray members (the engine-F shape: Engine -> subsystem -> bare-primitive loop bound + ndarray buffers)."""
+
+    @qd.data_oriented(template_primitives=False)
+    class Inner:
+        def __init__(self, n_rt):
+            self.n_rt = n_rt
+            self.buf = qd.ndarray(qd.f64, shape=(4,))
+
+    @qd.data_oriented(template_primitives=False)
+    class Outer:
+        def __init__(self, n_rt):
+            self.cap = 1000
+            self.inner = Inner(n_rt)
+
+    h = args_hasher.hash_args
+    h4 = h(False, [Outer(4)], [None])
+    assert h4 is not None and not isinstance(h4, FastcacheSkip)
+    assert h4 == h(False, [Outer(6)], [None])
 
 
 @test_utils.test()
@@ -167,8 +241,6 @@ def _qd_init_same_arch() -> None:
 def test_args_hasher_field() -> None:
     """
     Check fields are correctly disabled.
-
-    More context: https://github.com/Genesis-Embodied-AI/quadrants/pull/163
     """
     for dtype in [qd.i32, qd.i64, qd.f32, qd.f64]:
         for shape in [(2,), (5,), (2, 5)]:
@@ -383,3 +455,38 @@ def test_args_hasher_named_tuple() -> None:
     geom = Geom(pos=qd.field(dtype=qd.types.vector(3, qd.f32), shape=(1,)))
     set_pos(geom, np.ones((1, 3), dtype=np.float32))
     assert np.all(geom.pos.to_numpy() == np.ones((1, 3), dtype=np.float32))
+
+
+@test_utils.test()
+def test_args_hasher_frozen_dataclass_failure_does_not_poison_narrower_walk() -> None:
+    """A frozen dataclass's cached fastcache failure must not be reused across walks with different pruning sets.
+
+    Two kernels share one instance. Kernel A reads the unsupported ``qd.field`` member and fails fastcache; kernel B
+    reads only the ndarray, so it must stay cacheable rather than inherit A's on-instance failure sentinel.
+    """
+    args_hasher.reset_unknown_type_warn_state()
+
+    @dataclasses.dataclass(frozen=True)
+    class State:
+        x: qd.types.NDArray[qd.i32, 1]  # actually holds a qd.field below (unsupported at read path)
+        y: qd.types.NDArray[qd.i32, 1]  # cacheable ndarray
+
+    state = State(x=qd.field(qd.i32, shape=(4,)), y=qd.ndarray(qd.i32, (4,)))
+    arg_meta = ArgMetadata(name="state", annotation=State)
+
+    # Kernel A: pruning set includes both fields; walking hits the qd.field and fails.
+    paths_a = {"__qd_state__qd_x", "__qd_state__qd_y"}
+    h_a = args_hasher.hash_args(False, [state], [arg_meta], pruning_paths=paths_a)
+    assert isinstance(h_a, FastcacheSkip), f"kernel A should fail fastcache; got {h_a!r}"
+
+    # Kernel B: narrower pruning set excludes the failing field. Same instance - must NOT inherit A's failure.
+    paths_b = {"__qd_state__qd_y"}
+    h_b = args_hasher.hash_args(False, [state], [arg_meta], pruning_paths=paths_b)
+    assert not isinstance(
+        h_b, FastcacheSkip
+    ), f"kernel B should be fast-cacheable (its pruning set skips the unsupported field); got {h_b!r}"
+    assert isinstance(h_b, str) and len(h_b) > 0
+
+    # And unpruned walks are unaffected: no ``pruning_paths`` -> walk everything -> fail (same as A).
+    h_none = args_hasher.hash_args(False, [state], [arg_meta])
+    assert isinstance(h_none, FastcacheSkip), f"unpruned walk should fail fastcache; got {h_none!r}"

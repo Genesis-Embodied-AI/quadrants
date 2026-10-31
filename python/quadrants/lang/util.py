@@ -311,8 +311,7 @@ def in_python_scope():
 def quadrants_scope(func):
     @functools.wraps(func)
     def wrapped(*args, **kwargs):
-        if not impl.is_python_backend():
-            assert in_quadrants_scope(), f"{func.__name__} cannot be called in Python-scope"
+        assert in_quadrants_scope(), f"{func.__name__} cannot be called in Python-scope"
         return func(*args, **kwargs)
 
     return wrapped
@@ -360,6 +359,19 @@ def is_data_oriented(obj: Any) -> bool:
         flag = klass.__dict__.get("_data_oriented")
         if flag is not None:
             return flag
+    return False
+
+
+def wants_runtime_primitives(obj: Any) -> bool:
+    # True when ``obj`` is an instance of a class decorated ``@qd.data_oriented(template_primitives=False)``, meaning
+    # its primitive (int/float/bool) members should be lifted into runtime scalar kernel args rather than baked into
+    # the compiled kernel as compile-time constants. Uses the same metaclass-safe MRO ``__dict__`` walk as
+    # ``is_data_oriented`` (never ``getattr``). The flag stores the ``template_primitives`` value (True = bake, the
+    # default), so runtime-lifting is requested iff the nearest flag in the MRO is explicitly ``False``.
+    for klass in type(obj).__mro__:
+        flag = klass.__dict__.get("_qd_template_primitives")
+        if flag is not None:
+            return flag is False
     return False
 
 

@@ -40,7 +40,8 @@ constexpr uint32 HIP_ERROR_ASSERT = 710;
 constexpr uint32 HIP_JIT_MAX_REGISTERS = 0;
 constexpr uint32 HIP_POINTER_ATTRIBUTE_MEMORY_TYPE = 2;
 constexpr uint32 HIP_SUCCESS = 0;
-constexpr uint32 HIP_MEMORYTYPE_DEVICE = 1;
+// HIP 6+ enum values. AMDGPUContext rejects older runtimes before using their pointer attributes.
+constexpr uint32 HIP_MEMORYTYPE_DEVICE = 2;
 // `hipFuncAttributeMaxDynamicSharedMemorySize` from the `hipFuncAttribute` enum in ROCm/clr
 // hipamd/include/hip/hip_runtime_api.h. Used with `kernel_set_attribute` (`hipFuncSetAttribute`) to opt in to >48 KB
 // of dynamic shared memory for graph kernel nodes that request it.
@@ -123,7 +124,7 @@ class AMDGPUDriver : protected AMDGPUDriverBase {
 
   void (*driver_get_version)(int *);
 
-  void (*runtime_get_version)(int *);
+  uint32 (*runtime_get_version)(int *);
 
   bool detected();
 

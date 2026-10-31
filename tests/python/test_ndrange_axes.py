@@ -13,7 +13,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 def _expected_flat_to_canonical(dims, axes):

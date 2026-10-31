@@ -4,7 +4,7 @@ from pytest import approx
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 OP_ADD = 0
 OP_MIN = 1
@@ -62,24 +62,24 @@ def _test_reduction_single(dtype, criterion, op):
     @qd.kernel
     def reduce():
         for i in a:
-            qd_op(tot[None], a[i])
+            qd_op(tot[()], a[i])
 
     @qd.kernel
     def reduce_tmp() -> dtype:
-        s = qd.zero(tot[None]) if op == OP_ADD or op == OP_XOR else a[0]
+        s = qd.zero(tot[()]) if op == OP_ADD or op == OP_XOR else a[0]
         for i in a:
             qd_op(s, a[i])
         return s
 
     fill()
-    tot[None] = 0 if op in [OP_ADD, OP_XOR] else a[0]
+    tot[()] = 0 if op in [OP_ADD, OP_XOR] else a[0]
     reduce()
     tot2 = reduce_tmp()
 
     np_arr = a.to_numpy()
     ground_truth = np_ops[op](np_arr)
 
-    assert criterion(tot[None], ground_truth)
+    assert criterion(tot[()], ground_truth)
     assert criterion(tot2, ground_truth)
 
 

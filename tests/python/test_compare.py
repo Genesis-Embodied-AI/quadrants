@@ -3,7 +3,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang import impl
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test(require=qd.extension.sparse, exclude=qd.metal)
@@ -15,20 +15,20 @@ def test_compare_basics():
 
     @qd.kernel
     def func():
-        b[None] = 3
-        c[None] = 5
-        a[0] = b[None] < c[None]
-        a[1] = b[None] <= c[None]
-        a[2] = b[None] > c[None]
-        a[3] = b[None] >= c[None]
-        a[4] = b[None] == c[None]
-        a[5] = b[None] != c[None]
-        a[6] = c[None] < b[None]
-        a[7] = c[None] <= b[None]
-        a[8] = c[None] > b[None]
-        a[9] = c[None] >= b[None]
-        a[10] = c[None] == b[None]
-        a[11] = c[None] != b[None]
+        b[()] = 3
+        c[()] = 5
+        a[0] = b[()] < c[()]
+        a[1] = b[()] <= c[()]
+        a[2] = b[()] > c[()]
+        a[3] = b[()] >= c[()]
+        a[4] = b[()] == c[()]
+        a[5] = b[()] != c[()]
+        a[6] = c[()] < b[()]
+        a[7] = c[()] <= b[()]
+        a[8] = c[()] > b[()]
+        a[9] = c[()] >= b[()]
+        a[10] = c[()] == b[()]
+        a[11] = c[()] != b[()]
 
     func()
     assert a[0]
@@ -54,20 +54,20 @@ def test_compare_equality():
 
     @qd.kernel
     def func():
-        b[None] = 3
-        c[None] = 3
-        a[0] = b[None] < c[None]
-        a[1] = b[None] <= c[None]
-        a[2] = b[None] > c[None]
-        a[3] = b[None] >= c[None]
-        a[4] = b[None] == c[None]
-        a[5] = b[None] != c[None]
-        a[6] = c[None] < b[None]
-        a[7] = c[None] <= b[None]
-        a[8] = c[None] > b[None]
-        a[9] = c[None] >= b[None]
-        a[10] = c[None] == b[None]
-        a[11] = c[None] != b[None]
+        b[()] = 3
+        c[()] = 3
+        a[0] = b[()] < c[()]
+        a[1] = b[()] <= c[()]
+        a[2] = b[()] > c[()]
+        a[3] = b[()] >= c[()]
+        a[4] = b[()] == c[()]
+        a[5] = b[()] != c[()]
+        a[6] = c[()] < b[()]
+        a[7] = c[()] <= b[()]
+        a[8] = c[()] > b[()]
+        a[9] = c[()] >= b[()]
+        a[10] = c[()] == b[()]
+        a[11] = c[()] != b[()]
 
     func()
     assert not a[0]
@@ -106,7 +106,7 @@ def test_no_duplicate_eval_func():
 
     @qd.func
     def why_this_foo_fail(n):
-        return qd.atomic_add(b[None], n)
+        return qd.atomic_add(b[()], n)
 
     def foo(n):
         ast_builder = impl.get_runtime().compiling_callable.ast_builder()
@@ -114,11 +114,11 @@ def test_no_duplicate_eval_func():
 
     @qd.kernel
     def func():
-        a[None] = 0 <= foo(2) < 1
+        a[()] = 0 <= foo(2) < 1
 
     func()
-    assert a[None] == 1
-    assert b[None] == 2
+    assert a[()] == 1
+    assert b[()] == 2
 
 
 @test_utils.test(require=qd.extension.sparse, exclude=qd.metal)
@@ -131,11 +131,11 @@ def test_chain_compare():
 
     @qd.kernel
     def func():
-        b[None] = 2
-        c[None] = 3
-        d[None] = 3
-        a[0] = c[None] == d[None] != b[None] < d[None] > b[None] >= b[None] <= c[None]
-        a[1] = b[None] <= c[None] != d[None] > b[None] == b[None]
+        b[()] = 2
+        c[()] = 3
+        d[()] = 3
+        a[0] = c[()] == d[()] != b[()] < d[()] > b[()] >= b[()] <= c[()]
+        a[1] = b[()] <= c[()] != d[()] > b[()] == b[()]
 
     func()
     assert a[0]
@@ -156,6 +156,109 @@ def test_static_in():
     assert foo(qd.u32) == 1
     assert foo(qd.i64) == 2
     assert foo(qd.f32) == 0
+
+
+@test_utils.test()
+def test_static_is():
+    @qd.kernel
+    def foo(a: qd.template()) -> qd.i32:
+        b = 0
+        if qd.static(a is None):
+            b = 1
+        elif qd.static(a is not None):
+            b = 2
+        return b
+
+    assert foo(None) == 1
+    assert foo(0) == 2
+    assert foo(qd.i32) == 2
+
+
+@test_utils.test()
+def test_static_is_rejects_runtime_operands():
+    @qd.kernel
+    def scalar(value: qd.i32) -> qd.i32:
+        return 1 if qd.static(value is None) else 0
+
+    with pytest.raises(
+        qd.QuadrantsSyntaxError,
+        match=r'Operator "is" inside `qd.static` compares a direct kernel argument against `None`',
+    ):
+        scalar(0)
+
+    # A non-optional ndarray still rejects; presence checks need the opt-in qd.types.NDArray[...] | None form.
+    @qd.kernel
+    def array(value: qd.types.ndarray()) -> qd.i32:
+        return 1 if qd.static(value is not None) else 0
+
+    value = qd.ndarray(qd.i32, shape=(1,))
+    with pytest.raises(
+        qd.QuadrantsSyntaxError,
+        match=r'Operator "is not" inside `qd.static` compares a direct kernel argument against `None`',
+    ):
+        array(value)
+
+    @qd.kernel
+    def reserved_name(__qd_value: qd.template()) -> qd.i32:
+        return 1 if qd.static(__qd_value is None) else 0
+
+    with pytest.raises(
+        qd.QuadrantsSyntaxError,
+        match=r'Operator "is" inside `qd.static` compares a direct kernel argument against `None`',
+    ):
+        reserved_name(None)
+
+    @qd.kernel
+    def shadowed_template(value: qd.template()) -> qd.i32:
+        result = 0
+        for value in qd.static([None]):
+            result = 1 if qd.static(value is None) else 0
+        return result
+
+    with pytest.raises(
+        qd.QuadrantsSyntaxError,
+        match=r'Operator "is" inside `qd.static` compares a direct kernel argument against `None`',
+    ):
+        shadowed_template(7)
+
+
+@test_utils.test()
+def test_static_is_accepts_tensor_presence():
+    @qd.kernel
+    def present(value: qd.Tensor) -> qd.i32:
+        return 1 if qd.static(value is not None) else 0
+
+    field = qd.field(qd.i32, shape=(1,))
+    array = qd.ndarray(qd.i32, shape=(1,))
+
+    assert present(None) == 0
+    assert present(field) == 1
+    assert present(array) == 1
+
+
+@test_utils.test()
+def test_static_is_accepts_optional_ndarray_presence():
+    @qd.kernel
+    def present(value: qd.types.NDArray[qd.i32, 1] | None) -> qd.i32:
+        return 1 if qd.static(value is not None) else 0
+
+    array = qd.ndarray(qd.i32, shape=(1,))
+
+    assert present(None) == 0
+    assert present(array) == 1
+
+
+@test_utils.test()
+def test_static_is_rejects_non_none_identity():
+    @qd.kernel
+    def same(value: qd.template()) -> qd.i32:
+        return 1 if qd.static(value is qd.i32) else 0
+
+    with pytest.raises(
+        qd.QuadrantsSyntaxError,
+        match=r'Operator "is" inside `qd.static` compares a direct kernel argument against `None`',
+    ):
+        same(qd.i32)
 
 
 @test_utils.test()

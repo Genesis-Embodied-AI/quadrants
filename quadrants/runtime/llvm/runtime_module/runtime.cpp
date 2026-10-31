@@ -27,6 +27,7 @@
 #include "quadrants/math/arithmetic.h"
 #include "llvm_runtime.h"
 #include "adstack_runtime.h"
+#include "cpu_range_for.h"
 
 // In llvm 15, host_printf_type will be saved as ptr instead of ptr of FunctionType. Add dummy function to save function
 // type for host_printf_type.
@@ -223,6 +224,9 @@ STRUCT_FIELD_ARRAY(PhysicalCoordinates, val);
 STRUCT_FIELD(RuntimeContext, runtime);
 STRUCT_FIELD(RuntimeContext, result_buffer)
 STRUCT_FIELD(RuntimeContext, cpu_assert_failed)
+STRUCT_FIELD(RuntimeContext, cpu_block_idx)
+STRUCT_FIELD(RuntimeContext, checkpoint_resume_point_ptr)
+STRUCT_FIELD(RuntimeContext, checkpoint_yield_signal_ptr)
 
 #include "quadrants/runtime/llvm/runtime_module/atomic.h"
 
@@ -734,6 +738,10 @@ Ptr LLVMRuntime::allocate_aligned(PreallocatedMemoryChunk &memory_chunk,
   return (Ptr)host_allocator(memory_pool, size, alignment);
 }
 
+bool LLVMRuntime::sized_by_device_memory_config(const PreallocatedMemoryChunk &memory_chunk) const {
+  return &memory_chunk == &runtime_memory_chunk;
+}
+
 // [ONLY ON DEVICE] CUDA/AMDGPU backend
 Ptr LLVMRuntime::allocate_from_reserved_memory(PreallocatedMemoryChunk &memory_chunk,
                                                std::size_t size,
@@ -759,12 +767,21 @@ Ptr LLVMRuntime::allocate_from_reserved_memory(PreallocatedMemoryChunk &memory_c
     // Here unfortunately we have to rely on a native CUDA assert failure to
     // halt the whole grid. Using a quadrants_assert_runtime will not finish the
     // whole kernel execution immediately.
-    __assertfail(
-        "Out of CUDA pre-allocated memory.\n"
-        "Consider using qd.init(device_memory_fraction=0.9) or "
-        "qd.init(device_memory_GB=4) to allocate more"
-        " GPU memory",
-        "Quadrants JIT", 0, "allocate_from_reserved_memory", 1);
+    if (sized_by_device_memory_config(memory_chunk)) {
+      __assertfail(
+          "Out of CUDA pre-allocated memory.\n"
+          "Consider using qd.init(device_memory_fraction=0.9) or "
+          "qd.init(device_memory_GB=4) to allocate more"
+          " GPU memory",
+          "Quadrants JIT", 0, "allocate_from_reserved_memory", 1);
+    } else {
+      __assertfail(
+          "Out of CUDA pre-allocated memory for runtime objects.\n"
+          "This chunk is sized from the runtime's own requirements: "
+          "qd.init(device_memory_fraction=...) and qd.init(device_memory_GB=...) "
+          "size a different chunk and will not help",
+          "Quadrants JIT", 0, "allocate_from_reserved_memory", 1);
+    }
 #endif
   }
   quadrants_assert_runtime(this, success, "Out of pre-allocated memory");
@@ -1015,13 +1032,13 @@ i32 amdgpu_ds_bpermute(i32 byte_index, i32 value) {
 }
 
 // Exchanges a 32-bit value between lanes ``i`` and ``i ^ 32`` in a single instruction. The native instruction
-// ``v_permlane64_b32`` is only available on gfx940+ (CDNA3) and gfx11+ (RDNA3+); ``llvm_context.cpp`` detects the
-// target at JIT time and patches this stub to either the ``llvm.amdgcn.permlane64`` intrinsic (on supported
-// hardware) or an LDS-roundtrip software emulation (on gfx9xx CDNA1/2 and gfx10.x RDNA1/2). The emulation has higher
-// latency (LDS store + ``s_waitcnt`` + LDS load -- roughly tens of cycles per call vs. a few for the native swap),
-// but produces correct cross-half results on RDNA wave64 emulation hardware. Used by
-// ``amdgpu_cross_half_shuffle_i32`` below to repair the cross-half story for ``ds_bpermute``, which is SIMD32-scoped
-// on RDNA.
+// ``v_permlane64_b32`` is RDNA-only -- it exists on gfx11 (RDNA3) and gfx12 (RDNA4), but on NO CDNA part (the AMD
+// assembler rejects it on gfx908/gfx90a/gfx940/gfx941/gfx942/gfx950). ``llvm_context.cpp`` detects the target at JIT
+// time and patches this stub to either the ``llvm.amdgcn.permlane64`` intrinsic (on gfx11+/gfx12 only) or an
+// LDS-roundtrip software emulation (on every CDNA part and on gfx10.x RDNA1/2). The emulation has higher latency (LDS
+// store + ``s_waitcnt`` + LDS load -- roughly tens of cycles per call vs. a few for the native swap), but produces
+// correct cross-half results on wave64 hardware. Used by ``amdgpu_cross_half_shuffle_i32`` below to repair the
+// cross-half story for ``ds_bpermute``, which is SIMD32-scoped on RDNA.
 i32 amdgpu_permlane64(i32 value) {
   __builtin_trap();
   return 0;
@@ -1059,6 +1076,15 @@ i32 amdgpu_lane_id() {
   return amdgpu_mbcnt_hi(-1, amdgpu_mbcnt_lo(-1, 0));
 }
 
+// Lane-index mask applied to ``ds_bpermute``'s target in ``amdgpu_cross_half_shuffle_i32``. ``ds_bpermute``'s reach
+// differs by ISA, so ``llvm_context.cpp`` patches this at JIT load time: 63 on GCN/CDNA (gfx9xx), where
+// ``ds_bpermute`` addresses the full wave64 directly, and 31 on RDNA (gfx10/11/12), where it is SIMD32-scoped and the
+// top half is reached via the ``permlane64`` swap instead. Defaults to 31 so an unpatched build stays correct on
+// RDNA. (runtime.cpp is compiled at -O0 to bitcode, so this stays a real call until the JIT patches + inlines it.)
+i32 amdgpu_ds_bpermute_lane_mask() {
+  return 31;
+}
+
 // Wave64-aware "read ``value`` from lane ``target_lane``" gather for AMDGPU. Shared by every i32 shuffle variant
 // (``shuffle`` / ``shuffle_down`` / ``shuffle_up``); the f32 / i64 / f64 wrappers below decompose into i32 calls and
 // therefore inherit the wave64 fix for free.
@@ -1075,13 +1101,16 @@ i32 amdgpu_lane_id() {
 // so ``ds_bpermute(byte, permlane64(value))`` effectively reads from lanes 32-63. We always compute both reads and
 // select between them branchlessly based on the high bit of ``target_lane``: bit 5 picks the half.
 //
-// Note this is correct on every AMDGPU target we run on. On CDNA (gfx9xx, gfx940/942) ``ds_bpermute`` could in
-// principle directly address all 64 lanes, but because we always mask the byte argument to ``(target_lane & 31) * 4``
-// we never test that path -- on both ISAs the byte index is in [0, 128) and only addresses the bottom half. The
-// ``permlane64`` swap then supplies the top-half data: on hardware with the native instruction (gfx940+ CDNA3 /
-// gfx11+ RDNA3+) this is a single ``v_permlane64_b32``; on older wave64-capable targets (gfx9xx CDNA1/2, gfx10.x
-// RDNA1/2) the JIT patches ``amdgpu_permlane64`` to an LDS roundtrip that produces the same result at higher latency
-// (see the patching logic in ``llvm_context.cpp``).
+// The lane-index mask (``amdgpu_ds_bpermute_lane_mask()``) and ``permlane64`` are both JIT-patched per architecture
+// (see ``llvm_context.cpp``), because ``ds_bpermute``'s reach differs by ISA:
+//   * GCN / CDNA (gfx9xx, incl. gfx940/gfx942/gfx950): ``ds_bpermute`` addresses the full wave64, so the mask is 63
+//     and a single ``ds_bpermute((target_lane & 63) * 4, value)`` already returns lane ``target_lane`` for the whole
+//     wave. ``permlane64`` is patched to the identity there -- ``v_permlane64_b32`` does not exist on CDNA and
+//     emitting it crashes the backend (genesis-world #2962) -- so ``from_other_half`` equals ``from_self_half`` and
+//     the select below is a true no-op.
+//   * RDNA (gfx10/11/12): ``ds_bpermute`` is SIMD32-scoped, so the mask is 31 and ``ds_bpermute`` only reaches the
+//     issuing lane's own 32-lane half. The top half is supplied by the ``permlane64`` swap -- a single
+//     ``v_permlane64_b32`` on gfx11/gfx12, or an LDS-roundtrip emulation on gfx10.x.
 //
 // OOR target lanes (``target_lane < 0`` or ``target_lane >= 64``): we mask to ``target_lane & 31`` for the byte and
 // ``& 32`` for the half-bit. The behaviour for OOR targets is implementation-defined on every backend (CUDA's
@@ -1093,11 +1122,12 @@ i32 amdgpu_cross_half_shuffle_i32(i32 target_lane, i32 value) {
   // wave -- lifting it above the select keeps the AMDGPU backend happy and lets it issue exactly one
   // ``v_permlane64_b32``. ``ds_bpermute`` on RDNA wave64 is SIMD32-scoped with a 5-bit address (top half of the wave
   // is unreachable directly), so ``from_self_half`` handles the same-SIMD case and ``from_other_half`` handles the
-  // cross-SIMD case via the ``swapped`` payload. On CDNA the wave is one SIMD64 so both reads return the same value
-  // and the select is a no-op; we don't try to optimize that out because the dead read is cheap (LLVM CSE may fold
-  // it anyway).
+  // cross-SIMD case via the ``swapped`` payload. On CDNA the lane mask is 63 (``ds_bpermute`` is wave64-wide) and
+  // ``permlane64`` is patched to the identity, so ``swapped == value``, both reads return lane ``target_lane``, and
+  // the select is a true no-op; we don't optimize that out because the dead read is cheap (LLVM CSE may fold it).
+  i32 self_lane = amdgpu_lane_id();
   i32 swapped = amdgpu_permlane64(value);
-  i32 byte = (target_lane & 31) * 4;
+  i32 byte = (target_lane & amdgpu_ds_bpermute_lane_mask()) * 4;
   // ``llvm.amdgcn.ds.bpermute`` is the real hardware ``ds_bpermute_b32`` -- but if LLVM's uniformity analysis decides
   // ``byte`` is uniform across the wave (e.g. ``target_lane`` is a compile-time constant), it sometimes lowers to a
   // ``v_readlane_b32``-style instruction that addresses lanes 0..31 wave-globally rather than SIMD32-locally. On
@@ -1110,7 +1140,7 @@ i32 amdgpu_cross_half_shuffle_i32(i32 target_lane, i32 value) {
   // makes the constant-target case behave the same way).
   //
   // The ``+v`` constraint names the AMDGPU VGPR register class. clang accepts ``v`` as a constraint name on x86
-  // (where it historically means an SSE register) and on amdgcn, but rejects it outright on AArch64 -- the asm is
+  // (where it means an SSE register) and on amdgcn, but rejects it outright on AArch64 -- the asm is
   // parsed against the host's clang target even though the resulting bitcode is later re-targeted to amdgcn at JIT
   // time (see ``llvm_context.cpp`` setting the module triple to ``amdgcn-amd-amdhsa``). The constraint string is
   // preserved verbatim into the IR, so any host whose front-end accepts ``v`` produces bitcode that the AMDGPU
@@ -1121,16 +1151,9 @@ i32 amdgpu_cross_half_shuffle_i32(i32 target_lane, i32 value) {
 #if defined(ARCH_amdgpu) && (defined(__x86_64__) || defined(__i386__) || defined(__amdgcn__))
   __asm__ volatile("" : "+v"(byte));
 #endif
-  // ``byte`` masks the lane index to 5 bits, so ``from_self_half`` always reads the low SIMD32
-  // (lanes 0..31) and ``from_other_half`` (via the ``permlane64`` swap) always reads the high SIMD32
-  // (lanes 32..63) -- regardless of which half the executing lane sits in. The correct payload is
-  // therefore selected purely by which half the *target* lane lives in (``target_lane & 32``); it must
-  // not depend on the executing lane. The previous ``(target_lane ^ self_lane) & 32`` was wrong for
-  // top-half lanes: for a same-half target it wrongly picked the other-half read, so e.g.
-  // ``shuffle_up`` on lanes 32..63 returned lane ``target_lane - 32`` instead of ``target_lane``.
   i32 from_self_half = amdgpu_ds_bpermute(byte, value);
   i32 from_other_half = amdgpu_ds_bpermute(byte, swapped);
-  return (target_lane & 32) ? from_other_half : from_self_half;
+  return ((target_lane ^ self_lane) & 32) ? from_other_half : from_self_half;
 }
 
 i32 amdgpu_shuffle_i32(i32 index, i32 value) {
@@ -1615,11 +1638,11 @@ struct cpu_block_task_helper_context {
 // TODO: TLS should be directly passed to the scheduler, so that it lives
 // with the threads (instead of blocks).
 
-void cpu_struct_for_block_helper(void *ctx_, int thread_id, int i) {
+void cpu_struct_for_block_helper(void *ctx_, int thread_id, int task_id) {
   auto ctx = (cpu_block_task_helper_context *)(ctx_);
-  int element_id = i / ctx->element_split;
+  int element_id = task_id / ctx->element_split;
   int part_size = ctx->element_size / ctx->element_split;
-  int part_id = i % ctx->element_split;
+  int part_id = task_id % ctx->element_split;
   auto &e = ctx->list->get<Element>(element_id);
   int lower = e.loop_bounds[0] + part_id * part_size;
   int upper = e.loop_bounds[0] + (part_id + 1) * part_size;
@@ -1631,6 +1654,7 @@ void cpu_struct_for_block_helper(void *ctx_, int thread_id, int i) {
 
   RuntimeContext this_thread_context = *ctx->context;
   this_thread_context.cpu_thread_id = thread_id;
+  this_thread_context.cpu_block_idx = task_id;
   this_thread_context.cpu_assert_failed = 0;
 
   if (lower < upper) {
@@ -1684,65 +1708,75 @@ void parallel_struct_for(RuntimeContext *context,
 #endif
 }
 
+i32 get_cpu_per_worker_block_start_index(i32 original_range_begin,
+                                         i32 original_range_end,
+                                         i32 num_blocks,
+                                         i32 min_block_size,
+                                         i32 boundary_index) {
+  return quadrants::lang::get_cpu_per_worker_block_start_index(original_range_begin, original_range_end, num_blocks,
+                                                               min_block_size, boundary_index);
+}
+
 using range_for_xlogue = void (*)(RuntimeContext *, /*TLS*/ char *tls_base);
 using mesh_for_xlogue = void (*)(RuntimeContext *,
                                  /*TLS*/ char *tls_base,
                                  uint32_t patch_idx);
 
-struct range_task_helper_context {
+struct RangeTaskContext {
   RuntimeContext *context;
   range_for_xlogue prologue{nullptr};
-  RangeForTaskFunc *body{nullptr};
+  RangeForBodyFn *body{nullptr};
   range_for_xlogue epilogue{nullptr};
   std::size_t tls_size{1};
   int begin;
   int end;
-  int block_size;
+  int body_loop_size;
   int step;
 };
 
 void cpu_parallel_range_for_task(void *range_context, int thread_id, int task_id) {
-  auto ctx = *(range_task_helper_context *)range_context;
+  auto range_task_context = *(RangeTaskContext *)range_context;
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wvla-cxx-extension"
-  alignas(8) char tls_buffer[ctx.tls_size];
+  alignas(8) char tls_buffer[range_task_context.tls_size];
 #pragma clang diagnostic pop
   auto tls_ptr = &tls_buffer[0];
 
-  RuntimeContext this_thread_context = *ctx.context;
+  RuntimeContext this_thread_context = *range_task_context.context;
   this_thread_context.cpu_thread_id = thread_id;
+  this_thread_context.cpu_block_idx = task_id;
   this_thread_context.cpu_assert_failed = 0;
 
-  if (ctx.prologue) {
-    ctx.prologue(&this_thread_context, tls_ptr);
+  if (range_task_context.prologue) {
+    range_task_context.prologue(&this_thread_context, tls_ptr);
     if (this_thread_context.cpu_assert_failed) {
-      ctx.context->cpu_assert_failed = 1;
+      range_task_context.context->cpu_assert_failed = 1;
       return;
     }
   }
 
-  if (ctx.step == 1) {
-    int block_start = ctx.begin + task_id * ctx.block_size;
-    int block_end = std::min(block_start + ctx.block_size, ctx.end);
-    for (int i = block_start; i < block_end; i++) {
-      ctx.body(&this_thread_context, tls_ptr, i);
+  if (range_task_context.step == 1) {
+    int body_loop_start = range_task_context.begin + task_id * range_task_context.body_loop_size;
+    int body_loop_end = std::min(body_loop_start + range_task_context.body_loop_size, range_task_context.end);
+    for (int body_loop_idx = body_loop_start; body_loop_idx < body_loop_end; body_loop_idx++) {
+      range_task_context.body(&this_thread_context, tls_ptr, body_loop_idx);
       if (this_thread_context.cpu_assert_failed)
         break;
     }
-  } else if (ctx.step == -1) {
-    int block_start = ctx.end - task_id * ctx.block_size;
-    int block_end = std::max(ctx.begin, block_start - ctx.block_size);
-    for (int i = block_start - 1; i >= block_end; i--) {
-      ctx.body(&this_thread_context, tls_ptr, i);
+  } else if (range_task_context.step == -1) {
+    int body_loop_start = range_task_context.end - task_id * range_task_context.body_loop_size;
+    int body_loop_end = std::max(range_task_context.begin, body_loop_start - range_task_context.body_loop_size);
+    for (int body_loop_idx = body_loop_start - 1; body_loop_idx >= body_loop_end; body_loop_idx--) {
+      range_task_context.body(&this_thread_context, tls_ptr, body_loop_idx);
       if (this_thread_context.cpu_assert_failed)
         break;
     }
   }
 
-  if (!this_thread_context.cpu_assert_failed && ctx.epilogue)
-    ctx.epilogue(&this_thread_context, tls_ptr);
+  if (!this_thread_context.cpu_assert_failed && range_task_context.epilogue)
+    range_task_context.epilogue(&this_thread_context, tls_ptr);
   if (this_thread_context.cpu_assert_failed)
-    ctx.context->cpu_assert_failed = 1;
+    range_task_context.context->cpu_assert_failed = 1;
 }
 
 void cpu_parallel_range_for(RuntimeContext *context,
@@ -1752,33 +1786,33 @@ void cpu_parallel_range_for(RuntimeContext *context,
                             int step,
                             int block_dim,
                             range_for_xlogue prologue,
-                            RangeForTaskFunc *body,
+                            RangeForBodyFn *body,
                             range_for_xlogue epilogue,
                             std::size_t tls_size) {
-  range_task_helper_context ctx;
-  ctx.context = context;
-  ctx.prologue = prologue;
-  ctx.tls_size = tls_size;
-  ctx.body = body;
-  ctx.epilogue = epilogue;
-  ctx.begin = begin;
-  ctx.end = end;
-  ctx.step = step;
+  RangeTaskContext range_task_context;
+  range_task_context.context = context;
+  range_task_context.prologue = prologue;
+  range_task_context.tls_size = tls_size;
+  range_task_context.body = body;
+  range_task_context.epilogue = epilogue;
+  range_task_context.begin = begin;
+  range_task_context.end = end;
+  range_task_context.step = step;
   if (step != 1 && step != -1) {
     quadrants_printf(context->runtime, "step must not be %d\n", step);
     exit(-1);
   }
-  ctx.block_size = block_dim;
+  range_task_context.body_loop_size = block_dim;
   auto runtime = context->runtime;
-  runtime->parallel_for(runtime->thread_pool, (end - begin + block_dim - 1) / block_dim, num_threads, &ctx,
-                        cpu_parallel_range_for_task);
+  runtime->parallel_for(runtime->thread_pool, (end - begin + block_dim - 1) / block_dim, num_threads,
+                        &range_task_context, cpu_parallel_range_for_task);
 }
 
 void gpu_parallel_range_for(RuntimeContext *context,
                             int begin,
                             int end,
                             range_for_xlogue prologue,
-                            RangeForTaskFunc *func,
+                            RangeForBodyFn *func,
                             range_for_xlogue epilogue,
                             const std::size_t tls_size) {
   int idx = thread_idx() + block_dim() * block_idx() + begin;
@@ -1806,7 +1840,7 @@ void gpu_parallel_range_for(RuntimeContext *context,
 struct mesh_task_helper_context {
   RuntimeContext *context;
   mesh_for_xlogue prologue{nullptr};
-  RangeForTaskFunc *body{nullptr};
+  RangeForBodyFn *body{nullptr};
   mesh_for_xlogue epilogue{nullptr};
   std::size_t tls_size{1};
   int num_patches;
@@ -1823,6 +1857,7 @@ void cpu_parallel_mesh_for_task(void *range_context, int thread_id, int task_id)
 
   RuntimeContext this_thread_context = *ctx.context;
   this_thread_context.cpu_thread_id = thread_id;
+  this_thread_context.cpu_block_idx = task_id;
   this_thread_context.cpu_assert_failed = 0;
 
   int block_start = task_id * ctx.block_size;
@@ -1852,7 +1887,7 @@ void cpu_parallel_mesh_for(RuntimeContext *context,
                            int num_patches,
                            int block_dim,
                            mesh_for_xlogue prologue,
-                           RangeForTaskFunc *body,
+                           RangeForBodyFn *body,
                            mesh_for_xlogue epilogue,
                            std::size_t tls_size) {
   mesh_task_helper_context ctx;
@@ -1898,6 +1933,14 @@ void gpu_parallel_mesh_for(RuntimeContext *context,
     if (epilogue)
       epilogue(context, tls_ptr, idx);
   }
+}
+
+i32 global_block_idx(RuntimeContext *context) {
+#if ARCH_cuda || ARCH_amdgpu
+  return block_idx();
+#else
+  return context->cpu_block_idx;
+#endif
 }
 
 i32 linear_thread_idx(RuntimeContext *context) {

@@ -12,6 +12,7 @@
 #include "quadrants/codegen/spirv/snode_struct_compiler.h"
 #include "quadrants/codegen/spirv/kernel_utils.h"
 #include "quadrants/codegen/spirv/spirv_ir_builder.h"
+#include "quadrants/codegen/spirv/spirv_operations.h"
 #include "quadrants/codegen/spirv/kernel_utils.h"
 
 #include <spirv-tools/libspirv.hpp>
@@ -168,6 +169,7 @@ class TaskCodegen : public IRVisitor {
   spirv::Value ret_buffer_value_;
 
   std::shared_ptr<spirv::IRBuilder> ir_;  // spirv binary code builder
+  std::unique_ptr<spirv::SpirvOperations> ops_;
   std::unordered_map<std::pair<BufferInfo, int>, spirv::Value, BufferInfoTypeTupleHasher> buffer_value_map_;
   std::unordered_map<std::pair<BufferInfo, int>, uint32_t, BufferInfoTypeTupleHasher> buffer_binding_map_;
   // All existing type views of each underlying storage buffer, in creation order. When a second or later view is minted
@@ -250,7 +252,7 @@ class TaskCodegen : public IRVisitor {
   // `size_expr` trees and publishes them into the `AdStackMetadata` buffer; the shader reads the
   // per-dispatch values from the metadata buffer rather than using these immediates directly. The
   // compile-time values are still mirrored into `task_attribs.ad_stack.*` so the offline-cache-hit
-  // path with no symbolic bound captured reproduces the pre-PR shader layout.
+  // path with no symbolic bound captured uses the compile-time shader layout.
   uint32_t ad_stack_heap_per_thread_stride_float_{0};
   uint32_t ad_stack_heap_per_thread_stride_int_{0};
   // Total number of `AdStackAllocaStmt` the body will visit, pre-computed by the same scan that builds the heap
@@ -353,10 +355,13 @@ class TaskCodegen : public IRVisitor {
   spirv::Value get_ad_stack_heap_buffer_int();
   spirv::Value get_ad_stack_heap_thread_base_int();
   spirv::Value ad_stack_heap_int_ptr(spirv::Value slot_offset, spirv::Value count);
-  // Metadata buffer accessors. Each emits one OpLoad on first use and caches the SSA id.
+  // Metadata buffer accessors. Each emits one OpLoad on first use and caches the SSA id. The two stride loads are
+  // seeded by `preload_ad_stack_metadata_strides` at the task entry block so the cached ids dominate every heap
+  // access site; see the comment on that function for why lazy first emission at a heap access site is unsound.
   spirv::Value get_ad_stack_metadata_buffer();
   spirv::Value get_ad_stack_metadata_stride_float();
   spirv::Value get_ad_stack_metadata_stride_int();
+  void preload_ad_stack_metadata_strides();
   void ensure_ad_stack_metadata_loaded(AdStackSpirv &info);
   // Lazy-allocate the per-task overflow-signal accumulator at the function entry block. See the member
   // doc on `any_overflow_signal_var_` for the design rationale.

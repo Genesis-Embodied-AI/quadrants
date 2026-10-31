@@ -433,15 +433,11 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
 
       patch_intrinsic("cuda_match_any_sync_i32", Intrinsic::nvvm_match_any_sync_i32);
 
-      // The three intrinsics below replace the stubs in runtime.cpp that
-      // previously contained PTX inline asm with AArch64-specific register
-      // constraints. See the comment in runtime.cpp for the full story.
-      // The LLVM 10 bugs that originally prevented using these intrinsics
-      // (commented out before this change) are long fixed in LLVM 22.
+      // Replace the runtime.cpp stubs with intrinsics to avoid host-specific inline-assembly constraints.
       patch_intrinsic("cuda_active_mask", Intrinsic::nvvm_activemask);
 
       // nvvm_match_all_sync_i32p returns {i32, i1}; extract only the i32.
-      // (The predicate is discarded — same as the old inline asm did.)
+      // Discard the predicate.
       {
         auto func = module->getFunction("cuda_match_all_sync_i32");
         if (func) {
@@ -552,43 +548,66 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       }
       patch_intrinsic("amdgpu_clock_i64", llvm::Intrinsic::amdgcn_s_memtime);
       patch_intrinsic("amdgpu_ds_bpermute", llvm::Intrinsic::amdgcn_ds_bpermute);
-      // ``llvm.amdgcn.permlane64`` exchanges a 32-bit value between lanes ``i`` and ``i ^ 32`` in a single instruction.
-      // We use it to extend the SIMD32-scoped ``ds_bpermute`` (every shuffle op lowers to that) into a wave64-aware
-      // cross-half shuffle on RDNA: ``ds_bpermute`` reads within the lane's own 32-lane SIMD cluster, ``permlane64``
-      // brings the other SIMD's value to this lane, and we select between the two based on which half the target lane
-      // sits in. See ``amdgpu_cross_half_shuffle_i32`` in runtime.cpp. The instruction is gfx940+ (CDNA3) and gfx11+
-      // (RDNA3+) only -- on earlier wave64-capable targets (gfx9xx CDNA1/2, gfx10.x RDNA1/2) the AMDGPU LLVM backend
-      // hits "Cannot select" while lowering the intrinsic, so we have to provide a software emulation.
+      // The wave64 cross-half subgroup shuffle (``amdgpu_cross_half_shuffle_i32`` in runtime.cpp) is built from
+      // ``ds_bpermute`` plus, on some targets, ``permlane64``. How those behave -- and therefore how we patch them --
+      // depends on the architecture family:
       //
-      // The emulation is a wave-local LDS roundtrip: each lane writes its ``value`` to ``lds[wave_base + lane]``,
-      // a wavefront-scope acquire-release fence lowers to ``s_waitcnt lgkmcnt(0)`` (drains outstanding LDS writes),
-      // and each lane then reads ``lds[wave_base + (lane ^ 32)]``. On RDNA wave64-emulation the two SIMD32 halves of
-      // the wave issue store / load in two passes apiece, but the waitcnt between them guarantees both halves' stores
-      // are committed to LDS before either half's loads issue, so the cross-half routing is correct.  ``wave_base``
-      // is ``(workitem.id.x >> 6) << 6``, scoping the LDS slot to a single wave so multi-wave workgroups don't
-      // collide.  The LDS buffer is a 1024-entry per-workgroup global (4 KiB) -- enough for the AMDGPU 1024-thread
-      // workgroup max at wave64.  The buffer is only materialised on this code path, so kernels on permlane64-capable
-      // hardware (the common case) pay zero LDS for cross-half shuffles.
+      //   * GCN / CDNA (gfx9xx: gfx900/906 Vega, gfx908/gfx90a CDNA1/2, gfx940/gfx941/gfx942 CDNA3, gfx950 CDNA4):
+      //     ``ds_bpermute`` addresses the full wave64 directly, so the cross-half shuffle is a single wide
+      //     ``ds_bpermute`` (lane mask 63) and ``permlane64`` is unnecessary. Critically, ``v_permlane64_b32`` does
+      //     not exist on CDNA -- emitting ``llvm.amdgcn.permlane64`` makes the backend select the ``V_PERMLANE64_B32``
+      //     pseudo, which has no valid MC opcode for CDNA, and then crash with a bare SIGSEGV inside
+      //     ``SIInstrInfo::getInstSizeInBytes`` during branch relaxation (genesis-world #2962). So on CDNA we patch
+      //     ``amdgpu_permlane64`` to the identity, which neutralises the helper's (RDNA-shaped) cross-SIMD branch
+      //     without ever emitting the intrinsic.
+      //   * RDNA3/4 (gfx11 / gfx12): ``ds_bpermute`` is SIMD32-scoped (lane mask 31), so the top half is reached via
+      //     the native single-instruction ``v_permlane64_b32``.
+      //   * RDNA1/2 (gfx10.x): ``ds_bpermute`` is SIMD32-scoped (lane mask 31), but ``v_permlane64_b32`` does not
+      //     exist yet, so we emulate the lane ``i`` <-> ``i ^ 32`` swap with an LDS roundtrip (below).
       //
-      // The intrinsic is overloaded on its element type (signature ``T -> T`` for any 32-bit-or-smaller ``T``), so we
-      // have to pass the explicit ``i32`` type alongside the ID -- otherwise ``CreateIntrinsic`` segfaults inside
-      // ``getDeclaration()`` while resolving the mangled name.
+      // The LDS emulation writes each lane's ``value`` to ``lds[wave_base + lane]``, issues a wavefront-scope
+      // acquire-release fence (lowers to ``s_waitcnt lgkmcnt(0)``: drains outstanding LDS writes without the
+      // cross-wave ``s_barrier`` a workgroup-scope fence would emit, which would deadlock if only some waves reach
+      // this point), then reads back ``lds[wave_base + (lane ^ 32)]``. ``wave_base`` is ``(workitem.id.x >> 6) << 6``,
+      // scoping the slot to a single wave so multi-wave workgroups don't collide. The buffer is a 1024-entry
+      // per-workgroup global (4 KiB, the AMDGPU 1024-thread wave64 max), materialised only on this path, so kernels
+      // on the other two paths pay zero LDS for cross-half shuffles.
+      //
+      // ``patch_intrinsic`` for permlane64 passes the explicit ``i32`` type alongside the ID because the intrinsic is
+      // overloaded on its element type (signature ``T -> T`` for any 32-bit-or-smaller ``T``); otherwise
+      // ``CreateIntrinsic`` segfaults inside ``getDeclaration()`` while resolving the mangled name.
       auto mcpu_str = AMDGPUContext::get_instance().get_mcpu();
-      bool has_permlane64 = (mcpu_str == "gfx940" || mcpu_str == "gfx941" || mcpu_str == "gfx942" ||
-                             mcpu_str.substr(0, 5) == "gfx11" || mcpu_str.substr(0, 5) == "gfx12");
-      // Escape hatch for validating the LDS software emulation on hardware that natively supports
-      // ``v_permlane64_b32``: setting ``QD_AMDGPU_FORCE_PERMLANE64_FALLBACK=1`` forces the JIT to take the LDS path
-      // even on gfx11+ / gfx940+, so we can exercise the fallback on a working AMD box (gfx1100 / gfx942) without
-      // needing a gfx10.x runner.  Has no effect on non-AMDGPU backends.
-      if (const char *force_fallback = std::getenv("QD_AMDGPU_FORCE_PERMLANE64_FALLBACK")) {
-        if (force_fallback[0] == '1') {
-          has_permlane64 = false;
-        }
+      bool is_gcn_cdna = (mcpu_str.substr(0, 4) == "gfx9");
+      bool has_native_permlane64 = (mcpu_str.substr(0, 5) == "gfx11" || mcpu_str.substr(0, 5) == "gfx12");
+
+      // Patch the ds_bpermute lane mask used by ``amdgpu_cross_half_shuffle_i32``: 63 where ``ds_bpermute`` is
+      // wave64-wide (GCN/CDNA), 31 where it is SIMD32-scoped (RDNA, paired with the permlane64 swap above).
+      if (auto mask_func = module->getFunction("amdgpu_ds_bpermute_lane_mask")) {
+        mask_func->deleteBody();
+        auto bb = llvm::BasicBlock::Create(*ctx, "entry", mask_func);
+        IRBuilder<> builder(*ctx);
+        builder.SetInsertPoint(bb);
+        builder.CreateRet(llvm::ConstantInt::get(llvm::Type::getInt32Ty(*ctx), is_gcn_cdna ? 63 : 31));
+        QuadrantsLLVMContext::mark_inline(mask_func);
       }
-      if (has_permlane64) {
+
+      if (has_native_permlane64) {
         patch_intrinsic("amdgpu_permlane64", llvm::Intrinsic::amdgcn_permlane64, true, {llvm::Type::getInt32Ty(*ctx)});
+      } else if (is_gcn_cdna) {
+        // CDNA: the wide ds_bpermute already reaches all 64 lanes, so permlane64 is unnecessary -- and emitting it
+        // crashes the backend. Patch it to the identity so the helper's cross-SIMD branch returns the same value as
+        // its same-SIMD branch, making the per-lane select a true no-op.
+        if (auto permlane64_func = module->getFunction("amdgpu_permlane64")) {
+          permlane64_func->deleteBody();
+          auto bb = llvm::BasicBlock::Create(*ctx, "entry", permlane64_func);
+          IRBuilder<> builder(*ctx);
+          builder.SetInsertPoint(bb);
+          builder.CreateRet(&*permlane64_func->arg_begin());
+          QuadrantsLLVMContext::mark_inline(permlane64_func);
+        }
       } else if (auto permlane64_func = module->getFunction("amdgpu_permlane64")) {
-        // LDS-based software emulation.  Layout: ``[1024 x i32] addrspace(3)`` indexed by ``wave_base + lane``.
+        // gfx10.x RDNA1/2: LDS-based software emulation. Layout: ``[1024 x i32] addrspace(3)`` indexed by ``wave_base +
+        // lane``.
         auto i32_ty = llvm::Type::getInt32Ty(*ctx);
         auto buf_ty = llvm::ArrayType::get(i32_ty, 1024);
         auto lds_global = llvm::cast_or_null<llvm::GlobalVariable>(module->getNamedValue("__amdgpu_permlane64_lds"));
@@ -755,9 +774,9 @@ void QuadrantsLLVMContext::link_module_with_cuda_libdevice(std::unique_ptr<llvm:
 
   // `slim_libdevice.10.bc` ships without an explicit `target datalayout` line (only the `nvptx64-nvidia-gpulibs`
   // triple), so its `getDataLayout()` returns the empty LLVM-default DL where `i64` ABI alignment is 4 bytes.
-  // Previously we copied that empty DL straight into the kernel module, which made every CreateStore / CreateLoad
-  // of i64 emit `align 4` -> the NVPTX backend then split each `align 4` i64 store into two `st.b32` halves, and
-  // ptxas in turn mis-combined those halves into a single `ST.E.64` that dropped the low 32 bits of values produced
+  // Copying that empty DL into the kernel module makes every CreateStore / CreateLoad of i64 emit `align 4` -> the
+  // NVPTX backend then splits each `align 4` i64 store into two `st.b32` halves, and ptxas in turn mis-combines those
+  // halves into a single `ST.E.64` that drops the low 32 bits of values produced
   // by f64 / i64 arithmetic (single 64-bit virtual reg holding the full bit pattern). End result: silent precision
   // loss for `bit_cast(scan_result_f64, u64)` and friends.
   //
@@ -803,8 +822,7 @@ void QuadrantsLLVMContext::link_module_with_amdgpu_libdevice(std::unique_ptr<llv
   // Force wave64 on every AMDGPU target (CDNA gfx9xx are wave64 by default; RDNA gfx10/11/12 default to wave32 but also
   // support wave64). Linking the wavefrontsize64=on libdevice variant aligns the ROCm device libraries with the wave64
   // codegen forced via target-features in llvm_context_pass.h::AMDGPUConvertAllocaInstAddressSpacePass and
-  // jit_amdgpu.cpp's TargetMachine features. See `hp/always-wave64`: testing both wave modes was costly, so we
-  // standardize on wave64.
+  // jit_amdgpu.cpp's TargetMachine features.
   std::string libdevice_files[] = {"ocml.bc",
                                    "oclc_wavefrontsize64_on.bc",
                                    "ockl.bc",

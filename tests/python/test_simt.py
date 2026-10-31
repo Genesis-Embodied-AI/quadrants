@@ -8,7 +8,7 @@ from pytest import approx
 import quadrants as qd
 from quadrants.lang.simt import block, subgroup
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 def _skip_if_f64_unsupported(dtype):
@@ -663,8 +663,8 @@ def test_block_mem_fence_divergent_control_flow():
 
 
 # NOTE: a producer-consumer memory-ordering test for `block.mem_fence()` (i.e. thread 0 publishes data + flag with a
-# fence between, another thread spin-waits on flag then reads data) was attempted in this PR and removed. Every variant
-# deadlocks on CUDA before pytest's process-level timeout fires:
+# fence between, another thread spin-waits on flag then reads data) can deadlock on CUDA before pytest's process-level
+# timeout fires:
 #
 # 1. Plain shared-memory load `while flag[0] == 0: pass` -- LLVM hoists the load out of the loop because there is no
 #    `volatile` qualifier and no memory-clobbering call inside the loop body. The consumer never re-reads the flag.
@@ -685,12 +685,11 @@ def test_block_mem_fence_divergent_control_flow():
 #
 # The fundamental gap is that Quadrants' Python API does not currently expose a `volatile`-flavored shared-array
 # primitive, which is the standard tool for writing producer-consumer ordering tests in CUDA / Vulkan / Metal. Adding
-# such a primitive (e.g. `block.SharedArray(..., volatile=True)`) is a Quadrants frontend feature outside this PR.
+# such a primitive (e.g. `block.SharedArray(..., volatile=True)`) requires frontend support.
 #
 # What we do test, in lieu of a full producer-consumer ordering test:
 #   - `test_block_mem_fence_smoke`: end-to-end compile + run on every backend.
-#   - `test_block_mem_fence_divergent_control_flow`: the fence is a fence, not a thread-converging barrier. This
-#     catches the regression we actually fixed in this PR.
+#   - `test_block_mem_fence_divergent_control_flow`: the fence is a fence, not a thread-converging barrier.
 #
 # The convergence test exercises every backend's mem_fence through divergent control flow, which is the hard
 # correctness property and the practical motivation for renaming `mem_sync -> mem_fence`. Pure memory-ordering
@@ -717,7 +716,7 @@ def test_block_mem_sync_deprecated_alias():
 
 
 # Portable test for `block.global_thread_idx()`. Runs on every supported GPU backend; in particular, verifies the
-# SPIR-V dispatch path that was previously unreachable due to a Python-side dispatch bug.
+# SPIR-V dispatch path.
 @test_utils.test(arch=qd.gpu)
 def test_block_global_thread_idx_portable():
     N = 64
@@ -757,8 +756,8 @@ def test_block_thread_idx_portable():
 # Multi-block coverage for `block.thread_idx()`: with block_dim=8 and loop total 32, the kernel runs across 4 blocks
 # and the in-block index must reset to 0 at each block boundary. Without this case, a regression that aliased
 # `block.thread_idx()` to `block.global_thread_idx()` (or vice versa) would slip past the single-block portable tests.
-# CUDA / AMDGPU lower this to the `tid.x` SREG; Vulkan / Metal lower it to `gl_LocalInvocationID.x` (which is what
-# required the `OpEntryPoint` interface fix earlier in this PR).
+# CUDA / AMDGPU lower this to the `tid.x` SREG; Vulkan / Metal lower it to `gl_LocalInvocationID.x` (which must be
+# included in the `OpEntryPoint` interface).
 @test_utils.test(arch=qd.gpu)
 def test_block_thread_idx_multi_block():
     N = 32
@@ -3845,8 +3844,12 @@ def test_subgroup_exclusive_add_tiled_log2_size_6():
 # to the ``permlane64``-based cross-half helper a lane in the bottom half could not read the top half (and vice
 # versa).  All five tests are gated to ``log2_group_size() == 6`` so they only assert anything on real wave64
 # hardware -- CUDA and SPIR-V backends with wave32 skip the absolute-correctness check (the cross-half partner is
-# out of range there, which is implementation-defined).  CDNA (gfx9xx, MI300X) already had a wave64-wide
-# ``ds_bpermute`` so its behaviour is unchanged by the fix; the new helper is observably a no-op on that path.
+# out of range there, which is implementation-defined).  Both CDNA and RDNA wave64 run these, via different lowerings
+# of ``amdgpu_cross_half_shuffle_i32``: on CDNA (gfx9xx, incl. gfx942 MI300X) ``ds_bpermute`` is wave64-wide, so the
+# cross-half read is a single wide ``ds_bpermute`` (lane mask 63) and ``permlane64`` is unused; on RDNA ``ds_bpermute``
+# is SIMD32-scoped (lane mask 31) and the top half comes from ``amdgpu_permlane64`` -- the native ``v_permlane64_b32``
+# on gfx11+/gfx12, or an LDS-roundtrip emulation on gfx10.x.  ``v_permlane64_b32`` does not exist on CDNA and emitting
+# it there crashes the AMDGPU backend (genesis-world issue #2962), so the JIT must never emit it on gfx9xx.
 # --------------------------------------------------------------------------------------------------------------------
 
 

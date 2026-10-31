@@ -5,6 +5,8 @@
 
 namespace quadrants::lang {
 
+enum class CPUWorkScheduling { PER_WORKER, FIXED_SIZE };
+
 struct CompileConfig {
   Arch arch;
   bool debug;
@@ -19,21 +21,19 @@ struct CompileConfig {
   bool print_preprocessed_ir;
   bool print_ir;
   bool print_accessor_ir;
-  bool print_ir_dbg_info;
+  bool print_ir_dbg_info{false};
   bool serial_schedule;
-  bool simplify_before_lower_access;
-  bool lower_access;
-  bool simplify_after_lower_access;
   bool move_loop_invariant_outside_if;
+  // Load-bearing optimization on contact-heavy solves (e.g. duck_in_box). The pass caches a loop-invariant global
+  // load into a local, which is only sound when a global's read and write pointers are the same statement. Under
+  // per-task CSE that unification is restored by merge_global_ptrs (pre-offload, fields) and cse_offloaded_tasks
+  // (post-offload, ndarrays) -- see compile_to_offloads.cpp -- so this pass itself is unchanged from upstream.
   bool cache_loop_invariant_global_vars{true};
   bool demote_dense_struct_fors;
   bool advanced_optimization;
   bool constant_folding;
-  bool use_llvm;
-  bool verbose_kernel_launches;
   bool kernel_profiler;
   bool timeline{false};
-  bool verbose;
   bool fast_math;
   bool flatten_if;
   bool make_thread_local;
@@ -42,15 +42,12 @@ struct CompileConfig {
   bool real_matrix_scalarize;
   bool force_scalarize_matrix;
   bool half2_vectorization;
-  bool make_cpu_multithreading_loop;
+  CPUWorkScheduling cpu_work_scheduling;
   DataType default_fp;
   DataType default_ip;
   DataType default_up;
-  std::string extra_flags;
-  int default_cpu_block_dim;
-  bool cpu_block_dim_adaptive;
+  int cpu_fixed_block_dim;
   int default_gpu_block_dim;
-  int gpu_max_reg;
   bool ad_stack_experimental_enabled{false};
   int ad_stack_size{0};  // 0 = adaptive
   // Conservative-heap threshold (in bytes) below which a kernel keeps the eager `linear_thread_idx * stride` adstack
@@ -65,6 +62,7 @@ struct CompileConfig {
   int saturating_grid_dim;
   int max_block_dim;
   int cpu_max_num_threads;
+  int cpu_per_worker_min_block_dim;
   int random_seed;
 
   // Debugging options:
@@ -101,7 +99,6 @@ struct CompileConfig {
   double offline_cache_cleaning_factor{0.25};              // [0.f, 1.f]
 
   int num_compile_threads{4};
-  std::string vk_api_version;
 
   size_t cuda_stack_limit{0};
 

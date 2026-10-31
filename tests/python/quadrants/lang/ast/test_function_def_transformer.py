@@ -4,12 +4,11 @@ from typing import Any
 import pytest
 
 import quadrants as qd
-import quadrants._test_tools.dataclass_test_tools as dataclass_test_tools
 from quadrants.lang.ast.ast_transformers.function_def_transformer import (
     FunctionDefTransformer,
 )
 
-from tests import test_utils
+from tests.helpers import dataclass_helpers, test_utils
 
 
 @dataclasses.dataclass
@@ -81,12 +80,15 @@ def test_process_func_arg(argument_name: str, argument_type: Any, expected_varia
     class MockContext:
         def __init__(self) -> None:
             self.variables: dict[str, Any] = {}
+            # Mirror the real ``ASTTransformerFuncContext.fn_param_names`` so ``_transform_func_arg`` can record bare
+            # param names without crashing.
+            self.fn_param_names: set[str] = set()
 
         def create_variable(self, name: str, data: Any) -> None:
             assert name not in self.variables
             self.variables[name] = data
 
-    data = dataclass_test_tools.build_struct(argument_type)
+    data = dataclass_helpers.build_struct(argument_type)
     ctx = MockContext()
     FunctionDefTransformer._transform_func_arg(
         ctx,

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # -- stdlib --
+import hashlib
 import shutil
 import zipfile
 from pathlib import Path
@@ -10,6 +11,7 @@ from urllib.parse import urlparse
 import requests
 
 # -- own --
+from .download import download_file
 from .misc import get_cache_home, info
 from .tinysh import bash, sh, sudo, tar
 
@@ -88,14 +90,16 @@ def probe_mirrors():
     SHOULD_USE_MIRROR["_probed"] = True
 
 
-def download_dep(url, outdir, *, strip=0, force=False, args=None, plain=False, elevate=False):
+def download_dep(url, outdir, *, strip=0, force=False, args=None, plain=False, elevate=False, sha256=None):
     """
     Download a dependency archive from `url` and expand it to `outdir`,
-    optionally stripping `strip` components.
+    optionally stripping `strip` components. Verify `sha256` before extraction when supplied.
     """
     outdir = Path(outdir)
+    checksum_marker = outdir / ".archive-sha256"
     if outdir.exists() and len(list(outdir.glob("*"))) > 0 and not force:
-        return
+        if sha256 is None or (checksum_marker.exists() and checksum_marker.read_text().strip() == sha256):
+            return
 
     shutil.rmtree(outdir, ignore_errors=True)
 
@@ -128,24 +132,13 @@ def download_dep(url, outdir, *, strip=0, force=False, args=None, plain=False, e
             pass
 
     if not local_cached.exists() or local_cached.stat().st_size != size:
-        import tqdm
+        download_file(url, local_cached, name)
 
-        with requests.get(url, stream=True) as r:
-            r.raise_for_status()
-            total_size = int(r.headers.get("content-length", 0))
-            prog = tqdm.tqdm(
-                unit="B",
-                unit_scale=True,
-                unit_divisor=1024,
-                total=total_size,
-                desc=name,
-            )
-            with prog, open(str(local_cached) + ".download", "wb") as f:
-                for chunk in r.iter_content(chunk_size=8192):
-                    sz = f.write(chunk)
-                    prog.update(sz)
-
-        shutil.move(str(local_cached) + ".download", local_cached)
+    if sha256 is not None:
+        actual_sha256 = hashlib.sha256(local_cached.read_bytes()).hexdigest()
+        if actual_sha256 != sha256:
+            local_cached.unlink()
+            raise RuntimeError(f"SHA-256 mismatch for {name}: expected {sha256}, got {actual_sha256}")
 
     if name.endswith(".zip"):
         outdir.mkdir(parents=True, exist_ok=True)
@@ -172,3 +165,6 @@ def download_dep(url, outdir, *, strip=0, force=False, args=None, plain=False, e
         shutil.copy(local_cached, outdir / name)
     else:
         raise RuntimeError(f"Unknown file type: {name}")
+
+    if sha256 is not None:
+        checksum_marker.write_text(sha256 + "\n")
