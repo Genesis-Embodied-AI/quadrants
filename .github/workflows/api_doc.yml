@@ -17,6 +17,7 @@ concurrency:
   cancel-in-progress: true
 permissions:
   contents: write
+  statuses: write
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -61,15 +62,23 @@ jobs:
         if: github.head_ref != ''
         env:
           PREVIEW_BRANCH: ${{ github.head_ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           python - <<'PY'
           import os
+          import subprocess
           from urllib.parse import quote
 
           owner, repo = os.environ["GITHUB_REPOSITORY"].split("/")
           branch = quote(os.environ["PREVIEW_BRANCH"], safe="/")
           url = f"https://{owner}.github.io/{repo}/preview/{branch}/"
-          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
-              summary.write(f"[View documentation preview]({url})\n\n")
-              summary.write("GitHub Pages may take a few minutes to publish this update.\n")
+          # Attach the link to the PR head, rather than GitHub's temporary merge commit.
+          subprocess.run([
+              "gh", "api", "--method", "POST",
+              f"repos/{owner}/{repo}/statuses/{os.environ['PR_HEAD_SHA']}",
+              "-f", "state=success", "-f", "context=Docs preview",
+              "-f", "description=Open docs preview (publishing may take a few minutes)",
+              "-f", f"target_url={url}",
+          ], check=True)
           PY
