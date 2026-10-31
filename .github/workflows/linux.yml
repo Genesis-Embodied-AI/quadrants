@@ -104,12 +104,13 @@ jobs:
           name: coverage-cuda
           path: coverage.xml
 
-  coverage-comment:
+  coverage-report:
     if: github.event_name == 'pull_request' && always()
     needs: [build, test-cuda]
     runs-on: ubuntu-latest
     permissions:
-      pull-requests: write
+      contents: read
+      statuses: write
       checks: write
     steps:
       - uses: actions/checkout@v4
@@ -158,7 +159,7 @@ jobs:
             --compare-branch=origin/${{ github.base_ref }} \
             --coverage-xml $COV_XMLS \
             --commit-hash "$HEAD_SHA" \
-            --format markdown-summary > coverage-comment.md || true
+            --format markdown-summary > coverage-summary.md || true
       - name: Upload full coverage report
         if: always() && hashFiles('coverage-check.md') != ''
         uses: actions/upload-artifact@v4
@@ -196,22 +197,22 @@ jobs:
               }
             });
             core.setOutput('check-url', check.data.html_url);
-      - name: Post coverage comment
-        if: always() && hashFiles('coverage-comment.md') != ''
+      - name: Publish coverage status
+        if: always() && steps.publish_check.outputs.check-url != '' && hashFiles('coverage-summary.md') != ''
         uses: actions/github-script@v8
         env:
           REPORT_URL: ${{ steps.publish_check.outputs.check-url }}
         with:
           script: |
             const fs = require('fs');
-            let body = fs.readFileSync('coverage-comment.md', 'utf8').trim();
-            const url = process.env.REPORT_URL;
-            if (url) {
-              body = `[${body}](${url})`;
-            }
-            await github.rest.issues.createComment({
+            const summary = fs.readFileSync('coverage-summary.md', 'utf8').trim();
+            await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.payload.pull_request.number,
-              body: body
+              sha: context.payload.pull_request.head.sha,
+              state: 'success',
+              context: 'Diff coverage',
+              // GitHub limits commit status descriptions to 140 characters.
+              description: summary.substring(0, 140),
+              target_url: process.env.REPORT_URL
             });
