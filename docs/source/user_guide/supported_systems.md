@@ -3,7 +3,7 @@
 ## CI Tested systems
 
 We test the following systems in our CI servers:
-- Python 3.12-Python 3.14
+- Python 3.12-Python 3.15
 - Mac OS X 14 and 15
 - Ubuntu 22.04 and Ubuntu 24.04
 - Windows Server 2025
@@ -14,6 +14,8 @@ We test the following systems in our CI servers:
 - Mac Silicon 14 or 15
 - Ubuntu 22.04 and 24.04 (x64 and ARM64)
 - Windows 10 or later (x86 only)
+
+Linux wheels require glibc 2.35 or newer on both x64 and ARM64.
 
 ### GPUs
 

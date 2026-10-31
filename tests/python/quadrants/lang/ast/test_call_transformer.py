@@ -43,17 +43,19 @@ def dump_ast_list(nodes: tuple[ast.stmt, ...]) -> str:
 
 
 @pytest.mark.parametrize(
-    "args_in, expected_args_out",
+    "arg_name, arg_type, expected_args_out",
     [
         (
-            [ast.Name(id="my_struct_ab", ctx=ast.Load(), ptr=MyStructAB)],
+            "my_struct_ab",
+            MyStructAB,
             [
                 ast.Name(id="__qd_my_struct_ab__qd_a", ctx=ast.Load()),
                 ast.Name(id="__qd_my_struct_ab__qd_b", ctx=ast.Load()),
             ],
         ),
         (
-            [ast.Name(id="my_struct_cd", ctx=ast.Load(), ptr=MyStructCD)],
+            "my_struct_cd",
+            MyStructCD,
             [
                 ast.Name(id="__qd_my_struct_cd__qd_c", ctx=ast.Load()),
                 ast.Name(id="__qd_my_struct_cd__qd_d", ctx=ast.Load()),
@@ -62,7 +64,8 @@ def dump_ast_list(nodes: tuple[ast.stmt, ...]) -> str:
             ],
         ),
         (
-            [ast.Name(id="my_struct_ef", ctx=ast.Load(), ptr=MyStructEF)],
+            "my_struct_ef",
+            MyStructEF,
             (
                 ast.Name(id="__qd_my_struct_ef__qd_e", ctx=ast.Load()),
                 ast.Name(id="__qd_my_struct_ef__qd_f", ctx=ast.Load()),
@@ -75,7 +78,10 @@ def dump_ast_list(nodes: tuple[ast.stmt, ...]) -> str:
     ],
 )
 @test_utils.test()
-def test_expand_Call_dataclass_args(args_in: tuple[ast.stmt, ...], expected_args_out: tuple[ast.stmt, ...]) -> None:
+def test_expand_Call_dataclass_args(arg_name: str, arg_type: type, expected_args_out: tuple[ast.stmt, ...]) -> None:
+    arg = ast.Name(id=arg_name, ctx=ast.Load())
+    arg.ptr = arg_type
+    args_in = (arg,)
     for arg in args_in:
         arg.lineno = 1
         arg.end_lineno = 2

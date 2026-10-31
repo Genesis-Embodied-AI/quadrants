@@ -5702,37 +5702,39 @@ def test_final_subclass_structural_container_subclass_rejected():
 
 @test_utils.test()
 def test_final_subclass_structural_foreign_descriptor_identity():
-    """A *foreign* descriptor bound in a keyed structural attr (``Unit.__weakref__ = A.__weakref__``) must carry its
-    owner's identity: its address-based ``repr`` is unkeyable and its own ``__qualname__`` is just the slot name, so
-    without the owner two distinct descriptors collapse to one token and a compile-time ``... is A.__weakref__`` branch
-    would reuse the wrong specialization."""
+    """Foreign descriptors stored in structural attributes must retain their owner's identity in specialization keys.
+    Distinct owners, including ones with the same qualified name, must produce different keys to avoid reusing the
+    wrong specialization.
+    """
     from quadrants.lang._final_dataclass_fields import final_scalar_key
 
+    # Python 3.15 shares the generic __weakref__ descriptor between ordinary classes. Explicit slots provide distinct
+    # foreign descriptors, preserving the owner-identity regression this test exercises.
     class OwnerA:
-        pass
+        __slots__ = ("slot",)
 
     class OwnerB:
-        pass
+        __slots__ = ("slot",)
 
     class Unit(int):
         pass
 
-    Unit.__weakref__ = OwnerA.__dict__["__weakref__"]
+    Unit.__weakref__ = OwnerA.__dict__["slot"]
     live_a = final_scalar_key(Unit(1), live=True)
     offline_a = str(final_scalar_key(Unit(1), live=False))
-    Unit.__weakref__ = OwnerB.__dict__["__weakref__"]  # distinct owner -> distinct qualname
+    Unit.__weakref__ = OwnerB.__dict__["slot"]  # distinct owner -> distinct qualname
     assert final_scalar_key(Unit(1), live=True) != live_a
     assert str(final_scalar_key(Unit(1), live=False)) != offline_a
 
     def make_owner():  # two owners sharing a qualname but distinct identity
         class Owner:
-            pass
+            __slots__ = ("slot",)
 
         return Owner
 
-    Unit.__weakref__ = make_owner().__dict__["__weakref__"]
+    Unit.__weakref__ = make_owner().__dict__["slot"]
     live_c = final_scalar_key(Unit(1), live=True)
-    Unit.__weakref__ = make_owner().__dict__["__weakref__"]
+    Unit.__weakref__ = make_owner().__dict__["slot"]
     assert final_scalar_key(Unit(1), live=True) != live_c  # separated by the owner's identity component
 
 
