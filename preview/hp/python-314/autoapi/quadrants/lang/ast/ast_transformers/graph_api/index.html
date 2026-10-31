@@ -380,13 +380,13 @@ by the AST transformer and never executed inside a kernel.</p>
 <h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ast.ast_transformers.graph_api.is_deprecated_spelling" title="quadrants.lang.ast.ast_transformers.graph_api.is_deprecated_spelling"><code class="xref py py-obj docutils literal notranslate"><span class="pre">is_deprecated_spelling</span></code></a>(→ bool)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ast.ast_transformers.graph_api.is_deprecated_spelling" title="quadrants.lang.ast.ast_transformers.graph_api.is_deprecated_spelling"><code class="xref py py-obj docutils literal notranslate"><span class="pre">is_deprecated_spelling</span></code></a>(func, name) → bool</p></td>
 <td><p>True if <em>func</em> uses the deprecated flat <code class="docutils literal notranslate"><span class="pre">qd.graph_&lt;name&gt;</span></code> spelling (attribute <code class="docutils literal notranslate"><span class="pre">x.graph_&lt;name&gt;</span></code> or bare name</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.ast.ast_transformers.graph_api.matches" title="quadrants.lang.ast.ast_transformers.graph_api.matches"><code class="xref py py-obj docutils literal notranslate"><span class="pre">matches</span></code></a>(→ bool)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.ast.ast_transformers.graph_api.matches" title="quadrants.lang.ast.ast_transformers.graph_api.matches"><code class="xref py py-obj docutils literal notranslate"><span class="pre">matches</span></code></a>(func, name) → bool</p></td>
 <td><p>True if <em>func</em> refers to the construct <em>name</em>, in either the canonical <code class="docutils literal notranslate"><span class="pre">qd.graph.&lt;name&gt;</span></code> spelling or the</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ast.ast_transformers.graph_api.warn_if_deprecated" title="quadrants.lang.ast.ast_transformers.graph_api.warn_if_deprecated"><code class="xref py py-obj docutils literal notranslate"><span class="pre">warn_if_deprecated</span></code></a>(→ None)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ast.ast_transformers.graph_api.warn_if_deprecated" title="quadrants.lang.ast.ast_transformers.graph_api.warn_if_deprecated"><code class="xref py py-obj docutils literal notranslate"><span class="pre">warn_if_deprecated</span></code></a>(func, name) → None</p></td>
 <td><p>If <em>func</em> uses the deprecated flat <code class="docutils literal notranslate"><span class="pre">qd.graph_&lt;name&gt;</span></code> spelling, emit a <code class="docutils literal notranslate"><span class="pre">DeprecationWarning</span></code> pointing at the</p></td>
 </tr>
 </tbody>

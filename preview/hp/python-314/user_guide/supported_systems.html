@@ -352,7 +352,6 @@
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="unsupported_python.html">Python features in kernel scope</a></li>
-<li class="toctree-l1"><a class="reference internal" href="python_backend.html">Python backend</a></li>
 <li class="toctree-l1"><a class="reference internal" href="debug.html">Debug mode</a></li>
 <li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
@@ -522,10 +521,7 @@
 <li><p>Quadrants selects the Vulkan API version automatically. The <code class="docutils literal notranslate"><span class="pre">vk_api_version</span></code> argument to <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> has been removed; omit it from existing calls.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">qd.vulkan</span></code> on macOS bundles a copy of MoltenVK (a Vulkan-to-Metal translation layer) inside the wheel, so no separate install is required.</p></li>
 </ul>
-</section>
-<section id="python-backend">
-<h3>Python backend<a class="headerlink" href="#python-backend" title="Link to this heading">#</a></h3>
-<p>A pure-Python backend (<code class="docutils literal notranslate"><span class="pre">qd.python</span></code>) is available on any system where PyTorch is installed. See <a class="reference internal" href="python_backend.html"><span class="std std-doc">Python backend</span></a>.</p>
+<p>The Python backend (<code class="docutils literal notranslate"><span class="pre">qd.python</span></code>) has been removed. To run kernels on the CPU, use <code class="docutils literal notranslate"><span class="pre">qd.init(arch=qd.cpu)</span></code>. CPU kernels are compiled; they do not execute as ordinary Python functions.</p>
 </section>
 </section>
 </section>
@@ -582,7 +578,6 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#operating-systems">Operating systems</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#gpus">GPUs</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#backend-os-matrix">Backend / OS matrix</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#python-backend">Python backend</a></li>
 </ul>
 </li>
 </ul>

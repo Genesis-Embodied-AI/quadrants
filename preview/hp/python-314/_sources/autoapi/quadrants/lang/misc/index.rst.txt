@@ -31,7 +31,6 @@ Attributes
    quadrants.lang.misc.amdgpu
    quadrants.lang.misc.metal
    quadrants.lang.misc.vulkan
-   quadrants.lang.misc.python
    quadrants.lang.misc.gpu
    quadrants.lang.misc.cpu
    quadrants.lang.misc.extension
@@ -152,8 +151,6 @@ Module Contents
 
    The Vulkan backend.
 
-.. py:data:: python
-
 .. py:data:: gpu
 
    A list of GPU backends supported on the current system.
@@ -184,7 +181,7 @@ Module Contents
    Example::
 
        >>> a = qd.field(qd.i32, shape=())
-       >>> a[None] = 1
+       >>> a[()] = 1
        >>> print("before reset: ", a)
        before rest: 1
        >>>

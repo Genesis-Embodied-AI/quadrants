@@ -465,7 +465,6 @@ Module Contents
       :type shape: Union[int, tuple[int]]
       :param needs_grad: If True, allocate a companion grad ndarray of the same shape and dtype,
                          accessible via ``arr.grad``. Requires ``dtype`` to be a real (floating-point) type. Defaults to False.
-                         Silently ignored on the python backend (matches the scalar ``qd.ndarray`` behaviour).
       :type needs_grad: bool, optional
 
       Example::
@@ -482,8 +481,7 @@ Module Contents
 
       Allocate a tensor whose elements are ``n``-by-``m`` matrices.
 
-      Per-tensor backend dispatcher, equivalent to scalar ``qd.tensor()`` for matrix-valued elements. Selects
-      between ``qd.Matrix.field`` and ``qd.Matrix.ndarray`` based on the ``backend=`` keyword.
+      Equivalent to ``qd.tensor(qd.types.matrix(n, m, dtype), shape, **kwargs)``.
 
       :param n: Number of rows of each matrix element.
       :type n: int
@@ -493,7 +491,10 @@ Module Contents
       :param shape: Shape of the tensor (excluding the matrix dimensions) as an ``int`` or tuple of ``int``.
       :param backend: Storage backend. Defaults to ``qd.Backend.NDARRAY``.
       :type backend: qd.Backend, optional
-      :param \*\*kwargs: Forwarded verbatim to the underlying ``qd.Matrix.field`` / ``qd.Matrix.ndarray`` call.
+      :param layout: Permutation of shape axes, outermost first. Matrix component axes stay
+                     innermost. Defaults to the natural axis order.
+      :type layout: tuple of int, optional
+      :param \*\*kwargs: Additional options such as ``needs_grad``, forwarded to ``qd.tensor``.
 
       Example::
 
@@ -680,7 +681,6 @@ Module Contents
       :type shape: Union[int, tuple[int]]
       :param needs_grad: If True, allocate a companion grad ndarray of the same shape and dtype,
                          accessible via ``arr.grad``. Requires ``dtype`` to be a real (floating-point) type. Defaults to False.
-                         Silently ignored on the python backend (matches the scalar ``qd.ndarray`` behaviour).
       :type needs_grad: bool, optional
 
       .. rubric:: Example
@@ -697,8 +697,7 @@ Module Contents
 
       Allocate a tensor whose elements are length-``n`` vectors.
 
-      Per-tensor backend dispatcher, equivalent to scalar ``qd.tensor()`` for vector-valued elements. Selects
-      between ``qd.Vector.field`` and ``qd.Vector.ndarray`` based on the ``backend=`` keyword.
+      Equivalent to ``qd.tensor(qd.types.vector(n, dtype), shape, **kwargs)``.
 
       :param n: Length of each vector element.
       :type n: int
@@ -706,7 +705,10 @@ Module Contents
       :param shape: Shape of the tensor (excluding the vector dimension) as an ``int`` or tuple of ``int``.
       :param backend: Storage backend. Defaults to ``qd.Backend.NDARRAY``.
       :type backend: qd.Backend, optional
-      :param \*\*kwargs: Forwarded verbatim to the underlying ``qd.Vector.field`` / ``qd.Vector.ndarray`` call.
+      :param layout: Permutation of shape axes, outermost first. Vector components stay
+                     innermost. Defaults to the natural axis order.
+      :type layout: tuple of int, optional
+      :param \*\*kwargs: Additional options such as ``needs_grad``, forwarded to ``qd.tensor``.
 
       Example::
 
