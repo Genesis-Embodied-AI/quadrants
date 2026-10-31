@@ -345,7 +345,6 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.field</span><span class="w"> </span><span class="kn">import</span> <span class="n">Field</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.util</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">cook_dtype</span><span class="p">,</span>
-    <span class="n">dtype_to_torch_dtype</span><span class="p">,</span>
     <span class="n">is_matrix_class</span><span class="p">,</span>
     <span class="n">is_quadrants_class</span><span class="p">,</span>
     <span class="n">quadrants_scope</span><span class="p">,</span>
@@ -377,9 +376,6 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">writeback_binary</span><span class="p">(</span><span class="n">foo</span><span class="p">):</span>
     <span class="nd">@functools</span><span class="o">.</span><span class="n">wraps</span><span class="p">(</span><span class="n">foo</span><span class="p">)</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">wrapped</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
-        <span class="c1"># Python backend is single-threaded, so atomics are just plain ops.</span>
-        <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
-            <span class="k">return</span> <span class="n">foo</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">Field</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">Field</span><span class="p">):</span>
             <span class="k">return</span> <span class="bp">NotImplemented</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">is_quadrants_expr</span><span class="p">(</span><span class="n">a</span><span class="p">)</span> <span class="ow">and</span> <span class="n">a</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">is_lvalue</span><span class="p">()):</span>
@@ -419,13 +415,6 @@
     <span class="k">if</span> <span class="n">is_quadrants_class</span><span class="p">(</span><span class="n">obj</span><span class="p">):</span>
         <span class="c1"># TODO: unify with element_wise_unary</span>
         <span class="k">return</span> <span class="n">obj</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
-        <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">_torch</span>  <span class="c1"># pylint: disable=C0415</span>
-
-        <span class="n">torch_dtype</span> <span class="o">=</span> <span class="n">dtype_to_torch_dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">_torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
-            <span class="k">return</span> <span class="n">obj</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch_dtype</span><span class="p">)</span>
-        <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span> <span class="k">if</span> <span class="n">torch_dtype</span><span class="o">.</span><span class="n">is_floating_point</span> <span class="k">else</span> <span class="nb">int</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">value_cast</span><span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">dtype</span><span class="p">))</span></div>
 
 
@@ -943,8 +932,8 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">_popcnt</span><span class="p">(</span><span class="n">_</span><span class="p">):</span>
         <span class="c1"># No Python fallback: popcnt is bitwidth-dependent (a u64 with the top bit set should return 64, not 1), but</span>
         <span class="c1"># once the value reaches here it's a plain Python int with no width attached. Worse, `bin(x).count("1")`</span>
-        <span class="c1"># quietly drops the sign and reports `popcnt(-1) == 1` instead of 32 / 64. The path is only hit on the</span>
-        <span class="c1"># `qd.python` backend or from ad-hoc module-level calls; native backends route through the IR / codegen.</span>
+        <span class="c1"># quietly drops the sign and reports `popcnt(-1) == 1` instead of 32 / 64. This path is only hit from</span>
+        <span class="c1"># Python-scope calls; kernels route through the IR / codegen.</span>
         <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
             <span class="s2">"qd.math.popcnt has no Python fallback: the result depends on the operand's bitwidth "</span>
             <span class="s2">"(i32 vs i64), which is lost once the value is a plain Python int. Run on a real backend "</span>
@@ -1563,9 +1552,8 @@
         <span class="c1"># No Python fallback: clz is bitwidth-dependent (`clz(0) == 32` for i32 but `64` for i64, and `clz(-1) == 0`</span>
         <span class="c1"># requires interpreting -1 as the unsigned all-bits-set pattern at a known width). Once the value reaches here</span>
         <span class="c1"># it's a plain Python int with no width attached, so no single answer is correct. The old hard-coded 32-bit</span>
-        <span class="c1"># implementation silently returned wrong values for negatives and 64-bit inputs. This path is only hit on the</span>
-        <span class="c1"># `qd.python` backend or from ad-hoc module-level calls; native backends route through the IR / codegen and</span>
-        <span class="c1"># never see it.</span>
+        <span class="c1"># implementation silently returned wrong values for negatives and 64-bit inputs. This path is only hit from</span>
+        <span class="c1"># Python-scope calls; kernels route through the IR / codegen and never see it.</span>
         <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
             <span class="s2">"qd.math.clz has no Python fallback: the result depends on the operand's bitwidth "</span>
             <span class="s2">"(i32 vs i64), which is lost once the value is a plain Python int. Run on a real backend "</span>
@@ -1587,8 +1575,8 @@
         <span class="c1"># No Python fallback: ffs is bitwidth-dependent (an i32 that wraps around to 0 should return 0, but the same</span>
         <span class="c1"># numeric value in Python's arbitrary-precision int would return its real bit position). Once the value reaches</span>
         <span class="c1"># here it's a plain Python int with no width attached, so there's no single answer that matches native backends.</span>
-        <span class="c1"># This path is only hit on the `qd.python` backend or from ad-hoc module-level calls; native backends route</span>
-        <span class="c1"># through the IR / codegen and never see it. Same treatment as popcnt / clz for consistency.</span>
+        <span class="c1"># This path is only hit from Python-scope calls; kernels route through the IR / codegen and never see it.</span>
+        <span class="c1"># Same treatment as popcnt / clz for consistency.</span>
         <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
             <span class="s2">"qd.math.ffs has no Python fallback: the result depends on the operand's bitwidth "</span>
             <span class="s2">"(i32 vs i64), which is lost once the value is a plain Python int. Run on a real backend "</span>
@@ -1627,10 +1615,6 @@
 <span class="sd">        &gt;&gt;&gt;</span>
 <span class="sd">        &gt;&gt;&gt;     qd.atomic_add(1, x)  # will raise QuadrantsSyntaxError</span>
 <span class="sd">    """</span>
-    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
-        <span class="n">old</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
-        <span class="n">x</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">old</span> <span class="o">+</span> <span class="n">y</span>
-        <span class="k">return</span> <span class="n">old</span>
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_add</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">())))</span></div>
 
 
@@ -1664,10 +1648,6 @@
 <span class="sd">        &gt;&gt;&gt;</span>
 <span class="sd">        &gt;&gt;&gt;     qd.atomic_mul(1, x)  # will raise QuadrantsSyntaxError</span>
 <span class="sd">    """</span>
-    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
-        <span class="n">old</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
-        <span class="n">x</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">old</span> <span class="o">*</span> <span class="n">y</span>
-        <span class="k">return</span> <span class="n">old</span>
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_mul</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">())))</span></div>
 
 
@@ -1701,10 +1681,6 @@
 <span class="sd">        &gt;&gt;&gt;</span>
 <span class="sd">        &gt;&gt;&gt;     qd.atomic_sub(1, x)  # will raise QuadrantsSyntaxError</span>
 <span class="sd">    """</span>
-    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
-        <span class="n">old</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
-        <span class="n">x</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">old</span> <span class="o">-</span> <span class="n">y</span>
-        <span class="k">return</span> <span class="n">old</span>
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_sub</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">())))</span></div>
 
 
@@ -1738,10 +1714,6 @@
 <span class="sd">        &gt;&gt;&gt;</span>
 <span class="sd">        &gt;&gt;&gt;     qd.atomic_min(1, x)  # will raise QuadrantsSyntaxError</span>
 <span class="sd">    """</span>
-    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
-        <span class="n">old</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
-        <span class="n">x</span><span class="p">[()]</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">old</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">old</span>
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_min</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">())))</span></div>
 
 
@@ -1775,10 +1747,6 @@
 <span class="sd">        &gt;&gt;&gt;</span>
 <span class="sd">        &gt;&gt;&gt;     qd.atomic_max(1, x)  # will raise QuadrantsSyntaxError</span>
 <span class="sd">    """</span>
-    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
-        <span class="n">old</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
-        <span class="n">x</span><span class="p">[()]</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">old</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">old</span>
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_max</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">())))</span></div>
 
 
@@ -1812,10 +1780,6 @@
 <span class="sd">        &gt;&gt;&gt;</span>
 <span class="sd">        &gt;&gt;&gt;     qd.atomic_and(1, x)  # will raise QuadrantsSyntaxError</span>
 <span class="sd">    """</span>
-    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
-        <span class="n">old</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
-        <span class="n">x</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">old</span> <span class="o">&amp;</span> <span class="n">y</span>
-        <span class="k">return</span> <span class="n">old</span>
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span>
         <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_bit_and</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">()))</span>
     <span class="p">)</span></div>
@@ -1851,10 +1815,6 @@
 <span class="sd">        &gt;&gt;&gt;</span>
 <span class="sd">        &gt;&gt;&gt;     qd.atomic_or(1, x)  # will raise QuadrantsSyntaxError</span>
 <span class="sd">    """</span>
-    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
-        <span class="n">old</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
-        <span class="n">x</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">old</span> <span class="o">|</span> <span class="n">y</span>
-        <span class="k">return</span> <span class="n">old</span>
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span>
         <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_bit_or</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">()))</span>
     <span class="p">)</span></div>
@@ -1890,10 +1850,6 @@
 <span class="sd">        &gt;&gt;&gt;</span>
 <span class="sd">        &gt;&gt;&gt;     qd.atomic_xor(1, x)  # will raise QuadrantsSyntaxError</span>
 <span class="sd">    """</span>
-    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
-        <span class="n">old</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
-        <span class="n">x</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">old</span> <span class="o">^</span> <span class="n">y</span>
-        <span class="k">return</span> <span class="n">old</span>
 
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span>
         <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_bit_xor</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">()))</span>
@@ -1931,10 +1887,6 @@
 <span class="sd">        &gt;&gt;&gt;</span>
 <span class="sd">        &gt;&gt;&gt;     qd.atomic_exchange(1, x)  # will raise QuadrantsSyntaxError</span>
 <span class="sd">    """</span>
-    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
-        <span class="n">old</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
-        <span class="n">x</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">y</span>
-        <span class="k">return</span> <span class="n">old</span>
 
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_xchg</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">())))</span></div>
 
@@ -1970,21 +1922,16 @@
 <span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def take_slot():</span>
 <span class="sd">        &gt;&gt;&gt;     # Try to claim the slot only if it is currently empty (== 0).</span>
-<span class="sd">        &gt;&gt;&gt;     old = qd.atomic_cas(slot[None], 0, my_id)</span>
+<span class="sd">        &gt;&gt;&gt;     old = qd.atomic_cas(slot[()], 0, my_id)</span>
 <span class="sd">        &gt;&gt;&gt;     if old == 0:</span>
 <span class="sd">        &gt;&gt;&gt;         # we won the race; the slot is ours</span>
 <span class="sd">        &gt;&gt;&gt;         ...</span>
 <span class="sd">    """</span>
-    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
-        <span class="n">old</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
-        <span class="k">if</span> <span class="n">old</span> <span class="o">==</span> <span class="n">expected</span><span class="p">:</span>
-            <span class="n">x</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">desired</span>
-        <span class="k">return</span> <span class="n">old</span>
-    <span class="c1"># Mirror @writeback_binary's Field guard: passing a raw Field (rather than `field[None]`) would otherwise</span>
+    <span class="c1"># Mirror @writeback_binary's Field guard: passing a raw Field (rather than `field[()]`) would otherwise</span>
     <span class="c1"># blow up later with a confusing AttributeError on `x.ptr`. Surface a clear QuadrantsSyntaxError instead.</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">Field</span><span class="p">):</span>
         <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-            <span class="s2">"cannot use a Field directly as the first operand of 'atomic_cas'; index it first (e.g. `field[None]`)"</span>
+            <span class="s2">"cannot use a Field directly as the first operand of 'atomic_cas'; index it first (e.g. `field[()]`)"</span>
         <span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">is_quadrants_expr</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="ow">and</span> <span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">is_lvalue</span><span class="p">()):</span>
         <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"cannot use a non-writable target as the first operand of 'atomic_cas'"</span><span class="p">)</span>
@@ -2042,11 +1989,9 @@
 <span class="sd">        `qd.atomic_*` for the read-modify-write side; `qd.simt.grid.mem_fence` for the heavyweight</span>
 <span class="sd">        device-scope fence that was the only correct (but slow) workaround before this primitive existed.</span>
 <span class="sd">    """</span>
-    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
-        <span class="k">return</span> <span class="n">target</span><span class="o">.</span><span class="n">item</span><span class="p">()</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="s2">"item"</span><span class="p">)</span> <span class="k">else</span> <span class="n">target</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="n">Field</span><span class="p">):</span>
         <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-            <span class="s2">"cannot pass a Field directly to 'qd.volatile_load'; index it first (e.g. `field[None]`)"</span>
+            <span class="s2">"cannot pass a Field directly to 'qd.volatile_load'; index it first (e.g. `field[()]`)"</span>
         <span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">is_quadrants_expr</span><span class="p">(</span><span class="n">target</span><span class="p">)</span> <span class="ow">and</span> <span class="n">target</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">is_lvalue</span><span class="p">()):</span>
         <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"qd.volatile_load requires an lvalue (field / ndarray subscript) as its argument"</span><span class="p">)</span>

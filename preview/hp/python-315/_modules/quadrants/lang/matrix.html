@@ -336,6 +336,7 @@
 <span class="kn">import</span><span class="w"> </span><span class="nn">numbers</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Iterable</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">itertools</span><span class="w"> </span><span class="kn">import</span> <span class="n">product</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">cast</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 
@@ -376,17 +377,6 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">is_signed</span>
 
 <span class="n">_type_factory</span> <span class="o">=</span> <span class="n">_qd_python_core</span><span class="o">.</span><span class="n">get_type_factory_instance</span><span class="p">()</span>
-
-
-<span class="k">def</span><span class="w"> </span><span class="nf">_scalar_tensors_to_items</span><span class="p">(</span><span class="n">arr</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""Recursively convert 0-d tensors to Python scalars in a nested list."""</span>
-    <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>  <span class="c1"># pylint: disable=C0415</span>
-
-    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)):</span>
-        <span class="k">return</span> <span class="p">[</span><span class="n">_scalar_tensors_to_items</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">arr</span><span class="p">]</span>
-    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="ow">and</span> <span class="n">arr</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="p">():</span>
-        <span class="k">return</span> <span class="n">arr</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
-    <span class="k">return</span> <span class="n">arr</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_generate_swizzle_patterns</span><span class="p">(</span><span class="n">key_group</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">required_length</span><span class="o">=</span><span class="mi">4</span><span class="p">):</span>
@@ -598,14 +588,6 @@
     <span class="n">_is_quadrants_class</span> <span class="o">=</span> <span class="kc">True</span>
     <span class="n">_is_matrix_class</span> <span class="o">=</span> <span class="kc">True</span>
     <span class="n">__array_priority__</span> <span class="o">=</span> <span class="mi">1000</span>
-
-    <span class="k">def</span><span class="w"> </span><span class="fm">__new__</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">arr</span><span class="p">,</span> <span class="n">dt</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-        <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
-            <span class="kn">from</span><span class="w"> </span><span class="nn">.</span><span class="w"> </span><span class="kn">import</span> <span class="n">_py_tensor</span> <span class="k">as</span> <span class="n">py_tensor</span>  <span class="c1"># pylint: disable=C0415</span>
-
-            <span class="n">arr</span> <span class="o">=</span> <span class="n">_scalar_tensors_to_items</span><span class="p">(</span><span class="n">arr</span><span class="p">)</span>
-            <span class="k">return</span> <span class="n">py_tensor</span><span class="o">.</span><span class="n">PyTensor</span><span class="p">(</span><span class="n">arr</span><span class="p">)</span>
-        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__new__</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">,</span> <span class="n">dt</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)):</span>
@@ -1300,15 +1282,8 @@
 <span class="sd">        Returns:</span>
 <span class="sd">            :class:`~quadrants.Matrix`: A matrix.</span>
 <span class="sd">        """</span>
-        <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
-            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">):</span>
-                <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">shape</span><span class="p">,)</span>
-            <span class="k">if</span> <span class="n">shape</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">shape</span> <span class="o">=</span> <span class="p">()</span>
-            <span class="n">mat_type</span> <span class="o">=</span> <span class="n">MatrixType</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="n">ndim</span> <span class="k">if</span> <span class="n">ndim</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="mi">2</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
-            <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">mat_type</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">shape</span><span class="p">)</span>
 
-        <span class="n">entries</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">member_groups</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="n">element_dim</span> <span class="o">=</span> <span class="n">ndim</span> <span class="k">if</span> <span class="n">ndim</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="mi">2</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)):</span>
             <span class="c1"># set different dtype for each element in Matrix — see #2135</span>
@@ -1317,7 +1292,7 @@
                     <span class="nb">len</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">dtype</span><span class="p">))</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span> <span class="o">==</span> <span class="n">n</span>
                 <span class="p">),</span> <span class="sa">f</span><span class="s2">"Please set correct dtype list for Vector. The shape of dtype list should be (</span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2">, ) instead of </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
                 <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
-                    <span class="n">entries</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="n">member_groups</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                         <span class="n">impl</span><span class="o">.</span><span class="n">create_field_member</span><span class="p">(</span>
                             <span class="n">dtype</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>
                             <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
@@ -1331,7 +1306,7 @@
                 <span class="p">),</span> <span class="sa">f</span><span class="s2">"Please set correct dtype list for Matrix. The shape of dtype list should be (</span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">m</span><span class="si">}</span><span class="s2">) instead of </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
                 <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
                     <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">m</span><span class="p">):</span>
-                        <span class="n">entries</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                        <span class="n">member_groups</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                             <span class="n">impl</span><span class="o">.</span><span class="n">create_field_member</span><span class="p">(</span>
                                 <span class="n">dtype</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">j</span><span class="p">],</span>
                                 <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
@@ -1341,21 +1316,23 @@
                         <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span> <span class="o">*</span> <span class="n">m</span><span class="p">):</span>
-                <span class="n">entries</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">create_field_member</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">needs_grad</span><span class="o">=</span><span class="n">needs_grad</span><span class="p">,</span> <span class="n">needs_dual</span><span class="o">=</span><span class="n">needs_dual</span><span class="p">))</span>
-        <span class="n">entries</span><span class="p">,</span> <span class="n">entries_grad</span><span class="p">,</span> <span class="n">entries_dual</span><span class="p">,</span> <span class="n">entries_grad_checkbit</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">entries</span><span class="p">)</span>
+                <span class="n">member_groups</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="n">impl</span><span class="o">.</span><span class="n">create_field_member</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">needs_grad</span><span class="o">=</span><span class="n">needs_grad</span><span class="p">,</span> <span class="n">needs_dual</span><span class="o">=</span><span class="n">needs_dual</span><span class="p">)</span>
+                <span class="p">)</span>
+        <span class="n">entries</span><span class="p">,</span> <span class="n">entries_grad</span><span class="p">,</span> <span class="n">entries_dual</span><span class="p">,</span> <span class="n">entries_grad_checkbit</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">member_groups</span><span class="p">)</span>
 
-        <span class="n">entries</span> <span class="o">=</span> <span class="n">MatrixField</span><span class="p">(</span><span class="n">entries</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">element_dim</span><span class="p">)</span>
+        <span class="n">field</span> <span class="o">=</span> <span class="n">MatrixField</span><span class="p">(</span><span class="n">entries</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">element_dim</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="n">entries_grad</span><span class="p">):</span>
-            <span class="n">entries_grad</span> <span class="o">=</span> <span class="n">MatrixField</span><span class="p">(</span><span class="n">entries_grad</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">element_dim</span><span class="p">)</span>
-            <span class="n">entries</span><span class="o">.</span><span class="n">_set_grad</span><span class="p">(</span><span class="n">entries_grad</span><span class="p">)</span>
+            <span class="n">grad_field</span> <span class="o">=</span> <span class="n">MatrixField</span><span class="p">(</span><span class="n">entries_grad</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">element_dim</span><span class="p">)</span>
+            <span class="n">field</span><span class="o">.</span><span class="n">_set_grad</span><span class="p">(</span><span class="n">grad_field</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="n">entries_dual</span><span class="p">):</span>
-            <span class="n">entries_dual</span> <span class="o">=</span> <span class="n">MatrixField</span><span class="p">(</span><span class="n">entries_dual</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">element_dim</span><span class="p">)</span>
-            <span class="n">entries</span><span class="o">.</span><span class="n">_set_dual</span><span class="p">(</span><span class="n">entries_dual</span><span class="p">)</span>
+            <span class="n">dual_field</span> <span class="o">=</span> <span class="n">MatrixField</span><span class="p">(</span><span class="n">entries_dual</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">element_dim</span><span class="p">)</span>
+            <span class="n">field</span><span class="o">.</span><span class="n">_set_dual</span><span class="p">(</span><span class="n">dual_field</span><span class="p">)</span>
         <span class="n">entries_grad_checkbit_field</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="k">if</span> <span class="n">needs_grad</span> <span class="ow">and</span> <span class="nb">all</span><span class="p">(</span><span class="n">e</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">entries_grad_checkbit</span><span class="p">):</span>
             <span class="n">entries_grad_checkbit_field</span> <span class="o">=</span> <span class="n">MatrixField</span><span class="p">(</span><span class="n">entries_grad_checkbit</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">element_dim</span><span class="p">)</span>
 
-        <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">matrix_fields</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">entries</span><span class="p">)</span>
+        <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">matrix_fields</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">field</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="n">shape</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">offset</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -1398,12 +1375,12 @@
             <span class="k">if</span> <span class="n">order</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">offset</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="n">phys_offset</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">offset</span><span class="p">[</span><span class="n">axis_seq</span><span class="p">[</span><span class="n">p</span><span class="p">]]</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">dim</span><span class="p">))</span>
             <span class="k">if</span> <span class="n">layout</span> <span class="o">==</span> <span class="n">Layout</span><span class="o">.</span><span class="n">SOA</span><span class="p">:</span>
-                <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">entries</span><span class="o">.</span><span class="n">_get_field_members</span><span class="p">():</span>
+                <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">field</span><span class="o">.</span><span class="n">_get_field_members</span><span class="p">():</span>
                     <span class="n">impl</span><span class="o">.</span><span class="n">_create_snode</span><span class="p">(</span><span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span>
                         <span class="n">ScalarField</span><span class="p">(</span><span class="n">e</span><span class="p">),</span> <span class="n">offset</span><span class="o">=</span><span class="n">phys_offset</span>
                     <span class="p">)</span>
                 <span class="k">if</span> <span class="n">needs_grad</span><span class="p">:</span>
-                    <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">entries_grad</span><span class="o">.</span><span class="n">_get_field_members</span><span class="p">():</span>
+                    <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">grad_field</span><span class="o">.</span><span class="n">_get_field_members</span><span class="p">():</span>
                         <span class="n">impl</span><span class="o">.</span><span class="n">_create_snode</span><span class="p">(</span><span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span>
                             <span class="n">ScalarField</span><span class="p">(</span><span class="n">e</span><span class="p">),</span> <span class="n">offset</span><span class="o">=</span><span class="n">phys_offset</span>
                         <span class="p">)</span>
@@ -1413,32 +1390,28 @@
                                 <span class="n">ScalarField</span><span class="p">(</span><span class="n">e</span><span class="p">),</span> <span class="n">offset</span><span class="o">=</span><span class="n">phys_offset</span>
                             <span class="p">)</span>
                 <span class="k">if</span> <span class="n">needs_dual</span><span class="p">:</span>
-                    <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">entries_dual</span><span class="o">.</span><span class="n">_get_field_members</span><span class="p">():</span>
+                    <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">dual_field</span><span class="o">.</span><span class="n">_get_field_members</span><span class="p">():</span>
                         <span class="n">impl</span><span class="o">.</span><span class="n">_create_snode</span><span class="p">(</span><span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span>
                             <span class="n">ScalarField</span><span class="p">(</span><span class="n">e</span><span class="p">),</span> <span class="n">offset</span><span class="o">=</span><span class="n">phys_offset</span>
                         <span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="n">impl</span><span class="o">.</span><span class="n">_create_snode</span><span class="p">(</span><span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">entries</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">phys_offset</span><span class="p">)</span>
+                <span class="n">impl</span><span class="o">.</span><span class="n">_create_snode</span><span class="p">(</span><span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">field</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">phys_offset</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">needs_grad</span><span class="p">:</span>
-                    <span class="n">impl</span><span class="o">.</span><span class="n">_create_snode</span><span class="p">(</span><span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span>
-                        <span class="n">entries_grad</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">phys_offset</span>
-                    <span class="p">)</span>
+                    <span class="n">impl</span><span class="o">.</span><span class="n">_create_snode</span><span class="p">(</span><span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">grad_field</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">phys_offset</span><span class="p">)</span>
                     <span class="k">if</span> <span class="n">entries_grad_checkbit_field</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                         <span class="n">impl</span><span class="o">.</span><span class="n">_create_snode</span><span class="p">(</span><span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span>
                             <span class="n">entries_grad_checkbit_field</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">phys_offset</span>
                         <span class="p">)</span>
                 <span class="k">if</span> <span class="n">needs_dual</span><span class="p">:</span>
-                    <span class="n">impl</span><span class="o">.</span><span class="n">_create_snode</span><span class="p">(</span><span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span>
-                        <span class="n">entries_dual</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">phys_offset</span>
-                    <span class="p">)</span>
+                    <span class="n">impl</span><span class="o">.</span><span class="n">_create_snode</span><span class="p">(</span><span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">dual_field</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">phys_offset</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">order</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="n">_qd_layout</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">axis_seq</span><span class="p">)</span>
-                <span class="n">entries</span><span class="o">.</span><span class="n">_qd_layout</span> <span class="o">=</span> <span class="n">_qd_layout</span>
+                <span class="n">field</span><span class="o">.</span><span class="n">_qd_layout</span> <span class="o">=</span> <span class="n">_qd_layout</span>
                 <span class="k">if</span> <span class="n">needs_grad</span><span class="p">:</span>
-                    <span class="n">entries_grad</span><span class="o">.</span><span class="n">_qd_layout</span> <span class="o">=</span> <span class="n">_qd_layout</span>
+                    <span class="n">grad_field</span><span class="o">.</span><span class="n">_qd_layout</span> <span class="o">=</span> <span class="n">_qd_layout</span>
                 <span class="k">if</span> <span class="n">needs_dual</span><span class="p">:</span>
-                    <span class="n">entries_dual</span><span class="o">.</span><span class="n">_qd_layout</span> <span class="o">=</span> <span class="n">_qd_layout</span>
-        <span class="k">return</span> <span class="n">entries</span></div>
+                    <span class="n">dual_field</span><span class="o">.</span><span class="n">_qd_layout</span> <span class="o">=</span> <span class="n">_qd_layout</span>
+        <span class="k">return</span> <span class="n">field</span></div>
 
 
     <span class="nd">@classmethod</span>
@@ -1456,7 +1429,6 @@
 <span class="sd">            shape (Union[int, tuple[int]]): Shape of the ndarray.</span>
 <span class="sd">            needs_grad (bool, optional): If True, allocate a companion grad ndarray of the same shape and dtype,</span>
 <span class="sd">                accessible via ``arr.grad``. Requires ``dtype`` to be a real (floating-point) type. Defaults to False.</span>
-<span class="sd">                Silently ignored on the python backend (matches the scalar ``qd.ndarray`` behaviour).</span>
 
 <span class="sd">        Example::</span>
 
@@ -1466,13 +1438,6 @@
 <span class="sd">        """</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">):</span>
             <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">shape</span><span class="p">,)</span>
-        <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
-            <span class="kn">from</span><span class="w"> </span><span class="nn">.</span><span class="w"> </span><span class="kn">import</span> <span class="n">_py_tensor</span> <span class="k">as</span> <span class="n">py_tensor</span>  <span class="c1"># pylint: disable=C0415</span>
-            <span class="kn">from</span><span class="w"> </span><span class="nn">.util</span><span class="w"> </span><span class="kn">import</span> <span class="n">dtype_to_torch_dtype</span>  <span class="c1"># pylint: disable=C0415</span>
-
-            <span class="n">batch_ndim</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
-            <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="o">*</span><span class="n">shape</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span>
-            <span class="k">return</span> <span class="n">py_tensor</span><span class="o">.</span><span class="n">create_tensor</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype_to_torch_dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">),</span> <span class="n">batch_ndim</span><span class="o">=</span><span class="n">batch_ndim</span><span class="p">)</span>
         <span class="n">arr</span> <span class="o">=</span> <span class="n">MatrixNdarray</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">needs_grad</span><span class="p">:</span>
             <span class="n">dt</span> <span class="o">=</span> <span class="n">cook_dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
@@ -1490,8 +1455,7 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">tensor</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">"""Allocate a tensor whose elements are ``n``-by-``m`` matrices.</span>
 
-<span class="sd">        Per-tensor backend dispatcher, equivalent to scalar ``qd.tensor()`` for matrix-valued elements. Selects</span>
-<span class="sd">        between ``qd.Matrix.field`` and ``qd.Matrix.ndarray`` based on the ``backend=`` keyword.</span>
+<span class="sd">        Equivalent to ``qd.tensor(qd.types.matrix(n, m, dtype), shape, **kwargs)``.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            n (int): Number of rows of each matrix element.</span>
@@ -1499,16 +1463,19 @@
 <span class="sd">            dtype: Element data type (e.g. ``qd.f32``).</span>
 <span class="sd">            shape: Shape of the tensor (excluding the matrix dimensions) as an ``int`` or tuple of ``int``.</span>
 <span class="sd">            backend (qd.Backend, optional): Storage backend. Defaults to ``qd.Backend.NDARRAY``.</span>
-<span class="sd">            **kwargs: Forwarded verbatim to the underlying ``qd.Matrix.field`` / ``qd.Matrix.ndarray`` call.</span>
+<span class="sd">            layout (tuple of int, optional): Permutation of shape axes, outermost first. Matrix component axes stay</span>
+<span class="sd">                innermost. Defaults to the natural axis order.</span>
+<span class="sd">            **kwargs: Additional options such as ``needs_grad``, forwarded to ``qd.tensor``.</span>
 
 <span class="sd">        Example::</span>
 
 <span class="sd">            &gt;&gt;&gt; a = qd.Matrix.tensor(2, 3, qd.f32, shape=(4,))</span>
 <span class="sd">            &gt;&gt;&gt; b = qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)</span>
 <span class="sd">        """</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor</span><span class="w"> </span><span class="kn">import</span> <span class="n">_tensor_mat</span>  <span class="c1"># pylint: disable=C0415</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor</span><span class="w"> </span><span class="kn">import</span> <span class="n">tensor</span>  <span class="c1"># pylint: disable=C0415</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor_wrapper</span><span class="w"> </span><span class="kn">import</span> <span class="n">MatrixTensor</span>  <span class="c1"># pylint: disable=C0415</span>
 
-        <span class="k">return</span> <span class="n">_tensor_mat</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+        <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="n">MatrixTensor</span><span class="p">,</span> <span class="n">tensor</span><span class="p">(</span><span class="n">MatrixType</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">),</span> <span class="n">shape</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span></div>
 
 
     <span class="nd">@staticmethod</span>
@@ -1698,7 +1665,6 @@
 <span class="sd">            shape (Union[int, tuple[int]]): Shape of the ndarray.</span>
 <span class="sd">            needs_grad (bool, optional): If True, allocate a companion grad ndarray of the same shape and dtype,</span>
 <span class="sd">                accessible via ``arr.grad``. Requires ``dtype`` to be a real (floating-point) type. Defaults to False.</span>
-<span class="sd">                Silently ignored on the python backend (matches the scalar ``qd.ndarray`` behaviour).</span>
 
 <span class="sd">        Example:</span>
 <span class="sd">            The code below shows how a Quadrants ndarray with vector elements can be declared and defined::</span>
@@ -1707,13 +1673,6 @@
 <span class="sd">        """</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">):</span>
             <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">shape</span><span class="p">,)</span>
-        <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
-            <span class="kn">from</span><span class="w"> </span><span class="nn">.</span><span class="w"> </span><span class="kn">import</span> <span class="n">_py_tensor</span> <span class="k">as</span> <span class="n">py_tensor</span>  <span class="c1"># pylint: disable=C0415</span>
-            <span class="kn">from</span><span class="w"> </span><span class="nn">.util</span><span class="w"> </span><span class="kn">import</span> <span class="n">dtype_to_torch_dtype</span>  <span class="c1"># pylint: disable=C0415</span>
-
-            <span class="n">batch_ndim</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
-            <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="o">*</span><span class="n">shape</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span>
-            <span class="k">return</span> <span class="n">py_tensor</span><span class="o">.</span><span class="n">create_tensor</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype_to_torch_dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">),</span> <span class="n">batch_ndim</span><span class="o">=</span><span class="n">batch_ndim</span><span class="p">)</span>
         <span class="n">arr</span> <span class="o">=</span> <span class="n">VectorNdarray</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">needs_grad</span><span class="p">:</span>
             <span class="n">dt</span> <span class="o">=</span> <span class="n">cook_dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
@@ -1731,24 +1690,26 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">tensor</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">"""Allocate a tensor whose elements are length-``n`` vectors.</span>
 
-<span class="sd">        Per-tensor backend dispatcher, equivalent to scalar ``qd.tensor()`` for vector-valued elements. Selects</span>
-<span class="sd">        between ``qd.Vector.field`` and ``qd.Vector.ndarray`` based on the ``backend=`` keyword.</span>
+<span class="sd">        Equivalent to ``qd.tensor(qd.types.vector(n, dtype), shape, **kwargs)``.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            n (int): Length of each vector element.</span>
 <span class="sd">            dtype: Element data type (e.g. ``qd.f32``).</span>
 <span class="sd">            shape: Shape of the tensor (excluding the vector dimension) as an ``int`` or tuple of ``int``.</span>
 <span class="sd">            backend (qd.Backend, optional): Storage backend. Defaults to ``qd.Backend.NDARRAY``.</span>
-<span class="sd">            **kwargs: Forwarded verbatim to the underlying ``qd.Vector.field`` / ``qd.Vector.ndarray`` call.</span>
+<span class="sd">            layout (tuple of int, optional): Permutation of shape axes, outermost first. Vector components stay</span>
+<span class="sd">                innermost. Defaults to the natural axis order.</span>
+<span class="sd">            **kwargs: Additional options such as ``needs_grad``, forwarded to ``qd.tensor``.</span>
 
 <span class="sd">        Example::</span>
 
 <span class="sd">            &gt;&gt;&gt; v = qd.Vector.tensor(3, qd.f32, shape=(4,))</span>
 <span class="sd">            &gt;&gt;&gt; u = qd.Vector.tensor(3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)</span>
 <span class="sd">        """</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor</span><span class="w"> </span><span class="kn">import</span> <span class="n">_tensor_vec</span>  <span class="c1"># pylint: disable=C0415</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor</span><span class="w"> </span><span class="kn">import</span> <span class="n">tensor</span>  <span class="c1"># pylint: disable=C0415</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor_wrapper</span><span class="w"> </span><span class="kn">import</span> <span class="n">VectorTensor</span>  <span class="c1"># pylint: disable=C0415</span>
 
-        <span class="k">return</span> <span class="n">_tensor_vec</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+        <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="n">VectorTensor</span><span class="p">,</span> <span class="n">tensor</span><span class="p">(</span><span class="n">VectorType</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="p">),</span> <span class="n">shape</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span></div>
 </div>
 
 
@@ -2457,7 +2418,7 @@
 <span class="sd">            &gt;&gt;&gt; arr = np.ones((2, 1, 2, 2))</span>
 <span class="sd">            &gt;&gt;&gt; m.from_numpy(arr)</span>
 <span class="sd">        """</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_ndarray_matrix_from_numpy</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">as_vector</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_copy_from_numpy</span><span class="p">(</span><span class="n">arr</span><span class="p">)</span></div>
 
 
     <span class="nd">@python_scope</span>
@@ -2641,7 +2602,7 @@
 <span class="sd">            &gt;&gt;&gt; b = np.ones((2, 2, 3), dtype=np.float32)</span>
 <span class="sd">            &gt;&gt;&gt; a.from_numpy(b)</span>
 <span class="sd">        """</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_ndarray_matrix_from_numpy</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">as_vector</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_copy_from_numpy</span><span class="p">(</span><span class="n">arr</span><span class="p">)</span></div>
 
 
     <span class="nd">@python_scope</span>

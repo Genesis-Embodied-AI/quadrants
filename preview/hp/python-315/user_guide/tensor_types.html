@@ -352,7 +352,6 @@
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="unsupported_python.html">Python features in kernel scope</a></li>
-<li class="toctree-l1"><a class="reference internal" href="python_backend.html">Python backend</a></li>
 <li class="toctree-l1"><a class="reference internal" href="debug.html">Debug mode</a></li>
 <li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
@@ -452,6 +451,7 @@
 <p>Let’s first give an example of using each:</p>
 <section id="ndarray">
 <h3>NDArray<a class="headerlink" href="#ndarray" title="Link to this heading">#</a></h3>
+<p>Annotate ndarray parameters with <code class="docutils literal notranslate"><span class="pre">qd.types.NDArray[data_type,</span> <span class="pre">number_dimensions]</span></code>, where <code class="docutils literal notranslate"><span class="pre">data_type</span></code> is the type of each stored element and <code class="docutils literal notranslate"><span class="pre">number_dimensions</span></code> is the number of array dimensions. For example, <code class="docutils literal notranslate"><span class="pre">qd.types.NDArray[qd.i32,</span> <span class="pre">1]</span></code> describes a one-dimensional array of 32-bit integers. The dimension count is optional: <code class="docutils literal notranslate"><span class="pre">qd.types.NDArray[qd.i32]</span></code> accepts any number of dimensions.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
 
 <span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">gpu</span><span class="p">)</span>
@@ -463,8 +463,6 @@
     <span class="n">p1</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
 </pre></div>
 </div>
-<p>Note that the typing for NDArray is <code class="docutils literal notranslate"><span class="pre">qd.types.NDArray[data_type,</span> <span class="pre">number_dimensions]</span></code>.</p>
-<p><code class="docutils literal notranslate"><span class="pre">number_dimensions</span></code> is optional: <code class="docutils literal notranslate"><span class="pre">qd.types.NDArray[qd.i32]</span></code> is also valid, and leaves <code class="docutils literal notranslate"><span class="pre">ndim</span></code> unspecified.</p>
 </section>
 <section id="global-field">
 <h3>Global field<a class="headerlink" href="#global-field" title="Link to this heading">#</a></h3>

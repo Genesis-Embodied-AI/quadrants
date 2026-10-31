@@ -432,16 +432,13 @@
 <tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.misc.vulkan" title="quadrants.lang.misc.vulkan"><code class="xref py py-obj docutils literal notranslate"><span class="pre">vulkan</span></code></a></p></td>
 <td><p>The Vulkan backend.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.misc.python" title="quadrants.lang.misc.python"><code class="xref py py-obj docutils literal notranslate"><span class="pre">python</span></code></a></p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.misc.gpu" title="quadrants.lang.misc.gpu"><code class="xref py py-obj docutils literal notranslate"><span class="pre">gpu</span></code></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.misc.gpu" title="quadrants.lang.misc.gpu"><code class="xref py py-obj docutils literal notranslate"><span class="pre">gpu</span></code></a></p></td>
 <td><p>A list of GPU backends supported on the current system.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.misc.cpu" title="quadrants.lang.misc.cpu"><code class="xref py py-obj docutils literal notranslate"><span class="pre">cpu</span></code></a></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.misc.cpu" title="quadrants.lang.misc.cpu"><code class="xref py py-obj docutils literal notranslate"><span class="pre">cpu</span></code></a></p></td>
 <td><p>A list of CPU backends supported on the current system.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.misc.extension" title="quadrants.lang.misc.extension"><code class="xref py py-obj docutils literal notranslate"><span class="pre">extension</span></code></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.misc.extension" title="quadrants.lang.misc.extension"><code class="xref py py-obj docutils literal notranslate"><span class="pre">extension</span></code></a></p></td>
 <td><p>An instance of Quadrants extension.</p></td>
 </tr>
 </tbody>
@@ -476,7 +473,7 @@
 <tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.misc.loop_config" title="quadrants.lang.misc.loop_config"><code class="xref py py-obj docutils literal notranslate"><span class="pre">loop_config</span></code></a>(*[, block_dim, serialize, parallelize, ...])</p></td>
 <td><p>Sets directives for the next loop</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.misc.graph_do_while" title="quadrants.lang.misc.graph_do_while"><code class="xref py py-obj docutils literal notranslate"><span class="pre">graph_do_while</span></code></a>(→ bool)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.misc.graph_do_while" title="quadrants.lang.misc.graph_do_while"><code class="xref py py-obj docutils literal notranslate"><span class="pre">graph_do_while</span></code></a>(condition) → bool</p></td>
 <td><p>Marks a while loop as a CUDA graph do-while conditional node.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.misc.block_idx" title="quadrants.lang.misc.block_idx"><code class="xref py py-obj docutils literal notranslate"><span class="pre">block_idx</span></code></a>()</p></td>
@@ -488,10 +485,10 @@
 <tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.misc.mesh_patch_idx" title="quadrants.lang.misc.mesh_patch_idx"><code class="xref py py-obj docutils literal notranslate"><span class="pre">mesh_patch_idx</span></code></a>()</p></td>
 <td><p>Returns the internal mesh patch id of this running thread,</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.misc.is_extension_enabled" title="quadrants.lang.misc.is_extension_enabled"><code class="xref py py-obj docutils literal notranslate"><span class="pre">is_extension_enabled</span></code></a>(→ bool)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.misc.is_extension_enabled" title="quadrants.lang.misc.is_extension_enabled"><code class="xref py py-obj docutils literal notranslate"><span class="pre">is_extension_enabled</span></code></a>(ext) → bool</p></td>
 <td><p>Directly returns whether extension is enabled, without needing to</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.misc.dump_compile_config" title="quadrants.lang.misc.dump_compile_config"><code class="xref py py-obj docutils literal notranslate"><span class="pre">dump_compile_config</span></code></a>(→ None)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.misc.dump_compile_config" title="quadrants.lang.misc.dump_compile_config"><code class="xref py py-obj docutils literal notranslate"><span class="pre">dump_compile_config</span></code></a>() → None</p></td>
 <td><p>Dumps the compile config, which can be usful for example in diagnosing fastcache issues, since</p></td>
 </tr>
 </tbody>
@@ -636,11 +633,6 @@ lower dimension d-2, it’s the second axis of this cell.</p>
 </dd></dl>
 
 <dl class="py data">
-<dt class="sig sig-object py" id="quadrants.lang.misc.python">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.misc.</span></span><span class="sig-name descname"><span class="pre">python</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/misc.html#python"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.misc.python" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py data">
 <dt class="sig sig-object py" id="quadrants.lang.misc.gpu">
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.misc.</span></span><span class="sig-name descname"><span class="pre">gpu</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/misc.html#gpu"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.misc.gpu" title="Link to this definition">#</a></dt>
 <dd><p>A list of GPU backends supported on the current system.
@@ -672,7 +664,7 @@ This will destroy all the allocated fields and kernels, and restore
 the runtime to its default configuration.</p>
 <p>Example:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">())</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span><span class="p">[()]</span> <span class="o">=</span> <span class="mi">1</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="s2">"before reset: "</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
 <span class="go">before rest: 1</span>
 <span class="gp">&gt;&gt;&gt;</span>
@@ -1010,7 +1002,6 @@ the fastcache cache keys depend on the compile config.</p>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.misc.amdgpu"><code class="docutils literal notranslate"><span class="pre">amdgpu</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.misc.metal"><code class="docutils literal notranslate"><span class="pre">metal</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.misc.vulkan"><code class="docutils literal notranslate"><span class="pre">vulkan</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.misc.python"><code class="docutils literal notranslate"><span class="pre">python</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.misc.gpu"><code class="docutils literal notranslate"><span class="pre">gpu</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.misc.cpu"><code class="docutils literal notranslate"><span class="pre">cpu</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.misc.extension"><code class="docutils literal notranslate"><span class="pre">extension</span></code></a></li>

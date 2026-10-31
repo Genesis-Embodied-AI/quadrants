@@ -673,8 +673,7 @@
 <span class="sd">        Handles the following forms a single subscript can take inside a kernel:</span>
 
 <span class="sd">        - Python ``list`` / ``tuple``, including indices passed through a ``@qd.func``.</span>
-<span class="sd">        - ``Matrix`` (Python class) — produced when the kernel runs on the python backend, e.g. ``qd.grouped(field)``</span>
-<span class="sd">          returning a ``[Matrix([i, j])]`` list.</span>
+<span class="sd">        - ``Matrix`` (Python class) indices supplied from Python scope.</span>
 <span class="sd">        - ``Expr`` with tensor shape ``(N,)`` — produced by ``matrix.make_matrix(loop_indices, ...)`` in</span>
 <span class="sd">          :func:`build_struct_for` / :func:`build_grouped_ndrange_for`, which is what real kernels see for</span>
 <span class="sd">          ``for I in qd.grouped(...)``.</span>
