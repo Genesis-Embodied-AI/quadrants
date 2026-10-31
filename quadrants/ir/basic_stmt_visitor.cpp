@@ -10,7 +10,8 @@ BasicStmtVisitor::BasicStmtVisitor() {
 
 void BasicStmtVisitor::visit(Block *stmt_list) {
   std::vector<Stmt *> statements;
-  // Make a copy in case the pass modifies the block itself
+  // Copy the pointers so changes to the block's statement vector do not invalidate iteration. This does not keep
+  // statements alive: defer removals until traversal finishes, as RemoveLoopUnique does with DelayedIRModifier.
   for (auto &stmt : stmt_list->statements)
     statements.push_back(stmt.get());
   for (auto &stmt : statements)

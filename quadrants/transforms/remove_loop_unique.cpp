@@ -12,14 +12,17 @@ namespace {
 
 class RemoveLoopUnique : public BasicStmtVisitor {
  public:
+  // Keep inherited overloads visible for direct calls on this visitor.
   using BasicStmtVisitor::visit;
   DelayedIRModifier modifier;
 
+  // Redirect uses to the input and queue removal, keeping the statement alive during traversal.
   void visit(LoopUniqueStmt *stmt) override {
     stmt->replace_usages_with(stmt->input);
     modifier.erase(stmt);
   }
 
+  // Use inherited container traversal to find statements, then apply the queued removals.
   static bool run(IRNode *node) {
     RemoveLoopUnique pass;
     node->accept(&pass);

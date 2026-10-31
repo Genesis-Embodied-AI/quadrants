@@ -3,11 +3,15 @@
 
 namespace quadrants::lang {
 
-// Visits all non-containing statements
+// Traverses blocks and the containers listed below, ignoring unhandled leaf statements by default.
+// Overriding a container's visit replaces its traversal: call BasicStmtVisitor::visit(stmt) to retain it, or visit
+// the desired child blocks explicitly. New container types need a traversal implementation here as well.
 class BasicStmtVisitor : public IRVisitor {
  public:
   BasicStmtVisitor();
 
+  // Called by the container visitors below before descending into child blocks; not called for Block itself.
+  // Override this hook to inspect containers without replacing their traversal.
   virtual void preprocess_container_stmt(Stmt *stmt) {
   }
 

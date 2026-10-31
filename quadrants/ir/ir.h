@@ -156,9 +156,12 @@ class VecStatement {
   }
 };
 
+// Dispatches to typed visit overloads; subclasses define traversal. Unhandled types report an error by default.
 class IRVisitor {
  public:
+  // Permit unhandled types instead of reporting an error.
   bool allow_undefined_visitor;
+  // When undefined visitors are allowed, forward unhandled typed visits to visit(Stmt *) instead of ignoring them.
   bool invoke_default_visitor;
 
   IRVisitor() {
@@ -168,7 +171,7 @@ class IRVisitor {
 
   virtual ~IRVisitor() = default;
 
-  // default visitor
+  // Fallback for unhandled types when both flags above are enabled.
   virtual void visit(Stmt *stmt) {
     if (!allow_undefined_visitor) {
       QD_ERROR(
@@ -269,6 +272,9 @@ class IRNode {
   std::unique_ptr<IRNode> clone();
 };
 
+// Virtual accept dispatch selects the concrete node, whose `this` type selects the visit overload at compile time.
+// That overload is virtual too, so the concrete visitor supplies its implementation. Calling visit with a Stmt *
+// directly selects visit(Stmt *), regardless of the node's runtime type.
 #define QD_DEFINE_ACCEPT                     \
   void accept(IRVisitor *visitor) override { \
     visitor->visit(this);                    \
@@ -701,6 +707,8 @@ class Block : public IRNode {
   QD_DEFINE_ACCEPT
 };
 
+// Queues IR edits for explicit application by modify_ir(), allowing passes to defer removal until traversal finishes.
+// Apply queued edits before destruction; the destructor asserts that no edits remain pending.
 class DelayedIRModifier {
  private:
   std::vector<std::pair<Stmt *, VecStatement>> to_insert_before_;
