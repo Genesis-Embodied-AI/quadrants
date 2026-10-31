@@ -900,8 +900,7 @@ This function must be called in Python scope, and after <cite>qd.init</cite> is 
 <li><p><strong>dtype</strong> (<em>DataType</em>) – Data type of each value.</p></li>
 <li><p><strong>shape</strong> (<em>Union</em><em>[</em><em>int</em><em>, </em><em>tuple</em><em>[</em><em>int</em><em>]</em><em>]</em>) – Shape of the ndarray.</p></li>
 <li><p><strong>needs_grad</strong> (<em>bool</em><em>, </em><a class="reference internal" href="../kernel_arguments/index.html#quadrants.lang.kernel_arguments.ArgMetadata.optional" title="quadrants.lang.kernel_arguments.ArgMetadata.optional"><em>optional</em></a>) – If True, allocate a companion grad ndarray of the same shape and dtype,
-accessible via <code class="docutils literal notranslate"><span class="pre">arr.grad</span></code>. Requires <code class="docutils literal notranslate"><span class="pre">dtype</span></code> to be a real (floating-point) type. Defaults to False.
-Silently ignored on the python backend (matches the scalar <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code> behaviour).</p></li>
+accessible via <code class="docutils literal notranslate"><span class="pre">arr.grad</span></code>. Requires <code class="docutils literal notranslate"><span class="pre">dtype</span></code> to be a real (floating-point) type. Defaults to False.</p></li>
 </ul>
 </dd>
 </dl>
@@ -917,8 +916,7 @@ Silently ignored on the python backend (matches the scalar <code class="docutils
 <dt class="sig sig-object py" id="quadrants.lang.matrix.Matrix.tensor">
 <span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">tensor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">m</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shape</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#Matrix.tensor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.Matrix.tensor" title="Link to this definition">#</a></dt>
 <dd><p>Allocate a tensor whose elements are <code class="docutils literal notranslate"><span class="pre">n</span></code>-by-<code class="docutils literal notranslate"><span class="pre">m</span></code> matrices.</p>
-<p>Per-tensor backend dispatcher, equivalent to scalar <code class="docutils literal notranslate"><span class="pre">qd.tensor()</span></code> for matrix-valued elements. Selects
-between <code class="docutils literal notranslate"><span class="pre">qd.Matrix.field</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.Matrix.ndarray</span></code> based on the <code class="docutils literal notranslate"><span class="pre">backend=</span></code> keyword.</p>
+<p>Equivalent to <code class="docutils literal notranslate"><span class="pre">qd.tensor(qd.types.matrix(n,</span> <span class="pre">m,</span> <span class="pre">dtype),</span> <span class="pre">shape,</span> <span class="pre">**kwargs)</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -927,7 +925,9 @@ between <code class="docutils literal notranslate"><span class="pre">qd.Matrix.f
 <li><p><strong>dtype</strong> – Element data type (e.g. <code class="docutils literal notranslate"><span class="pre">qd.f32</span></code>).</p></li>
 <li><p><strong>shape</strong> – Shape of the tensor (excluding the matrix dimensions) as an <code class="docutils literal notranslate"><span class="pre">int</span></code> or tuple of <code class="docutils literal notranslate"><span class="pre">int</span></code>.</p></li>
 <li><p><strong>backend</strong> (<em>qd.Backend</em><em>, </em><a class="reference internal" href="../kernel_arguments/index.html#quadrants.lang.kernel_arguments.ArgMetadata.optional" title="quadrants.lang.kernel_arguments.ArgMetadata.optional"><em>optional</em></a>) – Storage backend. Defaults to <code class="docutils literal notranslate"><span class="pre">qd.Backend.NDARRAY</span></code>.</p></li>
-<li><p><strong>**kwargs</strong> – Forwarded verbatim to the underlying <code class="docutils literal notranslate"><span class="pre">qd.Matrix.field</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.Matrix.ndarray</span></code> call.</p></li>
+<li><p><strong>layout</strong> (<em>tuple</em><em> of </em><em>int</em><em>, </em><a class="reference internal" href="../kernel_arguments/index.html#quadrants.lang.kernel_arguments.ArgMetadata.optional" title="quadrants.lang.kernel_arguments.ArgMetadata.optional"><em>optional</em></a>) – Permutation of shape axes, outermost first. Matrix component axes stay
+innermost. Defaults to the natural axis order.</p></li>
+<li><p><strong>**kwargs</strong> – Additional options such as <code class="docutils literal notranslate"><span class="pre">needs_grad</span></code>, forwarded to <code class="docutils literal notranslate"><span class="pre">qd.tensor</span></code>.</p></li>
 </ul>
 </dd>
 </dl>
@@ -1128,8 +1128,7 @@ you can even initialize a matrix with an empty list:
 <li><p><strong>dtype</strong> (<em>DataType</em>) – Data type of each value.</p></li>
 <li><p><strong>shape</strong> (<em>Union</em><em>[</em><em>int</em><em>, </em><em>tuple</em><em>[</em><em>int</em><em>]</em><em>]</em>) – Shape of the ndarray.</p></li>
 <li><p><strong>needs_grad</strong> (<em>bool</em><em>, </em><a class="reference internal" href="../kernel_arguments/index.html#quadrants.lang.kernel_arguments.ArgMetadata.optional" title="quadrants.lang.kernel_arguments.ArgMetadata.optional"><em>optional</em></a>) – If True, allocate a companion grad ndarray of the same shape and dtype,
-accessible via <code class="docutils literal notranslate"><span class="pre">arr.grad</span></code>. Requires <code class="docutils literal notranslate"><span class="pre">dtype</span></code> to be a real (floating-point) type. Defaults to False.
-Silently ignored on the python backend (matches the scalar <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code> behaviour).</p></li>
+accessible via <code class="docutils literal notranslate"><span class="pre">arr.grad</span></code>. Requires <code class="docutils literal notranslate"><span class="pre">dtype</span></code> to be a real (floating-point) type. Defaults to False.</p></li>
 </ul>
 </dd>
 </dl>
@@ -1144,8 +1143,7 @@ Silently ignored on the python backend (matches the scalar <code class="docutils
 <dt class="sig sig-object py" id="quadrants.lang.matrix.Vector.tensor">
 <span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">tensor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shape</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#Vector.tensor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.Vector.tensor" title="Link to this definition">#</a></dt>
 <dd><p>Allocate a tensor whose elements are length-<code class="docutils literal notranslate"><span class="pre">n</span></code> vectors.</p>
-<p>Per-tensor backend dispatcher, equivalent to scalar <code class="docutils literal notranslate"><span class="pre">qd.tensor()</span></code> for vector-valued elements. Selects
-between <code class="docutils literal notranslate"><span class="pre">qd.Vector.field</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.Vector.ndarray</span></code> based on the <code class="docutils literal notranslate"><span class="pre">backend=</span></code> keyword.</p>
+<p>Equivalent to <code class="docutils literal notranslate"><span class="pre">qd.tensor(qd.types.vector(n,</span> <span class="pre">dtype),</span> <span class="pre">shape,</span> <span class="pre">**kwargs)</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -1153,7 +1151,9 @@ between <code class="docutils literal notranslate"><span class="pre">qd.Vector.f
 <li><p><strong>dtype</strong> – Element data type (e.g. <code class="docutils literal notranslate"><span class="pre">qd.f32</span></code>).</p></li>
 <li><p><strong>shape</strong> – Shape of the tensor (excluding the vector dimension) as an <code class="docutils literal notranslate"><span class="pre">int</span></code> or tuple of <code class="docutils literal notranslate"><span class="pre">int</span></code>.</p></li>
 <li><p><strong>backend</strong> (<em>qd.Backend</em><em>, </em><a class="reference internal" href="../kernel_arguments/index.html#quadrants.lang.kernel_arguments.ArgMetadata.optional" title="quadrants.lang.kernel_arguments.ArgMetadata.optional"><em>optional</em></a>) – Storage backend. Defaults to <code class="docutils literal notranslate"><span class="pre">qd.Backend.NDARRAY</span></code>.</p></li>
-<li><p><strong>**kwargs</strong> – Forwarded verbatim to the underlying <code class="docutils literal notranslate"><span class="pre">qd.Vector.field</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.Vector.ndarray</span></code> call.</p></li>
+<li><p><strong>layout</strong> (<em>tuple</em><em> of </em><em>int</em><em>, </em><a class="reference internal" href="../kernel_arguments/index.html#quadrants.lang.kernel_arguments.ArgMetadata.optional" title="quadrants.lang.kernel_arguments.ArgMetadata.optional"><em>optional</em></a>) – Permutation of shape axes, outermost first. Vector components stay
+innermost. Defaults to the natural axis order.</p></li>
+<li><p><strong>**kwargs</strong> – Additional options such as <code class="docutils literal notranslate"><span class="pre">needs_grad</span></code>, forwarded to <code class="docutils literal notranslate"><span class="pre">qd.tensor</span></code>.</p></li>
 </ul>
 </dd>
 </dl>

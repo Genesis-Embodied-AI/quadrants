@@ -352,7 +352,6 @@
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="unsupported_python.html">Python features in kernel scope</a></li>
-<li class="toctree-l1"><a class="reference internal" href="python_backend.html">Python backend</a></li>
 <li class="toctree-l1"><a class="reference internal" href="debug.html">Debug mode</a></li>
 <li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
@@ -449,7 +448,7 @@
 <ol class="arabic simple">
 <li><p>Allocate an adjoint (<code class="docutils literal notranslate"><span class="pre">.grad</span></code>) buffer next to every primal field whose gradient you need.</p></li>
 <li><p>Run the forward kernel.</p></li>
-<li><p>Seed the loss gradient - typically <code class="docutils literal notranslate"><span class="pre">loss.grad[None]</span> <span class="pre">=</span> <span class="pre">1.0</span></code>.</p></li>
+<li><p>Seed the loss gradient - typically <code class="docutils literal notranslate"><span class="pre">loss.grad[()]</span> <span class="pre">=</span> <span class="pre">1.0</span></code>.</p></li>
 <li><p>Call <code class="docutils literal notranslate"><span class="pre">kernel.grad()</span></code>.</p></li>
 <li><p>Read the gradients from the <code class="docutils literal notranslate"><span class="pre">.grad</span></code> fields.</p></li>
 </ol>
@@ -467,16 +466,16 @@
 <span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">compute</span><span class="p">():</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">x</span><span class="p">:</span>
-        <span class="n">y</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">+=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="n">y</span><span class="p">[()]</span> <span class="o">+=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
 
 <span class="c1"># Step 2: run the forward kernel.</span>
 <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">16</span><span class="p">):</span>
     <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
-<span class="n">y</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span>
+<span class="n">y</span><span class="p">[()]</span> <span class="o">=</span> <span class="mf">0.0</span>
 <span class="n">compute</span><span class="p">()</span>
 
 <span class="c1"># Step 3: seed the loss gradient.</span>
-<span class="n">y</span><span class="o">.</span><span class="n">grad</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span>
+<span class="n">y</span><span class="o">.</span><span class="n">grad</span><span class="p">[()]</span> <span class="o">=</span> <span class="mf">1.0</span>
 <span class="c1"># (clear input adjoints before the reverse pass so they do not accumulate)</span>
 <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">16</span><span class="p">):</span>
     <span class="n">x</span><span class="o">.</span><span class="n">grad</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span>
@@ -503,7 +502,7 @@
 <section id="recording-a-backward-pass-with-qd-ad-tape">
 <h3>Recording a backward pass with <code class="docutils literal notranslate"><span class="pre">qd.ad.Tape</span></code><a class="headerlink" href="#recording-a-backward-pass-with-qd-ad-tape" title="Link to this heading">#</a></h3>
 <p>Training loops typically chain several kernels - physics step, feature extraction, loss. Differentiating such a pipeline by hand means calling each <code class="docutils literal notranslate"><span class="pre">.grad()</span></code> in the correct reverse order, seeding the loss, and clearing adjoints on every iteration.</p>
-<p><code class="docutils literal notranslate"><span class="pre">qd.ad.Tape</span></code> automates this. Kernel calls inside a <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.ad.Tape(loss=...)</span></code> block are recorded; on exit the tape replays them in reverse, seeds <code class="docutils literal notranslate"><span class="pre">loss.grad[None]</span> <span class="pre">=</span> <span class="pre">1.0</span></code>, and writes the input gradients back into the <code class="docutils literal notranslate"><span class="pre">.grad</span></code> fields. Adjoints are cleared on entry, which is the desired behavior for almost every training iteration.</p>
+<p><code class="docutils literal notranslate"><span class="pre">qd.ad.Tape</span></code> automates this. Kernel calls inside a <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.ad.Tape(loss=...)</span></code> block are recorded; on exit the tape replays them in reverse, seeds <code class="docutils literal notranslate"><span class="pre">loss.grad[()]</span> <span class="pre">=</span> <span class="pre">1.0</span></code>, and writes the input gradients back into the <code class="docutils literal notranslate"><span class="pre">.grad</span></code> fields. Adjoints are cleared on entry, which is the desired behavior for almost every training iteration.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">qd</span><span class="o">.</span><span class="n">ad</span><span class="o">.</span><span class="n">Tape</span><span class="p">(</span><span class="n">loss</span><span class="o">=</span><span class="n">y</span><span class="p">):</span>
     <span class="n">compute</span><span class="p">()</span>
 <span class="c1"># x.grad is now populated.</span>
@@ -574,7 +573,7 @@
 <span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">accumulate</span><span class="p">(</span><span class="n">mul</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">):</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">128</span><span class="p">):</span>
-        <span class="n">qd</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">total</span><span class="p">[</span><span class="kc">None</span><span class="p">],</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">mul</span><span class="p">)</span>
+        <span class="n">qd</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">total</span><span class="p">[()],</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">mul</span><span class="p">)</span>
 
 <span class="nd">@qd</span><span class="o">.</span><span class="n">ad</span><span class="o">.</span><span class="n">grad_replaced</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="n">mul</span><span class="p">):</span>
@@ -600,22 +599,22 @@
 <p>Here is a kernel that violates the rule:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">bad</span><span class="p">():</span>
-    <span class="c1"># Reads b[None] for loss, then overwrites b[None] -&gt; invalid.</span>
-    <span class="n">loss</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">b</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span>
-    <span class="n">b</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">100</span>
+    <span class="c1"># Reads b[()] for loss, then overwrites b[()] -&gt; invalid.</span>
+    <span class="n">loss</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">b</span><span class="p">[()]</span>
+    <span class="n">b</span><span class="p">[()]</span> <span class="o">+=</span> <span class="mi">100</span>
 </pre></div>
 </div>
-<p>This is the “read then overwrite” pattern: <code class="docutils literal notranslate"><span class="pre">b[None]</span></code> is read, then written, inside the same launch. The reverse pass would need the original <code class="docutils literal notranslate"><span class="pre">b[None]</span></code> to compute <code class="docutils literal notranslate"><span class="pre">dloss/dx[1]</span></code>, but by then it has been clobbered.</p>
+<p>This is the “read then overwrite” pattern: <code class="docutils literal notranslate"><span class="pre">b[()]</span></code> is read, then written, inside the same launch. The reverse pass would need the original <code class="docutils literal notranslate"><span class="pre">b[()]</span></code> to compute <code class="docutils literal notranslate"><span class="pre">dloss/dx[1]</span></code>, but by then it has been clobbered.</p>
 <p>To fix it, separate the read and the write into two distinct kernels. Each kernel launch becomes self-consistent: <code class="docutils literal notranslate"><span class="pre">compute_loss</span></code> only reads, <code class="docutils literal notranslate"><span class="pre">update_b</span></code> only writes, and the rule is obeyed because the constraint is per-launch.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">compute_loss</span><span class="p">():</span>
-    <span class="n">loss</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">b</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span>
+    <span class="n">loss</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">b</span><span class="p">[()]</span>
 
 <span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">update_b</span><span class="p">():</span>
-    <span class="n">b</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">100</span>
+    <span class="n">b</span><span class="p">[()]</span> <span class="o">+=</span> <span class="mi">100</span>
 
-<span class="c1"># Call them in order. Each launch reads or writes b[None], never both.</span>
+<span class="c1"># Call them in order. Each launch reads or writes b[()], never both.</span>
 <span class="n">compute_loss</span><span class="p">()</span>
 <span class="n">update_b</span><span class="p">()</span>
 </pre></div>
@@ -840,7 +839,7 @@
 <td><p><code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(42):</span></code></p></td>
 </tr>
 <tr class="row-odd"><td><p>Scalar integer field (<code class="docutils literal notranslate"><span class="pre">i32</span></code> / <code class="docutils literal notranslate"><span class="pre">i64</span></code>) at a constant or loop index</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(n[None]):</span></code>, <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(n[j]):</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(n[()]):</span></code>, <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(n[j]):</span></code></p></td>
 </tr>
 <tr class="row-even"><td><p>Ndarray argument shape along any axis</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(arr.shape[1]):</span></code></p></td>

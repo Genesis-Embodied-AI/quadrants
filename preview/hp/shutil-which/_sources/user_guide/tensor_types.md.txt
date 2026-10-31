@@ -21,6 +21,8 @@ Let's first give an example of using each:
 
 ### NDArray
 
+Annotate ndarray parameters with `qd.types.NDArray[data_type, number_dimensions]`, where `data_type` is the type of each stored element and `number_dimensions` is the number of array dimensions. For example, `qd.types.NDArray[qd.i32, 1]` describes a one-dimensional array of 32-bit integers. The dimension count is optional: `qd.types.NDArray[qd.i32]` accepts any number of dimensions.
+
 ```python
 import quadrants as qd
 
@@ -32,10 +34,6 @@ a = qd.ndarray(qd.i32, shape=(10,))
 def f1(p1: qd.types.NDArray[qd.i32, 1]) -> None:
     p1[0] += 1
 ```
-
-Note that the typing for NDArray is `qd.types.NDArray[data_type, number_dimensions]`.
-
-`number_dimensions` is optional: `qd.types.NDArray[qd.i32]` is also valid, and leaves `ndim` unspecified.
 
 ### Global field
 

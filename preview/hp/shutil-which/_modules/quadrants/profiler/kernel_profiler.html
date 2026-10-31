@@ -843,12 +843,12 @@
 
 <span class="sd">        &gt;&gt;&gt; x = qd.field(qd.f32, shape=num_elements)</span>
 <span class="sd">        &gt;&gt;&gt; y = qd.field(qd.f32, shape=())</span>
-<span class="sd">        &gt;&gt;&gt; y[None] = 0</span>
+<span class="sd">        &gt;&gt;&gt; y[()] = 0</span>
 
 <span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def reduction():</span>
 <span class="sd">        &gt;&gt;&gt;     for i in x:</span>
-<span class="sd">        &gt;&gt;&gt;         y[None] += x[i]</span>
+<span class="sd">        &gt;&gt;&gt;         y[()] += x[i]</span>
 
 <span class="sd">        &gt;&gt;&gt; # In the case of not parameter, Quadrants will print its pre-defined metrics list</span>
 <span class="sd">        &gt;&gt;&gt; qd.profiler.get_predefined_cupti_metrics()</span>
@@ -894,12 +894,12 @@
 
 <span class="sd">        &gt;&gt;&gt; x = qd.field(qd.f32, shape=num_elements)</span>
 <span class="sd">        &gt;&gt;&gt; y = qd.field(qd.f32, shape=())</span>
-<span class="sd">        &gt;&gt;&gt; y[None] = 0</span>
+<span class="sd">        &gt;&gt;&gt; y[()] = 0</span>
 
 <span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def reduction():</span>
 <span class="sd">        &gt;&gt;&gt;     for i in x:</span>
-<span class="sd">        &gt;&gt;&gt;         y[None] += x[i]</span>
+<span class="sd">        &gt;&gt;&gt;         y[()] += x[i]</span>
 
 <span class="sd">        &gt;&gt;&gt; # In the case of not parameter, Quadrants will print its pre-defined metrics list</span>
 <span class="sd">        &gt;&gt;&gt; qd.profiler.get_predefined_cupti_metrics()</span>

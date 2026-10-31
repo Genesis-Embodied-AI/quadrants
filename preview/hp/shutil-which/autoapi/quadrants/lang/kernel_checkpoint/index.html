@@ -371,16 +371,16 @@ below so the central <code class="docutils literal notranslate"><span class="pre
 <h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.kernel_checkpoint.validate_resume_cookie" title="quadrants.lang.kernel_checkpoint.validate_resume_cookie"><code class="xref py py-obj docutils literal notranslate"><span class="pre">validate_resume_cookie</span></code></a>(→ None)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.kernel_checkpoint.validate_resume_cookie" title="quadrants.lang.kernel_checkpoint.validate_resume_cookie"><code class="xref py py-obj docutils literal notranslate"><span class="pre">validate_resume_cookie</span></code></a>(kernel, resume_from_checkpoint) → None</p></td>
 <td><p>Raise if <code class="docutils literal notranslate"><span class="pre">_qd_from_checkpoint</span></code> was passed to a kernel without any <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(yield_on=...)</span></code> block.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.kernel_checkpoint.translate_user_label_to_internal_cp_id" title="quadrants.lang.kernel_checkpoint.translate_user_label_to_internal_cp_id"><code class="xref py py-obj docutils literal notranslate"><span class="pre">translate_user_label_to_internal_cp_id</span></code></a>(→ int)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.kernel_checkpoint.translate_user_label_to_internal_cp_id" title="quadrants.lang.kernel_checkpoint.translate_user_label_to_internal_cp_id"><code class="xref py py-obj docutils literal notranslate"><span class="pre">translate_user_label_to_internal_cp_id</span></code></a>(kernel, user_label) → int</p></td>
 <td><p>Translate a user-supplied <code class="docutils literal notranslate"><span class="pre">from_checkpoint=</span></code> label (int or IntEnum) to the runtime's internal dense cp_id.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.kernel_checkpoint.forward_yield_on_table_to_ctx" title="quadrants.lang.kernel_checkpoint.forward_yield_on_table_to_ctx"><code class="xref py py-obj docutils literal notranslate"><span class="pre">forward_yield_on_table_to_ctx</span></code></a>(→ None)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.kernel_checkpoint.forward_yield_on_table_to_ctx" title="quadrants.lang.kernel_checkpoint.forward_yield_on_table_to_ctx"><code class="xref py py-obj docutils literal notranslate"><span class="pre">forward_yield_on_table_to_ctx</span></code></a>(kernel, launch_ctx) → None</p></td>
 <td><p>Copy the <code class="docutils literal notranslate"><span class="pre">cp_id</span> <span class="pre">-&gt;</span> <span class="pre">C++</span> <span class="pre">arg-id</span></code> table onto the launch context so the runtime can find each <code class="docutils literal notranslate"><span class="pre">yield_on=</span></code></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.kernel_checkpoint.maybe_build_graph_status" title="quadrants.lang.kernel_checkpoint.maybe_build_graph_status"><code class="xref py py-obj docutils literal notranslate"><span class="pre">maybe_build_graph_status</span></code></a>(→ Any)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.kernel_checkpoint.maybe_build_graph_status" title="quadrants.lang.kernel_checkpoint.maybe_build_graph_status"><code class="xref py py-obj docutils literal notranslate"><span class="pre">maybe_build_graph_status</span></code></a>(kernel, default_ret) → Any</p></td>
 <td><p>Translate the runtime's internal yielding cp_id back to the user-supplied label and return a <code class="docutils literal notranslate"><span class="pre">GraphStatus</span></code>.</p></td>
 </tr>
 </tbody>
