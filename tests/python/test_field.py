@@ -346,7 +346,7 @@ def test_index_mismatch():
 def test_invalid_slicing():
     with pytest.raises(
         TypeError,
-        match="Detected illegal element of type: .*?\. Please be aware that slicing a qd.field is not supported so far.",
+        match=r"Detected illegal element of type: .*?\. Please be aware that slicing a qd.field is not supported so far.",
     ):
         val = qd.field(qd.i32, shape=(2, 2))
         val[0, :]
