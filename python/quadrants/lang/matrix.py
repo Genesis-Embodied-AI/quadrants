@@ -12,6 +12,7 @@ from quadrants._lib import core as qd_python_core
 from quadrants._lib.utils import qd_python_core as _qd_python_core
 from quadrants.lang import expr, impl, runtime_ops
 from quadrants.lang import ops as ops_mod
+from quadrants.lang._field_initializer import _FillValue, capture_fill_value
 from quadrants.lang._metal_interop import mps_sync_if_metal
 from quadrants.lang._ndarray import Ndarray, NdarrayHostAccess
 from quadrants.lang.common_ops import QuadrantsOperations
@@ -856,6 +857,8 @@ class Matrix(QuadrantsOperations):
         needs_dual=False,
         layout=Layout.AOS,
         ndim=None,
+        *,
+        fill: _FillValue | None = None,
     ):
         """Construct a data container to hold all elements of the Matrix.
 
@@ -870,11 +873,13 @@ class Matrix(QuadrantsOperations):
             needs_grad (bool, optional): Whether the Matrix need grad field (reverse mode autodiff).
             needs_dual (bool, optional): Whether the Matrix need dual field (forward mode autodiff).
             layout (Layout, optional): The field layout, either Array Of Structure (AOS) or Structure Of Array (SOA).
+            fill (optional): Initial scalar or per-component values, applied once on materialization. Defaults to None.
 
         Returns:
             :class:`~quadrants.Matrix`: A matrix.
         """
 
+        captured_fill_value = capture_fill_value(fill, (n,) if ndim == 1 else (n, m))
         member_groups = []
         element_dim = ndim if ndim is not None else 2
         if isinstance(dtype, (list, tuple, np.ndarray)):
@@ -1003,6 +1008,7 @@ class Matrix(QuadrantsOperations):
                     grad_field._qd_layout = _qd_layout
                 if needs_dual:
                     dual_field._qd_layout = _qd_layout
+        impl.get_runtime().field_initializers.add(field, captured_fill_value)
         return field
 
     @classmethod
