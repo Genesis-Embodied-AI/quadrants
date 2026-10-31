@@ -120,6 +120,9 @@ jobs:
           bash .github/workflows/scripts_new/manylinux_wheel/5_test.sh
   api_docs:
     uses: ./.github/workflows/api_doc.yml
+    permissions:
+      contents: write
+      statuses: write
     needs: build_wheel
     with:
       head_ref: ${{ github.head_ref || github.ref_name }}

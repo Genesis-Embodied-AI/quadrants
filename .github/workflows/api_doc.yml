@@ -17,6 +17,7 @@ concurrency:
   cancel-in-progress: true
 permissions:
   contents: write
+  statuses: write
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -57,3 +58,22 @@ jobs:
           destination_dir: ${{ github.head_ref && format('preview/{0}', github.head_ref) || '' }}
           keep_files: true
           publish_branch: gh-pages
+      - name: Link to documentation preview
+        if: github.head_ref != ''
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            // Encode each path segment so slashes in branch names remain directory separators.
+            const branch = context.payload.pull_request.head.ref.split('/').map(encodeURIComponent).join('/');
+            const url = `https://${owner}.github.io/${repo}/preview/${branch}/`;
+            await github.rest.repos.createCommitStatus({
+              owner,
+              repo,
+              // Attach the link to the PR head, rather than GitHub's temporary merge commit.
+              sha: context.payload.pull_request.head.sha,
+              state: 'success',
+              context: 'Docs preview',
+              description: 'Open docs preview (publishing may take a few minutes)',
+              target_url: url,
+            });
