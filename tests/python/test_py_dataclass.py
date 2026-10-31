@@ -12,7 +12,7 @@ from quadrants.lang._kernel_types import KernelBatchedArgType
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.impl import Kernel, QuadrantsSyntaxError
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @pytest.fixture
@@ -3417,9 +3417,9 @@ def test_frozen_dataclass_passed_to_multiple_ancestor_annotations():
 #
 # Design goal: let users mark selected fields of a plain frozen
 # ``@dataclasses.dataclass`` config as ``typing.Final[T]`` to signal that the field's value must be baked as a
-# compile-time constant. This replaces the pre-existing ``@qd.data_oriented`` + ``qd.Template`` pattern for static
-# configs - where the same effect required opting the whole class into the data_oriented machinery and paying the
-# associated per-launch overhead (see PR #705 discussion of ``_arg_disposition`` / ``TemplateMapper.lookup``).
+# compile-time constant. Unlike ``@qd.data_oriented`` + ``qd.Template`` for static configs, this does not require
+# opting the whole class into the data_oriented machinery or paying the associated per-launch overhead in
+# ``_class_needs_ndarray_member_walk`` in ``TemplateMapper.lookup``.
 #
 # Semantics:
 # - ``config.field`` accessed inside a kernel body resolves at AST-build time to the actual Python value baked into

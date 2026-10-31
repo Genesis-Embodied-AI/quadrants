@@ -9,7 +9,7 @@ import quadrants as qd
 from quadrants.lang import impl
 from quadrants.lang.misc import get_host_arch_list
 
-from tests import test_utils
+from tests.helpers import test_utils
 from tests.helpers.kernel_loading import load_kernel_from_string
 
 data_types = [qd.i32, qd.f32, qd.i64, qd.f64]
@@ -422,8 +422,8 @@ def test_sparse_not_supported():
 @test_utils.test(require=qd.extension.data64)
 def test_write_u64():
     x = qd.field(qd.u64, shape=())
-    x[None] = 2**64 - 1
-    assert x[None] == 2**64 - 1
+    x[()] = 2**64 - 1
+    assert x[()] == 2**64 - 1
 
 
 @test_utils.test(require=qd.extension.data64)

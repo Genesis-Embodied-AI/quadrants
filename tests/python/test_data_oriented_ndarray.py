@@ -17,7 +17,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 # ---------------------------------------------------------------------------
 # 1. Single raw qd.ndarray attribute (scalar element type).
@@ -663,14 +663,12 @@ def test_data_oriented_nested_ndarray_reassign():
 
 # ---------------------------------------------------------------------------
 # 15b. Reassignment through a FROZEN outer container that wraps a MUTABLE inner container holding the ndarray.
-# Reproducer for Codex review #1 on PR #704
-# (https://github.com/Genesis-Embodied-AI/quadrants/pull/704#discussion_r3253017477): the launch-time mutable-nd cache
-# guard only classified mutability of the *top-level* kernel arg. With a frozen dataclass at the root, the predicate
-# returned False and no per-call walk was inserted, so reassigning ``outer.inner.x`` between launches left the
-# launch-context cache bound to the *original* ndarray.
+# The launch-time mutable-nd cache guard must account for mutable containers nested inside a frozen dataclass.
+# Checking only the top-level kernel arg skips the per-call walk, so reassigning ``outer.inner.x`` between launches
+# leaves the launch-context cache bound to the original ndarray.
 #
-# Fixed by widening the predicate to OR-fold mutability across every intermediate container along the recorded
-# attr-chain (not just the root). See ``launch_kernel`` in ``python/quadrants/lang/kernel.py``.
+# The predicate must OR-fold mutability across every intermediate container along the recorded attr-chain, not just
+# the root. See ``launch_kernel`` in ``python/quadrants/lang/kernel.py``.
 # ---------------------------------------------------------------------------
 
 

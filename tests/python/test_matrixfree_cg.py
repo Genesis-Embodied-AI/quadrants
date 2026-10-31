@@ -5,7 +5,7 @@ import pytest
 import quadrants as qd
 from quadrants.linalg import LinearOperator, MatrixFreeCG
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 vk_on_mac = (qd.vulkan, "Darwin")
 

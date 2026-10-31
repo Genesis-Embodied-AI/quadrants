@@ -233,10 +233,8 @@ class QD_DLL_EXPORT GfxRuntime {
   // Quadrants touches a Python-side observable (result fetch, `to_numpy()`, field readback, etc.) between
   // kernel launches and those paths trigger an implicit `synchronize()` that drains the queue.
   //
-  // A bounded-FIFO / semaphore-keyed retirement scheme was considered (see the `is_signaled()` discussion in
-  // the closed PR #538) and rejected as net-negative: the FIFO variant trades a theoretical growth path for
-  // a real, measurable blocking stall every N flushes, at an arbitrary threshold. The non-blocking polling
-  // variant is the one worth doing, but only if a real workload motivates it - that requires
+  // A bounded-FIFO / semaphore-keyed retirement scheme trades a theoretical growth path for a blocking stall every N
+  // flushes, at an arbitrary threshold. Non-blocking polling is worth doing if a workload motivates it. It requires
   // `bool is_signaled() const` on `StreamSemaphoreObject` and per-backend implementations (`vkGetFenceStatus`
   // on Vulkan, `MTLSharedEvent` on Metal, trivial on CPU), an RHI public-surface change that should stand
   // alone when it lands.

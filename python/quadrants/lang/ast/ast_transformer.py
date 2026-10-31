@@ -306,8 +306,7 @@ class ASTTransformer(Builder):
         Handles the following forms a single subscript can take inside a kernel:
 
         - Python ``list`` / ``tuple``, including indices passed through a ``@qd.func``.
-        - ``Matrix`` (Python class) — produced when the kernel runs on the python backend, e.g. ``qd.grouped(field)``
-          returning a ``[Matrix([i, j])]`` list.
+        - ``Matrix`` (Python class) indices supplied from Python scope.
         - ``Expr`` with tensor shape ``(N,)`` — produced by ``matrix.make_matrix(loop_indices, ...)`` in
           :func:`build_struct_for` / :func:`build_grouped_ndrange_for`, which is what real kernels see for
           ``for I in qd.grouped(...)``.

@@ -47,6 +47,4 @@ Notes:
 - Quadrants selects the Vulkan API version automatically. The `vk_api_version` argument to `qd.init()` has been removed; omit it from existing calls.
 - `qd.vulkan` on macOS bundles a copy of MoltenVK (a Vulkan-to-Metal translation layer) inside the wheel, so no separate install is required.
 
-### Python backend
-
-A pure-Python backend (`qd.python`) is available on any system where PyTorch is installed. See [Python backend](./python_backend.md).
+The Python backend (`qd.python`) has been removed. To run kernels on the CPU, use `qd.init(arch=qd.cpu)`. CPU kernels are compiled; they do not execute as ordinary Python functions.

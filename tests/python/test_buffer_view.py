@@ -10,7 +10,7 @@ from quadrants import BufferView
 from quadrants.lang.exception import QuadrantsAssertionError, QuadrantsRuntimeTypeError
 from quadrants.lang.misc import get_host_arch_list
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 # Skip debug-mode assertion tests on ARM64 Linux where assertions are unsupported.
 _u = platform.uname()

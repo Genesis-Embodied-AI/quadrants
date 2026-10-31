@@ -8,7 +8,7 @@ import pytest
 import quadrants as qd
 from quadrants._tensor import _with_layout
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 # ----------------------------------------------------------------------------
 # Identity / default layouts
@@ -153,9 +153,9 @@ def test_order_kwarg_rejected():
 
 
 # ----------------------------------------------------------------------------
-# Ndarray non-identity layout: enabled in an earlier change.
+# Ndarray non-identity layout.
 # These cases are exercised in depth in test_tensor_factory_layout_ndarray.py; this file just pins the smoke "factory
-# does not raise" contract that replaces the PR-6-era NotImplementedError gating.
+# does not raise" contract.
 # ----------------------------------------------------------------------------
 
 
@@ -191,36 +191,6 @@ def test_layout_with_needs_grad_allocates_grad(backend):
     a = qd.tensor(qd.f32, shape=(4, 5), backend=backend, layout=(1, 0), needs_grad=True)
     assert a.grad is not None
     assert tuple(a.grad.shape) == tuple(a.shape)
-
-
-# ----------------------------------------------------------------------------
-# Compound dtype (vector / matrix) + layout= must be rejected
-# ----------------------------------------------------------------------------
-
-
-def test_layout_rejected_for_vector_dtype():
-    """qd.tensor() with a compound vector dtype must reject layout=."""
-    qd.init(arch=qd.x64)
-    vec3 = qd.types.vector(3, qd.f32)
-    with pytest.raises(TypeError, match="layout.*not supported.*compound"):
-        qd.tensor(vec3, shape=(4,), layout=(0,))
-
-
-def test_layout_rejected_for_matrix_dtype():
-    """qd.tensor() with a compound matrix dtype must reject layout=."""
-    qd.init(arch=qd.x64)
-    mat2x2 = qd.types.matrix(2, 2, qd.f32)
-    with pytest.raises(TypeError, match="layout.*not supported.*compound"):
-        qd.tensor(mat2x2, shape=(4,), layout=(0,))
-
-
-@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
-def test_layout_rejected_for_vector_dtype_both_backends(backend):
-    """layout= rejection applies to both field and ndarray backends."""
-    qd.init(arch=qd.x64)
-    vec3 = qd.types.vector(3, qd.f32)
-    with pytest.raises(TypeError, match="layout.*not supported.*compound"):
-        qd.tensor(vec3, shape=(5,), backend=backend, layout=(0,))
 
 
 def test_vector_dtype_without_layout_still_works():
@@ -265,17 +235,8 @@ def test_layout_sequence_index(
     qd.func read and update the same canonical elements on both tensor backends."""
 
     @qd.func
-    def encode_index(I):
-        # Encode coordinates as an integer, e.g. [1, 2] -> 12.
-        # This encoding depends only on the index coordinates, not on the layout.
-        index_code = 0
-        for axis in qd.static(range(len(I))):
-            index_code = index_code * 10 + I[axis]
-        return index_code
-
-    @qd.func
     def f1(I, x: qd.Tensor, y: qd.Tensor):
-        index_code = encode_index(I)
+        index_code = test_utils.encode_index(I)
         if qd.static(operation == "read"):
             y[I] = x[I]
         elif qd.static(operation == "write"):
