@@ -106,6 +106,7 @@ Fastcache supports the following parameter types:
 | `qd.Template` primitives (int, float, bool) | Yes | type and value (baked into kernel) |
 | Non-template primitives (int, float, bool) | Yes | type only |
 | `enum.Enum` | Yes | name and value |
+| [`qd.Matrix`](matrix_vector.md) / [`qd.Vector`](matrix_vector.md) with a `qd.types.matrix` / `qd.types.vector` annotation | Yes | declared dtype, ndim, n, m |
 | `None` (absent optional [`qd.Tensor`](tensor.md) / `qd.Template` argument) | Yes | a constant tag (the singleton fully determines the specialization) |
 | `qd.field` / [`ScalarField`](matrix_vector.md#vector-and-matrix-fields) / [`MatrixField`](matrix_vector.md#vector-and-matrix-fields) | **No** | - |
 
