@@ -24,7 +24,7 @@ class MockGpuDevice : public Device {
   std::vector<std::string> operations;
 
  protected:
-  void *allocation_stream() override {
+  void *get_stream() override {
     return stream;
   }
 

@@ -107,7 +107,7 @@ class AmdgpuDevice : public LlvmDevice {
 
  protected:
   // Driver operations used by runtime allocation; tests override these without initializing a GPU context.
-  virtual void *allocation_stream();
+  virtual void *get_stream();
   virtual void allocation_copy_to_device(void *dst, void *src, std::size_t size, void *stream);
   virtual void allocation_synchronize(void *stream);
   virtual void allocation_copy_to_host(void *dst, void *src, std::size_t size);

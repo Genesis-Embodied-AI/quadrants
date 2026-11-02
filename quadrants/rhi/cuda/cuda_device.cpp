@@ -84,7 +84,7 @@ uint64_t *CudaDevice::allocate_llvm_runtime_memory_jit(const LlvmRuntimeAllocPar
   // Zero the slot before the JIT call so that a null readback unambiguously signals pool exhaustion (see the
   // AmdgpuDevice counterpart for why). The existing __assertfail hard-halt on the device side still runs, but we
   // no longer rely on it to stop the host from dereferencing a stale pointer.
-  void *active_stream = allocation_stream();
+  void *active_stream = get_stream();
   uint64 zero = 0;
   allocation_copy_to_device(params.result_buffer, &zero, sizeof(uint64), active_stream);
   params.runtime_jit->call<void *, std::size_t, std::size_t>("runtime_memory_allocate_aligned", params.runtime,
@@ -98,7 +98,7 @@ uint64_t *CudaDevice::allocate_llvm_runtime_memory_jit(const LlvmRuntimeAllocPar
   return ret;
 }
 
-void *CudaDevice::allocation_stream() {
+void *CudaDevice::get_stream() {
   return nullptr;
 }
 
