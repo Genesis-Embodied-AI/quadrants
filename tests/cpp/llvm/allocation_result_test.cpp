@@ -31,8 +31,11 @@ TEST(AllocationResult, RuntimeClearsStalePointerBeforeCallingAllocator) {
     SCOPED_TRACE(returned_pointer == nullptr ? "failed allocation" : "successful allocation");
     std::uint64_t result = reinterpret_cast<std::uintptr_t>(MOCK_STALE_ALLOCATION);
     struct MockMemoryPool {
+      // Point to the caller's result buffer so the fake allocator can inspect it when called.
       std::uint64_t *result;
+      // Return this pointer to simulate either allocation failure (null) or success.
       void *returned_pointer;
+      // Save the result buffer's value on allocator entry to verify that production code already cleared it.
       std::uint64_t result_at_call = 1;
       // Record the allocator's arguments so the test can verify that production code forwards them unchanged.
       std::size_t size = 0;
