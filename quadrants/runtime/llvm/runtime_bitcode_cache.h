@@ -2,14 +2,13 @@
 
 #include <array>
 #include <cstdint>
-#include <deque>
 #include <fstream>
 #include <map>
-#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
+#include "quadrants/common/byte_cache.h"
 #include "llvm/Support/SHA256.h"
 #include "llvm/ADT/StringRef.h"
 
@@ -55,31 +54,7 @@ struct RuntimeBitcodeInputs {
   }
 };
 
-// Retain serialized modules until process exit. Consumers parse copies into their own mutable LLVM contexts.
-class RuntimeBitcodeCache {
- public:
-  template <typename Build>
-  std::string get_or_build(const std::string &key, Build build, bool &hit) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    hit = false;
-    // We expect few runtime variants per process; a linear scan avoids a separate index.
-    for (const auto &[stored_key, bytes] : entries_) {
-      if (stored_key == key) {
-        hit = true;
-        return bytes;
-      }
-    }
-    std::string bytes = build();
-    if (bytes.empty()) {
-      return bytes;
-    }
-    entries_.emplace_back(key, bytes);
-    return bytes;
-  }
-
- private:
-  std::mutex mutex_;
-  std::deque<std::pair<std::string, std::string>> entries_;
-};
+// Consumers parse cached bytes into their own mutable LLVM contexts.
+using RuntimeBitcodeCache = ByteCache<std::string>;
 
 }  // namespace quadrants::lang

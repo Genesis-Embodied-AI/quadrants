@@ -3,18 +3,18 @@
 #include <vector>
 
 #include "gtest/gtest.h"
-#include "quadrants/runtime/amdgpu/runtime_hsaco_cache.h"
+#include "quadrants/common/byte_cache.h"
 
 namespace quadrants::lang {
 namespace {
 
-TEST(RuntimeHsacoCache, ConcurrentLookupCompilesOnce) {
-  // Concurrent requests for one key must compile once and return the same bytes, including embedded zeros.
-  RuntimeHsacoCache cache;
-  std::atomic<int> compilations{0};
+TEST(ByteCache, ConcurrentLookupBuildsOnce) {
+  // Concurrent requests for one key must build once and return the same bytes, including embedded zeros.
+  ByteCache<std::string> cache;
+  std::atomic<int> builds{0};
   const std::string binary("a\0b", 3);
-  auto compile = [&] {
-    ++compilations;
+  auto build = [&] {
+    ++builds;
     return binary;
   };
   std::promise<void> start;
@@ -24,13 +24,13 @@ TEST(RuntimeHsacoCache, ConcurrentLookupCompilesOnce) {
     results.push_back(std::async(std::launch::async, [&] {
       ready.wait();
       bool hit;
-      return cache.get_or_compile({"runtime", "gfx900", "", true}, compile, hit);
+      return cache.get_or_build("runtime", build, hit);
     }));
   }
   start.set_value();
   for (auto &result : results)
     EXPECT_EQ(result.get(), binary);
-  EXPECT_EQ(compilations, 1);
+  EXPECT_EQ(builds, 1);
 }
 
 }  // namespace

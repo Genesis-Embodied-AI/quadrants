@@ -10,8 +10,6 @@
 #include "llvm/IR/Module.h"
 #include "llvm/Support/MemoryBufferRef.h"
 #include "llvm/Support/raw_ostream.h"
-#include <atomic>
-#include <thread>
 
 namespace quadrants::lang {
 namespace {
@@ -34,32 +32,6 @@ TEST(RuntimeBitcodeCache, InputsInvalidateByTargetPathAndEveryContent) {
   EXPECT_EQ(original.key(), RuntimeBitcodeInputs(original).key());
   EXPECT_THROW(RuntimeBitcodeInputs::read("gfx1100", {"/nonexistent-quadrants-runtime/cache-test.bc"}),
                std::runtime_error);
-}
-
-TEST(RuntimeBitcodeCache, ConcurrentBuildCompilesOnce) {
-  // Concurrent requests for the same key must build once and preserve binary bytes.
-  RuntimeBitcodeCache cache;
-  std::atomic<int> builds{0};
-  const std::string binary("abc\0def", 7);
-  std::vector<std::thread> threads;
-  std::vector<std::string> results(8);
-  for (int i = 0; i < 8; ++i) {
-    threads.emplace_back([&, i] {
-      bool hit;
-      results[i] = cache.get_or_build(
-          "key",
-          [&] {
-            ++builds;
-            return binary;
-          },
-          hit);
-    });
-  }
-  for (auto &thread : threads)
-    thread.join();
-  EXPECT_EQ(builds, 1);
-  for (const auto &result : results)
-    EXPECT_EQ(result, binary);
 }
 
 TEST(RuntimeBitcodeCache, PreservesPreparedIntrinsicAttributesAcrossSerialization) {

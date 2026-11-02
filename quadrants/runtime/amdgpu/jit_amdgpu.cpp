@@ -29,7 +29,7 @@ JITModule *JITSessionAMDGPU::add_module(std::unique_ptr<llvm::Module> M, int max
       make_runtime_hsaco_key(*M, AMDGPUContext::get_instance().get_mcpu(), kAmdgpuFeatures, config_.fast_math);
   static RuntimeHsacoCache hsaco_cache;
   bool hit;
-  std::string hsaco = hsaco_cache.get_or_compile(key, [&] { return compile_module_to_hsaco(M); }, hit);
+  std::string hsaco = hsaco_cache.get_or_build(key, [&] { return compile_module_to_hsaco(M); }, hit);
   QD_TRACE("AMDGPU runtime HSACO cache {}", hit ? "hit" : "miss");
   return load_hsaco_bytes(hsaco);
 }
