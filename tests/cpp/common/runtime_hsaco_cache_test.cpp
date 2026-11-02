@@ -33,24 +33,22 @@ TEST(RuntimeHsacoCache, ConcurrentLookupCompilesOnce) {
   EXPECT_EQ(compilations, 1);
 }
 
-TEST(RuntimeHsacoCache, RespectsEntryLimitRegardlessOfBinarySize) {
-  // Evict the oldest entry at the count limit, but retain large binaries just like small ones.
-  RuntimeHsacoCache cache(2);
-  auto lookup = [&](const char *name, const std::string &bytes = "abc") {
+TEST(RuntimeHsacoCache, RetainsEntriesRegardlessOfCountOrBinarySize) {
+  // All variants remain reusable, even beyond the former eight-entry and 8 MiB limits.
+  RuntimeHsacoCache cache;
+  auto lookup = [&](const std::string &name, const std::string &bytes = "abc") {
     bool hit;
     EXPECT_EQ(cache.get_or_compile({name, "gfx900", "", true}, [&] { return bytes; }, hit), bytes);
     return hit;
   };
-  EXPECT_FALSE(lookup("first"));
-  EXPECT_FALSE(lookup("second"));
-  EXPECT_TRUE(lookup("first"));
-  EXPECT_FALSE(lookup("third"));
-  EXPECT_TRUE(lookup("second"));
-  EXPECT_FALSE(lookup("first"));
+  for (int i = 0; i < 16; ++i)
+    EXPECT_FALSE(lookup(std::to_string(i)));
+  for (int i = 0; i < 16; ++i)
+    EXPECT_TRUE(lookup(std::to_string(i)));
   const std::string large_binary(8 * 1024 * 1024 + 1, 'x');
   EXPECT_FALSE(lookup("large", large_binary));
   EXPECT_TRUE(lookup("large", large_binary));
-  EXPECT_TRUE(lookup("first"));
+  EXPECT_TRUE(lookup("0"));
 }
 
 }  // namespace
