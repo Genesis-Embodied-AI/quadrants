@@ -1,3 +1,4 @@
+#include "quadrants/common/file_io.h"
 #include <memory>
 #include <utility>
 #include <mutex>
@@ -128,11 +129,7 @@ class JITSessionAMDGPU : public JITSession {
   }
 
   std::string load_hsaco(const std::string &filename) {
-    std::ifstream src_file(filename);
-    if (!src_file.is_open()) {
-      QD_ERROR(fmt::format("Open {} Error", filename));
-    }
-    return std::string(std::istreambuf_iterator<char>(src_file), (std::istreambuf_iterator<char>()));
+    return read_binary_file(filename);
   }
 
   uint64 get_random_num() {

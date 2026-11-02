@@ -1,6 +1,7 @@
 // A llvm backend helper
 
 #include "quadrants/runtime/llvm/llvm_context.h"
+#include "quadrants/common/file_io.h"
 #include "quadrants/runtime/llvm/amdgpu_runtime_bitcode.h"
 #include "quadrants/runtime/llvm/runtime_bitcode_inputs.h"
 
@@ -225,10 +226,7 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::clone_module_to_this_thread_
 
 std::unique_ptr<llvm::Module> LlvmModuleBitcodeLoader::load(llvm::LLVMContext *ctx) const {
   QD_AUTO_PROF;
-  std::ifstream ifs(bitcode_path_, std::ios::binary);
-  QD_ERROR_IF(!ifs, "Bitcode file ({}) not found.", bitcode_path_);
-  std::string bitcode(std::istreambuf_iterator<char>(ifs), (std::istreambuf_iterator<char>()));
-  return load_bytes(ctx, bitcode);
+  return load_bytes(ctx, read_binary_file(bitcode_path_));
 }
 
 std::unique_ptr<llvm::Module> LlvmModuleBitcodeLoader::load_bytes(llvm::LLVMContext *ctx,

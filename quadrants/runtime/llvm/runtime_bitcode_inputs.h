@@ -2,13 +2,12 @@
 
 #include <array>
 #include <cstdint>
-#include <fstream>
 #include <map>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
 #include "quadrants/common/byte_cache.h"
+#include "quadrants/common/file_io.h"
 #include "llvm/Support/SHA256.h"
 #include "llvm/ADT/StringRef.h"
 
@@ -23,15 +22,7 @@ struct RuntimeBitcodeInputs {
   static RuntimeBitcodeInputs read(const std::string &target, const std::vector<std::string> &paths) {
     RuntimeBitcodeInputs inputs{target, {}};
     for (const std::string &path : paths) {
-      std::ifstream file(path, std::ios::binary);
-      if (!file) {
-        throw std::runtime_error("Cannot read runtime bitcode: " + path);
-      }
-      std::string bytes{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
-      if (file.bad()) {
-        throw std::runtime_error("Failed reading runtime bitcode: " + path);
-      }
-      inputs.files.emplace(path, std::move(bytes));
+      inputs.files.emplace(path, read_binary_file(path));
     }
     return inputs;
   }
