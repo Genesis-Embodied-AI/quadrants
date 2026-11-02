@@ -150,7 +150,7 @@ class JITSessionAMDGPU : public JITSession {
   }
 
  private:
-  // Load compiled code into this session.
+  // Load HSACO bytes into this session.
   JITModule *load_hsaco_bytes(const std::string &hsaco);
   std::string compile_module_to_hsaco(std::unique_ptr<llvm::Module> &module);
   uint64_t random_num_;
