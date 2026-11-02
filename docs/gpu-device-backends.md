@@ -2,12 +2,12 @@
 
 The C++ device interface supports the same upload, readback, mapping, device-to-device copy, import, and allocation
 operations for CUDA and AMDGPU. AMDGPU now implements `upload_data` and `readback_data`, including allocation offsets,
-using the same implementation as CUDA. Python APIs are unchanged.
+with the same behavior as CUDA. The two device classes retain separate implementations. Python APIs are unchanged.
 
 Runtime-pool allocation clears its result on the active stream, launches the allocation kernel, waits for that stream,
 and then checks the returned pointer. A null result reports exhaustion with the appropriate backend name.
 
-The shared implementation preserves these existing backend policies:
+Named constants at the top of each device implementation preserve these existing backend policies:
 
 | Policy | CUDA | AMDGPU |
 | --- | --- | --- |
