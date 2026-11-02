@@ -27,7 +27,7 @@ TEST(AllocationResult, RuntimeClearsStalePointerBeforeCallingAllocator) {
   void *returned_pointers[] = {nullptr, &storage};
   for (void *returned_pointer : returned_pointers) {
     SCOPED_TRACE(returned_pointer == nullptr ? "failed allocation" : "successful allocation");
-    std::uint64_t result = reinterpret_cast<std::uintptr_t>(&storage);
+    std::uint64_t result = 0x0badbeef;
     struct AllocationState {
       std::uint64_t *result;
       void *returned_pointer;
