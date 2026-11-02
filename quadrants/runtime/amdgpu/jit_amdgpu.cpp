@@ -18,24 +18,20 @@ namespace {
 constexpr const char *kAmdgpuFeatures = "+wavefrontsize64,-wavefrontsize32";
 }  // namespace
 
-JITModule *JITSessionAMDGPU::add_runtime_module(std::unique_ptr<llvm::Module> M, int max_reg) {
-  if (!config_.offline_cache || config_.print_kernel_llvm_ir || config_.print_kernel_llvm_ir_optimized ||
+JITModule *JITSessionAMDGPU::add_module(std::unique_ptr<llvm::Module> M, int max_reg, bool cache) {
+  if (!cache || !config_.offline_cache || config_.print_kernel_llvm_ir || config_.print_kernel_llvm_ir_optimized ||
       config_.print_kernel_amdgcn || get_environ_config("QD_DUMP_IR") != 0) {
     QD_TRACE("AMDGPU runtime HSACO cache bypass");
-    return add_module(std::move(M), max_reg);
+    return load_hsaco_bytes(compile_module_to_hsaco(M));
   }
 
   RuntimeHsacoKey key =
       make_runtime_hsaco_key(*M, AMDGPUContext::get_instance().get_mcpu(), kAmdgpuFeatures, config_.fast_math);
-  static RuntimeHsacoCache cache;
+  static RuntimeHsacoCache hsaco_cache;
   bool hit;
-  std::string hsaco = cache.get_or_compile(key, [&] { return compile_module_to_hsaco(M); }, hit);
+  std::string hsaco = hsaco_cache.get_or_compile(key, [&] { return compile_module_to_hsaco(M); }, hit);
   QD_TRACE("AMDGPU runtime HSACO cache {}", hit ? "hit" : "miss");
   return load_hsaco_bytes(hsaco);
-}
-
-JITModule *JITSessionAMDGPU ::add_module(std::unique_ptr<llvm::Module> M, int max_reg) {
-  return load_hsaco_bytes(compile_module_to_hsaco(M));
 }
 
 JITModule *JITSessionAMDGPU::load_hsaco_bytes(const std::string &hsaco) {
