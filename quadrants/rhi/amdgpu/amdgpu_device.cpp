@@ -9,11 +9,11 @@ namespace lang {
 
 namespace amdgpu {
 
-AmdgpuDevice::AmdgpuDevice() : AmdgpuDevice(true) {
+AmdgpuDevice::AmdgpuDevice() : AmdgpuDevice(false /*skip_initialize_memory_pool*/) {
 }
 
-AmdgpuDevice::AmdgpuDevice(bool initialize_memory_pool) {
-  if (initialize_memory_pool) {
+AmdgpuDevice::AmdgpuDevice(bool skip_initialize_memory_pool) {
+  if (!skip_initialize_memory_pool) {
     DeviceMemoryPool::get_instance(Arch::amdgpu, false /*merge_upon_release*/);
   }
 }

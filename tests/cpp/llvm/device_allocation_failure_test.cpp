@@ -21,7 +21,7 @@ template <typename Device>
 class MockGpuDevice : public Device {
  public:
   // This host allocation path does not use DeviceMemoryPool. Avoid initializing its shared singleton.
-  MockGpuDevice() : Device(false /*initialize_memory_pool*/) {
+  MockGpuDevice() : Device(true /*skip_initialize_memory_pool*/) {
   }
 
   void *stream = nullptr;

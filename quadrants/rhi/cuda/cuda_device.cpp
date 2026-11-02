@@ -7,11 +7,11 @@ namespace quadrants::lang {
 
 namespace cuda {
 
-CudaDevice::CudaDevice() : CudaDevice(true) {
+CudaDevice::CudaDevice() : CudaDevice(false /*skip_initialize_memory_pool*/) {
 }
 
-CudaDevice::CudaDevice(bool initialize_memory_pool) {
-  if (initialize_memory_pool) {
+CudaDevice::CudaDevice(bool skip_initialize_memory_pool) {
+  if (!skip_initialize_memory_pool) {
     DeviceMemoryPool::get_instance(Arch::cuda, true /*merge_upon_release*/);
   }
 }
