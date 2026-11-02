@@ -17,11 +17,11 @@ namespace {
 
 // Keep the production device's allocation method, including result clearing, readback, and error handling.
 // Replace only driver operations with CPU memory operations and observations; no GPU context is initialized.
-template <typename Device>
-class MockGpuDevice : public Device {
+template <typename DeviceType>
+class MockGpuDevice : public DeviceType {
  public:
   // This host allocation path does not use DeviceMemoryPool. Avoid initializing its shared singleton.
-  MockGpuDevice() : Device(/*skip_initialize_memory_pool=*/true) {
+  MockGpuDevice() : DeviceType(/*skip_initialize_memory_pool=*/true) {
   }
 
   void *stream = nullptr;
@@ -92,18 +92,18 @@ class MockAllocationJit : public JITModule {
   std::vector<std::string> &operations_;
 };
 
-template <typename Device>
+template <typename DeviceType>
 void check_allocation_failure_and_success(const std::string &backend, void *stream) {
   void *const MOCK_SUCCESSFUL_ALLOCATION = reinterpret_cast<void *>(std::uintptr_t{1024});
   void *const MOCK_STALE_ALLOCATION = reinterpret_cast<void *>(std::uintptr_t{0x0badbeef});
 
-  MockGpuDevice<Device> device;
+  MockGpuDevice<DeviceType> device;
   device.stream = stream;
   MockAllocationJit mock_jit(device.operations);
   // This local slot stands in for GPU memory. Only the mocked copies and kernel launch access it.
   uint64 mock_device_result = 0;
   mock_jit.result_buffer = &mock_device_result;
-  typename Device::LlvmRuntimeAllocParams params;
+  typename DeviceType::LlvmRuntimeAllocParams params;
   params.size = 1;
   params.runtime_jit = &mock_jit;
   params.result_buffer = &mock_device_result;
