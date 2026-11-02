@@ -8,7 +8,7 @@ else()
     set(_QD_DEV_MODULE Development.Module)
 endif()
 
-find_package(Python 3.10 COMPONENTS Interpreter ${_QD_DEV_MODULE} REQUIRED)
+find_package(Python 3.12 COMPONENTS Interpreter ${_QD_DEV_MODULE} REQUIRED)
 
 # The rest of the Quadrants CMake scripts still reference the legacy uppercase FindPythonInterp/FindPythonLibs
 # variables, so mirror the modern FindPython results onto them.
