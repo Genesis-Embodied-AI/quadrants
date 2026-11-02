@@ -10,6 +10,10 @@
 namespace quadrants::lang {
 namespace {
 
+// Call the production runtime_memory_allocate_aligned and LLVMRuntime::allocate_aligned through the CPU JIT.
+// On a test-owned LLVMRuntime, replace only the host_allocator callback with a fake that records the result before
+// returning null or a known pointer. Its memory_pool field carries test observation data instead of a real memory pool.
+// The result clearing, callback invocation, and final result assignment all execute unchanged production code.
 TEST(AllocationResult, RuntimeClearsStalePointerBeforeCallingAllocator) {
   CompileConfig config;
   config.arch = host_arch();
