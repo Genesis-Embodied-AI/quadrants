@@ -15,8 +15,8 @@ namespace {
 // returning null or a known pointer. Its memory_pool field carries test observation data instead of a real memory pool.
 // The result clearing, callback invocation, and final result assignment all execute unchanged production code.
 TEST(AllocationResult, RuntimeClearsStalePointerBeforeCallingAllocator) {
-  constexpr std::uint64_t MOCK_SUCCESSFUL_ALLOCATION = 1024;
-  constexpr std::uint64_t MOCK_STALE_ALLOCATION = 0x0badbeef;
+  void *const MOCK_SUCCESSFUL_ALLOCATION = reinterpret_cast<void *>(std::uintptr_t{1024});
+  void *const MOCK_STALE_ALLOCATION = reinterpret_cast<void *>(std::uintptr_t{0x0badbeef});
 
   CompileConfig config;
   config.arch = host_arch();
@@ -26,10 +26,10 @@ TEST(AllocationResult, RuntimeClearsStalePointerBeforeCallingAllocator) {
 
   // Use a separate runtime so the fake allocator cannot affect the executor's own allocations or cleanup.
   std::unique_ptr<::LLVMRuntime> runtime = std::make_unique<::LLVMRuntime>();
-  void *returned_pointers[] = {nullptr, reinterpret_cast<void *>(MOCK_SUCCESSFUL_ALLOCATION)};
+  void *returned_pointers[] = {nullptr, MOCK_SUCCESSFUL_ALLOCATION};
   for (void *returned_pointer : returned_pointers) {
     SCOPED_TRACE(returned_pointer == nullptr ? "failed allocation" : "successful allocation");
-    std::uint64_t result = MOCK_STALE_ALLOCATION;
+    std::uint64_t result = reinterpret_cast<std::uintptr_t>(MOCK_STALE_ALLOCATION);
     struct AllocationState {
       std::uint64_t *result;
       void *returned_pointer;
