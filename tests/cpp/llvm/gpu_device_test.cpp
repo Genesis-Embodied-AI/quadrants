@@ -50,8 +50,12 @@ struct MockDriver {
 
 struct MockContext {
   void *stream = nullptr;
-  void *get_stream() { return stream; }
-  std::size_t get_total_memory() { return 8192; }
+  void *get_stream() {
+    return stream;
+  }
+  std::size_t get_total_memory() {
+    return 8192;
+  }
 };
 
 struct MockMemoryPool {
@@ -93,17 +97,27 @@ struct MockCudaBackend {
   static constexpr const char *name = "CUDA";
   static constexpr bool reject_runtime_host_access = false;
   static constexpr bool release_raw_allocations = true;
-  static MockDriver &driver() { return mock_state.driver; }
-  static MockContext &context() { return mock_state.context; }
-  static MockMemoryPool &memory_pool() { return mock_state.pool; }
-  static void free_pooled_memory(void *) { mock_state.pooled_free = "async"; }
+  static MockDriver &driver() {
+    return mock_state.driver;
+  }
+  static MockContext &context() {
+    return mock_state.context;
+  }
+  static MockMemoryPool &memory_pool() {
+    return mock_state.pool;
+  }
+  static void free_pooled_memory(void *) {
+    mock_state.pooled_free = "async";
+  }
 };
 
 struct MockAmdgpuBackend : MockCudaBackend {
   static constexpr const char *name = "AMDGPU";
   static constexpr bool reject_runtime_host_access = true;
   static constexpr bool release_raw_allocations = false;
-  static void free_pooled_memory(void *) { mock_state.pooled_free = "sync"; }
+  static void free_pooled_memory(void *) {
+    mock_state.pooled_free = "sync";
+  }
 };
 
 template <typename Backend>
@@ -219,8 +233,12 @@ class MockAllocationJit : public JITModule {
  public:
   uint64 *result = nullptr;
   void *returned_pointer = nullptr;
-  bool direct_dispatch() const override { return false; }
-  void *lookup_function(const std::string &) override { return nullptr; }
+  bool direct_dispatch() const override {
+    return false;
+  }
+  void *lookup_function(const std::string &) override {
+    return nullptr;
+  }
   void call(const std::string &name, const std::vector<void *> &, const std::vector<int> &) override {
     EXPECT_EQ(name, "runtime_memory_allocate_aligned");
     mock_state.driver.operations.push_back("launch");

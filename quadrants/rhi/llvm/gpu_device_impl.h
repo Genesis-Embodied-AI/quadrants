@@ -60,8 +60,7 @@ DeviceAllocation GpuDevice<Backend>::allocate_memory_runtime(const LlvmRuntimeAl
   } else if (params.use_memory_pool) {
     Backend::driver().malloc_async((void **)&info.ptr, info.size, nullptr);
   } else {
-    info.ptr =
-        Backend::memory_pool().allocate_with_cache(this, params);
+    info.ptr = Backend::memory_pool().allocate_with_cache(this, params);
 
     if (!info.ptr) {
       DeviceAllocation fail_alloc;
@@ -101,7 +100,8 @@ uint64_t *GpuDevice<Backend>::allocate_llvm_runtime_memory_jit(const LlvmRuntime
   Backend::driver().memcpy_device_to_host(&ret, params.result_buffer, sizeof(uint64));
   QD_ERROR_IF(ret == nullptr,
               "Out of {} pre-allocated memory. Consider using qd.init(device_memory_fraction=0.9) or "
-              "qd.init(device_memory_GB=N) to allocate more GPU memory.", Backend::name);
+              "qd.init(device_memory_GB=N) to allocate more GPU memory.",
+              Backend::name);
   return ret;
 }
 
@@ -124,8 +124,7 @@ void GpuDevice<Backend>::dealloc_memory(DeviceAllocation handle) {
   if (info.use_memory_pool) {
     Backend::free_pooled_memory(info.ptr);
   } else if (info.use_cached) {
-    Backend::memory_pool()
-        .release(info.size, (uint64_t *)info.ptr, false);
+    Backend::memory_pool().release(info.size, (uint64_t *)info.ptr, false);
   } else if (!info.use_preallocated) {
     auto &mem_pool = Backend::memory_pool();
     mem_pool.release(info.size, info.ptr, Backend::release_raw_allocations);
@@ -134,7 +133,10 @@ void GpuDevice<Backend>::dealloc_memory(DeviceAllocation handle) {
 }
 
 template <typename Backend>
-RhiResult GpuDevice<Backend>::upload_data(DevicePtr *device_ptr, const void **data, size_t *size, int num_alloc) noexcept {
+RhiResult GpuDevice<Backend>::upload_data(DevicePtr *device_ptr,
+                                          const void **data,
+                                          size_t *size,
+                                          int num_alloc) noexcept {
   if (!device_ptr || !data || !size) {
     return RhiResult::invalid_usage;
   }
@@ -145,8 +147,7 @@ RhiResult GpuDevice<Backend>::upload_data(DevicePtr *device_ptr, const void **da
     }
 
     AllocInfo &info = allocations_[device_ptr[i].alloc_id];
-    Backend::driver().memcpy_host_to_device((uint8_t *)info.ptr + device_ptr[i].offset, (void *)data[i],
-                                                     size[i]);
+    Backend::driver().memcpy_host_to_device((uint8_t *)info.ptr + device_ptr[i].offset, (void *)data[i], size[i]);
   }
 
   return RhiResult::success;
@@ -154,10 +155,10 @@ RhiResult GpuDevice<Backend>::upload_data(DevicePtr *device_ptr, const void **da
 
 template <typename Backend>
 RhiResult GpuDevice<Backend>::readback_data(DevicePtr *device_ptr,
-                                    void **data,
-                                    size_t *size,
-                                    int num_alloc,
-                                    const std::vector<StreamSemaphore> &wait_sema) noexcept {
+                                            void **data,
+                                            size_t *size,
+                                            int num_alloc,
+                                            const std::vector<StreamSemaphore> &wait_sema) noexcept {
   if (!device_ptr || !data || !size) {
     return RhiResult::invalid_usage;
   }
