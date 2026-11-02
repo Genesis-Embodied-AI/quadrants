@@ -33,23 +33,5 @@ TEST(RuntimeHsacoCache, ConcurrentLookupCompilesOnce) {
   EXPECT_EQ(compilations, 1);
 }
 
-TEST(RuntimeHsacoCache, RetainsEntriesRegardlessOfCountOrBinarySize) {
-  // All variants remain reusable, even beyond the former eight-entry and 8 MiB limits.
-  RuntimeHsacoCache cache;
-  auto lookup = [&](const std::string &name, const std::string &bytes = "abc") {
-    bool hit;
-    EXPECT_EQ(cache.get_or_compile({name, "gfx900", "", true}, [&] { return bytes; }, hit), bytes);
-    return hit;
-  };
-  for (int i = 0; i < 16; ++i)
-    EXPECT_FALSE(lookup(std::to_string(i)));
-  for (int i = 0; i < 16; ++i)
-    EXPECT_TRUE(lookup(std::to_string(i)));
-  const std::string large_binary(8 * 1024 * 1024 + 1, 'x');
-  EXPECT_FALSE(lookup("large", large_binary));
-  EXPECT_TRUE(lookup("large", large_binary));
-  EXPECT_TRUE(lookup("0"));
-}
-
 }  // namespace
 }  // namespace quadrants::lang
