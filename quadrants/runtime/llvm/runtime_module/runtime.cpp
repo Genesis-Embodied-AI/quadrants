@@ -27,6 +27,7 @@
 #include "quadrants/math/arithmetic.h"
 #include "llvm_runtime.h"
 #include "adstack_runtime.h"
+#include "allocation_result.h"
 #include "cpu_range_for.h"
 
 // In llvm 15, host_printf_type will be saved as ptr instead of ptr of FunctionType. Add dummy function to save function
@@ -792,9 +793,10 @@ Ptr LLVMRuntime::allocate_from_reserved_memory(PreallocatedMemoryChunk &memory_c
 // [ON HOST] CPU backend
 // [ON DEVICE] CUDA/AMDGPU backend
 void runtime_memory_allocate_aligned(LLVMRuntime *runtime, std::size_t size, std::size_t alignment, uint64 *result) {
-  *result = (uint64) nullptr;
-  *result = quadrants_union_cast_with_different_sizes<uint64>(
-      runtime->allocate_aligned(runtime->runtime_memory_chunk, size, alignment));
+  quadrants::lang::store_allocation_result(result, [&] {
+    return quadrants_union_cast_with_different_sizes<uint64>(
+        runtime->allocate_aligned(runtime->runtime_memory_chunk, size, alignment));
+  });
 }
 
 // External API
