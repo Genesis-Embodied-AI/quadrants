@@ -1,0 +1,26 @@
+quadrants.tools
+===============
+
+.. py:module:: quadrants.tools
+
+.. autoapi-nested-parse::
+
+   Quadrants utility module.
+
+   - `image` submodule for image io.
+   - `video` submodule for exporting results to video files.
+   - `diagnose` submodule for printing system environment information.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/quadrants/tools/diagnose/index
+   /autoapi/quadrants/tools/np2ply/index
+   /autoapi/quadrants/tools/vtk/index
+
+
