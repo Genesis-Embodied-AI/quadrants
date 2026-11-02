@@ -35,6 +35,18 @@ def f1(p1: qd.types.NDArray[qd.i32, 1]) -> None:
     p1[0] += 1
 ```
 
+Pass `fill=` to initialize an ndarray during allocation:
+
+```python
+a = qd.ndarray(qd.f32, shape=(4, 5), fill=1.0)
+directions = qd.Vector.ndarray(3, qd.f32, shape=8, fill=[0, 0, 1])
+matrices = qd.Matrix.ndarray(2, 2, qd.f32, shape=4, fill=[[1, 0], [0, 1]])
+```
+
+A scalar fills every component. Vector and matrix ndarrays also accept lists, tuples, or Quadrants vectors and matrices matching the element shape; that value is repeated across the array. Vector and matrix types passed to `qd.ndarray` support the same initializers.
+
+Only the array's forward values are initialized; gradient buffers retain their defaults when `needs_grad=True`.
+
 ### Global field
 
 ```python
@@ -64,6 +76,24 @@ def f1(p1: qd.Template) -> None:
     p1[0] += 1
 ```
 In this case, we provide the field to the kernel via a parameter, with typing type of `qd.Template`.
+
+## Initializing fields
+
+Use `fill=` to give a field an initial value:
+
+```python
+weights = qd.field(qd.f32, shape=16, fill=1.0)
+```
+
+Field allocation is deferred until Quadrants needs the storage. The initializer runs once at that point, before the first read or write through Quadrants. Declaring multiple fields with `fill=` lets Quadrants allocate them together. This avoids splitting the allocation with a separate `.fill()` call after each declaration, which can exhaust Metal's buffer bindings when a kernel accesses many fields.
+
+`fill=` also works with `qd.Matrix.field` and vector or matrix types passed to `qd.field`. A scalar initializes every component; a list, tuple, or Quadrants vector or matrix supplies per-component values. Mutable values are captured when the field is declared. Omitting `fill` or passing `None` preserves the existing allocation behavior. Only the field itself is initialized; its [gradient and dual fields](autodiff.md), which store derivatives for automatic differentiation, keep their default values.
+
+"Sparse fields" track which elements are active, meaning enabled for storage and computation. On these fields, `fill=` fills only elements active when initialization runs. It does not change the default value of elements activated later.
+
+A field declared without `shape` must still be placed before use: placement assigns its storage layout using `qd.root` and `.place()`. The axis identifier `qd.i` denotes the first axis, and `dense(qd.i, 16)` specifies storage for 16 elements along that axis. For example, declare `values = qd.field(qd.f32, fill=1.0)`, then call `qd.root.dense(qd.i, 16).place(values)` to assign that layout to the field. See the [manual placement example](autodiff.md#reverse-mode-autodiff).
+
+For ndarray initialization, see [NDArray](#ndarray).
 
 ## Comparison of tensor approaches
 
