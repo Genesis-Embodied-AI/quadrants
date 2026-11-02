@@ -34,6 +34,7 @@ TEST(AllocationResult, RuntimeClearsStalePointerBeforeCallingAllocator) {
       std::uint64_t *result;
       void *returned_pointer;
       std::uint64_t result_at_call = 1;
+      // Record the allocator's arguments so the test can verify that production code forwards them unchanged.
       std::size_t size = 0;
       std::size_t alignment = 0;
       int calls = 0;
