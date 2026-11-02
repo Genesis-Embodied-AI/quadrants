@@ -35,28 +35,28 @@ TEST(AllocationResult, RuntimeClearsStalePointerBeforeCallingAllocator) {
       std::size_t size = 0;
       std::size_t alignment = 0;
       int calls = 0;
-    } state{&result, returned_pointer};
+    } mock_memory_pool{&result, returned_pointer};
     // Substitute observation data for the real memory pool. The fake allocator interprets this pointer as
     // AllocationState; no HostMemoryPool object is created or used for this request.
-    runtime->memory_pool = reinterpret_cast<::Ptr>(&state);
+    runtime->memory_pool = reinterpret_cast<::Ptr>(&mock_memory_pool);
     // Substitute a fake host allocator that records the result on entry and returns the selected pointer without
     // allocating memory. The production runtime code must clear the result before invoking this callback.
     runtime->host_allocator = [](void *context, std::size_t size, std::size_t alignment) -> void * {
-      AllocationState &state = *static_cast<AllocationState *>(context);
-      state.result_at_call = *state.result;
-      state.size = size;
-      state.alignment = alignment;
-      ++state.calls;
-      return state.returned_pointer;
+      AllocationState &mock_memory_pool = *static_cast<AllocationState *>(context);
+      mock_memory_pool.result_at_call = *mock_memory_pool.result;
+      mock_memory_pool.size = size;
+      mock_memory_pool.alignment = alignment;
+      ++mock_memory_pool.calls;
+      return mock_memory_pool.returned_pointer;
     };
 
     // Inspect the result inside the allocator: checking only the final null would miss #451, where an interrupted
     // allocation left a stale pointer because the result was not cleared before entering the allocator.
     jit->call("runtime_memory_allocate_aligned", runtime.get(), std::size_t(1), std::size_t(1), &result);
-    EXPECT_EQ(state.calls, 1);
-    EXPECT_EQ(state.result_at_call, 0u);
-    EXPECT_EQ(state.size, 1u);
-    EXPECT_EQ(state.alignment, 1u);
+    EXPECT_EQ(mock_memory_pool.calls, 1);
+    EXPECT_EQ(mock_memory_pool.result_at_call, 0u);
+    EXPECT_EQ(mock_memory_pool.size, 1u);
+    EXPECT_EQ(mock_memory_pool.alignment, 1u);
     EXPECT_EQ(result, reinterpret_cast<std::uintptr_t>(returned_pointer));
   }
 }
