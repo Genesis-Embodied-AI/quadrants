@@ -397,6 +397,8 @@ endif()
 
 # Keep the fixed device-library selection and its packaging in one place.
 set(AMDGPU_LIBDEVICE_SUFFIX "_rocm70")
+# Use code-object version 6 for both device libraries and LLVM code generation.
+set(AMDGPU_ABI_VERSION 600)
 set(AMDGPU_LIBDEVICE_FILES
     # Supply GPU math functions.
     ocml.bc
@@ -404,8 +406,8 @@ set(AMDGPU_LIBDEVICE_FILES
     oclc_wavefrontsize64_on.bc
     # Supply GPU kernel support functions.
     ockl.bc
-    # Select ABI version 400.
-    oclc_abi_version_400.bc
+    # Select the ABI used by our GPU code objects.
+    oclc_abi_version_${AMDGPU_ABI_VERSION}.bc
     # Disable correctly rounded 32-bit square roots.
     oclc_correctly_rounded_sqrt_off.bc
     # Disable the finite-only assumption.
