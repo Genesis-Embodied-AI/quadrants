@@ -15,10 +15,10 @@ TEST(AllocationResult, RuntimeClearsStalePointerBeforeCallingAllocator) {
   config.arch = host_arch();
   config.cpu_max_num_threads = 1;
   LlvmRuntimeExecutor executor(config, nullptr, nullptr);
-  auto *jit = executor.get_runtime_jit_module();
+  JITModule *jit = executor.get_runtime_jit_module();
 
   // Use a separate runtime so the fake allocator cannot affect the executor's own allocations or cleanup.
-  auto runtime = std::make_unique<::LLVMRuntime>();
+  std::unique_ptr<::LLVMRuntime> runtime = std::make_unique<::LLVMRuntime>();
   std::uint8_t storage = 0;
   void *returned_pointers[] = {nullptr, &storage};
   for (void *returned_pointer : returned_pointers) {
@@ -34,7 +34,7 @@ TEST(AllocationResult, RuntimeClearsStalePointerBeforeCallingAllocator) {
     } state{&result, returned_pointer};
     runtime->memory_pool = reinterpret_cast<::Ptr>(&state);
     runtime->host_allocator = [](void *context, std::size_t size, std::size_t alignment) -> void * {
-      auto &state = *static_cast<AllocationState *>(context);
+      AllocationState &state = *static_cast<AllocationState *>(context);
       state.result_at_call = *state.result;
       state.size = size;
       state.alignment = alignment;
