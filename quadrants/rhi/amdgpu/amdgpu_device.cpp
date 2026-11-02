@@ -9,7 +9,7 @@ namespace lang {
 
 namespace amdgpu {
 
-AmdgpuDevice::AmdgpuDevice() : AmdgpuDevice(false /*skip_initialize_memory_pool=*/) {
+AmdgpuDevice::AmdgpuDevice() : AmdgpuDevice(/*skip_initialize_memory_pool=*/false) {
 }
 
 AmdgpuDevice::AmdgpuDevice(bool skip_initialize_memory_pool) {
