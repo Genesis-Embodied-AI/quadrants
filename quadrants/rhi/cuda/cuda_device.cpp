@@ -7,9 +7,13 @@ namespace quadrants::lang {
 
 namespace cuda {
 
-CudaDevice::CudaDevice() {
-  // Initialize the device memory pool
-  DeviceMemoryPool::get_instance(Arch::cuda, true /*merge_upon_release*/);
+CudaDevice::CudaDevice() : CudaDevice(true) {
+}
+
+CudaDevice::CudaDevice(bool initialize_memory_pool) {
+  if (initialize_memory_pool) {
+    DeviceMemoryPool::get_instance(Arch::cuda, true /*merge_upon_release*/);
+  }
 }
 
 CudaDevice::AllocInfo CudaDevice::get_alloc_info(const DeviceAllocation handle) {

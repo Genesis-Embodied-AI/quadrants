@@ -9,9 +9,13 @@ namespace lang {
 
 namespace amdgpu {
 
-AmdgpuDevice::AmdgpuDevice() {
-  // Initialize the device memory pool
-  DeviceMemoryPool::get_instance(Arch::amdgpu, false /*merge_upon_release*/);
+AmdgpuDevice::AmdgpuDevice() : AmdgpuDevice(true) {
+}
+
+AmdgpuDevice::AmdgpuDevice(bool initialize_memory_pool) {
+  if (initialize_memory_pool) {
+    DeviceMemoryPool::get_instance(Arch::amdgpu, false /*merge_upon_release*/);
+  }
 }
 
 AmdgpuDevice::AllocInfo AmdgpuDevice::get_alloc_info(const DeviceAllocation handle) {

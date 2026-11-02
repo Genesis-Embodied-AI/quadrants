@@ -106,6 +106,9 @@ class AmdgpuDevice : public LlvmDevice {
   }
 
  protected:
+  // Mock devices can skip the process-wide pool when testing allocation without real GPU memory.
+  explicit AmdgpuDevice(bool initialize_memory_pool);
+
   // Driver operations used by runtime allocation; tests override these without initializing a GPU context.
   virtual void *get_stream();
   virtual void allocation_copy_to_device(void *dst, void *src, std::size_t size, void *stream);
