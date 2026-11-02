@@ -101,7 +101,7 @@ def ensure_venv() -> None:
     else:
         misc.warn(
             f"No active virtualenv and none found at {candidate}. The editable install would run "
-            "against the system interpreter. Create one first, e.g. `uv venv --python 3.10`."
+            "against the system interpreter. Create one first, e.g. `uv venv --python 3.12`."
         )
 
 
@@ -181,7 +181,7 @@ def parse_args():
     parser.add_argument("-s", "--shell", action="store_true", help=help)
 
     help = (
-        "Python version to use, e.g. '3.7', '3.11', or 'native' to not use an isolated python environment. "
+        "Python version to use, e.g. '3.12', '3.14', or 'native' to not use an isolated python environment. "
         "Defaults to the same version of the current python interpreter."
     )
     parser.add_argument("--python", default=None, help=help)
