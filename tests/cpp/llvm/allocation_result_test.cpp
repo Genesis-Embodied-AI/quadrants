@@ -9,35 +9,36 @@ namespace {
 
 struct AllocationInterrupted {};
 
-TEST(AllocationResult, ClearsStalePointerBeforeInterruptedAllocation) {
-  std::uint64_t result = 0x1234;
-  bool called = false;
-  auto allocate = [&]() -> std::uint64_t {
-    called = true;
-    EXPECT_EQ(result, 0u);
-    // Simulate a device-side failure that never returns to the result assignment. Exceptions are used only in this
-    // host test; the production runtime still compiles with -fno-exceptions.
-    throw AllocationInterrupted{};
-  };
+// Exercise the same clear-and-store helper used by the production runtime. The fake allocator throws before it
+// returns, so the helper's final assignment never runs. Exceptions are confined to this host test; the production
+// runtime still compiles with -fno-exceptions.
+TEST(AllocationResult, ClearsStalePointerWhenAllocationIsInterrupted) {
+  constexpr std::uint64_t MOCK_STALE_ALLOCATION = 0x0badbeef;
 
-  EXPECT_THROW(store_allocation_result(&result, allocate), AllocationInterrupted);
-  EXPECT_TRUE(called);
+  std::uint64_t result = MOCK_STALE_ALLOCATION;
+  int calls = 0;
+  EXPECT_THROW(
+      store_allocation_result(&result,
+                              [&]() -> std::uint64_t {
+                                ++calls;
+                                throw AllocationInterrupted{};
+                              }),
+      AllocationInterrupted);
+  EXPECT_EQ(calls, 1);
   EXPECT_EQ(result, 0u);
 }
 
-TEST(AllocationResult, ReplacesStalePointerWhenAllocationReturnsNull) {
-  std::uint64_t result = 0x1234;
-  store_allocation_result(&result, []() -> std::uint64_t { return 0; });
-  EXPECT_EQ(result, 0u);
-}
+TEST(AllocationResult, StoresReturnedAllocationResult) {
+  constexpr std::uint64_t MOCK_SUCCESSFUL_ALLOCATION = 1024;
+  constexpr std::uint64_t MOCK_STALE_ALLOCATION = 0x0badbeef;
 
-TEST(AllocationResult, PublishesSuccessfulAllocationAfterClearingStalePointer) {
-  std::uint64_t result = 0x1234;
-  store_allocation_result(&result, [&]() -> std::uint64_t {
-    EXPECT_EQ(result, 0u);
-    return 0x5678;
-  });
-  EXPECT_EQ(result, 0x5678u);
+  std::uint64_t allocation_test_cases[] = {0, MOCK_SUCCESSFUL_ALLOCATION};
+  for (std::uint64_t returned_value : allocation_test_cases) {
+    SCOPED_TRACE(returned_value);
+    std::uint64_t result = MOCK_STALE_ALLOCATION;
+    store_allocation_result(&result, [&]() -> std::uint64_t { return returned_value; });
+    EXPECT_EQ(result, returned_value);
+  }
 }
 
 }  // namespace
