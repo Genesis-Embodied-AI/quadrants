@@ -20,8 +20,7 @@ namespace quadrants::lang {
 
 std::vector<std::string> amdgpu_libdevice_files(const std::string &mcpu) {
   std::vector<std::string> files(std::begin(amdgpu_static_libdevice_files), std::end(amdgpu_static_libdevice_files));
-  // Preserve the existing link order: the GPU-specific library precedes the last two fixed libraries.
-  files.insert(files.end() - 2, "oclc_isa_version_" + mcpu.substr(3, 4) + ".bc");
+  files.push_back("oclc_isa_version_" + mcpu.substr(3, 4) + ".bc");
   return files;
 }
 
