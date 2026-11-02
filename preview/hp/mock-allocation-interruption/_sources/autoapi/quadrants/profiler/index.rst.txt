@@ -1,0 +1,18 @@
+quadrants.profiler
+==================
+
+.. py:module:: quadrants.profiler
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/quadrants/profiler/kernel_metrics/index
+   /autoapi/quadrants/profiler/kernel_profiler/index
+   /autoapi/quadrants/profiler/memory_profiler/index
+   /autoapi/quadrants/profiler/scoped_profiler/index
+
+
