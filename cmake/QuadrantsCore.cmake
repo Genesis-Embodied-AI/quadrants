@@ -398,23 +398,23 @@ endif()
 # Keep the fixed device-library selection and its packaging in one place.
 set(AMDGPU_LIBDEVICE_SUFFIX "_rocm70")
 set(AMDGPU_LIBDEVICE_FILES
-    # Supply GPU math functions used by the runtime.
+    # Supply GPU math functions.
     ocml.bc
     # select 64-thread wavefronts
     oclc_wavefrontsize64_on.bc
-    # Supply low-level GPU kernel support functions.
+    # Supply GPU kernel support functions.
     ockl.bc
-    # Keep the existing device-library ABI selection for binary interface compatibility.
+    # Select ABI version 400.
     oclc_abi_version_400.bc
-    # Keep the existing square-root mode, without requiring correctly rounded results.
+    # Disable correctly rounded 32-bit square roots.
     oclc_correctly_rounded_sqrt_off.bc
-    # Allow device-library math to handle very small inputs instead of assuming they are zero.
+    # Retain the existing DAZ file; this ROCm 7.0 copy defines no options.
     oclc_daz_opt_off.bc
-    # Allow device-library math to handle infinities and NaNs.
+    # Disable the finite-only assumption.
     oclc_finite_only_off.bc
-    # Keep unsafe math transformations disabled within the device libraries.
+    # Disable unsafe-math.
     oclc_unsafe_math_off.bc
-    # Supply OpenCL built-in functions referenced by the linked GPU code.
+    # Supply OpenCL built-in functions.
     opencl.bc)
 string(JOIN "\",\n    \"" AMDGPU_LIBDEVICE_INITIALIZER ${AMDGPU_LIBDEVICE_FILES})
 configure_file(quadrants/runtime/llvm/amdgpu_libdevice_files.h.in
