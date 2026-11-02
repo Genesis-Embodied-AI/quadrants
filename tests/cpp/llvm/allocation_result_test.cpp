@@ -17,13 +17,12 @@ TEST(AllocationResult, ClearsStalePointerWhenAllocationIsInterrupted) {
 
   std::uint64_t result = MOCK_STALE_ALLOCATION;
   int calls = 0;
-  EXPECT_THROW(
-      store_allocation_result(&result,
-                              [&]() -> std::uint64_t {
-                                ++calls;
-                                throw AllocationInterrupted{};
-                              }),
-      AllocationInterrupted);
+  EXPECT_THROW(store_allocation_result(&result,
+                                       [&]() -> std::uint64_t {
+                                         ++calls;
+                                         throw AllocationInterrupted{};
+                                       }),
+               AllocationInterrupted);
   EXPECT_EQ(calls, 1);
   EXPECT_EQ(result, 0u);
 }
