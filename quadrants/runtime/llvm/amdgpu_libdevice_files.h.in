@@ -1,0 +1,11 @@
+#pragma once
+
+// Generated from the device-library filenames in cmake/QuadrantsCore.cmake.
+namespace quadrants::lang {
+
+inline constexpr char amdgpu_libdevice_suffix[] = "@AMDGPU_LIBDEVICE_SUFFIX@";
+
+inline constexpr const char *amdgpu_static_libdevice_files[] = {
+    "@AMDGPU_LIBDEVICE_INITIALIZER@"};
+
+}  // namespace quadrants::lang

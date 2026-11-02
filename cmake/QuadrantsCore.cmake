@@ -107,6 +107,7 @@ set(CORE_LIBRARY_NAME quadrants_core)
 add_library(${CORE_LIBRARY_NAME} OBJECT ${QUADRANTS_CORE_SOURCE})
 
 target_include_directories(${CORE_LIBRARY_NAME} PRIVATE ${CMAKE_SOURCE_DIR})
+target_include_directories(${CORE_LIBRARY_NAME} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
 target_include_directories(${CORE_LIBRARY_NAME} PRIVATE external/include)
 target_include_directories(${CORE_LIBRARY_NAME} PRIVATE external/SPIRV-Tools/include)
 target_include_directories(${CORE_LIBRARY_NAME} PRIVATE external/PicoSHA2)
@@ -395,11 +396,32 @@ if (NOT APPLE)
             DESTINATION ${INSTALL_LIB_DIR}/runtime)
 endif()
 
+# Keep the fixed device-library selection and its packaging in one place.
+set(AMDGPU_LIBDEVICE_SUFFIX "_rocm70")
+set(AMDGPU_LIBDEVICE_FILES
+    ocml.bc
+    oclc_wavefrontsize64_on.bc
+    ockl.bc
+    oclc_abi_version_400.bc
+    oclc_correctly_rounded_sqrt_off.bc
+    oclc_daz_opt_off.bc
+    oclc_finite_only_off.bc
+    oclc_unsafe_math_off.bc
+    opencl.bc)
+string(JOIN "\",\n    \"" AMDGPU_LIBDEVICE_INITIALIZER ${AMDGPU_LIBDEVICE_FILES})
+configure_file(quadrants/runtime/llvm/amdgpu_libdevice_files.h.in
+               generated/quadrants/runtime/llvm/amdgpu_libdevice_files.h @ONLY)
+
 if (QD_WITH_AMDGPU)
-    # Install ROCm 7.0 libdevice files
-    file(GLOB AMDGPU_BC_FILES_ROCM70 ${CMAKE_SOURCE_DIR}/external/amdgpu_libdevice_rocm70/*.bc)
-    install(FILES ${AMDGPU_BC_FILES_ROCM70}
-            DESTINATION ${INSTALL_LIB_DIR}/runtime_rocm70)
+    set(AMDGPU_LIBDEVICE_DIR ${CMAKE_SOURCE_DIR}/external/amdgpu_libdevice${AMDGPU_LIBDEVICE_SUFFIX})
+    foreach(library IN LISTS AMDGPU_LIBDEVICE_FILES)
+        install(FILES ${AMDGPU_LIBDEVICE_DIR}/${library}
+                DESTINATION ${INSTALL_LIB_DIR}/runtime${AMDGPU_LIBDEVICE_SUFFIX})
+    endforeach()
+    # A wheel must support GPUs other than the machine used to build it.
+    file(GLOB AMDGPU_ISA_FILES ${AMDGPU_LIBDEVICE_DIR}/oclc_isa_version_*.bc)
+    install(FILES ${AMDGPU_ISA_FILES}
+            DESTINATION ${INSTALL_LIB_DIR}/runtime${AMDGPU_LIBDEVICE_SUFFIX})
 endif()
 
 # Ship the assets submodule inside the package (replaces setup.py's copy_assets()).

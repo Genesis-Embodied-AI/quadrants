@@ -1,4 +1,6 @@
 #include "quadrants/runtime/llvm/amdgpu_runtime_bitcode.h"
+#include "quadrants/runtime/llvm/amdgpu_libdevice_files.h"
+#include <iterator>
 #include "quadrants/runtime/llvm/runtime_bitcode_inputs.h"
 #include "quadrants/runtime/llvm/runtime_bitcode_serialization.h"
 #include "quadrants/runtime/llvm/llvm_context.h"
@@ -17,16 +19,10 @@
 namespace quadrants::lang {
 
 std::vector<std::string> amdgpu_libdevice_files(const std::string &mcpu) {
-  return {"ocml.bc",
-          "oclc_wavefrontsize64_on.bc",
-          "ockl.bc",
-          "oclc_abi_version_400.bc",
-          "oclc_correctly_rounded_sqrt_off.bc",
-          "oclc_daz_opt_off.bc",
-          "oclc_finite_only_off.bc",
-          "oclc_isa_version_" + mcpu.substr(3, 4) + ".bc",
-          "oclc_unsafe_math_off.bc",
-          "opencl.bc"};
+  std::vector<std::string> files(std::begin(amdgpu_static_libdevice_files), std::end(amdgpu_static_libdevice_files));
+  // Preserve the existing link order: the GPU-specific library precedes the last two fixed libraries.
+  files.insert(files.end() - 2, "oclc_isa_version_" + mcpu.substr(3, 4) + ".bc");
+  return files;
 }
 
 std::unique_ptr<llvm::Module> load_amdgpu_runtime_bitcode(QuadrantsLLVMContext &context,
@@ -42,7 +38,7 @@ std::unique_ptr<llvm::Module> load_amdgpu_runtime_bitcode(QuadrantsLLVMContext &
   const std::string target = AMDGPUContext::get_instance().get_mcpu();
   std::vector<std::string> paths{runtime_lib_dir() + "/" + file};
   for (const std::string &library : amdgpu_libdevice_files(target)) {
-    paths.push_back(runtime_lib_dir() + "_rocm70/" + library);
+    paths.push_back(runtime_lib_dir() + amdgpu_libdevice_suffix + "/" + library);
   }
   const RuntimeBitcodeInputs inputs = RuntimeBitcodeInputs::read(target, paths);
   static RuntimeBitcodeCache cache;

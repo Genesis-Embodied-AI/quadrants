@@ -1,3 +1,4 @@
+#include "quadrants/runtime/llvm/amdgpu_libdevice_files.h"
 // A llvm backend helper
 
 #include "quadrants/runtime/llvm/llvm_context.h"
@@ -817,7 +818,7 @@ void QuadrantsLLVMContext::link_module_with_amdgpu_libdevice(std::unique_ptr<llv
   QD_ASSERT(arch_ == Arch::amdgpu);
 #if defined(QD_WITH_AMDGPU)
   auto mcpu = AMDGPUContext::get_instance().get_mcpu();
-  const std::string lib_dir = runtime_lib_dir() + "_rocm70/";
+  const std::string lib_dir = runtime_lib_dir() + amdgpu_libdevice_suffix + "/";
 
   // Force wave64 on every AMDGPU target (CDNA gfx9xx are wave64 by default; RDNA gfx10/11/12 default to wave32 but also
   // support wave64). Linking the wavefrontsize64=on libdevice variant aligns the ROCm device libraries with the wave64
