@@ -25,10 +25,11 @@ JITModule *JITSessionAMDGPU::add_runtime_module(std::unique_ptr<llvm::Module> M,
     return add_module(std::move(M), max_reg);
   }
 
-  auto key = make_runtime_hsaco_key(*M, AMDGPUContext::get_instance().get_mcpu(), kAmdgpuFeatures, config_.fast_math);
+  RuntimeHsacoKey key =
+      make_runtime_hsaco_key(*M, AMDGPUContext::get_instance().get_mcpu(), kAmdgpuFeatures, config_.fast_math);
   static RuntimeHsacoCache cache;
   bool hit;
-  auto hsaco = cache.get_or_compile(key, [&] { return compile_module_to_hsaco(M); }, hit);
+  std::string hsaco = cache.get_or_compile(key, [&] { return compile_module_to_hsaco(M); }, hit);
   QD_TRACE("AMDGPU runtime HSACO cache {}", hit ? "hit" : "miss");
   return load_hsaco_bytes(hsaco);
 }
@@ -41,7 +42,7 @@ JITModule *JITSessionAMDGPU::load_hsaco_bytes(const std::string &hsaco) {
   QD_TRACE("hsaco size: {:.2f}KB", hsaco.size() / 1024.0);
 
   void *amdgpu_module;
-  auto t = Time::get_time();
+  double t = Time::get_time();
   AMDGPUDriver::get_instance().module_load_data(&amdgpu_module, hsaco.c_str());
   QD_TRACE("AMDGPU load data from module time : {}ms", (Time::get_time() - t) * 1000);
   modules.push_back(std::make_unique<JITModuleAMDGPU>(amdgpu_module));
