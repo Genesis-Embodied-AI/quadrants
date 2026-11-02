@@ -70,7 +70,8 @@ class MockAllocationJit : public JITModule {
     operations_.push_back("launch");
     EXPECT_EQ(name, "runtime_memory_allocate_aligned");
     ASSERT_EQ(arg_pointers.size(), 4u);
-    EXPECT_EQ(arg_sizes, (std::vector<int>{sizeof(void *), sizeof(std::size_t), sizeof(std::size_t), sizeof(uint64 *)}));
+    EXPECT_EQ(arg_sizes,
+              (std::vector<int>{sizeof(void *), sizeof(std::size_t), sizeof(std::size_t), sizeof(uint64 *)}));
     EXPECT_EQ(*static_cast<void **>(arg_pointers[0]), nullptr);
     EXPECT_EQ(*static_cast<std::size_t *>(arg_pointers[1]), 1u);
     EXPECT_EQ(*static_cast<std::size_t *>(arg_pointers[2]), quadrants_page_size);
