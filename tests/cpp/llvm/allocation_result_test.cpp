@@ -36,7 +36,11 @@ TEST(AllocationResult, RuntimeClearsStalePointerBeforeCallingAllocator) {
       std::size_t alignment = 0;
       int calls = 0;
     } state{&result, returned_pointer};
+    // Substitute observation data for the real memory pool. The fake allocator interprets this pointer as
+    // AllocationState; no HostMemoryPool object is created or used for this request.
     runtime->memory_pool = reinterpret_cast<::Ptr>(&state);
+    // Substitute a fake host allocator that records the result on entry and returns the selected pointer without
+    // allocating memory. The production runtime code must clear the result before invoking this callback.
     runtime->host_allocator = [](void *context, std::size_t size, std::size_t alignment) -> void * {
       AllocationState &state = *static_cast<AllocationState *>(context);
       state.result_at_call = *state.result;
