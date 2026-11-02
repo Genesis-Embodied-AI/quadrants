@@ -16,7 +16,7 @@ namespace quadrants::lang {
 namespace {
 
 // Keep the production device's allocation method, including result clearing, readback, and error handling.
-// Replace only driver operations with CPU memory copies and observations; no GPU context is initialized.
+// Replace only driver operations with CPU memory operations and observations; no GPU context is initialized.
 template <typename Device>
 class MockGpuDevice : public Device {
  public:
@@ -32,10 +32,10 @@ class MockGpuDevice : public Device {
     return stream;
   }
 
-  void allocation_copy_to_device(void *dst, void *src, std::size_t size, void *copy_stream) override {
-    EXPECT_EQ(copy_stream, stream);
+  void allocation_memset(void *dst, uint8 value, std::size_t size, void *clear_stream) override {
+    EXPECT_EQ(clear_stream, stream);
     operations.push_back("clear");
-    std::memcpy(dst, src, size);
+    std::memset(dst, value, size);
   }
 
   void allocation_synchronize(void *sync_stream) override {
@@ -126,8 +126,11 @@ void check_allocation_failure_and_success(const std::string &backend, void *stre
 }
 
 #if defined(QD_WITH_CUDA)
-TEST(DeviceAllocationFailure, CudaReportsInterruptedAllocation) {
+TEST(DeviceAllocationFailure, CudaReportsInterruptedAllocationOnActiveStream) {
+  void *const MOCK_ACTIVE_STREAM = reinterpret_cast<void *>(std::uintptr_t{2048});
+
   check_allocation_failure_and_success<cuda::CudaDevice>("CUDA", nullptr);
+  check_allocation_failure_and_success<cuda::CudaDevice>("CUDA", MOCK_ACTIVE_STREAM);
 }
 #endif
 
@@ -135,6 +138,7 @@ TEST(DeviceAllocationFailure, CudaReportsInterruptedAllocation) {
 TEST(DeviceAllocationFailure, AmdgpuReportsInterruptedAllocationOnActiveStream) {
   void *const MOCK_ACTIVE_STREAM = reinterpret_cast<void *>(std::uintptr_t{2048});
 
+  check_allocation_failure_and_success<amdgpu::AmdgpuDevice>("AMDGPU", nullptr);
   check_allocation_failure_and_success<amdgpu::AmdgpuDevice>("AMDGPU", MOCK_ACTIVE_STREAM);
 }
 #endif
