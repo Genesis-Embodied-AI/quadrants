@@ -1,3 +1,6 @@
+// The runtime source uses variable-length arrays that the Windows MSVC compiler cannot compile.
+#if !defined(_WIN32)
+
 #include "gtest/gtest.h"
 
 #include <cstdint>
@@ -6,10 +9,7 @@
 // Compile the unchanged production runtime as native CPU code in this test, with exceptions enabled. This lets the
 // mock throw through runtime_memory_allocate_aligned and LLVMRuntime::allocate_aligned, so we can inspect the result
 // after interrupted allocation. Production runtime bitcode still builds separately with -fno-exceptions.
-#pragma push_macro("QD_INCLUDED")
-#undef QD_INCLUDED
 #include "quadrants/runtime/llvm/runtime_module/runtime.cpp"
-#pragma pop_macro("QD_INCLUDED")
 
 namespace quadrants::lang {
 namespace {
@@ -74,3 +74,5 @@ TEST(AllocationResult, RuntimeStoresReturnedAllocationResult) {
 
 }  // namespace
 }  // namespace quadrants::lang
+
+#endif
