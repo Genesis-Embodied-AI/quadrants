@@ -90,13 +90,10 @@ DeviceAllocation AmdgpuDevice::allocate_memory_runtime(const LlvmRuntimeAllocPar
 }
 
 uint64_t *AmdgpuDevice::allocate_llvm_runtime_memory_jit(const LlvmRuntimeAllocParams &params) {
-  // The device-side runtime_memory_allocate_aligned fires quadrants_assert_runtime on pool exhaustion, which stops
-  // the kernel without writing to *result. To detect that here, zero the slot first so a null readback unambiguously
-  // means "allocation failed" and we can surface a helpful host-side message instead of letting the downstream
-  // hipMemset trip on the stale pointer with a cryptic hipErrorInvalidValue.
+  // An aborted allocation can leave the result slot untouched. Clear it first so the host detects failure instead
+  // of using a stale pointer. Clear and wait on the allocation kernel's stream; a device memset needs no host buffer.
   void *active_stream = AMDGPUContext::get_instance().get_stream();
-  uint64 zero = 0;
-  AMDGPUDriver::get_instance().memcpy_host_to_device_async(params.result_buffer, &zero, sizeof(uint64), active_stream);
+  AMDGPUDriver::get_instance().memset_async(params.result_buffer, 0, sizeof(uint64), active_stream);
   params.runtime_jit->call<void *, std::size_t, std::size_t>("runtime_memory_allocate_aligned", params.runtime,
                                                              params.size, quadrants_page_size, params.result_buffer);
   AMDGPUDriver::get_instance().stream_synchronize(active_stream);

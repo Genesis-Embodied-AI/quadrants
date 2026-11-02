@@ -81,10 +81,8 @@ DeviceAllocation CudaDevice::allocate_memory_runtime(const LlvmRuntimeAllocParam
 }
 
 uint64_t *CudaDevice::allocate_llvm_runtime_memory_jit(const LlvmRuntimeAllocParams &params) {
-  // Zero the slot before the JIT call so that a null readback unambiguously signals pool exhaustion (see the
-  // AmdgpuDevice counterpart for why). The existing __assertfail hard-halt on the device side still runs, but we
-  // no longer rely on it to stop the host from dereferencing a stale pointer.
-  // Clear and wait on the stream used by the allocation kernel. A device memset needs no pinned host buffer.
+  // An aborted allocation can leave the result slot untouched. Clear it first so the host detects failure instead
+  // of using a stale pointer. Clear and wait on the allocation kernel's stream; a device memset needs no host buffer.
   void *active_stream = CUDAContext::get_instance().get_stream();
   CUDADriver::get_instance().memset_async(params.result_buffer, 0, sizeof(uint64), active_stream);
   params.runtime_jit->call<void *, std::size_t, std::size_t>("runtime_memory_allocate_aligned", params.runtime,
