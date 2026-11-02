@@ -1,5 +1,5 @@
 #include "quadrants/runtime/llvm/amdgpu_runtime_bitcode.h"
-#include "quadrants/runtime/llvm/runtime_bitcode_cache.h"
+#include "quadrants/runtime/llvm/runtime_bitcode_inputs.h"
 #include "quadrants/runtime/llvm/runtime_bitcode_serialization.h"
 #include "quadrants/runtime/llvm/llvm_context.h"
 #include "quadrants/util/environ_config.h"

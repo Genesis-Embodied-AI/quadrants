@@ -2,7 +2,7 @@
 
 #include "quadrants/runtime/llvm/llvm_context.h"
 #include "quadrants/runtime/llvm/amdgpu_runtime_bitcode.h"
-#include "quadrants/runtime/llvm/runtime_bitcode_cache.h"
+#include "quadrants/runtime/llvm/runtime_bitcode_inputs.h"
 
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/ADT/APFloat.h"

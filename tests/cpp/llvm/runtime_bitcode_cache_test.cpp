@@ -1,5 +1,5 @@
 #include "gtest/gtest.h"
-#include "quadrants/runtime/llvm/runtime_bitcode_cache.h"
+#include "quadrants/runtime/llvm/runtime_bitcode_inputs.h"
 #include "quadrants/runtime/llvm/runtime_bitcode_serialization.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/Bitcode/BitcodeReader.h"
