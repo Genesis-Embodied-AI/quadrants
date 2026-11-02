@@ -408,14 +408,10 @@ set(AMDGPU_LIBDEVICE_FILES
     oclc_abi_version_400.bc
     # Disable correctly rounded 32-bit square roots.
     oclc_correctly_rounded_sqrt_off.bc
-    # Retain the existing DAZ file; this ROCm 7.0 copy defines no options.
-    oclc_daz_opt_off.bc
     # Disable the finite-only assumption.
     oclc_finite_only_off.bc
     # Disable unsafe-math.
-    oclc_unsafe_math_off.bc
-    # Supply OpenCL built-in functions.
-    opencl.bc)
+    oclc_unsafe_math_off.bc)
 string(JOIN "\",\n    \"" AMDGPU_LIBDEVICE_INITIALIZER ${AMDGPU_LIBDEVICE_FILES})
 configure_file(quadrants/runtime/llvm/amdgpu_libdevice_files.h.in
                generated/quadrants/runtime/llvm/amdgpu_libdevice_files.h @ONLY)
