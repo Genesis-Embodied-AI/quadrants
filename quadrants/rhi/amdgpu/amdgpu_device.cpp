@@ -14,7 +14,7 @@ AmdgpuDevice::AmdgpuDevice() : AmdgpuDevice(/*skip_initialize_memory_pool=*/fals
 
 AmdgpuDevice::AmdgpuDevice(bool skip_initialize_memory_pool) {
   if (!skip_initialize_memory_pool) {
-    DeviceMemoryPool::get_instance(Arch::amdgpu, false /*merge_upon_release*/);
+    DeviceMemoryPool::get_instance(Arch::amdgpu, /*merge_upon_release=*/false);
   }
 }
 
@@ -25,7 +25,7 @@ AmdgpuDevice::AllocInfo AmdgpuDevice::get_alloc_info(const DeviceAllocation hand
 
 RhiResult AmdgpuDevice::allocate_memory(const AllocParams &params, DeviceAllocation *out_devalloc) {
   AllocInfo info;
-  auto &mem_pool = DeviceMemoryPool::get_instance(Arch::amdgpu, false /*merge_upon_release*/);
+  auto &mem_pool = DeviceMemoryPool::get_instance(Arch::amdgpu, /*merge_upon_release=*/false);
 
   bool managed = params.host_read || params.host_write;
   void *ptr = mem_pool.allocate(params.size, DeviceMemoryPool::page_size, managed);
@@ -66,7 +66,7 @@ DeviceAllocation AmdgpuDevice::allocate_memory_runtime(const LlvmRuntimeAllocPar
     AMDGPUDriver::get_instance().malloc_async((void **)&info.ptr, info.size, nullptr);
   } else {
     info.ptr =
-        DeviceMemoryPool::get_instance(Arch::amdgpu, false /*merge_upon_release*/).allocate_with_cache(this, params);
+        DeviceMemoryPool::get_instance(Arch::amdgpu, /*merge_upon_release=*/false).allocate_with_cache(this, params);
 
     if (!info.ptr) {
       DeviceAllocation fail_alloc;
@@ -147,10 +147,10 @@ void AmdgpuDevice::dealloc_memory(DeviceAllocation handle) {
   if (info.use_memory_pool) {
     AMDGPUDriver::get_instance().mem_free(info.ptr);
   } else if (info.use_cached) {
-    DeviceMemoryPool::get_instance(Arch::amdgpu, false /*merge_upon_release*/)
+    DeviceMemoryPool::get_instance(Arch::amdgpu, /*merge_upon_release=*/false)
         .release(info.size, (uint64_t *)info.ptr, false);
   } else if (!info.use_preallocated) {
-    DeviceMemoryPool::get_instance(Arch::amdgpu, false /*merge_upon_release*/).release(info.size, info.ptr);
+    DeviceMemoryPool::get_instance(Arch::amdgpu, /*merge_upon_release=*/false).release(info.size, info.ptr);
   }
   info.ptr = nullptr;
 }

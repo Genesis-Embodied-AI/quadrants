@@ -12,7 +12,7 @@ CudaDevice::CudaDevice() : CudaDevice(/*skip_initialize_memory_pool=*/false) {
 
 CudaDevice::CudaDevice(bool skip_initialize_memory_pool) {
   if (!skip_initialize_memory_pool) {
-    DeviceMemoryPool::get_instance(Arch::cuda, true /*merge_upon_release*/);
+    DeviceMemoryPool::get_instance(Arch::cuda, /*merge_upon_release=*/true);
   }
 }
 
@@ -24,7 +24,7 @@ CudaDevice::AllocInfo CudaDevice::get_alloc_info(const DeviceAllocation handle) 
 RhiResult CudaDevice::allocate_memory(const AllocParams &params, DeviceAllocation *out_devalloc) {
   AllocInfo info;
 
-  auto &mem_pool = DeviceMemoryPool::get_instance(Arch::cuda, true /*merge_upon_release*/);
+  auto &mem_pool = DeviceMemoryPool::get_instance(Arch::cuda, /*merge_upon_release=*/true);
 
   bool managed = params.host_read || params.host_write;
   void *ptr = mem_pool.allocate(params.size, DeviceMemoryPool::page_size, managed);
@@ -57,7 +57,7 @@ DeviceAllocation CudaDevice::allocate_memory_runtime(const LlvmRuntimeAllocParam
     CUDADriver::get_instance().malloc_async((void **)&info.ptr, info.size, nullptr);
   } else {
     info.ptr =
-        DeviceMemoryPool::get_instance(Arch::cuda, true /*merge_upon_release*/).allocate_with_cache(this, params);
+        DeviceMemoryPool::get_instance(Arch::cuda, /*merge_upon_release=*/true).allocate_with_cache(this, params);
 
     if (!info.ptr) {
       DeviceAllocation fail_alloc;
@@ -136,10 +136,10 @@ void CudaDevice::dealloc_memory(DeviceAllocation handle) {
   if (info.use_memory_pool) {
     CUDADriver::get_instance().mem_free_async(info.ptr, nullptr);
   } else if (info.use_cached) {
-    DeviceMemoryPool::get_instance(Arch::cuda, true /*merge_upon_release*/)
+    DeviceMemoryPool::get_instance(Arch::cuda, /*merge_upon_release=*/true)
         .release(info.size, (uint64_t *)info.ptr, false);
   } else if (!info.use_preallocated) {
-    auto &mem_pool = DeviceMemoryPool::get_instance(Arch::cuda, true /*merge_upon_release*/);
+    auto &mem_pool = DeviceMemoryPool::get_instance(Arch::cuda, /*merge_upon_release=*/true);
     mem_pool.release(info.size, info.ptr, true /*release_raw*/);
   }
   info.ptr = nullptr;
