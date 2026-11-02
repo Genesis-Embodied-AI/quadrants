@@ -107,7 +107,6 @@ set(CORE_LIBRARY_NAME quadrants_core)
 add_library(${CORE_LIBRARY_NAME} OBJECT ${QUADRANTS_CORE_SOURCE})
 
 target_include_directories(${CORE_LIBRARY_NAME} PRIVATE ${CMAKE_SOURCE_DIR})
-target_include_directories(${CORE_LIBRARY_NAME} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
 target_include_directories(${CORE_LIBRARY_NAME} PRIVATE external/include)
 target_include_directories(${CORE_LIBRARY_NAME} PRIVATE external/SPIRV-Tools/include)
 target_include_directories(${CORE_LIBRARY_NAME} PRIVATE external/PicoSHA2)
