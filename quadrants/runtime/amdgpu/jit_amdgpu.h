@@ -123,7 +123,7 @@ class JITSessionAMDGPU : public JITSession {
   // Compile an LLVM IR module to HSACO bytes and load them.
   JITModule *add_module(std::unique_ptr<llvm::Module> M, int max_reg) override;
 
-  // Compile the runtime with caching.
+  // Compile runtime LLVM IR to HSACO bytes, reusing cached bytes when available, and load them.
   JITModule *add_runtime_module(std::unique_ptr<llvm::Module> M, int max_reg) override;
 
   llvm::DataLayout get_data_layout() override {
