@@ -66,8 +66,8 @@ DeviceAllocation AmdgpuDevice::allocate_memory_runtime(const LlvmRuntimeAllocPar
   } else if (params.use_memory_pool) {
     AMDGPUDriver::get_instance().malloc_async((void **)&info.ptr, info.size, nullptr);
   } else {
-    info.ptr =
-        DeviceMemoryPool::get_instance(Arch::amdgpu, /*merge_upon_release=*/kMergeUponRelease).allocate_with_cache(this, params);
+    info.ptr = DeviceMemoryPool::get_instance(Arch::amdgpu, /*merge_upon_release=*/kMergeUponRelease)
+                   .allocate_with_cache(this, params);
 
     if (!info.ptr) {
       DeviceAllocation fail_alloc;
@@ -154,17 +154,17 @@ RhiResult AmdgpuDevice::upload_data(DevicePtr *device_ptr, const void **data, si
 
     AllocInfo &info = allocations_[device_ptr[i].alloc_id];
     AMDGPUDriver::get_instance().memcpy_host_to_device((uint8_t *)info.ptr + device_ptr[i].offset, (void *)data[i],
-                                                     size[i]);
+                                                       size[i]);
   }
 
   return RhiResult::success;
 }
 
 RhiResult AmdgpuDevice::readback_data(DevicePtr *device_ptr,
-                                    void **data,
-                                    size_t *size,
-                                    int num_alloc,
-                                    const std::vector<StreamSemaphore> &wait_sema) noexcept {
+                                      void **data,
+                                      size_t *size,
+                                      int num_alloc,
+                                      const std::vector<StreamSemaphore> &wait_sema) noexcept {
   if (!device_ptr || !data || !size) {
     return RhiResult::invalid_usage;
   }
