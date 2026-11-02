@@ -30,14 +30,14 @@ JITModule *JITSessionAMDGPU::add_runtime_module(std::unique_ptr<llvm::Module> M,
   bool hit;
   auto hsaco = cache.get_or_compile(key, [&] { return compile_module_to_hsaco(M); }, hit);
   QD_TRACE("AMDGPU runtime HSACO cache {}", hit ? "hit" : "miss");
-  return load_hsaco_module(hsaco);
+  return load_hsaco_bytes(hsaco);
 }
 
 JITModule *JITSessionAMDGPU ::add_module(std::unique_ptr<llvm::Module> M, int max_reg) {
-  return load_hsaco_module(compile_module_to_hsaco(M));
+  return load_hsaco_bytes(compile_module_to_hsaco(M));
 }
 
-JITModule *JITSessionAMDGPU::load_hsaco_module(const std::string &hsaco) {
+JITModule *JITSessionAMDGPU::load_hsaco_bytes(const std::string &hsaco) {
   QD_TRACE("hsaco size: {:.2f}KB", hsaco.size() / 1024.0);
 
   void *amdgpu_module;
