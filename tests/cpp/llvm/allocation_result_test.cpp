@@ -29,8 +29,8 @@ TEST(AllocationResult, RuntimeClearsStalePointerWhenAllocationIsInterrupted) {
   } mock_memory_pool;
   // Substitute observation data for the real memory pool. The mock never allocates or inspects the result buffer.
   runtime->memory_pool = reinterpret_cast<::Ptr>(&mock_memory_pool);
-  // Replace only the host allocator callback. Throwing prevents the final assignment in
-  // runtime_memory_allocate_aligned from running. No device or memory exhaustion is needed.
+  // Replace only the host allocator callback. Throwing prevents the final assignment in runtime_memory_allocate_aligned
+  // from running. No device or memory exhaustion is needed.
   runtime->host_allocator = [](void *context, std::size_t size, std::size_t alignment) -> void * {
     MockMemoryPool &mock_memory_pool = *static_cast<MockMemoryPool *>(context);
     mock_memory_pool.size = size;

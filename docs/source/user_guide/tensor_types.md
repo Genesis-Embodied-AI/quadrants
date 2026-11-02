@@ -85,7 +85,7 @@ Use `fill=` to give a field an initial value:
 weights = qd.field(qd.f32, shape=16, fill=1.0)
 ```
 
-Field allocation is deferred until Quadrants needs the storage. The initializer runs once at that point, before the first read or write through Quadrants. Declaring multiple fields with `fill=` lets Quadrants allocate them together. This avoids splitting the allocation with a separate `.fill()` call after each declaration, which can exhaust Metal's buffer bindings when a kernel accesses many fields.
+Field allocation is deferred until Quadrants needs the storage. The initializer runs once at that point, before the first read or write through Quadrants. Declaring multiple fields with `fill=` lets Quadrants allocate them together. This avoids creating a separate allocation after each `.fill()` call. On Metal, Apple's GPU API, a kernel can access only a limited number of separate memory buffers. Allocating fields together reduces the number of buffers it needs.
 
 `fill=` also works with `qd.Matrix.field` and vector or matrix types passed to `qd.field`. A scalar initializes every component; a list, tuple, or Quadrants vector or matrix supplies per-component values. Mutable values are captured when the field is declared. Omitting `fill` or passing `None` preserves the existing allocation behavior. Only the field itself is initialized; its [gradient and dual fields](autodiff.md), which store derivatives for automatic differentiation, keep their default values.
 
