@@ -8,7 +8,7 @@
 namespace quadrants::lang {
 
 // Read the complete file as bytes, preserving zeros; throw if opening or reading fails.
-inline std::string read_binary_file(const std::string &path) {
+inline std::string read_binary_file_into_string(const std::string &path) {
   std::ifstream file(path, std::ios::binary);
   if (!file) {
     throw std::runtime_error("Cannot open file: " + path);

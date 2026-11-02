@@ -129,7 +129,7 @@ class JITSessionAMDGPU : public JITSession {
   }
 
   std::string load_hsaco(const std::string &filename) {
-    return read_binary_file(filename);
+    return read_binary_file_into_string(filename);
   }
 
   uint64 get_random_num() {

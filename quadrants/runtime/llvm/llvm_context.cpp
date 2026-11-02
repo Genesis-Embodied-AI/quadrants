@@ -226,7 +226,7 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::clone_module_to_this_thread_
 
 std::unique_ptr<llvm::Module> LlvmModuleBitcodeLoader::load(llvm::LLVMContext *ctx) const {
   QD_AUTO_PROF;
-  return load_bytes(ctx, read_binary_file(bitcode_path_));
+  return load_bytes(ctx, read_binary_file_into_string(bitcode_path_));
 }
 
 std::unique_ptr<llvm::Module> LlvmModuleBitcodeLoader::load_bytes(llvm::LLVMContext *ctx,

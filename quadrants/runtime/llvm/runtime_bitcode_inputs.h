@@ -22,7 +22,7 @@ struct RuntimeBitcodeInputs {
   static RuntimeBitcodeInputs read(const std::string &target, const std::vector<std::string> &paths) {
     RuntimeBitcodeInputs inputs{target, {}};
     for (const std::string &path : paths) {
-      inputs.files.emplace(path, read_binary_file(path));
+      inputs.files.emplace(path, read_binary_file_into_string(path));
     }
     return inputs;
   }
