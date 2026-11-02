@@ -828,11 +828,12 @@ void QuadrantsLLVMContext::link_module_with_amdgpu_libdevice(std::unique_ptr<llv
   for (const std::string &libdevice : amdgpu_libdevice_files(mcpu)) {
     const std::string path = lib_dir + libdevice;
     LlvmModuleBitcodeLoader loader;
-    std::unique_ptr<llvm::Module> libdevice_module = inputs ? loader.set_bitcode_path(path)
-                                         .set_buffer_id("runtime_bitcode")
-                                         .set_inline_funcs(true)
-                                         .load_bytes(get_this_thread_context(), inputs->files.at(path))
-                                   : module_from_bitcode_file(path, get_this_thread_context());
+    std::unique_ptr<llvm::Module> libdevice_module =
+        inputs ? loader.set_bitcode_path(path)
+                     .set_buffer_id("runtime_bitcode")
+                     .set_inline_funcs(true)
+                     .load_bytes(get_this_thread_context(), inputs->files.at(path))
+               : module_from_bitcode_file(path, get_this_thread_context());
 
     if (libdevice == "ocml.bc")
       module->setDataLayout(libdevice_module->getDataLayout());
