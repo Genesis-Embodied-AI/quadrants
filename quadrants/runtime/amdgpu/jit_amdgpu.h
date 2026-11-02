@@ -120,7 +120,7 @@ class JITSessionAMDGPU : public JITSession {
     create_directories(tmp_dir_);
   }
 
-  // Compile a module without caching.
+  // Compile an LLVM IR module to HSACO bytes and load them.
   JITModule *add_module(std::unique_ptr<llvm::Module> M, int max_reg) override;
 
   // Compile the runtime with caching.
