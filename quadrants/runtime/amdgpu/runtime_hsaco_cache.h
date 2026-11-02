@@ -31,6 +31,7 @@ class RuntimeHsacoCache {
   std::string get_or_compile(const RuntimeHsacoKey &key, Compile compile, bool &hit) {
     std::lock_guard<std::mutex> lock(mutex_);
     hit = false;
+    // With only eight entries by default, a linear scan avoids a custom key hash and separate eviction-order tracking.
     for (const auto &entry : entries_) {
       if (entry.first == key) {
         hit = true;
