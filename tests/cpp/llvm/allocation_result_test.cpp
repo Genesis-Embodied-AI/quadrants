@@ -30,7 +30,7 @@ TEST(AllocationResult, RuntimeClearsStalePointerBeforeCallingAllocator) {
   for (void *returned_pointer : allocation_test_cases) {
     SCOPED_TRACE(returned_pointer == nullptr ? "failed allocation" : "successful allocation");
     std::uint64_t result = reinterpret_cast<std::uintptr_t>(MOCK_STALE_ALLOCATION);
-    struct AllocationState {
+    struct MockMemoryPool {
       std::uint64_t *result;
       void *returned_pointer;
       std::uint64_t result_at_call = 1;
@@ -39,12 +39,12 @@ TEST(AllocationResult, RuntimeClearsStalePointerBeforeCallingAllocator) {
       int calls = 0;
     } mock_memory_pool{&result, returned_pointer};
     // Substitute observation data for the real memory pool. The fake allocator interprets this pointer as
-    // AllocationState; no HostMemoryPool object is created or used for this request.
+    // MockMemoryPool; no HostMemoryPool object is created or used for this request.
     runtime->memory_pool = reinterpret_cast<::Ptr>(&mock_memory_pool);
     // Substitute a fake host allocator that records the result on entry and returns the selected pointer without
     // allocating memory. The production runtime code must clear the result before invoking this callback.
     runtime->host_allocator = [](void *context, std::size_t size, std::size_t alignment) -> void * {
-      AllocationState &mock_memory_pool = *static_cast<AllocationState *>(context);
+      MockMemoryPool &mock_memory_pool = *static_cast<MockMemoryPool *>(context);
       mock_memory_pool.result_at_call = *mock_memory_pool.result;
       mock_memory_pool.size = size;
       mock_memory_pool.alignment = alignment;
