@@ -9,6 +9,7 @@ namespace quadrants::lang {
 namespace {
 
 TEST(RuntimeHsacoCache, ConcurrentLookupCompilesOnce) {
+  // Concurrent requests for one key must compile once and return the same bytes, including embedded zeros.
   RuntimeHsacoCache cache;
   std::atomic<int> compilations{0};
   const std::string binary("a\0b", 3);
@@ -32,24 +33,25 @@ TEST(RuntimeHsacoCache, ConcurrentLookupCompilesOnce) {
   EXPECT_EQ(compilations, 1);
 }
 
-TEST(RuntimeHsacoCache, RespectsEntryAndByteLimits) {
-  for (const auto limits : {std::pair<std::size_t, std::size_t>{2, 100}, {10, 6}}) {
-    RuntimeHsacoCache cache(limits.first, limits.second);
-    auto lookup = [&](const char *name, const std::string &bytes = "abc") {
-      bool hit;
-      EXPECT_EQ(cache.get_or_compile({name, "gfx900", "", true}, [&] { return bytes; }, hit), bytes);
-      return hit;
-    };
-    EXPECT_FALSE(lookup("first"));
-    EXPECT_FALSE(lookup("second"));
-    EXPECT_TRUE(lookup("first"));
-    EXPECT_FALSE(lookup("third"));
-    EXPECT_TRUE(lookup("second"));
-    EXPECT_FALSE(lookup("first"));
-    EXPECT_FALSE(lookup("oversized", std::string(101, 'x')));
-    EXPECT_FALSE(lookup("oversized", std::string(101, 'x')));
-    EXPECT_TRUE(lookup("first"));
-  }
+TEST(RuntimeHsacoCache, RespectsEntryLimitRegardlessOfBinarySize) {
+  // Evict the oldest entry at the count limit, but retain large binaries just like small ones.
+  RuntimeHsacoCache cache(2);
+  auto lookup = [&](const char *name, const std::string &bytes = "abc") {
+    bool hit;
+    EXPECT_EQ(cache.get_or_compile({name, "gfx900", "", true}, [&] { return bytes; }, hit), bytes);
+    return hit;
+  };
+  EXPECT_FALSE(lookup("first"));
+  EXPECT_FALSE(lookup("second"));
+  EXPECT_TRUE(lookup("first"));
+  EXPECT_FALSE(lookup("third"));
+  EXPECT_TRUE(lookup("second"));
+  EXPECT_FALSE(lookup("first"));
+  const std::string large_binary(8 * 1024 * 1024 + 1, 'x');
+  EXPECT_FALSE(lookup("large", large_binary));
+  EXPECT_TRUE(lookup("large", large_binary));
+  EXPECT_TRUE(lookup("first"));
 }
+
 }  // namespace
 }  // namespace quadrants::lang
