@@ -74,6 +74,9 @@ class MockAllocationJit : public JITModule {
     operations_.push_back("launch");
     EXPECT_EQ(name, "runtime_memory_allocate_aligned");
     ASSERT_EQ(arg_pointers.size(), 4u);
+    // Check the arguments to this production function:
+    // void runtime_memory_allocate_aligned(LLVMRuntime *runtime, std::size_t size,
+    //                                      std::size_t alignment, uint64 *result);
     EXPECT_EQ(arg_sizes,
               (std::vector<int>{sizeof(void *), sizeof(std::size_t), sizeof(std::size_t), sizeof(uint64 *)}));
     EXPECT_EQ(*static_cast<void **>(arg_pointers[0]), nullptr);
