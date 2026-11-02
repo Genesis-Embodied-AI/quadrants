@@ -339,14 +339,14 @@ def test_initializer_precedes_writes(
     # Initialization must run before each kind of write.
     if (
         sys.platform == "darwin"
-        and qd.lang.impl.current_cfg().arch == qd.vulkan
+        and qd.lang.impl.current_cfg().arch in (qd.vulkan, qd.metal)
         and operation == "host"
         and (container_type == "ndarray" or backend == qd.Backend.NDARRAY)
     ):
         request.node.add_marker(
             pytest.mark.xfail(
-                reason="Existing Vulkan ndarray host-write ordering bug: "
-                "https://github.com/Genesis-Embodied-AI/quadrants/pull/1045",
+                reason="Existing Vulkan/Metal ndarray host-write ordering bug: "
+                "https://github.com/Genesis-Embodied-AI/quadrants/pull/1046",
                 raises=AssertionError,
                 strict=False,
             )
