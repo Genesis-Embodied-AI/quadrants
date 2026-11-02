@@ -106,8 +106,8 @@ class AmdgpuDevice : public LlvmDevice {
   }
 
  protected:
-  // skip_initialize_memory_pool: true skips the shared pool for mock devices that do not use it; false
-  // initializes or retrieves the pool for this backend. This step does not allocate GPU memory.
+  // skip_initialize_memory_pool: true skips the shared pool for mock devices that do not use it; false initializes or
+  // retrieves the pool for this backend. This step does not allocate GPU memory.
   explicit AmdgpuDevice(bool skip_initialize_memory_pool);
 
   // Driver operations used by runtime allocation; tests override these without initializing a GPU context.
