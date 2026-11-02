@@ -6,6 +6,7 @@ namespace quadrants::lang {
 namespace {
 
 TEST(RuntimeHsacoCache, KeyTracksCompilationInputs) {
+  // Changed code or compiler settings must change the key; restoring the original code must restore its key.
   llvm::LLVMContext context;
   llvm::Module module("runtime", context);
   auto value = llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 1);

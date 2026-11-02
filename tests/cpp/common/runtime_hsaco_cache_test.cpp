@@ -9,6 +9,7 @@ namespace quadrants::lang {
 namespace {
 
 TEST(RuntimeHsacoCache, ConcurrentLookupCompilesOnce) {
+  // Concurrent requests for one key must compile once and return the same bytes, including embedded zeros.
   RuntimeHsacoCache cache;
   std::atomic<int> compilations{0};
   const std::string binary("a\0b", 3);
@@ -33,6 +34,7 @@ TEST(RuntimeHsacoCache, ConcurrentLookupCompilesOnce) {
 }
 
 TEST(RuntimeHsacoCache, RespectsEntryAndByteLimits) {
+  // Either limit evicts the oldest entry; oversized results must neither be cached nor evict existing entries.
   for (const auto limits : {std::pair<std::size_t, std::size_t>{2, 100}, {10, 6}}) {
     RuntimeHsacoCache cache(limits.first, limits.second);
     auto lookup = [&](const char *name, const std::string &bytes = "abc") {

@@ -16,6 +16,7 @@ from tests.helpers import test_utils
 )
 @test_utils.test(arch=qd.amdgpu, offline_cache=False)
 def test_runtime_cache_bypass(diagnostic, capfd, monkeypatch, tmp_path):
+    # Disabling caching or requesting diagnostic output must bypass the cache on every initialization.
     monkeypatch.chdir(tmp_path)
     if diagnostic == "QD_DUMP_IR":
         monkeypatch.setenv(diagnostic, "1")
@@ -33,6 +34,7 @@ def test_runtime_cache_bypass(diagnostic, capfd, monkeypatch, tmp_path):
 
 @test_utils.test(arch=qd.amdgpu, offline_cache=False)
 def test_runtime_cache_resets_and_process_isolation(tmp_path):
+    # Resets reuse code without stale field state; fast-math modes get separate entries, and new processes start empty.
     qd.reset()
     script = tmp_path / "runtime_cache_check.py"
     script.write_text(
