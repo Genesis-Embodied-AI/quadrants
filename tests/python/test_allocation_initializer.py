@@ -1,5 +1,6 @@
 """Allocation-time initialization through field, ndarray, and tensor factories."""
 
+import sys
 from fractions import Fraction
 
 import numpy as np
@@ -332,8 +333,24 @@ def test_initializer_invalid_matrix(
 )
 @pytest.mark.parametrize("operation", ["fill", "host", "numpy", "kernel"])
 @test_utils.test()
-def test_initializer_precedes_writes(container_type: str, backend: qd.Backend | None, operation: str) -> None:
+def test_initializer_precedes_writes(
+    container_type: str, backend: qd.Backend | None, operation: str, request: pytest.FixtureRequest
+) -> None:
     # Initialization must run before each kind of write.
+    if (
+        sys.platform == "darwin"
+        and qd.lang.impl.current_cfg().arch == qd.vulkan
+        and operation == "host"
+        and (container_type == "ndarray" or backend == qd.Backend.NDARRAY)
+    ):
+        request.node.add_marker(
+            pytest.mark.xfail(
+                reason="Existing Vulkan ndarray host-write ordering bug: "
+                "https://github.com/Genesis-Embodied-AI/quadrants/pull/1045",
+                raises=AssertionError,
+                strict=False,
+            )
+        )
     num_elements = 4
     array = _create_array(
         container_type=container_type,
