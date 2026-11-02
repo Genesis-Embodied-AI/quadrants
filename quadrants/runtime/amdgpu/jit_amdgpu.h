@@ -120,10 +120,10 @@ class JITSessionAMDGPU : public JITSession {
     create_directories(tmp_dir_);
   }
 
-  // Compile the LLVM module to HSACO bytes and load a new GPU module, without using the runtime cache.
+  // Compile a module without caching.
   JITModule *add_module(std::unique_ptr<llvm::Module> M, int max_reg) override;
 
-  // Reuse cached runtime HSACO bytes when allowed, compiling on a miss; always load a new GPU module.
+  // Compile the runtime with caching.
   JITModule *add_runtime_module(std::unique_ptr<llvm::Module> M, int max_reg) override;
 
   llvm::DataLayout get_data_layout() override {
@@ -150,7 +150,7 @@ class JITSessionAMDGPU : public JITSession {
   }
 
  private:
-  // Load compiled HSACO bytes through the AMD driver and return a module wrapper owned by this session.
+  // Load compiled code into this session.
   JITModule *load_hsaco_module(const std::string &hsaco);
   std::string compile_module_to_hsaco(std::unique_ptr<llvm::Module> &module);
   uint64_t random_num_;
