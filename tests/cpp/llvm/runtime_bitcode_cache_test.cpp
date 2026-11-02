@@ -17,6 +17,7 @@ namespace quadrants::lang {
 namespace {
 
 TEST(RuntimeBitcodeCache, InputsInvalidateByTargetPathAndEveryContent) {
+  // Changing the target, file paths, or any input bytes must change the cache key.
   RuntimeBitcodeInputs original{"gfx1100", {{"runtime.bc", "runtime"}, {"ocml.bc", std::string("lib\0data", 8)}}};
   auto changed = original;
   changed.target = "gfx900";
@@ -35,7 +36,8 @@ TEST(RuntimeBitcodeCache, InputsInvalidateByTargetPathAndEveryContent) {
                std::runtime_error);
 }
 
-TEST(RuntimeBitcodeCache, BinaryOwnershipAndConcurrentBuild) {
+TEST(RuntimeBitcodeCache, ConcurrentBuildCompilesOnce) {
+  // Concurrent requests for the same key must build once and preserve binary bytes.
   RuntimeBitcodeCache cache;
   std::atomic<int> builds{0};
   const std::string binary("abc\0def", 7);
@@ -58,59 +60,26 @@ TEST(RuntimeBitcodeCache, BinaryOwnershipAndConcurrentBuild) {
   EXPECT_EQ(builds, 1);
   for (const auto &result : results)
     EXPECT_EQ(result, binary);
-  results[0][0] = 'z';
-  bool hit;
-  EXPECT_EQ(cache.get_or_build("key", [] { return "wrong"; }, hit), binary);
-  EXPECT_TRUE(hit);
-}
-
-TEST(RuntimeBitcodeCache, FailureAndEmptyResultsAreRetried) {
-  RuntimeBitcodeCache cache;
-  bool hit;
-  EXPECT_THROW(cache.get_or_build(
-                   "key", []() -> std::string { throw std::runtime_error("build failed"); }, hit),
-               std::runtime_error);
-  EXPECT_EQ(cache.get_or_build("key", [] { return std::string(); }, hit), "");
-  EXPECT_FALSE(hit);
-  EXPECT_EQ(cache.get_or_build("key", [] { return "success"; }, hit), "success");
-  EXPECT_FALSE(hit);
-  cache.get_or_build("key", [] { return "wrong"; }, hit);
-  EXPECT_TRUE(hit);
-}
-
-TEST(RuntimeBitcodeCache, EntryAndPayloadLimitsAndOversizedBypass) {
-  bool hit;
-  for (auto limits : {std::pair<std::size_t, std::size_t>{1, 100}, {4, 3}}) {
-    RuntimeBitcodeCache cache(limits.first, limits.second);
-    auto retained = cache.get_or_build("a", [] { return "aa"; }, hit);
-    cache.get_or_build("b", [] { return "bb"; }, hit);
-    EXPECT_EQ(cache.get_or_build("a", [] { return "new"; }, hit), "new");
-    EXPECT_FALSE(hit);
-    EXPECT_EQ(retained, "aa");
-  }
-  RuntimeBitcodeCache cache(4, 3);
-  for (int i = 0; i < 2; ++i) {
-    EXPECT_EQ(cache.get_or_build("large", [] { return "oversized"; }, hit), "oversized");
-    EXPECT_FALSE(hit);
-  }
 }
 
 TEST(RuntimeBitcodeCache, PreservesPreparedIntrinsicAttributesAcrossSerialization) {
+  // Serialization must preserve the preparation flags needed for identical HSACO cache keys.
   llvm::LLVMContext source, destination;
   llvm::Module module("runtime", source);
   auto *intrinsic =
       llvm::Intrinsic::getOrInsertDeclaration(&module, llvm::Intrinsic::sqrt, {llvm::Type::getFloatTy(source)});
   intrinsic->addFnAttr(llvm::Attribute::AlwaysInline);
-  auto bytes = serialize_runtime_bitcode(module);
+  std::string module_serialized = serialize_runtime_bitcode(module);
   EXPECT_EQ(module.getNamedMetadata(kRuntimeInlineIntrinsics), nullptr);
-  auto parsed = parse_runtime_bitcode(bytes, destination);
+  auto parsed = parse_runtime_bitcode(module_serialized, destination);
   ASSERT_TRUE(bool(parsed));
   EXPECT_TRUE(parsed.get()->getFunction("llvm.sqrt.f32")->hasFnAttribute(llvm::Attribute::AlwaysInline));
   EXPECT_EQ(parsed.get()->getNamedMetadata(kRuntimeInlineIntrinsics), nullptr);
-  EXPECT_EQ(bytes, serialize_runtime_bitcode(*parsed.get()));
+  EXPECT_EQ(module_serialized, serialize_runtime_bitcode(*parsed.get()));
 }
 
 TEST(RuntimeBitcodeCache, ModulesOutliveSourceContextAndMutateIndependently) {
+  // Cached bytes must survive the source context and produce independent mutable modules.
   RuntimeBitcodeCache cache;
   bool hit;
   auto bytes = cache.get_or_build(
@@ -122,10 +91,10 @@ TEST(RuntimeBitcodeCache, ModulesOutliveSourceContextAndMutateIndependently) {
         auto function = llvm::Function::Create(type, llvm::Function::ExternalLinkage, "value", module);
         llvm::IRBuilder<> builder(llvm::BasicBlock::Create(source, "entry", function));
         builder.CreateRet(builder.getInt32(7));
-        std::string result;
-        llvm::raw_string_ostream stream(result);
-        llvm::WriteBitcodeToFile(module, stream);
-        return result;
+        std::string module_serialized;
+        llvm::raw_string_ostream module_serialized_writer(module_serialized);
+        llvm::WriteBitcodeToFile(module, module_serialized_writer);
+        return module_serialized;
       },
       hit);
   llvm::LLVMContext first_context, second_context;

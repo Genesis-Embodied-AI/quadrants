@@ -13,31 +13,34 @@ namespace quadrants::lang {
 // consequently the same downstream HSACO key). All carrier metadata is removed before the module is consumed.
 inline constexpr const char *kRuntimeInlineIntrinsics = "quadrants.runtime.inline_intrinsics";
 
+// Serialize a prepared LLVM module while preserving its added intrinsic attributes.
 inline std::string serialize_runtime_bitcode(llvm::Module &module) {
-  auto *metadata = module.getOrInsertNamedMetadata(kRuntimeInlineIntrinsics);
-  for (auto &function : module) {
+  llvm::NamedMDNode *metadata = module.getOrInsertNamedMetadata(kRuntimeInlineIntrinsics);
+  for (llvm::Function &function : module) {
     if (function.isIntrinsic() && function.hasFnAttribute(llvm::Attribute::AlwaysInline)) {
       metadata->addOperand(llvm::MDNode::get(module.getContext(), llvm::ValueAsMetadata::get(&function)));
     }
   }
-  std::string bytes;
-  llvm::raw_string_ostream stream(bytes);
-  llvm::WriteBitcodeToFile(module, stream);
+  std::string module_serialized;
+  llvm::raw_string_ostream module_serialized_writer(module_serialized);
+  llvm::WriteBitcodeToFile(module, module_serialized_writer);
   module.eraseNamedMetadata(metadata);
-  return bytes;
+  return module_serialized;
 }
 
-inline llvm::Expected<std::unique_ptr<llvm::Module>> parse_runtime_bitcode(const std::string &bytes,
+// Parse serialized runtime bytes into the supplied LLVM context.
+inline llvm::Expected<std::unique_ptr<llvm::Module>> parse_runtime_bitcode(const std::string &module_serialized,
                                                                            llvm::LLVMContext &context) {
   // This is prepared intermediate IR, like clone_module_to_context's input. Device-library CommonLinkage functions
   // are resolved later; raw input files are verified by LlvmModuleBitcodeLoader before reaching this boundary.
-  auto module = llvm::parseBitcodeFile(llvm::MemoryBufferRef(bytes, "runtime_bitcode"), context);
+  llvm::Expected<std::unique_ptr<llvm::Module>> module =
+      llvm::parseBitcodeFile(llvm::MemoryBufferRef(module_serialized, "runtime_bitcode"), context);
   if (!module) {
     return module.takeError();
   }
-  if (auto *metadata = module.get()->getNamedMetadata(kRuntimeInlineIntrinsics)) {
-    for (auto *node : metadata->operands()) {
-      auto *value = llvm::cast<llvm::ValueAsMetadata>(node->getOperand(0));
+  if (llvm::NamedMDNode *metadata = module.get()->getNamedMetadata(kRuntimeInlineIntrinsics)) {
+    for (llvm::MDNode *node : metadata->operands()) {
+      llvm::ValueAsMetadata *value = llvm::cast<llvm::ValueAsMetadata>(node->getOperand(0));
       llvm::cast<llvm::Function>(value->getValue())->addFnAttr(llvm::Attribute::AlwaysInline);
     }
     module.get()->eraseNamedMetadata(metadata);

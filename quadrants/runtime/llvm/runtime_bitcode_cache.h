@@ -1,5 +1,7 @@
 #pragma once
 
+#include <array>
+#include <cstdint>
 #include <deque>
 #include <fstream>
 #include <map>
@@ -21,7 +23,7 @@ struct RuntimeBitcodeInputs {
 
   static RuntimeBitcodeInputs read(const std::string &target, const std::vector<std::string> &paths) {
     RuntimeBitcodeInputs inputs{target, {}};
-    for (const auto &path : paths) {
+    for (const std::string &path : paths) {
       std::ifstream file(path, std::ios::binary);
       if (!file) {
         throw std::runtime_error("Cannot read runtime bitcode: " + path);
@@ -48,22 +50,19 @@ struct RuntimeBitcodeInputs {
       add(path);
       add(bytes);
     }
-    auto digest = hash.final();
+    std::array<std::uint8_t, 32> digest = hash.final();
     return {reinterpret_cast<const char *>(digest.data()), digest.size()};
   }
 };
 
-// The cache owns serialized modules only. Consumers parse owned copies into their own mutable LLVM contexts.
+// Retain serialized modules until process exit. Consumers parse copies into their own mutable LLVM contexts.
 class RuntimeBitcodeCache {
  public:
-  explicit RuntimeBitcodeCache(std::size_t max_entries = 4, std::size_t max_bytes = 32 * 1024 * 1024)
-      : max_entries_(max_entries), max_bytes_(max_bytes) {
-  }
-
   template <typename Build>
   std::string get_or_build(const std::string &key, Build build, bool &hit) {
     std::lock_guard<std::mutex> lock(mutex_);
     hit = false;
+    // We expect few runtime variants per process; a linear scan avoids a separate index.
     for (const auto &[stored_key, bytes] : entries_) {
       if (stored_key == key) {
         hit = true;
@@ -71,22 +70,14 @@ class RuntimeBitcodeCache {
       }
     }
     std::string bytes = build();
-    if (bytes.empty() || bytes.size() > max_bytes_ || max_entries_ == 0) {
+    if (bytes.empty()) {
       return bytes;
     }
-    while (entries_.size() >= max_entries_ || bytes.size() > max_bytes_ - bytes_) {
-      bytes_ -= entries_.front().second.size();
-      entries_.pop_front();
-    }
     entries_.emplace_back(key, bytes);
-    bytes_ += bytes.size();
     return bytes;
   }
 
  private:
-  const std::size_t max_entries_;
-  const std::size_t max_bytes_;
-  std::size_t bytes_{0};
   std::mutex mutex_;
   std::deque<std::pair<std::string, std::string>> entries_;
 };

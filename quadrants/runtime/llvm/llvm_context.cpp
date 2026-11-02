@@ -299,7 +299,7 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::clone_runtime_module() {
 std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::string &file,
                                                                      const RuntimeBitcodeInputs *inputs) {
   auto ctx = get_this_thread_context();
-  const auto path = fmt::format("{}/{}", runtime_lib_dir(), file);
+  const std::string path = fmt::format("{}/{}", runtime_lib_dir(), file);
   LlvmModuleBitcodeLoader loader;
   std::unique_ptr<llvm::Module> module = inputs ? loader.set_bitcode_path(path)
                                                       .set_buffer_id("runtime_bitcode")
@@ -825,10 +825,10 @@ void QuadrantsLLVMContext::link_module_with_amdgpu_libdevice(std::unique_ptr<llv
   // support wave64). Linking the wavefrontsize64=on libdevice variant aligns the ROCm device libraries with the wave64
   // codegen forced via target-features in llvm_context_pass.h::AMDGPUConvertAllocaInstAddressSpacePass and
   // jit_amdgpu.cpp's TargetMachine features.
-  for (const auto &libdevice : amdgpu_libdevice_files(mcpu)) {
-    const auto path = lib_dir + libdevice;
+  for (const std::string &libdevice : amdgpu_libdevice_files(mcpu)) {
+    const std::string path = lib_dir + libdevice;
     LlvmModuleBitcodeLoader loader;
-    auto libdevice_module = inputs ? loader.set_bitcode_path(path)
+    std::unique_ptr<llvm::Module> libdevice_module = inputs ? loader.set_bitcode_path(path)
                                          .set_buffer_id("runtime_bitcode")
                                          .set_inline_funcs(true)
                                          .load_bytes(get_this_thread_context(), inputs->files.at(path))

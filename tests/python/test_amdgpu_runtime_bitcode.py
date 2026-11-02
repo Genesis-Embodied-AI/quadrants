@@ -7,6 +7,7 @@ from tests.helpers import test_utils
 
 @test_utils.test(arch=qd.amdgpu, offline_cache=False)
 def test_runtime_bitcode_fresh_structures(capfd):
+    # Reused runtime code must work with fresh field shapes and vector widths after each reset.
     for cycle, size in enumerate((9, 31, 6, 17, 9, 31)):
         qd.reset()
         capfd.readouterr()

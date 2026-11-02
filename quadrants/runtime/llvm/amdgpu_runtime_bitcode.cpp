@@ -39,16 +39,16 @@ std::unique_ptr<llvm::Module> load_amdgpu_runtime_bitcode(QuadrantsLLVMContext &
     return context.module_from_file(file);
   }
 
-  const auto target = AMDGPUContext::get_instance().get_mcpu();
+  const std::string target = AMDGPUContext::get_instance().get_mcpu();
   std::vector<std::string> paths{runtime_lib_dir() + "/" + file};
-  for (const auto &library : amdgpu_libdevice_files(target)) {
+  for (const std::string &library : amdgpu_libdevice_files(target)) {
     paths.push_back(runtime_lib_dir() + "_rocm70/" + library);
   }
-  const auto inputs = RuntimeBitcodeInputs::read(target, paths);
+  const RuntimeBitcodeInputs inputs = RuntimeBitcodeInputs::read(target, paths);
   static RuntimeBitcodeCache cache;
   std::unique_ptr<llvm::Module> prepared;
   bool hit;
-  const auto bitcode = cache.get_or_build(
+  const std::string module_serialized = cache.get_or_build(
       inputs.key(),
       [&] {
         prepared = context.module_from_file(file, &inputs);
@@ -60,7 +60,8 @@ std::unique_ptr<llvm::Module> load_amdgpu_runtime_bitcode(QuadrantsLLVMContext &
     return prepared;
   }
   // Parse into this program/thread's fresh context; mutations cannot reach any other program or cached template.
-  auto module = parse_runtime_bitcode(bitcode, *context.get_this_thread_context());
+  llvm::Expected<std::unique_ptr<llvm::Module>> module =
+      parse_runtime_bitcode(module_serialized, *context.get_this_thread_context());
   if (!module) {
     QD_ERROR("Failed to parse prepared AMD runtime bitcode: {}", llvm::toString(module.takeError()));
   }
