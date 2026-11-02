@@ -400,7 +400,7 @@ set(AMDGPU_LIBDEVICE_SUFFIX "_rocm70")
 set(AMDGPU_LIBDEVICE_FILES
     # Supply GPU math functions used by the runtime.
     ocml.bc
-    # Match the 64-thread wavefronts requested by our GPU compiler settings.
+    # Linking this file selects 64-thread wavefronts for device-library code, matching our GPU compiler settings.
     oclc_wavefrontsize64_on.bc
     # Supply low-level GPU kernel support functions.
     ockl.bc
