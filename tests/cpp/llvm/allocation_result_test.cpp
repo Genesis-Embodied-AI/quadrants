@@ -24,10 +24,12 @@ TEST(AllocationResult, RuntimeClearsStalePointerBeforeCallingAllocator) {
   // Use a separate runtime so the fake allocator cannot affect the executor's own allocations or cleanup.
   std::unique_ptr<::LLVMRuntime> runtime = std::make_unique<::LLVMRuntime>();
   std::uint8_t storage = 0;
-  void *returned_pointers[] = {nullptr, &storage};
+  void *const MOCK_SUCCESSFUL_ALLOCATION = &storage;
+  constexpr std::uint64_t MOCK_STALE_ALLOCATION = 0x0badbeef;
+  void *returned_pointers[] = {nullptr, MOCK_SUCCESSFUL_ALLOCATION};
   for (void *returned_pointer : returned_pointers) {
     SCOPED_TRACE(returned_pointer == nullptr ? "failed allocation" : "successful allocation");
-    std::uint64_t result = 0x0badbeef;
+    std::uint64_t result = MOCK_STALE_ALLOCATION;
     struct AllocationState {
       std::uint64_t *result;
       void *returned_pointer;
