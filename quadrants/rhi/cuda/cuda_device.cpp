@@ -84,17 +84,34 @@ uint64_t *CudaDevice::allocate_llvm_runtime_memory_jit(const LlvmRuntimeAllocPar
   // Zero the slot before the JIT call so that a null readback unambiguously signals pool exhaustion (see the
   // AmdgpuDevice counterpart for why). The existing __assertfail hard-halt on the device side still runs, but we
   // no longer rely on it to stop the host from dereferencing a stale pointer.
+  void *active_stream = allocation_stream();
   uint64 zero = 0;
-  CUDADriver::get_instance().memcpy_host_to_device(params.result_buffer, &zero, sizeof(uint64));
+  allocation_copy_to_device(params.result_buffer, &zero, sizeof(uint64), active_stream);
   params.runtime_jit->call<void *, std::size_t, std::size_t>("runtime_memory_allocate_aligned", params.runtime,
                                                              params.size, quadrants_page_size, params.result_buffer);
-  CUDADriver::get_instance().stream_synchronize(nullptr);
+  allocation_synchronize(active_stream);
   uint64 *ret{nullptr};
-  CUDADriver::get_instance().memcpy_device_to_host(&ret, params.result_buffer, sizeof(uint64));
+  allocation_copy_to_host(&ret, params.result_buffer, sizeof(uint64));
   QD_ERROR_IF(ret == nullptr,
               "Out of CUDA pre-allocated memory. Consider using qd.init(device_memory_fraction=0.9) or "
               "qd.init(device_memory_GB=N) to allocate more GPU memory.");
   return ret;
+}
+
+void *CudaDevice::allocation_stream() {
+  return nullptr;
+}
+
+void CudaDevice::allocation_copy_to_device(void *dst, void *src, std::size_t size, void *stream) {
+  CUDADriver::get_instance().memcpy_host_to_device(dst, src, size);
+}
+
+void CudaDevice::allocation_synchronize(void *stream) {
+  CUDADriver::get_instance().stream_synchronize(stream);
+}
+
+void CudaDevice::allocation_copy_to_host(void *dst, void *src, std::size_t size) {
+  CUDADriver::get_instance().memcpy_device_to_host(dst, src, size);
 }
 
 void CudaDevice::dealloc_memory(DeviceAllocation handle) {

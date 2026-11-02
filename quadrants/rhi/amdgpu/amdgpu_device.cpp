@@ -94,18 +94,34 @@ uint64_t *AmdgpuDevice::allocate_llvm_runtime_memory_jit(const LlvmRuntimeAllocP
   // the kernel without writing to *result. To detect that here, zero the slot first so a null readback unambiguously
   // means "allocation failed" and we can surface a helpful host-side message instead of letting the downstream
   // hipMemset trip on the stale pointer with a cryptic hipErrorInvalidValue.
-  void *active_stream = AMDGPUContext::get_instance().get_stream();
+  void *active_stream = allocation_stream();
   uint64 zero = 0;
-  AMDGPUDriver::get_instance().memcpy_host_to_device_async(params.result_buffer, &zero, sizeof(uint64), active_stream);
+  allocation_copy_to_device(params.result_buffer, &zero, sizeof(uint64), active_stream);
   params.runtime_jit->call<void *, std::size_t, std::size_t>("runtime_memory_allocate_aligned", params.runtime,
                                                              params.size, quadrants_page_size, params.result_buffer);
-  AMDGPUDriver::get_instance().stream_synchronize(active_stream);
+  allocation_synchronize(active_stream);
   uint64 *ret{nullptr};
-  AMDGPUDriver::get_instance().memcpy_device_to_host(&ret, params.result_buffer, sizeof(uint64));
+  allocation_copy_to_host(&ret, params.result_buffer, sizeof(uint64));
   QD_ERROR_IF(ret == nullptr,
               "Out of AMDGPU pre-allocated memory. Consider using qd.init(device_memory_fraction=0.9) or "
               "qd.init(device_memory_GB=N) to allocate more GPU memory.");
   return ret;
+}
+
+void *AmdgpuDevice::allocation_stream() {
+  return AMDGPUContext::get_instance().get_stream();
+}
+
+void AmdgpuDevice::allocation_copy_to_device(void *dst, void *src, std::size_t size, void *stream) {
+  AMDGPUDriver::get_instance().memcpy_host_to_device_async(dst, src, size, stream);
+}
+
+void AmdgpuDevice::allocation_synchronize(void *stream) {
+  AMDGPUDriver::get_instance().stream_synchronize(stream);
+}
+
+void AmdgpuDevice::allocation_copy_to_host(void *dst, void *src, std::size_t size) {
+  AMDGPUDriver::get_instance().memcpy_device_to_host(dst, src, size);
 }
 
 void AmdgpuDevice::dealloc_memory(DeviceAllocation handle) {
