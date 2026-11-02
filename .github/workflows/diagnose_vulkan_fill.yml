@@ -1,0 +1,51 @@
+name: Diagnose Vulkan fill ordering
+on:
+  push:
+    branches: [hp/diagnose-vulkan-fill-order]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  diagnose:
+    name: ${{ matrix.wheel }} wheel
+    runs-on: macos-26
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - wheel: base-1042
+            run_id: '41487562042'
+            source_sha: b5f4525472f65e9a3c56cbc6a65b37ddd790b345
+          - wheel: pr-1015
+            run_id: '41489971312'
+            source_sha: 18d9ff5e10a237c0453477d2ac4a82d1e54c1cf2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: mac_wheel_26_cp312
+          run-id: ${{ matrix.run_id }}
+          github-token: ${{ github.token }}
+          path: dist
+      - name: Install prebuilt wheel and test dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/python -m pip install dist/*.whl
+          .venv/bin/python -m pip install --group test
+      - name: Compare fill and host-write ordering
+        env:
+          DIAGNOSTIC_WHEEL: ${{ matrix.wheel }}
+          DIAGNOSTIC_SOURCE_SHA: ${{ matrix.source_sha }}
+        run: |
+          set -o pipefail
+          .venv/bin/python tests/run_tests.py vulkan_fill_order_diagnostic --arch vulkan -t 1 -sv 2>&1 | tee diagnostic.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fill-order-${{ matrix.wheel }}
+          path: diagnostic.log
