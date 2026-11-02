@@ -7,7 +7,7 @@ namespace quadrants::lang {
 
 namespace cuda {
 
-CudaDevice::CudaDevice() : CudaDevice(false /*skip_initialize_memory_pool*/) {
+CudaDevice::CudaDevice() : CudaDevice(false /*skip_initialize_memory_pool=*/) {
 }
 
 CudaDevice::CudaDevice(bool skip_initialize_memory_pool) {
