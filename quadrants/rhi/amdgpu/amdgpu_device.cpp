@@ -9,9 +9,13 @@ namespace lang {
 
 namespace amdgpu {
 
-AmdgpuDevice::AmdgpuDevice() {
-  // Initialize the device memory pool
-  DeviceMemoryPool::get_instance(Arch::amdgpu, false /*merge_upon_release*/);
+AmdgpuDevice::AmdgpuDevice() : AmdgpuDevice(/*skip_initialize_memory_pool=*/false) {
+}
+
+AmdgpuDevice::AmdgpuDevice(bool skip_initialize_memory_pool) {
+  if (!skip_initialize_memory_pool) {
+    DeviceMemoryPool::get_instance(Arch::amdgpu, /*merge_upon_release=*/false);
+  }
 }
 
 AmdgpuDevice::AllocInfo AmdgpuDevice::get_alloc_info(const DeviceAllocation handle) {
@@ -21,7 +25,7 @@ AmdgpuDevice::AllocInfo AmdgpuDevice::get_alloc_info(const DeviceAllocation hand
 
 RhiResult AmdgpuDevice::allocate_memory(const AllocParams &params, DeviceAllocation *out_devalloc) {
   AllocInfo info;
-  auto &mem_pool = DeviceMemoryPool::get_instance(Arch::amdgpu, false /*merge_upon_release*/);
+  auto &mem_pool = DeviceMemoryPool::get_instance(Arch::amdgpu, /*merge_upon_release=*/false);
 
   bool managed = params.host_read || params.host_write;
   void *ptr = mem_pool.allocate(params.size, DeviceMemoryPool::page_size, managed);
@@ -62,7 +66,7 @@ DeviceAllocation AmdgpuDevice::allocate_memory_runtime(const LlvmRuntimeAllocPar
     AMDGPUDriver::get_instance().malloc_async((void **)&info.ptr, info.size, nullptr);
   } else {
     info.ptr =
-        DeviceMemoryPool::get_instance(Arch::amdgpu, false /*merge_upon_release*/).allocate_with_cache(this, params);
+        DeviceMemoryPool::get_instance(Arch::amdgpu, /*merge_upon_release=*/false).allocate_with_cache(this, params);
 
     if (!info.ptr) {
       DeviceAllocation fail_alloc;
@@ -90,22 +94,35 @@ DeviceAllocation AmdgpuDevice::allocate_memory_runtime(const LlvmRuntimeAllocPar
 }
 
 uint64_t *AmdgpuDevice::allocate_llvm_runtime_memory_jit(const LlvmRuntimeAllocParams &params) {
-  // The device-side runtime_memory_allocate_aligned fires quadrants_assert_runtime on pool exhaustion, which stops
-  // the kernel without writing to *result. To detect that here, zero the slot first so a null readback unambiguously
-  // means "allocation failed" and we can surface a helpful host-side message instead of letting the downstream
-  // hipMemset trip on the stale pointer with a cryptic hipErrorInvalidValue.
-  void *active_stream = AMDGPUContext::get_instance().get_stream();
-  uint64 zero = 0;
-  AMDGPUDriver::get_instance().memcpy_host_to_device_async(params.result_buffer, &zero, sizeof(uint64), active_stream);
+  // An aborted allocation can leave the result slot untouched. Clear it first so the host detects failure instead
+  // of using a stale pointer. Clear and wait on the allocation kernel's stream; a device memset needs no host buffer.
+  void *active_stream = get_stream();
+  allocation_memset(params.result_buffer, 0, sizeof(uint64), active_stream);
   params.runtime_jit->call<void *, std::size_t, std::size_t>("runtime_memory_allocate_aligned", params.runtime,
                                                              params.size, quadrants_page_size, params.result_buffer);
-  AMDGPUDriver::get_instance().stream_synchronize(active_stream);
+  allocation_synchronize(active_stream);
   uint64 *ret{nullptr};
-  AMDGPUDriver::get_instance().memcpy_device_to_host(&ret, params.result_buffer, sizeof(uint64));
+  allocation_copy_to_host(&ret, params.result_buffer, sizeof(uint64));
   QD_ERROR_IF(ret == nullptr,
               "Out of AMDGPU pre-allocated memory. Consider using qd.init(device_memory_fraction=0.9) or "
               "qd.init(device_memory_GB=N) to allocate more GPU memory.");
   return ret;
+}
+
+void *AmdgpuDevice::get_stream() {
+  return AMDGPUContext::get_instance().get_stream();
+}
+
+void AmdgpuDevice::allocation_memset(void *dst, uint8 value, std::size_t size, void *stream) {
+  AMDGPUDriver::get_instance().memset_async(dst, value, size, stream);
+}
+
+void AmdgpuDevice::allocation_synchronize(void *stream) {
+  AMDGPUDriver::get_instance().stream_synchronize(stream);
+}
+
+void AmdgpuDevice::allocation_copy_to_host(void *dst, void *src, std::size_t size) {
+  AMDGPUDriver::get_instance().memcpy_device_to_host(dst, src, size);
 }
 
 void AmdgpuDevice::dealloc_memory(DeviceAllocation handle) {
@@ -127,10 +144,10 @@ void AmdgpuDevice::dealloc_memory(DeviceAllocation handle) {
   if (info.use_memory_pool) {
     AMDGPUDriver::get_instance().mem_free(info.ptr);
   } else if (info.use_cached) {
-    DeviceMemoryPool::get_instance(Arch::amdgpu, false /*merge_upon_release*/)
+    DeviceMemoryPool::get_instance(Arch::amdgpu, /*merge_upon_release=*/false)
         .release(info.size, (uint64_t *)info.ptr, false);
   } else if (!info.use_preallocated) {
-    DeviceMemoryPool::get_instance(Arch::amdgpu, false /*merge_upon_release*/).release(info.size, info.ptr);
+    DeviceMemoryPool::get_instance(Arch::amdgpu, /*merge_upon_release=*/false).release(info.size, info.ptr);
   }
   info.ptr = nullptr;
 }
