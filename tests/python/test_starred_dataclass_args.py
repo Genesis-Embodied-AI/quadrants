@@ -11,14 +11,14 @@ from tests.helpers import test_utils
 
 
 @pytest.mark.parametrize("container", [tuple, list])
-@pytest.mark.parametrize("templated", [False, True])
+@pytest.mark.parametrize("templated", [False, True, "class"])
 @test_utils.test()
 def test_starred_dataclass_args(container, templated):
     @dataclasses.dataclass(frozen=True)
     class State:
         values: qd.Tensor
 
-    annotation = qd.template() if templated else State
+    annotation = qd.Template if templated == "class" else qd.template() if templated else State
 
     @qd.func
     def add(state: annotation, other: annotation):
@@ -27,12 +27,12 @@ def test_starred_dataclass_args(container, templated):
 
     @qd.kernel
     def forward(args: qd.template()):
-        add(*args)
+        add(*qd.static(container(args)))
 
     state = State(qd.field(qd.i32, shape=4))
     other = State(qd.field(qd.i32, shape=4))
     other.values.fill(3)
-    forward(container((state, other)))
+    forward((state, other))
     np.testing.assert_array_equal(state.values.to_numpy(), [3] * 4)
 
 
@@ -105,3 +105,60 @@ def test_starred_dataclass_args_mixed_template():
     other.values[0] = 7
     run((state, other, 3))
     assert state.values[0] == 21
+
+
+@test_utils.test()
+def test_starred_dataclass_args_typed_literal():
+    @dataclasses.dataclass(frozen=True)
+    class State:
+        unused: qd.types.NDArray[qd.i32, 1]
+        values: qd.types.NDArray[qd.i32, 1]
+
+    @qd.func
+    def write(state: State, value: qd.i32):
+        state.values[0] = value
+
+    @qd.kernel
+    def run(state: State):
+        write(*(state, 17))
+
+    state = State(qd.ndarray(qd.i32, shape=1), qd.ndarray(qd.i32, shape=1))
+    run(state)
+    assert state.values[0] == 17
+
+
+@test_utils.test()
+def test_starred_dataclass_args_evaluated_once_per_pass():
+    @dataclasses.dataclass(frozen=True)
+    class State:
+        first: qd.Tensor
+        second: qd.Tensor
+
+    state = State(qd.field(qd.i32, shape=1), qd.field(qd.i32, shape=1))
+    calls = []
+
+    def make_args():
+        calls.append(None)
+        return (state,)
+
+    @qd.func
+    def write(state: State):
+        state.first[0] += 1
+        state.second[0] += 2
+
+    @qd.kernel
+    def baseline():
+        args = qd.static(make_args())
+        write(args[0])
+
+    @qd.kernel
+    def starred():
+        write(*qd.static(make_args()))
+
+    baseline()
+    baseline_calls = len(calls)
+    calls.clear()
+    starred()
+    assert len(calls) == baseline_calls
+    assert state.first[0] == 2
+    assert state.second[0] == 4
