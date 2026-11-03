@@ -71,6 +71,8 @@ def require_torch_gpu_kernels() -> None:
 
 
 def require_torch_dlpack(need_field_support: bool) -> ModuleType:
+    if qd.lang.impl.current_cfg().arch == qd.vulkan:
+        pytest.skip("DLPack export is not supported on Vulkan")
     torch = pytest.importorskip("torch")
     if (
         qd.lang.impl.current_cfg().arch == qd.metal

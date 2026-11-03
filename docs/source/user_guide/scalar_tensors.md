@@ -14,6 +14,17 @@ counter = qd.field(qd.i32, shape=())
 counter = qd.ndarray(qd.i32, shape=())
 ```
 
+## Initializing a scalar field
+
+Use `fill=` to give a scalar field an initial value:
+
+```python
+gravity = qd.field(qd.f32, shape=(), fill=-9.81)
+counter = qd.field(qd.i32, shape=(), fill=0)
+```
+
+See [Initializing fields](tensor_types.md#initializing-fields) for allocation timing and supported initializers.
+
 ## Accessing the value
 
 Index a scalar tensor with `[()]`:
