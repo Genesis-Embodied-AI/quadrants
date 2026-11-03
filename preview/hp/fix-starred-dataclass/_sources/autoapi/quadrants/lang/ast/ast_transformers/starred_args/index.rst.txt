@@ -1,0 +1,24 @@
+quadrants.lang.ast.ast_transformers.starred_args
+================================================
+
+.. py:module:: quadrants.lang.ast.ast_transformers.starred_args
+
+.. autoapi-nested-parse::
+
+   Normalize compile-time starred dataclass arguments before call-parameter expansion.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.lang.ast.ast_transformers.starred_args.expand_starred_dataclass_args
+
+
+Module Contents
+---------------
+
+.. py:function:: expand_starred_dataclass_args(args: list[ast.expr], keywords: list[ast.keyword]) -> list[ast.expr]
+
