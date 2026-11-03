@@ -15,7 +15,6 @@ from quadrants.lang.misc import *  # pylint: disable=W0622
 from quadrants.lang.ops import *  # pylint: disable=W0622
 from quadrants.lang.runtime_ops import *
 from quadrants.lang.snode import *
-from quadrants.lang.source_builder import *
 from quadrants.lang.stream import *
 from quadrants.lang.struct import *
 from quadrants.types.enums import (  # noqa: F401
@@ -54,7 +53,6 @@ __all__ = [
         "runtime_ops",
         "shell",
         "snode",
-        "source_builder",
         "stream",
         "struct",
         "util",
