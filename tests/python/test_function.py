@@ -184,7 +184,7 @@ def test_experimental_templates():
 
 @test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_real_func_template_runtime_arguments():
-    """Keep interleaved template parameters out of real-function runtime arguments while specializing their values."""
+    """Check that real functions work when compile-time settings and runtime inputs are mixed in the argument list."""
 
     @qd.real_func
     def apply(enabled: qd.Template, value: qd.i32, offset: qd.Template, scale: qd.i32) -> qd.i32:
