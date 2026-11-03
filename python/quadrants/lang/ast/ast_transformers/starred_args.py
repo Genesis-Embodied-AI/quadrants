@@ -32,6 +32,6 @@ def expand_starred_dataclass_args(args: list[ast.expr], keywords: list[ast.keywo
             item = ast.copy_location(ast.Constant(value=value), starred)
             item.ptr = value
             item.violates_pure = starred.value.violates_pure
-            item.violates_pure_reason = starred.value.violates_pure_reason
+            item.violates_pure_reason = getattr(starred.value, "violates_pure_reason", None)
         expanded.append(item)
     return expanded

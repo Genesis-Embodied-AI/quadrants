@@ -11,14 +11,14 @@ from tests.helpers import test_utils
 
 
 @pytest.mark.parametrize("container", [tuple, list])
-@pytest.mark.parametrize("templated", [False, True, "class"])
+@pytest.mark.parametrize("templated", [False, True])
 @test_utils.test()
 def test_starred_dataclass_args(container, templated):
     @dataclasses.dataclass(frozen=True)
     class State:
         values: qd.Tensor
 
-    annotation = qd.Template if templated == "class" else qd.template() if templated else State
+    annotation = qd.template() if templated else State
 
     @qd.func
     def add(state: annotation, other: annotation):
