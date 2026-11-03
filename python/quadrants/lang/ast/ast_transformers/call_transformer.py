@@ -22,6 +22,7 @@ from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
     get_decorator,
 )
+from quadrants.lang.ast.ast_transformers.starred_args import expand_starred_dataclass_args
 from quadrants.lang.exception import (
     QuadrantsSyntaxError,
     QuadrantsTypeError,
@@ -30,6 +31,7 @@ from quadrants.lang.expr import Expr
 from quadrants.lang.matrix import Matrix, Vector
 from quadrants.lang.util import is_quadrants_class
 from quadrants.types import primitive_types
+from quadrants.types.annotations import Template
 
 from ..._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
 
@@ -170,6 +172,7 @@ class CallTransformer:
         args: tuple[ast.stmt, ...],
         called_needed: set[str] | None = None,
         callee_arg_names: list[str] | None = None,
+        callee_arg_types: list[Any] | None = None,
     ) -> tuple[tuple[ast.stmt, ...], tuple[ast.stmt, ...]]:
         """
         We require that each node has a .ptr attribute added to it, that contains the associated Python object.
@@ -177,6 +180,7 @@ class CallTransformer:
         ``called_needed`` and ``callee_arg_names`` are used only for the attribute-accessed-instance branch (Option A
         for data_oriented @qd.func calls): the caller cannot construct a flat name from its own ``arg.id`` (the arg is
         an ast.Attribute), so we look up pruning against the callee's parameter name at the same positional index.
+        ``callee_arg_types`` preserves whole template arguments when normalizing a starred dataclass call.
         """
         args_new = []
         added_args = []
@@ -184,6 +188,13 @@ class CallTransformer:
         func_id = ctx.func.func_id
         for arg_idx, arg in enumerate(args):
             val = arg.ptr
+            if (
+                callee_arg_types is not None
+                and arg_idx < len(callee_arg_types)
+                and (callee_arg_types[arg_idx] is Template or isinstance(callee_arg_types[arg_idx], Template))
+            ):
+                args_new.append(arg)
+                continue
             if dataclasses.is_dataclass(val) and isinstance(val, type):
                 dataclass_type = val
                 for field in dataclasses.fields(dataclass_type):
@@ -392,6 +403,7 @@ class CallTransformer:
         pruning = ctx.global_context.pruning
         called_needed = None
         callee_arg_names: list[str] | None = None
+        callee_arg_types: list[Any] | None = None
         if pruning.enforcing and is_func_base_wrapper:
             called_func_id_ = func.wrapper.func_id  # type: ignore
             called_needed = pruning.used_vars_by_func_id[called_func_id_]
@@ -402,13 +414,20 @@ class CallTransformer:
             # set, silently dropping the fields it needs.
             try:
                 callee_arg_names = [m.name for m in func.wrapper.arg_metas]  # type: ignore[attr-defined]
+                callee_arg_types = [m.annotation for m in func.wrapper.arg_metas]
                 if type(func) is BoundQuadrantsCallable:
                     callee_arg_names = callee_arg_names[1:]
+                    callee_arg_types = callee_arg_types[1:]
             except AttributeError:
                 callee_arg_names = None
 
+        positional_args = expand_starred_dataclass_args(node.args, node.keywords) if is_func_base_wrapper else node.args
         added_args, node_args = CallTransformer._expand_Call_dataclass_args(
-            ctx, node.args, called_needed=called_needed, callee_arg_names=callee_arg_names
+            ctx,
+            positional_args,
+            called_needed=called_needed,
+            callee_arg_names=callee_arg_names,
+            callee_arg_types=callee_arg_types if positional_args is not node.args else None,
         )
         added_keywords, node_keywords = CallTransformer._expand_Call_dataclass_kwargs(ctx, node.keywords, called_needed)
 

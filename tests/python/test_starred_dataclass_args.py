@@ -37,8 +37,9 @@ def test_starred_dataclass_args(container, templated):
 
 
 @pytest.mark.parametrize("bound", [False, True])
+@pytest.mark.parametrize("explicit_state", [False, True])
 @test_utils.test()
-def test_starred_dataclass_args_nested_pruning(bound):
+def test_starred_dataclass_args_nested_pruning(bound, explicit_state):
     @dataclasses.dataclass(frozen=True)
     class Inner:
         unused: qd.types.NDArray[qd.i32, 1]
@@ -66,7 +67,10 @@ def test_starred_dataclass_args_nested_pruning(bound):
 
         @qd.kernel
         def run(self):
-            self.func(5, *self.args)
+            if qd.static(explicit_state):
+                self.func(5, self.args[0], *self.args[1:])
+            else:
+                self.func(5, *self.args)
 
     def make_state():
         return State(
