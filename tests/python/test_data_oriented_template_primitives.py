@@ -10,6 +10,7 @@ This file pins the runtime-lifting behaviour, the pruning (only accessed primiti
 """
 
 import dataclasses
+from typing import NamedTuple
 
 import numpy as np
 import pytest
@@ -201,6 +202,31 @@ def test_runtime_primitive_nested_data_oriented():
     step(sim)
     assert sim.out.to_numpy()[0] == 2
     sim.inner.count = 9
+    step(sim)
+    assert sim.out.to_numpy()[0] == 9
+
+
+@test_utils.test(arch=qd.cpu)
+def test_runtime_primitive_nested_named_tuple():
+    @qd.data_oriented
+    class Counts(NamedTuple):
+        count: int
+
+    @qd.data_oriented(template_primitives=False)
+    class Sim:
+        def __init__(self):
+            self.counts = Counts(count=2)
+            self.out = qd.field(qd.i32, shape=1)
+
+    sim = Sim()
+
+    @qd.kernel
+    def step(s: qd.template()):
+        s.out[0] = s.counts.count
+
+    step(sim)
+    assert sim.out.to_numpy()[0] == 2
+    sim.counts = Counts(count=9)
     step(sim)
     assert sim.out.to_numpy()[0] == 9
 
