@@ -105,10 +105,6 @@ export LLVM_DIR="/path/to/llvm/"
 export CMAKE_ARGS="$CMAKE_ARGS -DLLVM_ROOT=/path/to/llvm"
 ```
 
-`SourceBuilder.from_file()` and `SourceBuilder.from_source()` require an explicit `compile_fn` callback for C, C++,
-and CUDA source files. The callback receives a source path and returns a compatible LLVM bitcode file path;
-precompiled bitcode and shared-library files can still be loaded directly.
-
 ### Building with the AMD GPU backend (Linux)
 
 The AMD GPU backend is Linux-only (it is force-disabled on macOS and Windows) and is off by default, so enable it explicitly through `CMAKE_ARGS`:
