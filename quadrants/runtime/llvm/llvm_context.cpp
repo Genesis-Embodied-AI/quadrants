@@ -1,6 +1,8 @@
 // A llvm backend helper
 
 #include "quadrants/runtime/llvm/llvm_context.h"
+#include "quadrants/runtime/llvm/amdgpu_libdevice_files.h"
+#include <iterator>
 
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/ADT/APFloat.h"
@@ -806,8 +808,7 @@ void QuadrantsLLVMContext::link_module_with_amdgpu_libdevice(std::unique_ptr<llv
   auto mcpu = AMDGPUContext::get_instance().get_mcpu();
   auto isa_version = mcpu.substr(3, 4);
 
-  const std::string libdevice_subdir = "_rocm70";
-  const std::string lib_dir = runtime_lib_dir() + libdevice_subdir + "/";
+  const std::string lib_dir = runtime_lib_dir() + amdgpu_libdevice_suffix + "/";
   const std::string isa_file = "oclc_isa_version_" + isa_version + ".bc";
   std::ifstream test_file(lib_dir + isa_file);
 
@@ -823,16 +824,9 @@ void QuadrantsLLVMContext::link_module_with_amdgpu_libdevice(std::unique_ptr<llv
   // support wave64). Linking the wavefrontsize64=on libdevice variant aligns the ROCm device libraries with the wave64
   // codegen forced via target-features in llvm_context_pass.h::AMDGPUConvertAllocaInstAddressSpacePass and
   // jit_amdgpu.cpp's TargetMachine features.
-  std::string libdevice_files[] = {"ocml.bc",
-                                   "oclc_wavefrontsize64_on.bc",
-                                   "ockl.bc",
-                                   "oclc_abi_version_400.bc",
-                                   "oclc_correctly_rounded_sqrt_off.bc",
-                                   "oclc_daz_opt_off.bc",
-                                   "oclc_finite_only_off.bc",
-                                   "oclc_isa_version_" + isa_version + ".bc",
-                                   "oclc_unsafe_math_off.bc",
-                                   "opencl.bc"};
+  std::vector<std::string> libdevice_files(std::begin(amdgpu_static_libdevice_files),
+                                          std::end(amdgpu_static_libdevice_files));
+  libdevice_files.push_back(isa_file);
 
   for (auto &libdevice : libdevice_files) {
     auto libdevice_module = module_from_bitcode_file(lib_dir + libdevice, get_this_thread_context());
