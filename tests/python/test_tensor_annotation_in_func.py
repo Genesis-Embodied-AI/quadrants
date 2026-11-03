@@ -258,7 +258,7 @@ def test_tensor_struct_vector_field_roundtrip(backend):
 
 
 # ---------------------------------------------------------------------------
-# 9. Frozen dataclass with qd.Tensor field, kernel arg is struct TYPE (not qd.Template) — exercises
+# 9. Frozen dataclass with qd.Tensor field, kernel arg is struct TYPE (not qd.Template) - exercises
 #    _predeclare_struct_ndarrays + ndarray_to_any_array resolution in impl.subscript (Option C path)
 # ---------------------------------------------------------------------------
 

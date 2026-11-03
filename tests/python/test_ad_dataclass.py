@@ -3,11 +3,11 @@
 These tests pin that gradients flow correctly when kernel arguments are wrapped in plain Python dataclasses, across the
 tensor types Quadrants exposes:
 
-* ``qd.ndarray`` — typed-dataclass annotation + ``qd.Template`` path; gradient via ``kernel.grad()``.
-* ``qd.field`` — ``qd.Template`` path; gradient via ``qd.ad.Tape``.
+* ``qd.ndarray`` - typed-dataclass annotation + ``qd.Template`` path; gradient via ``kernel.grad()``.
+* ``qd.field`` - ``qd.Template`` path; gradient via ``qd.ad.Tape``.
 * ``qd.tensor(backend=NDARRAY)`` — same path as ``qd.ndarray``; dispatcher returns a wrapper whose ndarray ``_impl``
   is unwrapped by the dataclass-annotation infrastructure.
-* ``qd.tensor(backend=FIELD)`` — works when the dataclass member is annotated ``qd.Tensor`` (or ``qd.Template``).
+* ``qd.tensor(backend=FIELD)`` - works when the dataclass member is annotated ``qd.Tensor`` (or ``qd.Template``).
   With ``object`` / no annotation the wrapper survives into kernel scope and host-side ``__getitem__`` asserts.
 * mixed — single dataclass holding both a ``qd.ndarray`` and a ``qd.field`` member.
 

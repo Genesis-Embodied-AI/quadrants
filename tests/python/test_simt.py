@@ -3335,7 +3335,7 @@ def test_subgroup_group_size_stable_across_reinit(req_arch, req_options):
 
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_log2_group_size_feeds_into_template():
-    """``log2_group_size()`` can be passed directly into ``qd.Template`` arguments — e.g. ``reduce_add_tiled(v,
+    """``log2_group_size()`` can be passed directly into ``qd.Template`` arguments - e.g. ``reduce_add_tiled(v,
     log2_group_size())`` matches what hand-written ``log2_size=5/6`` would produce."""
     N = 64
     src = qd.field(dtype=qd.i32, shape=N)
