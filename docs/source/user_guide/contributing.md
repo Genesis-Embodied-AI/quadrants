@@ -105,9 +105,6 @@ export LLVM_DIR="/path/to/llvm/"
 export CMAKE_ARGS="$CMAKE_ARGS -DLLVM_ROOT=/path/to/llvm"
 ```
 
-`qd.lang.source_builder.SourceBuilder` has been removed. Loading external source, bitcode, or shared-library
-functions through this API is no longer supported.
-
 ### Building with the AMD GPU backend (Linux)
 
 The AMD GPU backend is Linux-only (it is force-disabled on macOS and Windows) and is off by default, so enable it explicitly through `CMAKE_ARGS`:
