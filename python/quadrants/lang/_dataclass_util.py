@@ -1,3 +1,21 @@
+import dataclasses
+from typing import Any, cast
+
+from quadrants.lang.exception import QuadrantsTypeError
+
+
+def dataclass_call_type(value: Any, annotation: Any = None) -> type:
+    """Select the declared dataclass view, retaining nominal type checks before fields are flattened."""
+    actual_type = value if isinstance(value, type) else type(value)
+    if isinstance(annotation, type) and dataclasses.is_dataclass(annotation):
+        if not issubclass(actual_type, cast(type, annotation)):
+            raise QuadrantsTypeError(
+                f"Expected dataclass {annotation.__name__} or a subclass, got {actual_type.__name__}"
+            )
+        return annotation
+    return actual_type
+
+
 def create_flat_name(basename: str, child_name: str) -> str:
     """
     Appends child_name to basename, separated by __qd_.
