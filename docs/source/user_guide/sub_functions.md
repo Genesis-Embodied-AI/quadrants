@@ -37,6 +37,31 @@ def compute(a: qd.Template) -> None:
         increment(a, i)
 ```
 
+### Template parameters
+
+Use `qd.Template` for arguments that a function should preserve without converting or copying them. Python constants
+remain available to [`qd.static`](static.md), and runtime variables are passed by reference so the function can modify
+the caller's value. The legacy `qd.template()` spelling is also accepted.
+
+```python
+@qd.func
+def add_if_enabled(value: qd.Template, enabled: qd.Template):
+    if qd.static(enabled):
+        value += 1
+
+@qd.kernel
+def compute(enabled: qd.Template) -> qd.i32:
+    value = 10
+    add_if_enabled(value, enabled)
+    return value
+```
+
+Here, `compute(True)` returns `11` and `compute(False)` returns `10`. A template annotation preserves an argument's
+existing compile-time or runtime nature; it does not turn a runtime variable into a compile-time constant.
+
+The same behavior applies to `@qd.pyfunc` when called from a kernel. `@qd.real_func` also accepts `qd.Template` for
+compile-time parameters, alongside typed runtime parameters.
+
 ## Restricting a func to the top level (`requires_top_level=True`)
 
 **Experimental.** `requires_top_level` is an experimental feature and its behavior or API may change in a future release.

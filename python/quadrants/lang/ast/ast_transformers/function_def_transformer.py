@@ -390,7 +390,7 @@ class FunctionDefTransformer:
             ctx.create_variable(argument_name, data)
             return None
         # Template arguments are passed by reference.
-        if isinstance(argument_type, annotations.template):
+        if argument_type is annotations.Template or isinstance(argument_type, annotations.Template):
             ctx.create_variable(argument_name, data)
             return None
 

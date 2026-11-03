@@ -6,12 +6,12 @@ from tests.helpers import test_utils
 
 
 @qd.func
-def some_sub_func(a: qd.template, b: qd.Template) -> None:
+def some_sub_func(a: qd.Template, b: qd.Template) -> None:
     a[()] = b[()] + 2
 
 
 @qd.kernel
-def some_kernel(a: qd.template, b: qd.Template) -> None:
+def some_kernel(a: qd.Template, b: qd.Template) -> None:
     a[()] = b[()] + 2
     some_sub_func(a, b)
 
