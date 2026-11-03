@@ -233,6 +233,7 @@ class FuncBase:
         self.pos_info_cache: dict[tuple, str] = {}
 
         self.check_parameter_annotations()
+        self.has_runtime_dataclasses = any(is_dataclass_annotation(arg.annotation) for arg in self.arg_metas)
 
         self.mapper = TemplateMapper(self.arg_metas, self.template_slot_locations)
 
@@ -688,6 +689,8 @@ class FuncBase:
             launch_ctx_buffer[_FLOAT].append((index, float(v)))
             return 1, False
         if needed_arg_type_id in primitive_types.integer_type_ids:
+            if isinstance(v, np.bool_):
+                v = bool(v)
             if not isinstance(v, (int, np.integer)):
                 raise QuadrantsRuntimeTypeError.get((index,), needed_arg_type.to_string(), provided_arg_type)
             v = int(v)
@@ -715,7 +718,7 @@ class FuncBase:
                 is_frozen = params is not None and (params.frozen or params.unsafe_hash)
             # Runtime schemas can contain mutable children even when the outer dataclass is frozen. Re-read their
             # leaves on each launch; instance identity alone cannot validate a cached launch buffer.
-            if hasattr(needed_arg_type, "_qd_runtime_origin"):
+            if hasattr(needed_arg_type, "_qd_runtime_origin") and not needed_arg_type._qd_runtime_stable:
                 is_frozen = False
             idx = 0
             if is_frozen:
@@ -735,7 +738,7 @@ class FuncBase:
                         launch_ctx,
                         launch_ctx_buffer,
                         field_type,
-                        field_type,
+                        type(field_value),
                         field_value,
                         index + idx,
                         actual_argument_slot,

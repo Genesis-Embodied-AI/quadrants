@@ -377,7 +377,7 @@ class CallTransformer:
 
         with (
             dataclass_call_arguments(func, node.args, node.keywords, func_type is BoundQuadrantsCallable)
-            if is_func_base_wrapper
+            if is_func_base_wrapper and func.wrapper.has_runtime_dataclasses
             else nullcontext()
         ):
             return CallTransformer._build_resolved_call(ctx, node, build_stmt, is_func_base_wrapper)

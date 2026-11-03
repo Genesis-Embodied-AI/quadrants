@@ -398,7 +398,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         # is hashable, but a user can enforce a dataclass to be consider frozen for a user perspective without being
         # truly frozen by specifying 'unsafe_hash=True'. If a user is doing this on purpose, it makes sense to honor it.
         is_runtime_schema = hasattr(annotation, "_qd_runtime_origin")
-        is_frozen = annotation.__hash__ is not None and not is_runtime_schema
+        is_frozen = annotation.__hash__ is not None and (not is_runtime_schema or annotation._qd_runtime_stable)
         # Serve the ``_qd_spec_key`` cache only in the default (non-strict) mode: the cached key is
         # setting-independent, but the ``Final[float]`` guard below is not, and an early return would also skip the
         # recursion that runs it on nested frozen dataclasses. A Final-bearing subtree is never served either - the
@@ -463,6 +463,8 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
                     if field._field_type is _FIELD
                 ]
             )
+        if is_runtime_schema:
+            key = RuntimeDataclassFeatures(key, annotation)
         # Store the cache only for a ``Final``-free subtree; a Final-bearing one must revalidate every launch, so we
         # never store one (making the read above fall through).
         if is_frozen and not subtree_has_final_fields(annotation):
@@ -478,10 +480,6 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
                     pass
             else:
                 _key_map[id(annotation)] = (annotation, key)
-        # Leaf scalar features are normally '#': include the inferred structure so int/float (and nesting) changes
-        # cannot select the same compiled kernel. Keep feature indexing unchanged for the AST argument declarations.
-        if is_runtime_schema:
-            return RuntimeDataclassFeatures(key, annotation)
         return key
     if annotation_type is sparse_matrix_builder:
         return arg.dtype

@@ -271,7 +271,7 @@ def dataclass_to_repr(
             raise_on_templated_floats,
             path + (field.name,),
             child_value,
-            arg_meta=None,
+            arg_meta=ArgMetadata(field.type, field.name) if hasattr(field_source, "_qd_runtime_origin") else None,
             pruning_paths=pruning_paths,
             parent_flat=child_flat,
         )
@@ -372,7 +372,11 @@ def stringify_obj_type(
         annotated_type = None
         if arg_meta is not None:
             ann = arg_meta.annotation
-            if isinstance(ann, type) and dataclasses.is_dataclass(ann) and isinstance(obj, ann):
+            if (
+                isinstance(ann, type)
+                and dataclasses.is_dataclass(ann)
+                and isinstance(obj, getattr(ann, "_qd_runtime_origin", ann))
+            ):
                 annotated_type = ann
         return dataclass_to_repr(
             raise_on_templated_floats, path, obj, annotated_type, pruning_paths=pruning_paths, parent_flat=parent_flat

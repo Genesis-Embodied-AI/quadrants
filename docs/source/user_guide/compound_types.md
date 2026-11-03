@@ -51,7 +51,7 @@ def advance(state: qd.RuntimeTyped):
     state.positions[0] += state.increment
 ```
 
-Quadrants infers ordinary member types from the arriving values, including nested dataclasses. Member annotations do not constrain array dtypes or dimensionality and do not cast scalar values. Concrete dataclass parameter annotations remain accepted and use runtime member inference too. `typing.Final[T]` retains its compile-time meaning and validation rules described below.
+Quadrants infers ordinary member types from the arriving values, including nested dataclasses. Member annotations do not constrain array dtypes or dimensionality and do not cast scalar values. Concrete dataclass parameter annotations remain accepted and use runtime member inference too; they retain their existing class/subclass check and declared field boundary. `qd.RuntimeTyped` instead accepts unrelated dataclass classes and uses the arriving instance's fields. `typing.Final[T]` retains its compile-time meaning and validation rules described below.
 
 Python `int` and `float` members use `qd.init`'s `default_ip` and `default_fp`; NumPy scalars retain their dtype. Arrays retain their runtime dtype and dimensions. External NumPy and PyTorch arrays are interpreted as arrays of scalars, since their values do not distinguish vector/matrix element axes from array axes. Changing a member's runtime type selects a new kernel specialization; changing an ordinary scalar's value supplies a fresh runtime argument.
 

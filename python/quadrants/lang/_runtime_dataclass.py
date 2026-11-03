@@ -27,8 +27,38 @@ from quadrants.types import buffer_view_type, primitive_types
 from quadrants.types.annotations import RuntimeTyped
 
 _schemas: dict[tuple, type] = {}
+_direct_final_types: dict[int, type] = {}
 _matrix_types: dict[tuple, MatrixType] = {}
 _buffer_annotation = buffer_view_type.BufferViewType()
+
+
+def _direct_final_names(source: type) -> frozenset[str]:
+    """Validate direct Final declarations without following annotation-only nested dataclass types.
+
+    Nested paths are validated later against the actual values. Ordinary annotations must not introduce phantom
+    children (or reject a valid value) just because they happen to name a Final-bearing dataclass.
+    """
+    direct = _direct_final_types.get(id(source))
+    if direct is None:
+        fields = {}
+        for field in dataclasses.fields(source):
+            copied = copy.copy(field)
+            if isinstance(field.type, type) and dataclasses.is_dataclass(field.type):
+                copied.type = object
+            fields[field.name] = copied
+        direct = type(
+            source.__name__,
+            (),
+            {
+                "__module__": source.__module__,
+                "__annotations__": dict(source.__annotations__),
+                "__dataclass_fields__": fields,
+                "__dataclass_params__": source.__dataclass_params__,
+                "_qd_runtime_origin": source,
+            },
+        )
+        _direct_final_types[id(source)] = direct
+    return final_field_names(direct)
 
 
 def is_dataclass_annotation(annotation: Any) -> bool:
@@ -67,7 +97,9 @@ def infer_member_type(value: Any, path: str, visiting: frozenset[int]) -> Any:
     raise QuadrantsRuntimeTypeError(f"Dataclass member {path!r} has unsupported runtime type {type(value).__name__}")
 
 
-def resolve_dataclass(value: Any, path: str, visiting: frozenset[int] = frozenset()) -> type:
+def resolve_dataclass(
+    value: Any, path: str, visiting: frozenset[int] = frozenset(), declared_type: type | None = None
+) -> type:
     if not dataclasses.is_dataclass(value) or isinstance(value, type):
         raise QuadrantsRuntimeTypeError(
             f"Argument {path!r} requires a Python dataclass instance, got {type(value).__name__}"
@@ -75,15 +107,28 @@ def resolve_dataclass(value: Any, path: str, visiting: frozenset[int] = frozense
     if id(value) in visiting:
         raise QuadrantsRuntimeTypeError(f"Dataclass member {path!r} contains a cycle")
     visiting = visiting | {id(value)}
-    source = type(value)
-    finals = final_field_names(source)
+    source = declared_type if declared_type is not None else type(value)
+    if not isinstance(value, source):
+        raise QuadrantsRuntimeTypeError(f"Argument {path!r} requires {source.__name__}, got {type(value).__name__}")
+    runtime = impl.get_runtime()
+    cache_key = (id(source), id(runtime.default_ip), id(runtime.default_fp))
+    cached = getattr(value, "_qd_runtime_schemas", {}).get(cache_key)
+    if cached is not None and cached._qd_runtime_origin is source:
+        return cached
+    finals = _direct_final_names(source)
+    stable = source.__dataclass_params__.frozen and not finals
     fields = {}
     for field in dataclasses.fields(source):
         resolved = copy.copy(field)
         if field.name not in finals:
-            resolved.type = infer_member_type(getattr(value, field.name), f"{path}.{field.name}", visiting)
+            child = getattr(value, field.name)
+            resolved.type = infer_member_type(child, f"{path}.{field.name}", visiting)
+            if dataclasses.is_dataclass(resolved.type):
+                stable &= resolved.type._qd_runtime_stable
+            elif not isinstance(child, (bool, int, float, np.generic, Ndarray, Field)):
+                stable = False
         fields[field.name] = resolved
-    key = (id(source), tuple((name, id(field.type)) for name, field in fields.items()))
+    key = (id(source), stable, tuple((name, id(field.type)) for name, field in fields.items()))
     schema = _schemas.get(key)
     if schema is None:
         schema = type(
@@ -96,18 +141,36 @@ def resolve_dataclass(value: Any, path: str, visiting: frozenset[int] = frozense
                 "__dataclass_params__": source.__dataclass_params__,
                 "__hash__": source.__hash__,
                 "_qd_runtime_origin": source,
+                "_qd_runtime_stable": stable,
             },
         )
-        _schemas[key] = schema
         # Validate Final-bearing paths against the inferred nesting, including children annotated as Any/object.
         final_field_names(schema)
+        _schemas[key] = schema
+    if stable:
+        try:
+            cache = value._qd_runtime_schemas
+        except AttributeError:
+            cache = {}
+            try:
+                object.__setattr__(value, "_qd_runtime_schemas", cache)
+            except AttributeError:
+                pass
+        cache[cache_key] = schema
     return schema
 
 
 def resolve_arguments(arguments: list[ArgMetadata], values: tuple[Any, ...]) -> list[ArgMetadata]:
     return [
         (
-            ArgMetadata(resolve_dataclass(value, arg.name), arg.name, arg.default, optional=arg.optional)
+            ArgMetadata(
+                resolve_dataclass(
+                    value, arg.name, declared_type=None if arg.annotation is RuntimeTyped else arg.annotation
+                ),
+                arg.name,
+                arg.default,
+                optional=arg.optional,
+            )
             if is_dataclass_annotation(arg.annotation)
             else arg
         )

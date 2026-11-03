@@ -42,6 +42,7 @@ from quadrants.lang import _kernel_impl_dataclass, impl, runtime_ops
 # construction to those free functions so this hot file doesn't accrete checkpoint-feature-specific blocks.
 from quadrants.lang import kernel_checkpoint as _checkpoint_helpers
 from quadrants.lang._fast_caching import src_hasher
+from quadrants.lang._runtime_dataclass import resolve_arguments
 from quadrants.lang._template_mapper_hotpath import chain_has_mutable_container
 from quadrants.lang._wrap_inspect import FunctionSourceInfo, get_source_info_and_src
 from quadrants.lang.ast import (
@@ -947,16 +948,17 @@ class Kernel(FuncBase):
                     launch_ctx_buffer[_INT].append((arg_id, int(obj)))
 
     def ensure_compiled(self, *py_args: tuple[Any, ...]) -> tuple[Callable, int, AutodiffMode]:
-        from quadrants.lang._runtime_dataclass import (
-            resolve_arguments,  # pylint: disable=import-outside-toplevel
-        )
-
-        self.arg_metas = resolve_arguments(self.orig_arguments, py_args)
-        self.mapper.arguments = self.arg_metas
-        # A dataclass's member types can change without changing the identity of the outer object.
-        self.mapper._mapping_cache_disabled = (
-            any(hasattr(meta.annotation, "_qd_runtime_origin") for meta in self.arg_metas) or None
-        )
+        if self.has_runtime_dataclasses:
+            self.arg_metas = resolve_arguments(self.orig_arguments, py_args)
+            self.mapper.arguments = self.arg_metas
+            # A dataclass's member types can change without changing the identity of the outer object.
+            self.mapper._mapping_cache_disabled = (
+                any(
+                    hasattr(meta.annotation, "_qd_runtime_origin") and not meta.annotation._qd_runtime_stable
+                    for meta in self.arg_metas
+                )
+                or None
+            )
         try:
             instance_id, arg_features = self.mapper.lookup(self.raise_on_templated_floats, py_args)
         except Exception as e:
