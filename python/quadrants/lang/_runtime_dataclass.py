@@ -201,6 +201,19 @@ def resolve_arguments(arguments: list[ArgMetadata], values: tuple[Any, ...]) -> 
     ]
 
 
+def runtime_template_members(schema, value, path=()):
+    """Yield template-valued subobjects with paths rooted at the original kernel argument."""
+    if not hasattr(schema, "_qd_runtime_origin"):
+        return
+    for field in dataclasses.fields(schema):
+        child = getattr(value, field.name)
+        child_path = (*path, field.name)
+        if field.type is template:
+            yield child_path, child
+        elif hasattr(field.type, "_qd_runtime_origin"):
+            yield from runtime_template_members(field.type, child, child_path)
+
+
 def is_runtime_member_name(arguments: list[ArgMetadata], name: str) -> bool:
     """Whether a flattened AST name belongs to an inferred dataclass argument (including inlined functions)."""
     for arg in arguments:

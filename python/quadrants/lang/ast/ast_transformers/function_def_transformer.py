@@ -28,6 +28,7 @@ from quadrants.lang._final_dataclass_fields import (
     is_final_annotation,
 )
 from quadrants.lang._optional_annotation import OPTIONAL_ABSENT
+from quadrants.lang._runtime_dataclass import runtime_template_members
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
 )
@@ -353,6 +354,10 @@ class FunctionDefTransformer:
             anno = arg_meta.annotation
             is_template = anno is annotations.template or isinstance(anno, annotations.template)
             is_tensor_anno = anno is _TensorClass
+            if hasattr(anno, "_qd_runtime_origin"):
+                for path, child in runtime_template_members(anno, ctx.py_args[i]):
+                    _walk_obj(child, i, path, {id(child)})
+                continue
             if not (is_template or is_tensor_anno):
                 continue
             val = ctx.py_args[i]
