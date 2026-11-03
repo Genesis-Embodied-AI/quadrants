@@ -402,7 +402,9 @@ set(AMDGPU_ABI_VERSION 600)
 set(AMDGPU_LIBDEVICE_FILES
     # Supply GPU math functions.
     ocml.bc
-    # select 64-thread wavefronts
+    # Select 64-thread wavefronts to match our GPU compiler settings. CDNA gfx9xx defaults to wave64;
+    # RDNA gfx10/11/12 defaults to wave32 but also supports wave64. We force wave64 through target features in
+    # llvm_context_pass.h::AMDGPUConvertAllocaInstAddressSpacePass and jit_amdgpu.cpp's TargetMachine settings.
     oclc_wavefrontsize64_on.bc
     # Supply GPU kernel support functions.
     ockl.bc
