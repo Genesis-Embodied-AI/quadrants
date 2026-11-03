@@ -351,3 +351,24 @@ def test_runtime_dataclass_then_scalar_restores_annotation():
     assert run(State(3.5)) == 3.5
     assert run(4) == 4
     assert run(State(5.5)) == 5.5
+
+
+@test_utils.test()
+def test_runtime_subclass_fields_visible_through_base_annotation():
+    @dataclass
+    class Base:
+        value: int
+
+    @dataclass
+    class Derived(Base):
+        extra: str
+
+    @qd.func
+    def read(state: Base):
+        return state.value + state.extra
+
+    @qd.kernel
+    def run(state: Base) -> qd.f32:
+        return read(state)
+
+    assert run(Derived(2, 3.5)) == 5.5

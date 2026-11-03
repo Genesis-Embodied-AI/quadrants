@@ -54,7 +54,7 @@ Python `int` and `float` members use `qd.init`'s `default_ip` and `default_fp`; 
 
 When migrating existing containers, array annotation options such as `boundary="clamp"` and explicit `needs_grad` overrides no longer apply: inferred arrays use the default unsafe boundary mode and the arriving array's gradient metadata. A primitive member previously annotated `qd.Template` becomes a runtime scalar; use `Final[T]` when it must remain compile-time. Ordinary string/forward-reference member annotations do not need to resolve. `Final` annotations still need to be actual type objects.
 
-A member may be `None`. Test its presence with `qd.static(state.member is not None)`; replacing it with an array selects a different specialization. Unsupported member values and cyclic dataclass references raise an error naming the member path.
+A member may be `None`. Test its presence with `qd.static(state.member is not None)`; replacing it with an array selects a different specialization. Unsupported member values and cyclic dataclass references raise an error naming the member path. All fields of the actual dataclass participate in inference, including unused subclass fields; annotating the parameter with a base class no longer hides application-only fields with unsupported values.
 
 `dataclasses.dataclass` allows you to create structs containing:
 - ndarrays

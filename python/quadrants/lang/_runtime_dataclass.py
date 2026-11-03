@@ -192,7 +192,7 @@ def resolve_arguments(arguments: list[ArgMetadata], values: tuple[Any, ...]) -> 
                 arg.default,
                 optional=arg.optional,
             )
-            if (hasattr(type(value), "__dataclass_fields__")) or is_dataclass_annotation(arg.annotation)
+            if hasattr(type(value), "__dataclass_fields__") or is_dataclass_annotation(arg.annotation)
             else arg
         )
         for arg, value in zip(arguments, values)
@@ -230,7 +230,7 @@ def dataclass_call_arguments(func, args, keywords, bound: bool = False):
         value = values[meta.name]
         if isinstance(value, type) and hasattr(value, "_qd_runtime_origin"):
             schema = value
-        elif (hasattr(type(value), "__dataclass_fields__")) or is_dataclass_annotation(meta.annotation):
+        elif hasattr(type(value), "__dataclass_fields__") or is_dataclass_annotation(meta.annotation):
             schema = resolve_dataclass(value, meta.name)
         else:
             continue
