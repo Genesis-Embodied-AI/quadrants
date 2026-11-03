@@ -120,6 +120,10 @@ class QD_DLL_EXPORT Program {
 
   StreamSemaphore flush();
 
+  void buffer_copy(DevicePtr dst, DevicePtr src, size_t size) {
+    program_impl_->buffer_copy(dst, src, size);
+  }
+
   /**
    * Materializes the runtime.
    */
