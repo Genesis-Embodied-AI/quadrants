@@ -1,6 +1,6 @@
-"""Normalize compile-time starred dataclass arguments before call-parameter expansion."""
-
 # type: ignore
+
+"""Normalize compile-time starred dataclass arguments before call-parameter expansion."""
 
 import ast
 import dataclasses
