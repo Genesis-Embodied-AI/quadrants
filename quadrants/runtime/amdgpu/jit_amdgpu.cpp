@@ -1,4 +1,5 @@
 #include "quadrants/runtime/amdgpu/jit_amdgpu.h"
+#include "quadrants/runtime/llvm/amdgpu_libdevice_files.h"
 #include "quadrants/runtime/amdgpu/runtime_hsaco_cache_key.h"
 #include "quadrants/util/environ_config.h"
 
@@ -46,6 +47,8 @@ JITModule *JITSessionAMDGPU::load_hsaco_bytes(const std::string &hsaco) {
 }
 
 std::string JITSessionAMDGPU::compile_module_to_hsaco(std::unique_ptr<llvm::Module> &llvm_module) {
+  // Match code generation to the selected device-library ABI instead of LLVM's default.
+  llvm_module->addModuleFlag(llvm::Module::Override, "amdhsa_code_object_version", amdgpu_abi_version);
   llvm::legacy::FunctionPassManager function_pass_manager_addrcast(llvm_module.get());
   function_pass_manager_addrcast.add(new AMDGPUConvertAllocaInstAddressSpacePass());
   function_pass_manager_addrcast.doInitialization();
