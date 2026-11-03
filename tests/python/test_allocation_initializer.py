@@ -1,6 +1,5 @@
 """Allocation-time initialization through field, ndarray, and tensor factories."""
 
-import sys
 from fractions import Fraction
 
 import numpy as np
@@ -338,8 +337,7 @@ def test_initializer_precedes_writes(
 ) -> None:
     # Initialization must run before each kind of write.
     if (
-        sys.platform == "darwin"
-        and qd.lang.impl.current_cfg().arch in (qd.vulkan, qd.metal)
+        qd.lang.impl.current_cfg().arch in (qd.vulkan, qd.metal)
         and operation == "host"
         and (container_type == "ndarray" or backend == qd.Backend.NDARRAY)
     ):
