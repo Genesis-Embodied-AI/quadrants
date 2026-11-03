@@ -55,23 +55,6 @@ def has_pytorch():
     return _has_pytorch
 
 
-def get_clangpp():
-    from shutil import which  # pylint: disable=C0415
-
-    # Quadrants itself uses llvm-10.0.0 to compile.
-    # There will be some issues compiling CUDA with other clang++ version.
-    _clangpp_candidates = ["clang++-10"]
-    for c in _clangpp_candidates:
-        if which(c) is not None:
-            _clangpp_presence = which(c)
-            return _clangpp_presence
-    return None
-
-
-def has_clangpp():
-    return get_clangpp() is not None
-
-
 def is_matrix_class(rhs):
     matrix_class = False
     try:
