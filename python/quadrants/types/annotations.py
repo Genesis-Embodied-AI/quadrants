@@ -45,8 +45,15 @@ template = Template
 """
 
 
+class Dataclass:
+    """A Python dataclass argument whose member types are inferred from the arriving instance.
+
+    Use the class itself as a kernel or function parameter annotation: ``state: qd.Dataclass``.
+    """
+
+
 class sparse_matrix_builder:
     pass
 
 
-__all__ = ["template", "sparse_matrix_builder", "Template"]
+__all__ = ["template", "sparse_matrix_builder", "Template", "Dataclass"]

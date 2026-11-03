@@ -947,6 +947,16 @@ class Kernel(FuncBase):
                     launch_ctx_buffer[_INT].append((arg_id, int(obj)))
 
     def ensure_compiled(self, *py_args: tuple[Any, ...]) -> tuple[Callable, int, AutodiffMode]:
+        from quadrants.lang._runtime_dataclass import (
+            resolve_arguments,  # pylint: disable=import-outside-toplevel
+        )
+
+        self.arg_metas = resolve_arguments(self.orig_arguments, py_args)
+        self.mapper.arguments = self.arg_metas
+        # A dataclass's member types can change without changing the identity of the outer object.
+        self.mapper._mapping_cache_disabled = (
+            any(hasattr(meta.annotation, "_qd_runtime_origin") for meta in self.arg_metas) or None
+        )
         try:
             instance_id, arg_features = self.mapper.lookup(self.raise_on_templated_floats, py_args)
         except Exception as e:

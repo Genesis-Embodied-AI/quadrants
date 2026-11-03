@@ -40,6 +40,7 @@ from quadrants.lang._final_dataclass_fields import (
     subtree_has_final_fields,
 )
 from quadrants.lang._ndarray import Ndarray
+from quadrants.lang._runtime_dataclass import is_dataclass_annotation
 from quadrants.lang._signature import get_func_signature
 from quadrants.lang._wrap_inspect import get_source_info_and_src
 from quadrants.lang.ast import ASTTransformerFuncContext
@@ -313,7 +314,7 @@ class FuncBase:
                     # ``qd.Tensor`` (the wrapper class) used as the polymorphic kernel-arg annotation. Behaves like a
                     # template slot upfront; the actual dispatch happens at extract-time / AST-build-time.
                     pass
-                elif annotation_type is type and is_dataclass(annotation):
+                elif is_dataclass_annotation(annotation):
                     pass
                 elif self.is_kernel and isinstance(annotation, sparse_matrix_builder):
                     pass
@@ -358,8 +359,8 @@ class FuncBase:
         for i in template_slot_locations:
             template_var_name = argument_metas[i].name
             global_vars[template_var_name] = py_args[i]
-        parameters = get_func_signature(fn).parameters
-        for i, (parameter_name, parameter) in enumerate(parameters.items()):
+        for i, parameter in enumerate(argument_metas):
+            parameter_name = parameter.name
             anno = parameter.annotation
             if is_dataclass(anno):
                 _kernel_impl_dataclass.populate_global_vars_from_dataclass(
@@ -699,7 +700,8 @@ class FuncBase:
         needed_arg_fields = getattr(needed_arg_type, _FIELDS, None)
         # We get the fields from the needed arg type, thus subclasses are allowed
         if needed_arg_fields is not None:
-            if provided_arg_type is not needed_arg_type and not issubclass(provided_arg_type, needed_arg_type):
+            expected_type = getattr(needed_arg_type, "_qd_runtime_origin", needed_arg_type)
+            if provided_arg_type is not expected_type and not issubclass(provided_arg_type, expected_type):
                 # PERF: Check immediate case first (`is not needed_arg_type`), fallback to subclass
                 raise QuadrantsRuntimeTypeError(
                     "needed", needed_arg_type, "cannot be assigned the provided", provided_arg_type
@@ -711,6 +713,10 @@ class FuncBase:
             if not is_frozen:
                 params = getattr(needed_arg_type, "__dataclass_params__", None)
                 is_frozen = params is not None and (params.frozen or params.unsafe_hash)
+            # Runtime schemas can contain mutable children even when the outer dataclass is frozen. Re-read their
+            # leaves on each launch; instance identity alone cannot validate a cached launch buffer.
+            if hasattr(needed_arg_type, "_qd_runtime_origin"):
+                is_frozen = False
             idx = 0
             if is_frozen:
                 # PERF: Frozen-dataclass fast path. Uses the pre-computed field plan (which fields are active for this
@@ -746,6 +752,8 @@ class FuncBase:
             for field in needed_arg_fields.values():
                 if field._field_type is not _FIELD:
                     continue
+                if field.name in final_field_names(needed_arg_type):
+                    continue
                 field_name = field.name
                 field_full_name = create_flat_name(py_dataclass_basename, field_name)
                 if field_full_name not in used_py_dataclass_parameters:
@@ -760,7 +768,7 @@ class FuncBase:
                     launch_ctx,
                     launch_ctx_buffer,
                     field_type,
-                    field_type,
+                    type(field_value),
                     field_value,
                     index + idx,
                     actual_argument_slot,

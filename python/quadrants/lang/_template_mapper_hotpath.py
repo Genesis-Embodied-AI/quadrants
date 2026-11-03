@@ -397,7 +397,8 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         # Instead of strictly requiring being frozen, we only require the dataclass to be hashable. Any frozen dataclass
         # is hashable, but a user can enforce a dataclass to be consider frozen for a user perspective without being
         # truly frozen by specifying 'unsafe_hash=True'. If a user is doing this on purpose, it makes sense to honor it.
-        is_frozen = annotation.__hash__ is not None
+        is_runtime_schema = hasattr(annotation, "_qd_runtime_origin")
+        is_frozen = annotation.__hash__ is not None and not is_runtime_schema
         # Serve the ``_qd_spec_key`` cache only in the default (non-strict) mode: the cached key is
         # setting-independent, but the ``Final[float]`` guard below is not, and an early return would also skip the
         # recursion that runs it on nested frozen dataclasses. A Final-bearing subtree is never served either - the
@@ -477,8 +478,27 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
                     pass
             else:
                 _key_map[id(annotation)] = (annotation, key)
+        # Leaf scalar features are normally '#': include the inferred structure so int/float (and nesting) changes
+        # cannot select the same compiled kernel. Keep feature indexing unchanged for the AST argument declarations.
+        if is_runtime_schema:
+            return RuntimeDataclassFeatures(key, annotation)
         return key
     if annotation_type is sparse_matrix_builder:
         return arg.dtype
     # Use '#' as a placeholder because other kinds of arguments are not involved in template instantiation
     return "#"
+
+
+class RuntimeDataclassFeatures(tuple):
+    """Tuple-compatible field features whose dispatch identity also includes the inferred scalar types."""
+
+    def __new__(cls, features, schema):
+        result = super().__new__(cls, features)
+        result.schema = schema
+        return result
+
+    def __hash__(self):
+        return hash((self.schema, tuple(self)))
+
+    def __eq__(self, other):
+        return type(other) is type(self) and self.schema is other.schema and tuple.__eq__(self, other)

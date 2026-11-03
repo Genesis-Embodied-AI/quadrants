@@ -36,6 +36,25 @@ It's of course very subjective, but some guidelines you could consider:
 
 ## dataclasses.dataclass
 
+### Runtime member types
+
+Use `qd.Dataclass` on a kernel or `qd.func` parameter to accept a Python dataclass instance without naming its concrete class:
+
+```python
+@dataclass
+class State:
+    positions: object
+    increment: object
+
+@qd.kernel
+def advance(state: qd.Dataclass):
+    state.positions[0] += state.increment
+```
+
+Quadrants infers ordinary member types from the arriving values, including nested dataclasses. Member annotations do not constrain array dtypes or dimensionality and do not cast scalar values. Concrete dataclass parameter annotations remain accepted and use runtime member inference too. `typing.Final[T]` retains its compile-time meaning and validation rules described below.
+
+Python `int` and `float` members use `qd.init`'s `default_ip` and `default_fp`; NumPy scalars retain their dtype. Arrays retain their runtime dtype and dimensions. External NumPy and PyTorch arrays are interpreted as arrays of scalars, since their values do not distinguish vector/matrix element axes from array axes. Changing a member's runtime type selects a new kernel specialization; changing an ordinary scalar's value supplies a fresh runtime argument.
+
 `dataclasses.dataclass` allows you to create structs containing:
 - ndarrays
 - fields
