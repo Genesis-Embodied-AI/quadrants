@@ -1,0 +1,24 @@
+quadrants.lang.ast.ast_transformers.function_def_transformer
+============================================================
+
+.. py:module:: quadrants.lang.ast.ast_transformers.function_def_transformer
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer
+
+
+Module Contents
+---------------
+
+.. py:class:: FunctionDefTransformer
+
+   .. py:method:: build_FunctionDef(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.FunctionDef, build_stmts: Callable[[quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, list[ast.stmt]], None]) -> None
+      :staticmethod:
+
+
+
