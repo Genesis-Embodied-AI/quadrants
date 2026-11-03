@@ -221,6 +221,13 @@ def test_runtime_matrix_and_quadrants_struct_members():
     state = State(qd.Vector([1, 2], dt=qd.i32), Pair(count=2**40, weight=0.5))
     assert read(state) == 2**40 + 2.5
 
+    @qd.kernel
+    def make_pair() -> Pair:
+        return Pair(count=qd.i64(1) << 40, weight=qd.f64(0.5))
+
+    state.pair = make_pair()
+    assert read(state) == 2**40 + 2.5
+
 
 @test_utils.test()
 def test_runtime_bool_members():

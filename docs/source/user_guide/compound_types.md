@@ -55,6 +55,10 @@ Quadrants infers ordinary member types from the arriving values, including neste
 
 Python `int` and `float` members use `qd.init`'s `default_ip` and `default_fp`; NumPy scalars retain their dtype. Arrays retain their runtime dtype and dimensions. External NumPy and PyTorch arrays are interpreted as arrays of scalars, since their values do not distinguish vector/matrix element axes from array axes. Changing a member's runtime type selects a new kernel specialization; changing an ordinary scalar's value supplies a fresh runtime argument.
 
+When migrating existing containers, array annotation options such as `boundary="clamp"` and explicit `needs_grad` overrides no longer apply: inferred arrays use the default unsafe boundary mode and the arriving array's gradient metadata. A primitive member previously annotated `qd.Template` becomes a runtime scalar; use `Final[T]` when it must remain compile-time. Ordinary string/forward-reference member annotations do not need to resolve. `Final` annotations still need to be actual type objects.
+
+A member may be `None`. Test its presence with `qd.static(state.member is not None)`; replacing it with an array selects a different specialization. Unsupported member values and cyclic dataclass references raise an error naming the member path.
+
 `dataclasses.dataclass` allows you to create structs containing:
 - ndarrays
 - fields
