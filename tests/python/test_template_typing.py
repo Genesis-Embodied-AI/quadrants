@@ -112,7 +112,7 @@ def test_template_raise_on_global_floats(raise_on_templated_floats: bool) -> Non
 
 
 @test_utils.test()
-def test_pyfunc_template_compile_time_scalars():
+def test_pyfunc_template_scalars_in_static():
     """Check that a pyfunc called from a kernel can use boolean and integer qd.Template arguments in qd.static."""
     values = qd.field(qd.i32, shape=4)
 
