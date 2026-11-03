@@ -105,9 +105,8 @@ export LLVM_DIR="/path/to/llvm/"
 export CMAKE_ARGS="$CMAKE_ARGS -DLLVM_ROOT=/path/to/llvm"
 ```
 
-`SourceBuilder.from_file()` and `SourceBuilder.from_source()` require an explicit `compile_fn` callback for C, C++,
-and CUDA source files. The callback receives a source path and returns a compatible LLVM bitcode file path;
-precompiled bitcode and shared-library files can still be loaded directly.
+`qd.lang.source_builder.SourceBuilder` has been removed. Loading external source, bitcode, or shared-library
+functions through this API is no longer supported.
 
 ### Building with the AMD GPU backend (Linux)
 
