@@ -346,6 +346,53 @@ state = State(100)
 state.step()
 ```
 
+### NamedTuple members
+
+A `NamedTuple` decorated `@qd.data_oriented` holds its members in its fields. Being a tuple, it can also be iterated with `qd.static`, which calls the same func on every member whatever its class:
+
+```python
+from typing import NamedTuple
+
+@qd.data_oriented
+class Particles:
+    def __init__(self, n):
+        self.x = qd.ndarray(qd.f32, shape=(n,))
+
+    @qd.func
+    def advance(self):
+        for i in range(self.x.shape[0]):
+            self.x[i] += 1.0
+
+@qd.data_oriented
+class Grid:
+    def __init__(self, n):
+        self.mass = qd.ndarray(qd.f32, shape=(n,))
+
+    @qd.func
+    def advance(self):
+        for i in range(self.mass.shape[0]):
+            self.mass[i] *= 0.5
+
+@qd.data_oriented
+class Parts(NamedTuple):
+    particles: Particles
+    grid: Grid
+
+@qd.data_oriented
+class Simulation:
+    def __init__(self, parts):
+        self.parts = parts
+
+@qd.kernel
+def step(sim: qd.template()):
+    for part in qd.static(sim.parts):
+        part.advance()
+
+step(Simulation(Parts(particles=Particles(128), grid=Grid(64))))
+```
+
+Keep the `NamedTuple` as a member of a regular `@qd.data_oriented` object rather than passing it as the kernel argument itself. Passed directly, it is specialized as a plain tuple: each field must be a valid template argument on its own (a `@qd.data_oriented` object, a field or a primitive), so a bare `qd.ndarray` field raises, and since a tuple cannot be weakly referenced, the kernel re-derives its specialization on every launch.
+
 ### Fastcache
 
 `@qd.kernel(fastcache=True)` is supported on methods of `@qd.data_oriented` classes, but is disabled for fields; see [Appendix — compound-type cache keying](fastcache.md#compound-type-cache-keying) for more information.

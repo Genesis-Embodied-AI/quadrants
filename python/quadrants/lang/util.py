@@ -8,6 +8,7 @@ import os
 import traceback
 import types
 import warnings
+from collections.abc import Iterable
 from typing import Any
 
 import numpy as np
@@ -343,6 +344,20 @@ def is_data_oriented(obj: Any) -> bool:
         if flag is not None:
             return flag
     return False
+
+
+def data_oriented_members(obj: Any) -> Iterable[tuple[str, Any]]:
+    """Return the ``(name, value)`` pairs of the members of a ``@qd.data_oriented`` object.
+
+    A ``NamedTuple`` decorated ``@qd.data_oriented`` has no instance ``__dict__``: its members are its fields. The
+    ndarray and primitive predeclaration walk the members through this function, with the same ``_asdict()`` fallback
+    as the template mapping (``_build_struct_nd_paths``) and the fastcache hashing (``stringify_obj_type``), so that
+    all of them see the same members.
+    """
+    try:
+        return obj._asdict().items()
+    except AttributeError:
+        return vars(obj).items()
 
 
 def wants_runtime_primitives(obj: Any) -> bool:

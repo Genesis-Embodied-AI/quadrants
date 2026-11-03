@@ -11,6 +11,7 @@ This file pins what actually works, and documents the gaps.
 """
 
 import dataclasses
+from typing import Any, NamedTuple
 
 import numpy as np
 import pytest
@@ -1439,3 +1440,115 @@ def test_data_oriented_ndarray_wrapper():
     np.testing.assert_array_equal(a.to_numpy(), np.arange(1, N + 1))
 
     run(state)
+    np.testing.assert_array_equal(a.to_numpy(), np.arange(1, N + 1))
+
+
+# ---------------------------------------------------------------------------
+# 24. @qd.data_oriented NamedTuple, as a member of a @qd.data_oriented container and as the kernel arg itself.
+#
+# A NamedTuple instance has no ``__dict__``: its members are its fields. The predeclaration walk reads them through
+# ``data_oriented_members``, so ndarrays reached through a NamedTuple are declared as kernel args, and a kernel can
+# iterate the NamedTuple with ``qd.static`` to call each member's funcs.
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_named_tuple_member():
+    N = 4
+
+    @qd.data_oriented
+    class Scale:
+        def __init__(self, x, factor):
+            self.x = x
+            self.factor = factor
+
+        @qd.func
+        def apply(self):
+            for i in range(N):
+                self.x[i] *= self.factor
+
+    @qd.data_oriented
+    class Shift:
+        def __init__(self, x, offset):
+            self.x = x
+            self.offset = offset
+
+        @qd.func
+        def apply(self):
+            for i in range(N):
+                self.x[i] += self.offset
+
+    @qd.data_oriented
+    class Members(NamedTuple):
+        scale: Scale
+        shift: Shift
+
+    @qd.data_oriented
+    class State:
+        def __init__(self, members):
+            self.members = members
+
+    @qd.kernel
+    def run(s: qd.template()):
+        for member in qd.static(s.members):
+            member.apply()
+
+    # A second state with new ndarrays checks that the launch binds the ndarrays of the instance it is given
+    for _ in range(2):
+        scale = Scale(x=qd.ndarray(qd.f32, shape=(N,)), factor=2.0)
+        scale.x.from_numpy(np.arange(N, dtype=np.float32))
+        shift = Shift(x=qd.ndarray(qd.f32, shape=(N,)), offset=1.0)
+        run(State(Members(scale=scale, shift=shift)))
+        np.testing.assert_array_equal(scale.x.to_numpy(), np.arange(N) * 2.0)
+        np.testing.assert_array_equal(shift.x.to_numpy(), np.ones(N))
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_named_tuple_arg():
+    N = 4
+
+    @qd.data_oriented
+    class Values:
+        def __init__(self, x):
+            self.x = x
+
+    @qd.data_oriented
+    class Pair(NamedTuple):
+        first: Values
+        second: Values
+
+    @qd.kernel
+    def run(p: qd.template()):
+        for i in range(N):
+            p.first.x[i] = i
+            p.second.x[i] = 2 * i
+
+    pair = Pair(first=Values(qd.ndarray(qd.i32, shape=(N,))), second=Values(qd.ndarray(qd.i32, shape=(N,))))
+    run(pair)
+    np.testing.assert_array_equal(pair.first.x.to_numpy(), np.arange(N))
+    np.testing.assert_array_equal(pair.second.x.to_numpy(), np.arange(N) * 2)
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_named_tuple_ndarray_field():
+    N = 4
+
+    @qd.data_oriented
+    class Arrays(NamedTuple):
+        x: Any
+        y: Any
+
+    @qd.data_oriented
+    class State:
+        def __init__(self, arrays):
+            self.arrays = arrays
+
+    @qd.kernel
+    def run(s: qd.template()):
+        for i in range(N):
+            s.arrays.y[i] = s.arrays.x[i] + 1
+
+    arrays = Arrays(x=qd.ndarray(qd.i32, shape=(N,)), y=qd.ndarray(qd.i32, shape=(N,)))
+    arrays.x.from_numpy(np.arange(N, dtype=np.int32))
+    run(State(arrays))
+    np.testing.assert_array_equal(arrays.y.to_numpy(), np.arange(N) + 1)
