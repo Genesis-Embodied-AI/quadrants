@@ -43,7 +43,7 @@ def test_legacy_template_func(decorate):
 
 @test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_legacy_template_real_func():
-    """Exclude legacy template fields and flags from a real function's runtime argument list."""
+    """Check that real functions accept legacy qd.template() arguments mixed with ordinary typed arguments."""
     values = qd.field(qd.i32, shape=())
 
     @qd.real_func
