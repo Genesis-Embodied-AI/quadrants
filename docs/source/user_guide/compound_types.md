@@ -38,7 +38,7 @@ It's of course very subjective, but some guidelines you could consider:
 
 ### Runtime member types
 
-Use `qd.Dataclass` on a kernel or `qd.func` parameter to accept a Python dataclass instance without naming its concrete class:
+Use `qd.RuntimeTyped` on a kernel or `qd.func` parameter to accept a Python dataclass instance without naming its concrete class:
 
 ```python
 @dataclass
@@ -47,7 +47,7 @@ class State:
     increment: object
 
 @qd.kernel
-def advance(state: qd.Dataclass):
+def advance(state: qd.RuntimeTyped):
     state.positions[0] += state.increment
 ```
 

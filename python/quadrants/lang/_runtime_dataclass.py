@@ -24,7 +24,7 @@ from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.matrix import Matrix, MatrixType
 from quadrants.lang.util import to_quadrants_type
 from quadrants.types import buffer_view_type, primitive_types
-from quadrants.types.annotations import Dataclass
+from quadrants.types.annotations import RuntimeTyped
 
 _schemas: dict[tuple, type] = {}
 _matrix_types: dict[tuple, MatrixType] = {}
@@ -32,7 +32,7 @@ _buffer_annotation = buffer_view_type.BufferViewType()
 
 
 def is_dataclass_annotation(annotation: Any) -> bool:
-    return annotation is Dataclass or isinstance(annotation, type) and dataclasses.is_dataclass(annotation)
+    return annotation is RuntimeTyped or isinstance(annotation, type) and dataclasses.is_dataclass(annotation)
 
 
 def infer_member_type(value: Any, path: str, visiting: frozenset[int]) -> Any:
