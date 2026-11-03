@@ -825,7 +825,7 @@ void QuadrantsLLVMContext::link_module_with_amdgpu_libdevice(std::unique_ptr<llv
   // codegen forced via target-features in llvm_context_pass.h::AMDGPUConvertAllocaInstAddressSpacePass and
   // jit_amdgpu.cpp's TargetMachine features.
   std::vector<std::string> libdevice_files(std::begin(amdgpu_static_libdevice_files),
-                                          std::end(amdgpu_static_libdevice_files));
+                                           std::end(amdgpu_static_libdevice_files));
   libdevice_files.push_back(isa_file);
 
   for (auto &libdevice : libdevice_files) {
