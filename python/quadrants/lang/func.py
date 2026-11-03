@@ -19,6 +19,7 @@ from quadrants.lang.expr import Expr
 from quadrants.lang.matrix import MatrixType
 from quadrants.lang.struct import StructType
 from quadrants.types import (
+    Template,
     ndarray_type,
     primitive_types,
     template,
@@ -98,7 +99,7 @@ class Func(FuncBase):
         dbg_info = _qd_core.DebugInfo(impl.get_runtime().get_current_src_info())
         for i, kernel_arg in enumerate(self.arg_metas):
             anno = kernel_arg.annotation
-            if anno is not template and not isinstance(anno, template):
+            if anno is not Template and not isinstance(anno, template):
                 if id(anno) in primitive_types.type_ids:
                     non_template_args.append(ops.cast(args[i], anno))
                 elif isinstance(anno, primitive_types.RefType):
