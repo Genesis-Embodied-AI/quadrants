@@ -96,9 +96,6 @@ You could then set the environment variable `CMAKE_ARGS` (scikit-build-core's CM
 export CMAKE_ARGS="-DQD_WITH_CUDA=OFF -DQD_WITH_AMDGPU=OFF"
 ```
 
-Building with LLVM backends requires LLVM 22.1.0 or newer. The CI build scripts download LLVM 22.1.0.
-A custom LLVM installation selected through `LLVM_DIR` or `LLVM_ROOT` must meet the same minimum.
-
 To direct `cmake` where to look at for some dependencies, for example `LLVM`, you could either use an environment variable `LLVM_DIR` or specify the cmake option `LLVM_ROOT`:
 
 ```
@@ -107,6 +104,10 @@ export LLVM_DIR="/path/to/llvm/"
 # or with a cmake option
 export CMAKE_ARGS="$CMAKE_ARGS -DLLVM_ROOT=/path/to/llvm"
 ```
+
+`SourceBuilder.from_file()` and `SourceBuilder.from_source()` require an explicit `compile_fn` callback for C, C++,
+and CUDA source files. The callback receives a source path and returns a compatible LLVM bitcode file path;
+precompiled bitcode and shared-library files can still be loaded directly.
 
 ### Building with the AMD GPU backend (Linux)
 
