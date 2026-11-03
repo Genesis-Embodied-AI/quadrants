@@ -17,7 +17,7 @@ The following compound types are available:
 | `@qd.kernel` instance methods       | no                                    | yes                                   | no                                  |
 | `@qd.func` instance methods         | no                                    | yes                                   | yes                                 |
 | Member declaration                  | type-annotated class fields           | live attributes (no annotations)      | type-annotated class fields         |
-| Kernel-arg annotation               | `MyStruct` (the dataclass type)       | `qd.Template`                       | `MyStruct` (the struct type)        |
+| Kernel-arg annotation               | `qd.RuntimeTyped` or `MyStruct`       | `qd.Template`                       | `MyStruct` (the struct type)        |
 | Primitive members are               | runtime args, or compile-time constants when annotated [`Final[T]`](#compile-time-constant-fields-typingfinal) | compile-time constants by default ([opt out](#runtime-primitives-template_primitivesfalse)) | fields of the in-kernel struct |
 
 > ⚠️ **Deprecation: `@dataclasses.dataclass` instance passed via `qd.Template`.**
@@ -161,7 +161,7 @@ Note: assigning a sub-struct to a local variable and then passing it (`t = s.inn
 
 ### Frozen vs non-frozen
 
-A `dataclasses.dataclass` may be either non-frozen (the default) or frozen (`@dataclass(frozen=True)`). Both work as kernel arguments, but **kernel launch is faster with `frozen=True`** (because it enables some optimizations that would otherwise not be possible). Recommend `frozen=True` unless you specifically need to rebind members after construction. Note that rebinding members after construction contradicts certain best practices; for example, it is typically incompatible with type linters such as pyright and mypy.
+A `dataclasses.dataclass` may be either non-frozen (the default) or frozen (`@dataclass(frozen=True)`). Both work as kernel arguments. Frozen containers with stable members enable cached type resolution and launch arguments. A frozen outer container does not freeze its children: if a nested dataclass is mutable, Quadrants re-reads its members on each launch. `unsafe_hash=True` alone does not enable these caches.
 
 ### Subclasses
 
@@ -184,7 +184,7 @@ def update_positions(pos: Position) -> None:
         update_position(pos.x, i)
 ```
 
-Note: when the annotated type is frozen, the flattened launch arguments are cached on the instance on first use. Do not rebind a field after the first launch; the kernel would keep using the stale cached value. Frozen dataclasses forbid rebinding by design, so this only affects code that deliberately bypasses that (e.g. `object.__setattr__`, or an `unsafe_hash=True` non-frozen dataclass).
+Do not bypass a frozen dataclass's assignment restrictions with `object.__setattr__` after its first launch: cached type descriptions and launch arguments assume those member bindings remain fixed. Mutable nested dataclasses and `Final`-bearing containers are re-read on each launch.
 
 ### Compile-time constant fields: `typing.Final`
 
@@ -458,7 +458,7 @@ The outermost annotation you put on the kernel parameter should match the parame
 
 | Kernel parameter compound type | Annotation |
 |--------------------------------|------------------------------|
-| `@dataclasses.dataclass`       | `MyDataclass` (dataclass type) |
+| `@dataclasses.dataclass`       | `qd.RuntimeTyped`, or `MyDataclass` to retain a concrete class/field boundary |
 | `@qd.data_oriented`            | `qd.Template` |
 
 ### Reassigning ndarray members

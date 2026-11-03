@@ -264,3 +264,20 @@ def test_runtime_offline_cache(tmp_path):
         output = qd.ndarray(qd.f32, shape=1)
         run(State(Config(bias, value), output, qd.ndarray(qd.i32, shape=2)))
         assert output[0] == bias + value
+
+
+@test_utils.test()
+def test_runtime_unresolved_member_annotations():
+    @dataclass
+    class Inner:
+        value: "NotImported"
+
+    @dataclass
+    class Outer:
+        inner: "AlsoNotImported"
+
+    @qd.kernel
+    def read(state: qd.RuntimeTyped) -> qd.f32:
+        return state.inner.value
+
+    assert read(Outer(Inner(2.5))) == 2.5

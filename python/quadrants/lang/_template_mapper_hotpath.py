@@ -500,3 +500,6 @@ class RuntimeDataclassFeatures(tuple):
 
     def __eq__(self, other):
         return type(other) is type(self) and self.schema is other.schema and tuple.__eq__(self, other)
+
+    def __ne__(self, other):
+        return not self == other
