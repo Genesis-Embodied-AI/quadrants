@@ -509,6 +509,8 @@
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">export</span> <span class="n">CMAKE_ARGS</span><span class="o">=</span><span class="s2">"-DQD_WITH_CUDA=OFF -DQD_WITH_AMDGPU=OFF"</span>
 </pre></div>
 </div>
+<p>Building with LLVM backends requires LLVM 22.1.0 or newer. The CI build scripts download LLVM 22.1.0.
+A custom LLVM installation selected through <code class="docutils literal notranslate"><span class="pre">LLVM_DIR</span></code> or <code class="docutils literal notranslate"><span class="pre">LLVM_ROOT</span></code> must meet the same minimum.</p>
 <p>To direct <code class="docutils literal notranslate"><span class="pre">cmake</span></code> where to look at for some dependencies, for example <code class="docutils literal notranslate"><span class="pre">LLVM</span></code>, you could either use an environment variable <code class="docutils literal notranslate"><span class="pre">LLVM_DIR</span></code> or specify the cmake option <code class="docutils literal notranslate"><span class="pre">LLVM_ROOT</span></code>:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># using an env var</span>
 <span class="n">export</span> <span class="n">LLVM_DIR</span><span class="o">=</span><span class="s2">"/path/to/llvm/"</span>

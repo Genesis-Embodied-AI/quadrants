@@ -96,6 +96,9 @@ You could then set the environment variable `CMAKE_ARGS` (scikit-build-core's CM
 export CMAKE_ARGS="-DQD_WITH_CUDA=OFF -DQD_WITH_AMDGPU=OFF"
 ```
 
+Building with LLVM backends requires LLVM 22.1.0 or newer. The CI build scripts download LLVM 22.1.0.
+A custom LLVM installation selected through `LLVM_DIR` or `LLVM_ROOT` must meet the same minimum.
+
 To direct `cmake` where to look at for some dependencies, for example `LLVM`, you could either use an environment variable `LLVM_DIR` or specify the cmake option `LLVM_ROOT`:
 
 ```
