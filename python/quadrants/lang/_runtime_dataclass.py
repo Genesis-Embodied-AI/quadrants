@@ -25,7 +25,7 @@ from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.matrix import Matrix, MatrixType, VectorType
 from quadrants.lang.struct import Struct, StructType
 from quadrants.lang.util import to_quadrants_type
-from quadrants.types import buffer_view_type, primitive_types
+from quadrants.types import buffer_view_type, ndarray_type, primitive_types
 from quadrants.types.annotations import RuntimeTyped
 
 _schemas: dict[tuple, type] = {}
@@ -33,6 +33,7 @@ _direct_final_types: dict[int, type] = {}
 _matrix_types: dict[tuple, MatrixType] = {}
 _struct_types: dict[tuple, StructType] = {}
 _buffer_annotation = buffer_view_type.BufferViewType()
+_array_annotation = ndarray_type.NdarrayType()
 
 
 def _direct_final_names(source: type) -> frozenset[str]:
@@ -75,14 +76,16 @@ def infer_member_type(value: Any, path: str, visiting: frozenset[int]) -> Any:
         return resolve_dataclass(value, path, visiting)
     if value is None:
         return Tensor
-    if isinstance(value, (Ndarray, AnyArray, Field, np.ndarray)):
+    if isinstance(value, Field):
         return Tensor
+    if isinstance(value, (Ndarray, AnyArray, np.ndarray)):
+        return _array_annotation
     # Avoid importing torch on the inference path when it is not already in use.
     import sys  # pylint: disable=import-outside-toplevel
 
     torch = sys.modules.get("torch")
     if torch is not None and isinstance(value, torch.Tensor):
-        return Tensor
+        return _array_annotation
     if isinstance(value, BufferView):
         return _buffer_annotation
     if isinstance(value, (bool, np.bool_)):
@@ -159,6 +162,14 @@ def resolve_dataclass(
                 "__hash__": source.__hash__,
                 "_qd_runtime_origin": source,
                 "_qd_runtime_stable": stable,
+                # Cache eligibility is not part of the compiled interface: a Tensor wrapper and its bare ndarray
+                # must share a specialization, even though the wrapper can change its underlying implementation.
+                "_qd_runtime_key": (
+                    id(source),
+                    tuple(
+                        (name, getattr(field.type, "_qd_runtime_key", id(field.type))) for name, field in fields.items()
+                    ),
+                ),
             },
         )
         # Validate Final-bearing paths against the inferred nesting, including children annotated as Any/object.

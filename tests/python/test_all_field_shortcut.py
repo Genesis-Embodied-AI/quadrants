@@ -24,8 +24,10 @@ from tests.helpers import test_utils
 
 def _cached_all_field(obj, annotated):
     """Read the ``_qd_all_field`` verdict for ``annotated`` (identity-guarded), or None if absent."""
-    entry = getattr(obj, "_qd_all_field", {}).get(id(annotated))
-    return entry[1] if entry is not None and entry[0] is annotated else None
+    for schema, verdict in getattr(obj, "_qd_all_field", {}).values():
+        if getattr(schema, "_qd_runtime_origin", schema) is annotated:
+            return verdict
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -352,7 +354,7 @@ def test_all_field_struct_wrong_annotation_raises():
         pass
 
     x = qd.field(qd.i32, shape=(4,))
-    state = State(x=qd.Tensor(x))
+    state = State(x=x)
 
     # First call caches _qd_all_field[State]=True
     correct_kernel(state)
@@ -384,7 +386,7 @@ def test_all_field_struct_passed_as_ndarray_param_raises():
             arr[i] = 99
 
     x = qd.field(qd.i32, shape=(4,))
-    state = State(x=qd.Tensor(x))
+    state = State(x=x)
 
     correct_kernel(state)
     assert _cached_all_field(state, State) is True

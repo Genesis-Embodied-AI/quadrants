@@ -496,10 +496,14 @@ class RuntimeDataclassFeatures(tuple):
         return result
 
     def __hash__(self):
-        return hash((self.schema, tuple(self)))
+        return hash((self.schema._qd_runtime_key, tuple(self)))
 
     def __eq__(self, other):
-        return type(other) is type(self) and self.schema is other.schema and tuple.__eq__(self, other)
+        return (
+            type(other) is type(self)
+            and self.schema._qd_runtime_key == other.schema._qd_runtime_key
+            and tuple.__eq__(self, other)
+        )
 
     def __ne__(self, other):
         return not self == other
