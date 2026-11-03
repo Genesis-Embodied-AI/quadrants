@@ -1,6 +1,6 @@
 # type: ignore
 
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, TypeVar, Union
 
 import numpy as np
 
@@ -27,6 +27,11 @@ if TYPE_CHECKING:
     from quadrants.lang.matrix import MatrixNdarray, VectorNdarray
 
     TensorNdarray = Union["ScalarNdarray", VectorNdarray, MatrixNdarray]
+
+
+# Use this for a helper's argument and return annotations when it returns the same ndarray type it receives.
+# This preserves the concrete scalar, vector, or matrix subtype and its methods for type checking.
+_Ndarray = TypeVar("_Ndarray", bound="Ndarray")
 
 
 def _invert_layout(layout):

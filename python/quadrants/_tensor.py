@@ -21,6 +21,7 @@ from enum import IntEnum
 # ``__init__.py`` simple and atomic.
 from quadrants._tensor_wrapper import Tensor
 from quadrants._tensor_wrapper import wrap as _wrap_impl
+from quadrants.lang._fill_initializer import _FillValue
 
 __all__ = [
     "Backend",
@@ -100,7 +101,7 @@ def _coerce_backend(backend):
 # work on one backend and raise cryptic errors deep in the other. Users who need backend-specific knobs (e.g.
 # ``offset=`` for field offset indexing, ``order=`` for SoA layouts) should call ``qd.field`` / ``qd.ndarray`` directly
 # — they have explicitly opted out of the unified tensor API.
-_TENSOR_ACCEPTED_KWARGS = frozenset({"backend", "needs_grad", "layout"})
+_TENSOR_ACCEPTED_KWARGS = frozenset({"backend", "needs_grad", "layout", "fill"})
 
 
 def _validate_kwargs(kwargs, *, factory_name, accepted):
@@ -135,7 +136,7 @@ def _layout_to_order(layout, ndim):
     return "".join(chr(ord("i") + axis) for axis in layout)
 
 
-def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
+def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, fill: _FillValue | None = None, **kwargs):
     """Allocate a tensor on the chosen backend, optionally with a custom physical layout.
 
     Thin dispatcher over :func:`quadrants.field` and :func:`quadrants.ndarray` that selects between the two via the
@@ -154,6 +155,8 @@ def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
             underlying allocation is automatically sized to the permuted *physical* shape, and kernel subscripts
             ``x[i, j, ...]`` are rewritten to hit the right physical slot. Supported on both ``Backend.FIELD`` and
             ``Backend.NDARRAY``.
+        fill (optional): Initial scalar or per-component values. Field initialization is deferred with allocation;
+            ndarray initialization is submitted during allocation. None preserves the allocator's default values.
 
     Returns:
         A ``Tensor``, ``VectorTensor``, or ``MatrixTensor`` wrapper for the selected backend and element type.
@@ -195,7 +198,7 @@ def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
     if backend is Backend.FIELD:
         if order is not None:
             forwarded["order"] = order
-        f = impl.field(dtype, shape, **forwarded)
+        f = impl.field(dtype, shape, fill=fill, **forwarded)
         # The canonical->physical layout permutation is attached by ``_field`` itself via ``_qd_layout`` (identical
         # attribute to the one ``Ndarray`` uses). The AST subscript rewrite in ``build_Subscript`` /
         # ``build_struct_for`` reads it to permute user-supplied canonical indices into physical storage order;
@@ -203,13 +206,13 @@ def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
         return _wrap_impl(f)
     if backend is Backend.NDARRAY:
         if order is None:
-            return _wrap_impl(impl.ndarray(dtype, shape, **forwarded))
+            return _wrap_impl(impl.ndarray(dtype, shape, fill=fill, **forwarded))
         # Non-identity layout: allocate at the physical (permuted) shape and tag the result so the kernel-side
         # subscript rewrite picks up the canonical -> physical translation.
         assert layout is not None  # implied by `order is not None`
         layout_t = tuple(layout)
         physical_shape = tuple(shape_t[axis] for axis in layout_t)
-        arr = impl.ndarray(dtype, physical_shape, **forwarded)
+        arr = impl.ndarray(dtype, physical_shape, fill=fill, **forwarded)
         # _with_layout propagates the tag to the companion grad ndarray if one was allocated by needs_grad=True, so
         # kernel code reading x.grad[i, j, ...] goes through the same canonical->physical AST rewrite as the primal
         # access.
