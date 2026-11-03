@@ -93,6 +93,11 @@ class ProgramImpl {
     return nullptr;
   }
 
+  // Order the copy after pending kernels. The caller must keep both buffers alive until synchronization completes.
+  virtual void buffer_copy(DevicePtr dst, DevicePtr src, size_t size) {
+    dst.device->memcpy_internal(dst, src, size);
+  }
+
   /**
    * Dump Offline-cache data to disk
    */

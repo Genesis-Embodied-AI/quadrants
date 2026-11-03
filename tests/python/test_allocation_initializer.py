@@ -332,23 +332,8 @@ def test_initializer_invalid_matrix(
 )
 @pytest.mark.parametrize("operation", ["fill", "host", "numpy", "kernel"])
 @test_utils.test()
-def test_initializer_precedes_writes(
-    container_type: str, backend: qd.Backend | None, operation: str, request: pytest.FixtureRequest
-) -> None:
+def test_initializer_precedes_writes(container_type: str, backend: qd.Backend | None, operation: str) -> None:
     # Initialization must run before each kind of write.
-    if (
-        qd.lang.impl.current_cfg().arch in (qd.vulkan, qd.metal)
-        and operation == "host"
-        and (container_type == "ndarray" or backend == qd.Backend.NDARRAY)
-    ):
-        request.node.add_marker(
-            pytest.mark.xfail(
-                reason="Existing Vulkan/Metal ndarray host-write ordering bug: "
-                "https://github.com/Genesis-Embodied-AI/quadrants/pull/1046",
-                raises=AssertionError,
-                strict=False,
-            )
-        )
     num_elements = 4
     array = _create_array(
         container_type=container_type,

@@ -193,7 +193,7 @@ void Ndarray::write(const std::vector<int> &I, TypedConstant val) const {
   std::memcpy(device_arr_ptr, &val.value_bits, size_);
 
   staging_buf_->device->unmap(*staging_buf_);
-  staging_buf_->device->memcpy_internal(this->ndarray_alloc_.get_ptr(index * size_), staging_buf_->get_ptr(), size_);
+  prog_->buffer_copy(this->ndarray_alloc_.get_ptr(index * size_), staging_buf_->get_ptr(), size_);
 
   prog_->synchronize();
   // Host-side mutation of the ndarray contents: bump the per-DeviceAllocation generation so any cached
