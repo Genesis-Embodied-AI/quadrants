@@ -146,6 +146,11 @@ A `dataclasses.dataclass` may be either non-frozen (the default) or frozen (`@da
 
 ### Subclasses
 
+Both `@qd.kernel` and `@qd.func` parameters accept subclasses of their annotated dataclass type. A func sees only
+the fields declared by its parameter annotation, including nested dataclass fields. Extra subclass fields remain
+available to the caller. Positional and keyword calls are supported; unrelated dataclasses with matching fields
+are not accepted.
+
 You are able to pass any subclass of the annotated dataclass type. This is especially useful for cases where only a subset of your class is valid in quadrants, as below:
 
 ```python

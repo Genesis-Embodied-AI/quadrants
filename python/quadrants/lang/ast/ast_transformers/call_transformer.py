@@ -17,7 +17,7 @@ from quadrants.lang import (
     matrix,
 )
 from quadrants.lang import ops as qd_ops
-from quadrants.lang._dataclass_util import create_flat_name
+from quadrants.lang._dataclass_util import create_flat_name, dataclass_call_type
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
     get_decorator,
@@ -170,6 +170,7 @@ class CallTransformer:
         args: tuple[ast.stmt, ...],
         called_needed: set[str] | None = None,
         callee_arg_names: list[str] | None = None,
+        callee_annotations: list[Any] | None = None,
     ) -> tuple[tuple[ast.stmt, ...], tuple[ast.stmt, ...]]:
         """
         We require that each node has a .ptr attribute added to it, that contains the associated Python object.
@@ -184,8 +185,14 @@ class CallTransformer:
         func_id = ctx.func.func_id
         for arg_idx, arg in enumerate(args):
             val = arg.ptr
+            annotation = (
+                callee_annotations[arg_idx]
+                if callee_annotations is not None and arg_idx < len(callee_annotations)
+                else None
+            )
+            dataclass_type = dataclass_call_type(val, annotation)
             if dataclasses.is_dataclass(val) and isinstance(val, type):
-                dataclass_type = val
+                source_fields = {field.name: field for field in dataclasses.fields(val)}
                 for field in dataclasses.fields(dataclass_type):
                     try:
                         child_name = create_flat_name(arg.id, field.name)
@@ -203,8 +210,10 @@ class CallTransformer:
                         end_col_offset=arg.end_col_offset,
                     )
                     if dataclasses.is_dataclass(field.type):
-                        arg_node.ptr = field.type
-                        _added_args, _args_new = CallTransformer._expand_Call_dataclass_args(ctx, (arg_node,))
+                        arg_node.ptr = source_fields[field.name].type
+                        _added_args, _args_new = CallTransformer._expand_Call_dataclass_args(
+                            ctx, (arg_node,), callee_annotations=[field.type]
+                        )
                         args_new.extend(_args_new)
                         added_args.extend(_added_args)
                     else:
@@ -214,7 +223,6 @@ class CallTransformer:
                 # Dataclass *instance* passed positionally (e.g. ``self.state``): expand to per-leaf ``ast.Attribute``
                 # children, where the typed-arg path above emits ``ast.Name``. Items appended to ``added_args`` must not
                 # carry ``.ptr`` - ``build_stmt`` populates it downstream.
-                dataclass_type = type(val)
                 # Flat names have to match the callee's, which may have pruned unused fields.
                 callee_param = (
                     callee_arg_names[arg_idx]
@@ -248,6 +256,7 @@ class CallTransformer:
                             (child_node,),
                             called_needed=called_needed,
                             callee_arg_names=[nested_callee_param] if nested_callee_param is not None else None,
+                            callee_annotations=[field.type],
                         )
                         args_new.extend(_args_new)
                         added_args.extend(_added_args)
@@ -263,6 +272,7 @@ class CallTransformer:
         ctx: ASTTransformerFuncContext,
         kwargs: list[ast.keyword],
         used_args: set[str] | None,
+        callee_annotations_by_name: dict[str, Any] | None = None,
     ) -> tuple[list[ast.keyword], list[ast.keyword]]:
         """
         We require that each node has a .ptr attribute added to it, that contains
@@ -274,8 +284,10 @@ class CallTransformer:
         added_kwargs = []
         for i, kwarg in enumerate(kwargs):
             val = kwarg.ptr[kwarg.arg]
+            annotation = callee_annotations_by_name.get(kwarg.arg) if callee_annotations_by_name is not None else None
+            dataclass_type = dataclass_call_type(val, annotation)
             if dataclasses.is_dataclass(val) and isinstance(val, type):
-                dataclass_type = val
+                source_fields = {field.name: field for field in dataclasses.fields(val)}
                 for field in dataclasses.fields(dataclass_type):
                     src_name = create_flat_name(kwarg.value.id, field.name)
                     child_name = create_flat_name(kwarg.arg, field.name)
@@ -302,9 +314,9 @@ class CallTransformer:
                         end_col_offset=kwarg.end_col_offset,
                     )
                     if dataclasses.is_dataclass(field.type):
-                        kwarg_node.ptr = {child_name: field.type}
+                        kwarg_node.ptr = {child_name: source_fields[field.name].type}
                         _added_kwargs, _kwargs_new = CallTransformer._expand_Call_dataclass_kwargs(
-                            ctx, [kwarg_node], used_args
+                            ctx, [kwarg_node], used_args, callee_annotations_by_name={child_name: field.type}
                         )
                         kwargs_new.extend(_kwargs_new)
                         added_kwargs.extend(_added_kwargs)
@@ -314,7 +326,6 @@ class CallTransformer:
             elif dataclasses.is_dataclass(val) and not isinstance(val, type):
                 # Dataclass *instance* passed as a keyword arg: expand to per-leaf keywords whose values are attribute
                 # accesses on the original node (``__qd_state__x=self.state.x``).
-                dataclass_type = type(val)
                 for field in dataclasses.fields(dataclass_type):
                     child_name = create_flat_name(kwarg.arg, field.name)
                     if used_args is not None and child_name not in used_args:
@@ -343,7 +354,7 @@ class CallTransformer:
                     if dataclasses.is_dataclass(child_val) and not isinstance(child_val, type):
                         kwarg_node.ptr = {child_name: child_val}
                         _added_kwargs, _kwargs_new = CallTransformer._expand_Call_dataclass_kwargs(
-                            ctx, [kwarg_node], used_args
+                            ctx, [kwarg_node], used_args, callee_annotations_by_name={child_name: field.type}
                         )
                         kwargs_new.extend(_kwargs_new)
                         added_kwargs.extend(_added_kwargs)
@@ -392,6 +403,8 @@ class CallTransformer:
         pruning = ctx.global_context.pruning
         called_needed = None
         callee_arg_names: list[str] | None = None
+        callee_annotations: list[Any] | None = None
+        callee_annotations_by_name: dict[str, Any] | None = None
         if pruning.enforcing and is_func_base_wrapper:
             called_func_id_ = func.wrapper.func_id  # type: ignore
             called_needed = pruning.used_vars_by_func_id[called_func_id_]
@@ -401,16 +414,25 @@ class CallTransformer:
             # ``self.write(self.state)`` builds flat names rooted at ``self`` that match nothing in the callee's pruning
             # set, silently dropping the fields it needs.
             try:
-                callee_arg_names = [m.name for m in func.wrapper.arg_metas]  # type: ignore[attr-defined]
+                callee_metas = func.wrapper.arg_metas  # type: ignore[attr-defined]
                 if type(func) is BoundQuadrantsCallable:
-                    callee_arg_names = callee_arg_names[1:]
+                    callee_metas = callee_metas[1:]
+                callee_arg_names = [m.name for m in callee_metas]
+                callee_annotations = [m.annotation for m in callee_metas]
+                callee_annotations_by_name = {m.name: m.annotation for m in callee_metas}
             except AttributeError:
                 callee_arg_names = None
 
         added_args, node_args = CallTransformer._expand_Call_dataclass_args(
-            ctx, node.args, called_needed=called_needed, callee_arg_names=callee_arg_names
+            ctx,
+            node.args,
+            called_needed=called_needed,
+            callee_arg_names=callee_arg_names,
+            callee_annotations=callee_annotations,
         )
-        added_keywords, node_keywords = CallTransformer._expand_Call_dataclass_kwargs(ctx, node.keywords, called_needed)
+        added_keywords, node_keywords = CallTransformer._expand_Call_dataclass_kwargs(
+            ctx, node.keywords, called_needed, callee_annotations_by_name=callee_annotations_by_name
+        )
 
         # Create variables for the now-expanded dataclass members.
         # We don't want to include these now-expanded dataclass members in
