@@ -16,7 +16,6 @@ target_sources(llvm_runtime
 target_include_directories(llvm_runtime
   PRIVATE
     ${PROJECT_SOURCE_DIR}
-    ${PROJECT_BINARY_DIR}/generated
     ${PROJECT_SOURCE_DIR}/external/eigen
     ${PROJECT_SOURCE_DIR}/external/spdlog/include
     ${LLVM_INCLUDE_DIRS}
