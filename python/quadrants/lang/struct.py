@@ -765,6 +765,9 @@ class StructType(CompoundType):
         entries["__struct_methods"] = self.methods
         struct = Struct(entries)
         struct._Struct__dtype = self.dtype
+        # Keep the Python type description alongside the native dtype so a containing Python dataclass can infer
+        # this value's scalar/member types without consulting the container's annotations.
+        struct._qd_struct_type = self
         attach_unpacked_groups(struct, self._unpacked_groups)
         return struct
 

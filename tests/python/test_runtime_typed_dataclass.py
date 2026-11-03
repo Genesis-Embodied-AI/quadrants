@@ -200,3 +200,67 @@ def test_runtime_bad_inputs():
     cyclic.value = cyclic
     with pytest.raises(Exception, match="state.value.*cycle"):
         read(cyclic)
+
+
+@test_utils.test(require=qd.extension.data64)
+def test_runtime_matrix_and_quadrants_struct_members():
+    @qd.dataclass
+    class Pair:
+        count: qd.i64
+        weight: qd.f64
+
+    @dataclass
+    class State:
+        vector: object
+        pair: object
+
+    @qd.kernel
+    def read(state: qd.RuntimeTyped) -> qd.f64:
+        return state.vector[1] + state.pair.weight + state.pair.count
+
+    state = State(qd.Vector([1, 2], dt=qd.i32), Pair(count=2**40, weight=0.5))
+    assert read(state) == 2**40 + 2.5
+
+
+@test_utils.test()
+def test_runtime_bool_members():
+    @dataclass
+    class State:
+        enabled: object
+
+    @qd.kernel
+    def read(state: qd.RuntimeTyped) -> qd.i32:
+        return qd.cast(state.enabled, qd.i32)
+
+    for value in (True, False, np.bool_(True), np.bool_(False)):
+        assert read(State(value)) == int(value)
+
+
+@test_utils.test()
+def test_runtime_offline_cache(tmp_path):
+    @dataclass(frozen=True)
+    class Config:
+        bias: Final[int]
+        value: object
+
+    @dataclass(frozen=True)
+    class State:
+        config: object
+        output: object
+        unused: object
+
+    arch = qd.lang.impl.current_cfg().arch
+    for bias, value in ((3, 1.25), (3, 2.5), (7, 2.5), (7, 2), (3, 1.25)):
+        qd.init(arch=arch, offline_cache=True, offline_cache_file_path=str(tmp_path))
+
+        @qd.func
+        def calculate(config: qd.RuntimeTyped):
+            return qd.static(config.bias) + config.value
+
+        @qd.kernel(fastcache=True)
+        def run(state: qd.RuntimeTyped):
+            state.output[0] = calculate(state.config)
+
+        output = qd.ndarray(qd.f32, shape=1)
+        run(State(Config(bias, value), output, qd.ndarray(qd.i32, shape=2)))
+        assert output[0] == bias + value

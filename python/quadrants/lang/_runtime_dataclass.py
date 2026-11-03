@@ -22,6 +22,7 @@ from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.field import Field
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.matrix import Matrix, MatrixType
+from quadrants.lang.struct import Struct, StructType
 from quadrants.lang.util import to_quadrants_type
 from quadrants.types import buffer_view_type, primitive_types
 from quadrants.types.annotations import RuntimeTyped
@@ -29,6 +30,7 @@ from quadrants.types.annotations import RuntimeTyped
 _schemas: dict[tuple, type] = {}
 _direct_final_types: dict[int, type] = {}
 _matrix_types: dict[tuple, MatrixType] = {}
+_struct_types: dict[tuple, StructType] = {}
 _buffer_annotation = buffer_view_type.BufferViewType()
 
 
@@ -89,11 +91,20 @@ def infer_member_type(value: Any, path: str, visiting: frozenset[int]) -> Any:
     if isinstance(value, float):
         return impl.get_runtime().default_fp
     if isinstance(value, Matrix):
-        dtype = to_quadrants_type(value.to_numpy().dtype)
+        dtype = to_quadrants_type(np.asarray(value.to_numpy()).dtype)
         key = (value.n, value.m, value.ndim, dtype)
         if key not in _matrix_types:
             _matrix_types[key] = MatrixType(value.n, value.m, value.ndim, dtype)
         return _matrix_types[key]
+    if isinstance(value, Struct):
+        declared = getattr(value, "_qd_struct_type", None)
+        if declared is not None:
+            return declared
+        members = {name: infer_member_type(child, f"{path}.{name}", visiting) for name, child in value.items}
+        key = tuple((name, id(dtype)) for name, dtype in members.items())
+        if key not in _struct_types:
+            _struct_types[key] = StructType(**members)
+        return _struct_types[key]
     raise QuadrantsRuntimeTypeError(f"Dataclass member {path!r} has unsupported runtime type {type(value).__name__}")
 
 
@@ -116,7 +127,8 @@ def resolve_dataclass(
     if cached is not None and cached._qd_runtime_origin is source:
         return cached
     finals = _direct_final_names(source)
-    stable = source.__dataclass_params__.frozen and not finals
+    params = getattr(source, "__dataclass_params__")
+    stable = params.frozen and not finals
     fields = {}
     for field in dataclasses.fields(source):
         resolved = copy.copy(field)
@@ -124,7 +136,7 @@ def resolve_dataclass(
             child = getattr(value, field.name)
             resolved.type = infer_member_type(child, f"{path}.{field.name}", visiting)
             if dataclasses.is_dataclass(resolved.type):
-                stable &= resolved.type._qd_runtime_stable
+                stable &= getattr(resolved.type, "_qd_runtime_stable")
             elif not isinstance(child, (bool, int, float, np.generic, Ndarray, Field)):
                 stable = False
         fields[field.name] = resolved
@@ -138,7 +150,7 @@ def resolve_dataclass(
                 "__module__": source.__module__,
                 "__qualname__": source.__qualname__,
                 "__dataclass_fields__": fields,
-                "__dataclass_params__": source.__dataclass_params__,
+                "__dataclass_params__": params,
                 "__hash__": source.__hash__,
                 "_qd_runtime_origin": source,
                 "_qd_runtime_stable": stable,
@@ -148,9 +160,8 @@ def resolve_dataclass(
         final_field_names(schema)
         _schemas[key] = schema
     if stable:
-        try:
-            cache = value._qd_runtime_schemas
-        except AttributeError:
+        cache = getattr(value, "_qd_runtime_schemas", None)
+        if cache is None:
             cache = {}
             try:
                 object.__setattr__(value, "_qd_runtime_schemas", cache)
