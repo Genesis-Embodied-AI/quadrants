@@ -98,6 +98,6 @@ def compute(n: int, a: qd.Template) -> None:
 Syntax like `some_function(*args)` is supported in a narrow case:
 
 - `*args` must be the last argument in the function call
-- No keyword arguments may follow `*args`
+- Keyword arguments cannot be combined with `*args`
 
 When calling a `@qd.func`, a compile-time tuple or list may contain `dataclasses.dataclass` objects. Typed dataclass parameters receive their fields just as in an explicit positional call; `qd.template()` parameters receive the whole object. For example, `update(*args)` works with `args = (state, other)` when `update` declares typed dataclass parameters for `state` and `other`.
