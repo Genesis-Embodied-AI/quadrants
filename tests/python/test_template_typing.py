@@ -109,3 +109,84 @@ def test_template_raise_on_global_floats(raise_on_templated_floats: bool) -> Non
             k1d()
     else:
         k1d()
+
+
+@test_utils.test()
+def test_pyfunc_template_compile_time_scalars():
+    """Keep boolean flags and loop bounds compile-time in a kernel-side pyfunc across changing and repeated calls."""
+    values = qd.field(qd.i32, shape=4)
+
+    @qd.pyfunc
+    def add(enabled: qd.Template, count: qd.Template):
+        if qd.static(enabled):
+            for i in qd.static(range(count)):
+                values[i] += 1
+
+    @qd.kernel
+    def run(enabled: qd.Template, count: qd.Template):
+        add(enabled, count)
+
+    for enabled, count in [(True, 4), (False, 4), (True, 2), (False, 2), (True, 4)]:
+        values.fill(0)
+        run(enabled, count)
+        assert values.to_numpy().tolist() == [int(enabled and i < count) for i in range(4)]
+
+
+@pytest.mark.parametrize("decorate", [qd.func, qd.pyfunc], ids=["func", "pyfunc"])
+@pytest.mark.parametrize("config", [[2, 3], (2, 3), {0: 2, 1: 3}], ids=["list", "tuple", "dict"])
+@test_utils.test()
+def test_template_compile_time_container(decorate, config):
+    """Preserve compile-time elements of lists, tuples, and dictionaries passed to funcs and kernel-side pyfuncs."""
+
+    @decorate
+    def total(items: qd.Template):
+        result = 0
+        for i in qd.static(range(items[0])):
+            result += qd.static(items[1])
+        return result
+
+    @qd.kernel
+    def run() -> qd.i32:
+        return total(config)
+
+    assert run() == 6
+
+
+@pytest.mark.parametrize("decorate", [qd.func, qd.pyfunc], ids=["func", "pyfunc"])
+@test_utils.test()
+def test_template_callable(decorate):
+    """Pass a callable through a template parameter and invoke it from a func or kernel-side pyfunc."""
+
+    @qd.func
+    def increment(value):
+        return value + 1
+
+    @decorate
+    def apply(operation: qd.Template, value: qd.i32):
+        return operation(value)
+
+    @qd.kernel
+    def run(value: qd.i32) -> qd.i32:
+        return apply(increment, value)
+
+    assert run(41) == 42
+
+
+@pytest.mark.parametrize("decorate", [qd.func, qd.pyfunc], ids=["func", "pyfunc"])
+@test_utils.test()
+def test_template_reference_mutation(decorate):
+    """Verify that mutations to templated runtime vectors and structs reach the caller."""
+
+    @decorate
+    def update(vector: qd.Template, struct: qd.Template):
+        vector[0] += 2
+        struct.value += 3
+
+    @qd.kernel
+    def run() -> qd.i32:
+        vector = qd.Vector([20, 30])
+        struct = qd.Struct(value=40)
+        update(vector, struct)
+        return vector[0] + struct.value
+
+    assert run() == 65

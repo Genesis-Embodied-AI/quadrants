@@ -64,37 +64,40 @@ def test_call_expressions():
     assert x[()] == 26
 
 
+@pytest.mark.parametrize("decorate", [qd.func, qd.pyfunc], ids=["func", "pyfunc"])
 @test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], debug=True)
-def test_default_templates():
-    @qd.func
+def test_default_templates(decorate):
+    """Check scalar and field reference mutation through funcs and kernel-side pyfuncs."""
+
+    @decorate
     def func1(x: qd.Template):
         x = 1
 
-    @qd.func
+    @decorate
     def func2(x: qd.Template):
         x += 1
 
-    @qd.func
+    @decorate
     def func3(x):
         x = 1
 
-    @qd.func
+    @decorate
     def func4(x):
         x += 1
 
-    @qd.func
+    @decorate
     def func1_field(x: qd.Template):
         x[()] = 1
 
-    @qd.func
+    @decorate
     def func2_field(x: qd.Template):
         x[()] += 1
 
-    @qd.func
+    @decorate
     def func3_field(x):
         x[()] = 1
 
-    @qd.func
+    @decorate
     def func4_field(x):
         x[()] += 1
 
@@ -177,6 +180,25 @@ def test_experimental_templates():
     run_kernel()
     run_func(True)
     verify()
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
+def test_real_func_template_runtime_arguments():
+    """Keep interleaved template parameters out of real-function runtime arguments while specializing their values."""
+
+    @qd.real_func
+    def apply(enabled: qd.Template, value: qd.i32, offset: qd.Template, scale: qd.i32) -> qd.i32:
+        result = value
+        if qd.static(enabled):
+            result = value * scale + offset
+        return result
+
+    @qd.kernel
+    def run(enabled: qd.Template, offset: qd.Template, value: qd.i32) -> qd.i32:
+        return apply(enabled, value, offset, 2)
+
+    for enabled, offset, value in [(True, 3, 10), (False, 3, 10), (True, 7, 20), (True, 3, 11)]:
+        assert run(enabled, offset, value) == (value * 2 + offset if enabled else value)
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
