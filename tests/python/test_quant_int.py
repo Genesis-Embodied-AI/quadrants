@@ -35,7 +35,7 @@ def test_quant_store_fusion() -> None:
     z = qd.field(dtype=qd.i32, shape=(10, 2))
 
     @qd.real_func
-    def probe(x: qd.template(), z: qd.template(), i: int, j: int) -> None:
+    def probe(x: qd.Template, z: qd.Template, i: int, j: int) -> None:
         z[i, j] = x[i]
 
     # should fuse store
@@ -77,7 +77,7 @@ def test_quant_store_no_fusion() -> None:
     z = qd.field(dtype=qd.i32, shape=(10, 2))
 
     @qd.real_func
-    def probe(x: qd.template(), z: qd.template(), i: int, j: int) -> None:
+    def probe(x: qd.Template, z: qd.Template, i: int, j: int) -> None:
         z[i, j] = x[i]
 
     @qd.kernel

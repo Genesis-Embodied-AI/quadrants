@@ -80,7 +80,7 @@ def new_numpy_tensor_containing_index_codes(
 
 
 @qd.func
-def fill_tensor_with_index_codes(x: qd.template()) -> None:
+def fill_tensor_with_index_codes(x: qd.Template) -> None:
     for I in qd.grouped(x):
         element_shape = qd.static(x[I].get_shape())
         position_code = encode_index(I)
@@ -93,7 +93,7 @@ def fill_tensor_with_index_codes(x: qd.template()) -> None:
 
 
 @qd.kernel
-def fill_index_codes(x: qd.Tensor, dtype: qd.template()) -> None:
+def fill_index_codes(x: qd.Tensor, dtype: qd.Template) -> None:
     """Write each scalar component's index code through canonical kernel indices."""
     fill_tensor_with_index_codes(x)
 

@@ -42,7 +42,7 @@ def test_cpu_range_for_block_bounds(
         return total
 
     @qd.kernel
-    def k_constant_range(begin: qd.template(), end: qd.template()) -> qd.i32:
+    def k_constant_range(begin: qd.Template, end: qd.Template) -> qd.i32:
         total = 0
         for i in range(begin, end):
             num_visits[i + 2] += 1
@@ -103,7 +103,7 @@ def test_cpu_range_for_block_overflow(cpu_per_worker_min_block_dim):
                 qd.atomic_or(out[INVALID_VISIT_INDEX], 1)
 
     @qd.kernel
-    def k_constant_range(begin: qd.template(), end: qd.template()):
+    def k_constant_range(begin: qd.Template, end: qd.Template):
         for i in range(begin, end):
             if begin <= i < end:
                 out[i - begin] += 1

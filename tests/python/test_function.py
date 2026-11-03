@@ -67,11 +67,11 @@ def test_call_expressions():
 @test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], debug=True)
 def test_default_templates():
     @qd.func
-    def func1(x: qd.template()):
+    def func1(x: qd.Template):
         x = 1
 
     @qd.func
-    def func2(x: qd.template()):
+    def func2(x: qd.Template):
         x += 1
 
     @qd.func
@@ -83,11 +83,11 @@ def test_default_templates():
         x += 1
 
     @qd.func
-    def func1_field(x: qd.template()):
+    def func1_field(x: qd.Template):
         x[()] = 1
 
     @qd.func
-    def func2_field(x: qd.template()):
+    def func2_field(x: qd.Template):
         x[()] += 1
 
     @qd.func
@@ -138,7 +138,7 @@ def test_experimental_templates():
     answer = qd.field(qd.i32, shape=8)
 
     @qd.kernel
-    def kernel_inc(x: qd.template()):
+    def kernel_inc(x: qd.Template):
         x[()] += 1
 
     def run_kernel():
@@ -152,7 +152,7 @@ def test_experimental_templates():
         assert y[()] == 21
 
     @qd.real_func
-    def inc(x: qd.template()):
+    def inc(x: qd.Template):
         x[()] += 1
 
     @qd.kernel
@@ -223,7 +223,7 @@ def test_different_argument_type():
 @test_utils.test(arch=[qd.cpu, qd.cuda], cuda_stack_limit=8192)
 def test_recursion():
     @qd.real_func
-    def sum(f: qd.template(), l: qd.i32, r: qd.i32) -> qd.i32:
+    def sum(f: qd.Template, l: qd.i32, r: qd.i32) -> qd.i32:
         if l == r:
             return f[l]
         else:

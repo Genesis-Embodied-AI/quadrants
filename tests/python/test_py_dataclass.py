@@ -1713,7 +1713,7 @@ def test_prune_used_parameters_fastcache_dead_static_branch(tmp_path: Path):
             not_used: qd.types.NDArray[qd.i32, 1]
 
         @qd.func
-        def inner(md: MyDataclass, use_deep: qd.template()) -> None:
+        def inner(md: MyDataclass, use_deep: qd.Template) -> None:
             md.base[0] = 1
             if qd.static(use_deep):
                 md.deep[0] = 99
@@ -1760,7 +1760,7 @@ def test_prune_used_parameters_fastcache_dead_static_branch_reversed_order(tmp_p
             not_used: qd.types.NDArray[qd.i32, 1]
 
         @qd.func
-        def inner(md: MyDataclass, use_deep: qd.template()) -> None:
+        def inner(md: MyDataclass, use_deep: qd.Template) -> None:
             md.base[0] = 1
             if qd.static(use_deep):
                 md.deep[0] = 99
@@ -1808,7 +1808,7 @@ def test_prune_used_parameters_fastcache_dead_static_branch_kwargs(tmp_path: Pat
             not_used: qd.types.NDArray[qd.i32, 1]
 
         @qd.func
-        def inner(use_deep: qd.template(), md: MyDataclass) -> None:
+        def inner(use_deep: qd.Template, md: MyDataclass) -> None:
             md.base[0] = 1
             if qd.static(use_deep):
                 md.deep[0] = 99
@@ -1862,7 +1862,7 @@ def test_prune_used_parameters_fastcache_dead_static_branch_nested(tmp_path: Pat
             mid: Mid
 
         @qd.func
-        def inner(top: Top, use_deep: qd.template()) -> None:
+        def inner(top: Top, use_deep: qd.Template) -> None:
             top.base[0] = 1
             if qd.static(use_deep):
                 top.mid.leaf.deep[0] = 99
@@ -2191,7 +2191,7 @@ def test_pruning_with_recursive_func() -> None:
         return my_struct
 
     @qd.func
-    def f1(depth: qd.template(), struc_f1: MyStruct):
+    def f1(depth: qd.Template, struc_f1: MyStruct):
         if qd.static(depth) == 0:
             struc_f1.a[0, 0] = 100
             f1(1, struc_f1)
@@ -2322,7 +2322,7 @@ def test_pruning_reuse_func_same_kernel_call_l1() -> None:
         return my_struct
 
     @qd.func
-    def f1(flag: qd.template(), struc_f1: MyStruct):
+    def f1(flag: qd.Template, struc_f1: MyStruct):
         if qd.static(flag):
             struc_f1._f1a[0, 0] = 101
         else:
@@ -2373,7 +2373,7 @@ def test_pruning_reuse_func_same_kernel_call_l2() -> None:
         return my_struct
 
     @qd.func
-    def f2(flag: qd.template(), struc_f2: MyStruct):
+    def f2(flag: qd.Template, struc_f2: MyStruct):
         if qd.static(flag):
             struc_f2._f2a[0, 0] = 102
         else:
@@ -2436,7 +2436,7 @@ def test_pruning_reuse_func_across_kernels() -> None:
         return my_struct
 
     @qd.func
-    def f1(flag: qd.template(), struct_f1: MyStruct):
+    def f1(flag: qd.Template, struct_f1: MyStruct):
         if qd.static(flag):
             struct_f1._f1_with_flag[0, 0] = 102
         else:
@@ -2495,7 +2495,7 @@ def test_pruning_reuse_func_same_kernel_diff_call() -> None:
         return my_struct
 
     @qd.func
-    def f1(flag: qd.template(), struct_f1: MyStruct):
+    def f1(flag: qd.Template, struct_f1: MyStruct):
         if qd.static(flag):
             struct_f1._f1_with_flag[0, 0] = 101
         else:
@@ -3962,7 +3962,7 @@ def test_bare_final_annotation_is_rejected():
 def test_final_float_field_honors_raise_on_templated_floats():
     """``raise_on_templated_floats`` exists to stop float values from driving kernel specialisation, since each
     distinct value compiles another kernel. A ``Final[float]`` field does exactly that, so it must honour the setting
-    the same way a ``qd.template()`` float does.
+    the same way a ``qd.Template`` float does.
 
     Note this is deliberately *stricter* than the ``@qd.data_oriented`` pattern ``Final`` replaces: a float member of
     a data_oriented template arg currently bypasses the guard, because ``_extract_arg``'s data_oriented branch returns

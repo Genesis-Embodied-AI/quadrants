@@ -5,15 +5,14 @@ import quadrants as qd
 from tests.helpers import test_utils
 
 
-@pytest.mark.parametrize("annotation", [qd.Template, qd.template()], ids=["class", "legacy"])
 @pytest.mark.parametrize("decorate", [qd.func, qd.pyfunc], ids=["func", "pyfunc"])
 @test_utils.test()
-def test_template_compile_time_scalars(annotation, decorate):
+def test_template_compile_time_scalars(decorate):
     """Keep boolean flags and integer loop bounds compile-time across changing and repeated kernel calls."""
     values = qd.field(qd.i32, shape=4)
 
     @decorate
-    def add(enabled: annotation, count: annotation):
+    def add(enabled: qd.Template, count: qd.Template):
         if qd.static(enabled):
             for i in qd.static(range(count)):
                 values[i] += 1
@@ -28,15 +27,14 @@ def test_template_compile_time_scalars(annotation, decorate):
         assert values.to_numpy().tolist() == [int(enabled and i < count) for i in range(4)]
 
 
-@pytest.mark.parametrize("annotation", [qd.Template, qd.template()], ids=["class", "legacy"])
 @pytest.mark.parametrize("decorate", [qd.func, qd.pyfunc], ids=["func", "pyfunc"])
 @pytest.mark.parametrize("config", [[2, 3], (2, 3), {0: 2, 1: 3}], ids=["list", "tuple", "dict"])
 @test_utils.test()
-def test_template_compile_time_container(annotation, decorate, config):
+def test_template_compile_time_container(decorate, config):
     """Preserve compile-time elements of lists, tuples, and dictionaries passed to funcs and kernel-side pyfuncs."""
 
     @decorate
-    def total(items: annotation):
+    def total(items: qd.Template):
         result = 0
         for i in qd.static(range(items[0])):
             result += qd.static(items[1])
@@ -49,10 +47,9 @@ def test_template_compile_time_container(annotation, decorate, config):
     assert run() == 6
 
 
-@pytest.mark.parametrize("annotation", [qd.Template, qd.template()], ids=["class", "legacy"])
 @pytest.mark.parametrize("decorate", [qd.func, qd.pyfunc], ids=["func", "pyfunc"])
 @test_utils.test()
-def test_template_callable(annotation, decorate):
+def test_template_callable(decorate):
     """Pass a callable through a template parameter and invoke it from a func or kernel-side pyfunc."""
 
     @qd.func
@@ -60,7 +57,7 @@ def test_template_callable(annotation, decorate):
         return value + 1
 
     @decorate
-    def apply(operation: annotation, value: qd.i32):
+    def apply(operation: qd.Template, value: qd.i32):
         return operation(value)
 
     @qd.kernel
@@ -70,18 +67,17 @@ def test_template_callable(annotation, decorate):
     assert run(41) == 42
 
 
-@pytest.mark.parametrize("annotation", [qd.Template, qd.template()], ids=["class", "legacy"])
 @pytest.mark.parametrize("decorate", [qd.func, qd.pyfunc], ids=["func", "pyfunc"])
 @test_utils.test()
-def test_template_reference_mutation(annotation, decorate):
+def test_template_reference_mutation(decorate):
     """Verify that mutations to templated runtime scalars, vectors, and structs reach the caller."""
 
     @decorate
-    def increment(value: annotation):
+    def increment(value: qd.Template):
         value += 1
 
     @decorate
-    def update(vector: annotation, struct: annotation):
+    def update(vector: qd.Template, struct: qd.Template):
         vector[0] += 2
         struct.value += 3
 
@@ -97,13 +93,12 @@ def test_template_reference_mutation(annotation, decorate):
     assert run() == 76
 
 
-@pytest.mark.parametrize("annotation", [qd.Template, qd.template()], ids=["class", "legacy"])
 @test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
-def test_real_func_template_runtime_arguments(annotation):
+def test_real_func_template_runtime_arguments():
     """Keep interleaved template parameters out of real-function runtime arguments while specializing their values."""
 
     @qd.real_func
-    def apply(enabled: annotation, value: qd.i32, offset: annotation, scale: qd.i32) -> qd.i32:
+    def apply(enabled: qd.Template, value: qd.i32, offset: qd.Template, scale: qd.i32) -> qd.i32:
         result = value
         if qd.static(enabled):
             result = value * scale + offset
@@ -117,14 +112,13 @@ def test_real_func_template_runtime_arguments(annotation):
         assert run(enabled, offset, value) == (value * 2 + offset if enabled else value)
 
 
-@pytest.mark.parametrize("annotation", [qd.Template, qd.template()], ids=["class", "legacy"])
 @test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
-def test_real_func_template_only_arguments(annotation):
+def test_real_func_template_only_arguments():
     """Call a real function with no runtime arguments, specializing on a field and changing or repeated constants."""
     values = qd.field(qd.i32, shape=())
 
     @qd.real_func
-    def add(target: annotation, amount: annotation):
+    def add(target: qd.Template, amount: qd.Template):
         target[()] += amount
 
     @qd.kernel

@@ -191,7 +191,7 @@ def test_mesh_local():
     ext_a = qd.field(qd.i32, shape=len(model.verts))
 
     @qd.kernel
-    def foo(cache: qd.template()):
+    def foo(cache: qd.Template):
         if qd.static(cache):
             qd.mesh_local(ext_a, model.verts.a)
         for f in model.faces:
@@ -226,7 +226,7 @@ def test_auto_mesh_local():
     ext_a = qd.field(qd.i32, shape=len(model.verts))
 
     @qd.kernel
-    def foo(cache: qd.template()):
+    def foo(cache: qd.Template):
         for v in model.verts:
             v.s = v.id
         if qd.static(cache):
