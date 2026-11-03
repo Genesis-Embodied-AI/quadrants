@@ -14,7 +14,7 @@ def test_cache_primitive_args():
         flag: bool = True
 
     @qd.kernel
-    def fun(static_args: qd.template(), constant: qd.template(), value: qd.types.ndarray()):
+    def fun(static_args: qd.Template, constant: qd.Template, value: qd.types.ndarray()):
         if qd.static(static_args.flag):
             if qd.static(constant > 0):
                 value[()] = value[()] + 1
@@ -64,7 +64,7 @@ def test_cache_primitive_args():
 @test_utils.test(arch=get_host_arch_list())
 def test_cache_multi_entry_static():
     @qd.kernel
-    def fun(flag: qd.template(), value: qd.template()):
+    def fun(flag: qd.Template, value: qd.Template):
         if qd.static(flag):
             value[()] = value[()] + 1
         else:
@@ -107,7 +107,7 @@ def test_cache_multi_entry_static():
 @test_utils.test(arch=get_host_arch_list())
 def test_cache_fields_only():
     @qd.kernel
-    def fun(flag: qd.template(), value: qd.template()):
+    def fun(flag: qd.Template, value: qd.Template):
         if qd.static(flag):
             value[()] = value[()] + 1
         else:
@@ -175,7 +175,7 @@ def test_cache_ndarray_only():
 @test_utils.test(arch=get_host_arch_list())
 def test_cache_primitive():
     @qd.kernel
-    def fun(value: qd.template(), offset: int):
+    def fun(value: qd.Template, offset: int):
         if offset > 0:
             value[()] = value[()] + offset
 
@@ -225,7 +225,7 @@ def test_fastcache(tmp_path: pathlib.Path, monkeypatch):
     monkeypatch.setattr("quadrants.lang.kernel_impl.Kernel.launch_kernel", launch_kernel)
 
     @qd.kernel(fastcache=True)
-    def fun(value: qd.types.ndarray(), offset: qd.template()):
+    def fun(value: qd.types.ndarray(), offset: qd.Template):
         value[()] = value[()] + offset
 
     assert len(fun._primal.compiled_kernel_data_by_key) == 0

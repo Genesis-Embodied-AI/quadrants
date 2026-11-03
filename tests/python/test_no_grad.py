@@ -33,7 +33,7 @@ def test_raise_no_gradient():
     z = np.array([1.0])
 
     @qd.kernel
-    def func(x: qd.template()):
+    def func(x: qd.Template):
         y[()] = x.grad[()] * x.grad[()]
         z[0] = x.grad[()]
 

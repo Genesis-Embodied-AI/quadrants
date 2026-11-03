@@ -31,7 +31,7 @@ def test_order_scalar():
             f[i, j, k] = i * j * k
 
     @qd.kernel
-    def get_field_addr(a: qd.template(), i: qd.i32, j: qd.i32, k: qd.i32) -> qd.u64:
+    def get_field_addr(a: qd.Template, i: qd.i32, j: qd.i32, k: qd.i32) -> qd.u64:
         return qd.get_addr(a, [i, j, k])
 
     fill()
@@ -76,7 +76,7 @@ def test_order_vector():
             d[i, j] = [i, j]
 
     @qd.kernel
-    def get_field_addr(a: qd.template(), i: qd.i32, j: qd.i32) -> qd.u64:
+    def get_field_addr(a: qd.Template, i: qd.i32, j: qd.i32) -> qd.u64:
         return qd.get_addr(a, [i, j])
 
     fill()

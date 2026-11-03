@@ -40,12 +40,12 @@ def test_tensor_grad_kernel_roundtrip(backend):
     if backend is qd.Backend.FIELD:
 
         @qd.kernel
-        def write_primal(x: qd.template()):
+        def write_primal(x: qd.Template):
             for i in range(4):
                 x[i] = i * 10.0
 
         @qd.kernel
-        def write_grad(x: qd.template()):
+        def write_grad(x: qd.Template):
             for i in range(4):
                 x.grad[i] = i * 100.0
 
@@ -96,13 +96,13 @@ def test_tensor_vec_grad_kernel_roundtrip(backend):
     if backend is qd.Backend.FIELD:
 
         @qd.kernel
-        def write_primal(x: qd.template()):
+        def write_primal(x: qd.Template):
             for i in range(2):
                 for j in qd.static(range(3)):
                     x[i][j] = i * 10.0 + j
 
         @qd.kernel
-        def write_grad(x: qd.template()):
+        def write_grad(x: qd.Template):
             for i in range(2):
                 for j in qd.static(range(3)):
                     x.grad[i][j] = i * 100.0 + j * 10.0
@@ -137,14 +137,14 @@ def test_tensor_mat_grad_kernel_roundtrip(backend):
     if backend is qd.Backend.FIELD:
 
         @qd.kernel
-        def write_primal(x: qd.template()):
+        def write_primal(x: qd.Template):
             for i in range(3):
                 for r in qd.static(range(2)):
                     for c in qd.static(range(2)):
                         x[i][r, c] = i * 10.0 + r * 2.0 + c
 
         @qd.kernel
-        def write_grad(x: qd.template()):
+        def write_grad(x: qd.Template):
             for i in range(3):
                 for r in qd.static(range(2)):
                     for c in qd.static(range(2)):
