@@ -344,7 +344,11 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">qd_python_core</span> <span class="k">as</span> <span class="n">_qd_python_core</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">expr</span><span class="p">,</span> <span class="n">impl</span><span class="p">,</span> <span class="n">runtime_ops</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">ops</span> <span class="k">as</span> <span class="n">ops_mod</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._field_initializer</span><span class="w"> </span><span class="kn">import</span> <span class="n">_FillValue</span><span class="p">,</span> <span class="n">capture_fill_value</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._fill_initializer</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">_FillValue</span><span class="p">,</span>
+    <span class="n">apply_initial_ndarray_fill</span><span class="p">,</span>
+    <span class="n">capture_fill_value</span><span class="p">,</span>
+<span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._metal_interop</span><span class="w"> </span><span class="kn">import</span> <span class="n">mps_sync_if_metal</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._ndarray</span><span class="w"> </span><span class="kn">import</span> <span class="n">Ndarray</span><span class="p">,</span> <span class="n">NdarrayHostAccess</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.common_ops</span><span class="w"> </span><span class="kn">import</span> <span class="n">QuadrantsOperations</span>
@@ -1424,7 +1428,7 @@
     <span class="nd">@python_scope</span>
 <div class="viewcode-block" id="Matrix.ndarray">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.ndarray">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">ndarray</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="n">needs_grad</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">ndarray</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="n">needs_grad</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">fill</span><span class="p">:</span> <span class="n">_FillValue</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">"""Defines a Quadrants ndarray with matrix elements.</span>
 <span class="sd">        This function must be called in Python scope, and after `qd.init` is called.</span>
 
@@ -1435,6 +1439,7 @@
 <span class="sd">            shape (Union[int, tuple[int]]): Shape of the ndarray.</span>
 <span class="sd">            needs_grad (bool, optional): If True, allocate a companion grad ndarray of the same shape and dtype,</span>
 <span class="sd">                accessible via ``arr.grad``. Requires ``dtype`` to be a real (floating-point) type. Defaults to False.</span>
+<span class="sd">            fill (optional): Initial scalar or per-component values, submitted during allocation. Defaults to None.</span>
 
 <span class="sd">        Example::</span>
 
@@ -1452,7 +1457,7 @@
                     <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2"> is not supported for Matrix.ndarray with needs_grad=True; element dtype must be real (floating-point)."</span>
                 <span class="p">)</span>
             <span class="n">arr</span><span class="o">.</span><span class="n">_set_grad</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="n">needs_grad</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
-        <span class="k">return</span> <span class="n">arr</span></div>
+        <span class="k">return</span> <span class="n">apply_initial_ndarray_fill</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">fill</span><span class="p">)</span></div>
 
 
     <span class="nd">@classmethod</span>
@@ -1471,6 +1476,7 @@
 <span class="sd">            backend (qd.Backend, optional): Storage backend. Defaults to ``qd.Backend.NDARRAY``.</span>
 <span class="sd">            layout (tuple of int, optional): Permutation of shape axes, outermost first. Matrix component axes stay</span>
 <span class="sd">                innermost. Defaults to the natural axis order.</span>
+<span class="sd">            fill (optional): Initial scalar or per-component values, as in ``qd.tensor(..., fill=...)``.</span>
 <span class="sd">            **kwargs: Additional options such as ``needs_grad``, forwarded to ``qd.tensor``.</span>
 
 <span class="sd">        Example::</span>
@@ -1662,7 +1668,7 @@
     <span class="nd">@python_scope</span>
 <div class="viewcode-block" id="Vector.ndarray">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Vector.ndarray">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">ndarray</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="n">needs_grad</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">ndarray</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="n">needs_grad</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">fill</span><span class="p">:</span> <span class="n">_FillValue</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">"""Defines a Quadrants ndarray with vector elements.</span>
 
 <span class="sd">        Args:</span>
@@ -1671,6 +1677,7 @@
 <span class="sd">            shape (Union[int, tuple[int]]): Shape of the ndarray.</span>
 <span class="sd">            needs_grad (bool, optional): If True, allocate a companion grad ndarray of the same shape and dtype,</span>
 <span class="sd">                accessible via ``arr.grad``. Requires ``dtype`` to be a real (floating-point) type. Defaults to False.</span>
+<span class="sd">            fill (optional): Initial scalar or per-component values, submitted during allocation. Defaults to None.</span>
 
 <span class="sd">        Example:</span>
 <span class="sd">            The code below shows how a Quadrants ndarray with vector elements can be declared and defined::</span>
@@ -1687,7 +1694,7 @@
                     <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2"> is not supported for Vector.ndarray with needs_grad=True; element dtype must be real (floating-point)."</span>
                 <span class="p">)</span>
             <span class="n">arr</span><span class="o">.</span><span class="n">_set_grad</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="n">needs_grad</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
-        <span class="k">return</span> <span class="n">arr</span></div>
+        <span class="k">return</span> <span class="n">apply_initial_ndarray_fill</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">fill</span><span class="p">)</span></div>
 
 
     <span class="nd">@classmethod</span>
@@ -1705,6 +1712,7 @@
 <span class="sd">            backend (qd.Backend, optional): Storage backend. Defaults to ``qd.Backend.NDARRAY``.</span>
 <span class="sd">            layout (tuple of int, optional): Permutation of shape axes, outermost first. Vector components stay</span>
 <span class="sd">                innermost. Defaults to the natural axis order.</span>
+<span class="sd">            fill (optional): Initial scalar or per-component values, as in ``qd.tensor(..., fill=...)``.</span>
 <span class="sd">            **kwargs: Additional options such as ``needs_grad``, forwarded to ``qd.tensor``.</span>
 
 <span class="sd">        Example::</span>
