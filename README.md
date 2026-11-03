@@ -42,7 +42,8 @@ While the repository still resembles upstream in structure, major changes includ
 
 ### Removed components
 
-To focus the compiler and reduce maintenance burden, we removed: GUI/GGUI, C-API, AOT, DX11/DX12, iOS/Android, OpenGL/GLES, argpack, CLI.
+To focus the compiler and reduce maintenance burden, we removed: GUI/GGUI, C-API, AOT, DX11/DX12, iOS/Android,
+OpenGL/GLES, argpack, CLI, SourceBuilder.
 
 ### Performance
 
