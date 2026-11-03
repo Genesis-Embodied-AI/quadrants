@@ -441,6 +441,15 @@
 </pre></div>
 </div>
 </section>
+<section id="initializing-a-scalar-field">
+<h2>Initializing a scalar field<a class="headerlink" href="#initializing-a-scalar-field" title="Link to this heading">#</a></h2>
+<p>Use <code class="docutils literal notranslate"><span class="pre">fill=</span></code> to give a scalar field an initial value:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">gravity</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(),</span> <span class="n">fill</span><span class="o">=-</span><span class="mf">9.81</span><span class="p">)</span>
+<span class="n">counter</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(),</span> <span class="n">fill</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>See <a class="reference internal" href="tensor_types.html#initializing-fields"><span class="std std-ref">Initializing fields</span></a> for allocation timing and supported initializers.</p>
+</section>
 <section id="accessing-the-value">
 <h2>Accessing the value<a class="headerlink" href="#accessing-the-value" title="Link to this heading">#</a></h2>
 <p>Index a scalar tensor with <code class="docutils literal notranslate"><span class="pre">[()]</span></code>:</p>
@@ -528,6 +537,7 @@
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#creating-a-scalar-tensor">Creating a scalar tensor</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#initializing-a-scalar-field">Initializing a scalar field</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#accessing-the-value">Accessing the value</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#example-summing-with-atomics">Example: summing with atomics</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#reading-from-python">Reading from Python</a></li>
