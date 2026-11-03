@@ -113,7 +113,7 @@ def test_template_raise_on_global_floats(raise_on_templated_floats: bool) -> Non
 
 @test_utils.test()
 def test_pyfunc_template_compile_time_scalars():
-    """Keep boolean flags and loop bounds compile-time in a kernel-side pyfunc across changing and repeated calls."""
+    """Check that a pyfunc called from a kernel can use boolean and integer qd.Template arguments in qd.static."""
     values = qd.field(qd.i32, shape=4)
 
     @qd.pyfunc
@@ -136,7 +136,7 @@ def test_pyfunc_template_compile_time_scalars():
 @pytest.mark.parametrize("config", [[2, 3], (2, 3), {0: 2, 1: 3}], ids=["list", "tuple", "dict"])
 @test_utils.test()
 def test_template_compile_time_container(decorate, config):
-    """Preserve compile-time elements of lists, tuples, and dictionaries passed to funcs and kernel-side pyfuncs."""
+    """Check that funcs and pyfuncs can use elements of a list, tuple, or dict passed as qd.Template in qd.static."""
 
     @decorate
     def total(items: qd.Template):
@@ -155,7 +155,7 @@ def test_template_compile_time_container(decorate, config):
 @pytest.mark.parametrize("decorate", [qd.func, qd.pyfunc], ids=["func", "pyfunc"])
 @test_utils.test()
 def test_template_callable(decorate):
-    """Pass a callable through a template parameter and invoke it from a func or kernel-side pyfunc."""
+    """Check that funcs and pyfuncs can call a function passed as a qd.Template argument."""
 
     @qd.func
     def increment(value):
@@ -175,7 +175,7 @@ def test_template_callable(decorate):
 @pytest.mark.parametrize("decorate", [qd.func, qd.pyfunc], ids=["func", "pyfunc"])
 @test_utils.test()
 def test_template_reference_mutation(decorate):
-    """Verify that mutations to templated runtime vectors and structs reach the caller."""
+    """Check that changing a vector or struct passed as qd.Template changes the caller's value."""
 
     @decorate
     def update(vector: qd.Template, struct: qd.Template):
