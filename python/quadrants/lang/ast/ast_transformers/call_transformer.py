@@ -22,7 +22,9 @@ from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
     get_decorator,
 )
-from quadrants.lang.ast.ast_transformers.starred_args import expand_starred_dataclass_args
+from quadrants.lang.ast.ast_transformers.starred_args import (
+    expand_starred_dataclass_args,
+)
 from quadrants.lang.exception import (
     QuadrantsSyntaxError,
     QuadrantsTypeError,
