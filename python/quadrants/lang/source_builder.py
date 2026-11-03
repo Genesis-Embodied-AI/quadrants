@@ -11,7 +11,6 @@ from quadrants._lib import core as _qd_core
 from quadrants.lang import impl
 from quadrants.lang.exception import QuadrantsSyntaxError
 from quadrants.lang.expr import make_expr_group
-from quadrants.lang.util import get_clangpp
 
 
 class SourceBuilder:
@@ -34,51 +33,12 @@ class SourceBuilder:
         if self.td is None:
             self.td = tempfile.mkdtemp()
 
-        if filename.endswith((".cpp", ".c", ".cc")):
-            if impl.current_cfg().arch not in [_qd_core.Arch.x64, _qd_core.Arch.cuda]:
+        if filename.endswith((".cpp", ".c", ".cc", ".cu")):
+            supported_archs = [_qd_core.Arch.cuda] if filename.endswith(".cu") else [_qd_core.Arch.x64, _qd_core.Arch.cuda]
+            if impl.current_cfg().arch not in supported_archs:
                 raise QuadrantsSyntaxError("Unsupported arch for external function call")
             if compile_fn is None:
-
-                def compile_fn_impl(filename):
-                    if impl.current_cfg().arch == _qd_core.Arch.x64:
-                        subprocess.call(
-                            get_clangpp() + " -flto -c " + filename + " -o " + os.path.join(self.td, "source.bc"),
-                            shell=True,
-                        )
-                    else:
-                        subprocess.call(
-                            get_clangpp()
-                            + " -flto -c "
-                            + filename
-                            + " -o "
-                            + os.path.join(self.td, "source.bc")
-                            + " -target nvptx64-nvidia-cuda",
-                            shell=True,
-                        )
-                    return os.path.join(self.td, "source.bc")
-
-                compile_fn = compile_fn_impl
-            self.bc = compile_fn(filename)
-            self.mode = "bc"
-        elif filename.endswith(".cu"):
-            if impl.current_cfg().arch not in [_qd_core.Arch.cuda]:
-                raise QuadrantsSyntaxError("Unsupported arch for external function call")
-            if compile_fn is None:
-                shutil.copy(filename, os.path.join(self.td, "source.cu"))
-
-                def compile_fn_impl(filename):
-                    # Cannot use -o to specify multiple output files
-                    subprocess.call(
-                        get_clangpp()
-                        + " "
-                        + os.path.join(self.td, "source.cu")
-                        + " -c -emit-llvm -std=c++17 --cuda-gpu-arch=sm_50 -nocudalib",
-                        cwd=self.td,
-                        shell=True,
-                    )
-                    return os.path.join(self.td, "source-cuda-nvptx64-nvidia-cuda-sm_50.bc")
-
-                compile_fn = compile_fn_impl
+                raise QuadrantsSyntaxError("External source files require an explicit compile_fn callback.")
             self.bc = compile_fn(filename)
             self.mode = "bc"
         elif filename.endswith((".so", ".dylib", ".dll")):
