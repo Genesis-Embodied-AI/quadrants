@@ -346,9 +346,10 @@
     <span class="n">Program</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._snode</span><span class="w"> </span><span class="kn">import</span> <span class="n">fields_builder</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._field_initializer</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._fill_initializer</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">FieldInitializers</span><span class="p">,</span>
     <span class="n">_FillValue</span><span class="p">,</span>
+    <span class="n">apply_initial_ndarray_fill</span><span class="p">,</span>
     <span class="n">capture_fill_value</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._ndarray</span><span class="w"> </span><span class="kn">import</span> <span class="n">Ndarray</span><span class="p">,</span> <span class="n">ScalarNdarray</span>
@@ -1340,12 +1341,14 @@
 <span class="nd">@python_scope</span>
 <div class="viewcode-block" id="ndarray">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/impl/index.html#quadrants.lang.impl.ndarray">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="n">needs_grad</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="n">needs_grad</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">fill</span><span class="p">:</span> <span class="n">_FillValue</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Defines a Quadrants ndarray with scalar elements.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        dtype (Union[DataType, MatrixType]): Data type of each element. This can be either a scalar type like qd.f32 or a compound type like qd.types.vector(3, qd.i32).</span>
 <span class="sd">        shape (Union[int, tuple[int]]): Shape of the ndarray.</span>
+<span class="sd">        fill (optional): Initial scalar or per-component values, applied before returning the ndarray. None (default)</span>
+<span class="sd">            preserves the allocator's default values. Gradient buffers are not filled.</span>
 
 <span class="sd">    Example:</span>
 <span class="sd">        The code below shows how a Quadrants ndarray with scalar elements can be declared and defined::</span>
@@ -1380,7 +1383,7 @@
             <span class="p">)</span>
         <span class="n">x_grad</span> <span class="o">=</span> <span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="n">needs_grad</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
         <span class="n">x</span><span class="o">.</span><span class="n">_set_grad</span><span class="p">(</span><span class="n">x_grad</span><span class="p">)</span>  <span class="c1"># type: ignore[arg-type]</span>
-    <span class="k">return</span> <span class="n">x</span></div>
+    <span class="k">return</span> <span class="n">apply_initial_ndarray_fill</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">fill</span><span class="p">)</span></div>
 
 
 
