@@ -124,8 +124,8 @@ if(QD_WITH_LLVM)
     # http://llvm.org/docs/CMake.html#embedding-llvm-in-your-project
     find_package(LLVM REQUIRED CONFIG)
     message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
-    if("${LLVM_PACKAGE_VERSION}" VERSION_LESS "22.1.0")
-        message(FATAL_ERROR "LLVM 22.1.0 or newer is required; found ${LLVM_PACKAGE_VERSION}")
+    if(${LLVM_PACKAGE_VERSION} VERSION_LESS "10.0")
+        message(FATAL_ERROR "LLVM version < 10 is not supported")
     endif()
     message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 

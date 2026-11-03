@@ -15,6 +15,8 @@ which clang
 clang --version
 
 echo "Detected platform: $PLATFORM"
+# Add Taichi LLVM toolchain to PATH
+export PATH="$PWD/taichi-llvm-15.0.7-linux-${PLATFORM}/bin:$PATH"
 
 # Taichi build options
 export CMAKE_ARGS="-DQD_WITH_VULKAN:BOOL=ON -DQD_WITH_CUDA:BOOL=ON -DQD_WITH_AMDGPU:BOOL=ON -DQD_BUILD_TESTS:BOOL=ON"
