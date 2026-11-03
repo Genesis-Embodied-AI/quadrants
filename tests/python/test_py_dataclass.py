@@ -9,7 +9,6 @@ import pytest
 
 import quadrants as qd
 from quadrants.lang._kernel_types import KernelBatchedArgType
-from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.impl import Kernel, QuadrantsSyntaxError
 
 from tests.helpers import test_utils
@@ -3167,12 +3166,8 @@ def test_pruning_iterate_function_no_iterate() -> None:
 
 
 @test_utils.test()
-def test_dataclass_with_template_emits_deprecation_warning():
-    """A frozen ``@dataclasses.dataclass`` passed into a ``qd.Template``-annotated kernel parameter must emit a
-    ``DeprecationWarning`` at materialize time. The pattern was never an intentional Quadrants pattern (the template
-    walker happens to handle dataclass-shaped objects, but the supported annotation is the dataclass type itself).
-    The warning is emitted from ``Kernel.materialize`` after the cache-hit early return, so it fires once per
-    (kernel, spec-key) and stays off the steady-state launch hot path. See ``compound_types.md`` Overview."""
+def test_dataclass_with_template_uses_runtime_types():
+    """An arriving dataclass overrides the template annotation without a deprecation warning."""
 
     @dataclass(frozen=True)
     class Foo:
@@ -3186,8 +3181,11 @@ def test_dataclass_with_template_emits_deprecation_warning():
         for i in range(4):
             foo.x[i] = float(i)
 
-    with pytest.warns(DeprecationWarning, match="qd.Template-annotated kernel parameter"):
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
         run(f)
+    assert not any(issubclass(w.category, DeprecationWarning) for w in caught)
+    assert x[3] == 3
 
 
 @test_utils.test()
@@ -3219,10 +3217,6 @@ def test_data_oriented_with_template_does_not_emit_deprecation_warning():
 
 @test_utils.test()
 def test_typed_dataclass_does_not_emit_deprecation_warning():
-    """The recommended path — frozen ``@dataclasses.dataclass`` passed as a typed kernel parameter (the dataclass
-    type itself) — must NOT emit the deprecation warning. Only the ``qd.Template`` outer-annotation path is
-    deprecated; the typed-dataclass flatten-to-args path is the supported pattern."""
-
     @dataclass(frozen=True)
     class Foo:
         x: qd.types.NDArray[qd.f32, 1]
@@ -3250,7 +3244,7 @@ def test_kernel_accepts_subclass_of_annotated_dataclass_param():
 
     @dataclass
     class SubDataclass(QdSafe):
-        y: str
+        y: int
 
     class SubPyClass(QdSafe):
         y: str | None
@@ -3262,7 +3256,7 @@ def test_kernel_accepts_subclass_of_annotated_dataclass_param():
         for i in range(dat.x.shape[0]):
             dat.x[i] = x_desired
 
-    y_desired = "i love quadrants"
+    y_desired = 42
 
     dat = SubDataclass(x=qd.ndarray(qd.i32, (8,)), y=y_desired)
     mykernel(dat)
@@ -3288,7 +3282,7 @@ def test_kernel_accepts_subclass_of_annotated_frozen_dataclass_param():
 
     @dataclass(frozen=True)
     class SubDataclass(QdSafe):
-        y: set[int]
+        y: int
 
     class SubPyClass(QdSafe):
         y: set[int] | None
@@ -3301,7 +3295,7 @@ def test_kernel_accepts_subclass_of_annotated_frozen_dataclass_param():
     def mykernel(dat: QdSafe) -> int:
         return read_x(dat)
 
-    y_desired = {1, 2, 3, 4, 5, 6, 7, 8}
+    y_desired = 42
     x_desired = 12345678
 
     dat = SubDataclass(x=x_desired, y=y_desired)
@@ -3315,13 +3309,9 @@ def test_kernel_accepts_subclass_of_annotated_frozen_dataclass_param():
 
 
 @test_utils.test()
-def test_kernel_accepts_subclass_with_unsupported_final_app_field():
-    """A subclass may carry an application-only ``Final`` field of a type Quadrants cannot bake (e.g. ``Final[list]``).
-    Only the annotated base's fields reach the kernel, so the extra ``Final`` field must be ignored, not validated
-    (validating it would reject the supported subclass pattern)."""
+def test_kernel_validates_subclass_final_fields_despite_base_annotation():
+    """All fields of the arriving subclass participate, including Final validation."""
     from typing import Final
-
-    import numpy as np
 
     @dataclass(frozen=True)
     class Base:
@@ -3329,7 +3319,7 @@ def test_kernel_accepts_subclass_with_unsupported_final_app_field():
 
     @dataclass(frozen=True)
     class Sub(Base):
-        extra: Final[list]  # unbakeable as a Quadrants Final field, but the kernel (annotated Base) never sees it
+        extra: Final[list]
 
     @qd.kernel
     def fill(dat: Base):
@@ -3338,8 +3328,8 @@ def test_kernel_accepts_subclass_with_unsupported_final_app_field():
 
     x = qd.ndarray(qd.i32, shape=(4,))
     sub = Sub(x=x, extra=[1, 2, 3])
-    fill(sub)  # must not raise while validating the ignored ``extra`` field
-    np.testing.assert_array_equal(x.to_numpy(), [7, 7, 7, 7])
+    with pytest.raises(Exception, match="Final"):
+        fill(sub)
 
 
 @test_utils.test()
@@ -3366,7 +3356,7 @@ def test_kernel_accepts_data_oriented_subclass_of_dataclass_param():
 
 
 @test_utils.test()
-def test_kernel_disallows_unassignable_dataclass():
+def test_kernel_accepts_unrelated_dataclass():
     @dataclass
     class Expected:
         x: int
@@ -3376,11 +3366,10 @@ def test_kernel_disallows_unassignable_dataclass():
         x: int
 
     @qd.kernel
-    def mykernel(_: Expected) -> None: ...
+    def mykernel(value: Expected) -> int:
+        return value.x
 
-    other = Unrelated(x=0)
-    with pytest.raises(QuadrantsRuntimeTypeError):
-        mykernel(other)
+    assert mykernel(Unrelated(x=7)) == 7
 
 
 @test_utils.test()

@@ -20,9 +20,6 @@ The following compound types are available:
 | Kernel-arg annotation               | `qd.RuntimeTyped` or `MyStruct`       | `qd.Template`                       | `MyStruct` (the struct type)        |
 | Primitive members are               | runtime args, or compile-time constants when annotated [`Final[T]`](#compile-time-constant-fields-typingfinal) | compile-time constants by default ([opt out](#runtime-primitives-template_primitivesfalse)) | fields of the in-kernel struct |
 
-> ⚠️ **Deprecation: `@dataclasses.dataclass` instance passed via `qd.Template`.**
-> Passing a `@dataclasses.dataclass` instance into a `qd.Template`-annotated kernel parameter is not supported and emits a `DeprecationWarning` at compile time. In a future release it will become an error.
-
 See [Nesting compatibility](#nesting-compatibility) below for a per-container × per-member-type breakdown, including the constraints on the outer kernel-arg annotation and ndarray reassignment.
 
 ## How to choose a compound type?
@@ -51,7 +48,7 @@ def advance(state: qd.RuntimeTyped):
     state.positions[0] += state.increment
 ```
 
-Quadrants infers ordinary member types from the arriving values, including nested dataclasses. Member annotations do not constrain array dtypes or dimensionality and do not cast scalar values. Concrete dataclass parameter annotations remain accepted and use runtime member inference too; they retain their existing class/subclass check and declared field boundary. `qd.RuntimeTyped` instead accepts unrelated dataclass classes and uses the arriving instance's fields. `typing.Final[T]` retains its compile-time meaning and validation rules described below.
+Quadrants infers ordinary member types from the arriving values, including nested dataclasses. Member annotations do not constrain array dtypes or dimensionality and do not cast scalar values. An arriving dataclass instance always takes precedence over its parameter annotation, including a concrete dataclass class, `qd.Template`, or a scalar/array annotation. Quadrants uses the actual instance's class and fields, including subclass fields, without checking compatibility with the annotated class. `qd.RuntimeTyped` makes that intent explicit. `typing.Final[T]` retains its compile-time meaning and validation rules described below.
 
 Python `int` and `float` members use `qd.init`'s `default_ip` and `default_fp`; NumPy scalars retain their dtype. Arrays retain their runtime dtype and dimensions. External NumPy and PyTorch arrays are interpreted as arrays of scalars, since their values do not distinguish vector/matrix element axes from array axes. Changing a member's runtime type selects a new kernel specialization; changing an ordinary scalar's value supplies a fresh runtime argument.
 
@@ -462,7 +459,7 @@ The outermost annotation you put on the kernel parameter should match the parame
 
 | Kernel parameter compound type | Annotation |
 |--------------------------------|------------------------------|
-| `@dataclasses.dataclass`       | `qd.RuntimeTyped`, or `MyDataclass` to retain a concrete class/field boundary |
+| `@dataclasses.dataclass`       | `qd.RuntimeTyped` recommended; the arriving dataclass overrides the parameter annotation |
 | `@qd.data_oriented`            | `qd.Template` |
 
 ### Reassigning ndarray members

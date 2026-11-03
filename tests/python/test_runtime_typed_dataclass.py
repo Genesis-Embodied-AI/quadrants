@@ -9,19 +9,34 @@ import quadrants as qd
 from tests.helpers import test_utils
 
 
-@pytest.mark.parametrize("concrete_annotation", [False, True])
+@pytest.mark.parametrize("annotation_kind", ["marker", "concrete", "unrelated", "scalar", "template", "ndarray"])
 @test_utils.test()
-def test_runtime_members_ignore_annotations(concrete_annotation):
+def test_runtime_members_ignore_annotations(annotation_kind):
     @dataclass
     class State:
         values: str
         increment: str
 
-    annotation = State if concrete_annotation else qd.RuntimeTyped
+    @dataclass
+    class Unrelated:
+        missing: int
+
+    annotation = {
+        "marker": qd.RuntimeTyped,
+        "concrete": State,
+        "unrelated": Unrelated,
+        "scalar": qd.f32,
+        "template": qd.Template,
+        "ndarray": qd.types.ndarray(),
+    }[annotation_kind]
+
+    @qd.func
+    def amount(state: annotation):
+        return state.increment
 
     @qd.kernel
     def advance(state: annotation):
-        state.values[0] += state.increment
+        state.values[0] += amount(state=state)
 
     values = qd.ndarray(qd.f32, shape=1)
     state = State(values, 1.25)
@@ -317,3 +332,22 @@ def test_runtime_optional_member():
     assert read(state) == 18
     state.value = None
     assert read(state) == 14
+
+
+@test_utils.test()
+def test_runtime_dataclass_then_scalar_restores_annotation():
+    @dataclass
+    class State:
+        value: int
+
+    @qd.kernel
+    def run(value: qd.Template) -> qd.f32:
+        if qd.static(hasattr(value, "__dataclass_fields__")):
+            return value.value
+        else:
+            return value
+
+    assert run(2) == 2
+    assert run(State(3.5)) == 3.5
+    assert run(4) == 4
+    assert run(State(5.5)) == 5.5

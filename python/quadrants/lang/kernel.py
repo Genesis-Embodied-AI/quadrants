@@ -4,7 +4,6 @@ import json
 import os
 import pathlib
 import time
-import warnings
 from collections import defaultdict
 from dataclasses import _FIELDS  # type: ignore[reportAttributeAccessIssue]
 
@@ -60,7 +59,7 @@ from quadrants.lang.exception import (
 )
 from quadrants.lang.impl import Program
 from quadrants.lang.shell import _shell_pop_print
-from quadrants.lang.util import cook_dtype, is_data_oriented
+from quadrants.lang.util import cook_dtype
 from quadrants.types import (
     ndarray_type,
     primitive_types,
@@ -513,28 +512,6 @@ class Kernel(FuncBase):
         if key in self.materialized_kernels:
             return
 
-        # Deprecation warning: passing a ``@dataclasses.dataclass`` instance through a ``qd.Template``-annotated kernel
-        # parameter was never an intentional Quadrants pattern. It works inadvertently because the template walker
-        # happens to handle dataclass-shaped objects, but the supported annotation for a ``@dataclasses.dataclass`` is
-        # the dataclass type itself (flat-by-fields path). We fire the warning here, after the ``materialized_kernels``
-        # cache-hit early return above, so it only runs on the first compile for each unique spec-key — zero cost on the
-        # steady-state launch hot path. Doubly-decorated objects (``@qd.data_oriented`` over ``@dataclasses.dataclass``)
-        # are excluded because that combination is a legitimate pattern routed through the data-oriented path.
-        for arg_meta, val in zip(self.arg_metas, py_args):
-            ann = arg_meta.annotation
-            if ann is not template and type(ann) is not template:
-                continue
-            if dataclasses.is_dataclass(val) and not isinstance(val, type) and not is_data_oriented(val):
-                warnings.warn(
-                    f"Kernel {self.func.__qualname__!r} parameter {arg_meta.name!r}: passing a "
-                    "@dataclasses.dataclass instance into a qd.Template-annotated kernel parameter was "
-                    "never intended to be supported, and only works inadvertently. Use the dataclass type "
-                    f"itself as the annotation instead (e.g. `def {self.func.__name__}({arg_meta.name}: "
-                    f"{type(val).__name__}, ...)`). In a future release this will become an error.",
-                    DeprecationWarning,
-                    stacklevel=4,
-                )
-
         if _kernel_coverage_enabled():
             from . import _kernel_coverage  # pylint: disable=import-outside-toplevel
 
@@ -948,17 +925,22 @@ class Kernel(FuncBase):
                     launch_ctx_buffer[_INT].append((arg_id, int(obj)))
 
     def ensure_compiled(self, *py_args: tuple[Any, ...]) -> tuple[Callable, int, AutodiffMode]:
-        if self.has_runtime_dataclasses:
-            self.arg_metas = resolve_arguments(self.orig_arguments, py_args)
-            self.mapper.arguments = self.arg_metas
-            # A dataclass's member types can change without changing the identity of the outer object.
-            self.mapper._mapping_cache_disabled = (
-                any(
-                    hasattr(meta.annotation, "_qd_runtime_origin") and not meta.annotation._qd_runtime_stable
-                    for meta in self.arg_metas
-                )
-                or None
+        self.arg_metas = resolve_arguments(self.orig_arguments, py_args)
+        self.mapper.arguments = self.arg_metas
+        self.template_slot_locations = [
+            i
+            for i in self.original_template_slot_locations
+            if not hasattr(self.arg_metas[i].annotation, "_qd_runtime_origin")
+        ]
+        self.mapper.template_slot_locations = self.template_slot_locations
+        # A dataclass's member types can change without changing the identity of the outer object.
+        self.mapper._mapping_cache_disabled = (
+            any(
+                hasattr(meta.annotation, "_qd_runtime_origin") and not meta.annotation._qd_runtime_stable
+                for meta in self.arg_metas
             )
+            or None
+        )
         try:
             instance_id, arg_features = self.mapper.lookup(self.raise_on_templated_floats, py_args)
         except Exception as e:

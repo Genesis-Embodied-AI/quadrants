@@ -233,7 +233,7 @@ class FuncBase:
         self.pos_info_cache: dict[tuple, str] = {}
 
         self.check_parameter_annotations()
-        self.has_runtime_dataclasses = any(is_dataclass_annotation(arg.annotation) for arg in self.arg_metas)
+        self.original_template_slot_locations = tuple(self.template_slot_locations)
 
         self.mapper = TemplateMapper(self.arg_metas, self.template_slot_locations)
 

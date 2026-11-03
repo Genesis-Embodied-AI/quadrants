@@ -72,7 +72,7 @@ def is_dataclass_annotation(annotation: Any) -> bool:
 def infer_member_type(value: Any, path: str, visiting: frozenset[int]) -> Any:
     if isinstance(value, Tensor):
         value = value._unwrap()
-    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+    if hasattr(type(value), "__dataclass_fields__"):
         return resolve_dataclass(value, path, visiting)
     if value is None:
         return Tensor
@@ -116,19 +116,15 @@ def infer_member_type(value: Any, path: str, visiting: frozenset[int]) -> Any:
     raise QuadrantsRuntimeTypeError(f"Dataclass member {path!r} has unsupported runtime type {type(value).__name__}")
 
 
-def resolve_dataclass(
-    value: Any, path: str, visiting: frozenset[int] = frozenset(), declared_type: type | None = None
-) -> type:
-    if not dataclasses.is_dataclass(value) or isinstance(value, type):
+def resolve_dataclass(value: Any, path: str, visiting: frozenset[int] = frozenset()) -> type:
+    if not hasattr(type(value), "__dataclass_fields__"):
         raise QuadrantsRuntimeTypeError(
             f"Argument {path!r} requires a Python dataclass instance, got {type(value).__name__}"
         )
     if id(value) in visiting:
         raise QuadrantsRuntimeTypeError(f"Dataclass member {path!r} contains a cycle")
     visiting = visiting | {id(value)}
-    source = declared_type if declared_type is not None else type(value)
-    if not isinstance(value, source):
-        raise QuadrantsRuntimeTypeError(f"Argument {path!r} requires {source.__name__}, got {type(value).__name__}")
+    source = type(value)
     runtime = impl.get_runtime()
     cache_key = (id(source), id(runtime.default_ip), id(runtime.default_fp))
     cached = getattr(value, "_qd_runtime_schemas", {}).get(cache_key)
@@ -191,14 +187,12 @@ def resolve_arguments(arguments: list[ArgMetadata], values: tuple[Any, ...]) -> 
     return [
         (
             ArgMetadata(
-                resolve_dataclass(
-                    value, arg.name, declared_type=None if arg.annotation is RuntimeTyped else arg.annotation
-                ),
+                resolve_dataclass(value, arg.name),
                 arg.name,
                 arg.default,
                 optional=arg.optional,
             )
-            if is_dataclass_annotation(arg.annotation)
+            if (hasattr(type(value), "__dataclass_fields__")) or is_dataclass_annotation(arg.annotation)
             else arg
         )
         for arg, value in zip(arguments, values)
@@ -231,13 +225,15 @@ def dataclass_call_arguments(func, args, keywords, bound: bool = False):
     values = {meta.name: arg.ptr for meta, arg in zip(metas[offset:], args)}
     values.update((kw.arg, kw.ptr[kw.arg]) for kw in keywords)
     for i, meta in enumerate(metas):
-        if not is_dataclass_annotation(meta.annotation) or meta.name not in values:
+        if meta.name not in values:
             continue
         value = values[meta.name]
         if isinstance(value, type) and hasattr(value, "_qd_runtime_origin"):
             schema = value
-        else:
+        elif (hasattr(type(value), "__dataclass_fields__")) or is_dataclass_annotation(meta.annotation):
             schema = resolve_dataclass(value, meta.name)
+        else:
+            continue
         metas[i] = ArgMetadata(schema, meta.name, meta.default, optional=meta.optional)
     wrapper.arg_metas = metas
     wrapper.orig_arguments = metas
