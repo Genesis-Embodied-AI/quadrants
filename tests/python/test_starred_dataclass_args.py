@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 import quadrants as qd
+from quadrants.lang._kernel_types import KernelBatchedArgType
 
 from tests.helpers import test_utils
 
@@ -58,6 +59,8 @@ def test_starred_dataclass_args_nested_pruning(bound, explicit_state):
     @qd.data_oriented
     class Action:
         def __init__(self, args):
+            # Register the ndarrays through struct members; kernel argument discovery does not traverse tuples.
+            self.state, self.other = args[:2]
             self.args = args
             self.func = self.write if bound else write
 
@@ -87,6 +90,7 @@ def test_starred_dataclass_args_nested_pruning(bound, explicit_state):
     other.extra[0] = 11
     action.run()
     assert state.inner.values[0] == 38
+    assert action.run._primal.launch_stats.kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 2
 
 
 @test_utils.test()
