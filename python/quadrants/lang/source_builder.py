@@ -34,7 +34,9 @@ class SourceBuilder:
             self.td = tempfile.mkdtemp()
 
         if filename.endswith((".cpp", ".c", ".cc", ".cu")):
-            supported_archs = [_qd_core.Arch.cuda] if filename.endswith(".cu") else [_qd_core.Arch.x64, _qd_core.Arch.cuda]
+            supported_archs = (
+                [_qd_core.Arch.cuda] if filename.endswith(".cu") else [_qd_core.Arch.x64, _qd_core.Arch.cuda]
+            )
             if impl.current_cfg().arch not in supported_archs:
                 raise QuadrantsSyntaxError("Unsupported arch for external function call")
             if compile_fn is None:
