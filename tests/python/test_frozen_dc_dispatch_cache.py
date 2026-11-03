@@ -197,7 +197,7 @@ def test_frozen_dc_unwrapped_cache_populated():
 
 @test_utils.test(arch=qd.cpu)
 def test_frozen_dc_template_key_cache_populated():
-    """The template key should depend on the way we use it"""
+    """The arriving subclass shares a runtime schema regardless of the annotated base."""
 
     @dataclasses.dataclass(frozen=True)
     class Base1:
@@ -232,8 +232,9 @@ def test_frozen_dc_template_key_cache_populated():
     assert id(schema1) in sub._qd_spec_key and id(schema2) in sub._qd_spec_key
     assert sub._qd_spec_key[id(schema1)][0] is schema1 and sub._qd_spec_key[id(schema2)][0] is schema2
 
-    # Distinct field sets (i32/1D vs f32/2D) must yield distinct keys, i.e. neither annotation reused the other's.
-    assert sub._qd_spec_key[id(schema1)][1] != sub._qd_spec_key[id(schema2)][1]
+    # Both kernels infer the complete subclass, rather than selecting fields from the annotated base.
+    assert schema1 is schema2
+    assert sub._qd_spec_key[id(schema1)][1] == sub._qd_spec_key[id(schema2)][1]
 
 
 # ---------------------------------------------------------------------------

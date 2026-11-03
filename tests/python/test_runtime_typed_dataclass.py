@@ -341,16 +341,16 @@ def test_runtime_dataclass_then_scalar_restores_annotation():
         value: int
 
     @qd.kernel
-    def run(value: qd.Template) -> qd.f32:
-        if qd.static(hasattr(value, "__dataclass_fields__")):
+    def run(value: qd.Template, is_container: qd.Template) -> qd.f32:
+        if qd.static(is_container):
             return value.value
         else:
             return value
 
-    assert run(2) == 2
-    assert run(State(3.5)) == 3.5
-    assert run(4) == 4
-    assert run(State(5.5)) == 5.5
+    assert run(2, False) == 2
+    assert run(State(3.5), True) == 3.5
+    assert run(4, False) == 4
+    assert run(State(5.5), True) == 5.5
 
 
 @test_utils.test()

@@ -24,9 +24,9 @@ from quadrants.lang.field import Field
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.matrix import Matrix, MatrixType, VectorType
 from quadrants.lang.struct import Struct, StructType
-from quadrants.lang.util import to_quadrants_type
+from quadrants.lang.util import is_data_oriented, to_quadrants_type
 from quadrants.types import buffer_view_type, ndarray_type, primitive_types
-from quadrants.types.annotations import RuntimeTyped
+from quadrants.types.annotations import RuntimeTyped, template
 
 _schemas: dict[tuple, type] = {}
 _direct_final_types: dict[int, type] = {}
@@ -74,6 +74,8 @@ def infer_member_type(value: Any, path: str, visiting: frozenset[int]) -> Any:
         value = value._unwrap()
     if hasattr(type(value), "__dataclass_fields__"):
         return resolve_dataclass(value, path, visiting)
+    if is_data_oriented(value):
+        return template
     if value is None:
         return Tensor
     if isinstance(value, Field):
