@@ -391,7 +391,7 @@ def step(sim: qd.template()):
 step(Simulation(Parts(particles=Particles(128), grid=Grid(64))))
 ```
 
-Keep the `NamedTuple` as a member of a regular `@qd.data_oriented` object rather than passing it as the kernel argument itself: a tuple cannot be weakly referenced, so a kernel taking it directly re-derives its specialization on every launch.
+Keep the `NamedTuple` as a member of a regular `@qd.data_oriented` object rather than passing it as the kernel argument itself. Passed directly, it is specialized as a plain tuple: each field must be a valid template argument on its own (a `@qd.data_oriented` object, a field or a primitive), so a bare `qd.ndarray` field raises, and since a tuple cannot be weakly referenced, the kernel re-derives its specialization on every launch.
 
 ### Fastcache
 
