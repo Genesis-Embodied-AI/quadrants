@@ -826,13 +826,11 @@ void QuadrantsLLVMContext::link_module_with_amdgpu_libdevice(std::unique_ptr<llv
   std::string libdevice_files[] = {"ocml.bc",
                                    "oclc_wavefrontsize64_on.bc",
                                    "ockl.bc",
-                                   "oclc_abi_version_400.bc",
+                                   "oclc_abi_version_600.bc",
                                    "oclc_correctly_rounded_sqrt_off.bc",
-                                   "oclc_daz_opt_off.bc",
                                    "oclc_finite_only_off.bc",
                                    "oclc_isa_version_" + isa_version + ".bc",
-                                   "oclc_unsafe_math_off.bc",
-                                   "opencl.bc"};
+                                   "oclc_unsafe_math_off.bc"};
 
   for (auto &libdevice : libdevice_files) {
     auto libdevice_module = module_from_bitcode_file(lib_dir + libdevice, get_this_thread_context());
