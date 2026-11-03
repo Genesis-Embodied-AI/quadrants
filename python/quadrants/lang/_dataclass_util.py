@@ -1,5 +1,5 @@
 import dataclasses
-from typing import Any
+from typing import Any, cast
 
 from quadrants.lang.exception import QuadrantsTypeError
 
@@ -8,7 +8,7 @@ def dataclass_call_type(value: Any, annotation: Any = None) -> type:
     """Select the declared dataclass view, retaining nominal type checks before fields are flattened."""
     actual_type = value if isinstance(value, type) else type(value)
     if isinstance(annotation, type) and dataclasses.is_dataclass(annotation):
-        if not issubclass(actual_type, annotation):
+        if not issubclass(actual_type, cast(type, annotation)):
             raise QuadrantsTypeError(
                 f"Expected dataclass {annotation.__name__} or a subclass, got {actual_type.__name__}"
             )
