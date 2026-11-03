@@ -51,6 +51,10 @@ class RuntimeTyped:
     Use the class itself as a kernel or function parameter annotation: ``state: qd.RuntimeTyped``.
     """
 
+    def __getattr__(self, name: str) -> Any:
+        """Member types are supplied by the arriving object, rather than this annotation marker."""
+        raise AttributeError(name)
+
 
 class sparse_matrix_builder:
     pass

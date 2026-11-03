@@ -14,6 +14,7 @@ import numpy as np
 
 from quadrants._tensor_wrapper import Tensor
 from quadrants.lang import impl
+from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._final_dataclass_fields import final_field_names
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang.any_array import AnyArray
@@ -21,7 +22,7 @@ from quadrants.lang.buffer_view import BufferView
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.field import Field
 from quadrants.lang.kernel_arguments import ArgMetadata
-from quadrants.lang.matrix import Matrix, MatrixType
+from quadrants.lang.matrix import Matrix, MatrixType, VectorType
 from quadrants.lang.struct import Struct, StructType
 from quadrants.lang.util import to_quadrants_type
 from quadrants.types import buffer_view_type, primitive_types
@@ -96,7 +97,9 @@ def infer_member_type(value: Any, path: str, visiting: frozenset[int]) -> Any:
         dtype = to_quadrants_type(np.asarray(value.to_numpy()).dtype)
         key = (value.n, value.m, value.ndim, dtype)
         if key not in _matrix_types:
-            _matrix_types[key] = MatrixType(value.n, value.m, value.ndim, dtype)
+            _matrix_types[key] = (
+                VectorType(value.n, dtype) if value.ndim == 1 else MatrixType(value.n, value.m, value.ndim, dtype)
+            )
         return _matrix_types[key]
     if isinstance(value, Struct):
         declared = getattr(value, "_qd_struct_type", None)
@@ -189,6 +192,20 @@ def resolve_arguments(arguments: list[ArgMetadata], values: tuple[Any, ...]) -> 
         )
         for arg, value in zip(arguments, values)
     ]
+
+
+def is_runtime_member_name(arguments: list[ArgMetadata], name: str) -> bool:
+    """Whether a flattened AST name belongs to an inferred dataclass argument (including inlined functions)."""
+    for arg in arguments:
+        if not hasattr(arg.annotation, "_qd_runtime_origin"):
+            continue
+        for field in dataclasses.fields(arg.annotation):
+            child_name = create_flat_name(arg.name, field.name)
+            if name == child_name:
+                return True
+            if is_runtime_member_name([ArgMetadata(field.type, child_name)], name):
+                return True
+    return False
 
 
 @contextmanager

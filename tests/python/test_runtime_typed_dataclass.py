@@ -289,17 +289,24 @@ def test_runtime_optional_member():
     class State:
         value: object
 
-    @qd.kernel
-    def read(state: qd.RuntimeTyped) -> qd.i32:
+    @qd.func
+    def from_func(state: qd.RuntimeTyped):
         result = 7
         if qd.static(state.value is not None):
             result = state.value[0]
         return result
 
+    @qd.kernel
+    def read(state: qd.RuntimeTyped) -> qd.i32:
+        result = 7
+        if qd.static(state.value is not None):
+            result = state.value[0]
+        return result + from_func(state)
+
     state = State(None)
-    assert read(state) == 7
+    assert read(state) == 14
     state.value = qd.ndarray(qd.i32, shape=1)
     state.value[0] = 9
-    assert read(state) == 9
+    assert read(state) == 18
     state.value = None
-    assert read(state) == 7
+    assert read(state) == 14
