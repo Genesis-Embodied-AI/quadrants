@@ -351,6 +351,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.matrix</span><span class="w"> </span><span class="kn">import</span> <span class="n">MatrixType</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.struct</span><span class="w"> </span><span class="kn">import</span> <span class="n">StructType</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">Template</span><span class="p">,</span>
     <span class="n">ndarray_type</span><span class="p">,</span>
     <span class="n">primitive_types</span><span class="p">,</span>
     <span class="n">template</span><span class="p">,</span>
@@ -455,7 +456,7 @@
         <span class="n">dbg_info</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">())</span>
         <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">kernel_arg</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">):</span>
             <span class="n">anno</span> <span class="o">=</span> <span class="n">kernel_arg</span><span class="o">.</span><span class="n">annotation</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">anno</span><span class="p">,</span> <span class="n">template</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">anno</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">Template</span> <span class="ow">and</span> <span class="nb">type</span><span class="p">(</span><span class="n">anno</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">template</span><span class="p">:</span>
                 <span class="k">if</span> <span class="nb">id</span><span class="p">(</span><span class="n">anno</span><span class="p">)</span> <span class="ow">in</span> <span class="n">primitive_types</span><span class="o">.</span><span class="n">type_ids</span><span class="p">:</span>
                     <span class="n">non_template_args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">anno</span><span class="p">))</span>
                 <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">anno</span><span class="p">,</span> <span class="n">primitive_types</span><span class="o">.</span><span class="n">RefType</span><span class="p">):</span>

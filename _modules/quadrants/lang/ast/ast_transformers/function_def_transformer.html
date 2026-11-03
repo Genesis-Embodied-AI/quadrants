@@ -724,7 +724,7 @@
             <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">argument_name</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
             <span class="k">return</span> <span class="kc">None</span>
         <span class="c1"># Template arguments are passed by reference.</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">argument_type</span><span class="p">,</span> <span class="n">annotations</span><span class="o">.</span><span class="n">template</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">argument_type</span> <span class="ow">is</span> <span class="n">annotations</span><span class="o">.</span><span class="n">Template</span> <span class="ow">or</span> <span class="nb">type</span><span class="p">(</span><span class="n">argument_type</span><span class="p">)</span> <span class="ow">is</span> <span class="n">annotations</span><span class="o">.</span><span class="n">template</span><span class="p">:</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">argument_name</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
             <span class="k">return</span> <span class="kc">None</span>
 
