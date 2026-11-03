@@ -72,6 +72,8 @@ def infer_member_type(value: Any, path: str, visiting: frozenset[int]) -> Any:
         value = value._unwrap()
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         return resolve_dataclass(value, path, visiting)
+    if value is None:
+        return Tensor
     if isinstance(value, (Ndarray, AnyArray, Field, np.ndarray)):
         return Tensor
     # Avoid importing torch on the inference path when it is not already in use.
@@ -137,7 +139,7 @@ def resolve_dataclass(
             resolved.type = infer_member_type(child, f"{path}.{field.name}", visiting)
             if dataclasses.is_dataclass(resolved.type):
                 stable &= getattr(resolved.type, "_qd_runtime_stable")
-            elif not isinstance(child, (bool, int, float, np.generic, Ndarray, Field)):
+            elif child is not None and not isinstance(child, (bool, int, float, np.generic, Ndarray, Field)):
                 stable = False
         fields[field.name] = resolved
     key = (id(source), stable, tuple((name, id(field.type)) for name, field in fields.items()))

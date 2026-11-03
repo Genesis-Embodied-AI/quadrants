@@ -281,3 +281,25 @@ def test_runtime_unresolved_member_annotations():
         return state.inner.value
 
     assert read(Outer(Inner(2.5))) == 2.5
+
+
+@test_utils.test()
+def test_runtime_optional_member():
+    @dataclass
+    class State:
+        value: object
+
+    @qd.kernel
+    def read(state: qd.RuntimeTyped) -> qd.i32:
+        result = 7
+        if qd.static(state.value is not None):
+            result = state.value[0]
+        return result
+
+    state = State(None)
+    assert read(state) == 7
+    state.value = qd.ndarray(qd.i32, shape=1)
+    state.value[0] = 9
+    assert read(state) == 9
+    state.value = None
+    assert read(state) == 7
