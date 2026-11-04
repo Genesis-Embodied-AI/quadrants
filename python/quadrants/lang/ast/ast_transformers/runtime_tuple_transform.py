@@ -42,7 +42,7 @@ def build_tuple_for(ctx, node, decorator, build_stmt, build_static_for):
     if decorator or is_range or isinstance(node.iter, ast.IfExp):
         return False, False
     build_stmt(ctx, node.iter)
-    if not isinstance(node.iter.ptr, tuple):
+    if not isinstance(getattr(node.iter, "ptr", None), tuple):
         return True, False
     with ctx.loop_scope_guard(is_static=True):
         build_static_for(ctx, node, False, iter_built=True)

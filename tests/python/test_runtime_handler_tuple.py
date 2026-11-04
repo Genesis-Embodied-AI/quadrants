@@ -392,3 +392,23 @@ def test_runtime_handler_tuple_float_policy():
 
     with pytest.raises(ValueError, match="Floats not allowed"):
         run((Data(1.5),))
+
+
+@test_utils.test()
+def test_runtime_tuple_subclass_specializes():
+    from collections import namedtuple
+
+    Pair = namedtuple("Pair", "first second")
+
+    @qd.kernel
+    def run(values: tuple) -> qd.i32:
+        result = 0
+        if qd.static(type(values) is Pair):
+            result = 100
+        for value in values:
+            result += value
+        return result
+
+    assert run((1, 2)) == 3
+    assert run(Pair(1, 2)) == 103
+    assert run((1, 2)) == 3

@@ -18,7 +18,6 @@ from quadrants.lang.util import is_data_oriented, wants_runtime_primitives
 from quadrants.types.annotations import template
 from quadrants.types.ndarray_type import NdarrayType
 
-
 _ARRAY_ANNOTATION = NdarrayType()
 
 
@@ -70,7 +69,7 @@ class TuplePlan:
         self._visiting.add(identity)
         try:
             if isinstance(value, tuple):
-                return ("tuple", tuple(self._describe(child, (*path, i)) for i, child in enumerate(value)))
+                return ("tuple", type(value), tuple(self._describe(child, (*path, i)) for i, child in enumerate(value)))
             if hasattr(type(value), "__dataclass_fields__"):
                 finals = _direct_final_names(type(value))
                 return (
