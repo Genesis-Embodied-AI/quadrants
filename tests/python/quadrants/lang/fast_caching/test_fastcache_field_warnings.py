@@ -8,7 +8,7 @@ Cases:
 4. Non-pure kernel with Fields → no warning (fastcache not attempted)
 5. Field passed directly to qd.Tensor kernel param → no warning
 6. Field passed directly to qd.Template kernel param → warning fires
-7. Dataclass member containing a Field → no warning regardless of its annotation
+7. Dataclass member containing a Field: no warning regardless of its annotation
 """
 
 import dataclasses
