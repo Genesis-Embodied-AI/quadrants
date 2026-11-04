@@ -45,9 +45,12 @@ from pathlib import Path
 # Allow importing helper functions from ``build_inputs.py`` (in the same directory).
 sys.path.insert(0, str(Path(__file__).parent))
 from build_inputs import (  # noqa: E402  (import after sys.path tweak)
+    FileSummary,
     code_line_set,
     diff_changed_line_numbers,
     format_header,
+    format_totals,
+    group_summaries,
 )
 
 
@@ -334,12 +337,20 @@ def render(summary_json: Path, jsonl_path: Path, output_dir: Path) -> str:
     by_path = _load_function_entries(jsonl_path)
 
     out_lines: list[str] = []
-    for s in summaries:
-        book = _build_file_bookkeeping(s, output_dir)
-        attributed = _attribute_all(by_path.get(book.path, []), book)
-        lines, _, _ = _emit_file_section(book, attributed)
-        out_lines.extend(lines)
-        out_lines.append("")
+    groups = group_summaries([FileSummary(**s) for s in summaries])
+    summaries_by_path = {s["path"]: s for s in summaries}
+    for name, files in groups.items():
+        if not files:
+            continue
+        out_lines.extend([f"{name}: {format_totals(files)}", ""])
+        for s in files:
+            book = _build_file_bookkeeping(summaries_by_path[s.path], output_dir)
+            attributed = _attribute_all(by_path.get(book.path, []), book)
+            lines, _, _ = _emit_file_section(book, attributed)
+            out_lines.extend(lines)
+            out_lines.append("")
+    if summaries:
+        out_lines.append(f"Total: {format_totals([s for files in groups.values() for s in files])}")
     while out_lines and out_lines[-1] == "":
         out_lines.pop()
     if out_lines:

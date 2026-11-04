@@ -163,11 +163,12 @@ jobs:
           {
             echo "## PR change report (\`${SHORT_SHA}\`)"
             echo
-            echo "Per-file totals + per-function breakdown of code-line additions and removals."
+            echo "Group and per-file totals + per-function breakdown of code-line additions and removals."
+            echo "Only source files (.py, .c, .cc, .cpp, .h, .hpp, .cu) are included."
             echo "Code lines exclude blank lines, comment-only lines, and Python multi-line strings."
             echo
-            # Reuse the table from report_comment.md (skip its leading heading + intro lines).
-            sed -n '/^| File /,/^\*\*Total\*\*/p' /tmp/pr_change_report/report_comment.md
+            # Reuse the grouped tables from report_comment.md (skip its leading heading + intro lines).
+            sed -n '/^| Group /,/^\*\*Total\*\*/p' /tmp/pr_change_report/report_comment.md
             echo
             echo "### Per-function breakdown"
             echo

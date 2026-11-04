@@ -336,12 +336,28 @@ def format_header(s: FileSummary) -> str:
     return " ".join(parts)
 
 
-def render_comment_markdown(summaries: list[FileSummary], commit: str) -> str:
-    """Render the compact PR-comment markdown: heading + per-file table + totals line.
+GROUPS = ("docs", "c++", "python", "tests", "github", "misc")
+_FOLDER_GROUPS = {"docs": "docs", "quadrants": "c++", "cmake": "c++", "python": "python", "tests": "tests", ".github": "github"}
 
-    The comment intentionally does NOT include the per-function breakdown; that lives in the
-    Check page (which the comment links to).
-    """
+
+def group_summaries(summaries: list[FileSummary]) -> dict[str, list[FileSummary]]:
+    """Group by top-level folder, keeping the existing impact order within each group."""
+    groups: dict[str, list[FileSummary]] = {name: [] for name in GROUPS}
+    for summary in summaries:
+        folder, separator, _ = summary.path.partition("/")
+        group = _FOLDER_GROUPS.get(folder, "misc") if separator else "misc"
+        groups[group].append(summary)
+    return groups
+
+
+def format_totals(summaries: list[FileSummary]) -> str:
+    added = sum(s.added for s in summaries)
+    removed = sum(s.removed for s in summaries)
+    return f"{len(summaries)} file(s) changed, +{added} -{removed} code lines."
+
+
+def render_comment_markdown(summaries: list[FileSummary], commit: str) -> str:
+    """Render group totals and grouped per-file tables for the report summary."""
     head = f"## PR change report (`{commit}`)\n" if commit else "## PR change report\n"
     lines = [head]
     if not summaries:
@@ -352,18 +368,26 @@ def render_comment_markdown(summaries: list[FileSummary], commit: str) -> str:
         "Excludes blank lines, comment-only lines, and Python multi-line strings."
     )
     lines.append("")
-    lines.append("| File | LoC | Added | Removed |")
-    lines.append("|------|-----|-------|---------|")
-    total_added = 0
-    total_removed = 0
-    for s in summaries:
-        added_cell = f"+{s.added}" if s.added else ""
-        removed_cell = f"-{s.removed}" if s.removed else ""
-        lines.append(f"| `{s.path}` | {s.total} | {added_cell} | {removed_cell} |")
-        total_added += s.added
-        total_removed += s.removed
+    groups = group_summaries(summaries)
+    lines.append("| Group | Files | LoC | Added | Removed |")
+    lines.append("|-------|-------|-----|-------|---------|")
+    for name, files in [*groups.items(), ("**Total**", summaries)]:
+        total = sum(s.total for s in files)
+        added = sum(s.added for s in files)
+        removed = sum(s.removed for s in files)
+        lines.append(f"| {name} | {len(files)} | {total} | +{added} | -{removed} |")
+    for name, files in groups.items():
+        if not files:
+            continue
+        lines.extend(["", f"### {name}", "", f"**Group total**: {format_totals(files)}", ""])
+        lines.append("| File | LoC | Added | Removed |")
+        lines.append("|------|-----|-------|---------|")
+        for s in files:
+            added_cell = f"+{s.added}" if s.added else ""
+            removed_cell = f"-{s.removed}" if s.removed else ""
+            lines.append(f"| `{s.path}` | {s.total} | {added_cell} | {removed_cell} |")
     lines.append("")
-    lines.append(f"**Total**: {len(summaries)} file(s) changed, +{total_added} -{total_removed} code lines.")
+    lines.append(f"**Total**: {format_totals(summaries)}")
     return "\n".join(lines) + "\n"
 
 
@@ -433,7 +457,7 @@ def main() -> int:
 
     # Sort files by descending lines added, then descending lines removed, then path. This is the
     # order used for every downstream artifact (summary.json, file_list.txt, report_header.md,
-    # report_comment.md) so that the report and PR comment surface the largest-impact files first.
+    # report_comment.md) so that each report group surfaces the largest-impact files first.
     summaries.sort(key=lambda s: (-s.added, -s.removed, s.path))
 
     summary_dicts = [
