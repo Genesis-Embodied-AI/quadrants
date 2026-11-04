@@ -5,10 +5,12 @@ structure lets compilation, inlined calls, dispatch and launch packing share pre
 without modifying the user's class or its annotations.
 """
 
+import ast
 import copy
 import dataclasses
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
-from typing import Any, TypeAlias
+from typing import TYPE_CHECKING, Any, TypeAlias, cast
 
 import numpy as np
 
@@ -34,6 +36,17 @@ from quadrants.lang.util import is_data_oriented, to_quadrants_type
 from quadrants.types import buffer_view_type, ndarray_type, primitive_types
 from quadrants.types.annotations import RuntimeTyped, Template
 
+if TYPE_CHECKING:
+    from quadrants.lang._func_base import FuncBase
+    from quadrants.lang._quadrants_callable import (
+        BoundQuadrantsCallable,
+        QuadrantsCallable,
+    )
+    from quadrants.lang.kernel import Kernel
+
+# Object identity maps to the retained object and its type-tagged Final specialization key.
+FinalValueKeyCache: TypeAlias = dict[int, tuple[Any, tuple[Any, ...]]]
+
 InferredMemberType: TypeAlias = (
     type | DataTypeCxx | ndarray_type.NdarrayType | buffer_view_type.BufferViewType | MatrixType | StructType
 )
@@ -56,7 +69,11 @@ def is_dataclass_annotation(annotation: Any) -> bool:
 
 
 def infer_member_type(
-    py_obj: Any, path: str, visiting: frozenset[int], final_parent: str | None = None, final_value_key_by_value_id=None
+    py_obj: Any,
+    path: str,
+    visiting: frozenset[int],
+    final_parent: str | None = None,
+    final_value_key_by_value_id: FinalValueKeyCache | None = None,
 ) -> InferredMemberType | DeferredMemberType:
     """Infer a member type from its value, or defer an unsupported-value error until the member is used."""
     if isinstance(py_obj, Tensor):
@@ -112,7 +129,7 @@ def infer_dataclass_type(
     path: str,
     visiting: frozenset[int] = frozenset(),
     final_parent: str | None = None,
-    final_value_key_by_value_id=None,
+    final_value_key_by_value_id: FinalValueKeyCache | None = None,
 ) -> type:
     """Build or reuse a private schema class; the caller must verify that py_obj is a dataclass instance."""
     if id(py_obj) in visiting:
@@ -197,7 +214,9 @@ def infer_dataclass_type(
 
 
 def infer_kernel_dataclass_arg_types(
-    arg_metas: list[ArgMetadata], py_objs: tuple[Any, ...], final_value_key_by_value_id=None
+    arg_metas: list[ArgMetadata],
+    py_objs: tuple[Any, ...],
+    final_value_key_by_value_id: FinalValueKeyCache | None = None,
 ) -> list[ArgMetadata]:
     """Replace kernel dataclass parameter annotations with schemas inferred from their arriving values."""
     resolved_arg_metas = []
@@ -217,13 +236,13 @@ def infer_kernel_dataclass_arg_types(
     return resolved_arg_metas
 
 
-def prepare_kernel_dataclass_args_for_mapper(kernel, py_objs):
+def prepare_kernel_dataclass_args_for_mapper(kernel: "Kernel", py_objs: tuple[Any, ...]) -> FinalValueKeyCache:
     """Update dataclass argument types, template slots, cache eligibility, and deferred-member status for a launch.
 
     Return Final keys already validated during this call so specialization can reuse them.
     """
     # Per-call cache: id(value) -> (value, specialization key); retain the value to verify its identity.
-    final_value_key_by_value_id = {}
+    final_value_key_by_value_id: FinalValueKeyCache = {}
     kernel.arg_metas = infer_kernel_dataclass_arg_types(kernel.orig_arguments, py_objs, final_value_key_by_value_id)
     kernel.mapper.arguments = kernel.arg_metas
     has_deferred = False
@@ -246,7 +265,9 @@ def prepare_kernel_dataclass_args_for_mapper(kernel, py_objs):
     return final_value_key_by_value_id
 
 
-def runtime_template_members(schema, py_obj, path=()):
+def runtime_template_members(
+    schema: type, py_obj: Any, path: tuple[str, ...] = ()
+) -> Iterator[tuple[tuple[str, ...], Any]]:
     """Yield template-valued subobjects with paths rooted at the original kernel argument."""
     if not hasattr(schema, "_qd_runtime_origin"):
         return
@@ -256,7 +277,7 @@ def runtime_template_members(schema, py_obj, path=()):
         if field.type is Template:
             yield child_path, child
         elif hasattr(field.type, "_qd_runtime_origin"):
-            yield from runtime_template_members(field.type, child, child_path)
+            yield from runtime_template_members(cast(type, field.type), child, child_path)
 
 
 def is_runtime_member_name(arg_metas: list[ArgMetadata], name: str) -> bool:
@@ -274,16 +295,21 @@ def is_runtime_member_name(arg_metas: list[ArgMetadata], name: str) -> bool:
 
 
 @contextmanager
-def dataclass_call_arguments(func, args, keywords, bound: bool = False):
+def dataclass_call_arguments(
+    func: "QuadrantsCallable | BoundQuadrantsCallable",
+    args: Sequence[ast.expr],
+    keywords: Sequence[ast.keyword],
+    bound: bool = False,
+) -> Iterator[None]:
     """Carry a caller's inferred structures across the pre-flattening boundary of an inlined function call."""
-    wrapper = func.wrapper
+    wrapper = cast("FuncBase", func.wrapper)
     original_arg_metas = wrapper.arg_metas
     expanded_arg_metas = wrapper.arg_metas_expanded
     declared_arg_metas = wrapper.orig_arguments
     arg_metas = list(declared_arg_metas)
     offset = int(bound)
-    py_objs = {meta.name: arg.ptr for meta, arg in zip(arg_metas[offset:], args)}
-    py_objs.update((kw.arg, kw.ptr[kw.arg]) for kw in keywords)
+    py_objs = {meta.name: getattr(arg, "ptr") for meta, arg in zip(arg_metas[offset:], args)}
+    py_objs.update((kw.arg, getattr(kw, "ptr")[kw.arg]) for kw in keywords)
     for i, meta in enumerate(arg_metas):
         if meta.name not in py_objs:
             if hasattr(type(meta.default), "__dataclass_fields__"):
