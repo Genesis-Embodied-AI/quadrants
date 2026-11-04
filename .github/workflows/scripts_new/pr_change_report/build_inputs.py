@@ -337,7 +337,14 @@ def format_header(s: FileSummary) -> str:
 
 
 GROUPS = ("docs", "c++", "python", "tests", "github", "misc")
-_FOLDER_GROUPS = {"docs": "docs", "quadrants": "c++", "cmake": "c++", "python": "python", "tests": "tests", ".github": "github"}
+_FOLDER_GROUPS = {
+    "docs": "docs",
+    "quadrants": "c++",
+    "cmake": "c++",
+    "python": "python",
+    "tests": "tests",
+    ".github": "github",
+}
 
 
 def group_summaries(summaries: list[FileSummary]) -> dict[str, list[FileSummary]]:
