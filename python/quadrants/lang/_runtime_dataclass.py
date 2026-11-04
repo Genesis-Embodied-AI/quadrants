@@ -38,10 +38,15 @@ InferredMemberType: TypeAlias = (
     type | DataTypeCxx | ndarray_type.NdarrayType | buffer_view_type.BufferViewType | MatrixType | StructType
 )
 
+# Generated schema classes, keyed by source class identity, stability, and ordered member names/type identities.
 _schemas: dict[tuple[int, bool, tuple[tuple[str, int], ...]], type] = {}
+# Matrix/vector type descriptions, keyed by rows, columns, dimensionality, and scalar dtype.
 _matrix_types: dict[tuple[int, int, int, DataTypeCxx], MatrixType] = {}
+# Inferred struct type descriptions, keyed by ordered member names and type identities.
 _struct_types: dict[tuple[tuple[str, int], ...], StructType] = {}
+# Shared buffer-view type description; contains no instance data.
 _buffer_annotation = buffer_view_type.BufferViewType()
+# Shared array type description; actual dtype and rank are checked during specialization.
 _array_annotation = ndarray_type.NdarrayType()
 
 
