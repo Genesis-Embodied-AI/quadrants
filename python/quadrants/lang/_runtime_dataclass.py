@@ -56,68 +56,68 @@ def is_dataclass_annotation(annotation: Any) -> bool:
 
 
 def infer_member_type(
-    value: Any, path: str, visiting: frozenset[int], final_parent: str | None = None, validated_keys=None
+    py_obj: Any, path: str, visiting: frozenset[int], final_parent: str | None = None, validated_keys=None
 ) -> InferredMemberType | DeferredMemberType:
     """Infer a member type from its value, or defer an unsupported-value error until the member is used."""
-    if isinstance(value, Tensor):
-        value = value._unwrap()
-    if hasattr(type(value), "__dataclass_fields__"):
-        return infer_dataclass_type(value, path, visiting, final_parent, validated_keys)
-    if is_data_oriented(value):
+    if isinstance(py_obj, Tensor):
+        py_obj = py_obj._unwrap()
+    if hasattr(type(py_obj), "__dataclass_fields__"):
+        return infer_dataclass_type(py_obj, path, visiting, final_parent, validated_keys)
+    if is_data_oriented(py_obj):
         return Template
-    if value is None:
+    if py_obj is None:
         return Tensor
-    if isinstance(value, Field):
+    if isinstance(py_obj, Field):
         return Tensor
-    if isinstance(value, (Ndarray, AnyArray, np.ndarray)):
+    if isinstance(py_obj, (Ndarray, AnyArray, np.ndarray)):
         return _array_annotation
     # Avoid importing torch on the inference path when it is not already in use.
     import sys  # pylint: disable=import-outside-toplevel
 
     torch = sys.modules.get("torch")
-    if torch is not None and isinstance(value, torch.Tensor):
+    if torch is not None and isinstance(py_obj, torch.Tensor):
         return _array_annotation
-    if isinstance(value, BufferView):
+    if isinstance(py_obj, BufferView):
         return _buffer_annotation
-    if isinstance(value, (bool, np.bool_)):
+    if isinstance(py_obj, (bool, np.bool_)):
         return primitive_types.u1
-    if isinstance(value, np.generic):
-        return to_quadrants_type(value.dtype)
-    if isinstance(value, int):
+    if isinstance(py_obj, np.generic):
+        return to_quadrants_type(py_obj.dtype)
+    if isinstance(py_obj, int):
         return impl.get_runtime().default_ip
-    if isinstance(value, float):
+    if isinstance(py_obj, float):
         return impl.get_runtime().default_fp
-    if isinstance(value, Matrix):
-        dtype = to_quadrants_type(np.asarray(value.to_numpy()).dtype)
-        key = (value.n, value.m, value.ndim, dtype)
+    if isinstance(py_obj, Matrix):
+        dtype = to_quadrants_type(np.asarray(py_obj.to_numpy()).dtype)
+        key = (py_obj.n, py_obj.m, py_obj.ndim, dtype)
         if key not in _matrix_types:
             _matrix_types[key] = (
-                VectorType(value.n, dtype) if value.ndim == 1 else MatrixType(value.n, value.m, value.ndim, dtype)
+                VectorType(py_obj.n, dtype) if py_obj.ndim == 1 else MatrixType(py_obj.n, py_obj.m, py_obj.ndim, dtype)
             )
         return _matrix_types[key]
-    if isinstance(value, Struct):
-        declared = getattr(value, "_qd_struct_type", None)
+    if isinstance(py_obj, Struct):
+        declared = getattr(py_obj, "_qd_struct_type", None)
         if declared is not None:
             return declared
-        members = {name: infer_member_type(child, f"{path}.{name}", visiting) for name, child in value.items}
+        members = {name: infer_member_type(child, f"{path}.{name}", visiting) for name, child in py_obj.items}
         key = tuple((name, id(dtype)) for name, dtype in members.items())
         if key not in _struct_types:
             _struct_types[key] = StructType(**members)
         return _struct_types[key]
-    return deferred_member(QuadrantsRuntimeTypeError, f"unsupported runtime type {type(value).__name__}")
+    return deferred_member(QuadrantsRuntimeTypeError, f"unsupported runtime type {type(py_obj).__name__}")
 
 
 def infer_dataclass_type(
-    value: Any, path: str, visiting: frozenset[int] = frozenset(), final_parent: str | None = None, validated_keys=None
+    py_obj: Any, path: str, visiting: frozenset[int] = frozenset(), final_parent: str | None = None, validated_keys=None
 ) -> type:
-    """Build or reuse a private schema class; the caller must verify that value is a dataclass instance."""
-    if id(value) in visiting:
+    """Build or reuse a private schema class; the caller must verify that py_obj is a dataclass instance."""
+    if id(py_obj) in visiting:
         raise QuadrantsRuntimeTypeError(f"Dataclass member {path!r} contains a cycle")
-    visiting = visiting | {id(value)}
-    source = type(value)
+    visiting = visiting | {id(py_obj)}
+    source = type(py_obj)
     runtime = impl.get_runtime()
     cache_key = (id(source), id(runtime.default_ip), id(runtime.default_fp), final_parent)
-    cached = getattr(value, "_qd_runtime_schemas", {}).get(cache_key)
+    cached = getattr(py_obj, "_qd_runtime_schemas", {}).get(cache_key)
     if cached is not None and cached._qd_runtime_origin is source:
         return cached
     finals, final_errors = runtime_final_plan(source)
@@ -131,10 +131,10 @@ def infer_dataclass_type(
             resolved.type = final_errors[field.name]
         elif field.name in finals:
             resolved.type = runtime_final_type(
-                field.type, getattr(value, field.name), final_parent, field.name, validated_keys
+                field.type, getattr(py_obj, field.name), final_parent, field.name, validated_keys
             )
         else:
-            child = getattr(value, field.name)
+            child = getattr(py_obj, field.name)
             child_final_parent = None
             if not (params.frozen or params.unsafe_hash):
                 child_final_parent = f"{source.__name__}.{field.name}"
@@ -181,11 +181,11 @@ def infer_dataclass_type(
         final_field_names(schema)
         _schemas[key] = schema
     if stable:
-        cache = getattr(value, "_qd_runtime_schemas", None)
+        cache = getattr(py_obj, "_qd_runtime_schemas", None)
         if cache is None:
             cache = {}
             try:
-                object.__setattr__(value, "_qd_runtime_schemas", cache)
+                object.__setattr__(py_obj, "_qd_runtime_schemas", cache)
             except AttributeError:
                 pass
         cache[cache_key] = schema
@@ -195,17 +195,17 @@ def infer_dataclass_type(
 def resolve_arguments(arg_metas: list[ArgMetadata], py_objs: tuple[Any, ...], validated_keys=None) -> list[ArgMetadata]:
     """Replace dataclass parameter annotations with schemas inferred from their arriving values."""
     resolved_arg_metas = []
-    for arg_meta, value in zip(arg_metas, py_objs):
-        if hasattr(type(value), "__dataclass_fields__"):
+    for arg_meta, py_obj in zip(arg_metas, py_objs):
+        if hasattr(type(py_obj), "__dataclass_fields__"):
             arg_meta = ArgMetadata(
-                infer_dataclass_type(value, arg_meta.name, validated_keys=validated_keys),
+                infer_dataclass_type(py_obj, arg_meta.name, validated_keys=validated_keys),
                 arg_meta.name,
                 arg_meta.default,
                 optional=arg_meta.optional,
             )
         elif is_dataclass_annotation(arg_meta.annotation):
             raise QuadrantsRuntimeTypeError(
-                f"Argument {arg_meta.name!r} requires a Python dataclass instance, got {type(value).__name__}"
+                f"Argument {arg_meta.name!r} requires a Python dataclass instance, got {type(py_obj).__name__}"
             )
         resolved_arg_metas.append(arg_meta)
     return resolved_arg_metas
@@ -236,12 +236,12 @@ def prepare_runtime_arguments(kernel, py_objs):
     return validated_keys
 
 
-def runtime_template_members(schema, value, path=()):
+def runtime_template_members(schema, py_obj, path=()):
     """Yield template-valued subobjects with paths rooted at the original kernel argument."""
     if not hasattr(schema, "_qd_runtime_origin"):
         return
     for field in dataclasses.fields(schema):
-        child = getattr(value, field.name)
+        child = getattr(py_obj, field.name)
         child_path = (*path, field.name)
         if field.type is Template:
             yield child_path, child
@@ -281,14 +281,14 @@ def dataclass_call_arguments(func, args, keywords, bound: bool = False):
                     f"Omitted dataclass defaults are not supported in @qd.func. Pass {meta.name!r} explicitly."
                 )
             continue
-        value = py_objs[meta.name]
-        if isinstance(value, type) and hasattr(value, "_qd_runtime_origin"):
-            schema = value
-        elif hasattr(type(value), "__dataclass_fields__"):
-            schema = infer_dataclass_type(value, meta.name)
+        py_obj = py_objs[meta.name]
+        if isinstance(py_obj, type) and hasattr(py_obj, "_qd_runtime_origin"):
+            schema = py_obj
+        elif hasattr(type(py_obj), "__dataclass_fields__"):
+            schema = infer_dataclass_type(py_obj, meta.name)
         elif is_dataclass_annotation(meta.annotation):
             raise QuadrantsRuntimeTypeError(
-                f"Argument {meta.name!r} requires a Python dataclass instance, got {type(value).__name__}"
+                f"Argument {meta.name!r} requires a Python dataclass instance, got {type(py_obj).__name__}"
             )
         else:
             continue
