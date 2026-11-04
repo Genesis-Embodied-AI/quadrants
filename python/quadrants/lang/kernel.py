@@ -781,7 +781,7 @@ class Kernel(FuncBase):
                 compiled_kernel_data = compile_result.compiled_kernel_data
                 if compile_result.cache_hit:
                     self.fe_ll_cache_observations.cache_hit = True
-                if self.fast_checksum:
+                if self.fast_checksum and not self._runtime_has_deferred:
                     src_hasher.store(
                         compile_result.cache_key,
                         self.fast_checksum,

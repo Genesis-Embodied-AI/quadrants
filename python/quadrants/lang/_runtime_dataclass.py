@@ -18,6 +18,7 @@ from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._deferred_dataclass import DeferredMemberType, deferred_member
 from quadrants.lang._final_dataclass_fields import final_field_names
 from quadrants.lang._ndarray import Ndarray
+from quadrants.lang._runtime_dataclass_final import runtime_final_plan, runtime_final_type
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.buffer_view import BufferView
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
@@ -30,51 +31,21 @@ from quadrants.types import buffer_view_type, ndarray_type, primitive_types
 from quadrants.types.annotations import RuntimeTyped, template
 
 _schemas: dict[tuple, type] = {}
-_direct_final_types: dict[int, type] = {}
 _matrix_types: dict[tuple, MatrixType] = {}
 _struct_types: dict[tuple, StructType] = {}
 _buffer_annotation = buffer_view_type.BufferViewType()
 _array_annotation = ndarray_type.NdarrayType()
 
 
-def _direct_final_names(source: type) -> frozenset[str]:
-    """Validate direct Final declarations without following annotation-only nested dataclass types.
-
-    Nested paths are validated later against the actual values. Ordinary annotations must not introduce phantom
-    children (or reject a valid value) just because they happen to name a Final-bearing dataclass.
-    """
-    direct = _direct_final_types.get(id(source))
-    if direct is None:
-        fields = {}
-        for field in dataclasses.fields(source):
-            copied = copy.copy(field)
-            if isinstance(field.type, type) and dataclasses.is_dataclass(field.type):
-                copied.type = object
-            fields[field.name] = copied
-        direct = type(
-            source.__name__,
-            (),
-            {
-                "__module__": source.__module__,
-                "__annotations__": dict(source.__annotations__),
-                "__dataclass_fields__": fields,
-                "__dataclass_params__": source.__dataclass_params__,
-                "_qd_runtime_origin": source,
-            },
-        )
-        _direct_final_types[id(source)] = direct
-    return final_field_names(direct)
-
-
 def is_dataclass_annotation(annotation: Any) -> bool:
     return annotation is RuntimeTyped or isinstance(annotation, type) and dataclasses.is_dataclass(annotation)
 
 
-def infer_member_type(value: Any, path: str, visiting: frozenset[int]) -> Any:
+def infer_member_type(value: Any, path: str, visiting: frozenset[int], final_parent: str | None = None) -> Any:
     if isinstance(value, Tensor):
         value = value._unwrap()
     if hasattr(type(value), "__dataclass_fields__"):
-        return resolve_dataclass(value, path, visiting)
+        return resolve_dataclass(value, path, visiting, final_parent)
     if is_data_oriented(value):
         return template
     if value is None:
@@ -119,7 +90,9 @@ def infer_member_type(value: Any, path: str, visiting: frozenset[int]) -> Any:
     return deferred_member(QuadrantsRuntimeTypeError, f"unsupported runtime type {type(value).__name__}")
 
 
-def resolve_dataclass(value: Any, path: str, visiting: frozenset[int] = frozenset()) -> type:
+def resolve_dataclass(
+    value: Any, path: str, visiting: frozenset[int] = frozenset(), final_parent: str | None = None
+) -> type:
     if not hasattr(type(value), "__dataclass_fields__"):
         raise QuadrantsRuntimeTypeError(
             f"Argument {path!r} requires a Python dataclass instance, got {type(value).__name__}"
@@ -129,20 +102,29 @@ def resolve_dataclass(value: Any, path: str, visiting: frozenset[int] = frozense
     visiting = visiting | {id(value)}
     source = type(value)
     runtime = impl.get_runtime()
-    cache_key = (id(source), id(runtime.default_ip), id(runtime.default_fp))
+    cache_key = (id(source), id(runtime.default_ip), id(runtime.default_fp), final_parent)
     cached = getattr(value, "_qd_runtime_schemas", {}).get(cache_key)
     if cached is not None and cached._qd_runtime_origin is source:
         return cached
-    finals = _direct_final_names(source)
+    finals, final_errors = runtime_final_plan(source)
     params = getattr(source, "__dataclass_params__")
-    stable = params.frozen and not finals
+    stable = params.frozen and not finals and not final_errors
     fields = {}
     has_deferred = False
     for field in dataclasses.fields(source):
         resolved = copy.copy(field)
-        if field.name not in finals:
+        if field.name in final_errors:
+            resolved.type = final_errors[field.name]
+        elif field.name in finals:
+            resolved.type = runtime_final_type(field.type, getattr(value, field.name), final_parent, field.name)
+        else:
             child = getattr(value, field.name)
-            resolved.type = infer_member_type(child, f"{path}.{field.name}", visiting)
+            child_final_parent = None
+            if not (params.frozen or params.unsafe_hash):
+                child_final_parent = f"{source.__name__}.{field.name}"
+            elif final_parent is not None:
+                child_final_parent = f"{final_parent}.{field.name}"
+            resolved.type = infer_member_type(child, f"{path}.{field.name}", visiting, child_final_parent)
             if dataclasses.is_dataclass(resolved.type):
                 stable &= getattr(resolved.type, "_qd_runtime_stable")
             elif child is not None and not isinstance(child, (bool, int, float, np.generic, Ndarray, Field)):
