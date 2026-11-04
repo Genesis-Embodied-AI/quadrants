@@ -56,9 +56,11 @@ def is_dataclass_annotation(annotation: Any) -> bool:
 
 
 def infer_member_type(
-    value: Any, path: str, visiting: frozenset[int], final_parent: str | None = None, validated_keys=None
+    value: Any, path: str | list[str], visiting: frozenset[int], final_parent: str | None = None, validated_keys=None
 ) -> InferredMemberType | DeferredMemberType:
     """Infer a member type from its value, or defer an unsupported-value error until the member is used."""
+    if isinstance(path, str):
+        path = [path]
     if isinstance(value, Tensor):
         value = value._unwrap()
     if hasattr(type(value), "__dataclass_fields__"):
@@ -99,7 +101,13 @@ def infer_member_type(
         declared = getattr(value, "_qd_struct_type", None)
         if declared is not None:
             return declared
-        members = {name: infer_member_type(child, f"{path}.{name}", visiting) for name, child in value.items}
+        members = {}
+        for name, child in value.items:
+            path.append(name)
+            try:
+                members[name] = infer_member_type(child, path, visiting)
+            finally:
+                path.pop()
         key = tuple((name, id(dtype)) for name, dtype in members.items())
         if key not in _struct_types:
             _struct_types[key] = StructType(**members)
@@ -108,15 +116,17 @@ def infer_member_type(
 
 
 def resolve_dataclass(
-    value: Any, path: str, visiting: frozenset[int] = frozenset(), final_parent: str | None = None, validated_keys=None
+    value: Any, path: str | list[str], visiting: frozenset[int] = frozenset(), final_parent: str | None = None, validated_keys=None
 ) -> type:
     """Build or reuse a private schema class describing the arriving dataclass's member types."""
+    if isinstance(path, str):
+        path = [path]
     if not hasattr(type(value), "__dataclass_fields__"):
         raise QuadrantsRuntimeTypeError(
-            f"Argument {path!r} requires a Python dataclass instance, got {type(value).__name__}"
+            f"Argument {'.'.join(path)!r} requires a Python dataclass instance, got {type(value).__name__}"
         )
     if id(value) in visiting:
-        raise QuadrantsRuntimeTypeError(f"Dataclass member {path!r} contains a cycle")
+        raise QuadrantsRuntimeTypeError(f"Dataclass member {'.'.join(path)!r} contains a cycle")
     visiting = visiting | {id(value)}
     source = type(value)
     runtime = impl.get_runtime()
@@ -144,9 +154,11 @@ def resolve_dataclass(
                 child_final_parent = f"{source.__name__}.{field.name}"
             elif final_parent is not None:
                 child_final_parent = f"{final_parent}.{field.name}"
-            resolved.type = infer_member_type(
-                child, f"{path}.{field.name}", visiting, child_final_parent, validated_keys
-            )
+            path.append(field.name)
+            try:
+                resolved.type = infer_member_type(child, path, visiting, child_final_parent, validated_keys)
+            finally:
+                path.pop()
             if dataclasses.is_dataclass(resolved.type):
                 stable &= getattr(resolved.type, "_qd_runtime_stable")
             elif child is not None and not isinstance(child, (bool, int, float, np.generic, Ndarray, Field)):
