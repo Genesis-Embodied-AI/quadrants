@@ -4,7 +4,11 @@ import copy
 import dataclasses
 
 from quadrants.lang._deferred_dataclass import DeferredMemberType, deferred_member
-from quadrants.lang._final_dataclass_fields import final_field_names, final_scalar_key, is_final_annotation
+from quadrants.lang._final_dataclass_fields import (
+    final_field_names,
+    final_scalar_key,
+    is_final_annotation,
+)
 
 _plans: dict[int, tuple[type, frozenset[str], dict[str, DeferredMemberType]]] = {}
 
