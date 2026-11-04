@@ -145,23 +145,26 @@ def infer_dataclass_type(
     if id(dataclass_instance) in visiting:
         raise QuadrantsRuntimeTypeError(f"Dataclass member {path!r} contains a cycle")
     visiting = visiting | {id(dataclass_instance)}
-    source = type(dataclass_instance)
+    dataclass_type = type(dataclass_instance)
     runtime = impl.get_runtime()
-    cache_key = (id(source), id(runtime.default_ip), id(runtime.default_fp), final_parent)
+    cache_key = (id(dataclass_type), id(runtime.default_ip), id(runtime.default_fp), final_parent)
     cached = getattr(dataclass_instance, "_qd_runtime_schemas", {}).get(cache_key)
-    if cached is not None and cached._qd_runtime_origin is source:
+    if cached is not None and cached._qd_runtime_origin is dataclass_type:
         return cached
     guarded = getattr(dataclass_instance, "_qd_runtime_guarded_schemas", {}).get(cache_key)
-    if guarded is not None and guarded.schema._qd_runtime_origin is source:
+    if guarded is not None and guarded.schema._qd_runtime_origin is dataclass_type:
         if guarded.matches(path, visiting, infer_member_type):
             return guarded.schema
-    finals, final_errors = runtime_final_plan(source)
-    plan = _field_plans.get(id(source))
+    finals, final_errors = runtime_final_plan(dataclass_type)
+    plan = _field_plans.get(id(dataclass_type))
     if plan is None:
-        plan = (source, tuple((field.name, field, field.name in finals) for field in dataclasses.fields(source)))
-        _field_plans[id(source)] = plan
+        plan = (
+            dataclass_type,
+            tuple((field.name, field, field.name in finals) for field in dataclasses.fields(dataclass_type)),
+        )
+        _field_plans[id(dataclass_type)] = plan
     _, field_plan = plan
-    params = getattr(source, "__dataclass_params__")
+    params = getattr(dataclass_type, "__dataclass_params__")
     stable = params.frozen and not finals and not final_errors
     member_types = []
     has_deferred = False
@@ -176,7 +179,7 @@ def infer_dataclass_type(
             child = getattr(dataclass_instance, name)
             child_final_parent = None
             if not (params.frozen or params.unsafe_hash):
-                child_final_parent = f"{source.__name__}.{name}"
+                child_final_parent = f"{dataclass_type.__name__}.{name}"
             elif final_parent is not None:
                 child_final_parent = f"{final_parent}.{name}"
             member_type = infer_member_type(
@@ -192,35 +195,35 @@ def infer_dataclass_type(
         member_types.append(member_type)
     stable &= not has_deferred
     key = (
-        id(source),
+        id(dataclass_type),
         stable,
         tuple((name, id(member_type)) for (name, _, _), member_type in zip(field_plan, member_types)),
     )
     schema = _schemas.get(key)
     if schema is None:
         # Revalidate py_objs on every uncached launch, but allocate field metadata only for a new inferred schema.
-        # The class plan retains the source and field order; only runtime member types and stability vary here.
+        # The class plan retains the dataclass_type and field order; only runtime member types and stability vary here.
         fields = {}
         for (name, field, _), member_type in zip(field_plan, member_types):
             resolved = copy.copy(field)
             resolved.type = member_type
             fields[name] = resolved
         schema = type(
-            source.__name__,
+            dataclass_type.__name__,
             (),
             {
-                "__module__": source.__module__,
-                "__qualname__": source.__qualname__,
+                "__module__": dataclass_type.__module__,
+                "__qualname__": dataclass_type.__qualname__,
                 "__dataclass_fields__": fields,
                 "__dataclass_params__": params,
-                "__hash__": source.__hash__,
-                "_qd_runtime_origin": source,
+                "__hash__": dataclass_type.__hash__,
+                "_qd_runtime_origin": dataclass_type,
                 "_qd_runtime_stable": stable,
                 "_qd_runtime_has_deferred": has_deferred,
                 # Cache eligibility is not part of the compiled interface: a Tensor wrapper and its bare ndarray
                 # must share a specialization, even though the wrapper can change its underlying implementation.
                 "_qd_runtime_key": (
-                    id(source),
+                    id(dataclass_type),
                     tuple(
                         (name, getattr(field.type, "_qd_runtime_key", id(field.type))) for name, field in fields.items()
                     ),
