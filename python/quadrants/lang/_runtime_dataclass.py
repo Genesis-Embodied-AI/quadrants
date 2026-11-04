@@ -10,7 +10,7 @@ import copy
 import dataclasses
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, TypeAlias, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol, TypeAlias, cast
 
 import numpy as np
 
@@ -43,6 +43,13 @@ if TYPE_CHECKING:
         QuadrantsCallable,
     )
     from quadrants.lang.kernel import Kernel
+
+
+class DataclassInstance(Protocol):
+    """Describe the field metadata shared by Python dataclass instances."""
+
+    __dataclass_fields__: ClassVar[dict[str, dataclasses.Field[Any]]]
+
 
 # Object identity maps to the retained object and its type-tagged Final specialization key.
 FinalValueKeyCache: TypeAlias = dict[int, tuple[Any, tuple[Any, ...]]]
@@ -125,7 +132,7 @@ def infer_member_type(
 
 
 def infer_dataclass_type(
-    py_obj: Any,
+    py_obj: DataclassInstance,
     path: str,
     visiting: frozenset[int] = frozenset(),
     final_parent: str | None = None,
@@ -266,7 +273,7 @@ def prepare_kernel_dataclass_args_for_mapper(kernel: "Kernel", py_objs: tuple[An
 
 
 def runtime_template_members(
-    schema: type, py_obj: Any, path: tuple[str, ...] = ()
+    schema: type, py_obj: DataclassInstance, path: tuple[str, ...] = ()
 ) -> Iterator[tuple[tuple[str, ...], Any]]:
     """Yield template-valued subobjects with paths rooted at the original kernel argument."""
     if not hasattr(schema, "_qd_runtime_origin"):
@@ -321,7 +328,7 @@ def dataclass_call_arguments(
         if isinstance(py_obj, type) and hasattr(py_obj, "_qd_runtime_origin"):
             schema = py_obj
         elif hasattr(type(py_obj), "__dataclass_fields__"):
-            schema = infer_dataclass_type(py_obj, meta.name)
+            schema = infer_dataclass_type(cast(DataclassInstance, py_obj), meta.name)
         elif is_dataclass_annotation(meta.annotation):
             raise QuadrantsRuntimeTypeError(
                 f"Argument {meta.name!r} requires a Python dataclass instance, got {type(py_obj).__name__}"
