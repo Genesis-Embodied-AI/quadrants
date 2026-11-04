@@ -66,6 +66,8 @@ _schema_by_context_by_instance: WeakIdentityCache[dict[InferenceContextKey, type
     WeakIdentityCache()
 )
 
+# These caches retain dataclass classes, assuming applications define relatively few of them.
+# Repeatedly generating new dataclass classes will grow these caches for the lifetime of the process.
 # Generated schema classes, keyed by source class identity, stability, and ordered member names/type identities.
 _schemas: dict[tuple[int, bool, tuple[tuple[str, int], ...]], type] = {}
 # Source classes and their ordered field descriptions, reused across schema inference calls.
