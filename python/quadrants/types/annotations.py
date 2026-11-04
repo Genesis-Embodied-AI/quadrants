@@ -52,7 +52,11 @@ class RuntimeTyped:
     """
 
     def __getattr__(self, name: str) -> Any:
-        """Member types are supplied by the arriving object, rather than this annotation marker."""
+        """Allow static type checkers to accept arbitrary member access on a RuntimeTyped parameter as Any.
+
+        Callers pass actual dataclass objects, whose members supply runtime types; this method does not infer them.
+        Accessing a missing member on an instance of this annotation marker still raises AttributeError.
+        """
         raise AttributeError(name)
 
 
