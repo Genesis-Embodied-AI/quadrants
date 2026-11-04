@@ -119,7 +119,9 @@ def infer_member_type(value: Any, path: str | tuple[str, ...], visiting: frozens
         if key not in _struct_types:
             _struct_types[key] = StructType(**members)
         return _struct_types[key]
-    raise QuadrantsRuntimeTypeError(f"Dataclass member {'.'.join(path)!r} has unsupported runtime type {type(value).__name__}")
+    raise QuadrantsRuntimeTypeError(
+        f"Dataclass member {'.'.join(path)!r} has unsupported runtime type {type(value).__name__}"
+    )
 
 
 def resolve_dataclass(value: Any, path: str | tuple[str, ...], visiting: frozenset[int] = frozenset()) -> type:
