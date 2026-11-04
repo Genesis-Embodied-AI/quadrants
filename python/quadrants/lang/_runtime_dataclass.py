@@ -30,6 +30,7 @@ from quadrants.types import buffer_view_type, ndarray_type, primitive_types
 from quadrants.types.annotations import RuntimeTyped, template
 
 _schemas: dict[tuple, type] = {}
+_field_plans: dict[int, tuple] = {}
 _direct_final_types: dict[int, type] = {}
 _matrix_types: dict[tuple, MatrixType] = {}
 _struct_types: dict[tuple, StructType] = {}
@@ -133,23 +134,39 @@ def resolve_dataclass(value: Any, path: str, visiting: frozenset[int] = frozense
     cached = getattr(value, "_qd_runtime_schemas", {}).get(cache_key)
     if cached is not None and cached._qd_runtime_origin is source:
         return cached
-    finals = _direct_final_names(source)
-    params = getattr(source, "__dataclass_params__")
-    stable = params.frozen and not finals
-    fields = {}
-    for field in dataclasses.fields(source):
-        resolved = copy.copy(field)
-        if field.name not in finals:
-            child = getattr(value, field.name)
-            resolved.type = infer_member_type(child, f"{path}.{field.name}", visiting)
-            if dataclasses.is_dataclass(resolved.type):
-                stable &= getattr(resolved.type, "_qd_runtime_stable")
+    plan = _field_plans.get(id(source))
+    if plan is None:
+        finals = _direct_final_names(source)
+        plan = (
+            source,
+            source.__dataclass_params__,
+            bool(finals),
+            tuple((field.name, field, field.name in finals) for field in dataclasses.fields(source)),
+        )
+        _field_plans[id(source)] = plan
+    _, params, has_finals, field_plan = plan
+    stable = params.frozen and not has_finals
+    member_types = []
+    for name, field, is_final in field_plan:
+        member_type = field.type
+        if not is_final:
+            child = getattr(value, name)
+            member_type = infer_member_type(child, f"{path}.{name}", visiting)
+            if dataclasses.is_dataclass(member_type):
+                stable &= getattr(member_type, "_qd_runtime_stable")
             elif child is not None and not isinstance(child, (bool, int, float, np.generic, Ndarray, Field)):
                 stable = False
-        fields[field.name] = resolved
-    key = (id(source), stable, tuple((name, id(field.type)) for name, field in fields.items()))
+        member_types.append(member_type)
+    key = (id(source), stable, tuple(map(id, member_types)))
     schema = _schemas.get(key)
     if schema is None:
+        # Revalidate values on every uncached launch, but allocate field metadata only for a new inferred schema.
+        # The class plan retains the source and field order; only runtime member types and stability vary here.
+        fields = {}
+        for (name, field, _), member_type in zip(field_plan, member_types):
+            resolved = copy.copy(field)
+            resolved.type = member_type
+            fields[name] = resolved
         schema = type(
             source.__name__,
             (),
