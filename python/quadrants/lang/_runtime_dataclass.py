@@ -38,9 +38,9 @@ InferredMemberType: TypeAlias = (
     type | DataTypeCxx | ndarray_type.NdarrayType | buffer_view_type.BufferViewType | MatrixType | StructType
 )
 
-_schemas: dict[tuple, type] = {}
-_matrix_types: dict[tuple, MatrixType] = {}
-_struct_types: dict[tuple, StructType] = {}
+_schemas: dict[tuple[int, bool, tuple[tuple[str, int], ...]], type] = {}
+_matrix_types: dict[tuple[int, int, int, DataTypeCxx], MatrixType] = {}
+_struct_types: dict[tuple[tuple[str, int], ...], StructType] = {}
 _buffer_annotation = buffer_view_type.BufferViewType()
 _array_annotation = ndarray_type.NdarrayType()
 
