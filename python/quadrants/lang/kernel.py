@@ -930,9 +930,11 @@ class Kernel(FuncBase):
                     launch_ctx_buffer[_INT].append((arg_id, int(obj)))
 
     def ensure_compiled(self, *py_args: tuple[Any, ...]) -> tuple[Callable, int, AutodiffMode]:
-        validated_keys = prepare_kernel_dataclass_args_for_mapper(self, py_args)
+        final_value_key_by_value_id = prepare_kernel_dataclass_args_for_mapper(self, py_args)
         try:
-            instance_id, arg_features = self.mapper.lookup(self.raise_on_templated_floats, py_args, validated_keys)
+            instance_id, arg_features = self.mapper.lookup(
+                self.raise_on_templated_floats, py_args, final_value_key_by_value_id
+            )
         except Exception as e:
             raise type(e)(f"exception while trying to ensure compiled {self.func}:\n{e}") from e
         key = (self.func, instance_id, self.autodiff_mode)

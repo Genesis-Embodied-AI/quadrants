@@ -224,7 +224,11 @@ def _collect_struct_nd_descriptors(arg: Any, out: list) -> None:
 
 
 def _extract_arg(
-    raise_on_templated_floats: bool, arg: Any, annotation: AnnotationType, arg_name: str, validated_keys=None
+    raise_on_templated_floats: bool,
+    arg: Any,
+    annotation: AnnotationType,
+    arg_name: str,
+    final_value_key_by_value_id=None,
 ) -> Any:
     # ``qd.Tensor`` wrappers passed as struct fields. Top-level kernel-arg unwrap in ``Kernel.__call__`` covers direct
     # args, but the dataclass-field recursion at the bottom of this function walks struct attributes via raw
@@ -444,7 +448,7 @@ def _extract_arg(
                         )
                     # ``live=True``: in-process key, so a subclass/enum is keyed by class identity. The offline
                     # fastcache passes ``live=False`` (see ``final_scalar_key`` / ``args_hasher``).
-                    key_parts.append(runtime_final_key(field_value, validated_keys))
+                    key_parts.append(runtime_final_key(field_value, final_value_key_by_value_id))
                 else:
                     key_parts.append(
                         _extract_arg(
@@ -452,7 +456,7 @@ def _extract_arg(
                             field_value,
                             field.type,
                             create_flat_name(arg_name, field.name),
-                            validated_keys,
+                            final_value_key_by_value_id,
                         )
                     )
             key = tuple(key_parts)
@@ -464,7 +468,7 @@ def _extract_arg(
                         getattr(arg, field.name),
                         field.type,
                         create_flat_name(arg_name, field.name),
-                        validated_keys,
+                        final_value_key_by_value_id,
                     )
                     for field in annotation_fields.values()
                     if field._field_type is _FIELD

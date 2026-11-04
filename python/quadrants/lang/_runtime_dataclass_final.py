@@ -55,7 +55,7 @@ def runtime_final_plan(source: type) -> tuple[frozenset[str], dict[str, Deferred
     return names, errors
 
 
-def runtime_final_type(annotation, value, parent_path: str | None, name: str, validated_keys=None):
+def runtime_final_type(annotation, value, parent_path: str | None, name: str, final_value_key_by_value_id=None):
     """Return a valid Final annotation or a deferred diagnostic for the current arriving value/path."""
     if parent_path is not None:
         parent_name = parent_path.split(".", 1)[0]
@@ -70,16 +70,16 @@ def runtime_final_type(annotation, value, parent_path: str | None, name: str, va
     if value_type is not bool and value_type is not int and value_type is not float and value_type is not str:
         try:
             key = final_scalar_key(value, live=True)
-            if validated_keys is not None:
-                validated_keys[id(value)] = (value, key)
+            if final_value_key_by_value_id is not None:
+                final_value_key_by_value_id[id(value)] = (value, key)
         except TypeError as error:
             return deferred_member(TypeError, str(error))
     return annotation
 
 
-def runtime_final_key(value, validated_keys):
+def runtime_final_key(value, final_value_key_by_value_id):
     """Reuse a value key validated during this dispatch only; never retain it across kernel calls."""
-    cached = validated_keys.get(id(value)) if validated_keys is not None else None
+    cached = final_value_key_by_value_id.get(id(value)) if final_value_key_by_value_id is not None else None
     if cached is not None and cached[0] is value:
         return cached[1]
     return final_scalar_key(value, live=True)

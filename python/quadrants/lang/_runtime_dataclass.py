@@ -56,13 +56,13 @@ def is_dataclass_annotation(annotation: Any) -> bool:
 
 
 def infer_member_type(
-    py_obj: Any, path: str, visiting: frozenset[int], final_parent: str | None = None, validated_keys=None
+    py_obj: Any, path: str, visiting: frozenset[int], final_parent: str | None = None, final_value_key_by_value_id=None
 ) -> InferredMemberType | DeferredMemberType:
     """Infer a member type from its value, or defer an unsupported-value error until the member is used."""
     if isinstance(py_obj, Tensor):
         py_obj = py_obj._unwrap()
     if hasattr(type(py_obj), "__dataclass_fields__"):
-        return infer_dataclass_type(py_obj, path, visiting, final_parent, validated_keys)
+        return infer_dataclass_type(py_obj, path, visiting, final_parent, final_value_key_by_value_id)
     if is_data_oriented(py_obj):
         return Template
     if py_obj is None:
@@ -108,7 +108,11 @@ def infer_member_type(
 
 
 def infer_dataclass_type(
-    py_obj: Any, path: str, visiting: frozenset[int] = frozenset(), final_parent: str | None = None, validated_keys=None
+    py_obj: Any,
+    path: str,
+    visiting: frozenset[int] = frozenset(),
+    final_parent: str | None = None,
+    final_value_key_by_value_id=None,
 ) -> type:
     """Build or reuse a private schema class; the caller must verify that py_obj is a dataclass instance."""
     if id(py_obj) in visiting:
@@ -131,7 +135,7 @@ def infer_dataclass_type(
             resolved.type = final_errors[field.name]
         elif field.name in finals:
             resolved.type = runtime_final_type(
-                field.type, getattr(py_obj, field.name), final_parent, field.name, validated_keys
+                field.type, getattr(py_obj, field.name), final_parent, field.name, final_value_key_by_value_id
             )
         else:
             child = getattr(py_obj, field.name)
@@ -141,7 +145,7 @@ def infer_dataclass_type(
             elif final_parent is not None:
                 child_final_parent = f"{final_parent}.{field.name}"
             resolved.type = infer_member_type(
-                child, f"{path}.{field.name}", visiting, child_final_parent, validated_keys
+                child, f"{path}.{field.name}", visiting, child_final_parent, final_value_key_by_value_id
             )
             if dataclasses.is_dataclass(resolved.type):
                 stable &= getattr(resolved.type, "_qd_runtime_stable")
@@ -193,14 +197,14 @@ def infer_dataclass_type(
 
 
 def infer_kernel_dataclass_arg_types(
-    arg_metas: list[ArgMetadata], py_objs: tuple[Any, ...], validated_keys=None
+    arg_metas: list[ArgMetadata], py_objs: tuple[Any, ...], final_value_key_by_value_id=None
 ) -> list[ArgMetadata]:
     """Replace kernel dataclass parameter annotations with schemas inferred from their arriving values."""
     resolved_arg_metas = []
     for arg_meta, py_obj in zip(arg_metas, py_objs):
         if hasattr(type(py_obj), "__dataclass_fields__"):
             arg_meta = ArgMetadata(
-                infer_dataclass_type(py_obj, arg_meta.name, validated_keys=validated_keys),
+                infer_dataclass_type(py_obj, arg_meta.name, final_value_key_by_value_id=final_value_key_by_value_id),
                 arg_meta.name,
                 arg_meta.default,
                 optional=arg_meta.optional,
@@ -218,8 +222,9 @@ def prepare_kernel_dataclass_args_for_mapper(kernel, py_objs):
 
     Return Final keys already validated during this call so specialization can reuse them.
     """
-    validated_keys = {}
-    kernel.arg_metas = infer_kernel_dataclass_arg_types(kernel.orig_arguments, py_objs, validated_keys)
+    # Per-call cache: id(value) -> (value, specialization key); retain the value to verify its identity.
+    final_value_key_by_value_id = {}
+    kernel.arg_metas = infer_kernel_dataclass_arg_types(kernel.orig_arguments, py_objs, final_value_key_by_value_id)
     kernel.mapper.arguments = kernel.arg_metas
     has_deferred = False
     unstable = False
@@ -238,7 +243,7 @@ def prepare_kernel_dataclass_args_for_mapper(kernel, py_objs):
     # A dataclass's member types can change without changing the identity of the outer object.
     kernel.mapper._mapping_cache_disabled = unstable or None
 
-    return validated_keys
+    return final_value_key_by_value_id
 
 
 def runtime_template_members(schema, py_obj, path=()):
