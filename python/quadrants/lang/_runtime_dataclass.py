@@ -8,10 +8,11 @@ without modifying the user's class or its annotations.
 import copy
 import dataclasses
 from contextlib import contextmanager
-from typing import Any
+from typing import Any, TypeAlias
 
 import numpy as np
 
+from quadrants._lib import core as _qd_core
 from quadrants._tensor_wrapper import Tensor
 from quadrants.lang import impl
 from quadrants.lang._dataclass_util import create_flat_name
@@ -33,6 +34,16 @@ from quadrants.lang.util import is_data_oriented, to_quadrants_type
 from quadrants.types import buffer_view_type, ndarray_type, primitive_types
 from quadrants.types.annotations import RuntimeTyped, template
 
+InferredMemberType: TypeAlias = (
+    type
+    | _qd_core.DataTypeCxx
+    | ndarray_type.NdarrayType
+    | buffer_view_type.BufferViewType
+    | MatrixType
+    | StructType
+    | DeferredMemberType
+)
+
 _schemas: dict[tuple, type] = {}
 _matrix_types: dict[tuple, MatrixType] = {}
 _struct_types: dict[tuple, StructType] = {}
@@ -47,7 +58,7 @@ def is_dataclass_annotation(annotation: Any) -> bool:
 
 def infer_member_type(
     value: Any, path: str, visiting: frozenset[int], final_parent: str | None = None, validated_keys=None
-) -> Any:
+) -> InferredMemberType:
     """Infer a member type from its value, or defer an unsupported-value error until the member is used."""
     if isinstance(value, Tensor):
         value = value._unwrap()
