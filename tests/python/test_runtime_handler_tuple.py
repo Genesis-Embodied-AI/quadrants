@@ -403,7 +403,7 @@ def test_runtime_tuple_subclass_specializes():
     @qd.kernel
     def run(values: tuple) -> qd.i32:
         result = 0
-        if qd.static(type(values) is Pair):
+        if qd.static(isinstance(values, Pair)):
             result = 100
         for value in values:
             result += value
