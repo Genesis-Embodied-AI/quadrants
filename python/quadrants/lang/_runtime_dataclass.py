@@ -32,16 +32,10 @@ from quadrants.lang.matrix import Matrix, MatrixType, VectorType
 from quadrants.lang.struct import Struct, StructType
 from quadrants.lang.util import is_data_oriented, to_quadrants_type
 from quadrants.types import buffer_view_type, ndarray_type, primitive_types
-from quadrants.types.annotations import RuntimeTyped, template
+from quadrants.types.annotations import RuntimeTyped, Template
 
 InferredMemberType: TypeAlias = (
-    type
-    | _qd_core.DataTypeCxx
-    | ndarray_type.NdarrayType
-    | buffer_view_type.BufferViewType
-    | MatrixType
-    | StructType
-    | DeferredMemberType
+    type | _qd_core.DataTypeCxx | ndarray_type.NdarrayType | buffer_view_type.BufferViewType | MatrixType | StructType
 )
 
 _schemas: dict[tuple, type] = {}
@@ -58,14 +52,14 @@ def is_dataclass_annotation(annotation: Any) -> bool:
 
 def infer_member_type(
     value: Any, path: str, visiting: frozenset[int], final_parent: str | None = None, validated_keys=None
-) -> InferredMemberType:
+) -> InferredMemberType | DeferredMemberType:
     """Infer a member type from its value, or defer an unsupported-value error until the member is used."""
     if isinstance(value, Tensor):
         value = value._unwrap()
     if hasattr(type(value), "__dataclass_fields__"):
         return resolve_dataclass(value, path, visiting, final_parent, validated_keys)
     if is_data_oriented(value):
-        return template
+        return Template
     if value is None:
         return Tensor
     if isinstance(value, Field):
@@ -246,7 +240,7 @@ def runtime_template_members(schema, value, path=()):
     for field in dataclasses.fields(schema):
         child = getattr(value, field.name)
         child_path = (*path, field.name)
-        if field.type is template:
+        if field.type is Template:
             yield child_path, child
         elif hasattr(field.type, "_qd_runtime_origin"):
             yield from runtime_template_members(field.type, child, child_path)
