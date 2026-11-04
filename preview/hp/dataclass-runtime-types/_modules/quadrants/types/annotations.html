@@ -398,7 +398,11 @@
 <span class="sd">    """</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">"""Member types are supplied by the arriving object, rather than this annotation marker."""</span>
+<span class="w">        </span><span class="sd">"""Static type checkers see only RuntimeTyped, so they would otherwise reject accesses like state.velocity.</span>
+
+<span class="sd">        The Any return annotation allows arbitrary members without claiming to know their types.</span>
+<span class="sd">        The marker itself has no such members, so access raises AttributeError; callers supply dataclass instances.</span>
+<span class="sd">        """</span>
         <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="n">name</span><span class="p">)</span></div>
 
 

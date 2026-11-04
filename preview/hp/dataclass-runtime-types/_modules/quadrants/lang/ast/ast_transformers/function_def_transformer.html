@@ -355,6 +355,7 @@
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">ops</span> <span class="k">as</span> <span class="n">qd_ops</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._dataclass_util</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_flat_name</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._deferred_dataclass</span><span class="w"> </span><span class="kn">import</span> <span class="n">DeferredMemberType</span><span class="p">,</span> <span class="n">DeferredMemberValue</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._final_dataclass_fields</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">final_field_names</span><span class="p">,</span>
     <span class="n">is_final_annotation</span><span class="p">,</span>
@@ -398,6 +399,8 @@
         <span class="n">this_arg_features</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">prefix_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">annotation</span><span class="p">,</span> <span class="n">DeferredMemberType</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">annotation</span><span class="o">.</span><span class="n">bind</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
         <span class="n">full_name</span> <span class="o">=</span> <span class="n">prefix_name</span> <span class="o">+</span> <span class="s2">"_"</span> <span class="o">+</span> <span class="n">name</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">annotation</span><span class="p">,</span> <span class="n">primitive_types</span><span class="o">.</span><span class="n">RefType</span><span class="p">):</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
@@ -722,6 +725,11 @@
         <span class="c1"># ``@qd.func`` (``static_rigid_sim_config.para_level``) reaches the kernel's pruning set - without it the</span>
         <span class="c1"># args-hasher never sees the value and configurations that differ only there collide in the fastcache key.</span>
         <span class="n">ctx</span><span class="o">.</span><span class="n">fn_param_names</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">argument_name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">argument_type</span><span class="p">,</span> <span class="n">DeferredMemberType</span><span class="p">):</span>
+            <span class="c1"># Captured Python dataclasses enter inlined calls before any kernel-argument binding exists.</span>
+            <span class="n">binding</span> <span class="o">=</span> <span class="n">data</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">DeferredMemberValue</span><span class="p">)</span> <span class="k">else</span> <span class="n">argument_type</span><span class="o">.</span><span class="n">bind</span><span class="p">(</span><span class="n">argument_name</span><span class="p">)</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">argument_name</span><span class="p">,</span> <span class="n">binding</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
 
         <span class="c1"># A ``Final[T]`` leaf @qd.func arg: ``data`` already carries the resolved Python value, so bind it directly for</span>
         <span class="c1"># ``qd.static(cfg.field)``. Before the ``annotations.template`` check (``Final[T]`` is not a ``template``).</span>
