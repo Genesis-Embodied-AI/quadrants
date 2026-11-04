@@ -85,11 +85,12 @@ def measure(callback, iterations, repeats):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--handlers", action="store_true")
+    parser.add_argument("--profile", action="store_true", help="Also measure native kernel time; affects launch timing")
     parser.add_argument("--arch", choices=("cpu", "cuda"), default="cpu")
     parser.add_argument("--iterations", type=int, default=10000)
     parser.add_argument("--repeats", type=int, default=5)
     args = parser.parse_args()
-    qd.init(arch=getattr(qd, args.arch), offline_cache=False, cpu_max_num_threads=1)
+    qd.init(arch=getattr(qd, args.arch), offline_cache=False, cpu_max_num_threads=1, kernel_profiler=args.profile)
     values = qd.ndarray(qd.f32, shape=4)
     values.fill(1)
     out = qd.ndarray(qd.f32, shape=4)
@@ -119,16 +120,24 @@ def main():
         "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
         "arch": args.arch,
         "iterations": args.iterations,
+        "profiling": args.profile,
         "repeats": args.repeats,
         "cases": {},
     }
     for name, kernel, inputs in cases:
         kernel(*inputs)
+        dispatch = measure(lambda: kernel._primal.ensure_compiled(*inputs), args.iterations, args.repeats)
+        if args.profile:
+            qd.profiler.clear_kernel_profiler_info()
         report["cases"][name] = {
-            "dispatch": measure(lambda: kernel._primal.ensure_compiled(*inputs), args.iterations, args.repeats),
+            "dispatch": dispatch,
             "launch": measure(lambda: kernel(*inputs), args.iterations, args.repeats),
             "specializations": len(kernel._primal.materialized_kernels),
         }
+        if args.profile:
+            report["cases"][name]["native_mean_us"] = (
+                qd.profiler.get_kernel_profiler_total_time() * 1e6 / (args.iterations * args.repeats + 100)
+            )
     if args.handlers:
         before = len(pipeline._primal.materialized_kernels)
         report["cases"]["fresh_handlers"] = {

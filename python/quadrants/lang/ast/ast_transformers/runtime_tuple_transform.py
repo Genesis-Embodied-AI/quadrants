@@ -1,4 +1,4 @@
-"""Normalize callable objects and host-tuple stars before dataclass inference and pruning."""
+"""Lower host-tuple iteration, callable objects, and starred captures before dataclass flattening."""
 
 import ast
 
@@ -30,3 +30,20 @@ def expand_tuple_stars(ctx, args, build_stmt):
             build_stmt(ctx, child)
             expanded.append(child)
     return expanded
+
+
+def build_tuple_for(ctx, node, decorator, build_stmt, build_static_for):
+    """Evaluate an ordinary iterable once, and use static-loop lowering when it is a host tuple.
+
+    Return whether the iterable was evaluated and whether the complete loop was handled. Range, explicitly
+    decorated loops, and conditional iterables continue through their existing specialized transformations.
+    """
+    is_range = isinstance(node.iter, ast.Call) and isinstance(node.iter.func, ast.Name) and node.iter.func.id == "range"
+    if decorator or is_range or isinstance(node.iter, ast.IfExp):
+        return False, False
+    build_stmt(ctx, node.iter)
+    if not isinstance(node.iter.ptr, tuple):
+        return True, False
+    with ctx.loop_scope_guard(is_static=True):
+        build_static_for(ctx, node, False, iter_built=True)
+    return True, True

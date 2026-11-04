@@ -23,7 +23,7 @@ from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
     get_decorator,
 )
-from quadrants.lang.ast.ast_transformers.runtime_tuple_calls import (
+from quadrants.lang.ast.ast_transformers.runtime_tuple_transform import (
     expand_tuple_stars,
     resolve_callable,
 )
