@@ -62,7 +62,7 @@ def infer_member_type(
     if isinstance(value, Tensor):
         value = value._unwrap()
     if hasattr(type(value), "__dataclass_fields__"):
-        return resolve_dataclass(value, path, visiting, final_parent, validated_keys)
+        return infer_dataclass_type(value, path, visiting, final_parent, validated_keys)
     if is_data_oriented(value):
         return Template
     if value is None:
@@ -107,7 +107,7 @@ def infer_member_type(
     return deferred_member(QuadrantsRuntimeTypeError, f"unsupported runtime type {type(value).__name__}")
 
 
-def resolve_dataclass(
+def infer_dataclass_type(
     value: Any, path: str, visiting: frozenset[int] = frozenset(), final_parent: str | None = None, validated_keys=None
 ) -> type:
     """Build or reuse a private schema class describing the arriving dataclass's member types."""
@@ -201,7 +201,7 @@ def resolve_arguments(arguments: list[ArgMetadata], values: tuple[Any, ...], val
     return [
         (
             ArgMetadata(
-                resolve_dataclass(value, arg.name, validated_keys=validated_keys),
+                infer_dataclass_type(value, arg.name, validated_keys=validated_keys),
                 arg.name,
                 arg.default,
                 optional=arg.optional,
@@ -287,7 +287,7 @@ def dataclass_call_arguments(func, args, keywords, bound: bool = False):
         if isinstance(value, type) and hasattr(value, "_qd_runtime_origin"):
             schema = value
         elif hasattr(type(value), "__dataclass_fields__") or is_dataclass_annotation(meta.annotation):
-            schema = resolve_dataclass(value, meta.name)
+            schema = infer_dataclass_type(value, meta.name)
         else:
             continue
         metas[i] = ArgMetadata(schema, meta.name, meta.default, optional=meta.optional)
