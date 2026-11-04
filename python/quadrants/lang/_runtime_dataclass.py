@@ -204,9 +204,14 @@ def prepare_runtime_arguments(kernel, values):
     validated_keys = {}
     kernel.arg_metas = resolve_arguments(kernel.orig_arguments, values, validated_keys)
     kernel.mapper.arguments = kernel.arg_metas
-    kernel._runtime_has_deferred = any(
-        getattr(meta.annotation, "_qd_runtime_has_deferred", False) for meta in kernel.arg_metas
-    )
+    has_deferred = False
+    unstable = False
+    for meta in kernel.arg_metas:
+        schema = meta.annotation
+        if hasattr(schema, "_qd_runtime_origin"):
+            has_deferred |= schema._qd_runtime_has_deferred
+            unstable |= not schema._qd_runtime_stable
+    kernel._runtime_has_deferred = has_deferred
     kernel.template_slot_locations = [
         i
         for i in kernel.original_template_slot_locations
@@ -214,13 +219,7 @@ def prepare_runtime_arguments(kernel, values):
     ]
     kernel.mapper.template_slot_locations = kernel.template_slot_locations
     # A dataclass's member types can change without changing the identity of the outer object.
-    kernel.mapper._mapping_cache_disabled = (
-        any(
-            hasattr(meta.annotation, "_qd_runtime_origin") and not meta.annotation._qd_runtime_stable
-            for meta in kernel.arg_metas
-        )
-        or None
-    )
+    kernel.mapper._mapping_cache_disabled = unstable or None
 
     return validated_keys
 
