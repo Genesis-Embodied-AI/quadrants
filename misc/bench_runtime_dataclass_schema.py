@@ -38,10 +38,13 @@ def main():
     parser.add_argument("--repeats", type=int, default=5)
     args = parser.parse_args()
     qd.init(arch=qd.cpu, cpu_max_num_threads=1, offline_cache=False)
+    guard_class = getattr(_runtime_dataclass, "FrozenSchemaEntry", None)
+    guard_source = inspect.getsource(inspect.getmodule(guard_class)) if guard_class is not None else None
     report = {
         "label": args.label,
         "quadrants_version": version("quadrants"),
         "resolver_sha256": hashlib.sha256(inspect.getsource(_runtime_dataclass).encode()).hexdigest(),
+        "guard_sha256": hashlib.sha256(guard_source.encode()).hexdigest() if guard_source is not None else None,
         "iterations": args.iterations,
         "repeats": args.repeats,
         "cases": {},
