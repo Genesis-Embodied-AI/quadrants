@@ -186,40 +186,46 @@ def resolve_dataclass(value: Any, path: str, visiting: frozenset[int] = frozense
     return schema
 
 
-def resolve_arguments(arguments, values, raise_on_templated_floats=False):
-    resolved = []
-    tuple_slots = []
-    for i, (arg, value) in enumerate(zip(arguments, values)):
-        if hasattr(type(value), "__dataclass_fields__"):
-            annotation = resolve_dataclass(value, arg.name)
-        elif isinstance(value, tuple):
-            annotation = tuple_annotation(value, arg.name, raise_on_templated_floats)
-            tuple_slots.append(i)
-        elif is_dataclass_annotation(arg.annotation):
-            annotation = resolve_dataclass(value, arg.name)
-        else:
-            resolved.append(arg)
-            continue
-        resolved.append(ArgMetadata(annotation, arg.name, arg.default, optional=arg.optional))
-    return resolved, tuple_slots
+def _tuple_argument(arg, value, tuple_names, raise_on_templated_floats):
+    tuple_names.append(arg.name)
+    return ArgMetadata(tuple_annotation(value, arg.name, raise_on_templated_floats), arg.name, arg.default)
+
+
+def resolve_arguments(arguments, values, tuple_names, raise_on_templated_floats=False):
+    return [
+        (
+            ArgMetadata(resolve_dataclass(value, arg.name), arg.name, arg.default, optional=arg.optional)
+            if hasattr(type(value), "__dataclass_fields__")
+            or (is_dataclass_annotation(arg.annotation) and not isinstance(value, tuple))
+            else (
+                _tuple_argument(arg, value, tuple_names, raise_on_templated_floats) if isinstance(value, tuple) else arg
+            )
+        )
+        for arg, value in zip(arguments, values)
+    ]
 
 
 def prepare_runtime_arguments(kernel, values):
     """Prepare inferred metadata and dispatch-cache eligibility for one kernel launch."""
-    kernel.arg_metas, tuple_slots = resolve_arguments(kernel.orig_arguments, values, kernel.raise_on_templated_floats)
+    tuple_names = []
+    kernel.arg_metas = resolve_arguments(kernel.orig_arguments, values, tuple_names, kernel.raise_on_templated_floats)
     kernel.mapper.arguments = kernel.arg_metas
     kernel.template_slot_locations = [
         i
         for i in kernel.original_template_slot_locations
         if not hasattr(kernel.arg_metas[i].annotation, "_qd_runtime_origin")
     ]
-    if tuple_slots:
-        kernel.template_slot_locations.extend(i for i in tuple_slots if i not in kernel.template_slot_locations)
+    if tuple_names:
+        kernel.template_slot_locations.extend(
+            i
+            for i, meta in enumerate(kernel.arg_metas)
+            if meta.name in tuple_names and i not in kernel.template_slot_locations
+        )
     kernel.mapper.template_slot_locations = kernel.template_slot_locations
     # A dataclass's member types can change without changing the identity of the outer object. Tuple captures may
     # reassign functions or data without changing the root tuple, so they also bypass the instance-keyed cache.
     kernel.mapper._mapping_cache_disabled = (
-        bool(tuple_slots)
+        bool(tuple_names)
         or any(
             hasattr(meta.annotation, "_qd_runtime_origin") and not meta.annotation._qd_runtime_stable
             for meta in kernel.arg_metas

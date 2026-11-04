@@ -19,6 +19,9 @@ from quadrants.types.annotations import template
 from quadrants.types.ndarray_type import NdarrayType
 
 
+_ARRAY_ANNOTATION = NdarrayType()
+
+
 class TuplePlan:
     def __init__(self, value, name, raise_on_templated_floats):
         self.arrays = []
@@ -63,7 +66,7 @@ class TuplePlan:
         self._seen[identity] = len(self._seen)
         if isinstance(value, Ndarray):
             self.arrays.append((path, value))
-            return ("array", _extract_arg(False, value, NdarrayType(), self.name))
+            return ("array", _extract_arg(False, value, _ARRAY_ANNOTATION, self.name))
         self._visiting.add(identity)
         try:
             if isinstance(value, tuple):
@@ -95,13 +98,11 @@ class TuplePlan:
                     for key, child in vars(value).items()
                     if not key.startswith("_qd_") and not isinstance(getattr(type(value), key, None), QuadrantsCallable)
                 )
+                runtime_primitives = wants_runtime_primitives(value)
                 return (
                     "object",
                     type(value),
-                    tuple(
-                        (key, self._describe(child, (*path, key), wants_runtime_primitives(value)))
-                        for key, child in entries
-                    ),
+                    tuple((key, self._describe(child, (*path, key), runtime_primitives)) for key, child in entries),
                 )
         finally:
             self._visiting.remove(identity)
