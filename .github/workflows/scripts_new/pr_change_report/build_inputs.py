@@ -388,7 +388,9 @@ def render_comment_markdown(summaries: list[FileSummary], commit: str) -> str:
     head = f"## PR change report (`{commit}`)\n" if commit else "## PR change report\n"
     lines = [head]
     if not summaries:
-        lines.append("No supported files (.py, .c, .cc, .cpp, .h, .hpp, .cu, .md, .sh, .yaml, .yml) changed in this PR.")
+        lines.append(
+            "No supported files (.py, .c, .cc, .cpp, .h, .hpp, .cu, .md, .sh, .yaml, .yml) changed in this PR."
+        )
         return "\n".join(lines) + "\n"
     lines.append("LoC = counted lines in the file BEFORE this PR (0 for newly-added files). " + COUNTING_NOTE)
     lines.append("")
