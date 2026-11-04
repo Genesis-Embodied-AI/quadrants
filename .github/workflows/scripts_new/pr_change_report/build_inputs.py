@@ -393,13 +393,12 @@ def render_comment_markdown(summaries: list[FileSummary], commit: str) -> str:
     lines.append("LoC = counted lines in the file BEFORE this PR (0 for newly-added files). " + COUNTING_NOTE)
     lines.append("")
     groups = group_summaries(summaries)
-    lines.append("| Group | Files | LoC | Added | Removed |")
-    lines.append("|-------|-------|-----|-------|---------|")
+    lines.append("| Group | Files | Added | Removed |")
+    lines.append("|-------|-------|-------|---------|")
     for name, files in [*groups.items(), ("**Total**", summaries)]:
-        total = sum(s.total for s in files)
         added = sum(s.added for s in files)
         removed = sum(s.removed for s in files)
-        lines.append(f"| {name} | {len(files)} | {total} | +{added} | -{removed} |")
+        lines.append(f"| {name} | {len(files)} | +{added} | -{removed} |")
     for name, files in groups.items():
         if not files:
             continue
