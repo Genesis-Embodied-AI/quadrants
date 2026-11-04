@@ -84,6 +84,8 @@ def main():
     parser.add_argument("phase", choices=("tests", "micro", "fem", "types"))
     parser.add_argument("--candidate", choices=("tuple", "list", "tuple-entry", "list-entry"), default="tuple")
     parser.add_argument("--entry-only", action="store_true")
+    parser.add_argument("--fem-pairs", type=int, default=2)
+    parser.add_argument("--start-pair", type=int, default=0)
     args = parser.parse_args()
     root = args.root.resolve()
     folder = root / "tmp/path-results" / (args.phase + ("-entry" if args.entry_only else ""))
@@ -98,6 +100,8 @@ def main():
     refs = {label: revision(root / "quadrants", ref) for label, ref in REFS.items()}
     (folder / "refs.json").write_text(json.dumps(refs, indent=2) + "\n")
     records = []
+    if args.phase == "fem" and args.start_pair:
+        records = json.loads((folder / "runs.json").read_text())
     benchmark = Path(__file__).with_name("benchmark.py").resolve()
     if args.phase == "micro":
         orders = (
@@ -124,8 +128,8 @@ def main():
     elif args.phase == "fem":
         schedule = [
             (f"guard-{kind}", trial)
-            for trial, order in enumerate((("control", args.candidate), (args.candidate, "control")))
-            for kind in order
+            for trial in range(args.start_pair, args.start_pair + args.fem_pairs)
+            for kind in (("control", args.candidate) if trial % 2 == 0 else (args.candidate, "control"))
         ]
     else:
         kinds = ("tuple-entry", "list-entry") if args.entry_only else ("control", "tuple", "list")
