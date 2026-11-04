@@ -61,8 +61,10 @@ InferredMemberType: TypeAlias = (
 )
 
 # Per-instance schemas, separated by numeric defaults and ancestor validation context; keys are held weakly.
-SchemaCacheKey: TypeAlias = tuple[int, int, int, str | None]
-_instance_schemas: WeakIdentityCache[dict[SchemaCacheKey, type | FrozenSchemaEntry]] = WeakIdentityCache()
+InferenceContextKey: TypeAlias = tuple[int, int, int, str | None]
+_schema_by_context_by_instance: WeakIdentityCache[dict[InferenceContextKey, type | FrozenSchemaEntry]] = (
+    WeakIdentityCache()
+)
 
 # Generated schema classes, keyed by source class identity, stability, and ordered member names/type identities.
 _schemas: dict[tuple[int, bool, tuple[tuple[str, int], ...]], type] = {}
@@ -154,14 +156,19 @@ def infer_dataclass_type(
     runtime = impl.get_runtime()
     # The same instance can need different schemas under different numeric defaults or non-frozen ancestor paths.
     # These affect member types and Final validation, so each instance has a dictionary keyed by inference context.
-    schema_cache_key = (id(dataclass_type), id(runtime.default_ip), id(runtime.default_fp), non_frozen_ancestor_path)
-    instance_cache = _instance_schemas.get(dataclass_instance)
-    cached = instance_cache.get(schema_cache_key) if instance_cache is not None else None
-    if isinstance(cached, FrozenSchemaEntry):
-        if cached.matches(dataclass_instance, path, ancestor_ids, infer_member_type):
-            return cached.schema
-    elif cached is not None:
-        return cached
+    inference_context_key = (
+        id(dataclass_type),
+        id(runtime.default_ip),
+        id(runtime.default_fp),
+        non_frozen_ancestor_path,
+    )
+    schema_by_context = _schema_by_context_by_instance.get(dataclass_instance)
+    cached_schema = schema_by_context.get(inference_context_key) if schema_by_context is not None else None
+    if isinstance(cached_schema, FrozenSchemaEntry):
+        if cached_schema.matches(dataclass_instance, path, ancestor_ids, infer_member_type):
+            return cached_schema.schema
+    elif cached_schema is not None:
+        return cached_schema
     finals, final_errors = runtime_final_plan(dataclass_type)
     plan = _field_plans.get(id(dataclass_type))
     if plan is None:
@@ -246,11 +253,11 @@ def infer_dataclass_type(
         _schemas[key] = schema
     # Guard reuse must not bypass deferred diagnostics or validation of Final-bearing paths.
     if stable or (params.frozen and not has_deferred and not finals and non_frozen_ancestor_path is None):
-        if instance_cache is None:
-            instance_cache = {}
-            if not _instance_schemas.set(dataclass_instance, instance_cache):
+        if schema_by_context is None:
+            schema_by_context = {}
+            if not _schema_by_context_by_instance.set(dataclass_instance, schema_by_context):
                 return schema
-        instance_cache[schema_cache_key] = (
+        schema_by_context[inference_context_key] = (
             schema if stable else FrozenSchemaEntry(dataclass_instance, schema, field_plan, member_types)
         )
     return schema

@@ -5,7 +5,10 @@ from dataclasses import dataclass
 import pytest
 
 import quadrants as qd
-from quadrants.lang._runtime_dataclass import _instance_schemas, infer_dataclass_type
+from quadrants.lang._runtime_dataclass import (
+    _schema_by_context_by_instance,
+    infer_dataclass_type,
+)
 
 from tests.helpers import test_utils
 
@@ -22,10 +25,10 @@ def test_schema_cache_does_not_modify_instances(slots):
     first = infer_dataclass_type(state, "state")
     assert infer_dataclass_type(state, "state") is first
     if slots:
-        assert _instance_schemas.get(state) is None
+        assert _schema_by_context_by_instance.get(state) is None
     else:
         assert vars(state) == before
-        assert _instance_schemas.get(state) is not None
+        assert _schema_by_context_by_instance.get(state) is not None
     assert not hasattr(state, "_qd_runtime_schemas")
     assert not hasattr(state, "_qd_runtime_guarded_schemas")
 
@@ -47,10 +50,10 @@ def test_guard_cache_does_not_retain_parent_through_child():
     schema = infer_dataclass_type(state, "state")
     assert infer_dataclass_type(state, "state") is schema
     assert vars(state) == before
-    assert _instance_schemas.get(state) is not None
+    assert _schema_by_context_by_instance.get(state) is not None
     key_id = id(state)
     ref = weakref.ref(state)
     del state, child, before
     gc.collect()
     assert ref() is None
-    assert key_id not in _instance_schemas._entries
+    assert key_id not in _schema_by_context_by_instance._entries
