@@ -43,12 +43,12 @@ from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._deferred_dataclass import DeferredMemberType
-from quadrants.lang._runtime_dataclass_final import runtime_final_key
 from quadrants.lang._final_dataclass_fields import (
     final_field_names,
     subtree_has_final_fields,
 )
 from quadrants.lang._ndarray import Ndarray
+from quadrants.lang._runtime_dataclass_final import runtime_final_key
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.buffer_view import BufferView as BufferViewInstance
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
@@ -223,7 +223,9 @@ def _collect_struct_nd_descriptors(arg: Any, out: list) -> None:
         out.append((".".join(chain), element_type, len(shape), v.grad is not None, v._qd_layout))
 
 
-def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: AnnotationType, arg_name: str, validated_keys=None) -> Any:
+def _extract_arg(
+    raise_on_templated_floats: bool, arg: Any, annotation: AnnotationType, arg_name: str, validated_keys=None
+) -> Any:
     # ``qd.Tensor`` wrappers passed as struct fields. Top-level kernel-arg unwrap in ``Kernel.__call__`` covers direct
     # args, but the dataclass-field recursion at the bottom of this function walks struct attributes via raw
     # ``getattr``, so a wrapper stored as a struct field arrives here un-stripped with its declared annotation (e.g.
@@ -465,7 +467,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
                         getattr(arg, field.name),
                         field.type,
                         create_flat_name(arg_name, field.name),
-                            validated_keys,
+                        validated_keys,
                     )
                     for field in annotation_fields.values()
                     if field._field_type is _FIELD
