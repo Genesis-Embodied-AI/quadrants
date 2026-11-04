@@ -135,23 +135,23 @@ def infer_member_type(
 
 
 def infer_dataclass_type(
-    py_obj: DataclassInstance,
+    dataclass_instances: DataclassInstance,
     path: str,
     visiting: frozenset[int] = frozenset(),
     final_parent: str | None = None,
     final_value_key_by_value_id: FinalValueKeyCache | None = None,
 ) -> type:
-    """Build or reuse a private schema class; the caller must verify that py_obj is a dataclass instance."""
-    if id(py_obj) in visiting:
+    """Build or reuse a private schema class; the caller must verify that dataclass_instances is a dataclass instance."""
+    if id(dataclass_instances) in visiting:
         raise QuadrantsRuntimeTypeError(f"Dataclass member {path!r} contains a cycle")
-    visiting = visiting | {id(py_obj)}
-    source = type(py_obj)
+    visiting = visiting | {id(dataclass_instances)}
+    source = type(dataclass_instances)
     runtime = impl.get_runtime()
     cache_key = (id(source), id(runtime.default_ip), id(runtime.default_fp), final_parent)
-    cached = getattr(py_obj, "_qd_runtime_schemas", {}).get(cache_key)
+    cached = getattr(dataclass_instances, "_qd_runtime_schemas", {}).get(cache_key)
     if cached is not None and cached._qd_runtime_origin is source:
         return cached
-    guarded = getattr(py_obj, "_qd_runtime_guarded_schemas", {}).get(cache_key)
+    guarded = getattr(dataclass_instances, "_qd_runtime_guarded_schemas", {}).get(cache_key)
     if guarded is not None and guarded.schema._qd_runtime_origin is source:
         if guarded.matches(path, visiting, infer_member_type):
             return guarded.schema
@@ -170,10 +170,10 @@ def infer_dataclass_type(
             member_type = final_errors[name]
         elif is_final:
             member_type = runtime_final_type(
-                field.type, getattr(py_obj, name), final_parent, name, final_value_key_by_value_id
+                field.type, getattr(dataclass_instances, name), final_parent, name, final_value_key_by_value_id
             )
         else:
-            child = getattr(py_obj, name)
+            child = getattr(dataclass_instances, name)
             child_final_parent = None
             if not (params.frozen or params.unsafe_hash):
                 child_final_parent = f"{source.__name__}.{name}"
@@ -231,24 +231,24 @@ def infer_dataclass_type(
         final_field_names(schema)
         _schemas[key] = schema
     if stable:
-        cache = getattr(py_obj, "_qd_runtime_schemas", None)
+        cache = getattr(dataclass_instances, "_qd_runtime_schemas", None)
         if cache is None:
             cache = {}
             try:
-                object.__setattr__(py_obj, "_qd_runtime_schemas", cache)
+                object.__setattr__(dataclass_instances, "_qd_runtime_schemas", cache)
             except AttributeError:
                 pass
         cache[cache_key] = schema
     # Guard reuse must not bypass deferred diagnostics or validation of Final-bearing paths.
     elif params.frozen and not has_deferred and not finals and final_parent is None:
-        cache = getattr(py_obj, "_qd_runtime_guarded_schemas", None)
+        cache = getattr(dataclass_instances, "_qd_runtime_guarded_schemas", None)
         if cache is None:
             cache = {}
             try:
-                object.__setattr__(py_obj, "_qd_runtime_guarded_schemas", cache)
+                object.__setattr__(dataclass_instances, "_qd_runtime_guarded_schemas", cache)
             except AttributeError:
                 return schema
-        cache[cache_key] = FrozenSchemaEntry(py_obj, schema, field_plan, member_types)
+        cache[cache_key] = FrozenSchemaEntry(dataclass_instances, schema, field_plan, member_types)
     return schema
 
 
@@ -305,13 +305,13 @@ def prepare_kernel_dataclass_args_for_mapper(kernel: "Kernel", py_objs: tuple[An
 
 
 def runtime_template_members(
-    schema: type, py_obj: DataclassInstance, path: tuple[str, ...] = ()
+    schema: type, dataclass_instances: DataclassInstance, path: tuple[str, ...] = ()
 ) -> Iterator[tuple[tuple[str, ...], Any]]:
     """Yield template-valued subobjects with paths rooted at the original kernel argument."""
     if not hasattr(schema, "_qd_runtime_origin"):
         return
     for field in dataclasses.fields(schema):
-        child = getattr(py_obj, field.name)
+        child = getattr(dataclass_instances, field.name)
         child_path = (*path, field.name)
         if field.type is Template:
             yield child_path, child
