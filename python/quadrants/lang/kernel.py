@@ -42,7 +42,7 @@ from quadrants.lang import _kernel_impl_dataclass, impl, runtime_ops
 from quadrants.lang import kernel_checkpoint as _checkpoint_helpers
 from quadrants.lang._fast_caching import src_hasher
 from quadrants.lang._runtime_dataclass import (
-    update_kernel_dataclass_arg_launch_metadata,
+    prepare_kernel_dataclass_args_for_mapper,
 )
 from quadrants.lang._template_mapper_hotpath import chain_has_mutable_container
 from quadrants.lang._wrap_inspect import FunctionSourceInfo, get_source_info_and_src
@@ -930,7 +930,7 @@ class Kernel(FuncBase):
                     launch_ctx_buffer[_INT].append((arg_id, int(obj)))
 
     def ensure_compiled(self, *py_args: tuple[Any, ...]) -> tuple[Callable, int, AutodiffMode]:
-        validated_keys = update_kernel_dataclass_arg_launch_metadata(self, py_args)
+        validated_keys = prepare_kernel_dataclass_args_for_mapper(self, py_args)
         try:
             instance_id, arg_features = self.mapper.lookup(self.raise_on_templated_floats, py_args, validated_keys)
         except Exception as e:

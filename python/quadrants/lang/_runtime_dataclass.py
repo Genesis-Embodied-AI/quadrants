@@ -213,7 +213,7 @@ def infer_kernel_dataclass_arg_types(
     return resolved_arg_metas
 
 
-def update_kernel_dataclass_arg_launch_metadata(kernel, py_objs):
+def prepare_kernel_dataclass_args_for_mapper(kernel, py_objs):
     """Update dataclass argument types, template slots, cache eligibility, and deferred-member status for a launch.
 
     Return Final keys already validated during this call so specialization can reuse them.
