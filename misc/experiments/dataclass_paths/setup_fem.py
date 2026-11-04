@@ -2,8 +2,8 @@
 
 import argparse
 import os
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 
 def main():
@@ -14,9 +14,7 @@ def main():
     root = args.root.resolve()
     environment = root / "fem-venv"
     override = root / "tmp/path-fem-overrides.txt"
-    override.write_text(
-        f"quadrants @ {args.wheel.resolve().as_uri()}\nnumpy==2.5.4\nscipy==1.18.1\npytest==9.1.1\n"
-    )
+    override.write_text(f"quadrants @ {args.wheel.resolve().as_uri()}\nnumpy==2.5.4\nscipy==1.18.1\npytest==9.1.1\n")
     source = (root / "genesis/.github/workflows/scripts/production_build.sh").read_text()
     source = source.replace("curl -LsSf https://astral.sh/uv/install.sh | sh\n", "")
     source = source.replace("/venv", str(environment))

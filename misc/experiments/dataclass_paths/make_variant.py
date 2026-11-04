@@ -29,39 +29,42 @@ def main():
     source = source.replace("path: str,", f"path: {annotation},")
     conversion = "(path,)" if kind == "tuple" else "[path]"
     # Preserve public root-string calls, including direct calls to infer_member_type.
-    for marker in ('    if isinstance(value, Tensor):', '    if not hasattr(type(value), "__dataclass_fields__"):'):
+    for marker in ("    if isinstance(value, Tensor):", '    if not hasattr(type(value), "__dataclass_fields__"):'):
         assert source.count(marker) == 1
         source = source.replace(marker, f"    if isinstance(path, str):\n        path = {conversion}\n" + marker)
     source = source.replace("{path!r}", "{'.'.join(path)!r}")
     if kind == "tuple":
-        source = source.replace('f"{path}.{name}"', 'path + (name,)')
-        source = source.replace('f"{path}.{field.name}"', 'path + (field.name,)')
+        source = source.replace('f"{path}.{name}"', "path + (name,)")
+        source = source.replace('f"{path}.{field.name}"', "path + (field.name,)")
     else:
         old = '        members = {name: infer_member_type(child, f"{path}.{name}", visiting) for name, child in value.items}'
         assert old in source
-        source = source.replace(old, '''        members = {}
+        source = source.replace(
+            old,
+            """        members = {}
         for name, child in value.items:
             path.append(name)
             try:
                 members[name] = infer_member_type(child, path, visiting)
             finally:
-                path.pop()''')
-        if 'resolved.type = infer_member_type(\n' in source:
-            old = '''            resolved.type = infer_member_type(
+                path.pop()""",
+        )
+        if "resolved.type = infer_member_type(\n" in source:
+            old = """            resolved.type = infer_member_type(
                 child, f"{path}.{field.name}", visiting, child_final_parent, validated_keys
-            )'''
-            new = '''            path.append(field.name)
+            )"""
+            new = """            path.append(field.name)
             try:
                 resolved.type = infer_member_type(child, path, visiting, child_final_parent, validated_keys)
             finally:
-                path.pop()'''
+                path.pop()"""
         else:
             old = '            member_type = infer_member_type(child, f"{path}.{name}", visiting)'
-            new = '''            path.append(name)
+            new = """            path.append(name)
             try:
                 member_type = infer_member_type(child, path, visiting)
             finally:
-                path.pop()'''
+                path.pop()"""
         assert old in source
         source = source.replace(old, new)
     file.write_text(source)
@@ -69,16 +72,16 @@ def main():
     if guard.exists():
         source = guard.read_text()
         if kind == "tuple":
-            source = source.replace('f"{path}.{name}"', 'path + (name,)')
+            source = source.replace('f"{path}.{name}"', "path + (name,)")
         else:
-            old = '''            if infer_member_type(child, f"{path}.{name}", visiting) is not member_type:
-                return False'''
-            new = '''            path.append(name)
+            old = """            if infer_member_type(child, f"{path}.{name}", visiting) is not member_type:
+                return False"""
+            new = """            path.append(name)
             try:
                 if infer_member_type(child, path, visiting) is not member_type:
                     return False
             finally:
-                path.pop()'''
+                path.pop()"""
             assert old in source
             source = source.replace(old, new)
         guard.write_text(source)

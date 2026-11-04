@@ -89,7 +89,9 @@ def main():
         read = deep_scalar if mutable else deep_array
         assert read(state) == 2
         report["cases"]["deep_mutable" if mutable else "deep_tensor"] = {
-            "schema": measure(lambda: _runtime_dataclass.resolve_dataclass(state, "state"), args.iterations, args.repeats),
+            "schema": measure(
+                lambda: _runtime_dataclass.resolve_dataclass(state, "state"), args.iterations, args.repeats
+            ),
             "dispatch": measure(lambda: read._primal.ensure_compiled(state), args.iterations, args.repeats),
             "specializations": len(read._primal.materialized_kernels),
         }

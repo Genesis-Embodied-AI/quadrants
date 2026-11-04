@@ -37,7 +37,9 @@ def test_diagnostic_path_cycle_shared_child_and_recovery():
     resolver(state, "recovered")
 
 
-@pytest.mark.skipif(not hasattr(_runtime_dataclass, "DeferredMemberType"), reason="Deferred errors postdate #1067 snapshot")
+@pytest.mark.skipif(
+    not hasattr(_runtime_dataclass, "DeferredMemberType"), reason="Deferred errors postdate #1067 snapshot"
+)
 @test_utils.test()
 def test_diagnostic_path_nested_use_and_inlined_forwarding():
     @dataclass
