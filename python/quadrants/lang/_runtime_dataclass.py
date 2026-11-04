@@ -41,12 +41,14 @@ _array_annotation = ndarray_type.NdarrayType()
 
 
 def is_dataclass_annotation(annotation: Any) -> bool:
+    """Recognize RuntimeTyped and concrete dataclass annotations without inferring member types from them."""
     return annotation is RuntimeTyped or isinstance(annotation, type) and dataclasses.is_dataclass(annotation)
 
 
 def infer_member_type(
     value: Any, path: str, visiting: frozenset[int], final_parent: str | None = None, validated_keys=None
 ) -> Any:
+    """Infer a member type from its value, or defer an unsupported-value error until the member is used."""
     if isinstance(value, Tensor):
         value = value._unwrap()
     if hasattr(type(value), "__dataclass_fields__"):
@@ -98,6 +100,7 @@ def infer_member_type(
 def resolve_dataclass(
     value: Any, path: str, visiting: frozenset[int] = frozenset(), final_parent: str | None = None, validated_keys=None
 ) -> type:
+    """Build or reuse a private schema class describing the arriving dataclass's member types."""
     if not hasattr(type(value), "__dataclass_fields__"):
         raise QuadrantsRuntimeTypeError(
             f"Argument {path!r} requires a Python dataclass instance, got {type(value).__name__}"
@@ -184,6 +187,7 @@ def resolve_dataclass(
 
 
 def resolve_arguments(arguments: list[ArgMetadata], values: tuple[Any, ...], validated_keys=None) -> list[ArgMetadata]:
+    """Replace dataclass parameter annotations with schemas inferred from their arriving values."""
     return [
         (
             ArgMetadata(
