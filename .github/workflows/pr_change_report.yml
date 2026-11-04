@@ -41,25 +41,20 @@ jobs:
             --output-dir /tmp/pr_change_report \
             --commit-hash "$SHORT_SHA"
 
-          # Primary skip gate: any source-file change at all (modifications, additions, OR
-          # deletions). summary.json is the full set; file_list.txt is the agent-input subset
-          # that excludes deletions, so gating on file_list.txt would silently drop
-          # deletion-only PRs.
+          # summary.json includes all supported changes. The agent-input subset in file_list.txt excludes deleted
+          # files and Markdown/shell/YAML, so it cannot be used to decide whether there is a report to publish.
           NUM_FILES=$(jq 'length' /tmp/pr_change_report/summary.json)
           if [ "$NUM_FILES" -eq 0 ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "No source files changed."
+            echo "No supported files changed."
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
-            echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
             echo "Files in summary.json: $NUM_FILES"
             echo
             echo "Pre-computed file headers:"
             cat /tmp/pr_change_report/report_header.md
 
-            # Secondary skip gate: per-function attribution requires at least one non-deleted
-            # file (the agent reads HEAD content). For deletion-only PRs there is nothing for
-            # the agent to do, so skip the Cursor CLI install and agent invocation.
+            # Only non-deleted Python/C++ files need the per-function agent step.
             if [ -s /tmp/pr_change_report/file_list.txt ]; then
               echo "skip_agent=false" >> "$GITHUB_OUTPUT"
               echo
@@ -68,7 +63,7 @@ jobs:
             else
               echo "skip_agent=true" >> "$GITHUB_OUTPUT"
               echo
-              echo "All changed source files are deletions; skipping per-function agent step."
+              echo "No files need per-function attribution; skipping agent step."
             fi
           fi
 
@@ -157,20 +152,11 @@ jobs:
 
       - name: Assemble Check-page markdown
         if: steps.inputs.outputs.skip != 'true'
-        env:
-          SHORT_SHA: ${{ steps.inputs.outputs.short_sha }}
         run: |
           {
-            echo "## PR change report (\`${SHORT_SHA}\`)"
+            cat /tmp/pr_change_report/report_comment.md
             echo
-            echo "Group and per-file totals + per-function breakdown of code-line additions and removals."
-            echo "Only source files (.py, .c, .cc, .cpp, .h, .hpp, .cu) are included."
-            echo "Code lines exclude blank lines, comment-only lines, and Python multi-line strings."
-            echo
-            # Reuse the grouped tables from report_comment.md (skip its leading heading + intro lines).
-            sed -n '/^| Group /,/^\*\*Total\*\*/p' /tmp/pr_change_report/report_comment.md
-            echo
-            echo "### Per-function breakdown"
+            echo "### Per-function breakdown (Python/C++ only)"
             echo
             echo '```text'
             cat /tmp/pr_change_report/report.txt
@@ -227,7 +213,7 @@ jobs:
             const totalAdded = summary.reduce((acc, s) => acc + s.added, 0);
             const totalRemoved = summary.reduce((acc, s) => acc + s.removed, 0);
             const text = `Total: ${numFiles} file(s) changed, ` +
-              `+${totalAdded} -${totalRemoved} code lines.`;
+              `+${totalAdded} -${totalRemoved} counted lines.`;
             // Link to this run's summary page, which hosts the full per-file / per-function report.
             const url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}` +
               `/actions/runs/${context.runId}`;

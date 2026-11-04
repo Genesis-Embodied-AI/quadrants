@@ -45,6 +45,7 @@ from pathlib import Path
 # Allow importing helper functions from ``build_inputs.py`` (in the same directory).
 sys.path.insert(0, str(Path(__file__).parent))
 from build_inputs import (  # noqa: E402  (import after sys.path tweak)
+    COUNTING_NOTE,
     FileSummary,
     code_line_set,
     diff_changed_line_numbers,
@@ -281,6 +282,8 @@ def _emit_file_section(book: _FileBookkeeping, attributed: list[_AttributedEntry
     if book.is_deleted:
         lines.append(f"{_GROUP_INDENT}# entire file deleted (per-function breakdown skipped)")
         return lines, 0, 0
+    if book.language not in {"py", "cpp"}:
+        return lines, 0, 0
     if not attributed:
         if book.added or book.removed:
             lines.append(f"{_GROUP_INDENT}# note: no per-function attribution available")
@@ -322,13 +325,12 @@ def _emit_file_section(book: _FileBookkeeping, attributed: list[_AttributedEntry
 
 _FOOTER = (
     "Notes:\n"
-    "  * The number columns (without a + or - sign) are code-line counts in the "
+    "  * The number columns (without a + or - sign) are counted lines in the "
     "BASE (pre-PR) version: file size before this PR (0 for newly-added files), "
     "function body size before this PR (0 for new functions; original body size "
     "for deleted functions).\n"
-    "  * +<n> / -<n> are code lines added / removed by this PR.\n"
-    "  * Code lines exclude blank lines, comment-only lines, and Python "
-    "multi-line strings."
+    "  * +<n> / -<n> are counted lines added / removed by this PR.\n"
+    f"  * {COUNTING_NOTE}"
 )
 
 
