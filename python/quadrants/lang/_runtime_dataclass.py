@@ -56,19 +56,31 @@ def is_dataclass_annotation(annotation: Any) -> bool:
 
 
 def infer_member_type(
+    value: Any, path: str, visiting: frozenset[int], final_parent: str | None = None, validated_keys=None
+) -> InferredMemberType | DeferredMemberType:
+    """Start a diagnostic path for an external member-inference call."""
+    return _infer_member_type(value, (path,), visiting, final_parent, validated_keys)
+
+
+def resolve_dataclass(
+    value: Any, path: str, visiting: frozenset[int] = frozenset(), final_parent: str | None = None, validated_keys=None
+) -> type:
+    """Start an isolated diagnostic path while preserving the root-string calling convention."""
+    return _resolve_dataclass(value, (path,), visiting, final_parent, validated_keys)
+
+
+def _infer_member_type(
     value: Any,
-    path: str | tuple[str, ...],
+    path: tuple[str, ...],
     visiting: frozenset[int],
     final_parent: str | None = None,
     validated_keys=None,
 ) -> InferredMemberType | DeferredMemberType:
     """Infer a member type from its value, or defer an unsupported-value error until the member is used."""
-    if isinstance(path, str):
-        path = (path,)
     if isinstance(value, Tensor):
         value = value._unwrap()
     if hasattr(type(value), "__dataclass_fields__"):
-        return resolve_dataclass(value, path, visiting, final_parent, validated_keys)
+        return _resolve_dataclass(value, path, visiting, final_parent, validated_keys)
     if is_data_oriented(value):
         return Template
     if value is None:
@@ -105,7 +117,7 @@ def infer_member_type(
         declared = getattr(value, "_qd_struct_type", None)
         if declared is not None:
             return declared
-        members = {name: infer_member_type(child, path + (name,), visiting) for name, child in value.items}
+        members = {name: _infer_member_type(child, path + (name,), visiting) for name, child in value.items}
         key = tuple((name, id(dtype)) for name, dtype in members.items())
         if key not in _struct_types:
             _struct_types[key] = StructType(**members)
@@ -113,16 +125,14 @@ def infer_member_type(
     return deferred_member(QuadrantsRuntimeTypeError, f"unsupported runtime type {type(value).__name__}")
 
 
-def resolve_dataclass(
+def _resolve_dataclass(
     value: Any,
-    path: str | tuple[str, ...],
+    path: tuple[str, ...],
     visiting: frozenset[int] = frozenset(),
     final_parent: str | None = None,
     validated_keys=None,
 ) -> type:
     """Build or reuse a private schema class describing the arriving dataclass's member types."""
-    if isinstance(path, str):
-        path = (path,)
     if not hasattr(type(value), "__dataclass_fields__"):
         raise QuadrantsRuntimeTypeError(
             f"Argument {'.'.join(path)!r} requires a Python dataclass instance, got {type(value).__name__}"
@@ -156,7 +166,9 @@ def resolve_dataclass(
                 child_final_parent = f"{source.__name__}.{field.name}"
             elif final_parent is not None:
                 child_final_parent = f"{final_parent}.{field.name}"
-            resolved.type = infer_member_type(child, path + (field.name,), visiting, child_final_parent, validated_keys)
+            resolved.type = _infer_member_type(
+                child, path + (field.name,), visiting, child_final_parent, validated_keys
+            )
             if dataclasses.is_dataclass(resolved.type):
                 stable &= getattr(resolved.type, "_qd_runtime_stable")
             elif child is not None and not isinstance(child, (bool, int, float, np.generic, Ndarray, Field)):
