@@ -13,7 +13,6 @@ This file pins what actually works, and documents the gaps.
 import dataclasses
 
 import numpy as np
-import pytest
 
 import quadrants as qd
 
@@ -864,7 +863,7 @@ def test_data_oriented_nested_ndarray_reassign_different_dtype():
 
 
 @test_utils.test(arch=qd.cpu)
-def test_typed_dataclass_with_data_oriented_field_raises_clear_error():
+def test_typed_dataclass_with_data_oriented_field_uses_runtime_type():
     @qd.data_oriented
     class Inner:
         def __init__(self, x):
@@ -882,8 +881,8 @@ def test_typed_dataclass_with_data_oriented_field_raises_clear_error():
         for i in range(4):
             s.inner.x[i] = i + 1
 
-    with pytest.raises(Exception, match="data_oriented.*qd.template"):
-        run(outer)
+    run(outer)
+    np.testing.assert_array_equal(x.to_numpy(), np.arange(1, 5))
 
 
 @test_utils.test(arch=qd.cpu)

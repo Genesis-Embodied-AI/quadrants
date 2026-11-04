@@ -373,7 +373,7 @@ class CallTransformer:
         func = node.func.ptr
         func_type = type(func)
 
-        is_func_base_wrapper = func_type in {QuadrantsCallable, BoundQuadrantsCallable}
+        is_func_base_wrapper = func_type in {QuadrantsCallable, BoundQuadrantsCallable} and func._is_quadrants_function
 
         with (
             dataclass_call_arguments(func, node.args, node.keywords, func_type is BoundQuadrantsCallable)

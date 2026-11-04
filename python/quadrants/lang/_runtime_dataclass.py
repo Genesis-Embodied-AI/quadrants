@@ -201,6 +201,26 @@ def resolve_arguments(arguments: list[ArgMetadata], values: tuple[Any, ...]) -> 
     ]
 
 
+def prepare_runtime_arguments(kernel, values):
+    """Prepare inferred metadata and dispatch-cache eligibility for one kernel launch."""
+    kernel.arg_metas = resolve_arguments(kernel.orig_arguments, values)
+    kernel.mapper.arguments = kernel.arg_metas
+    kernel.template_slot_locations = [
+        i
+        for i in kernel.original_template_slot_locations
+        if not hasattr(kernel.arg_metas[i].annotation, "_qd_runtime_origin")
+    ]
+    kernel.mapper.template_slot_locations = kernel.template_slot_locations
+    # A dataclass's member types can change without changing the identity of the outer object.
+    kernel.mapper._mapping_cache_disabled = (
+        any(
+            hasattr(meta.annotation, "_qd_runtime_origin") and not meta.annotation._qd_runtime_stable
+            for meta in kernel.arg_metas
+        )
+        or None
+    )
+
+
 def runtime_template_members(schema, value, path=()):
     """Yield template-valued subobjects with paths rooted at the original kernel argument."""
     if not hasattr(schema, "_qd_runtime_origin"):
