@@ -36,13 +36,13 @@ class FrozenSchemaEntry:
                 continue
             self.member_guards.append((name, member_type))
 
-    def matches(self, dataclass_instance, path, visiting, infer_member_type):
+    def matches(self, dataclass_instance, path, ancestor_ids, infer_member_type):
         for name, wrapper_type, backing_type in self.tensor_guards:
             tensor = getattr(dataclass_instance, name)
             if type(tensor) is not wrapper_type or type(tensor._unwrap()) is not backing_type:
                 return False
         for name, member_type in self.member_guards:
             child = getattr(dataclass_instance, name)
-            if infer_member_type(child, f"{path}.{name}", visiting) is not member_type:
+            if infer_member_type(child, f"{path}.{name}", ancestor_ids) is not member_type:
                 return False
         return True

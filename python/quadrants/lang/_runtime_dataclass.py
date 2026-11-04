@@ -86,7 +86,7 @@ def is_dataclass_annotation(annotation: Any) -> bool:
 def infer_member_type(
     py_obj: Any,
     path: str,
-    visiting: frozenset[int],
+    ancestor_ids: frozenset[int],
     non_frozen_ancestor_path: str | None = None,
     final_value_key_by_value_id: FinalValueKeyCache | None = None,
 ) -> InferredMemberType | DeferredMemberType:
@@ -94,7 +94,7 @@ def infer_member_type(
     if isinstance(py_obj, Tensor):
         py_obj = py_obj._unwrap()
     if hasattr(type(py_obj), "__dataclass_fields__"):
-        return infer_dataclass_type(py_obj, path, visiting, non_frozen_ancestor_path, final_value_key_by_value_id)
+        return infer_dataclass_type(py_obj, path, ancestor_ids, non_frozen_ancestor_path, final_value_key_by_value_id)
     if is_data_oriented(py_obj):
         return Template
     if py_obj is None:
@@ -131,7 +131,7 @@ def infer_member_type(
         declared = getattr(py_obj, "_qd_struct_type", None)
         if declared is not None:
             return declared
-        members = {name: infer_member_type(child, f"{path}.{name}", visiting) for name, child in py_obj.items}
+        members = {name: infer_member_type(child, f"{path}.{name}", ancestor_ids) for name, child in py_obj.items}
         key = tuple((name, id(dtype)) for name, dtype in members.items())
         if key not in _struct_types:
             _struct_types[key] = StructType(**members)
@@ -142,21 +142,21 @@ def infer_member_type(
 def infer_dataclass_type(
     dataclass_instance: DataclassInstance,
     path: str,
-    visiting: frozenset[int] = frozenset(),
+    ancestor_ids: frozenset[int] = frozenset(),
     non_frozen_ancestor_path: str | None = None,
     final_value_key_by_value_id: FinalValueKeyCache | None = None,
 ) -> type:
     """Build or reuse a private schema class; the caller must verify that dataclass_instance is a dataclass instance."""
-    if id(dataclass_instance) in visiting:
+    if id(dataclass_instance) in ancestor_ids:
         raise QuadrantsRuntimeTypeError(f"Dataclass member {path!r} contains a cycle")
-    visiting = visiting | {id(dataclass_instance)}
+    ancestor_ids = ancestor_ids | {id(dataclass_instance)}
     dataclass_type = type(dataclass_instance)
     runtime = impl.get_runtime()
     cache_key = (id(dataclass_type), id(runtime.default_ip), id(runtime.default_fp), non_frozen_ancestor_path)
     instance_cache = _instance_schemas.get(dataclass_instance)
     cached = instance_cache.get(cache_key) if instance_cache is not None else None
     if isinstance(cached, FrozenSchemaEntry):
-        if cached.matches(dataclass_instance, path, visiting, infer_member_type):
+        if cached.matches(dataclass_instance, path, ancestor_ids, infer_member_type):
             return cached.schema
     elif cached is not None:
         return cached
@@ -192,7 +192,7 @@ def infer_dataclass_type(
             elif non_frozen_ancestor_path is not None:
                 child_non_frozen_ancestor_path = f"{non_frozen_ancestor_path}.{name}"
             member_type = infer_member_type(
-                child, f"{path}.{name}", visiting, child_non_frozen_ancestor_path, final_value_key_by_value_id
+                child, f"{path}.{name}", ancestor_ids, child_non_frozen_ancestor_path, final_value_key_by_value_id
             )
             if dataclasses.is_dataclass(member_type):
                 stable &= getattr(member_type, "_qd_runtime_stable")
