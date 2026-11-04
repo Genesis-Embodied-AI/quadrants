@@ -56,7 +56,11 @@ def is_dataclass_annotation(annotation: Any) -> bool:
 
 
 def infer_member_type(
-    value: Any, path: str | tuple[str, ...], visiting: frozenset[int], final_parent: str | None = None, validated_keys=None
+    value: Any,
+    path: str | tuple[str, ...],
+    visiting: frozenset[int],
+    final_parent: str | None = None,
+    validated_keys=None,
 ) -> InferredMemberType | DeferredMemberType:
     """Infer a member type from its value, or defer an unsupported-value error until the member is used."""
     if isinstance(path, str):
@@ -110,7 +114,11 @@ def infer_member_type(
 
 
 def resolve_dataclass(
-    value: Any, path: str | tuple[str, ...], visiting: frozenset[int] = frozenset(), final_parent: str | None = None, validated_keys=None
+    value: Any,
+    path: str | tuple[str, ...],
+    visiting: frozenset[int] = frozenset(),
+    final_parent: str | None = None,
+    validated_keys=None,
 ) -> type:
     """Build or reuse a private schema class describing the arriving dataclass's member types."""
     if isinstance(path, str):
@@ -148,9 +156,7 @@ def resolve_dataclass(
                 child_final_parent = f"{source.__name__}.{field.name}"
             elif final_parent is not None:
                 child_final_parent = f"{final_parent}.{field.name}"
-            resolved.type = infer_member_type(
-                child, path + (field.name,), visiting, child_final_parent, validated_keys
-            )
+            resolved.type = infer_member_type(child, path + (field.name,), visiting, child_final_parent, validated_keys)
             if dataclasses.is_dataclass(resolved.type):
                 stable &= getattr(resolved.type, "_qd_runtime_stable")
             elif child is not None and not isinstance(child, (bool, int, float, np.generic, Ndarray, Field)):
