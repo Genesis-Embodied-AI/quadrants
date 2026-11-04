@@ -44,11 +44,11 @@ def is_dataclass_annotation(annotation: Any) -> bool:
     return annotation is RuntimeTyped or isinstance(annotation, type) and dataclasses.is_dataclass(annotation)
 
 
-def infer_member_type(value: Any, path: str, visiting: frozenset[int], final_parent: str | None = None) -> Any:
+def infer_member_type(value: Any, path: str, visiting: frozenset[int], final_parent: str | None = None, validated_keys=None) -> Any:
     if isinstance(value, Tensor):
         value = value._unwrap()
     if hasattr(type(value), "__dataclass_fields__"):
-        return resolve_dataclass(value, path, visiting, final_parent)
+        return resolve_dataclass(value, path, visiting, final_parent, validated_keys)
     if is_data_oriented(value):
         return template
     if value is None:
@@ -94,7 +94,7 @@ def infer_member_type(value: Any, path: str, visiting: frozenset[int], final_par
 
 
 def resolve_dataclass(
-    value: Any, path: str, visiting: frozenset[int] = frozenset(), final_parent: str | None = None
+    value: Any, path: str, visiting: frozenset[int] = frozenset(), final_parent: str | None = None, validated_keys=None
 ) -> type:
     if not hasattr(type(value), "__dataclass_fields__"):
         raise QuadrantsRuntimeTypeError(
@@ -119,7 +119,7 @@ def resolve_dataclass(
         if field.name in final_errors:
             resolved.type = final_errors[field.name]
         elif field.name in finals:
-            resolved.type = runtime_final_type(field.type, getattr(value, field.name), final_parent, field.name)
+            resolved.type = runtime_final_type(field.type, getattr(value, field.name), final_parent, field.name, validated_keys)
         else:
             child = getattr(value, field.name)
             child_final_parent = None
@@ -127,7 +127,7 @@ def resolve_dataclass(
                 child_final_parent = f"{source.__name__}.{field.name}"
             elif final_parent is not None:
                 child_final_parent = f"{final_parent}.{field.name}"
-            resolved.type = infer_member_type(child, f"{path}.{field.name}", visiting, child_final_parent)
+            resolved.type = infer_member_type(child, f"{path}.{field.name}", visiting, child_final_parent, validated_keys)
             if dataclasses.is_dataclass(resolved.type):
                 stable &= getattr(resolved.type, "_qd_runtime_stable")
             elif child is not None and not isinstance(child, (bool, int, float, np.generic, Ndarray, Field)):
@@ -177,11 +177,11 @@ def resolve_dataclass(
     return schema
 
 
-def resolve_arguments(arguments: list[ArgMetadata], values: tuple[Any, ...]) -> list[ArgMetadata]:
+def resolve_arguments(arguments: list[ArgMetadata], values: tuple[Any, ...], validated_keys=None) -> list[ArgMetadata]:
     return [
         (
             ArgMetadata(
-                resolve_dataclass(value, arg.name),
+                resolve_dataclass(value, arg.name, validated_keys=validated_keys),
                 arg.name,
                 arg.default,
                 optional=arg.optional,
@@ -195,7 +195,8 @@ def resolve_arguments(arguments: list[ArgMetadata], values: tuple[Any, ...]) -> 
 
 def prepare_runtime_arguments(kernel, values):
     """Prepare inferred metadata and dispatch-cache eligibility for one kernel launch."""
-    kernel.arg_metas = resolve_arguments(kernel.orig_arguments, values)
+    validated_keys = {}
+    kernel.arg_metas = resolve_arguments(kernel.orig_arguments, values, validated_keys)
     kernel.mapper.arguments = kernel.arg_metas
     kernel._runtime_has_deferred = any(
         getattr(meta.annotation, "_qd_runtime_has_deferred", False) for meta in kernel.arg_metas
@@ -214,6 +215,8 @@ def prepare_runtime_arguments(kernel, values):
         )
         or None
     )
+
+    return validated_keys
 
 
 def runtime_template_members(schema, value, path=()):

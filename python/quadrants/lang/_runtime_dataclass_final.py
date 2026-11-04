@@ -55,7 +55,7 @@ def runtime_final_plan(source: type) -> tuple[frozenset[str], dict[str, Deferred
     return names, errors
 
 
-def runtime_final_type(annotation, value, parent_path: str | None, name: str):
+def runtime_final_type(annotation, value, parent_path: str | None, name: str, validated_keys=None):
     """Return a valid Final annotation or a deferred diagnostic for the current arriving value/path."""
     if parent_path is not None:
         parent_name = parent_path.split(".", 1)[0]
@@ -66,9 +66,20 @@ def runtime_final_type(annotation, value, parent_path: str | None, name: str):
         )
     # Exact Python primitives cannot fail the existing value validator. Other values must still be checked on each
     # launch: an enum or primitive subclass can acquire mutable state even inside a frozen dataclass.
-    if not any(type(value) is primitive for primitive in (bool, int, float, str)):
+    value_type = type(value)
+    if value_type is not bool and value_type is not int and value_type is not float and value_type is not str:
         try:
-            final_scalar_key(value, live=True)
+            key = final_scalar_key(value, live=True)
+            if validated_keys is not None:
+                validated_keys[id(value)] = (value, key)
         except TypeError as error:
             return deferred_member(TypeError, str(error))
     return annotation
+
+
+def runtime_final_key(value, validated_keys):
+    """Reuse a value key validated during this dispatch only; never retain it across kernel calls."""
+    cached = validated_keys.get(id(value)) if validated_keys is not None else None
+    if cached is not None and cached[0] is value:
+        return cached[1]
+    return final_scalar_key(value, live=True)

@@ -282,3 +282,28 @@ def test_runtime_deferred_members_disable_offline_cache(tmp_path):
                 assert not observed.cache_stored
                 assert not observed.cache_key_generated
         assert run._primal._runtime_has_deferred
+
+
+@test_utils.test()
+def test_unused_member_in_captured_dataclass():
+    @dataclass(frozen=True)
+    class State:
+        value: object
+        unused: object
+
+    @qd.func
+    def read(state: qd.RuntimeTyped):
+        return state.value[0]
+
+    @qd.data_oriented
+    class Reader:
+        def __init__(self, state):
+            self.state = state
+
+        @qd.kernel
+        def run(self) -> qd.i32:
+            return read(self.state)
+
+    values = qd.ndarray(qd.i32, shape=1)
+    values[0] = 9
+    assert Reader(State(values, object())).run() == 9

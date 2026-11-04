@@ -392,8 +392,9 @@ class FunctionDefTransformer:
         # args-hasher never sees the value and configurations that differ only there collide in the fastcache key.
         ctx.fn_param_names.add(argument_name)
         if isinstance(argument_type, DeferredMemberType):
-            assert isinstance(data, DeferredMemberValue)
-            ctx.create_variable(argument_name, data)
+            # Captured Python dataclasses enter inlined calls before any kernel-argument binding exists.
+            binding = data if isinstance(data, DeferredMemberValue) else argument_type.bind(argument_name)
+            ctx.create_variable(argument_name, binding)
             return None
 
         # A ``Final[T]`` leaf @qd.func arg: ``data`` already carries the resolved Python value, so bind it directly for
