@@ -373,7 +373,7 @@
 <span class="c1"># construction to those free functions so this hot file doesn't accrete checkpoint-feature-specific blocks.</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">kernel_checkpoint</span> <span class="k">as</span> <span class="n">_checkpoint_helpers</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._fast_caching</span><span class="w"> </span><span class="kn">import</span> <span class="n">src_hasher</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._runtime_dataclass</span><span class="w"> </span><span class="kn">import</span> <span class="n">resolve_arguments</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._runtime_dataclass</span><span class="w"> </span><span class="kn">import</span> <span class="n">prepare_runtime_arguments</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._template_mapper_hotpath</span><span class="w"> </span><span class="kn">import</span> <span class="n">chain_has_mutable_container</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._wrap_inspect</span><span class="w"> </span><span class="kn">import</span> <span class="n">FunctionSourceInfo</span><span class="p">,</span> <span class="n">get_source_info_and_src</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
@@ -1390,22 +1390,7 @@
 <div class="viewcode-block" id="Kernel.ensure_compiled">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.ensure_compiled">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">ensure_compiled</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">py_args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Callable</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="n">AutodiffMode</span><span class="p">]:</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span> <span class="o">=</span> <span class="n">resolve_arguments</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">orig_arguments</span><span class="p">,</span> <span class="n">py_args</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">mapper</span><span class="o">.</span><span class="n">arguments</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">template_slot_locations</span> <span class="o">=</span> <span class="p">[</span>
-            <span class="n">i</span>
-            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">original_template_slot_locations</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">annotation</span><span class="p">,</span> <span class="s2">"_qd_runtime_origin"</span><span class="p">)</span>
-        <span class="p">]</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">mapper</span><span class="o">.</span><span class="n">template_slot_locations</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">template_slot_locations</span>
-        <span class="c1"># A dataclass's member types can change without changing the identity of the outer object.</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">mapper</span><span class="o">.</span><span class="n">_mapping_cache_disabled</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="nb">any</span><span class="p">(</span>
-                <span class="nb">hasattr</span><span class="p">(</span><span class="n">meta</span><span class="o">.</span><span class="n">annotation</span><span class="p">,</span> <span class="s2">"_qd_runtime_origin"</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">meta</span><span class="o">.</span><span class="n">annotation</span><span class="o">.</span><span class="n">_qd_runtime_stable</span>
-                <span class="k">for</span> <span class="n">meta</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span>
-            <span class="p">)</span>
-            <span class="ow">or</span> <span class="kc">None</span>
-        <span class="p">)</span>
+        <span class="n">prepare_runtime_arguments</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">py_args</span><span class="p">)</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="n">instance_id</span><span class="p">,</span> <span class="n">arg_features</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mapper</span><span class="o">.</span><span class="n">lookup</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">raise_on_templated_floats</span><span class="p">,</span> <span class="n">py_args</span><span class="p">)</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
