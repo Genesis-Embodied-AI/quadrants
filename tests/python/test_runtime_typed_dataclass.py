@@ -393,6 +393,8 @@ def test_runtime_frozen_wrapper_backing_and_nested_scalar_changes():
     array[0] = 2
     field = qd.field(qd.i32, shape=1)
     field[0] = 7
+    replacement_field = qd.field(qd.i32, shape=1)
+    replacement_field[0] = 11
     wrapped = qd.Tensor(array)
     inner = Inner(1.5)
     state = State(wrapped, inner)
@@ -403,12 +405,14 @@ def test_runtime_frozen_wrapper_backing_and_nested_scalar_changes():
     assert len(read._primal.materialized_kernels) == compiled
     wrapped._impl = field
     assert read(state) == 9.5
+    wrapped._impl = replacement_field
+    assert read(state) == 13.5
     inner.increment = 3
-    assert read(state) == 10
+    assert read(state) == 14
     wrapped._impl = array
     inner.increment = 1.5
     assert read(state) == 3.5
-    assert len(read._primal.materialized_kernels) == compiled + 2
+    assert len(read._primal.materialized_kernels) == compiled + 3
 
 
 @pytest.mark.parametrize("slots", [False, True])
