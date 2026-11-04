@@ -55,13 +55,15 @@ def runtime_final_plan(source: type) -> tuple[frozenset[str], dict[str, Deferred
     return names, errors
 
 
-def runtime_final_type(annotation, value, parent_path: str | None, name: str, final_value_key_by_value_id=None):
+def runtime_final_type(
+    annotation, value, non_frozen_ancestor_path: str | None, name: str, final_value_key_by_value_id=None
+):
     """Return a valid Final annotation or a deferred diagnostic for the current arriving value/path."""
-    if parent_path is not None:
-        parent_name = parent_path.split(".", 1)[0]
+    if non_frozen_ancestor_path is not None:
+        parent_name = non_frozen_ancestor_path.split(".", 1)[0]
         return deferred_member(
             TypeError,
-            f"{parent_name} is not frozen but reaches the ``Final`` field {parent_path}.{name}. "
+            f"{parent_name} is not frozen but reaches the ``Final`` field {non_frozen_ancestor_path}.{name}. "
             "No dataclass on the path to a used Final value may be reassignable.",
         )
     # Exact Python primitives cannot fail the existing value validator. Other values must still be checked on each

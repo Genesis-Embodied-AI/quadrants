@@ -82,14 +82,14 @@ def infer_member_type(
     py_obj: Any,
     path: str,
     visiting: frozenset[int],
-    final_parent: str | None = None,
+    non_frozen_ancestor_path: str | None = None,
     final_value_key_by_value_id: FinalValueKeyCache | None = None,
 ) -> InferredMemberType | DeferredMemberType:
     """Infer a member type from its value, or defer an unsupported-value error until the member is used."""
     if isinstance(py_obj, Tensor):
         py_obj = py_obj._unwrap()
     if hasattr(type(py_obj), "__dataclass_fields__"):
-        return infer_dataclass_type(py_obj, path, visiting, final_parent, final_value_key_by_value_id)
+        return infer_dataclass_type(py_obj, path, visiting, non_frozen_ancestor_path, final_value_key_by_value_id)
     if is_data_oriented(py_obj):
         return Template
     if py_obj is None:
@@ -138,7 +138,7 @@ def infer_dataclass_type(
     dataclass_instance: DataclassInstance,
     path: str,
     visiting: frozenset[int] = frozenset(),
-    final_parent: str | None = None,
+    non_frozen_ancestor_path: str | None = None,
     final_value_key_by_value_id: FinalValueKeyCache | None = None,
 ) -> type:
     """Build or reuse a private schema class; the caller must verify that dataclass_instance is a dataclass instance."""
@@ -147,7 +147,7 @@ def infer_dataclass_type(
     visiting = visiting | {id(dataclass_instance)}
     dataclass_type = type(dataclass_instance)
     runtime = impl.get_runtime()
-    cache_key = (id(dataclass_type), id(runtime.default_ip), id(runtime.default_fp), final_parent)
+    cache_key = (id(dataclass_type), id(runtime.default_ip), id(runtime.default_fp), non_frozen_ancestor_path)
     cached = getattr(dataclass_instance, "_qd_runtime_schemas", {}).get(cache_key)
     if cached is not None and cached._qd_runtime_origin is dataclass_type:
         return cached
@@ -173,17 +173,21 @@ def infer_dataclass_type(
             member_type = final_errors[name]
         elif is_final:
             member_type = runtime_final_type(
-                field.type, getattr(dataclass_instance, name), final_parent, name, final_value_key_by_value_id
+                field.type,
+                getattr(dataclass_instance, name),
+                non_frozen_ancestor_path,
+                name,
+                final_value_key_by_value_id,
             )
         else:
             child = getattr(dataclass_instance, name)
-            child_final_parent = None
+            child_non_frozen_ancestor_path = None
             if not (params.frozen or params.unsafe_hash):
-                child_final_parent = f"{dataclass_type.__name__}.{name}"
-            elif final_parent is not None:
-                child_final_parent = f"{final_parent}.{name}"
+                child_non_frozen_ancestor_path = f"{dataclass_type.__name__}.{name}"
+            elif non_frozen_ancestor_path is not None:
+                child_non_frozen_ancestor_path = f"{non_frozen_ancestor_path}.{name}"
             member_type = infer_member_type(
-                child, f"{path}.{name}", visiting, child_final_parent, final_value_key_by_value_id
+                child, f"{path}.{name}", visiting, child_non_frozen_ancestor_path, final_value_key_by_value_id
             )
             if dataclasses.is_dataclass(member_type):
                 stable &= getattr(member_type, "_qd_runtime_stable")
@@ -243,7 +247,7 @@ def infer_dataclass_type(
                 pass
         cache[cache_key] = schema
     # Guard reuse must not bypass deferred diagnostics or validation of Final-bearing paths.
-    elif params.frozen and not has_deferred and not finals and final_parent is None:
+    elif params.frozen and not has_deferred and not finals and non_frozen_ancestor_path is None:
         cache = getattr(dataclass_instance, "_qd_runtime_guarded_schemas", None)
         if cache is None:
             cache = {}
