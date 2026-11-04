@@ -26,6 +26,13 @@ REFS = {
     "guard-list": "origin/hp/path-guard-list",
     "guard-elided": "origin/hp/path-guard-elided",
 }
+REFS.update(
+    {
+        f"{base}-{kind}-entry": f"origin/hp/path-{base}-{kind}-entry"
+        for base in ("parent", "guard")
+        for kind in ("tuple", "list")
+    }
+)
 
 
 def revision(repo, ref):
@@ -74,10 +81,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("root", type=Path)
     parser.add_argument("phase", choices=("tests", "micro", "fem", "types"))
-    parser.add_argument("--candidate", choices=("tuple", "list"), default="tuple")
+    parser.add_argument("--candidate", choices=("tuple", "list", "tuple-entry", "list-entry"), default="tuple")
+    parser.add_argument("--entry-only", action="store_true")
     args = parser.parse_args()
     root = args.root.resolve()
-    folder = root / "tmp/path-results" / args.phase
+    folder = root / "tmp/path-results" / (args.phase + ("-entry" if args.entry_only else ""))
     folder.mkdir(parents=True, exist_ok=True)
     env = dict(
         os.environ, GS_ENABLE_NDARRAY="1", MADRONA_DISABLE_CUDA_HEAP_SIZE="1", QD_OFFLINE_CACHE_CLEANING_POLICY="never"
@@ -97,6 +105,15 @@ def main():
             ("tuple", "control", "elided", "list"),
             ("list", "elided", "control", "tuple"),
         )
+        if args.entry_only:
+            orders = (
+                ("control", "tuple-entry", "list-entry"),
+                ("list-entry", "tuple-entry", "control"),
+                ("tuple-entry", "control", "list-entry"),
+                ("list-entry", "control", "tuple-entry"),
+                ("tuple-entry", "list-entry", "control"),
+                ("control", "list-entry", "tuple-entry"),
+            )
         schedule = [
             (f"{base}-{kind}", trial)
             for base in ("parent", "guard")
@@ -110,7 +127,8 @@ def main():
             for kind in order
         ]
     else:
-        schedule = [(f"{base}-{kind}", 0) for base in ("parent", "guard") for kind in ("control", "tuple", "list")]
+        kinds = ("tuple-entry", "list-entry") if args.entry_only else ("control", "tuple", "list")
+        schedule = [(f"{base}-{kind}", 0) for base in ("parent", "guard") for kind in kinds]
     try:
         for label, trial in schedule:
             tree = checkout(root, label, refs)

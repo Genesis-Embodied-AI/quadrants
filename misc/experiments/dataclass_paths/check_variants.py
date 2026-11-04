@@ -8,14 +8,15 @@ from pathlib import Path
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("root", type=Path)
+    parser.add_argument("--entry-only", action="store_true")
     args = parser.parse_args()
     root = args.root.resolve()
-    folder = root / "tmp/path-results/lint"
+    folder = root / "tmp/path-results" / ("lint-entry" if args.entry_only else "lint")
     folder.mkdir(parents=True, exist_ok=True)
     hook = str(root / ".venv/bin/pre-commit")
     for base in ("parent", "guard"):
         for kind in ("tuple", "list"):
-            label = f"{base}-{kind}"
+            label = f"{base}-{kind}" + ("-entry" if args.entry_only else "")
             tree = root / "tmp" / f"experiment-{label}"
             files = ["python/quadrants/lang/_runtime_dataclass.py"]
             if base == "guard":
