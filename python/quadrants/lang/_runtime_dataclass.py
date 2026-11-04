@@ -152,9 +152,11 @@ def infer_dataclass_type(
     ancestor_ids = ancestor_ids | {id(dataclass_instance)}
     dataclass_type = type(dataclass_instance)
     runtime = impl.get_runtime()
-    cache_key = (id(dataclass_type), id(runtime.default_ip), id(runtime.default_fp), non_frozen_ancestor_path)
+    # The same instance can need different schemas under different numeric defaults or non-frozen ancestor paths.
+    # These affect member types and Final validation, so each instance has a dictionary keyed by inference context.
+    schema_cache_key = (id(dataclass_type), id(runtime.default_ip), id(runtime.default_fp), non_frozen_ancestor_path)
     instance_cache = _instance_schemas.get(dataclass_instance)
-    cached = instance_cache.get(cache_key) if instance_cache is not None else None
+    cached = instance_cache.get(schema_cache_key) if instance_cache is not None else None
     if isinstance(cached, FrozenSchemaEntry):
         if cached.matches(dataclass_instance, path, ancestor_ids, infer_member_type):
             return cached.schema
@@ -248,7 +250,7 @@ def infer_dataclass_type(
             instance_cache = {}
             if not _instance_schemas.set(dataclass_instance, instance_cache):
                 return schema
-        instance_cache[cache_key] = (
+        instance_cache[schema_cache_key] = (
             schema if stable else FrozenSchemaEntry(dataclass_instance, schema, field_plan, member_types)
         )
     return schema
