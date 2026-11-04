@@ -12,7 +12,7 @@ from typing import Any, TypeAlias
 
 import numpy as np
 
-from quadrants._lib import core as _qd_core
+from quadrants._lib.core.quadrants_python import DataTypeCxx
 from quadrants._tensor_wrapper import Tensor
 from quadrants.lang import impl
 from quadrants.lang._dataclass_util import create_flat_name
@@ -35,7 +35,7 @@ from quadrants.types import buffer_view_type, ndarray_type, primitive_types
 from quadrants.types.annotations import RuntimeTyped, Template
 
 InferredMemberType: TypeAlias = (
-    type | _qd_core.DataTypeCxx | ndarray_type.NdarrayType | buffer_view_type.BufferViewType | MatrixType | StructType
+    type | DataTypeCxx | ndarray_type.NdarrayType | buffer_view_type.BufferViewType | MatrixType | StructType
 )
 
 _schemas: dict[tuple, type] = {}
