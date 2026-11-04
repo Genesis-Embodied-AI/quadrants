@@ -237,24 +237,38 @@ def test_runtime_scalar_precision():
     assert real(State(np.float64(1.0 + 2**-40))) == 1.0 + 2**-40
 
 
+@pytest.mark.parametrize("annotation_kind", ["marker", "concrete"])
 @test_utils.test()
-def test_runtime_bad_inputs():
+def test_runtime_bad_inputs(annotation_kind):
     @dataclass
     class State:
         value: object
 
+    annotation = qd.RuntimeTyped if annotation_kind == "marker" else State
+
     @qd.kernel
-    def read(state: qd.RuntimeTyped) -> qd.i32:
+    def read(state: annotation) -> qd.i32:
         return state.value
 
-    with pytest.raises(Exception, match="requires a Python dataclass instance"):
+    @qd.func
+    def from_func(state: annotation):
+        return state.value
+
+    @qd.kernel
+    def invalid_func_argument() -> qd.i32:
+        return from_func(1)
+
+    with pytest.raises(qd.QuadrantsRuntimeTypeError, match="Argument 'state' requires a Python dataclass instance"):
         read(1)
+    with pytest.raises(qd.QuadrantsRuntimeTypeError, match="Argument 'state' requires a Python dataclass instance"):
+        invalid_func_argument()
     with pytest.raises(Exception, match="state.value.*unsupported runtime type"):
         read(State(object()))
     cyclic = State(None)
     cyclic.value = cyclic
     with pytest.raises(Exception, match="state.value.*cycle"):
         read(cyclic)
+    assert read(State(2)) == 2
 
 
 @test_utils.test(require=qd.extension.data64)

@@ -110,11 +110,7 @@ def infer_member_type(
 def infer_dataclass_type(
     value: Any, path: str, visiting: frozenset[int] = frozenset(), final_parent: str | None = None, validated_keys=None
 ) -> type:
-    """Build or reuse a private schema class describing the arriving dataclass's member types."""
-    if not hasattr(type(value), "__dataclass_fields__"):
-        raise QuadrantsRuntimeTypeError(
-            f"Argument {path!r} requires a Python dataclass instance, got {type(value).__name__}"
-        )
+    """Build or reuse a private schema class; the caller must verify that value is a dataclass instance."""
     if id(value) in visiting:
         raise QuadrantsRuntimeTypeError(f"Dataclass member {path!r} contains a cycle")
     visiting = visiting | {id(value)}
@@ -198,19 +194,21 @@ def infer_dataclass_type(
 
 def resolve_arguments(arguments: list[ArgMetadata], values: tuple[Any, ...], validated_keys=None) -> list[ArgMetadata]:
     """Replace dataclass parameter annotations with schemas inferred from their arriving values."""
-    return [
-        (
-            ArgMetadata(
+    resolved = []
+    for arg, value in zip(arguments, values):
+        if hasattr(type(value), "__dataclass_fields__"):
+            arg = ArgMetadata(
                 infer_dataclass_type(value, arg.name, validated_keys=validated_keys),
                 arg.name,
                 arg.default,
                 optional=arg.optional,
             )
-            if hasattr(type(value), "__dataclass_fields__") or is_dataclass_annotation(arg.annotation)
-            else arg
-        )
-        for arg, value in zip(arguments, values)
-    ]
+        elif is_dataclass_annotation(arg.annotation):
+            raise QuadrantsRuntimeTypeError(
+                f"Argument {arg.name!r} requires a Python dataclass instance, got {type(value).__name__}"
+            )
+        resolved.append(arg)
+    return resolved
 
 
 def prepare_runtime_arguments(kernel, values):
@@ -286,8 +284,12 @@ def dataclass_call_arguments(func, args, keywords, bound: bool = False):
         value = values[meta.name]
         if isinstance(value, type) and hasattr(value, "_qd_runtime_origin"):
             schema = value
-        elif hasattr(type(value), "__dataclass_fields__") or is_dataclass_annotation(meta.annotation):
+        elif hasattr(type(value), "__dataclass_fields__"):
             schema = infer_dataclass_type(value, meta.name)
+        elif is_dataclass_annotation(meta.annotation):
+            raise QuadrantsRuntimeTypeError(
+                f"Argument {meta.name!r} requires a Python dataclass instance, got {type(value).__name__}"
+            )
         else:
             continue
         metas[i] = ArgMetadata(schema, meta.name, meta.default, optional=meta.optional)
