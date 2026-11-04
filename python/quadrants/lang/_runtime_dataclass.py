@@ -192,23 +192,23 @@ def infer_dataclass_type(
     return schema
 
 
-def resolve_arguments(arguments: list[ArgMetadata], values: tuple[Any, ...], validated_keys=None) -> list[ArgMetadata]:
+def resolve_arguments(arg_metas: list[ArgMetadata], values: tuple[Any, ...], validated_keys=None) -> list[ArgMetadata]:
     """Replace dataclass parameter annotations with schemas inferred from their arriving values."""
-    resolved = []
-    for arg, value in zip(arguments, values):
+    resolved_arg_metas = []
+    for arg_meta, value in zip(arg_metas, values):
         if hasattr(type(value), "__dataclass_fields__"):
-            arg = ArgMetadata(
-                infer_dataclass_type(value, arg.name, validated_keys=validated_keys),
-                arg.name,
-                arg.default,
-                optional=arg.optional,
+            arg_meta = ArgMetadata(
+                infer_dataclass_type(value, arg_meta.name, validated_keys=validated_keys),
+                arg_meta.name,
+                arg_meta.default,
+                optional=arg_meta.optional,
             )
-        elif is_dataclass_annotation(arg.annotation):
+        elif is_dataclass_annotation(arg_meta.annotation):
             raise QuadrantsRuntimeTypeError(
-                f"Argument {arg.name!r} requires a Python dataclass instance, got {type(value).__name__}"
+                f"Argument {arg_meta.name!r} requires a Python dataclass instance, got {type(value).__name__}"
             )
-        resolved.append(arg)
-    return resolved
+        resolved_arg_metas.append(arg_meta)
+    return resolved_arg_metas
 
 
 def prepare_runtime_arguments(kernel, values):
@@ -249,13 +249,13 @@ def runtime_template_members(schema, value, path=()):
             yield from runtime_template_members(field.type, child, child_path)
 
 
-def is_runtime_member_name(arguments: list[ArgMetadata], name: str) -> bool:
+def is_runtime_member_name(arg_metas: list[ArgMetadata], name: str) -> bool:
     """Whether a flattened AST name belongs to an inferred dataclass argument (including inlined functions)."""
-    for arg in arguments:
-        if not hasattr(arg.annotation, "_qd_runtime_origin"):
+    for arg_meta in arg_metas:
+        if not hasattr(arg_meta.annotation, "_qd_runtime_origin"):
             continue
-        for field in dataclasses.fields(arg.annotation):
-            child_name = create_flat_name(arg.name, field.name)
+        for field in dataclasses.fields(arg_meta.annotation):
+            child_name = create_flat_name(arg_meta.name, field.name)
             if name == child_name:
                 return True
             if is_runtime_member_name([ArgMetadata(field.type, child_name)], name):
@@ -267,14 +267,14 @@ def is_runtime_member_name(arguments: list[ArgMetadata], name: str) -> bool:
 def dataclass_call_arguments(func, args, keywords, bound: bool = False):
     """Carry a caller's inferred structures across the pre-flattening boundary of an inlined function call."""
     wrapper = func.wrapper
-    original = wrapper.arg_metas
-    expanded = wrapper.arg_metas_expanded
-    declared = wrapper.orig_arguments
-    metas = list(declared)
+    original_arg_metas = wrapper.arg_metas
+    expanded_arg_metas = wrapper.arg_metas_expanded
+    declared_arg_metas = wrapper.orig_arguments
+    arg_metas = list(declared_arg_metas)
     offset = int(bound)
-    values = {meta.name: arg.ptr for meta, arg in zip(metas[offset:], args)}
+    values = {meta.name: arg.ptr for meta, arg in zip(arg_metas[offset:], args)}
     values.update((kw.arg, kw.ptr[kw.arg]) for kw in keywords)
-    for i, meta in enumerate(metas):
+    for i, meta in enumerate(arg_metas):
         if meta.name not in values:
             if hasattr(type(meta.default), "__dataclass_fields__"):
                 raise QuadrantsRuntimeTypeError(
@@ -292,12 +292,12 @@ def dataclass_call_arguments(func, args, keywords, bound: bool = False):
             )
         else:
             continue
-        metas[i] = ArgMetadata(schema, meta.name, meta.default, optional=meta.optional)
-    wrapper.arg_metas = metas
-    wrapper.orig_arguments = metas
+        arg_metas[i] = ArgMetadata(schema, meta.name, meta.default, optional=meta.optional)
+    wrapper.arg_metas = arg_metas
+    wrapper.orig_arguments = arg_metas
     try:
         yield
     finally:
-        wrapper.arg_metas = original
-        wrapper.orig_arguments = declared
-        wrapper.arg_metas_expanded = expanded
+        wrapper.arg_metas = original_arg_metas
+        wrapper.orig_arguments = declared_arg_metas
+        wrapper.arg_metas_expanded = expanded_arg_metas
