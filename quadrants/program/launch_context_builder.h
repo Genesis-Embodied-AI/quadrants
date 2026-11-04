@@ -16,6 +16,9 @@ struct GraphDoWhileLevel {
   int cond_arg_id{-1};
   // Enclosing level id, or -1 if this level is at the kernel top level.
   int parent_id{-1};
+  // Internal id of the qd.checkpoint whose lexical body contains this WHILE node, or -1. Needed in addition to
+  // per-task checkpoint tags because a checkpoint containing only this loop has no direct parent-level task.
+  int checkpoint_id{-1};
   // Device pointer of the condition flag, resolved by the backend each launch from `cond_arg_id`.
   void *flag_dev_ptr{nullptr};
 };
@@ -183,9 +186,10 @@ class LaunchContextBuilder {
   }
 
   // Append a graph_do_while level (called from Python at launch, in level-id order). `cond_arg_id` is the resolved C++
-  // arg index of the condition ndarray; `parent_id` is the enclosing level id or -1.
-  void add_graph_do_while_level(int cond_arg_id, int parent_id) {
-    graph_do_while_levels.push_back(GraphDoWhileLevel{cond_arg_id, parent_id, nullptr});
+  // arg index of the condition ndarray; `parent_id` is the enclosing level id or -1; `checkpoint_id` is the enclosing
+  // checkpoint scope or -1.
+  void add_graph_do_while_level(int cond_arg_id, int parent_id, int checkpoint_id) {
+    graph_do_while_levels.push_back(GraphDoWhileLevel{cond_arg_id, parent_id, checkpoint_id, nullptr});
   }
 
   // Resolve the flag device pointer for any level whose condition arg matches `arg_id`. Called by each backend's

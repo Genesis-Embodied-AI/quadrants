@@ -22,6 +22,12 @@ struct CheckpointBuildPlan {
   bool has_yield{false};
   std::size_t num_distinct_checkpoints{0};
   int max_cp_id{-1};
+  // Innermost graph_do_while level that owns each checkpoint's IF node (-1 = kernel top level), indexed by cp_id.
+  // Computed as the lowest common ancestor of all task levels carrying that cp_id plus the parent of every WHILE
+  // lexically declared in it. This lets one IF body contain both direct work and child WHILE nodes instead of splitting
+  // the checkpoint at every loop-level boundary.
+  std::vector<int> checkpoint_level_ids;
+  bool has_multi_level_checkpoint{false};
   bool use_pre_hopper_flat_graph{false};
   bool reject_graph_build{false};
 };
@@ -212,24 +218,28 @@ class GraphManager {
   // a single successor so downstream nodes wait for every qd.graph_parallel section. `deps` must be non-empty.
   void *add_empty_node(void *graph, const std::vector<void *> &deps);
   // Recursively build the nodes for graph_do_while level `parent_id` (-1 = kernel top level) over the task range
-  // [begin, end) into `target_graph` (the body graph of `parent_id`, or the root graph for -1). Direct tasks become
-  // kernel nodes; a contiguous run of direct tasks sharing a non-negative `checkpoint_id` is wrapped in a gate-kernel +
-  // IF conditional node (SM 9.0+) or chained flat with a trailing yield-check (pre-Hopper). Each contiguous run of a
-  // child level becomes a conditional WHILE node (preceded by a re-arm init kernel when nested, i.e. parent_id != -1)
-  // whose body is filled recursively. For a real loop level (parent_id >= 0) the level's condition kernel is appended
-  // last (the cond-with-yield variant when the kernel has yielding checkpoints, so a yield breaks out of this and every
-  // enclosing loop). `cond_handles` is indexed by level id and filled as conditional nodes are created; `total_nodes`
-  // accumulates the node count for cache bookkeeping.
-  void build_level(int parent_id,
-                   void *target_graph,
-                   int begin,
-                   int end,
-                   const std::vector<OffloadedTask> &tasks,
-                   const std::vector<GraphDoWhileLevel> &levels,
-                   std::vector<unsigned long long> &cond_handles,
-                   JITModule *cuda_module,
-                   CachedGraph &cached,
-                   std::size_t &total_nodes);
+  // [begin, end) into `target_graph` (the body graph of `parent_id`, or the root graph for -1). A checkpoint owned by
+  // this level becomes one gate + IF whose body is built recursively, so that body may contain both direct work kernels
+  // and child WHILE nodes. `active_checkpoint_id` suppresses a second IF while recursing through that body.
+  //
+  // Child levels become conditional WHILE nodes (preceded by a re-arm init kernel when nested). `append_condition`
+  // appends `parent_id`'s condition kernel after a complete loop body; checkpoint subranges pass false because the
+  // enclosing level's condition belongs after the whole level, not inside the checkpoint IF. `prev_node` seeds the
+  // dependency chain (used by the pre-Hopper flat path). Returns the tail node of the built chain.
+  void *build_level(int parent_id,
+                    void *target_graph,
+                    int begin,
+                    int end,
+                    const std::vector<OffloadedTask> &tasks,
+                    const std::vector<GraphDoWhileLevel> &levels,
+                    const std::vector<int> &checkpoint_level_ids,
+                    std::vector<unsigned long long> &cond_handles,
+                    JITModule *cuda_module,
+                    CachedGraph &cached,
+                    std::size_t &total_nodes,
+                    void *prev_node,
+                    int active_checkpoint_id,
+                    bool append_condition);
 
   // Build-time state for the checkpoint walk inside build_level (single-threaded build, reset per build in try_launch).
   // `use_pre_hopper_flat_graph_` selects the codegen-prologue gating path (no conditional nodes) over the SM 9.0+
