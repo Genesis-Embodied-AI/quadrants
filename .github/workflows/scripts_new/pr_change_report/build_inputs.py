@@ -12,15 +12,13 @@ For each supported file changed in the PR (Python, C/C++, Markdown, shell, YAML)
   ``<output_dir>/head/<path>``         HEAD content of the file (always present)
   ``<output_dir>/base/<path>``         file content at merge-base (absent for newly added files)
 
-``total`` is the number of code lines in the BASE (pre-PR, merge-base) version of the file, i.e.
-the size of the file before this PR's changes. For newly-added files this is 0. ``added`` and
-``removed`` are the number of code lines added or removed by this PR (vs. merge-base). A "code
-line" excludes blank lines, lines whose only non-whitespace content is a comment, and (in Python)
-lines whose only token content is a string literal (i.e. docstrings and continuation lines of
-multi-line strings). C/C++ ``/* ... */`` block comments are stripped before counting.
-Markdown counts all nonblank lines. Shell and YAML use a line-based heuristic: skip blank and ``#``-prefixed lines, except
-shell shebangs. This does not parse multiline strings, YAML block scalars, or shell heredocs; ``#``-prefixed content inside
-them is also excluded.
+``total`` is the number of code lines in the BASE (pre-PR, merge-base) version of the file, i.e. the size of the file
+before this PR's changes. For newly-added files this is 0. ``added`` and ``removed`` are the number of code lines added
+or removed by this PR (vs. merge-base). A "code line" excludes blank lines, lines whose only non-whitespace content is a
+comment, and (in Python) lines whose only token content is a string literal (i.e. docstrings and continuation lines of
+multi-line strings). C/C++ ``/* ... */`` block comments are stripped before counting. Markdown counts all nonblank
+lines. Shell and YAML use a line-based heuristic: skip blank and ``#``-prefixed lines, except shell shebangs. This does
+not parse multiline strings, YAML block scalars, or shell heredocs; ``#``-prefixed content inside them is also excluded.
 
 The agent consumes these inputs to produce the per-function breakdown.
 """
@@ -480,9 +478,9 @@ def main() -> int:
             )
         )
 
-    # Sort files by descending lines added, then descending lines removed, then path. This is the
-    # order used for every downstream artifact (summary.json, file_list.txt, report_header.md,
-    # report_comment.md) so that each report group surfaces the largest-impact files first.
+    # Sort files by descending lines added, then descending lines removed, then path. This is the order used for every
+    # downstream artifact (summary.json, file_list.txt, report_header.md, report_comment.md) so that each report group
+    # surfaces the largest-impact files first.
     summaries.sort(key=lambda s: (-s.added, -s.removed, s.path))
 
     summary_dicts = [

@@ -41,8 +41,8 @@ jobs:
             --output-dir /tmp/pr_change_report \
             --commit-hash "$SHORT_SHA"
 
-          # summary.json includes all supported changes. The agent-input subset in file_list.txt excludes deleted
-          # files and Markdown/shell/YAML, so it cannot be used to decide whether there is a report to publish.
+          # summary.json includes all supported changes. The agent-input subset in file_list.txt excludes deleted files
+          # and Markdown/shell/YAML, so it cannot be used to decide whether there is a report to publish.
           NUM_FILES=$(jq 'length' /tmp/pr_change_report/summary.json)
           if [ "$NUM_FILES" -eq 0 ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
