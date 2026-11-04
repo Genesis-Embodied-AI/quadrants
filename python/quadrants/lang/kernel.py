@@ -862,7 +862,7 @@ class Kernel(FuncBase):
         """Walk a struct's attribute chain to find the live ndarray (or Tensor wrapper)."""
         obj = args[template_arg_idx]
         for attr_name in attr_chain:
-            obj = getattr(obj, attr_name)
+            obj = obj[attr_name] if type(attr_name) is int else getattr(obj, attr_name)
         if type(obj) in _TENSOR_WRAPPER_TYPES:
             obj = obj._unwrap()
         return obj
@@ -880,7 +880,7 @@ class Kernel(FuncBase):
         for arg_id, template_arg_idx, attr_chain in launch_info:
             obj = args[template_arg_idx]
             for attr_name in attr_chain:
-                obj = getattr(obj, attr_name)
+                obj = obj[attr_name] if type(attr_name) is int else getattr(obj, attr_name)
             if type(obj) in _TENSOR_WRAPPER_TYPES:
                 obj = obj._unwrap()
             assert isinstance(obj, Ndarray), f"Expected Ndarray at {attr_chain}, got {type(obj)}"
@@ -908,7 +908,7 @@ class Kernel(FuncBase):
         for arg_id, template_arg_idx, attr_chain, kind in launch_info:
             obj = args[template_arg_idx]
             for attr_name in attr_chain:
-                obj = getattr(obj, attr_name)
+                obj = obj[attr_name] if type(attr_name) is int else getattr(obj, attr_name)
             if kind == "f":
                 launch_ctx_buffer[_FLOAT].append((arg_id, float(obj)))
             else:

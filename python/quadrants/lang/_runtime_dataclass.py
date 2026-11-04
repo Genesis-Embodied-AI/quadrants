@@ -17,6 +17,7 @@ from quadrants.lang import impl
 from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._final_dataclass_fields import final_field_names
 from quadrants.lang._ndarray import Ndarray
+from quadrants.lang._runtime_tuple import tuple_annotation
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.buffer_view import BufferView
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
@@ -185,7 +186,9 @@ def resolve_dataclass(value: Any, path: str, visiting: frozenset[int] = frozense
     return schema
 
 
-def resolve_arguments(arguments: list[ArgMetadata], values: tuple[Any, ...]) -> list[ArgMetadata]:
+def resolve_arguments(
+    arguments: list[ArgMetadata], values: tuple[Any, ...], raise_on_templated_floats=False
+) -> list[ArgMetadata]:
     return [
         (
             ArgMetadata(
@@ -194,8 +197,13 @@ def resolve_arguments(arguments: list[ArgMetadata], values: tuple[Any, ...]) -> 
                 arg.default,
                 optional=arg.optional,
             )
-            if hasattr(type(value), "__dataclass_fields__") or is_dataclass_annotation(arg.annotation)
-            else arg
+            if hasattr(type(value), "__dataclass_fields__")
+            or (is_dataclass_annotation(arg.annotation) and not isinstance(value, tuple))
+            else (
+                ArgMetadata(tuple_annotation(value, arg.name, raise_on_templated_floats), arg.name, arg.default)
+                if isinstance(value, tuple)
+                else arg
+            )
         )
         for arg, value in zip(arguments, values)
     ]
@@ -203,18 +211,24 @@ def resolve_arguments(arguments: list[ArgMetadata], values: tuple[Any, ...]) -> 
 
 def prepare_runtime_arguments(kernel, values):
     """Prepare inferred metadata and dispatch-cache eligibility for one kernel launch."""
-    kernel.arg_metas = resolve_arguments(kernel.orig_arguments, values)
+    kernel.arg_metas = resolve_arguments(kernel.orig_arguments, values, kernel.raise_on_templated_floats)
     kernel.mapper.arguments = kernel.arg_metas
     kernel.template_slot_locations = [
         i
         for i in kernel.original_template_slot_locations
         if not hasattr(kernel.arg_metas[i].annotation, "_qd_runtime_origin")
     ]
+    kernel.template_slot_locations.extend(
+        i
+        for i, meta in enumerate(kernel.arg_metas)
+        if hasattr(meta.annotation, "_qd_tuple_plan") and i not in kernel.template_slot_locations
+    )
     kernel.mapper.template_slot_locations = kernel.template_slot_locations
     # A dataclass's member types can change without changing the identity of the outer object.
     kernel.mapper._mapping_cache_disabled = (
         any(
-            hasattr(meta.annotation, "_qd_runtime_origin") and not meta.annotation._qd_runtime_stable
+            hasattr(meta.annotation, "_qd_tuple_plan")
+            or (hasattr(meta.annotation, "_qd_runtime_origin") and not meta.annotation._qd_runtime_stable)
             for meta in kernel.arg_metas
         )
         or None
