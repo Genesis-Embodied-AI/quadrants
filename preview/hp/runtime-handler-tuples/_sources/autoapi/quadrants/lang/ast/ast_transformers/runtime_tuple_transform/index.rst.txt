@@ -1,0 +1,36 @@
+quadrants.lang.ast.ast_transformers.runtime_tuple_transform
+===========================================================
+
+.. py:module:: quadrants.lang.ast.ast_transformers.runtime_tuple_transform
+
+.. autoapi-nested-parse::
+
+   Lower host-tuple iteration, callable objects, and starred captures before dataclass flattening.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.lang.ast.ast_transformers.runtime_tuple_transform.resolve_callable
+   quadrants.lang.ast.ast_transformers.runtime_tuple_transform.expand_tuple_stars
+   quadrants.lang.ast.ast_transformers.runtime_tuple_transform.build_tuple_for
+
+
+Module Contents
+---------------
+
+.. py:function:: resolve_callable(func)
+
+.. py:function:: expand_tuple_stars(ctx, args, build_stmt)
+
+.. py:function:: build_tuple_for(ctx, node, decorator, build_stmt, build_static_for)
+
+   Evaluate an ordinary iterable once, and use static-loop lowering when it is a host tuple.
+
+   Return whether the iterable was evaluated and whether the complete loop was handled. Range, explicitly
+   decorated loops, and conditional iterables continue through their existing specialized transformations.
+
+
