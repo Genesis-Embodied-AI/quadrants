@@ -18,7 +18,10 @@ from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._deferred_dataclass import DeferredMemberType, deferred_member
 from quadrants.lang._final_dataclass_fields import final_field_names
 from quadrants.lang._ndarray import Ndarray
-from quadrants.lang._runtime_dataclass_final import runtime_final_plan, runtime_final_type
+from quadrants.lang._runtime_dataclass_final import (
+    runtime_final_plan,
+    runtime_final_type,
+)
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.buffer_view import BufferView
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
