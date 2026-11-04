@@ -3311,8 +3311,7 @@ def test_kernel_accepts_subclass_of_annotated_frozen_dataclass_param():
 @test_utils.test()
 def test_kernel_accepts_subclass_with_unsupported_final_app_field():
     """A subclass may carry an application-only ``Final`` field of a type Quadrants cannot bake (e.g. ``Final[list]``).
-    Only the annotated base's fields reach the kernel, so the extra ``Final`` field must be ignored, not validated
-    (validating it would reject the supported subclass pattern)."""
+    The kernel never reads the extra field, so its unsupported value must not prevent the kernel from running."""
     from typing import Final
 
     import numpy as np
@@ -3323,7 +3322,7 @@ def test_kernel_accepts_subclass_with_unsupported_final_app_field():
 
     @dataclass(frozen=True)
     class Sub(Base):
-        extra: Final[list]  # unbakeable as a Quadrants Final field, but the kernel (annotated Base) never sees it
+        extra: Final[list]  # unsupported as a Quadrants Final value, but unused by the kernel
 
     @qd.kernel
     def fill(dat: Base):
@@ -3332,7 +3331,7 @@ def test_kernel_accepts_subclass_with_unsupported_final_app_field():
 
     x = qd.ndarray(qd.i32, shape=(4,))
     sub = Sub(x=x, extra=[1, 2, 3])
-    fill(sub)  # must not raise while validating the ignored ``extra`` field
+    fill(sub)  # must not reject the unused ``extra`` field
     np.testing.assert_array_equal(x.to_numpy(), [7, 7, 7, 7])
 
 
