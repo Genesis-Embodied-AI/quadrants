@@ -26,6 +26,7 @@ from quadrants.lang._runtime_dataclass_final import (
     runtime_final_type,
 )
 from quadrants.lang._runtime_dataclass_guards import FrozenSchemaEntry
+from quadrants.lang._weak_identity_cache import WeakIdentityCache
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.buffer_view import BufferView
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
@@ -58,6 +59,10 @@ FinalValueKeyCache: TypeAlias = dict[int, tuple[Any, tuple[Any, ...]]]
 InferredMemberType: TypeAlias = (
     type | DataTypeCxx | ndarray_type.NdarrayType | buffer_view_type.BufferViewType | MatrixType | StructType
 )
+
+# Per-instance schemas, separated by numeric defaults and ancestor validation context; keys are held weakly.
+SchemaCacheKey: TypeAlias = tuple[int, int, int, str | None]
+_instance_schemas: WeakIdentityCache[dict[SchemaCacheKey, type | FrozenSchemaEntry]] = WeakIdentityCache()
 
 # Generated schema classes, keyed by source class identity, stability, and ordered member names/type identities.
 _schemas: dict[tuple[int, bool, tuple[tuple[str, int], ...]], type] = {}
@@ -148,13 +153,13 @@ def infer_dataclass_type(
     dataclass_type = type(dataclass_instance)
     runtime = impl.get_runtime()
     cache_key = (id(dataclass_type), id(runtime.default_ip), id(runtime.default_fp), non_frozen_ancestor_path)
-    cached = getattr(dataclass_instance, "_qd_runtime_schemas", {}).get(cache_key)
-    if cached is not None and cached._qd_runtime_origin is dataclass_type:
+    instance_cache = _instance_schemas.get(dataclass_instance)
+    cached = instance_cache.get(cache_key) if instance_cache is not None else None
+    if isinstance(cached, FrozenSchemaEntry):
+        if cached.matches(dataclass_instance, path, visiting, infer_member_type):
+            return cached.schema
+    elif cached is not None:
         return cached
-    guarded = getattr(dataclass_instance, "_qd_runtime_guarded_schemas", {}).get(cache_key)
-    if guarded is not None and guarded.schema._qd_runtime_origin is dataclass_type:
-        if guarded.matches(path, visiting, infer_member_type):
-            return guarded.schema
     finals, final_errors = runtime_final_plan(dataclass_type)
     plan = _field_plans.get(id(dataclass_type))
     if plan is None:
@@ -237,25 +242,15 @@ def infer_dataclass_type(
         # Validate Final-bearing paths against the inferred nesting, including children annotated as Any/object.
         final_field_names(schema)
         _schemas[key] = schema
-    if stable:
-        cache = getattr(dataclass_instance, "_qd_runtime_schemas", None)
-        if cache is None:
-            cache = {}
-            try:
-                object.__setattr__(dataclass_instance, "_qd_runtime_schemas", cache)
-            except AttributeError:
-                pass
-        cache[cache_key] = schema
     # Guard reuse must not bypass deferred diagnostics or validation of Final-bearing paths.
-    elif params.frozen and not has_deferred and not finals and non_frozen_ancestor_path is None:
-        cache = getattr(dataclass_instance, "_qd_runtime_guarded_schemas", None)
-        if cache is None:
-            cache = {}
-            try:
-                object.__setattr__(dataclass_instance, "_qd_runtime_guarded_schemas", cache)
-            except AttributeError:
+    if stable or (params.frozen and not has_deferred and not finals and non_frozen_ancestor_path is None):
+        if instance_cache is None:
+            instance_cache = {}
+            if not _instance_schemas.set(dataclass_instance, instance_cache):
                 return schema
-        cache[cache_key] = FrozenSchemaEntry(dataclass_instance, schema, field_plan, member_types)
+        instance_cache[cache_key] = (
+            schema if stable else FrozenSchemaEntry(dataclass_instance, schema, field_plan, member_types)
+        )
     return schema
 
 

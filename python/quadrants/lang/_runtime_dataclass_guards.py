@@ -9,7 +9,7 @@ from quadrants.types.ndarray_type import NdarrayType
 
 
 class FrozenSchemaEntry:
-    """Keep guards on values owned by the frozen container, without making its launch bindings immutable."""
+    """Store member names and types, never child objects that could retain the owning dataclass."""
 
     __slots__ = ("schema", "tensor_guards", "member_guards")
 
@@ -27,20 +27,22 @@ class FrozenSchemaEntry:
                 if (isinstance(backing, Ndarray) and isinstance(member_type, NdarrayType)) or (
                     isinstance(backing, Field) and member_type is Tensor
                 ):
-                    self.tensor_guards.append((child, type(child), type(backing)))
+                    self.tensor_guards.append((name, type(child), type(backing)))
                     continue
             if hasattr(member_type, "_qd_runtime_origin"):
                 if member_type._qd_runtime_stable:
                     continue
             elif child is None or isinstance(child, (bool, int, float, np.generic, Ndarray, Field)):
                 continue
-            self.member_guards.append((name, child, member_type))
+            self.member_guards.append((name, member_type))
 
-    def matches(self, path, visiting, infer_member_type):
-        for tensor, wrapper_type, backing_type in self.tensor_guards:
+    def matches(self, dataclass_instance, path, visiting, infer_member_type):
+        for name, wrapper_type, backing_type in self.tensor_guards:
+            tensor = getattr(dataclass_instance, name)
             if type(tensor) is not wrapper_type or type(tensor._unwrap()) is not backing_type:
                 return False
-        for name, child, member_type in self.member_guards:
+        for name, member_type in self.member_guards:
+            child = getattr(dataclass_instance, name)
             if infer_member_type(child, f"{path}.{name}", visiting) is not member_type:
                 return False
         return True

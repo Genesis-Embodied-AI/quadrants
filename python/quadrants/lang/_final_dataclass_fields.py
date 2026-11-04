@@ -13,10 +13,11 @@ import sys
 import types
 import typing
 import uuid
-import weakref
 from typing import Any
 
 import numpy as np
+
+from quadrants.lang._weak_identity_cache import WeakIdentityCache
 
 _MISSING = object()  # sentinel distinct from ``None`` (a legal attribute value) while resolving a qualname
 
@@ -563,7 +564,7 @@ class _ClassRef:
 # ``get`` compares keys by ``__eq__``/``__hash__``, so a metaclass making distinct classes compare equal would alias
 # two objects to one serial. ``id`` alone is unsafe (after an object is freed CPython recycles its address), so the
 # entry holds a weakref: a callback drops it on death and the guard rejects a stale entry whose ``id`` was recycled.
-_dynamic_object_serials: "dict[int, tuple[weakref.ref, int]]" = {}
+_dynamic_object_serials: WeakIdentityCache[int] = WeakIdentityCache()
 _dynamic_class_serial_counter = itertools.count()
 
 
@@ -572,22 +573,10 @@ def _dynamic_class_serial(obj: Any) -> int:
     lifetime. An object that cannot be weakly referenced draws a fresh serial each call - a redundant miss, never a
     stale reuse.
     """
-    key = id(obj)
-    entry = _dynamic_object_serials.get(key)
-    if entry is not None and entry[0]() is obj:  # identity guard: same live object, ``id`` not recycled
-        return entry[1]
-    serial = next(_dynamic_class_serial_counter)
-
-    def _drop(ref: "weakref.ref", k: int = key) -> None:
-        cur = _dynamic_object_serials.get(k)
-        if cur is not None and cur[0] is ref:  # only our own entry, never one that recycled the ``id``
-            del _dynamic_object_serials[k]
-
-    try:
-        ref = weakref.ref(obj, _drop)
-    except TypeError:
-        return serial
-    _dynamic_object_serials[key] = (ref, serial)
+    serial = _dynamic_object_serials.get(obj)
+    if serial is None:
+        serial = next(_dynamic_class_serial_counter)
+        _dynamic_object_serials.set(obj, serial)
     return serial
 
 
