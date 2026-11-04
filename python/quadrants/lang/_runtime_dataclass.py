@@ -144,9 +144,7 @@ def resolve_dataclass(
                 child_final_parent = f"{source.__name__}.{field.name}"
             elif final_parent is not None:
                 child_final_parent = f"{final_parent}.{field.name}"
-            resolved.type = infer_member_type(
-                child, path, visiting, child_final_parent, validated_keys
-            )
+            resolved.type = infer_member_type(child, path, visiting, child_final_parent, validated_keys)
             if dataclasses.is_dataclass(resolved.type):
                 stable &= getattr(resolved.type, "_qd_runtime_stable")
             elif child is not None and not isinstance(child, (bool, int, float, np.generic, Ndarray, Field)):
