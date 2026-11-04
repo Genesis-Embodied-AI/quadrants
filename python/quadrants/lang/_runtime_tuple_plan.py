@@ -8,7 +8,9 @@ from quadrants._tensor_wrapper import Tensor
 from quadrants.lang._final_dataclass_fields import final_scalar_key
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
-from quadrants.lang._runtime_dataclass import _direct_final_names, infer_member_type
+from quadrants.lang._runtime_dataclass import infer_member_type, resolve_dataclass
+from quadrants.lang._deferred_dataclass import DeferredMemberType
+from quadrants.lang._final_dataclass_fields import is_final_annotation
 from quadrants.lang._template_mapper_hotpath import _ExprCxx, _extract_arg
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.expr import Expr
@@ -71,7 +73,7 @@ class TuplePlan:
             if isinstance(value, tuple):
                 return ("tuple", type(value), tuple(self._describe(child, (*path, i)) for i, child in enumerate(value)))
             if hasattr(type(value), "__dataclass_fields__"):
-                finals = _direct_final_names(type(value))
+                schema = resolve_dataclass(value, self.name)
                 return (
                     "dataclass",
                     type(value),
@@ -79,14 +81,16 @@ class TuplePlan:
                         (
                             field.name,
                             (
-                                self._constant_key(getattr(value, field.name))
-                                if field.name in finals
+                                field.type
+                                if isinstance(field.type, DeferredMemberType)
+                                else self._constant_key(getattr(value, field.name))
+                                if is_final_annotation(field.type)
                                 else self._describe(
                                     getattr(value, field.name), (*path, field.name), runtime_scalar=True
                                 )
                             ),
                         )
-                        for field in dataclasses.fields(value)
+                        for field in dataclasses.fields(schema)
                     ),
                 )
             if is_data_oriented(value):

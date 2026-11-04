@@ -425,3 +425,36 @@ def test_runtime_tuple_subclass_specializes():
     assert run((1, 2)) == 3
     assert run(Pair(1, 2)) == 103
     assert run((1, 2)) == 3
+
+
+@test_utils.test()
+def test_handler_capture_unused_deferred_member():
+    from typing import Final
+
+    @dataclasses.dataclass(frozen=True)
+    class Data:
+        value: object
+        unused: Final[list]
+
+    @qd.data_oriented
+    class Bound:
+        def __init__(self, func, data):
+            self.func = func
+            self.data = (data,)
+
+        @qd.func
+        def __call__(self):
+            return self.func(*self.data)
+
+    @qd.func
+    def read(data: qd.RuntimeTyped):
+        return data.value
+
+    @qd.kernel
+    def run(handlers: qd.template()) -> qd.i32:
+        total = 0
+        for handler in handlers:
+            total += handler()
+        return total
+
+    assert run((Bound(read, Data(7, [])),)) == 7
