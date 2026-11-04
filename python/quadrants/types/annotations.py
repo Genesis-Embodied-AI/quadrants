@@ -52,15 +52,9 @@ class RuntimeTyped:
     """
 
     def __getattr__(self, name: str) -> Any:
-        """Let static type checkers accept members supplied by the arriving dataclass.
+        """Static type checkers see only RuntimeTyped, so they would otherwise reject accesses like state.velocity.
 
-        For a parameter annotated ``state: qd.RuntimeTyped``, Pyright only knows the RuntimeTyped class, not the
-        dataclass that a caller will supply. Without this method, it would report that ``state.velocity`` accesses
-        an attribute that RuntimeTyped does not have. The Any return annotation tells the checker to allow arbitrary
-        member access because the member's type is unknown to static checking.
-
-        Callers pass actual dataclass objects, whose members supply runtime types; this method does not infer them.
-        Accessing a missing member on an instance of this annotation marker still raises AttributeError.
+        The Any return annotation allows arbitrary members without claiming to know their types.
         """
         raise AttributeError(name)
 
