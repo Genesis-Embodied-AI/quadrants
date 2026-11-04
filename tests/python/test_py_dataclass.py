@@ -3244,7 +3244,7 @@ def test_kernel_accepts_subclass_of_annotated_dataclass_param():
 
     @dataclass
     class SubDataclass(QdSafe):
-        y: int
+        y: str
 
     class SubPyClass(QdSafe):
         y: str | None
@@ -3256,7 +3256,7 @@ def test_kernel_accepts_subclass_of_annotated_dataclass_param():
         for i in range(dat.x.shape[0]):
             dat.x[i] = x_desired
 
-    y_desired = 42
+    y_desired = "i love quadrants"
 
     dat = SubDataclass(x=qd.ndarray(qd.i32, (8,)), y=y_desired)
     mykernel(dat)
@@ -3282,7 +3282,7 @@ def test_kernel_accepts_subclass_of_annotated_frozen_dataclass_param():
 
     @dataclass(frozen=True)
     class SubDataclass(QdSafe):
-        y: int
+        y: set[int]
 
     class SubPyClass(QdSafe):
         y: set[int] | None
@@ -3295,7 +3295,7 @@ def test_kernel_accepts_subclass_of_annotated_frozen_dataclass_param():
     def mykernel(dat: QdSafe) -> int:
         return read_x(dat)
 
-    y_desired = 42
+    y_desired = {1, 2, 3, 4, 5, 6, 7, 8}
     x_desired = 12345678
 
     dat = SubDataclass(x=x_desired, y=y_desired)
@@ -3309,9 +3309,12 @@ def test_kernel_accepts_subclass_of_annotated_frozen_dataclass_param():
 
 
 @test_utils.test()
-def test_kernel_validates_subclass_final_fields_despite_base_annotation():
-    """All fields of the arriving subclass participate, including Final validation."""
+def test_kernel_accepts_subclass_with_unsupported_final_app_field():
+    """A subclass may carry an application-only ``Final`` field of a type Quadrants cannot bake (e.g. ``Final[list]``).
+    The kernel never reads the extra field, so its unsupported value must not prevent the kernel from running."""
     from typing import Final
+
+    import numpy as np
 
     @dataclass(frozen=True)
     class Base:
@@ -3319,7 +3322,7 @@ def test_kernel_validates_subclass_final_fields_despite_base_annotation():
 
     @dataclass(frozen=True)
     class Sub(Base):
-        extra: Final[list]
+        extra: Final[list]  # unsupported as a Quadrants Final value, but unused by the kernel
 
     @qd.kernel
     def fill(dat: Base):
@@ -3328,8 +3331,8 @@ def test_kernel_validates_subclass_final_fields_despite_base_annotation():
 
     x = qd.ndarray(qd.i32, shape=(4,))
     sub = Sub(x=x, extra=[1, 2, 3])
-    with pytest.raises(Exception, match="Final"):
-        fill(sub)
+    fill(sub)  # must not reject the unused ``extra`` field
+    np.testing.assert_array_equal(x.to_numpy(), [7, 7, 7, 7])
 
 
 @test_utils.test()
