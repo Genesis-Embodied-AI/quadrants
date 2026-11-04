@@ -23,6 +23,7 @@ from quadrants.lang._runtime_dataclass_final import (
     runtime_final_plan,
     runtime_final_type,
 )
+from quadrants.lang._runtime_dataclass_guards import FrozenSchemaEntry
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.buffer_view import BufferView
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
@@ -38,8 +39,10 @@ InferredMemberType: TypeAlias = (
     type | DataTypeCxx | ndarray_type.NdarrayType | buffer_view_type.BufferViewType | MatrixType | StructType
 )
 
-# Generated schema classes, keyed by source class identity, stability, and ordered member names/type identities.
-_schemas: dict[tuple[int, bool, tuple[tuple[str, int], ...]], type] = {}
+# Generated schema classes, keyed by source class identity, stability, and ordered member type identities.
+_schemas: dict[tuple[int, bool, tuple[int, ...]], type] = {}
+# Retain source classes and their ordered fields so identity keys cannot be reused after garbage collection.
+_field_plans: dict[int, tuple[type, tuple[tuple[str, dataclasses.Field[Any], bool], ...]]] = {}
 # Matrix/vector type descriptions, keyed by rows, columns, dimensionality, and scalar dtype.
 _matrix_types: dict[tuple[int, int, int, DataTypeCxx], MatrixType] = {}
 # Inferred struct type descriptions, keyed by ordered member names and type identities.
@@ -124,41 +127,52 @@ def infer_dataclass_type(
     cached = getattr(value, "_qd_runtime_schemas", {}).get(cache_key)
     if cached is not None and cached._qd_runtime_origin is source:
         return cached
+    guarded = getattr(value, "_qd_runtime_guarded_schemas", {}).get(cache_key)
+    if guarded is not None and guarded.schema._qd_runtime_origin is source:
+        if guarded.matches(path, visiting, infer_member_type):
+            return guarded.schema
     finals, final_errors = runtime_final_plan(source)
-    params = getattr(source, "__dataclass_params__")
+    plan = _field_plans.get(id(source))
+    if plan is None:
+        plan = (source, tuple((field.name, field, field.name in finals) for field in dataclasses.fields(source)))
+        _field_plans[id(source)] = plan
+    _, field_plan = plan
+    params = source.__dataclass_params__
     stable = params.frozen and not finals and not final_errors
-    fields = {}
+    member_types = []
     has_deferred = False
-    for field in dataclasses.fields(source):
-        resolved = copy.copy(field)
-        if field.name in final_errors:
-            resolved.type = final_errors[field.name]
-        elif field.name in finals:
-            resolved.type = runtime_final_type(
-                field.type, getattr(value, field.name), final_parent, field.name, validated_keys
-            )
+    for name, field, is_final in field_plan:
+        if name in final_errors:
+            member_type = final_errors[name]
+        elif is_final:
+            member_type = runtime_final_type(field.type, getattr(value, name), final_parent, name, validated_keys)
         else:
-            child = getattr(value, field.name)
+            child = getattr(value, name)
             child_final_parent = None
             if not (params.frozen or params.unsafe_hash):
-                child_final_parent = f"{source.__name__}.{field.name}"
+                child_final_parent = f"{source.__name__}.{name}"
             elif final_parent is not None:
-                child_final_parent = f"{final_parent}.{field.name}"
-            resolved.type = infer_member_type(
-                child, f"{path}.{field.name}", visiting, child_final_parent, validated_keys
-            )
-            if dataclasses.is_dataclass(resolved.type):
-                stable &= getattr(resolved.type, "_qd_runtime_stable")
+                child_final_parent = f"{final_parent}.{name}"
+            member_type = infer_member_type(child, f"{path}.{name}", visiting, child_final_parent, validated_keys)
+            if dataclasses.is_dataclass(member_type):
+                stable &= getattr(member_type, "_qd_runtime_stable")
             elif child is not None and not isinstance(child, (bool, int, float, np.generic, Ndarray, Field)):
                 stable = False
-        has_deferred |= isinstance(resolved.type, DeferredMemberType) or getattr(
-            resolved.type, "_qd_runtime_has_deferred", False
+        has_deferred |= isinstance(member_type, DeferredMemberType) or getattr(
+            member_type, "_qd_runtime_has_deferred", False
         )
-        fields[field.name] = resolved
+        member_types.append(member_type)
     stable &= not has_deferred
-    key = (id(source), stable, tuple((name, id(field.type)) for name, field in fields.items()))
+    key = (id(source), stable, tuple(map(id, member_types)))
     schema = _schemas.get(key)
     if schema is None:
+        # Revalidate values on every uncached launch, but allocate field metadata only for a new inferred schema.
+        # The class plan retains the source and field order; only runtime member types and stability vary here.
+        fields = {}
+        for (name, field, _), member_type in zip(field_plan, member_types):
+            resolved = copy.copy(field)
+            resolved.type = member_type
+            fields[name] = resolved
         schema = type(
             source.__name__,
             (),
@@ -193,6 +207,15 @@ def infer_dataclass_type(
             except AttributeError:
                 pass
         cache[cache_key] = schema
+    elif params.frozen and not has_deferred and not finals and final_parent is None:
+        cache = getattr(value, "_qd_runtime_guarded_schemas", None)
+        if cache is None:
+            cache = {}
+            try:
+                object.__setattr__(value, "_qd_runtime_guarded_schemas", cache)
+            except AttributeError:
+                return schema
+        cache[cache_key] = FrozenSchemaEntry(value, schema, field_plan, member_types)
     return schema
 
 
