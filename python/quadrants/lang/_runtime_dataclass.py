@@ -71,13 +71,21 @@ def is_dataclass_annotation(annotation: Any) -> bool:
     return annotation is RuntimeTyped or isinstance(annotation, type) and dataclasses.is_dataclass(annotation)
 
 
-def infer_member_type(value: Any, path: str | tuple[str, ...], visiting: frozenset[int]) -> Any:
-    if isinstance(path, str):
-        path = (path,)
+def infer_member_type(value: Any, path: str, visiting: frozenset[int]) -> Any:
+    """Start a diagnostic path for an external member-inference call."""
+    return _infer_member_type(value, (path,), visiting)
+
+
+def resolve_dataclass(value: Any, path: str, visiting: frozenset[int] = frozenset()) -> type:
+    """Start an isolated diagnostic path while preserving the root-string calling convention."""
+    return _resolve_dataclass(value, (path,), visiting)
+
+
+def _infer_member_type(value: Any, path: tuple[str, ...], visiting: frozenset[int]) -> Any:
     if isinstance(value, Tensor):
         value = value._unwrap()
     if hasattr(type(value), "__dataclass_fields__"):
-        return resolve_dataclass(value, path, visiting)
+        return _resolve_dataclass(value, path, visiting)
     if is_data_oriented(value):
         return template
     if value is None:
@@ -114,7 +122,7 @@ def infer_member_type(value: Any, path: str | tuple[str, ...], visiting: frozens
         declared = getattr(value, "_qd_struct_type", None)
         if declared is not None:
             return declared
-        members = {name: infer_member_type(child, path + (name,), visiting) for name, child in value.items}
+        members = {name: _infer_member_type(child, path + (name,), visiting) for name, child in value.items}
         key = tuple((name, id(dtype)) for name, dtype in members.items())
         if key not in _struct_types:
             _struct_types[key] = StructType(**members)
@@ -124,9 +132,7 @@ def infer_member_type(value: Any, path: str | tuple[str, ...], visiting: frozens
     )
 
 
-def resolve_dataclass(value: Any, path: str | tuple[str, ...], visiting: frozenset[int] = frozenset()) -> type:
-    if isinstance(path, str):
-        path = (path,)
+def _resolve_dataclass(value: Any, path: tuple[str, ...], visiting: frozenset[int] = frozenset()) -> type:
     if not hasattr(type(value), "__dataclass_fields__"):
         raise QuadrantsRuntimeTypeError(
             f"Argument {'.'.join(path)!r} requires a Python dataclass instance, got {type(value).__name__}"
@@ -144,7 +150,7 @@ def resolve_dataclass(value: Any, path: str | tuple[str, ...], visiting: frozens
     # launch binding still inspect current arrays and template values.
     guarded = getattr(value, "_qd_runtime_guarded_schemas", {}).get(cache_key)
     if guarded is not None and guarded.schema._qd_runtime_origin is source:
-        if guarded.matches(path, visiting, infer_member_type):
+        if guarded.matches(path, visiting, _infer_member_type):
             return guarded.schema
     plan = _field_plans.get(id(source))
     if plan is None:
@@ -163,7 +169,7 @@ def resolve_dataclass(value: Any, path: str | tuple[str, ...], visiting: frozens
         member_type = field.type
         if not is_final:
             child = getattr(value, name)
-            member_type = infer_member_type(child, path + (name,), visiting)
+            member_type = _infer_member_type(child, path + (name,), visiting)
             if dataclasses.is_dataclass(member_type):
                 stable &= getattr(member_type, "_qd_runtime_stable")
             elif child is not None and not isinstance(child, (bool, int, float, np.generic, Ndarray, Field)):
