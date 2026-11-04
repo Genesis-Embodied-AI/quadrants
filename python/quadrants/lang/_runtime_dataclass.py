@@ -192,10 +192,10 @@ def infer_dataclass_type(
     return schema
 
 
-def resolve_arguments(arg_metas: list[ArgMetadata], values: tuple[Any, ...], validated_keys=None) -> list[ArgMetadata]:
+def resolve_arguments(arg_metas: list[ArgMetadata], py_objs: tuple[Any, ...], validated_keys=None) -> list[ArgMetadata]:
     """Replace dataclass parameter annotations with schemas inferred from their arriving values."""
     resolved_arg_metas = []
-    for arg_meta, value in zip(arg_metas, values):
+    for arg_meta, value in zip(arg_metas, py_objs):
         if hasattr(type(value), "__dataclass_fields__"):
             arg_meta = ArgMetadata(
                 infer_dataclass_type(value, arg_meta.name, validated_keys=validated_keys),
@@ -211,10 +211,10 @@ def resolve_arguments(arg_metas: list[ArgMetadata], values: tuple[Any, ...], val
     return resolved_arg_metas
 
 
-def prepare_runtime_arguments(kernel, values):
+def prepare_runtime_arguments(kernel, py_objs):
     """Prepare inferred metadata and dispatch-cache eligibility for one kernel launch."""
     validated_keys = {}
-    kernel.arg_metas = resolve_arguments(kernel.orig_arguments, values, validated_keys)
+    kernel.arg_metas = resolve_arguments(kernel.orig_arguments, py_objs, validated_keys)
     kernel.mapper.arguments = kernel.arg_metas
     has_deferred = False
     unstable = False
@@ -272,16 +272,16 @@ def dataclass_call_arguments(func, args, keywords, bound: bool = False):
     declared_arg_metas = wrapper.orig_arguments
     arg_metas = list(declared_arg_metas)
     offset = int(bound)
-    values = {meta.name: arg.ptr for meta, arg in zip(arg_metas[offset:], args)}
-    values.update((kw.arg, kw.ptr[kw.arg]) for kw in keywords)
+    py_objs = {meta.name: arg.ptr for meta, arg in zip(arg_metas[offset:], args)}
+    py_objs.update((kw.arg, kw.ptr[kw.arg]) for kw in keywords)
     for i, meta in enumerate(arg_metas):
-        if meta.name not in values:
+        if meta.name not in py_objs:
             if hasattr(type(meta.default), "__dataclass_fields__"):
                 raise QuadrantsRuntimeTypeError(
                     f"Omitted dataclass defaults are not supported in @qd.func. Pass {meta.name!r} explicitly."
                 )
             continue
-        value = values[meta.name]
+        value = py_objs[meta.name]
         if isinstance(value, type) and hasattr(value, "_qd_runtime_origin"):
             schema = value
         elif hasattr(type(value), "__dataclass_fields__"):
