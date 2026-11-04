@@ -20,13 +20,15 @@ def tuple_annotation(value, name, raise_on_templated_floats=False):
     )
 
     annotation = template()
-    annotation._qd_tuple_plan = TuplePlan(value, name, raise_on_templated_floats)
+    setattr(annotation, "_qd_tuple_plan", TuplePlan(value, name, raise_on_templated_floats))
     return annotation
 
 
 def predeclare_tuple_scalars(ctx):
     # pylint: disable=import-outside-toplevel
-    from quadrants._lib import core  # pylint: disable=import-outside-toplevel
+    from quadrants._lib.core import (
+        quadrants_python as core,  # pylint: disable=import-outside-toplevel
+    )
     from quadrants.lang import expr, impl  # pylint: disable=import-outside-toplevel
     from quadrants.types.utils import (
         is_signed,  # pylint: disable=import-outside-toplevel
@@ -48,7 +50,9 @@ def predeclare_tuple_scalars(ctx):
             gc.struct_primitive_provenance[key] = (name, arg_idx, path, kind)
             if not pruning.enforcing or not pruning.is_used(pruning.KERNEL_FUNC_ID, name):
                 continue
-            ids = impl.get_runtime().compiling_callable.insert_scalar_param(dtype, name)
+            ids = impl.get_runtime().compiling_callable.insert_scalar_param(  # pyright: ignore[reportAttributeAccessIssue]
+                dtype, name
+            )
             gc.struct_primitive_to_expr[key] = expr.Expr(
                 core.make_arg_load_expr(
                     ids,

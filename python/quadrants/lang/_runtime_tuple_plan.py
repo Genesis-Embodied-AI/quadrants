@@ -9,10 +9,13 @@ from quadrants.lang._final_dataclass_fields import final_scalar_key
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
 from quadrants.lang._runtime_dataclass import _direct_final_names, infer_member_type
-from quadrants.lang._template_mapper_hotpath import _extract_arg
+from quadrants.lang._template_mapper_hotpath import _ExprCxx, _extract_arg
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
+from quadrants.lang.expr import Expr
 from quadrants.lang.field import Field
+from quadrants.lang.snode import SNode
 from quadrants.lang.util import is_data_oriented, wants_runtime_primitives
+from quadrants.types.annotations import template
 from quadrants.types.ndarray_type import NdarrayType
 
 
@@ -50,6 +53,8 @@ class TuplePlan:
             return ("bound_function", value.wrapper, self._describe(value.instance, (*path, "instance")))
         if isinstance(value, Field):
             return ("field", value)
+        if isinstance(value, (Expr, _ExprCxx, SNode)):
+            return ("native", type(value), _extract_arg(False, value, template, self.name))
         identity = id(value)
         if identity in self._visiting:
             raise QuadrantsRuntimeTypeError(f"Tuple member {self.name}{path} contains a cycle")

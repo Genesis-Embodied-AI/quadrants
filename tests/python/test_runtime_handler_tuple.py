@@ -301,3 +301,94 @@ def test_runtime_handler_tuple_rejects_cycles_and_unsupported_captures():
     handler.data = object()
     with pytest.raises(Exception, match="unsupported runtime type"):
         run((handler,))
+
+
+@test_utils.test()
+def test_runtime_handler_tuple_final_field_and_tensor_wrapper():
+    from typing import Final
+
+    @dataclasses.dataclass(frozen=True)
+    class Data:
+        values: object
+        bias: Final[int]
+
+    @qd.data_oriented
+    class Handler:
+        def __init__(self, data):
+            self.data = data
+
+        @qd.func
+        def __call__(self):
+            return self.data.values[0] + self.data.bias
+
+    @qd.kernel
+    def run(handlers: tuple) -> qd.f32:
+        result = 0.0
+        for handler in handlers:
+            result += handler()
+        return result
+
+    field = qd.field(qd.f32, shape=1)
+    field[0] = 2
+    handler = Handler(Data(qd.wrap(field), 3))
+    handlers = (handler,)
+    assert run(handlers) == 5
+    count = len(run._primal.materialized_kernels)
+    field[0] = 4
+    assert run(handlers) == 7
+    assert len(run._primal.materialized_kernels) == count
+    handler.data = Data(qd.wrap(field), 7)
+    assert run(handlers) == 11
+    assert len(run._primal.materialized_kernels) == count + 1
+    array = qd.tensor(qd.f32, shape=1, backend=qd.Backend.NDARRAY)
+    array[0] = 8
+    handler.data = Data(array, 7)
+    assert run(handlers) == 15
+
+
+@test_utils.test()
+def test_runtime_handler_tuple_bound_method_and_tuple_expression():
+    @qd.data_oriented
+    class Handler:
+        def __init__(self, array):
+            self.array = array
+
+        @qd.func
+        def apply(self):
+            return self.array[0]
+
+    @qd.kernel
+    def run(handlers: tuple) -> qd.f32:
+        result = 0.0
+        for handler in tuple(handlers):
+            result += handler()
+        return result
+
+    array = qd.ndarray(qd.f32, shape=1)
+    array[0] = 3
+    handler = Handler(array)
+    callbacks = (handler.apply,)
+    assert run(callbacks) == 3
+    replacement = qd.ndarray(qd.f32, shape=1)
+    replacement[0] = 7
+    handler.array = replacement
+    assert run(callbacks) == 7
+
+
+@test_utils.test(raise_on_templated_floats=True)
+def test_runtime_handler_tuple_float_policy():
+    from typing import Final
+
+    import pytest
+
+    @dataclasses.dataclass(frozen=True)
+    class Data:
+        bias: Final[float]
+
+    @qd.kernel
+    def run(values: tuple):
+        for value in values:
+            qd.static_print(value)
+
+    with pytest.raises(ValueError, match="Floats not allowed"):
+        run((Data(1.5),))
