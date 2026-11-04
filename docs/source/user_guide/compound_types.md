@@ -58,6 +58,8 @@ A member may be `None`. Test its presence with [`qd.static(state.member is not N
 
 An unused `Final[T]` member may also hold an unsupported constant or declare an unsupported inner type, such as `Final[list]`. A used Final member still requires a supported constant and a non-reassignable path through its containers. Malformed declarations, such as bare `Final` or unresolved string Final annotations, retain their eager errors. Valid Final values remain part of specialization keys, including the `raise_on_templated_floats` check. Containers with deferred unsupported members bypass offline fast caching and instance-based dispatch shortcuts; valid in-process compiled versions can still be reused.
 
+Dataclass arguments to `@qd.func` must be passed explicitly. If a parameter has a dataclass instance as its default, omitting that argument raises an error, regardless of its annotation. Passing the dataclass explicitly, by position or keyword, is supported. Ordinary scalar defaults remain supported.
+
 `dataclasses.dataclass` allows you to create structs containing:
 - ndarrays
 - fields

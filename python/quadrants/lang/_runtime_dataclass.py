@@ -264,6 +264,10 @@ def dataclass_call_arguments(func, args, keywords, bound: bool = False):
     values.update((kw.arg, kw.ptr[kw.arg]) for kw in keywords)
     for i, meta in enumerate(metas):
         if meta.name not in values:
+            if hasattr(type(meta.default), "__dataclass_fields__"):
+                raise QuadrantsRuntimeTypeError(
+                    f"Omitted dataclass defaults are not supported in @qd.func. Pass {meta.name!r} explicitly."
+                )
             continue
         value = values[meta.name]
         if isinstance(value, type) and hasattr(value, "_qd_runtime_origin"):
