@@ -192,8 +192,10 @@ def infer_dataclass_type(
     return schema
 
 
-def resolve_arguments(arg_metas: list[ArgMetadata], py_objs: tuple[Any, ...], validated_keys=None) -> list[ArgMetadata]:
-    """Replace dataclass parameter annotations with schemas inferred from their arriving values."""
+def infer_kernel_dataclass_arg_types(
+    arg_metas: list[ArgMetadata], py_objs: tuple[Any, ...], validated_keys=None
+) -> list[ArgMetadata]:
+    """Replace kernel dataclass parameter annotations with schemas inferred from their arriving values."""
     resolved_arg_metas = []
     for arg_meta, py_obj in zip(arg_metas, py_objs):
         if hasattr(type(py_obj), "__dataclass_fields__"):
@@ -214,7 +216,7 @@ def resolve_arguments(arg_metas: list[ArgMetadata], py_objs: tuple[Any, ...], va
 def prepare_runtime_arguments(kernel, py_objs):
     """Prepare inferred metadata and dispatch-cache eligibility for one kernel launch."""
     validated_keys = {}
-    kernel.arg_metas = resolve_arguments(kernel.orig_arguments, py_objs, validated_keys)
+    kernel.arg_metas = infer_kernel_dataclass_arg_types(kernel.orig_arguments, py_objs, validated_keys)
     kernel.mapper.arguments = kernel.arg_metas
     has_deferred = False
     unstable = False
