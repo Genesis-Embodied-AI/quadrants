@@ -116,7 +116,11 @@ def infer_member_type(
 
 
 def resolve_dataclass(
-    value: Any, path: str | list[str], visiting: frozenset[int] = frozenset(), final_parent: str | None = None, validated_keys=None
+    value: Any,
+    path: str | list[str],
+    visiting: frozenset[int] = frozenset(),
+    final_parent: str | None = None,
+    validated_keys=None,
 ) -> type:
     """Build or reuse a private schema class describing the arriving dataclass's member types."""
     if isinstance(path, str):
