@@ -71,7 +71,9 @@ def is_dataclass_annotation(annotation: Any) -> bool:
     return annotation is RuntimeTyped or isinstance(annotation, type) and dataclasses.is_dataclass(annotation)
 
 
-def infer_member_type(value: Any, path: str, visiting: frozenset[int]) -> Any:
+def infer_member_type(value: Any, path: str | list[str], visiting: frozenset[int]) -> Any:
+    if isinstance(path, str):
+        path = [path]
     if isinstance(value, Tensor):
         value = value._unwrap()
     if hasattr(type(value), "__dataclass_fields__"):
@@ -112,21 +114,29 @@ def infer_member_type(value: Any, path: str, visiting: frozenset[int]) -> Any:
         declared = getattr(value, "_qd_struct_type", None)
         if declared is not None:
             return declared
-        members = {name: infer_member_type(child, f"{path}.{name}", visiting) for name, child in value.items}
+        members = {}
+        for name, child in value.items:
+            path.append(name)
+            try:
+                members[name] = infer_member_type(child, path, visiting)
+            finally:
+                path.pop()
         key = tuple((name, id(dtype)) for name, dtype in members.items())
         if key not in _struct_types:
             _struct_types[key] = StructType(**members)
         return _struct_types[key]
-    raise QuadrantsRuntimeTypeError(f"Dataclass member {path!r} has unsupported runtime type {type(value).__name__}")
+    raise QuadrantsRuntimeTypeError(f"Dataclass member {'.'.join(path)!r} has unsupported runtime type {type(value).__name__}")
 
 
-def resolve_dataclass(value: Any, path: str, visiting: frozenset[int] = frozenset()) -> type:
+def resolve_dataclass(value: Any, path: str | list[str], visiting: frozenset[int] = frozenset()) -> type:
+    if isinstance(path, str):
+        path = [path]
     if not hasattr(type(value), "__dataclass_fields__"):
         raise QuadrantsRuntimeTypeError(
-            f"Argument {path!r} requires a Python dataclass instance, got {type(value).__name__}"
+            f"Argument {'.'.join(path)!r} requires a Python dataclass instance, got {type(value).__name__}"
         )
     if id(value) in visiting:
-        raise QuadrantsRuntimeTypeError(f"Dataclass member {path!r} contains a cycle")
+        raise QuadrantsRuntimeTypeError(f"Dataclass member {'.'.join(path)!r} contains a cycle")
     visiting = visiting | {id(value)}
     source = type(value)
     runtime = impl.get_runtime()
@@ -157,7 +167,11 @@ def resolve_dataclass(value: Any, path: str, visiting: frozenset[int] = frozense
         member_type = field.type
         if not is_final:
             child = getattr(value, name)
-            member_type = infer_member_type(child, f"{path}.{name}", visiting)
+            path.append(name)
+            try:
+                member_type = infer_member_type(child, path, visiting)
+            finally:
+                path.pop()
             if dataclasses.is_dataclass(member_type):
                 stable &= getattr(member_type, "_qd_runtime_stable")
             elif child is not None and not isinstance(child, (bool, int, float, np.generic, Ndarray, Field)):

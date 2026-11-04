@@ -41,6 +41,10 @@ class FrozenSchemaEntry:
             if type(tensor) is not wrapper_type or type(tensor._unwrap()) is not backing_type:
                 return False
         for name, child, member_type in self.member_guards:
-            if infer_member_type(child, f"{path}.{name}", visiting) is not member_type:
-                return False
+            path.append(name)
+            try:
+                if infer_member_type(child, path, visiting) is not member_type:
+                    return False
+            finally:
+                path.pop()
         return True
