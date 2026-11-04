@@ -44,7 +44,9 @@ def is_dataclass_annotation(annotation: Any) -> bool:
     return annotation is RuntimeTyped or isinstance(annotation, type) and dataclasses.is_dataclass(annotation)
 
 
-def infer_member_type(value: Any, path: str, visiting: frozenset[int], final_parent: str | None = None, validated_keys=None) -> Any:
+def infer_member_type(
+    value: Any, path: str, visiting: frozenset[int], final_parent: str | None = None, validated_keys=None
+) -> Any:
     if isinstance(value, Tensor):
         value = value._unwrap()
     if hasattr(type(value), "__dataclass_fields__"):
@@ -119,7 +121,9 @@ def resolve_dataclass(
         if field.name in final_errors:
             resolved.type = final_errors[field.name]
         elif field.name in finals:
-            resolved.type = runtime_final_type(field.type, getattr(value, field.name), final_parent, field.name, validated_keys)
+            resolved.type = runtime_final_type(
+                field.type, getattr(value, field.name), final_parent, field.name, validated_keys
+            )
         else:
             child = getattr(value, field.name)
             child_final_parent = None
@@ -127,7 +131,9 @@ def resolve_dataclass(
                 child_final_parent = f"{source.__name__}.{field.name}"
             elif final_parent is not None:
                 child_final_parent = f"{final_parent}.{field.name}"
-            resolved.type = infer_member_type(child, f"{path}.{field.name}", visiting, child_final_parent, validated_keys)
+            resolved.type = infer_member_type(
+                child, f"{path}.{field.name}", visiting, child_final_parent, validated_keys
+            )
             if dataclasses.is_dataclass(resolved.type):
                 stable &= getattr(resolved.type, "_qd_runtime_stable")
             elif child is not None and not isinstance(child, (bool, int, float, np.generic, Ndarray, Field)):
