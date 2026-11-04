@@ -5,7 +5,6 @@ from typing import Any
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import util
 from quadrants.lang._dataclass_util import create_flat_name
-from quadrants.lang._signature import get_func_signature
 from quadrants.lang.ast import (
     ASTTransformerFuncContext,
 )
@@ -82,9 +81,8 @@ def extract_struct_locals_from_context(ctx: ASTTransformerFuncContext) -> set[st
     """
     struct_locals = set()
     assert ctx.func is not None
-    sig = get_func_signature(ctx.func.func)
-    parameters = sig.parameters
-    for param_name, parameter in parameters.items():
+    for parameter in ctx.func.arg_metas:
+        param_name = parameter.name
         dc_type = None
         if dataclasses.is_dataclass(parameter.annotation):
             dc_type = parameter.annotation

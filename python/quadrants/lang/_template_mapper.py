@@ -74,20 +74,22 @@ class TemplateMapper:
         # ``annotation_has_final_subtree``). Computed lazily on first ``lookup`` so its ``Final`` validation runs then.
         self._mapping_cache_disabled: bool | None = None
 
-    def extract(self, raise_on_templated_floats: bool, args: tuple[Any, ...]) -> Key:
+    def extract(self, raise_on_templated_floats: bool, args: tuple[Any, ...], validated_keys=None) -> Key:
         # Optional ndarray + None gets its own key: _extract_arg's NdarrayType branch reads .shape and raises on None.
         return tuple(
             [
                 (
                     OPTIONAL_ABSENT
                     if arg is None and kernel_arg.optional and type(kernel_arg.annotation) is ndarray_type.NdarrayType
-                    else _extract_arg(raise_on_templated_floats, arg, kernel_arg.annotation, kernel_arg.name)
+                    else _extract_arg(
+                        raise_on_templated_floats, arg, kernel_arg.annotation, kernel_arg.name, validated_keys
+                    )
                 )
                 for arg, kernel_arg in zip(args, self.arguments)
             ]
         )
 
-    def lookup(self, raise_on_templated_floats: bool, args: tuple[Any, ...]) -> tuple[int, Key]:
+    def lookup(self, raise_on_templated_floats: bool, args: tuple[Any, ...], validated_keys=None) -> tuple[int, Key]:
         if len(args) != self.num_args:
             raise TypeError(f"{self.num_args} argument(s) needed but {len(args)} provided.")
 
@@ -156,7 +158,7 @@ class TemplateMapper:
             if mapping_cache_tracker:
                 return self._mapping_cache[args_hash]
 
-        key = self.extract(raise_on_templated_floats, args)
+        key = self.extract(raise_on_templated_floats, args, validated_keys)
         try:
             count = self.mapping[key]
         except KeyError:

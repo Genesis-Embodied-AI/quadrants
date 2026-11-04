@@ -17,11 +17,8 @@ The following compound types are available:
 | `@qd.kernel` instance methods       | no                                    | yes                                   | no                                  |
 | `@qd.func` instance methods         | no                                    | yes                                   | yes                                 |
 | Member declaration                  | type-annotated class fields           | live attributes (no annotations)      | type-annotated class fields         |
-| Kernel-arg annotation               | `MyStruct` (the dataclass type)       | `qd.Template`                       | `MyStruct` (the struct type)        |
+| Kernel-arg annotation               | `qd.RuntimeTyped` or `MyStruct`       | `qd.Template`                       | `MyStruct` (the struct type)        |
 | Primitive members are               | runtime args, or compile-time constants when annotated [`Final[T]`](#compile-time-constant-fields-typingfinal) | compile-time constants by default ([opt out](#runtime-primitives-template_primitivesfalse)) | fields of the in-kernel struct |
-
-> ⚠️ **Deprecation: `@dataclasses.dataclass` instance passed via `qd.Template`.**
-> Passing a `@dataclasses.dataclass` instance into a `qd.Template`-annotated kernel parameter is not supported and emits a `DeprecationWarning` at compile time. In a future release it will become an error.
 
 See [Nesting compatibility](#nesting-compatibility) below for a per-container × per-member-type breakdown, including the constraints on the outer kernel-arg annotation and ndarray reassignment.
 
@@ -35,6 +32,33 @@ It's of course very subjective, but some guidelines you could consider:
 - `@qd.dataclass` is used to create structured element types for field tensors. We also use it to create the Cholesky [tiles](tile.md).
 
 ## dataclasses.dataclass
+
+### Runtime member types
+
+Use `qd.RuntimeTyped` on a kernel or `qd.func` parameter to accept a Python dataclass instance without naming its concrete class:
+
+```python
+@dataclass
+class State:
+    positions: object
+    increment: object
+
+@qd.kernel
+def advance(state: qd.RuntimeTyped):
+    state.positions[0] += state.increment
+```
+
+Quadrants infers ordinary member types from the arriving values, including nested dataclasses. Member annotations do not constrain array dtypes or dimensionality and do not cast scalar values. An arriving dataclass instance always takes precedence over its parameter annotation, including a concrete dataclass class, `qd.Template`, or a scalar/array annotation. Quadrants uses the actual instance's class and fields, including subclass fields, without checking compatibility with the annotated class. `qd.RuntimeTyped` makes that intent explicit. `typing.Final[T]` retains its compile-time meaning and validation rules described below.
+
+Python `int` and `float` members use `qd.init`'s default integer precision (`default_ip`) and floating-point precision (`default_fp`); NumPy scalars retain their dtype. Arrays retain their runtime dtype and dimensions. External NumPy and PyTorch arrays are interpreted as arrays of scalars, since their values do not distinguish vector/matrix element axes from array axes. Changing a member's runtime type selects a new kernel specialization; changing an ordinary scalar's value supplies a fresh runtime argument.
+
+When migrating existing containers, array annotation options such as `boundary="clamp"` and explicit `needs_grad` overrides no longer apply: inferred arrays use the default unsafe boundary mode and the arriving array's gradient metadata. A primitive member previously annotated `qd.Template` becomes a runtime scalar; use `Final[T]` when it must remain compile-time. Ordinary string/forward-reference member annotations do not need to resolve. `Final` annotations still need to be actual type objects.
+
+A member may be `None`. Test its presence with [`qd.static(state.member is not None)`](static.md), which evaluates the condition at compile time; replacing it with an array selects a different specialization. All fields of the actual dataclass participate in inference, including subclass fields. Unsupported Python member values, such as strings, lists, sets, and application objects, may remain unused. Quadrants reports an error naming the member path only when a kernel or inlined function accesses such a member. Forwarding a dataclass to a function does not by itself access every member. An inactive `qd.static` branch may leave unsupported members unused; both branches of a runtime conditional still need to compile. Cyclic dataclass references remain an error during inference.
+
+An unused `Final[T]` member may also hold an unsupported constant or declare an unsupported inner type, such as `Final[list]`. A used Final member still requires a supported constant and a non-reassignable path through its containers. Malformed declarations, such as bare `Final` or unresolved string Final annotations, retain their eager errors. Valid Final values remain part of specialization keys, including the `raise_on_templated_floats` check. Containers with deferred unsupported members bypass offline fast caching and instance-based dispatch shortcuts; valid in-process compiled versions can still be reused.
+
+Dataclass arguments to `@qd.func` must be passed explicitly. If a parameter has a dataclass instance as its default, omitting that argument raises an error, regardless of its annotation. Passing the dataclass explicitly, by position or keyword, is supported. Ordinary scalar defaults remain supported.
 
 `dataclasses.dataclass` allows you to create structs containing:
 - ndarrays
@@ -142,7 +166,7 @@ Note: assigning a sub-struct to a local variable and then passing it (`t = s.inn
 
 ### Frozen vs non-frozen
 
-A `dataclasses.dataclass` may be either non-frozen (the default) or frozen (`@dataclass(frozen=True)`). Both work as kernel arguments, but **kernel launch is faster with `frozen=True`** (because it enables some optimizations that would otherwise not be possible). Recommend `frozen=True` unless you specifically need to rebind members after construction. Note that rebinding members after construction contradicts certain best practices; for example, it is typically incompatible with type linters such as pyright and mypy.
+A `dataclasses.dataclass` may be either non-frozen (the default) or frozen (`@dataclass(frozen=True)`). Both work as kernel arguments. Frozen containers with stable members enable cached type resolution and launch arguments. A frozen outer container does not freeze its children: if a nested dataclass is mutable, Quadrants re-reads its members on each launch. `unsafe_hash=True` alone does not enable these caches.
 
 ### Subclasses
 
@@ -165,7 +189,7 @@ def update_positions(pos: Position) -> None:
         update_position(pos.x, i)
 ```
 
-Note: when the annotated type is frozen, the flattened launch arguments are cached on the instance on first use. Do not rebind a field after the first launch; the kernel would keep using the stale cached value. Frozen dataclasses forbid rebinding by design, so this only affects code that deliberately bypasses that (e.g. `object.__setattr__`, or an `unsafe_hash=True` non-frozen dataclass).
+Do not bypass a frozen dataclass's assignment restrictions with `object.__setattr__` after its first launch: cached type descriptions and launch arguments assume those member bindings remain fixed. Mutable nested dataclasses and `Final`-bearing containers are re-read on each launch.
 
 ### Compile-time constant fields: `typing.Final`
 
@@ -439,7 +463,7 @@ The outermost annotation you put on the kernel parameter should match the parame
 
 | Kernel parameter compound type | Annotation |
 |--------------------------------|------------------------------|
-| `@dataclasses.dataclass`       | `MyDataclass` (dataclass type) |
+| `@dataclasses.dataclass`       | `qd.RuntimeTyped` recommended; the arriving dataclass overrides the parameter annotation |
 | `@qd.data_oriented`            | `qd.Template` |
 
 ### Reassigning ndarray members
