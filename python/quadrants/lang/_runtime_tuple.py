@@ -14,6 +14,7 @@ def path_value(root, path):
 
 
 def tuple_annotation(value, name, raise_on_templated_floats=False):
+    # pylint: disable=import-outside-toplevel
     from quadrants.lang._runtime_tuple_plan import (
         TuplePlan,  # pylint: disable=import-outside-toplevel
     )

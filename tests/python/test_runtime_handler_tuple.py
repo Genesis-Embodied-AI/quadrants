@@ -181,11 +181,11 @@ def test_runtime_handler_tuple_order_nested_and_aliases():
 
     output = qd.ndarray(qd.f32, shape=1)
     first = Handler(data(2), 1)
-    second = Handler(data(3), 2)
+    second = Handler(data(3), 3)
     run(((first, second), ()), output)
-    assert output[0] == 11
+    assert output[0] == 12
     run(((second, first),), output)
-    assert output[0] == 11
+    assert output[0] == 13
     second.bias = 4
     run(((first, second),), output)
     assert output[0] == 13

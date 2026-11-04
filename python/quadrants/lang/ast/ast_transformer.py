@@ -1392,7 +1392,10 @@ class ASTTransformer(Builder):
                 raise QuadrantsSyntaxError("'qd.static' cannot be nested")
             with ctx.loop_scope_guard(is_static=True):
                 return ASTTransformer.build_static_for(ctx, node, double_decorator == "grouped")
-        iter_built = decorator == "" and not isinstance(node.iter, (ast.Call, ast.IfExp))
+        is_range = (
+            isinstance(node.iter, ast.Call) and isinstance(node.iter.func, ast.Name) and node.iter.func.id == "range"
+        )
+        iter_built = decorator == "" and not is_range and not isinstance(node.iter, ast.IfExp)
         if iter_built:
             build_stmt(ctx, node.iter)
             if isinstance(node.iter.ptr, tuple):
