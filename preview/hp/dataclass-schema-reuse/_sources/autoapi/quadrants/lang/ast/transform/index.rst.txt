@@ -1,0 +1,19 @@
+quadrants.lang.ast.transform
+============================
+
+.. py:module:: quadrants.lang.ast.transform
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.lang.ast.transform.transform_tree
+
+
+Module Contents
+---------------
+
+.. py:function:: transform_tree(tree, ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext)
+
