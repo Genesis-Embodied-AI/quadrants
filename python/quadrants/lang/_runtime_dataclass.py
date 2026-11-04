@@ -99,7 +99,7 @@ def infer_member_type(
         declared = getattr(value, "_qd_struct_type", None)
         if declared is not None:
             return declared
-        members = {name: infer_member_type(child, f"{path}.{name}", visiting) for name, child in value.items}
+        members = {name: infer_member_type(child, path, visiting) for name, child in value.items}
         key = tuple((name, id(dtype)) for name, dtype in members.items())
         if key not in _struct_types:
             _struct_types[key] = StructType(**members)
@@ -145,7 +145,7 @@ def resolve_dataclass(
             elif final_parent is not None:
                 child_final_parent = f"{final_parent}.{field.name}"
             resolved.type = infer_member_type(
-                child, f"{path}.{field.name}", visiting, child_final_parent, validated_keys
+                child, path, visiting, child_final_parent, validated_keys
             )
             if dataclasses.is_dataclass(resolved.type):
                 stable &= getattr(resolved.type, "_qd_runtime_stable")
