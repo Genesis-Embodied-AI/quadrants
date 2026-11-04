@@ -96,5 +96,6 @@ def compute(n: int, a: qd.Template) -> None:
 ## Argument unpacking
 
 Syntax like `some_function(*args)` is supported in a narrow case:
+
 - `*args` must be the last argument in the function call
-- `*args` must not contain `dataclasses.dataclass` objects
+- Keyword arguments cannot be combined with `*args`
