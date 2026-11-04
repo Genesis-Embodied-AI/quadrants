@@ -1,16 +1,19 @@
 import dataclasses
 from collections.abc import Callable
-from typing import Protocol
+from typing import Generic, Protocol
 
 import numpy as np
+import pytest
+from typing_extensions import TypeVarTuple, Unpack
 
 import quadrants as qd
 
 from tests.helpers import test_utils
 
 
+@pytest.mark.parametrize("generic_syntax", ["pep695", "typing_extensions"])
 @test_utils.test()
-def test_runtime_handler_tuple_example():
+def test_runtime_handler_tuple_example(generic_syntax):
     @dataclasses.dataclass(frozen=True)
     class GridState:
         vel: qd.Tensor
@@ -41,6 +44,20 @@ def test_runtime_handler_tuple_example():
         def __call__(self, i_c: int, vel: float) -> float:
             return self.func(i_c, vel, *self.data)
 
+    Ts = TypeVarTuple("Ts")
+
+    @qd.data_oriented
+    class GenericHandler(Generic[Unpack[Ts]]):
+        def __init__(self, func: Callable[[int, float, Unpack[Ts]], float], *data: Unpack[Ts]) -> None:
+            self.func = func
+            self.data = data
+
+        @qd.func
+        def __call__(self, i_c: int, vel: float) -> float:
+            return self.func(i_c, vel, *self.data)
+
+    handler_type = GenericHandler if generic_syntax == "typing_extensions" else Bound
+
     @qd.func
     def func_add_coupling_vel(i_c: int, vel: float, coupling_data: CouplingData) -> float:
         return vel + coupling_data.vel_delta[i_c]
@@ -69,8 +86,8 @@ def test_runtime_handler_tuple_example():
     rigid_state = RigidState(tensor([-2.0, -3.0], qd.f32))
     vel_particles = tensor([0.0] * 4, qd.f32)
     handlers: tuple[Handler, ...] = (
-        Bound(func_add_coupling_vel, coupling_data),
-        Bound(func_replace_cpic_vel, cpic_data, rigid_state),
+        handler_type(func_add_coupling_vel, coupling_data),
+        handler_type(func_replace_cpic_vel, cpic_data, rigid_state),
     )
     kernel_g2p(grid_state, vel_particles, handlers)
     np.testing.assert_array_equal(vel_particles.to_numpy(), [1.5, -2.0, 1.5, -3.0])
@@ -276,8 +293,6 @@ def test_runtime_tuple_unrolling_and_calls():
 
 @test_utils.test()
 def test_runtime_handler_tuple_rejects_cycles_and_unsupported_captures():
-    import pytest
-
     @qd.data_oriented
     class Handler:
         def __init__(self, data):
@@ -378,8 +393,6 @@ def test_runtime_handler_tuple_bound_method_and_tuple_expression():
 @test_utils.test(raise_on_templated_floats=True)
 def test_runtime_handler_tuple_float_policy():
     from typing import Final
-
-    import pytest
 
     @dataclasses.dataclass(frozen=True)
     class Data:
