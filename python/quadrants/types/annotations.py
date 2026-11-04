@@ -46,7 +46,7 @@ template = Template
 
 
 class RuntimeTyped:
-    """A Python dataclass argument whose member types are inferred from the arriving instance.
+    """A Python dataclass or host tuple argument inferred from the arriving value.
 
     Use the class itself as a kernel or function parameter annotation: ``state: qd.RuntimeTyped``.
     """

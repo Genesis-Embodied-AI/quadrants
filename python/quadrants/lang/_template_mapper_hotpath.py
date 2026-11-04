@@ -193,7 +193,7 @@ def chain_has_mutable_container(args, template_arg_idx, attr_chain) -> bool:
     if type(cur).__hash__ is None or is_data_oriented(cur):
         return True
     for attr_name in attr_chain[:-1]:
-        cur = getattr(cur, attr_name)
+        cur = cur[attr_name] if type(attr_name) is int else getattr(cur, attr_name)
         if type(cur).__hash__ is None or is_data_oriented(cur):
             return True
     return False
@@ -266,6 +266,9 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         return (_TENSOR_T_FIELD_MARKER,) + (_extract_arg(raise_on_templated_floats, arg, template, arg_name),)
     arg_type = type(arg)
     if annotation is template or annotation_type is template:
+        plan = getattr(annotation, "_qd_tuple_plan", None)
+        if plan is not None:
+            return plan.key
         if arg_type is SNode:
             return arg.ptr
         if arg_type is Expr:

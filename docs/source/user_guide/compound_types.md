@@ -22,6 +22,8 @@ The following compound types are available:
 
 See [Nesting compatibility](#nesting-compatibility) below for a per-container × per-member-type breakdown, including the constraints on the outer kernel-arg annotation and ndarray reassignment.
 
+For ordered sequences of callable objects with captured dataclass data, see [tuples of handlers](handler_tuples.md).
+
 ## How to choose a compound type?
 
 It's of course very subjective, but some guidelines you could consider:

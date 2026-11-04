@@ -19,6 +19,8 @@ from quadrants.lang._deferred_dataclass import DeferredMemberType, deferred_memb
 from quadrants.lang._final_dataclass_fields import final_field_names
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang._runtime_dataclass_final import runtime_final_plan, runtime_final_type
+from quadrants.lang._runtime_dataclass_guards import FrozenSchemaEntry
+from quadrants.lang._runtime_tuple import tuple_annotation
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.buffer_view import BufferView
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
@@ -31,6 +33,7 @@ from quadrants.types import buffer_view_type, ndarray_type, primitive_types
 from quadrants.types.annotations import RuntimeTyped, template
 
 _schemas: dict[tuple, type] = {}
+_field_plans: dict[int, tuple] = {}
 _matrix_types: dict[tuple, MatrixType] = {}
 _struct_types: dict[tuple, StructType] = {}
 _buffer_annotation = buffer_view_type.BufferViewType()
@@ -106,37 +109,52 @@ def resolve_dataclass(
     cached = getattr(value, "_qd_runtime_schemas", {}).get(cache_key)
     if cached is not None and cached._qd_runtime_origin is source:
         return cached
+    guarded = getattr(value, "_qd_runtime_guarded_schemas", {}).get(cache_key)
+    if guarded is not None and guarded.schema._qd_runtime_origin is source:
+        if guarded.matches(path, visiting, infer_member_type):
+            return guarded.schema
     finals, final_errors = runtime_final_plan(source)
-    params = getattr(source, "__dataclass_params__")
+    plan = _field_plans.get(id(source))
+    if plan is None:
+        plan = (source, tuple((field.name, field, field.name in finals) for field in dataclasses.fields(source)))
+        _field_plans[id(source)] = plan
+    _, field_plan = plan
+    params = source.__dataclass_params__
     stable = params.frozen and not finals and not final_errors
-    fields = {}
+    member_types = []
     has_deferred = False
-    for field in dataclasses.fields(source):
-        resolved = copy.copy(field)
-        if field.name in final_errors:
-            resolved.type = final_errors[field.name]
-        elif field.name in finals:
-            resolved.type = runtime_final_type(field.type, getattr(value, field.name), final_parent, field.name)
+    for name, field, is_final in field_plan:
+        if name in final_errors:
+            member_type = final_errors[name]
+        elif is_final:
+            member_type = runtime_final_type(field.type, getattr(value, name), final_parent, name)
         else:
-            child = getattr(value, field.name)
+            child = getattr(value, name)
             child_final_parent = None
             if not (params.frozen or params.unsafe_hash):
-                child_final_parent = f"{source.__name__}.{field.name}"
+                child_final_parent = f"{source.__name__}.{name}"
             elif final_parent is not None:
-                child_final_parent = f"{final_parent}.{field.name}"
-            resolved.type = infer_member_type(child, f"{path}.{field.name}", visiting, child_final_parent)
-            if dataclasses.is_dataclass(resolved.type):
-                stable &= getattr(resolved.type, "_qd_runtime_stable")
+                child_final_parent = f"{final_parent}.{name}"
+            member_type = infer_member_type(child, f"{path}.{name}", visiting, child_final_parent)
+            if dataclasses.is_dataclass(member_type):
+                stable &= getattr(member_type, "_qd_runtime_stable")
             elif child is not None and not isinstance(child, (bool, int, float, np.generic, Ndarray, Field)):
                 stable = False
-        has_deferred |= isinstance(resolved.type, DeferredMemberType) or getattr(
-            resolved.type, "_qd_runtime_has_deferred", False
+        has_deferred |= isinstance(member_type, DeferredMemberType) or getattr(
+            member_type, "_qd_runtime_has_deferred", False
         )
-        fields[field.name] = resolved
+        member_types.append(member_type)
     stable &= not has_deferred
-    key = (id(source), stable, tuple((name, id(field.type)) for name, field in fields.items()))
+    key = (id(source), stable, tuple(map(id, member_types)))
     schema = _schemas.get(key)
     if schema is None:
+        # Revalidate values on every uncached launch, but allocate field metadata only for a new inferred schema.
+        # The class plan retains the source and field order; only runtime member types and stability vary here.
+        fields = {}
+        for (name, field, _), member_type in zip(field_plan, member_types):
+            resolved = copy.copy(field)
+            resolved.type = member_type
+            fields[name] = resolved
         schema = type(
             source.__name__,
             (),
@@ -171,20 +189,32 @@ def resolve_dataclass(
             except AttributeError:
                 pass
         cache[cache_key] = schema
+    elif params.frozen and not has_deferred and not finals and final_parent is None:
+        cache = getattr(value, "_qd_runtime_guarded_schemas", None)
+        if cache is None:
+            cache = {}
+            try:
+                object.__setattr__(value, "_qd_runtime_guarded_schemas", cache)
+            except AttributeError:
+                return schema
+        cache[cache_key] = FrozenSchemaEntry(value, schema, field_plan, member_types)
     return schema
 
 
-def resolve_arguments(arguments: list[ArgMetadata], values: tuple[Any, ...]) -> list[ArgMetadata]:
+def _tuple_argument(arg, value, tuple_names, raise_on_templated_floats):
+    tuple_names.append(arg.name)
+    return ArgMetadata(tuple_annotation(value, arg.name, raise_on_templated_floats), arg.name, arg.default)
+
+
+def resolve_arguments(arguments, values, tuple_names, raise_on_templated_floats=False):
     return [
         (
-            ArgMetadata(
-                resolve_dataclass(value, arg.name),
-                arg.name,
-                arg.default,
-                optional=arg.optional,
+            ArgMetadata(resolve_dataclass(value, arg.name), arg.name, arg.default, optional=arg.optional)
+            if hasattr(type(value), "__dataclass_fields__")
+            or (is_dataclass_annotation(arg.annotation) and not isinstance(value, tuple))
+            else (
+                _tuple_argument(arg, value, tuple_names, raise_on_templated_floats) if isinstance(value, tuple) else arg
             )
-            if hasattr(type(value), "__dataclass_fields__") or is_dataclass_annotation(arg.annotation)
-            else arg
         )
         for arg, value in zip(arguments, values)
     ]
@@ -192,7 +222,8 @@ def resolve_arguments(arguments: list[ArgMetadata], values: tuple[Any, ...]) -> 
 
 def prepare_runtime_arguments(kernel, values):
     """Prepare inferred metadata and dispatch-cache eligibility for one kernel launch."""
-    kernel.arg_metas = resolve_arguments(kernel.orig_arguments, values)
+    tuple_names = []
+    kernel.arg_metas = resolve_arguments(kernel.orig_arguments, values, tuple_names, kernel.raise_on_templated_floats)
     kernel.mapper.arguments = kernel.arg_metas
     kernel._runtime_has_deferred = any(
         getattr(meta.annotation, "_qd_runtime_has_deferred", False) for meta in kernel.arg_metas
@@ -202,10 +233,18 @@ def prepare_runtime_arguments(kernel, values):
         for i in kernel.original_template_slot_locations
         if not hasattr(kernel.arg_metas[i].annotation, "_qd_runtime_origin")
     ]
+    if tuple_names:
+        kernel.template_slot_locations.extend(
+            i
+            for i, meta in enumerate(kernel.arg_metas)
+            if meta.name in tuple_names and i not in kernel.template_slot_locations
+        )
     kernel.mapper.template_slot_locations = kernel.template_slot_locations
-    # A dataclass's member types can change without changing the identity of the outer object.
+    # A dataclass's member types can change without changing the identity of the outer object. Tuple captures may
+    # reassign functions or data without changing the root tuple, so they also bypass the instance-keyed cache.
     kernel.mapper._mapping_cache_disabled = (
-        any(
+        bool(tuple_names)
+        or any(
             hasattr(meta.annotation, "_qd_runtime_origin") and not meta.annotation._qd_runtime_stable
             for meta in kernel.arg_metas
         )
