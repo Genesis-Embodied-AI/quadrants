@@ -1,0 +1,19 @@
+quadrants.experimental
+======================
+
+.. py:module:: quadrants.experimental
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.experimental.real_func
+
+
+Module Contents
+---------------
+
+.. py:function:: real_func(func)
+
