@@ -23,6 +23,7 @@ from quadrants.lang import (
 )
 from quadrants.lang import ops as qd_ops
 from quadrants.lang._dataclass_util import create_flat_name
+from quadrants.lang._deferred_dataclass import DeferredMemberType, DeferredMemberValue
 from quadrants.lang._final_dataclass_fields import (
     final_field_names,
     is_final_annotation,
@@ -64,6 +65,8 @@ class FunctionDefTransformer:
         this_arg_features: tuple[tuple[Any, ...], ...] | None,
         prefix_name: str,
     ) -> tuple[bool, Any]:
+        if isinstance(annotation, DeferredMemberType):
+            return True, annotation.bind(name)
         full_name = prefix_name + "_" + name
         if not isinstance(annotation, primitive_types.RefType):
             ctx.kernel_args.append(name)
@@ -388,6 +391,10 @@ class FunctionDefTransformer:
         # ``@qd.func`` (``static_rigid_sim_config.para_level``) reaches the kernel's pruning set - without it the
         # args-hasher never sees the value and configurations that differ only there collide in the fastcache key.
         ctx.fn_param_names.add(argument_name)
+        if isinstance(argument_type, DeferredMemberType):
+            assert isinstance(data, DeferredMemberValue)
+            ctx.create_variable(argument_name, data)
+            return None
 
         # A ``Final[T]`` leaf @qd.func arg: ``data`` already carries the resolved Python value, so bind it directly for
         # ``qd.static(cfg.field)``. Before the ``annotations.template`` check (``Final[T]`` is not a ``template``).

@@ -418,6 +418,8 @@ class Kernel(FuncBase):
         self._l1_key = None  # type: ignore[attr-defined]
         self._pruning_paths_from_l1 = None  # type: ignore[attr-defined]
         self.fast_checksum = None
+        if self._runtime_has_deferred:
+            return None
         if self.runtime.src_ll_cache and self.quadrants_callable and self.quadrants_callable.is_pure:
             kernel_source_info, _src = get_source_info_and_src(self.func)
             self._kernel_source_info_cached = kernel_source_info  # reused by materialize / launch_kernel

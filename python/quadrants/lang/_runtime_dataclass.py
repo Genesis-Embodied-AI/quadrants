@@ -15,6 +15,7 @@ import numpy as np
 from quadrants._tensor_wrapper import Tensor
 from quadrants.lang import impl
 from quadrants.lang._dataclass_util import create_flat_name
+from quadrants.lang._deferred_dataclass import DeferredMemberType, deferred_member
 from quadrants.lang._final_dataclass_fields import final_field_names
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang.any_array import AnyArray
@@ -115,7 +116,7 @@ def infer_member_type(value: Any, path: str, visiting: frozenset[int]) -> Any:
         if key not in _struct_types:
             _struct_types[key] = StructType(**members)
         return _struct_types[key]
-    raise QuadrantsRuntimeTypeError(f"Dataclass member {path!r} has unsupported runtime type {type(value).__name__}")
+    return deferred_member(QuadrantsRuntimeTypeError, f"unsupported runtime type {type(value).__name__}")
 
 
 def resolve_dataclass(value: Any, path: str, visiting: frozenset[int] = frozenset()) -> type:
@@ -136,6 +137,7 @@ def resolve_dataclass(value: Any, path: str, visiting: frozenset[int] = frozense
     params = getattr(source, "__dataclass_params__")
     stable = params.frozen and not finals
     fields = {}
+    has_deferred = False
     for field in dataclasses.fields(source):
         resolved = copy.copy(field)
         if field.name not in finals:
@@ -145,7 +147,11 @@ def resolve_dataclass(value: Any, path: str, visiting: frozenset[int] = frozense
                 stable &= getattr(resolved.type, "_qd_runtime_stable")
             elif child is not None and not isinstance(child, (bool, int, float, np.generic, Ndarray, Field)):
                 stable = False
+        has_deferred |= isinstance(resolved.type, DeferredMemberType) or getattr(
+            resolved.type, "_qd_runtime_has_deferred", False
+        )
         fields[field.name] = resolved
+    stable &= not has_deferred
     key = (id(source), stable, tuple((name, id(field.type)) for name, field in fields.items()))
     schema = _schemas.get(key)
     if schema is None:
@@ -160,6 +166,7 @@ def resolve_dataclass(value: Any, path: str, visiting: frozenset[int] = frozense
                 "__hash__": source.__hash__,
                 "_qd_runtime_origin": source,
                 "_qd_runtime_stable": stable,
+                "_qd_runtime_has_deferred": has_deferred,
                 # Cache eligibility is not part of the compiled interface: a Tensor wrapper and its bare ndarray
                 # must share a specialization, even though the wrapper can change its underlying implementation.
                 "_qd_runtime_key": (
@@ -205,6 +212,9 @@ def prepare_runtime_arguments(kernel, values):
     """Prepare inferred metadata and dispatch-cache eligibility for one kernel launch."""
     kernel.arg_metas = resolve_arguments(kernel.orig_arguments, values)
     kernel.mapper.arguments = kernel.arg_metas
+    kernel._runtime_has_deferred = any(
+        getattr(meta.annotation, "_qd_runtime_has_deferred", False) for meta in kernel.arg_metas
+    )
     kernel.template_slot_locations = [
         i
         for i in kernel.original_template_slot_locations

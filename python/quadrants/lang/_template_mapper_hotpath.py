@@ -42,6 +42,7 @@ from quadrants._tensor import (
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang._dataclass_util import create_flat_name
+from quadrants.lang._deferred_dataclass import DeferredMemberType
 from quadrants.lang._final_dataclass_fields import (
     final_field_names,
     final_scalar_key,
@@ -239,6 +240,8 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
     ):  # pyright: ignore[reportOptionalMemberAccess]
         arg = arg._unwrap()
     annotation_type = type(annotation)
+    if annotation_type is DeferredMemberType:
+        return annotation
     # qd.Tensor: value-dispatch. Ndarray-shaped values flow through the ndarray feature path; everything else falls
     # through to the template path (Field, SNode, primitives). Both branches are salted with a marker so cache keys
     # disambiguate. The annotation is the wrapper *class* (``qd.Tensor``); ``arg`` is always a bare impl by the time
