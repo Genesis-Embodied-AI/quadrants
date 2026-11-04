@@ -32,9 +32,9 @@ def build_wheel(python: Command) -> None:
     u = platform.uname()
     match (u.system, u.machine):
         case ("Linux", "x86_64"):
-            plat = "manylinux_2_27_x86_64"
+            plat = "manylinux_2_35_x86_64"
         case ("Linux", "arm64") | ("Linux", "aarch64"):
-            plat = "manylinux_2_27_aarch64"
+            plat = "manylinux_2_35_aarch64"
         case ("Darwin", _):
             plat = "macosx_13_0_arm64"
 

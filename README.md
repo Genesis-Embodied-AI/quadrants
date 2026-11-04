@@ -71,7 +71,7 @@ OpenGL/GLES, argpack, CLI, SourceBuilder.
 
 # Installation
 ## Prerequisites
-- Python 3.12-3.14
+- Python 3.12-3.15
 - Mac OS 14, 15, Windows, or Ubuntu 22.04-24.04 or compatible
 - ROCm 5.2 or newer for AMD GPU support
 

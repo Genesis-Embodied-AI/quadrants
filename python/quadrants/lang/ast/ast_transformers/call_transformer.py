@@ -295,7 +295,6 @@ class CallTransformer:
                     kwarg_node = ast.keyword(
                         arg=child_name,
                         value=src_node,
-                        ctx=load_ctx,
                         lineno=kwarg.lineno,
                         end_lineno=kwarg.end_lineno,
                         col_offset=kwarg.col_offset,
@@ -334,7 +333,6 @@ class CallTransformer:
                     kwarg_node = ast.keyword(
                         arg=child_name,
                         value=src_node,
-                        ctx=load_ctx,
                         lineno=kwarg.lineno,
                         end_lineno=kwarg.end_lineno,
                         col_offset=kwarg.col_offset,
