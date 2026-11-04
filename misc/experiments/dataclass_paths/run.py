@@ -18,19 +18,20 @@ from pathlib import Path
 
 REFS = {
     "parent-control": "8102aca75",
-    "parent-tuple": "origin/hp/path-parent-tuple",
-    "parent-list": "origin/hp/path-parent-list",
-    "parent-elided": "origin/hp/path-parent-elided",
+    "parent-tuple": "bc5627b1a3975b29550ac7febdb467b74a67eb4c",
+    "parent-list": "5de461c6a161c9517294d9b3cc16a42dcf8be2d7",
+    "parent-elided": "f65e25189d0f8aa309e4561c42eb93801c3a8534",
     "guard-control": "8d6de6254",
-    "guard-tuple": "origin/hp/path-guard-tuple",
-    "guard-list": "origin/hp/path-guard-list",
-    "guard-elided": "origin/hp/path-guard-elided",
+    "guard-tuple": "d1f210c37b37e3671c65c22e1c2ad31a2c11c13d",
+    "guard-list": "68e98eb29c78c487f0f4d3e8a63b8f085b9d90ee",
+    "guard-elided": "3719f411499d28b4f827632dab5067e0ba7ec587",
 }
 REFS.update(
     {
-        f"{base}-{kind}-entry": f"origin/hp/path-{base}-{kind}-entry"
-        for base in ("parent", "guard")
-        for kind in ("tuple", "list")
+        "parent-tuple-entry": "96c6416ac9c2d08c062460118fb82930905452d2",
+        "parent-list-entry": "4212ada716a873039727576babf8f0ad8f098073",
+        "guard-tuple-entry": "b734597279cf3ebee02bd6ce4e3d2552033b46a5",
+        "guard-list-entry": "8d6959860a03c1ffd8a8304435da29cfce6396e9",
     }
 )
 
