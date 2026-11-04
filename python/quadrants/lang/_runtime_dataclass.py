@@ -17,6 +17,7 @@ from quadrants.lang import impl
 from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._final_dataclass_fields import final_field_names
 from quadrants.lang._ndarray import Ndarray
+from quadrants.lang._runtime_dataclass_guards import FrozenSchemaEntry
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.buffer_view import BufferView
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
@@ -133,6 +134,12 @@ def resolve_dataclass(value: Any, path: str, visiting: frozenset[int] = frozense
     cached = getattr(value, "_qd_runtime_schemas", {}).get(cache_key)
     if cached is not None and cached._qd_runtime_origin is source:
         return cached
+    # Guarded entries reuse schema metadata only. They retain _qd_runtime_stable=False so specialization and
+    # launch binding still inspect current arrays and template values.
+    guarded = getattr(value, "_qd_runtime_guarded_schemas", {}).get(cache_key)
+    if guarded is not None and guarded.schema._qd_runtime_origin is source:
+        if guarded.matches(path, visiting, infer_member_type):
+            return guarded.schema
     plan = _field_plans.get(id(source))
     if plan is None:
         finals = _direct_final_names(source)
@@ -199,6 +206,15 @@ def resolve_dataclass(value: Any, path: str, visiting: frozenset[int] = frozense
             except AttributeError:
                 pass
         cache[cache_key] = schema
+    elif params.frozen:
+        cache = getattr(value, "_qd_runtime_guarded_schemas", None)
+        if cache is None:
+            cache = {}
+            try:
+                object.__setattr__(value, "_qd_runtime_guarded_schemas", cache)
+            except AttributeError:
+                return schema
+        cache[cache_key] = FrozenSchemaEntry(value, schema, field_plan, member_types)
     return schema
 
 
