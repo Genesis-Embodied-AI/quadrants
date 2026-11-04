@@ -50,7 +50,7 @@ def test_guard_cache_does_not_retain_parent_through_child():
     assert _instance_schemas.get(state) is not None
     key_id = id(state)
     ref = weakref.ref(state)
-    del state, child
+    del state, child, before
     gc.collect()
     assert ref() is None
     assert key_id not in _instance_schemas._entries
