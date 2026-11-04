@@ -261,17 +261,24 @@ def test_runtime_deferred_members_disable_offline_cache(tmp_path):
 
         @qd.kernel(fastcache=True)
         def run(state: qd.RuntimeTyped):
-            state.output[0] = qd.static(state.value)
+            value = qd.static(state.value)
+            state.output[0] = value
 
         output = qd.ndarray(qd.i32, shape=1)
         run(State(bias, output, 1))
         assert output[0] == bias
         assert run._primal.src_ll_cache_observations.cache_key_generated
         for unused in (object(), object(), 2, object()):
+            # Observations accumulate across launches; clear them to inspect this particular call.
+            observed = run._primal.src_ll_cache_observations
+            observed.cache_loaded = False
+            observed.cache_stored = False
+            observed.cache_key_generated = False
             run(State(bias, output, unused))
             assert output[0] == bias
             observed = run._primal.src_ll_cache_observations
             if type(unused) is object:
                 assert not observed.cache_loaded
                 assert not observed.cache_stored
+                assert not observed.cache_key_generated
         assert run._primal._runtime_has_deferred
