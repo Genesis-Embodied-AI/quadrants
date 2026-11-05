@@ -2,6 +2,8 @@
 
 A kernel can accept a Python tuple of handlers whose `__call__` methods are [`@qd.func`](sub_functions.md) functions. Quadrants discovers the functions and their captured data from the arriving objects. Python annotations such as `Protocol`, `Callable`, and `tuple[Handler, ...]` do not select the implementation.
 
+The example uses [`qd.Tensor`](tensor.md), a common wrapper for Quadrants ndarrays and fields.
+
 ```python
 import dataclasses
 import quadrants as qd
@@ -39,7 +41,7 @@ The tuple determines its argument handling at runtime, even when its kernel para
 
 ## Captured values and changes between launches
 
-Captured data may contain tuples, Python dataclasses, data-oriented objects, Quadrants ndarrays, Fields, and `qd.Tensor` wrappers around those arrays or Fields. Ordinary scalar dataclass members are runtime arguments, using the same [runtime type inference](compound_types.md#runtime-member-types) as direct dataclass arguments. `Final` members remain compile-time constants. Data-oriented configuration members keep their existing template semantics.
+Captured data may contain tuples, Python dataclasses, data-oriented objects, Quadrants ndarrays, Fields, and `qd.Tensor` wrappers around those arrays or Fields. Ordinary scalar dataclass members are runtime arguments, using the same [runtime type inference](compound_types.md#runtime-member-types) as direct dataclass arguments. `Final` members remain compile-time constants. Data-oriented configuration members are compile-time constants by default: changing their values can select a different compiled version.
 
 Changing tensor contents or an ordinary scalar dataclass value updates the next launch without requiring another compilation. Rebinding a tensor with the same element type, rank, and layout also reuses compiled code. Changing a selected function, handler order, tuple structure, captured runtime type, or compile-time constant selects a matching specialization. Equivalent fresh handler objects can reuse compiled code; object identity alone is not the specialization key. Sharing captured objects is tracked because it affects which kernel arguments can be shared.
 
@@ -47,4 +49,4 @@ Changing tensor contents or an ordinary scalar dataclass value updates the next 
 
 ## Caching and limitations
 
-Compiled specializations are reused within the current runtime. Handler tuple arguments currently disable [offline caching](fastcache.md): the disk cache does not yet describe selected functions and indexed capture paths completely. Other kernel arguments retain their existing caching behavior. Captured external NumPy/PyTorch arrays, arbitrary lists/dictionaries, and opaque application objects are not supported by this tuple path; use Quadrants tensors and supported containers.
+Compiled specializations are reused within the current runtime. Handler tuple arguments currently disable [offline caching](fastcache.md): the disk cache does not yet record enough information about the selected functions and where their captured values occur in the tuple. Other kernel arguments retain their existing caching behavior. Captured external NumPy/PyTorch arrays, arbitrary lists/dictionaries, and opaque application objects are not supported by this tuple path; use Quadrants tensors and supported containers.

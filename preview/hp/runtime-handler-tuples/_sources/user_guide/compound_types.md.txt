@@ -17,7 +17,7 @@ The following compound types are available:
 | `@qd.kernel` instance methods       | no                                    | yes                                   | no                                  |
 | `@qd.func` instance methods         | no                                    | yes                                   | yes                                 |
 | Member declaration                  | type-annotated class fields           | live attributes (no annotations)      | type-annotated class fields         |
-| Kernel-arg annotation               | `qd.RuntimeTyped` or `MyStruct`       | `qd.Template`                       | `MyStruct` (the struct type)        |
+| Kernel-arg annotation               | [`qd.RuntimeTyped`](#runtime-member-types) or `MyStruct`       | `qd.Template`                       | `MyStruct` (the struct type)        |
 | Primitive members are               | runtime args, or compile-time constants when annotated [`Final[T]`](#compile-time-constant-fields-typingfinal) | compile-time constants by default ([opt out](#runtime-primitives-template_primitivesfalse)) | fields of the in-kernel struct |
 
 See [Nesting compatibility](#nesting-compatibility) below for a per-container × per-member-type breakdown, including the constraints on the outer kernel-arg annotation and ndarray reassignment.
@@ -56,7 +56,11 @@ Python `int` and `float` members use `qd.init`'s default integer precision (`def
 
 When migrating existing containers, array annotation options such as `boundary="clamp"` and explicit `needs_grad` overrides no longer apply: inferred arrays use the default unsafe boundary mode and the arriving array's gradient metadata. A primitive member previously annotated `qd.Template` becomes a runtime scalar; use `Final[T]` when it must remain compile-time. Ordinary string/forward-reference member annotations do not need to resolve. `Final` annotations still need to be actual type objects.
 
-A member may be `None`. Test its presence with [`qd.static(state.member is not None)`](static.md), which evaluates the condition at compile time; replacing it with an array selects a different specialization. Unsupported member values and cyclic dataclass references raise an error naming the member path. All fields of the actual dataclass participate in inference, including unused subclass fields; annotating the parameter with a base class no longer hides application-only fields with unsupported values.
+A member may be `None`. Test its presence with [`qd.static(state.member is not None)`](static.md), which evaluates the condition at compile time; replacing it with an array selects a different specialization. All fields of the actual dataclass participate in inference, including subclass fields. Unsupported Python member values, such as strings, lists, sets, and application objects, may remain unused. Quadrants reports an error naming the member path only when a kernel or inlined function accesses such a member. Forwarding a dataclass to a function does not by itself access every member. An inactive `qd.static` branch may leave unsupported members unused; both branches of a runtime conditional still need to compile. Cyclic dataclass references remain an error during inference.
+
+An unused `Final[T]` member may also hold an unsupported constant or declare an unsupported inner type, such as `Final[list]`. A used Final member still requires a supported constant and a non-reassignable path through its containers. Malformed declarations, such as bare `Final` or unresolved string Final annotations, retain their eager errors. Valid Final values remain part of specialization keys, including the `raise_on_templated_floats` check. Containers with deferred unsupported members bypass offline fast caching and instance-based dispatch shortcuts; valid in-process compiled versions can still be reused.
+
+Dataclass arguments to `@qd.func` must be passed explicitly. If a parameter has a dataclass instance as its default, omitting that argument raises an error, regardless of its annotation. Passing the dataclass explicitly, by position or keyword, is supported. Ordinary scalar defaults remain supported.
 
 `dataclasses.dataclass` allows you to create structs containing:
 - ndarrays
