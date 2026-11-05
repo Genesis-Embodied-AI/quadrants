@@ -37,7 +37,6 @@ from build_inputs import (  # noqa: E402  (import after sys.path tweak)
     diff_changed_line_numbers,
 )
 
-
 COUNTING_NOTE = (
     "Counts exclude blank lines. Python/C++ exclude comment-only lines; Python also excludes "
     "string-literal-only lines. Markdown counts all nonblank lines. Shell/YAML skip lines starting "

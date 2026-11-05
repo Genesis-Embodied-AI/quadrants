@@ -421,7 +421,7 @@ def main() -> int:
             )
         )
 
-    # Sort by descending additions, then descending removals, then path. Rendering preserves this order within each group.
+    # Sort by additions descending, then removals, then path. Reports preserve this order within each group.
     summaries.sort(key=lambda s: (-s.added, -s.removed, s.path))
 
     summary_dicts = [
