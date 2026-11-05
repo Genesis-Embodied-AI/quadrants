@@ -143,7 +143,7 @@ def render_report(summaries: list[FileSummary], jsonl_path: Path, output_dir: Pa
         lines.extend(render_table(["File", "LoC", "Added", "Removed"], file_rows))
 
         for file_summary in group_files:
-            if not file_summary.is_deleted and file_summary.language not in {"py", "cpp"}:
+            if file_summary.language not in {"py", "cpp"}:
                 continue
             if not file_summary.is_deleted and not (file_summary.added or file_summary.removed):
                 continue
