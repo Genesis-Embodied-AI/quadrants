@@ -30,7 +30,7 @@ def dataclass_field_is_final(dataclass_type: type, field_name: str, annotation: 
     # `-- slice: Name("int")    <- discard the inner annotation
     if isinstance(annotation_node, ast.Subscript):
         annotation_node = annotation_node.value
-    # For "typing.Final[int]", removing [int] leaves this dotted name:
+    # "typing.Final" parses as:
     # Attribute
     # |-- value: Name("typing")
     # `-- attr: "Final"
