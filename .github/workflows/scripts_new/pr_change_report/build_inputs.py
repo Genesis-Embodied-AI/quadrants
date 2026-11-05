@@ -432,9 +432,13 @@ def render_comment_markdown(summaries: list[FileSummary], commit: str) -> str:
         file_lines.append("| File | LoC | Added | Removed |")
         file_lines.append("|------|-----|-------|---------|")
         for s in files:
-            added_cell = f"+{s.added}" if s.added else ""
-            removed_cell = f"-{s.removed}" if s.removed else ""
-            file_lines.append(f"| `{s.path}` | {s.total} | {added_cell} | {removed_cell} |")
+            row = ""
+            row += f"| `{s.path}` "
+            row += f"| {s.total} "
+            row += f"| +{s.added} " if s.added else "|  "
+            row += f"| -{s.removed} " if s.removed else "|  "
+            row += "|"
+            file_lines.append(row)
     lines.append(f"| **Total** | {len(summaries)} | +{total_added} | -{total_removed} |")
     lines.extend(file_lines)
     lines.append("")
