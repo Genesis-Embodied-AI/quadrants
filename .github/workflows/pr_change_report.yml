@@ -139,16 +139,16 @@ jobs:
           cat /tmp/pr_change_report/function_ranges.jsonl
           echo "---------------------------------"
 
-      - name: Render report.txt deterministically
+      - name: Render report.md deterministically
         if: steps.inputs.outputs.skip != 'true'
         run: |
           python .github/workflows/scripts_new/pr_change_report/render_report.py \
             --output-dir /tmp/pr_change_report \
             --function-ranges /tmp/pr_change_report/function_ranges.jsonl \
-            --output /tmp/pr_change_report/report.txt
+            --output /tmp/pr_change_report/report.md
 
-          echo "----- report.txt -----"
-          cat /tmp/pr_change_report/report.txt
+          echo "----- report.md -----"
+          cat /tmp/pr_change_report/report.md
           echo "----------------------"
 
       - name: Assemble Check-page markdown
@@ -157,11 +157,9 @@ jobs:
           {
             cat /tmp/pr_change_report/report_comment.md
             echo
-            echo "### Per-function breakdown (Python/C++ only)"
+            echo "## Per-function breakdown (Python/C++ only)"
             echo
-            echo '```text'
-            cat /tmp/pr_change_report/report.txt
-            echo '```'
+            cat /tmp/pr_change_report/report.md
           } > /tmp/pr_change_report/report_check.md
 
           echo "----- report_check.md (head) -----"
@@ -175,7 +173,7 @@ jobs:
         with:
           name: pr-change-report
           path: |
-            /tmp/pr_change_report/report.txt
+            /tmp/pr_change_report/report.md
             /tmp/pr_change_report/report_check.md
             /tmp/pr_change_report/report_comment.md
             /tmp/pr_change_report/summary.json

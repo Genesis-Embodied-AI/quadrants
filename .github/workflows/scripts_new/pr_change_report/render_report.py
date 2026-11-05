@@ -1,37 +1,21 @@
 #!/usr/bin/env python3
-"""Render the per-file / per-function PR change report from phase-1 outputs and the agent's
-identified function ranges.
+"""Render the per-file / per-function PR change report as Markdown.
 
-Phase 1 is ``build_inputs.py``; phase 2 (this script) consumes those outputs plus the agent's
-JSONL output and produces the human-readable report. Everything here is deterministic -- the
-agent only contributes function NAMES and LINE RANGES; line counts and the +/- attribution are
-computed from the diff and the HEAD/base file contents using the same code-line definition
-``build_inputs.py`` uses.
+Phase 1 is ``build_inputs.py``; phase 2 (this script) consumes those outputs plus the agent's JSONL output. The agent
+supplies function names and line ranges; counts are computed deterministically from the diffs and HEAD/base contents
+using the same counting rules as ``build_inputs.py``.
 
 JSONL input (one object per line) -- emitted by the agent::
 
   {"path": "<path>", "name": "<func>", "head": [<start>, <end>] | null, "base": [<start>, <end>] | null}
 
-Output ``report.txt`` shape::
+Output ``report.md`` contains folder-group headings, file totals, and per-function tables rendered by the shared
+``render_table`` helper. Within each file, functions are split into New, Existing, and Deleted sections and sorted by
+added lines descending, then removed lines descending.
 
-  <path> <total> +<added> -<removed>
-      New:
-        <func>()                              <total>  +<added>
-        ...
-      Existing:
-        <func>()                              <total>  +<added>  -<removed>
-        ...
-      Deleted:
-        <func>()                              <total>            -<removed>
-        ...
-
-The ``<total>`` column at every level is the BASE (pre-PR) code-line count: file size before
-the PR (or 0 for newly-added files); function body size before the PR (or 0 for new functions;
-the original body size for deleted functions). Within each file, functions are split into a
-``New:`` group (added by this PR), an ``Existing:`` group (modified by this PR), and a
-``Deleted:`` group (removed by this PR), and within each group sorted by added lines descending,
-then removed lines descending. Function-name and numeric columns are padded with spaces so the
-columns line up within a file.
+The LoC column is the BASE (pre-PR) counted-line total: file size before the PR or function body size before the PR.
+Newly added files and functions have LoC 0; deleted files and functions retain their original size. Added and Removed
+columns contain nonnegative counts.
 """
 
 from __future__ import annotations
@@ -49,8 +33,8 @@ from build_inputs import (  # noqa: E402  (import after sys.path tweak)
     FileSummary,
     code_line_set,
     diff_changed_line_numbers,
-    format_header,
     get_group_summaries_by_name,
+    render_table,
 )
 
 
@@ -235,20 +219,6 @@ def _impact_sort_key(a: _AttributedEntry) -> tuple[int, int, str]:
     return (-a.added, -a.removed, a.entry.name)
 
 
-# Column widths chosen to fit the longest expected token in each column without crowding adjacent
-# columns. Five-digit ``+``/``-`` counts are the longest expected numeric tokens; the total
-# column holds a base (pre-PR) line count so it never exceeds a few digits in practice.
-_TOTAL_WIDTH = 6
-_ADDED_WIDTH = 7
-_REMOVED_WIDTH = 7
-_FUNC_INDENT = "      "
-_GROUP_INDENT = "    "
-
-
-def _format_total(a: _AttributedEntry) -> str:
-    return str(a.total)
-
-
 def _function_label(name: str) -> str:
     """Append ``()`` only when the agent did not already supply a parenthesized signature.
 
@@ -258,78 +228,65 @@ def _function_label(name: str) -> str:
     return name if name.rstrip().endswith(")") else f"{name}()"
 
 
-def _format_aligned_function(a: _AttributedEntry, name_width: int) -> str:
-    name = _function_label(a.entry.name)
-    total_str = _format_total(a)
-    added_str = f"+{a.added}" if a.added else ""
-    removed_str = f"-{a.removed}" if a.removed else ""
-    return (
-        f"{_FUNC_INDENT}{name:<{name_width}}  "
-        f"{total_str:>{_TOTAL_WIDTH}}  "
-        f"{added_str:>{_ADDED_WIDTH}}  "
-        f"{removed_str:>{_REMOVED_WIDTH}}"
-    ).rstrip()
-
-
 def _emit_file_section(book: _FileBookkeeping, attributed: list[_AttributedEntry]) -> tuple[list[str], int, int]:
-    """Render a single file's section (header + grouped/sorted/aligned function rows).
-
-    Returns ``(lines, per_func_added_total, per_func_removed_total)``. Trailing blank line is
-    appended by the caller, not here.
-    """
-    lines: list[str] = [format_header(_HeaderProxy(book))]
+    """Render file totals and grouped function tables; return lines and per-function addition/removal totals."""
+    lines = [f"#### `{book.path}`", ""]
+    lines.extend(
+        render_table(["LoC", "Added", "Removed"], [{"LoC": book.total, "Added": book.added, "Removed": book.removed}])
+    )
     if book.is_deleted:
-        lines.append(f"{_GROUP_INDENT}# entire file deleted (per-function breakdown skipped)")
+        lines.append("")
+        lines.append("Entire file deleted (per-function breakdown skipped).")
         return lines, 0, 0
     if book.language not in {"py", "cpp"}:
         return lines, 0, 0
     if not attributed:
         if book.added or book.removed:
-            lines.append(f"{_GROUP_INDENT}# note: no per-function attribution available")
+            lines.append("")
+            lines.append("Note: no per-function attribution available.")
         return lines, 0, 0
 
     new_group = sorted([a for a in attributed if a.is_new], key=_impact_sort_key)
     deleted_group = sorted([a for a in attributed if a.is_deleted], key=_impact_sort_key)
     existing_group = sorted([a for a in attributed if not a.is_new and not a.is_deleted], key=_impact_sort_key)
 
-    # Pad function names to the longest name across ALL groups so the New: / Existing: /
-    # Deleted: subsections line up with each other.
-    all_names = [_function_label(a.entry.name) for a in new_group + existing_group + deleted_group]
-    name_width = max((len(n) for n in all_names), default=0)
-
-    if new_group:
-        lines.append(f"{_GROUP_INDENT}New:")
-        for a in new_group:
-            lines.append(_format_aligned_function(a, name_width))
-    if existing_group:
-        lines.append(f"{_GROUP_INDENT}Existing:")
-        for a in existing_group:
-            lines.append(_format_aligned_function(a, name_width))
-    if deleted_group:
-        lines.append(f"{_GROUP_INDENT}Deleted:")
-        for a in deleted_group:
-            lines.append(_format_aligned_function(a, name_width))
+    for group_name, group_functions in [("New", new_group), ("Existing", existing_group), ("Deleted", deleted_group)]:
+        if not group_functions:
+            continue
+        lines.append("")
+        lines.append(f"##### {group_name}")
+        lines.append("")
+        rows: list[dict[str, str | int | float]] = []
+        for function in group_functions:
+            rows.append(
+                {
+                    "Function": f"`{_function_label(function.entry.name)}`",
+                    "LoC": function.total,
+                    "Added": function.added,
+                    "Removed": function.removed,
+                }
+            )
+        lines.extend(render_table(["Function", "LoC", "Added", "Removed"], rows))
 
     per_added = sum(a.added for a in attributed)
     per_removed = sum(a.removed for a in attributed)
     added_drift = book.added - per_added
     removed_drift = book.removed - per_removed
     if abs(added_drift) > 5 or abs(removed_drift) > 5:
+        lines.append("")
         lines.append(
-            f"{_GROUP_INDENT}# note: per-function +/- differs from file totals by "
+            "Note: per-function counts differ from file totals by "
             f"added_drift={added_drift:+d} removed_drift={removed_drift:+d}"
         )
     return lines, per_added, per_removed
 
 
 _FOOTER = (
-    "Notes:\n"
-    "  * The number columns (without a + or - sign) are counted lines in the "
-    "BASE (pre-PR) version: file size before this PR (0 for newly-added files), "
-    "function body size before this PR (0 for new functions; original body size "
-    "for deleted functions).\n"
-    "  * +<n> / -<n> are counted lines added / removed by this PR.\n"
-    f"  * {COUNTING_NOTE}"
+    "### Notes\n\n"
+    "- LoC counts lines in the BASE (pre-PR) version: file size or function body size before this PR "
+    "(0 for new files/functions; original size for deleted files/functions).\n"
+    "- Added and Removed are nonnegative counts of lines added and removed by this PR.\n"
+    f"- {COUNTING_NOTE}"
 )
 
 
@@ -349,7 +306,10 @@ def render(summary_json: Path, jsonl_path: Path, output_dir: Path) -> str:
         removed = sum(s.removed for s in group_files)
         total_added += added
         total_removed += removed
-        out_lines.extend([f"{group_name}: {len(group_files)} file(s) changed, +{added} -{removed} counted lines.", ""])
+        out_lines.append(f"### {group_name}")
+        out_lines.append("")
+        out_lines.append(f"{len(group_files)} file(s) changed, +{added} -{removed} counted lines.")
+        out_lines.append("")
         for s in group_files:
             book = _build_file_bookkeeping(summaries_by_path[s.path], output_dir)
             attributed = _attribute_all(by_path.get(book.path, []), book)
@@ -366,22 +326,11 @@ def render(summary_json: Path, jsonl_path: Path, output_dir: Path) -> str:
     return "\n".join(out_lines) + ("\n" if out_lines else "")
 
 
-class _HeaderProxy:
-    """Adapter so ``format_header`` (which expects a ``FileSummary``-shaped object) can consume
-    a ``_FileBookkeeping`` directly."""
-
-    def __init__(self, book: _FileBookkeeping) -> None:
-        self.path = book.path
-        self.total = book.total
-        self.added = book.added
-        self.removed = book.removed
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", required=True, help="Phase-1 output directory")
     parser.add_argument("--function-ranges", required=True, help="Path to JSONL of function ranges")
-    parser.add_argument("--output", required=True, help="Where to write report.txt")
+    parser.add_argument("--output", required=True, help="Where to write report.md")
     args = parser.parse_args()
 
     text = render(

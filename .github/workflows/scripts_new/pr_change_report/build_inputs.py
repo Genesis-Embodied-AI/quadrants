@@ -401,7 +401,7 @@ def render_table(columns: list[str], rows: list[dict[str, str | int | float]]) -
     lines = ["| " + " | ".join(columns) + " |"]
     lines.append("| " + " | ".join("---" for _ in columns) + " |")
     for row in rows:
-        lines.append("| " + " | ".join(str(row[column]) for column in columns) + " |")
+        lines.append("| " + " | ".join(str(row[column]).replace("|", r"\|") for column in columns) + " |")
     return lines
 
 
