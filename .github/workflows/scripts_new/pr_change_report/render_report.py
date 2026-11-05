@@ -84,7 +84,7 @@ def render_table(columns: list[str], rows: list[dict[str, str | int | float]]) -
 
 def render_report(summaries: list[FileSummary], jsonl_path: Path, output_dir: Path, commit: str) -> str:
     """Render group totals, file tables, and per-file function breakdowns in output order."""
-    by_path = _load_function_entries(jsonl_path)
+    function_ranges_by_file_path = _load_function_ranges(jsonl_path)
     head = f"## PR change report (`{commit}`)\n" if commit else "## PR change report\n"
     lines = [head]
     if not summaries:
@@ -154,7 +154,7 @@ def render_report(summaries: list[FileSummary], jsonl_path: Path, output_dir: Pa
                 lines.append("Entire file deleted (per-function breakdown skipped).")
                 continue
             book = _build_file_bookkeeping(file_summary, output_dir)
-            attributed = _attribute_all(by_path.get(file_summary.path, []), book)
+            attributed = _attribute_all(function_ranges_by_file_path.get(file_summary.path, []), book)
             if not attributed:
                 lines.append("Note: no per-function attribution available.")
                 continue
@@ -219,18 +219,18 @@ class _FileBookkeeping:
     is_deleted: bool = False
 
 
-def _load_function_entries(jsonl_path: Path) -> dict[str, list[_FunctionEntry]]:
+def _load_function_ranges(jsonl_path: Path) -> dict[str, list[_FunctionEntry]]:
     """Parse the agent's JSONL and group entries by file path. Malformed lines are skipped.
 
     Identical ``(path, name, head, base)`` tuples are deduplicated -- some agents (e.g.
     composer-2) occasionally emit the entire JSONL stream twice, which would otherwise
     cause the coalesce-by-name step to double the per-function counts.
     """
-    by_path: dict[str, list[_FunctionEntry]] = {}
+    function_ranges_by_file_path: dict[str, list[_FunctionEntry]] = {}
     seen: set[tuple] = set()
     duplicates = 0
     if not jsonl_path.exists():
-        return by_path
+        return function_ranges_by_file_path
     for raw in jsonl_path.read_text().splitlines():
         line = raw.strip()
         if not line or line.startswith("#"):
@@ -255,10 +255,12 @@ def _load_function_entries(jsonl_path: Path) -> dict[str, list[_FunctionEntry]]:
             duplicates += 1
             continue
         seen.add(key)
-        by_path.setdefault(path, []).append(_FunctionEntry(name=name, head_range=head_range, base_range=base_range))
+        function_ranges_by_file_path.setdefault(path, []).append(
+            _FunctionEntry(name=name, head_range=head_range, base_range=base_range)
+        )
     if duplicates:
         sys.stderr.write(f"info: deduplicated {duplicates} identical JSONL entry/entries\n")
-    return by_path
+    return function_ranges_by_file_path
 
 
 def _coerce_range(value: object) -> tuple[int, int] | None:
