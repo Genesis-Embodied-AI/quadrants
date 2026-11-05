@@ -150,25 +150,19 @@ jobs:
 
           HEAD_SHA=$(echo "${{ github.event.pull_request.head.sha }}" | cut -c1-9)
 
+          exit_code=0
+          python tests/coverage_report.py --report-only \
+            --compare-branch=origin/${{ github.base_ref }} \
+            --coverage-xml $COV_XMLS \
+            --commit-hash "$HEAD_SHA" \
+            --format markdown --summary-output coverage-summary.md > coverage-check.md || exit_code=$?
+          # Exit 42 means the report succeeded but coverage is below 80%.
           state=success
-          for report in check summary; do
-            format=markdown
-            if [ "$report" = summary ]; then
-              format=markdown-summary
-            fi
-            exit_code=0
-            python tests/coverage_report.py --report-only \
-              --compare-branch=origin/${{ github.base_ref }} \
-              --coverage-xml $COV_XMLS \
-              --commit-hash "$HEAD_SHA" \
-              --format "$format" > "coverage-$report.md" || exit_code=$?
-            # Exit 42 means the report succeeded but coverage is below 80%.
-            if [ "$exit_code" -eq 42 ]; then
-              state=failure
-            elif [ "$exit_code" -ne 0 ]; then
-              exit "$exit_code"
-            fi
-          done
+          if [ "$exit_code" -eq 42 ]; then
+            state=failure
+          elif [ "$exit_code" -ne 0 ]; then
+            exit "$exit_code"
+          fi
           echo "state=$state" >> "$GITHUB_OUTPUT"
       - name: Prepare coverage status
         id: coverage_status

@@ -24,6 +24,7 @@ import re
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
+from dataclasses import dataclass
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -348,14 +349,19 @@ def get_covered_lines(xml_paths):
     return result
 
 
-def generate_report(compare_branch, coverage_xmls, output_format="terminal", output_path=None):
-    """Generate the diff coverage report."""
+@dataclass
+class CoverageReport:
+    files: list[dict]
+    total_hit: int
+    total_miss: int
+    total_pct: float
+    no_changes: bool
+
+
+def calculate_report(compare_branch, coverage_xmls):
+    """Read the diff and coverage data once and calculate results for every view."""
     diff_lines = get_diff_lines(compare_branch)
     coverage = get_covered_lines(coverage_xmls)
-    if not diff_lines and output_format in ("markdown", "markdown-summary"):
-        print("No changes detected")
-        return 100
-
     files_report = []
     total_hit = 0
     total_miss = 0
@@ -401,21 +407,36 @@ def generate_report(compare_branch, coverage_xmls, output_format="terminal", out
 
     total_pct = (total_hit / (total_hit + total_miss) * 100) if (total_hit + total_miss) else 0
 
+    return CoverageReport(files_report, total_hit, total_miss, total_pct, not diff_lines)
+
+
+def render_report(report, output_format, output_path=None):
+    """Render a view of previously calculated coverage results."""
+    if report.no_changes and output_format in ("markdown", "markdown-summary"):
+        return "No changes detected"
+
     renderer_cls = _RENDERERS[output_format]
     renderer = renderer_cls(output_path=output_path) if output_format == "html" else renderer_cls()
-    renderer.begin(total_hit, total_miss, total_pct)
-    for fr in files_report:
+    renderer.begin(report.total_hit, report.total_miss, report.total_pct)
+    for fr in report.files:
         renderer.begin_file(fr["filename"], fr["pct"], fr["missing"])
         for lineno, text, status in fr["lines"]:
             renderer.write_line(lineno, text, status)
         renderer.end_file()
     renderer.finish()
 
-    rendered = renderer.output()
+    return renderer.output()
+
+
+def generate_report(compare_branch, coverage_xmls, output_format="terminal", output_path=None, summary_output=None):
+    """Calculate coverage once, then render the requested report and optional summary."""
+    report = calculate_report(compare_branch, coverage_xmls)
+    rendered = render_report(report, output_format, output_path)
     if rendered is not None:
         print(rendered)
-
-    return total_pct
+    if summary_output is not None:
+        Path(summary_output).write_text(render_report(report, "markdown-summary") + "\n", encoding="utf-8")
+    return 100 if report.no_changes else report.total_pct
 
 
 def _get_overall_coverage():
@@ -489,6 +510,11 @@ def main():
         help="Output file path for HTML format (default: coverage-report.html in repo root)",
     )
     parser.add_argument(
+        "--summary-output",
+        default=None,
+        help="Also write a one-line Markdown summary using the same calculated coverage results",
+    )
+    parser.add_argument(
         "--commit-hash",
         default=None,
         help="Override the commit hash shown in the report heading (default: git rev-parse HEAD)",
@@ -512,7 +538,13 @@ def main():
         print("No coverage.xml found. Run tests first or specify --coverage-xml.", file=sys.stderr)
         sys.exit(1)
 
-    total_pct = generate_report(args.compare_branch, xml_paths, args.output_format, output_path=args.output)
+    total_pct = generate_report(
+        args.compare_branch,
+        xml_paths,
+        args.output_format,
+        output_path=args.output,
+        summary_output=args.summary_output,
+    )
     return 0 if total_pct >= 80 else 42
 
 
