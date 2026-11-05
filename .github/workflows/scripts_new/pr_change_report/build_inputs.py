@@ -550,9 +550,8 @@ def main() -> int:
 
     # Only non-deleted Python/C++ files need per-function attribution. Other files still appear in all report totals.
     function_attribution_summaries = [s for s in summaries if not s.is_deleted and s.language in {"py", "cpp"}]
-    function_attribution_files = "\n".join(s.path for s in function_attribution_summaries)
     (output_dir / "function_attribution_files.txt").write_text(
-        function_attribution_files + ("\n" if function_attribution_files else "")
+        "".join(f"{s.path}\n" for s in function_attribution_summaries)
     )
 
     headers = "\n".join(format_header(s) for s in summaries)
