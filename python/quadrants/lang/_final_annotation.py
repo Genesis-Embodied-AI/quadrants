@@ -30,6 +30,13 @@ def dataclass_field_is_final(dataclass_type: type, field_name: str, annotation: 
     # `-- slice: Name("int")    <- discard the inner annotation
     if isinstance(annotation_node, ast.Subscript):
         annotation_node = annotation_node.value
+    # For "typing.Final[int]", removing [int] leaves this dotted name:
+    # Attribute
+    # |-- value: Name("typing")
+    # `-- attr: "Final"
+    # The loop collects "Final", then moves to Name("typing"). It also handles longer dotted names.
+    # Below, we append "typing" and reverse the list to get ["typing", "Final"]. This lets us look up
+    # typing first, then its Final attribute.
     parts = []
     while isinstance(annotation_node, ast.Attribute):
         parts.append(annotation_node.attr)
