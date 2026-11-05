@@ -24,6 +24,7 @@ def dataclass_field_is_final(dataclass_type: type, field_name: str, annotation: 
             annotation_node = ast.parse(annotation_node.value, mode="eval").body
     except SyntaxError:
         return False
+    # For "Final[int]", Subscript.value is the name Final; discard the inner annotation int.
     if isinstance(annotation_node, ast.Subscript):
         annotation_node = annotation_node.value
     parts = []
