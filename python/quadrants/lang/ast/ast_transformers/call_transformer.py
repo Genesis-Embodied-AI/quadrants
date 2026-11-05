@@ -23,6 +23,10 @@ from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
     get_decorator,
 )
+from quadrants.lang.ast.ast_transformers.runtime_tuple_transform import (
+    expand_tuple_stars,
+    resolve_callable,
+)
 from quadrants.lang.exception import (
     QuadrantsSyntaxError,
     QuadrantsTypeError,
@@ -370,8 +374,9 @@ class CallTransformer:
             # not related to dataclasses). Necessary for calling further child functions
             build_stmts(ctx, node.args)
             build_stmts(ctx, node.keywords)
-        func = node.func.ptr
+        func = node.func.ptr = resolve_callable(node.func.ptr)
         func_type = type(func)
+        node.args = expand_tuple_stars(ctx, node.args, build_stmt)
 
         is_func_base_wrapper = func_type in {QuadrantsCallable, BoundQuadrantsCallable} and func._is_quadrants_function
 

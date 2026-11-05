@@ -30,6 +30,7 @@ from quadrants.lang._final_dataclass_fields import (
 )
 from quadrants.lang._optional_annotation import OPTIONAL_ABSENT
 from quadrants.lang._runtime_dataclass import runtime_template_members
+from quadrants.lang._runtime_tuple import predeclare_tuple_scalars
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
 )
@@ -251,6 +252,7 @@ class FunctionDefTransformer:
 
         FunctionDefTransformer._predeclare_struct_ndarrays(ctx)
         predeclare_struct_primitives(ctx)
+        predeclare_tuple_scalars(ctx)
         compiling_callable.finalize_params()
         # remove original args
         node.args.args = []
@@ -355,6 +357,11 @@ class FunctionDefTransformer:
         assert ctx.py_args is not None
         for i, arg_meta in enumerate(ctx.func.arg_metas):
             anno = arg_meta.annotation
+            plan = getattr(anno, "_qd_tuple_plan", None)
+            if plan is not None:
+                for path, nd in plan.arrays:
+                    _register_ndarray(nd, i, path)
+                continue
             is_template = anno is annotations.template or isinstance(anno, annotations.template)
             is_tensor_anno = anno is _TensorClass
             if hasattr(anno, "_qd_runtime_origin"):
