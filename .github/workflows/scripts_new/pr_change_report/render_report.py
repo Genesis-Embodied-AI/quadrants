@@ -50,7 +50,6 @@ from build_inputs import (  # noqa: E402  (import after sys.path tweak)
     code_line_set,
     diff_changed_line_numbers,
     format_header,
-    format_totals,
     get_group_summaries_by_name,
 )
 
@@ -341,10 +340,16 @@ def render(summary_json: Path, jsonl_path: Path, output_dir: Path) -> str:
     out_lines: list[str] = []
     groups = get_group_summaries_by_name([FileSummary(**s) for s in summaries])
     summaries_by_path = {s["path"]: s for s in summaries}
+    total_added = 0
+    total_removed = 0
     for name, files in groups.items():
         if not files:
             continue
-        out_lines.extend([f"{name}: {format_totals(files)}", ""])
+        added = sum(s.added for s in files)
+        removed = sum(s.removed for s in files)
+        total_added += added
+        total_removed += removed
+        out_lines.extend([f"{name}: {len(files)} file(s) changed, +{added} -{removed} counted lines.", ""])
         for s in files:
             book = _build_file_bookkeeping(summaries_by_path[s.path], output_dir)
             attributed = _attribute_all(by_path.get(book.path, []), book)
@@ -352,7 +357,7 @@ def render(summary_json: Path, jsonl_path: Path, output_dir: Path) -> str:
             out_lines.extend(lines)
             out_lines.append("")
     if summaries:
-        out_lines.append(f"Total: {format_totals([s for files in groups.values() for s in files])}")
+        out_lines.append(f"Total: {len(summaries)} file(s) changed, +{total_added} -{total_removed} counted lines.")
     while out_lines and out_lines[-1] == "":
         out_lines.pop()
     if out_lines:

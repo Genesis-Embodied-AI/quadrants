@@ -395,12 +395,6 @@ def get_group_summaries_by_name(summaries: list[FileSummary]) -> dict[str, list[
     return summaries_by_group_name
 
 
-def format_totals(summaries: list[FileSummary]) -> str:
-    added = sum(s.added for s in summaries)
-    removed = sum(s.removed for s in summaries)
-    return f"{len(summaries)} file(s) changed, +{added} -{removed} counted lines."
-
-
 def render_comment_markdown(summaries: list[FileSummary], commit: str) -> str:
     """Render group totals and grouped per-file tables for the report summary."""
     head = f"## PR change report (`{commit}`)\n" if commit else "## PR change report\n"
@@ -415,22 +409,30 @@ def render_comment_markdown(summaries: list[FileSummary], commit: str) -> str:
     groups = get_group_summaries_by_name(summaries)
     lines.append("| Group | Files | Added | Removed |")
     lines.append("|-------|-------|-------|---------|")
-    for name, files in [*groups.items(), ("**Total**", summaries)]:
+    file_lines: list[str] = []
+    total_added = 0
+    total_removed = 0
+    for name, files in groups.items():
         added = sum(s.added for s in files)
         removed = sum(s.removed for s in files)
+        total_added += added
+        total_removed += removed
         lines.append(f"| {name} | {len(files)} | +{added} | -{removed} |")
-    for name, files in groups.items():
         if not files:
             continue
-        lines.extend(["", f"### {name}", "", f"**Group total**: {format_totals(files)}", ""])
-        lines.append("| File | LoC | Added | Removed |")
-        lines.append("|------|-----|-------|---------|")
+        file_lines.extend(
+            ["", f"### {name}", "", f"**Group total**: {len(files)} file(s) changed, +{added} -{removed} counted lines.", ""]
+        )
+        file_lines.append("| File | LoC | Added | Removed |")
+        file_lines.append("|------|-----|-------|---------|")
         for s in files:
             added_cell = f"+{s.added}" if s.added else ""
             removed_cell = f"-{s.removed}" if s.removed else ""
-            lines.append(f"| `{s.path}` | {s.total} | {added_cell} | {removed_cell} |")
+            file_lines.append(f"| `{s.path}` | {s.total} | {added_cell} | {removed_cell} |")
+    lines.append(f"| **Total** | {len(summaries)} | +{total_added} | -{total_removed} |")
+    lines.extend(file_lines)
     lines.append("")
-    lines.append(f"**Total**: {format_totals(summaries)}")
+    lines.append(f"**Total**: {len(summaries)} file(s) changed, +{total_added} -{total_removed} counted lines.")
     return "\n".join(lines) + "\n"
 
 
