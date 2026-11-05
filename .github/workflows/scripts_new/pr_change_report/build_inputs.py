@@ -417,7 +417,13 @@ def render_comment_markdown(summaries: list[FileSummary], commit: str) -> str:
         removed = sum(s.removed for s in files)
         total_added += added
         total_removed += removed
-        lines.append(f"| {name} | {len(files)} | +{added} | -{removed} |")
+        row = ""
+        row += f"| {name} "
+        row += f"| {len(files)} "
+        row += f"| +{added} "
+        row += f"| -{removed} "
+        row += "|"
+        lines.append(row)
         if not files:
             continue
         file_lines.extend(
