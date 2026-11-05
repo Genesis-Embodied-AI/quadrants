@@ -19,20 +19,20 @@ def dataclass_field_is_final(dataclass_type: type, field_name: str, annotation: 
     if not isinstance(annotation, str):
         return is_final_annotation(annotation)
     try:
-        node = ast.parse(annotation, mode="eval").body
-        while isinstance(node, ast.Constant) and isinstance(node.value, str):
-            node = ast.parse(node.value, mode="eval").body
+        annotation_node = ast.parse(annotation, mode="eval").body
+        while isinstance(annotation_node, ast.Constant) and isinstance(annotation_node.value, str):
+            annotation_node = ast.parse(annotation_node.value, mode="eval").body
     except SyntaxError:
         return False
-    if isinstance(node, ast.Subscript):
-        node = node.value
+    if isinstance(annotation_node, ast.Subscript):
+        annotation_node = annotation_node.value
     parts = []
-    while isinstance(node, ast.Attribute):
-        parts.append(node.attr)
-        node = node.value
-    if not isinstance(node, ast.Name):
+    while isinstance(annotation_node, ast.Attribute):
+        parts.append(annotation_node.attr)
+        annotation_node = annotation_node.value
+    if not isinstance(annotation_node, ast.Name):
         return False
-    parts.append(node.id)
+    parts.append(annotation_node.id)
     parts.reverse()
     owner = next(
         (cls for cls in dataclass_type.__mro__ if field_name in vars(cls).get("__annotations__", {})), dataclass_type
