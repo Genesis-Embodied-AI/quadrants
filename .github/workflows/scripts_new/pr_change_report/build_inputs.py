@@ -56,7 +56,7 @@ from pathlib import Path
 
 PY_EXTS = {".py"}
 CPP_EXTS = {".c", ".cc", ".cpp", ".h", ".hpp", ".cu"}
-TEXT_LANGUAGES = {".md": "md", ".sh": "sh", ".yaml": "yaml", ".yml": "yaml"}
+TEXT_LANGUAGE_BY_EXTENSION = {".md": "md", ".sh": "sh", ".yaml": "yaml", ".yml": "yaml"}
 COUNTING_NOTE = (
     "Counts exclude blank lines. Python/C++ exclude comment-only lines; Python also excludes "
     "string-literal-only lines. Markdown counts all nonblank lines. Shell/YAML skip lines starting "
@@ -82,7 +82,7 @@ def language_for(path: str) -> str | None:
         return "py"
     if suffix in CPP_EXTS:
         return "cpp"
-    return TEXT_LANGUAGES.get(suffix)
+    return TEXT_LANGUAGE_BY_EXTENSION.get(suffix)
 
 
 def strip_cpp_comments(src: str) -> str:
@@ -226,7 +226,7 @@ def code_line_set(src: str, language: str) -> set[int]:
         return _python_code_line_set(src)
     if language == "cpp":
         return _cpp_code_line_set(src)
-    if language in TEXT_LANGUAGES.values():
+    if language in TEXT_LANGUAGE_BY_EXTENSION.values():
         return {
             index
             for index, line in enumerate(src.splitlines(), start=1)
