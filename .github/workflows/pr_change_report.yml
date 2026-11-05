@@ -158,8 +158,6 @@ jobs:
           name: pr-change-report
           path: |
             /tmp/pr_change_report/report.md
-            /tmp/pr_change_report/report_check.md
-            /tmp/pr_change_report/report_comment.md
             /tmp/pr_change_report/summary.json
             /tmp/pr_change_report/report_header.md
             /tmp/pr_change_report/touched_ranges.txt
@@ -176,12 +174,12 @@ jobs:
           # Job summaries allow up to 1 MiB; cap well under that and fall back to the uploaded
           # artifact for the (rare) oversized report.
           MAX_BYTES=900000
-          if [ "$(wc -c < /tmp/pr_change_report/report_check.md)" -gt "$MAX_BYTES" ]; then
-            head -c "$MAX_BYTES" /tmp/pr_change_report/report_check.md >> "$GITHUB_STEP_SUMMARY"
+          if [ "$(wc -c < /tmp/pr_change_report/report.md)" -gt "$MAX_BYTES" ]; then
+            head -c "$MAX_BYTES" /tmp/pr_change_report/report.md >> "$GITHUB_STEP_SUMMARY"
             printf '\n\n---\n*Report truncated. Download the full report from the workflow artifacts.*\n' \
               >> "$GITHUB_STEP_SUMMARY"
           else
-            cat /tmp/pr_change_report/report_check.md >> "$GITHUB_STEP_SUMMARY"
+            cat /tmp/pr_change_report/report.md >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Publish files changed status

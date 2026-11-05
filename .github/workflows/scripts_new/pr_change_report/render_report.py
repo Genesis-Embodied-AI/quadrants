@@ -9,12 +9,9 @@ JSONL input (one object per line) -- emitted by the agent::
 
   {"path": "<path>", "name": "<func>", "head": [<start>, <end>] | null, "base": [<start>, <end>] | null}
 
-Output ``report_comment.md`` contains group and file tables; ``report_header.md`` contains compact file headers.
-``report_check.md`` combines the summary and detailed report for the workflow summary page.
-
-Output ``report.md`` contains folder-group headings, file totals, and per-function tables rendered by the shared
-``render_table`` helper. Within each file, functions are split into New, Existing, and Deleted sections and sorted by
-added lines descending, then removed lines descending.
+Output ``report.md`` contains the complete report: group totals, then each group's file table followed by its per-file
+function breakdowns. All tables use ``render_table``. Functions are split into New, Existing, and Deleted sections and
+sorted by added lines descending, then removed lines descending. ``report_header.md`` contains compact file summaries.
 
 The LoC column is the BASE (pre-PR) counted-line total: file size before the PR or function body size before the PR.
 Newly added files and functions have LoC 0; deleted files and functions retain their original size. Added and Removed
@@ -85,8 +82,9 @@ def render_table(columns: list[str], rows: list[dict[str, str | int | float]]) -
     return lines
 
 
-def render_comment_markdown(summaries: list[FileSummary], commit: str) -> str:
-    """Render group totals and grouped per-file tables for the report summary."""
+def render_report(summaries: list[FileSummary], jsonl_path: Path, output_dir: Path, commit: str) -> str:
+    """Render group totals, file tables, and per-file function breakdowns in output order."""
+    by_path = _load_function_entries(jsonl_path)
     head = f"## PR change report (`{commit}`)\n" if commit else "## PR change report\n"
     lines = [head]
     if not summaries:
@@ -94,7 +92,9 @@ def render_comment_markdown(summaries: list[FileSummary], commit: str) -> str:
             "No supported files (.py, .c, .cc, .cpp, .h, .hpp, .cu, .md, .sh, .yaml, .yml) changed in this PR."
         )
         return "\n".join(lines) + "\n"
-    lines.append("LoC = counted lines in the file BEFORE this PR (0 for newly-added files). " + COUNTING_NOTE)
+    lines.append(
+        "LoC = counted lines in the file or function BEFORE this PR (0 for newly-added items). " + COUNTING_NOTE
+    )
     lines.append("")
     group_summaries_by_name = get_group_summaries_by_name(summaries)
     group_rows: list[dict[str, str | int | float]] = []
@@ -141,6 +141,58 @@ def render_comment_markdown(summaries: list[FileSummary], commit: str) -> str:
                 }
             )
         lines.extend(render_table(["File", "LoC", "Added", "Removed"], file_rows))
+
+        for file_summary in group_files:
+            if not file_summary.is_deleted and file_summary.language not in {"py", "cpp"}:
+                continue
+            if not file_summary.is_deleted and not (file_summary.added or file_summary.removed):
+                continue
+            lines.append("")
+            lines.append(f"#### `{file_summary.path}`")
+            lines.append("")
+            if file_summary.is_deleted:
+                lines.append("Entire file deleted (per-function breakdown skipped).")
+                continue
+            book = _build_file_bookkeeping(file_summary, output_dir)
+            attributed = _attribute_all(by_path.get(file_summary.path, []), book)
+            if not attributed:
+                lines.append("Note: no per-function attribution available.")
+                continue
+
+            new_functions = sorted([a for a in attributed if a.is_new], key=_impact_sort_key)
+            existing_functions = sorted(
+                [a for a in attributed if not a.is_new and not a.is_deleted], key=_impact_sort_key
+            )
+            deleted_functions = sorted([a for a in attributed if a.is_deleted], key=_impact_sort_key)
+            for change_kind, functions in [
+                ("New", new_functions),
+                ("Existing", existing_functions),
+                ("Deleted", deleted_functions),
+            ]:
+                if not functions:
+                    continue
+                lines.append(f"##### {change_kind}")
+                lines.append("")
+                function_rows: list[dict[str, str | int | float]] = []
+                for function in functions:
+                    function_rows.append(
+                        {
+                            "Function": f"`{_function_label(function.entry.name)}`",
+                            "LoC": function.total,
+                            "Added": function.added,
+                            "Removed": function.removed,
+                        }
+                    )
+                lines.extend(render_table(["Function", "LoC", "Added", "Removed"], function_rows))
+                lines.append("")
+
+            added_drift = file_summary.added - sum(a.added for a in attributed)
+            removed_drift = file_summary.removed - sum(a.removed for a in attributed)
+            if abs(added_drift) > 5 or abs(removed_drift) > 5:
+                lines.append(
+                    "Note: per-function counts differ from file totals by "
+                    f"added_drift={added_drift:+d} removed_drift={removed_drift:+d}"
+                )
     lines.append("")
     lines.append(f"**Total**: {len(summaries)} file(s) changed, +{total_added} -{total_removed} counted lines.")
     return "\n".join(lines) + "\n"
@@ -226,9 +278,9 @@ def _read_or_empty(path: Path) -> str:
     return path.read_text() if path.exists() else ""
 
 
-def _build_file_bookkeeping(summary: dict, output_dir: Path) -> _FileBookkeeping:
-    path = summary["path"]
-    language = summary["language"]
+def _build_file_bookkeeping(summary: FileSummary, output_dir: Path) -> _FileBookkeeping:
+    path = summary.path
+    language = summary.language
     head_text = _read_or_empty(output_dir / "head" / path)
     base_text = _read_or_empty(output_dir / "base" / path)
     diff_text = _read_or_empty(output_dir / "diffs" / f"{path}.diff")
@@ -238,14 +290,14 @@ def _build_file_bookkeeping(summary: dict, output_dir: Path) -> _FileBookkeeping
     return _FileBookkeeping(
         path=path,
         language=language,
-        total=summary["total"],
-        added=summary["added"],
-        removed=summary["removed"],
+        total=summary.total,
+        added=summary.added,
+        removed=summary.removed,
         head_codes=head_codes,
         base_codes=base_codes,
         added_line_nos=added_line_nos,
         removed_line_nos=removed_line_nos,
-        is_deleted=bool(summary.get("is_deleted", False)),
+        is_deleted=summary.is_deleted,
     )
 
 
@@ -336,104 +388,6 @@ def _function_label(name: str) -> str:
     return name if name.rstrip().endswith(")") else f"{name}()"
 
 
-def _emit_file_section(book: _FileBookkeeping, attributed: list[_AttributedEntry]) -> tuple[list[str], int, int]:
-    """Render file totals and grouped function tables; return lines and per-function addition/removal totals."""
-    lines = [f"#### `{book.path}`", ""]
-    lines.extend(
-        render_table(["LoC", "Added", "Removed"], [{"LoC": book.total, "Added": book.added, "Removed": book.removed}])
-    )
-    if book.is_deleted:
-        lines.append("")
-        lines.append("Entire file deleted (per-function breakdown skipped).")
-        return lines, 0, 0
-    if book.language not in {"py", "cpp"}:
-        return lines, 0, 0
-    if not attributed:
-        if book.added or book.removed:
-            lines.append("")
-            lines.append("Note: no per-function attribution available.")
-        return lines, 0, 0
-
-    new_group = sorted([a for a in attributed if a.is_new], key=_impact_sort_key)
-    deleted_group = sorted([a for a in attributed if a.is_deleted], key=_impact_sort_key)
-    existing_group = sorted([a for a in attributed if not a.is_new and not a.is_deleted], key=_impact_sort_key)
-
-    for group_name, group_functions in [("New", new_group), ("Existing", existing_group), ("Deleted", deleted_group)]:
-        if not group_functions:
-            continue
-        lines.append("")
-        lines.append(f"##### {group_name}")
-        lines.append("")
-        rows: list[dict[str, str | int | float]] = []
-        for function in group_functions:
-            rows.append(
-                {
-                    "Function": f"`{_function_label(function.entry.name)}`",
-                    "LoC": function.total,
-                    "Added": function.added,
-                    "Removed": function.removed,
-                }
-            )
-        lines.extend(render_table(["Function", "LoC", "Added", "Removed"], rows))
-
-    per_added = sum(a.added for a in attributed)
-    per_removed = sum(a.removed for a in attributed)
-    added_drift = book.added - per_added
-    removed_drift = book.removed - per_removed
-    if abs(added_drift) > 5 or abs(removed_drift) > 5:
-        lines.append("")
-        lines.append(
-            "Note: per-function counts differ from file totals by "
-            f"added_drift={added_drift:+d} removed_drift={removed_drift:+d}"
-        )
-    return lines, per_added, per_removed
-
-
-_FOOTER = (
-    "### Notes\n\n"
-    "- LoC counts lines in the BASE (pre-PR) version: file size or function body size before this PR "
-    "(0 for new files/functions; original size for deleted files/functions).\n"
-    "- Added and Removed are nonnegative counts of lines added and removed by this PR.\n"
-    f"- {COUNTING_NOTE}"
-)
-
-
-def render(summary_json: Path, jsonl_path: Path, output_dir: Path) -> str:
-    summaries: list[dict] = json.loads(summary_json.read_text())
-    by_path = _load_function_entries(jsonl_path)
-
-    out_lines: list[str] = []
-    group_summaries_by_name = get_group_summaries_by_name([FileSummary(**s) for s in summaries])
-    summaries_by_path = {s["path"]: s for s in summaries}
-    total_added = 0
-    total_removed = 0
-    for group_name, group_files in group_summaries_by_name.items():
-        if not group_files:
-            continue
-        added = sum(s.added for s in group_files)
-        removed = sum(s.removed for s in group_files)
-        total_added += added
-        total_removed += removed
-        out_lines.append(f"### {group_name}")
-        out_lines.append("")
-        out_lines.append(f"{len(group_files)} file(s) changed, +{added} -{removed} counted lines.")
-        out_lines.append("")
-        for s in group_files:
-            book = _build_file_bookkeeping(summaries_by_path[s.path], output_dir)
-            attributed = _attribute_all(by_path.get(book.path, []), book)
-            lines, _, _ = _emit_file_section(book, attributed)
-            out_lines.extend(lines)
-            out_lines.append("")
-    if summaries:
-        out_lines.append(f"Total: {len(summaries)} file(s) changed, +{total_added} -{total_removed} counted lines.")
-    while out_lines and out_lines[-1] == "":
-        out_lines.pop()
-    if out_lines:
-        out_lines.append("")
-        out_lines.append(_FOOTER)
-    return "\n".join(out_lines) + ("\n" if out_lines else "")
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", required=True, help="Phase-1 output directory")
@@ -447,17 +401,13 @@ def main() -> int:
     summaries = [FileSummary(**s) for s in json.loads(summary_json.read_text())]
     headers = "\n".join(format_file_summary_line(s) for s in summaries)
     (output_dir / "report_header.md").write_text(headers + ("\n" if headers else ""))
-    summary_markdown = render_comment_markdown(summaries, args.commit_hash)
-    (output_dir / "report_comment.md").write_text(summary_markdown)
-    text = render(
-        summary_json=summary_json,
+    text = render_report(
+        summaries=summaries,
         jsonl_path=Path(args.function_ranges),
         output_dir=output_dir,
+        commit=args.commit_hash,
     )
     Path(args.output).write_text(text)
-    (output_dir / "report_check.md").write_text(
-        summary_markdown + "\n## Per-function breakdown (Python/C++ only)\n\n" + text
-    )
     sys.stdout.write(text)
     return 0
 
