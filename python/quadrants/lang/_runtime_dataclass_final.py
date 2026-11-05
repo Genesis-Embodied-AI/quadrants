@@ -11,6 +11,7 @@ from quadrants.lang._final_dataclass_fields import (
 )
 
 # Class identity maps to the retained class, validated Final field names, and deferred declaration errors.
+# This cache retains classes, assuming applications define relatively few dataclass types.
 _final_declaration_validation_by_dataclass_type_id: dict[
     int, tuple[type, frozenset[str], dict[str, DeferredMemberType]]
 ] = {}
