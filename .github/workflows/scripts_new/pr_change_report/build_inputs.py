@@ -374,7 +374,7 @@ def format_header(s: FileSummary) -> str:
 
 
 GROUPS = ("docs", "c++", "python", "tests", "github", "misc")
-_FOLDER_GROUPS = {
+_GROUP_BY_FOLDER_NAME = {
     "docs": "docs",
     "quadrants": "c++",
     "cmake": "c++",
@@ -389,7 +389,7 @@ def group_summaries(summaries: list[FileSummary]) -> dict[str, list[FileSummary]
     groups: dict[str, list[FileSummary]] = {name: [] for name in GROUPS}
     for summary in summaries:
         folder, separator, _ = summary.path.partition("/")
-        group = _FOLDER_GROUPS.get(folder, "misc") if separator else "misc"
+        group = _GROUP_BY_FOLDER_NAME.get(folder, "misc") if separator else "misc"
         groups[group].append(summary)
     return groups
 
