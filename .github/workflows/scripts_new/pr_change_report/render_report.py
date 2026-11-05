@@ -342,15 +342,17 @@ def render(summary_json: Path, jsonl_path: Path, output_dir: Path) -> str:
     summaries_by_path = {s["path"]: s for s in summaries}
     total_added = 0
     total_removed = 0
-    for name, files in groups.items():
-        if not files:
+    for group_name, group_files in groups.items():
+        if not group_files:
             continue
-        added = sum(s.added for s in files)
-        removed = sum(s.removed for s in files)
+        added = sum(s.added for s in group_files)
+        removed = sum(s.removed for s in group_files)
         total_added += added
         total_removed += removed
-        out_lines.extend([f"{name}: {len(files)} file(s) changed, +{added} -{removed} counted lines.", ""])
-        for s in files:
+        out_lines.extend(
+            [f"{group_name}: {len(group_files)} file(s) changed, +{added} -{removed} counted lines.", ""]
+        )
+        for s in group_files:
             book = _build_file_bookkeeping(summaries_by_path[s.path], output_dir)
             attributed = _attribute_all(by_path.get(book.path, []), book)
             lines, _, _ = _emit_file_section(book, attributed)

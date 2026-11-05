@@ -418,27 +418,27 @@ def render_comment_markdown(summaries: list[FileSummary], commit: str) -> str:
     groups = get_group_summaries_by_name(summaries)
     group_rows: list[dict[str, str | int | float]] = []
     file_lines: list[str] = []
-    for name, files in groups.items():
+    for group_name, group_files in groups.items():
         group_rows.append(
             {
-                "Group": name,
-                "Files": len(files),
-                "Added": sum(s.added for s in files),
-                "Removed": sum(s.removed for s in files),
+                "Group": group_name,
+                "Files": len(group_files),
+                "Added": sum(s.added for s in group_files),
+                "Removed": sum(s.removed for s in group_files),
             }
         )
-        if not files:
+        if not group_files:
             continue
         file_lines.append("")
-        file_lines.append(f"### {name}")
+        file_lines.append(f"### {group_name}")
         file_lines.append("")
         file_lines.append(
-            f"**Group total**: {len(files)} file(s) changed, "
-            f"+{sum(s.added for s in files)} -{sum(s.removed for s in files)} counted lines."
+            f"**Group total**: {len(group_files)} file(s) changed, "
+            f"+{sum(s.added for s in group_files)} -{sum(s.removed for s in group_files)} counted lines."
         )
         file_lines.append("")
         file_rows: list[dict[str, str | int | float]] = []
-        for s in files:
+        for s in group_files:
             file_rows.append(
                 {
                     "File": f"`{s.path}`",
