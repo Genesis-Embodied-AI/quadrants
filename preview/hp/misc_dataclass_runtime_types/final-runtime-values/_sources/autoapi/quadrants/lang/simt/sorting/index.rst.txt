@@ -1,0 +1,106 @@
+quadrants.lang.simt.sorting
+===========================
+
+.. py:module:: quadrants.lang.simt.sorting
+
+.. autoapi-nested-parse::
+
+   Subgroup-scoped sorting primitives.
+
+   Split out from `quadrants.lang.simt.subgroup` for the same reason `reductions` was: it keeps that module focused on
+   data movement (shuffle / broadcast / ballot / lanemask / vote primitives) and groups all sort-shaped helpers under one
+   implementation unit.  Public API is unchanged: everything defined here is re-exported by
+   `quadrants.lang.simt.subgroup`, so `qd.simt.subgroup.bitonic_sort_kv(k, v)` etc. work as if they lived in that module.
+
+   Only one family lives here today:
+
+   * ``bitonic_sort_kv_tiled`` -- in-register ascending lex sort on ``(key, value)`` pairs across ``2**log2_size``
+     consecutive lanes, one ``(key, value)`` pair per lane.  Pure ``shuffle`` (no shared memory, no barriers within the
+     sort), fully unrolled at compile time into the standard ``log2_size * (log2_size + 1) / 2`` compare-exchange stages.
+
+   Note this is *not* a stable sort in the textbook sense (preserve input lane order for equal keys): equal-keyed lanes
+   come back ordered by ``value``, not by their original lane id.  Callers that need lane-order stability should encode it
+   into ``value`` themselves (e.g. pack ``(payload, original_lane)``).
+
+   The full-subgroup form ``bitonic_sort_kv(key, value)`` is a one-liner that picks ``log2_size = log2_group_size()``,
+   following the same convention as ``reduce_add`` / ``reduce_all_add`` / etc.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.lang.simt.sorting.bitonic_sort_kv_tiled
+   quadrants.lang.simt.sorting.bitonic_sort_kv
+
+
+Module Contents
+---------------
+
+.. py:function:: bitonic_sort_kv_tiled(key, value, log2_size: template())
+
+   In-register ascending lex sort on ``(key, value)`` pairs across ``2**log2_size`` consecutive lanes.
+
+   Sorts ``(key, value)`` pairs by ascending ``key``; ties on ``key`` break on ascending ``value`` (lex order on the
+   ``(key, value)`` tuple).  Each lane holds one pair on entry; on exit, lane ``i`` (within its ``2**log2_size``-aligned
+   tile) holds the ``i``-th smallest pair under that lex order.  Lanes in different tiles sort independently of each
+   other; the result is broadcast-to-tile in the sense of [Tiled variants](#tiled-variants) -- every lane in a tile
+   has a valid sorted pair, just not the same one.
+
+   Not a textbook-stable sort: equal-keyed lanes come back in ascending-``value`` order, *not* in their original lane
+   order.  If you need lane-order stability (i.e. ``value`` treated as opaque payload), encode the lane id into
+   ``value`` yourself before calling -- e.g. pack ``(payload, original_lane)`` into a single value, or call from a
+   context where ``value`` is unique by construction (the Genesis contact-sort case, where ``value`` is a contact
+   index).
+
+   Caller contract:
+
+   * ``2**log2_size`` must not exceed the active subgroup size on the target: up to 32 on CUDA / Metal /
+     Vulkan-wave32, up to 64 on AMDGPU (every AMDGPU target is pinned to wave64).  ``log2_size = 0`` is the degenerate
+     "every lane is its own tile of 1" case -- the function returns ``(key, value)`` unchanged.
+   * ``log2_size`` is a ``qd.template()`` compile-time constant; the body is fully unrolled into exactly
+     ``log2_size * (log2_size + 1) / 2`` compare-exchange stages, each one two ``shuffle`` ops + a lex compare + a
+     predicated assignment.  For ``log2_size = 5`` (32 lanes) this is the standard 15-stage bitonic schedule.
+   * Same uniform-CF + all-lanes-active contract as the rest of ``qd.simt.subgroup``: every lane in the subgroup must
+     execute every call to ``bitonic_sort_kv_tiled`` together.
+   * ``key`` and ``value`` are scalar values held one-per-lane.  ``key`` must support ``<`` and ``==``; ``value``
+     must support ``<`` and ``==`` as well (the lex tiebreak compares values).  The supported scalar dtypes are the
+     union of what ``subgroup.shuffle`` accepts for each (i32, u32, f32, f64, i64, u64).  ``key`` and ``value`` do not
+     have to share a dtype.
+
+   Short-input pattern (sorting fewer than ``2**log2_size`` real elements):
+
+   1. Load real data into the low ``n`` lanes (``lane < n``).
+   2. Initialise the high lanes (``lane >= n``) with a sentinel key that compares greater than every real key
+      (``+inf`` for floats, ``INT_MAX`` / ``UINT_MAX`` for ints) and any safe value (often ``-1`` for an "invalid
+      index" marker).
+   3. Call ``bitonic_sort_kv_tiled(key, value, log2_size)``.
+   4. Read back only the low ``n`` lanes; the sentinels have drifted to the high end of the tile.
+
+   Returns ``(key, value)`` -- assign with ``key, value = bitonic_sort_kv_tiled(key, value, log2_size)``.
+
+   Float NaN handling on the key (or value) is implementation-defined: comparisons with NaN return false on most
+   backends, so NaN-keyed lanes drift to an arbitrary position within the sorted tile and the result loses its
+   "sorted" guarantee.  Bit-cast the key to a same-width integer dtype if you need a portable NaN-respecting order.
+
+   Cost is exactly ``log2_size * (log2_size + 1)`` ``shuffle`` ops (two per compare-exchange stage, one for the
+   partner's key and one for the partner's value) plus the same number of lex compares + predicated assignments, all
+   fully unrolled into the calling kernel's IR.  No barriers, no shared memory, no launch overhead.  The shuffle
+   pattern is the partner-XOR butterfly used by every other ``_tiled`` op in this module, so on AMDGPU the wave64
+   cross-half handling (the ``permlane64`` + dual ``ds_bpermute`` lowering described in `AMDGPU wave64 cross-half
+   lowering`) is inherited transparently.
+
+
+.. py:function:: bitonic_sort_kv(key, value)
+
+   ``bitonic_sort_kv_tiled`` across the entire subgroup -- the lex-smallest ``2**log2_group_size()`` pairs end up
+   in ascending lane order.
+
+   Plain Python wrapper (not ``@qd.func``): the ``log2_group_size()`` int is resolved at compile time and flows into
+   the underlying ``@qd.func``'s ``template()`` parameter, so the generated IR is identical to a hand-written
+   ``bitonic_sort_kv_tiled(key, value, 5)`` on wave32 backends or ``bitonic_sort_kv_tiled(key, value, 6)`` on AMDGPU
+   wave64.  See `bitonic_sort_kv_tiled` for the full contract, the short-input pattern, and the NaN caveat.
+
+
