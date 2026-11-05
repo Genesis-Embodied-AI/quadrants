@@ -4,7 +4,7 @@ import dataclasses
 import typing
 
 from quadrants.lang._deferred_dataclass import deferred_member
-from quadrants.lang._final_annotation import is_final_field_annotation
+from quadrants.lang._final_annotation import dataclass_field_is_final
 from quadrants.lang._final_dataclass_fields import final_scalar_key
 
 # Class identity maps to the retained class and its Final field names.
@@ -22,7 +22,7 @@ def get_final_field_names(dataclass_type: type) -> frozenset[str]:
     names = frozenset(
         field.name
         for field in dataclasses.fields(dataclass_type)
-        if is_final_field_annotation(dataclass_type, field.name, field.type)
+        if dataclass_field_is_final(dataclass_type, field.name, field.type)
     )
     _final_field_names_by_dataclass_type_id[id(dataclass_type)] = (dataclass_type, names)
     return names

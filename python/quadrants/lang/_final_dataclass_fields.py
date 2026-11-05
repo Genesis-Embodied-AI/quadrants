@@ -17,11 +17,12 @@ from typing import Any
 
 import numpy as np
 
+from quadrants.lang._final_annotation import dataclass_field_is_final
+
 # Re-export the marker predicate for existing compiler callers.
 from quadrants.lang._final_annotation import (  # pylint: disable=unused-import
     is_final_annotation as is_final_annotation,
 )
-from quadrants.lang._final_annotation import is_final_field_annotation
 from quadrants.lang._weak_identity_cache import WeakIdentityCache
 
 _MISSING = object()  # sentinel distinct from ``None`` (a legal attribute value) while resolving a qualname
@@ -90,7 +91,7 @@ def _build_final_plan(dc_type: type) -> "frozenset[str]":
     final_names = []
     for field in dataclasses.fields(dc_type):
         annotation = field.type
-        if not is_final_field_annotation(dc_type, field.name, annotation):
+        if not dataclass_field_is_final(dc_type, field.name, annotation):
             # A ``Final``-like form that is not ``typing.Final`` would also silently become a runtime arg.
             origin = typing.get_origin(annotation)
             if origin is not None and "Final" in _describe_annotation(origin):

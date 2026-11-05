@@ -14,7 +14,7 @@ def is_final_annotation(annotation: Any) -> bool:
     return annotation is typing.Final or typing.get_origin(annotation) is typing.Final
 
 
-def is_final_field_annotation(dataclass_type: type, field_name: str, annotation: Any) -> bool:
+def dataclass_field_is_final(dataclass_type: type, field_name: str, annotation: Any) -> bool:
     """Recognize a field's Final marker, resolving only the outer name when the annotation is a string."""
     if not isinstance(annotation, str):
         return is_final_annotation(annotation)
