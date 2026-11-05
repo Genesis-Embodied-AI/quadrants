@@ -203,11 +203,7 @@ def infer_dataclass_type(
             member_type = final_errors[name]
         elif is_final:
             member_type = runtime_final_type(
-                field.type,
-                getattr(dataclass_instance, name),
-                non_frozen_ancestor_path,
-                name,
-                final_value_key_by_value_id,
+                getattr(dataclass_instance, name), non_frozen_ancestor_path, name, final_value_key_by_value_id
             )
         else:
             child = getattr(dataclass_instance, name)

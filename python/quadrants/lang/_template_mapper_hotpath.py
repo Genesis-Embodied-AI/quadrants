@@ -435,14 +435,14 @@ def _extract_arg(
                     continue
                 field_value = getattr(arg, field.name)
                 if field.name in final_names:
-                    # A ``Final[float]`` drives specialisation, so honour ``raise_on_templated_floats`` like a
+                    # A floating-point Final value drives specialisation, so honour ``raise_on_templated_floats`` like a
                     # ``qd.template()`` float. The ``isinstance`` runs only in strict mode; ``bool`` is not a ``float``.
                     if raise_on_templated_floats and (
                         type(field_value) is float or isinstance(field_value, (float, np.floating))
                     ):
                         raise ValueError(
                             f"Floats not allowed as templated types: {annotation.__name__}.{field.name} is "
-                            f"``Final[float]``, so its value is baked into the compiled kernel and each distinct "
+                            f"a floating-point ``Final`` value baked into the compiled kernel, and each distinct "
                             f"value compiles a separate kernel. Drop the ``Final`` to make it an ordinary runtime "
                             f"field, or unset ``raise_on_templated_floats``."
                         )

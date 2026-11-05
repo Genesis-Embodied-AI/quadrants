@@ -3819,11 +3819,8 @@ def test_nested_final_field_recompiles_per_frozen_carrier_instance():
 
 
 @test_utils.test()
-def test_final_field_rejects_non_bakeable_inner_types():
-    """``Final[T]`` only accepts a ``T`` that is meaningful as a compile-time literal and hashes / reprs by value
-    stably across processes: ``bool`` / ``int`` / ``float`` / ``str`` and ``enum.Enum`` subclasses. Arrays, structs,
-    nested dataclasses and arbitrary objects are rejected with a tailored remediation hint rather than silently
-    miscompiling."""
+def test_final_field_ignores_inner_types():
+    """Final marks compile-time values without constraining their arriving types."""
     import enum
     from typing import Final
 
@@ -3837,31 +3834,27 @@ def test_final_field_rejects_non_bakeable_inner_types():
     class FinalNestedDataclass:
         inner: Final[Leaf]
 
-    with pytest.raises(TypeError, match="nested dataclasses are walked structurally"):
-        final_field_names(FinalNestedDataclass)
+    assert final_field_names(FinalNestedDataclass) == {"inner"}
 
     @dataclass(frozen=True)
     class FinalNdarrayType:
         buf: Final[qd.types.ndarray_type.NdarrayType]
 
-    with pytest.raises(TypeError, match="arrays are runtime data"):
-        final_field_names(FinalNdarrayType)
+    assert final_field_names(FinalNdarrayType) == {"buf"}
 
     @dataclass(frozen=True)
     class FinalTemplate:
         x: Final[qd.Template]
 
-    with pytest.raises(TypeError, match="is redundant"):
-        final_field_names(FinalTemplate)
+    assert final_field_names(FinalTemplate) == {"x"}
 
     @dataclass(frozen=True)
     class FinalObject:
         x: Final[object]
 
-    with pytest.raises(TypeError, match="supports T in"):
-        final_field_names(FinalObject)
+    assert final_field_names(FinalObject) == {"x"}
 
-    # Accepted: the scalar set plus any Enum subclass.
+    # Scalar and enum annotations remain accepted as well.
     class Mode(enum.IntEnum):
         A = 0
         B = 1
@@ -3882,8 +3875,8 @@ def test_final_field_rejects_non_bakeable_inner_types():
 def test_final_field_int_annotation_holding_intenum_value():
     """Genesis's static-config classes declare ``ccd_algorithm: int`` / ``integrator: int`` etc. but store ``IntEnum``
     members in them. Baking such a value must work: an ``IntEnum`` member is a valid literal, compares and does
-    arithmetic as an ``int``, and ``repr``s stably for the cache key. Validation is on the declared annotation, so
-    ``Final[int]`` holding an ``IntEnum`` is accepted without an ``isinstance`` check on the hot path."""
+    arithmetic as an ``int``, and ``repr``s stably for the cache key. The inner annotation is ignored, so
+    ``Final[int]`` holding an ``IntEnum`` uses the actual enum value and type."""
     import enum
     from typing import Final
 
@@ -3914,13 +3907,8 @@ def test_final_field_int_annotation_holding_intenum_value():
 
 
 @test_utils.test()
-def test_bare_final_annotation_is_rejected():
-    """A bare ``Final`` (no ``[T]``) must be rejected up front with a message naming the fix.
-
-    ``typing.get_origin(typing.Final)`` is ``None``, so the bare spelling does not look like a Final annotation and
-    would otherwise be treated as an ordinary runtime field - reaching ``decl_scalar_arg`` and dying in ``cook_dtype``
-    with ``ValueError: Invalid data type typing.Final``. That is precisely the confusing failure this feature removes
-    for ``Final[T]``, so it must not be how the unsupported spelling behaves."""
+def test_bare_final_annotation_specializes():
+    """Bare Final uses the arriving value as a compile-time constant."""
     import typing
 
     from quadrants.lang._final_dataclass_fields import (
@@ -3928,26 +3916,23 @@ def test_bare_final_annotation_is_rejected():
         is_final_annotation,
     )
 
-    # The bare form genuinely is not a subscripted Final...
-    assert is_final_annotation(typing.Final) is False
+    assert is_final_annotation(typing.Final) is True
     assert is_final_annotation(typing.Final[int]) is True
 
-    # ...but it is still rejected rather than silently lowered to a runtime arg.
     @dataclass(frozen=True)
     class BareFinal:
         x: typing.Final
 
-    with pytest.raises(TypeError, match="bare ``typing.Final`` is not supported"):
-        final_field_names(BareFinal)
+    assert final_field_names(BareFinal) == {"x"}
 
-    # And end-to-end, so the user sees that error instead of a cook_dtype failure.
     @qd.kernel
-    def k(cfg: BareFinal, out: qd.types.NDArray[qd.i32, 1]):
-        for i in out:
-            out[i] = 1
+    def k(cfg: BareFinal) -> qd.i32:
+        return qd.static(cfg.x)
 
-    with pytest.raises(Exception, match="bare ``typing.Final`` is not supported"):
-        k(BareFinal(x=5), qd.ndarray(qd.i32, shape=(2,)))
+    assert k(BareFinal(5)) == 5
+    assert k(BareFinal(8)) == 8
+    assert k(BareFinal(5)) == 5
+    assert len(k._primal.materialized_kernels) == 2
 
 
 @test_utils.test()
@@ -4094,18 +4079,15 @@ def test_final_unsafe_hash_ordinary_field_reread_each_launch():
 
 
 @test_utils.test()
-def test_final_field_string_annotation_is_rejected():
-    """``from __future__ import annotations`` (or any explicit string annotation) leaves ``field.type`` as an
-    unresolved string, so Quadrants cannot see the ``Final`` and would silently lower the field as a *runtime* kernel
-    argument - a field the user believes is a compile-time constant. Rather than half-support it, raise."""
+def test_final_field_string_annotation_is_recognized():
+    """String Final markers are recognized without resolving their inner annotations."""
     from quadrants.lang._final_dataclass_fields import final_field_names
 
     @dataclass(frozen=True)
     class StringAnnotated:
         x: "Final[int]"
 
-    with pytest.raises(TypeError, match="unresolved string"):
-        final_field_names(StringAnnotated)
+    assert final_field_names(StringAnnotated) == {"x"}
 
     # A non-Final string annotation stays on the pre-existing path (unchanged behavior, no error from us).
     @dataclass(frozen=True)
@@ -4116,11 +4098,8 @@ def test_final_field_string_annotation_is_rejected():
 
 
 @test_utils.test()
-def test_final_field_aliased_string_annotation_is_rejected():
-    """A substring test for the literal name ``Final`` misses an *aliased* spelling: with
-    ``from __future__ import annotations`` and ``from typing import Final as F``, ``x: F[int]`` is stored as the string
-    ``"F[int]"``. ``final_field_names`` resolves the class's hints (which sees the alias in the module globals) so the
-    field is recognised as ``Final`` and rejected, rather than silently lowered as an ordinary runtime argument."""
+def test_final_field_aliased_string_annotation_is_recognized():
+    """An aliased string marker is resolved through its defining module."""
     import sys
     import types
     from typing import Final
@@ -4135,8 +4114,7 @@ def test_final_field_aliased_string_annotation_is_rejected():
     sys.modules[mod.__name__] = mod
     try:
         exec("@dc.dataclass(frozen=True)\nclass Cfg:\n    x: 'F[int]'\n", mod.__dict__)
-        with pytest.raises(TypeError, match="unresolved string"):
-            final_field_names(mod.Cfg)
+        assert final_field_names(mod.Cfg) == {"x"}
     finally:
         sys.modules.pop(mod.__name__, None)
 
@@ -4160,12 +4138,8 @@ def test_final_aliased_string_detected_despite_unresolvable_sibling():
     try:
         # ``y``'s annotation names a type never defined in the module, so class-wide ``get_type_hints`` raises; the
         # aliased ``Final`` on ``x`` must still be seen.
-        exec(
-            "@dc.dataclass(frozen=True)\nclass Cfg:\n    x: 'F[int]'\n    y: 'OnlyUnderTypeChecking'\n",
-            mod.__dict__,
-        )
-        with pytest.raises(TypeError, match="unresolved string"):
-            final_field_names(mod.Cfg)
+        exec("@dc.dataclass(frozen=True)\nclass Cfg:\n    x: 'F[int]'\n    y: 'OnlyUnderTypeChecking'\n", mod.__dict__)
+        assert final_field_names(mod.Cfg) == {"x"}
     finally:
         sys.modules.pop(mod.__name__, None)
 
