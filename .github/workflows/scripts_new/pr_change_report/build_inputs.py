@@ -429,16 +429,14 @@ def render_comment_markdown(summaries: list[FileSummary], commit: str) -> str:
         )
         if not files:
             continue
-        file_lines.extend(
-            [
-                "",
-                f"### {name}",
-                "",
-                f"**Group total**: {len(files)} file(s) changed, "
-                f"+{sum(s.added for s in files)} -{sum(s.removed for s in files)} counted lines.",
-                "",
-            ]
+        file_lines.append("")
+        file_lines.append(f"### {name}")
+        file_lines.append("")
+        file_lines.append(
+            f"**Group total**: {len(files)} file(s) changed, "
+            f"+{sum(s.added for s in files)} -{sum(s.removed for s in files)} counted lines."
         )
+        file_lines.append("")
         file_rows: list[dict[str, str | int | float]] = []
         for s in files:
             file_rows.append(
