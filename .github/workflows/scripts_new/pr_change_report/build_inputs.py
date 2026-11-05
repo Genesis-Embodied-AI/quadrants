@@ -386,12 +386,12 @@ _GROUP_BY_FOLDER_NAME = {
 
 def group_summaries(summaries: list[FileSummary]) -> dict[str, list[FileSummary]]:
     """Group by top-level folder, keeping the existing impact order within each group."""
-    groups: dict[str, list[FileSummary]] = {name: [] for name in GROUPS}
+    summaries_by_group_name: dict[str, list[FileSummary]] = {name: [] for name in GROUPS}
     for summary in summaries:
         folder, separator, _ = summary.path.partition("/")
         group = _GROUP_BY_FOLDER_NAME.get(folder, "misc") if separator else "misc"
-        groups[group].append(summary)
-    return groups
+        summaries_by_group_name[group].append(summary)
+    return summaries_by_group_name
 
 
 def format_totals(summaries: list[FileSummary]) -> str:
