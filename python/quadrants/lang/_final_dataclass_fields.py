@@ -17,8 +17,9 @@ from typing import Any
 
 import numpy as np
 
-from quadrants.lang._final_annotation import (
-    is_final_annotation as is_final_annotation,  # pylint: disable=unused-import
+# Re-export the marker predicate for existing compiler callers.
+from quadrants.lang._final_annotation import (  # pylint: disable=unused-import
+    is_final_annotation as is_final_annotation,
 )
 from quadrants.lang._final_annotation import is_final_field_annotation
 from quadrants.lang._weak_identity_cache import WeakIdentityCache
