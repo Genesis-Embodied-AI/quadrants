@@ -9,7 +9,7 @@ from quadrants.lang._final_dataclass_fields import final_scalar_key
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
 from quadrants.lang._runtime_dataclass import infer_member_type
-from quadrants.lang._runtime_dataclass_final import runtime_final_plan
+from quadrants.lang._runtime_dataclass_final import validate_final_field_declarations
 from quadrants.lang._template_mapper_hotpath import _ExprCxx, _extract_arg
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.expr import Expr
@@ -72,7 +72,7 @@ class TuplePlan:
             if isinstance(value, tuple):
                 return ("tuple", type(value), tuple(self._describe(child, (*path, i)) for i, child in enumerate(value)))
             if hasattr(type(value), "__dataclass_fields__"):
-                finals, errors = runtime_final_plan(type(value))
+                finals, errors = validate_final_field_declarations(type(value))
                 for name, error in errors.items():
                     error.bind(f"{self.name}{path}.{name}").reject()
                 return (
