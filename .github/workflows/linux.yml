@@ -159,14 +159,22 @@ jobs:
             --coverage-xml $COV_XMLS \
             --commit-hash "$HEAD_SHA" \
             --format markdown-summary > coverage-summary.md || true
+      - name: Ensure coverage reports exist
+        if: always()
+        run: |
+          for report in coverage-check.md coverage-summary.md; do
+            if [ ! -s "$report" ]; then
+              printf 'No changes detected\n' > "$report"
+            fi
+          done
       - name: Upload full coverage report
-        if: always() && hashFiles('coverage-check.md') != ''
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
           path: coverage-check.md
       - name: Write coverage report to job summary
-        if: always() && hashFiles('coverage-check.md') != ''
+        if: always()
         run: |
           # Job summaries allow up to 1 MiB; leave room for the truncation notice.
           MAX_BYTES=900000
@@ -178,7 +186,7 @@ jobs:
             cat coverage-check.md >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Publish coverage status
-        if: always() && hashFiles('coverage-check.md') != '' && hashFiles('coverage-summary.md') != ''
+        if: always()
         uses: actions/github-script@v8
         env:
           REPORT_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
