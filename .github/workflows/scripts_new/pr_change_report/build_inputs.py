@@ -4,13 +4,17 @@
 For each supported file changed in the PR (Python, C/C++, Markdown, shell, YAML) this writes:
 
   ``<output_dir>/summary.json``        list of ``{path, language, total, added, removed, is_deleted}``
-  ``<output_dir>/file_list.txt``       one path per line; SAME order as ``summary.json`` but EXCLUDES
-                                       deleted files and files other than Python / C/C++
+  ``<output_dir>/file_list.txt``       Python/C++ paths sent to the function-attribution agent (one per line)
   ``<output_dir>/report_header.md``    pre-formatted file-header lines (verbatim for the report)
   ``<output_dir>/report_comment.md``   compact PR-comment markdown (table + totals line)
   ``<output_dir>/diffs/<path>.diff``   per-file unified diff vs. merge-base
   ``<output_dir>/head/<path>``         HEAD content of the file (always present)
   ``<output_dir>/base/<path>``         file content at merge-base (absent for newly added files)
+
+``file_list.txt`` selects files for per-function analysis, not files for the report. It contains only non-deleted
+Python/C++ files, preserving their relative order in ``summary.json``. Deleted files have no HEAD content for the agent
+to inspect; Markdown, shell, and YAML files receive file-level counts only. All supported files, including deletions,
+remain in ``summary.json`` and the report totals.
 
 ``total`` is the number of code lines in the BASE (pre-PR, merge-base) version of the file, i.e. the size of the file
 before this PR's changes. For newly-added files this is 0. ``added`` and ``removed`` are the number of code lines added
