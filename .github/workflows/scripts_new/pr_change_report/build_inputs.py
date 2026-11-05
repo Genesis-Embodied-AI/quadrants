@@ -410,18 +410,12 @@ def render_comment_markdown(summaries: list[FileSummary], commit: str) -> str:
     lines.append("| Group | Files | Added | Removed |")
     lines.append("|-------|-------|-------|---------|")
     file_lines: list[str] = []
-    total_added = 0
-    total_removed = 0
     for name, files in groups.items():
-        added = sum(s.added for s in files)
-        removed = sum(s.removed for s in files)
-        total_added += added
-        total_removed += removed
         row = ""
         row += f"| {name} "
         row += f"| {len(files)} "
-        row += f"| +{added} "
-        row += f"| -{removed} "
+        row += f"| +{sum(s.added for s in files)} "
+        row += f"| -{sum(s.removed for s in files)} "
         row += "|"
         lines.append(row)
         if not files:
@@ -431,7 +425,8 @@ def render_comment_markdown(summaries: list[FileSummary], commit: str) -> str:
                 "",
                 f"### {name}",
                 "",
-                f"**Group total**: {len(files)} file(s) changed, +{added} -{removed} counted lines.",
+                f"**Group total**: {len(files)} file(s) changed, "
+                f"+{sum(s.added for s in files)} -{sum(s.removed for s in files)} counted lines.",
                 "",
             ]
         )
@@ -445,6 +440,8 @@ def render_comment_markdown(summaries: list[FileSummary], commit: str) -> str:
             row += f"| -{s.removed} " if s.removed else "|  "
             row += "|"
             file_lines.append(row)
+    total_added = sum(s.added for s in summaries)
+    total_removed = sum(s.removed for s in summaries)
     lines.append(f"| **Total** | {len(summaries)} | +{total_added} | -{total_removed} |")
     lines.extend(file_lines)
     lines.append("")
