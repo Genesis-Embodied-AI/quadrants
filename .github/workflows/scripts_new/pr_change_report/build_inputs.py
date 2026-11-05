@@ -395,6 +395,15 @@ def get_group_summaries_by_name(summaries: list[FileSummary]) -> dict[str, list[
     return summaries_by_group_name
 
 
+def render_table(columns: list[str], rows: list[dict[str, str | int | float]]) -> list[str]:
+    """Render dictionary rows as a Markdown table in the specified column order."""
+    lines = ["| " + " | ".join(columns) + " |"]
+    lines.append("| " + " | ".join("---" for _ in columns) + " |")
+    for row in rows:
+        lines.append("| " + " | ".join(str(row[column]) for column in columns) + " |")
+    return lines
+
+
 def render_comment_markdown(summaries: list[FileSummary], commit: str) -> str:
     """Render group totals and grouped per-file tables for the report summary."""
     head = f"## PR change report (`{commit}`)\n" if commit else "## PR change report\n"
@@ -407,17 +416,17 @@ def render_comment_markdown(summaries: list[FileSummary], commit: str) -> str:
     lines.append("LoC = counted lines in the file BEFORE this PR (0 for newly-added files). " + COUNTING_NOTE)
     lines.append("")
     groups = get_group_summaries_by_name(summaries)
-    lines.append("| Group | Files | Added | Removed |")
-    lines.append("|-------|-------|-------|---------|")
+    group_rows: list[dict[str, str | int | float]] = []
     file_lines: list[str] = []
     for name, files in groups.items():
-        row = ""
-        row += f"| {name} "
-        row += f"| {len(files)} "
-        row += f"| +{sum(s.added for s in files)} "
-        row += f"| -{sum(s.removed for s in files)} "
-        row += "|"
-        lines.append(row)
+        group_rows.append(
+            {
+                "Group": name,
+                "Files": len(files),
+                "Added": sum(s.added for s in files),
+                "Removed": sum(s.removed for s in files),
+            }
+        )
         if not files:
             continue
         file_lines.extend(
@@ -430,19 +439,28 @@ def render_comment_markdown(summaries: list[FileSummary], commit: str) -> str:
                 "",
             ]
         )
-        file_lines.append("| File | LoC | Added | Removed |")
-        file_lines.append("|------|-----|-------|---------|")
+        file_rows: list[dict[str, str | int | float]] = []
         for s in files:
-            row = ""
-            row += f"| `{s.path}` "
-            row += f"| {s.total} "
-            row += f"| +{s.added} " if s.added else "|  "
-            row += f"| -{s.removed} " if s.removed else "|  "
-            row += "|"
-            file_lines.append(row)
+            file_rows.append(
+                {
+                    "File": f"`{s.path}`",
+                    "LoC": s.total,
+                    "Added": s.added,
+                    "Removed": s.removed,
+                }
+            )
+        file_lines.extend(render_table(["File", "LoC", "Added", "Removed"], file_rows))
     total_added = sum(s.added for s in summaries)
     total_removed = sum(s.removed for s in summaries)
-    lines.append(f"| **Total** | {len(summaries)} | +{total_added} | -{total_removed} |")
+    group_rows.append(
+        {
+            "Group": "**Total**",
+            "Files": len(summaries),
+            "Added": total_added,
+            "Removed": total_removed,
+        }
+    )
+    lines.extend(render_table(["Group", "Files", "Added", "Removed"], group_rows))
     lines.extend(file_lines)
     lines.append("")
     lines.append(f"**Total**: {len(summaries)} file(s) changed, +{total_added} -{total_removed} counted lines.")
