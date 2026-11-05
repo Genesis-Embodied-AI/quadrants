@@ -16,37 +16,37 @@ _final_declaration_validation_by_dataclass_type_id: dict[
 ] = {}
 
 
-def validate_final_field_declarations(source: type) -> tuple[frozenset[str], dict[str, DeferredMemberType]]:
+def validate_final_field_declarations(dataclass_type: type) -> tuple[frozenset[str], dict[str, DeferredMemberType]]:
     """Reuse legacy declaration validation, isolating unsupported Final members in a per-field fallback.
 
     Ordinary nested annotations must not introduce phantom children. Nested Final paths are checked against the
     arriving values by the runtime schema builder. Malformed declarations (bare or unresolved Final) keep their
     existing eager diagnostic; only real Final[T] members can defer unsupported-type or mutable-carrier errors.
     """
-    cached = _final_declaration_validation_by_dataclass_type_id.get(id(source))
-    if cached is not None and cached[0] is source:
+    cached = _final_declaration_validation_by_dataclass_type_id.get(id(dataclass_type))
+    if cached is not None and cached[0] is dataclass_type:
         return cached[1], cached[2]
     fields = {}
-    for field in dataclasses.fields(source):
+    for field in dataclasses.fields(dataclass_type):
         copied = copy.copy(field)
         if isinstance(field.type, type) and dataclasses.is_dataclass(field.type):
             copied.type = object
         fields[field.name] = copied
     attributes = {
-        "__module__": source.__module__,
-        "__annotations__": dict(source.__annotations__),
+        "__module__": dataclass_type.__module__,
+        "__annotations__": dict(dataclass_type.__annotations__),
         "__dataclass_fields__": fields,
-        "__dataclass_params__": source.__dataclass_params__,
-        "_qd_runtime_origin": source,
+        "__dataclass_params__": dataclass_type.__dataclass_params__,
+        "_qd_runtime_origin": dataclass_type,
     }
-    direct = type(source.__name__, (), attributes)
+    direct = type(dataclass_type.__name__, (), attributes)
     errors = {}
     try:
         names = final_field_names(direct)
     except TypeError:
         found = set()
         for name, field in fields.items():
-            single = type(source.__name__, (), {**attributes, "__dataclass_fields__": {name: field}})
+            single = type(dataclass_type.__name__, (), {**attributes, "__dataclass_fields__": {name: field}})
             try:
                 found.update(final_field_names(single))
             except TypeError as error:
@@ -54,7 +54,7 @@ def validate_final_field_declarations(source: type) -> tuple[frozenset[str], dic
                     raise
                 errors[name] = deferred_member(TypeError, str(error))
         names = frozenset(found)
-    _final_declaration_validation_by_dataclass_type_id[id(source)] = (source, names, errors)
+    _final_declaration_validation_by_dataclass_type_id[id(dataclass_type)] = (dataclass_type, names, errors)
     return names, errors
 
 
