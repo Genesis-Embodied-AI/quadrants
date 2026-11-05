@@ -73,7 +73,7 @@ jobs:
               // Attach the link to the PR head, rather than GitHub's temporary merge commit.
               sha: context.payload.pull_request.head.sha,
               state: 'success',
-              context: 'Docs preview',
+              context: '_Artifact: Docs preview',
               description: 'Open docs preview (publishing may take a few minutes)',
               target_url: url,
             });
