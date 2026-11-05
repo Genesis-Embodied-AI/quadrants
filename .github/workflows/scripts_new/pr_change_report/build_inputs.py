@@ -421,7 +421,13 @@ def render_comment_markdown(summaries: list[FileSummary], commit: str) -> str:
         if not files:
             continue
         file_lines.extend(
-            ["", f"### {name}", "", f"**Group total**: {len(files)} file(s) changed, +{added} -{removed} counted lines.", ""]
+            [
+                "",
+                f"### {name}",
+                "",
+                f"**Group total**: {len(files)} file(s) changed, +{added} -{removed} counted lines.",
+                "",
+            ]
         )
         file_lines.append("| File | LoC | Added | Removed |")
         file_lines.append("|------|-----|-------|---------|")
