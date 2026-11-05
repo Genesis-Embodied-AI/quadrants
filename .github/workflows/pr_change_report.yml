@@ -235,7 +235,7 @@ jobs:
               repo: context.repo.repo,
               sha: context.payload.pull_request.head.sha,
               state: 'success',
-              context: 'Files changed',
+              context: '_Artifact: Files changed',
               // GitHub limits commit status descriptions to 140 characters.
               description: text.substring(0, 140),
               target_url: url,

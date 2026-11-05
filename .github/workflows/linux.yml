@@ -211,7 +211,7 @@ jobs:
               repo: context.repo.repo,
               sha: context.payload.pull_request.head.sha,
               state: 'success',
-              context: 'Diff coverage',
+              context: '_Artifact: Diff coverage',
               // GitHub limits commit status descriptions to 140 characters.
               description: summary.substring(0, 140),
               target_url: process.env.REPORT_URL
