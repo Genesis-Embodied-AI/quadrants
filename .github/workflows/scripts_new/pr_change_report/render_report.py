@@ -45,7 +45,7 @@ COUNTING_NOTE = (
 )
 
 
-def format_header(s: FileSummary) -> str:
+def format_file_summary_line(s: FileSummary) -> str:
     parts = [s.path, str(s.total)]
     if s.added or not s.removed:
         parts.append(f"+{s.added}")
@@ -445,7 +445,7 @@ def main() -> int:
     output_dir = Path(args.output_dir)
     summary_json = output_dir / "summary.json"
     summaries = [FileSummary(**s) for s in json.loads(summary_json.read_text())]
-    headers = "\n".join(format_header(s) for s in summaries)
+    headers = "\n".join(format_file_summary_line(s) for s in summaries)
     (output_dir / "report_header.md").write_text(headers + ("\n" if headers else ""))
     summary_markdown = render_comment_markdown(summaries, args.commit_hash)
     (output_dir / "report_comment.md").write_text(summary_markdown)
