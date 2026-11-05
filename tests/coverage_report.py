@@ -301,7 +301,6 @@ def get_diff_lines(compare_branch):
     """Return {filename: [(lineno, text)]} for added/modified lines."""
     result = subprocess.run(
         ["git", "diff", "-U0", compare_branch],
-        check=True,
         capture_output=True,
         text=True,
         cwd=REPO_ROOT,
@@ -350,9 +349,6 @@ def generate_report(compare_branch, coverage_xmls, output_format="terminal", out
     """Generate the diff coverage report."""
     diff_lines = get_diff_lines(compare_branch)
     coverage = get_covered_lines(coverage_xmls)
-    if not diff_lines and output_format in ("markdown", "markdown-summary"):
-        print("No changes detected")
-        return 100
 
     files_report = []
     total_hit = 0
@@ -474,12 +470,6 @@ def main():
         help="Path(s) to coverage.xml file(s). Default: coverage.xml in repo root",
     )
     parser.add_argument(
-        "--fail-under",
-        type=float,
-        default=80,
-        help="Fail below this diff coverage percentage (default: 80; use 0 for informational reports)",
-    )
-    parser.add_argument(
         "--format",
         dest="output_format",
         default="html",
@@ -517,7 +507,7 @@ def main():
         sys.exit(1)
 
     total_pct = generate_report(args.compare_branch, xml_paths, args.output_format, output_path=args.output)
-    return 0 if total_pct >= args.fail_under else 1
+    return 0 if total_pct >= 80 else 1
 
 
 if __name__ == "__main__":
