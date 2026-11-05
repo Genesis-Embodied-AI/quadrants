@@ -41,9 +41,6 @@ from quadrants.lang import _kernel_impl_dataclass, impl, runtime_ops
 # construction to those free functions so this hot file doesn't accrete checkpoint-feature-specific blocks.
 from quadrants.lang import kernel_checkpoint as _checkpoint_helpers
 from quadrants.lang._fast_caching import src_hasher
-from quadrants.lang._runtime_dataclass import (
-    prepare_kernel_dataclass_args_for_mapper,
-)
 from quadrants.lang._template_mapper_hotpath import chain_has_mutable_container
 from quadrants.lang._wrap_inspect import FunctionSourceInfo, get_source_info_and_src
 from quadrants.lang.ast import (
@@ -331,6 +328,8 @@ class Kernel(FuncBase):
         self.materialized_kernels: dict[CompiledKernelKeyType, KernelCxx] = {}
         self.has_print = False
         self._runtime_has_deferred = False
+        self._runtime_metadata_args_hash: tuple[int, ...] | None = None
+        self._runtime_metadata_defaults: tuple[int, int] | None = None
         self.use_graph: bool = False
         # Opt-in flag set by `@qd.kernel(graph=True, checkpoints=True)`. When True, the AST transformer enables
         # `qd.checkpoint(...)` recognition AND auto-wraps every top-level for-loop that isn't already inside a `with
@@ -930,11 +929,8 @@ class Kernel(FuncBase):
                     launch_ctx_buffer[_INT].append((arg_id, int(obj)))
 
     def ensure_compiled(self, *py_args: tuple[Any, ...]) -> tuple[Callable, int, AutodiffMode]:
-        final_value_key_by_value_id = prepare_kernel_dataclass_args_for_mapper(self, py_args)
         try:
-            instance_id, arg_features = self.mapper.lookup(
-                self.raise_on_templated_floats, py_args, final_value_key_by_value_id
-            )
+            instance_id, arg_features = self.mapper.lookup(self.raise_on_templated_floats, py_args, runtime_kernel=self)
         except Exception as e:
             raise type(e)(f"exception while trying to ensure compiled {self.func}:\n{e}") from e
         key = (self.func, instance_id, self.autodiff_mode)

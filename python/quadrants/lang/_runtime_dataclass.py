@@ -11,16 +11,22 @@ import dataclasses
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol, TypeAlias, cast
+from weakref import ref
 
 import numpy as np
 
+from quadrants import _tensor_wrapper
 from quadrants._lib.core.quadrants_python import DataTypeCxx
-from quadrants._tensor_wrapper import Tensor
+from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES, Tensor
 from quadrants.lang import impl
 from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._deferred_dataclass import DeferredMemberType, deferred_member
 from quadrants.lang._final_dataclass_fields import final_field_names
 from quadrants.lang._ndarray import Ndarray
+from quadrants.lang._runtime_dataclass_cache import (
+    _runtime_kernels,
+    invalidate_tensor_bindings,
+)
 from quadrants.lang._runtime_dataclass_final import (
     runtime_final_plan,
     runtime_final_type,
@@ -37,6 +43,8 @@ from quadrants.lang.struct import Struct, StructType
 from quadrants.lang.util import is_data_oriented, to_quadrants_type
 from quadrants.types import buffer_view_type, ndarray_type, primitive_types
 from quadrants.types.annotations import RuntimeTyped, Template
+
+_tensor_wrapper._dataclass_binding_invalidator = invalidate_tensor_bindings
 
 if TYPE_CHECKING:
     from quadrants.lang._func_base import FuncBase
@@ -182,6 +190,12 @@ def infer_dataclass_type(
     _, field_plan = plan
     params = getattr(dataclass_type, "__dataclass_params__")
     stable = params.frozen and not finals and not final_errors
+    if stable:
+        try:
+            ref(dataclass_instance)
+        except TypeError:
+            # Tensor rebinding must be able to find and invalidate this instance's downstream caches.
+            stable = False
     member_types = []
     has_deferred = False
     for name, field, is_final in field_plan:
@@ -207,7 +221,11 @@ def infer_dataclass_type(
             )
             if dataclasses.is_dataclass(member_type):
                 stable &= getattr(member_type, "_qd_runtime_stable")
-            elif child is not None and not isinstance(child, (bool, int, float, np.generic, Ndarray, Field)):
+            elif (
+                child is not None
+                and type(child) not in _TENSOR_WRAPPER_TYPES
+                and not isinstance(child, (bool, int, float, np.generic, Ndarray, Field))
+            ):
                 stable = False
         has_deferred |= isinstance(member_type, DeferredMemberType) or getattr(
             member_type, "_qd_runtime_has_deferred", False
@@ -288,11 +306,26 @@ def infer_kernel_dataclass_arg_types(
     return resolved_arg_metas
 
 
-def prepare_kernel_dataclass_args_for_mapper(kernel: "Kernel", py_objs: tuple[Any, ...]) -> FinalValueKeyCache:
+def prepare_kernel_dataclass_args_for_mapper(
+    kernel: "Kernel", py_objs: tuple[Any, ...], args_hash: tuple[int, ...] | None = None
+) -> FinalValueKeyCache | None:
     """Update dataclass argument types, template slots, cache eligibility, and deferred-member status for a launch.
 
+    Reuse metadata when argument identities and numeric defaults match a live mapper cache entry.
     Return Final keys already validated during this call so specialization can reuse them.
     """
+    defaults = (id(kernel.runtime.default_ip), id(kernel.runtime.default_fp))
+    if (
+        args_hash is not None
+        and kernel._runtime_metadata_args_hash == args_hash
+        and kernel._runtime_metadata_defaults == defaults
+        and kernel.mapper._mapping_cache_tracker.get(args_hash)
+    ):
+        return None
+    _runtime_kernels.add(kernel)
+    if kernel._runtime_metadata_defaults is not None and kernel._runtime_metadata_defaults != defaults:
+        kernel.mapper._mapping_cache.clear()
+        kernel.mapper._mapping_cache_tracker.clear()
     # Per-call cache: id(value) -> (value, specialization key); retain the value to verify its identity.
     final_value_key_by_value_id: FinalValueKeyCache = {}
     kernel.arg_metas = infer_kernel_dataclass_arg_types(kernel.orig_arguments, py_objs, final_value_key_by_value_id)
@@ -313,6 +346,8 @@ def prepare_kernel_dataclass_args_for_mapper(kernel: "Kernel", py_objs: tuple[An
     kernel.mapper.template_slot_locations = kernel.template_slot_locations
     # A dataclass's member types can change without changing the identity of the outer object.
     kernel.mapper._mapping_cache_disabled = unstable or None
+    kernel._runtime_metadata_args_hash = args_hash if not unstable and not has_deferred else None
+    kernel._runtime_metadata_defaults = defaults
 
     return final_value_key_by_value_id
 
