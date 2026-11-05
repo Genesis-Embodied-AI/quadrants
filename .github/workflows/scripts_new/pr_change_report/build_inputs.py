@@ -549,9 +549,9 @@ def main() -> int:
     (output_dir / "summary.json").write_text(json.dumps(summary_dicts, indent=2) + "\n")
 
     # Only non-deleted Python/C++ files need per-function attribution. Other files still appear in all report totals.
-    function_attribution_summaries = [s for s in summaries if not s.is_deleted and s.language in {"py", "cpp"}]
+    files_needing_function_attribution = [s for s in summaries if not s.is_deleted and s.language in {"py", "cpp"}]
     (output_dir / "function_attribution_files.txt").write_text(
-        "".join(f"{s.path}\n" for s in function_attribution_summaries)
+        "".join(f"{s.path}\n" for s in files_needing_function_attribution)
     )
 
     headers = "\n".join(format_header(s) for s in summaries)
@@ -560,7 +560,7 @@ def main() -> int:
     (output_dir / "report_comment.md").write_text(render_comment_markdown(summaries, args.commit_hash))
 
     touched_lines = []
-    for s in function_attribution_summaries:
+    for s in files_needing_function_attribution:
         diff_text = (diffs_dir / f"{s.path}.diff").read_text()
         head_ranges, base_ranges = diff_touched_ranges(diff_text)
         head_str = ", ".join(f"{a}-{b}" for a, b in head_ranges) or "(none)"
