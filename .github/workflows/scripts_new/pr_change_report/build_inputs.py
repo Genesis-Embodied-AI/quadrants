@@ -4,7 +4,7 @@
 For each supported file changed in the PR (Python, C/C++, Markdown, shell, YAML) this writes:
 
   ``<output_dir>/summary.json``        list of ``{path, language, total, added, removed, is_deleted}``
-  ``<output_dir>/function_attribution_files.txt``
+  ``<output_dir>/files_needing_function_attribution.txt``
                                      Python/C++ paths sent to the function-attribution agent (one per line)
   ``<output_dir>/report_header.md``    pre-formatted file-header lines (verbatim for the report)
   ``<output_dir>/report_comment.md``   compact PR-comment markdown (table + totals line)
@@ -12,10 +12,10 @@ For each supported file changed in the PR (Python, C/C++, Markdown, shell, YAML)
   ``<output_dir>/head/<path>``         HEAD content of the file (always present)
   ``<output_dir>/base/<path>``         file content at merge-base (absent for newly added files)
 
-``function_attribution_files.txt`` selects files for per-function analysis, not files for the report. It contains only
-non-deleted Python/C++ files, preserving their relative order in ``summary.json``. Deleted files have no HEAD content
-for the agent to inspect; Markdown, shell, and YAML files receive file-level counts only. All supported files, including
-deletions, remain in ``summary.json`` and the report totals.
+``files_needing_function_attribution.txt`` selects files for per-function analysis, not files for the report. It
+contains only non-deleted Python/C++ files, preserving their relative order in ``summary.json``. Deleted files have no
+HEAD content for the agent to inspect; Markdown, shell, and YAML files receive file-level counts only. All supported
+files, including deletions, remain in ``summary.json`` and the report totals.
 
 ``total`` is the number of code lines in the BASE (pre-PR, merge-base) version of the file, i.e. the size of the file
 before this PR's changes. For newly-added files this is 0. ``added`` and ``removed`` are the number of code lines added
@@ -531,8 +531,8 @@ def main() -> int:
         )
 
     # Sort files by descending lines added, then descending lines removed, then path. This is the order used for every
-    # downstream artifact (summary.json, function_attribution_files.txt, report_header.md, report_comment.md) so that
-    # each report group surfaces the largest-impact files first.
+    # downstream artifact (summary.json, files_needing_function_attribution.txt, report_header.md, report_comment.md) so
+    # that each report group surfaces the largest-impact files first.
     summaries.sort(key=lambda s: (-s.added, -s.removed, s.path))
 
     summary_dicts = [
@@ -550,7 +550,7 @@ def main() -> int:
 
     # Only non-deleted Python/C++ files need per-function attribution. Other files still appear in all report totals.
     files_needing_function_attribution = [s for s in summaries if not s.is_deleted and s.language in {"py", "cpp"}]
-    (output_dir / "function_attribution_files.txt").write_text(
+    (output_dir / "files_needing_function_attribution.txt").write_text(
         "".join(f"{s.path}\n" for s in files_needing_function_attribution)
     )
 
