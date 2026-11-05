@@ -338,11 +338,11 @@ def render(summary_json: Path, jsonl_path: Path, output_dir: Path) -> str:
     by_path = _load_function_entries(jsonl_path)
 
     out_lines: list[str] = []
-    groups = get_group_summaries_by_name([FileSummary(**s) for s in summaries])
+    group_summaries_by_name = get_group_summaries_by_name([FileSummary(**s) for s in summaries])
     summaries_by_path = {s["path"]: s for s in summaries}
     total_added = 0
     total_removed = 0
-    for group_name, group_files in groups.items():
+    for group_name, group_files in group_summaries_by_name.items():
         if not group_files:
             continue
         added = sum(s.added for s in group_files)

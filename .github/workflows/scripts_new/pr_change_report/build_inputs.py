@@ -415,9 +415,9 @@ def render_comment_markdown(summaries: list[FileSummary], commit: str) -> str:
         return "\n".join(lines) + "\n"
     lines.append("LoC = counted lines in the file BEFORE this PR (0 for newly-added files). " + COUNTING_NOTE)
     lines.append("")
-    groups = get_group_summaries_by_name(summaries)
+    group_summaries_by_name = get_group_summaries_by_name(summaries)
     group_rows: list[dict[str, str | int | float]] = []
-    for group_name, group_files in groups.items():
+    for group_name, group_files in group_summaries_by_name.items():
         group_rows.append(
             {
                 "Group": group_name,
@@ -438,7 +438,7 @@ def render_comment_markdown(summaries: list[FileSummary], commit: str) -> str:
     )
     lines.extend(render_table(["Group", "Files", "Added", "Removed"], group_rows))
 
-    for group_name, group_files in groups.items():
+    for group_name, group_files in group_summaries_by_name.items():
         if not group_files:
             continue
         lines.append("")
