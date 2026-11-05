@@ -132,6 +132,7 @@ jobs:
           name: coverage-cuda
           path: coverage-cuda
       - name: Generate coverage reports
+        id: generate_coverage
         continue-on-error: true
         run: |
           COV_XMLS=""
@@ -142,31 +143,43 @@ jobs:
             COV_XMLS="$COV_XMLS coverage-cuda/coverage.xml"
           fi
           if [ -z "$COV_XMLS" ]; then
+            echo "unavailable=true" >> "$GITHUB_OUTPUT"
             echo "No coverage XML files found, skipping report"
             exit 0
           fi
 
           HEAD_SHA=$(echo "${{ github.event.pull_request.head.sha }}" | cut -c1-9)
 
-          python tests/coverage_report.py --report-only \
+          python tests/coverage_report.py --report-only --fail-under 0 \
             --compare-branch=origin/${{ github.base_ref }} \
             --coverage-xml $COV_XMLS \
             --commit-hash "$HEAD_SHA" \
-            --format markdown > coverage-check.md || true
+            --format markdown > coverage-check.md
 
-          python tests/coverage_report.py --report-only \
+          python tests/coverage_report.py --report-only --fail-under 0 \
             --compare-branch=origin/${{ github.base_ref }} \
             --coverage-xml $COV_XMLS \
             --commit-hash "$HEAD_SHA" \
-            --format markdown-summary > coverage-summary.md || true
-      - name: Ensure coverage reports exist
+            --format markdown-summary > coverage-summary.md
+      - name: Prepare coverage status
+        id: coverage_status
         if: always()
+        env:
+          COVERAGE_UNAVAILABLE: ${{ steps.generate_coverage.outputs.unavailable }}
+          GENERATION_OUTCOME: ${{ steps.generate_coverage.outcome }}
         run: |
-          for report in coverage-check.md coverage-summary.md; do
-            if [ ! -s "$report" ]; then
-              printf 'No changes detected\n' > "$report"
-            fi
-          done
+          message=""
+          if [ "$COVERAGE_UNAVAILABLE" = true ]; then
+            message="Coverage unavailable"
+          elif [ "$GENERATION_OUTCOME" != success ] || [ ! -s coverage-check.md ] || [ ! -s coverage-summary.md ]; then
+            message="Coverage report generation failed"
+          fi
+          if [ -n "$message" ]; then
+            printf '%s\n' "$message" | tee coverage-check.md > coverage-summary.md
+            echo "state=error" >> "$GITHUB_OUTPUT"
+          else
+            echo "state=success" >> "$GITHUB_OUTPUT"
+          fi
       - name: Upload full coverage report
         if: always()
         uses: actions/upload-artifact@v4
@@ -189,6 +202,7 @@ jobs:
         if: always()
         uses: actions/github-script@v8
         env:
+          REPORT_STATE: ${{ steps.coverage_status.outputs.state || 'error' }}
           REPORT_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           script: |
@@ -198,7 +212,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               sha: context.payload.pull_request.head.sha,
-              state: 'success',
+              state: process.env.REPORT_STATE,
               context: '_Artifact: Diff coverage',
               // GitHub limits commit status descriptions to 140 characters.
               description: summary.substring(0, 140),
