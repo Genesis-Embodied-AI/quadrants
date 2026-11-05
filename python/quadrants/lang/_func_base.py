@@ -35,6 +35,7 @@ from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import _kernel_impl_dataclass, impl
 from quadrants.lang._dataclass_util import create_flat_name
+from quadrants.lang._deferred_dataclass import DeferredMemberType
 from quadrants.lang._final_dataclass_fields import (
     final_field_names,
     subtree_has_final_fields,
@@ -665,6 +666,8 @@ class FuncBase:
 
         needed_arg_type_id = id(needed_arg_type)
         needed_arg_basetype = type(needed_arg_type)
+        if needed_arg_basetype is DeferredMemberType:
+            needed_arg_type.bind(py_dataclass_basename).reject()
 
         # qd.Tensor value-dispatch at launch time. Re-target the annotation to the concrete branch resolved from the
         # runtime value, then fall through to the existing dispatch logic. Wrapper instances are unwrapped earlier (in

@@ -42,12 +42,13 @@ from quadrants._tensor import (
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang._dataclass_util import create_flat_name
+from quadrants.lang._deferred_dataclass import DeferredMemberType
 from quadrants.lang._final_dataclass_fields import (
     final_field_names,
-    final_scalar_key,
     subtree_has_final_fields,
 )
 from quadrants.lang._ndarray import Ndarray
+from quadrants.lang._runtime_dataclass_final import runtime_final_key
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.buffer_view import BufferView as BufferViewInstance
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
@@ -222,7 +223,13 @@ def _collect_struct_nd_descriptors(arg: Any, out: list) -> None:
         out.append((".".join(chain), element_type, len(shape), v.grad is not None, v._qd_layout))
 
 
-def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: AnnotationType, arg_name: str) -> Any:
+def _extract_arg(
+    raise_on_templated_floats: bool,
+    arg: Any,
+    annotation: AnnotationType,
+    arg_name: str,
+    final_value_key_by_value_id=None,
+) -> Any:
     # ``qd.Tensor`` wrappers passed as struct fields. Top-level kernel-arg unwrap in ``Kernel.__call__`` covers direct
     # args, but the dataclass-field recursion at the bottom of this function walks struct attributes via raw
     # ``getattr``, so a wrapper stored as a struct field arrives here un-stripped with its declared annotation (e.g.
@@ -239,6 +246,8 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
     ):  # pyright: ignore[reportOptionalMemberAccess]
         arg = arg._unwrap()
     annotation_type = type(annotation)
+    if annotation_type is DeferredMemberType:
+        return annotation
     # qd.Tensor: value-dispatch. Ndarray-shaped values flow through the ndarray feature path; everything else falls
     # through to the template path (Field, SNode, primitives). Both branches are salted with a marker so cache keys
     # disambiguate. The annotation is the wrapper *class* (``qd.Tensor``); ``arg`` is always a bare impl by the time
@@ -442,7 +451,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
                         )
                     # ``live=True``: in-process key, so a subclass/enum is keyed by class identity. The offline
                     # fastcache passes ``live=False`` (see ``final_scalar_key`` / ``args_hasher``).
-                    key_parts.append(final_scalar_key(field_value, live=True))
+                    key_parts.append(runtime_final_key(field_value, final_value_key_by_value_id))
                 else:
                     key_parts.append(
                         _extract_arg(
@@ -450,6 +459,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
                             field_value,
                             field.type,
                             create_flat_name(arg_name, field.name),
+                            final_value_key_by_value_id,
                         )
                     )
             key = tuple(key_parts)
@@ -461,6 +471,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
                         getattr(arg, field.name),
                         field.type,
                         create_flat_name(arg_name, field.name),
+                        final_value_key_by_value_id,
                     )
                     for field in annotation_fields.values()
                     if field._field_type is _FIELD

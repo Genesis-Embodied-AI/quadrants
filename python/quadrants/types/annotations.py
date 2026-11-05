@@ -52,7 +52,11 @@ class RuntimeTyped:
     """
 
     def __getattr__(self, name: str) -> Any:
-        """Member types are supplied by the arriving object, rather than this annotation marker."""
+        """Static type checkers see only RuntimeTyped, so they would otherwise reject accesses like state.velocity.
+
+        The Any return annotation allows arbitrary members without claiming to know their types.
+        The marker itself has no such members, so access raises AttributeError; callers supply dataclass instances.
+        """
         raise AttributeError(name)
 
 

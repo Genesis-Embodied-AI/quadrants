@@ -9,6 +9,46 @@ import quadrants as qd
 from tests.helpers import test_utils
 
 
+@pytest.mark.parametrize("annotation_kind", ["marker", "concrete", "scalar"])
+@pytest.mark.parametrize("bound", [False, True])
+@test_utils.test()
+def test_runtime_dataclass_default_requires_explicit_argument(annotation_kind, bound):
+    @dataclass
+    class State:
+        value: object
+
+    default_state = State(3)
+    annotation = {"marker": qd.RuntimeTyped, "concrete": State, "scalar": qd.i32}[annotation_kind]
+
+    @qd.func
+    def read(state: annotation = default_state, bias: qd.i32 = 1):
+        return state.value + bias
+
+    @qd.data_oriented
+    class Reader:
+        @qd.func
+        def read(self, state: annotation = default_state, bias: qd.i32 = 1):
+            return state.value + bias
+
+    target = Reader().read if bound else read
+
+    @qd.kernel
+    def omitted() -> qd.i32:
+        return target()
+
+    @qd.kernel
+    def explicit(state: qd.RuntimeTyped) -> qd.i32:
+        return target(state) + target(state=state)
+
+    with pytest.raises(
+        qd.QuadrantsRuntimeTypeError,
+        match="Omitted dataclass defaults are not supported in @qd.func. Pass 'state' explicitly.",
+    ):
+        omitted()
+    assert explicit(default_state) == 8
+    assert explicit(State(5)) == 12
+
+
 @pytest.mark.parametrize("annotation_kind", ["marker", "concrete", "unrelated", "scalar", "template", "ndarray"])
 @test_utils.test()
 def test_runtime_members_ignore_annotations(annotation_kind):
@@ -197,24 +237,38 @@ def test_runtime_scalar_precision():
     assert real(State(np.float64(1.0 + 2**-40))) == 1.0 + 2**-40
 
 
+@pytest.mark.parametrize("annotation_kind", ["marker", "concrete"])
 @test_utils.test()
-def test_runtime_bad_inputs():
+def test_runtime_bad_inputs(annotation_kind):
     @dataclass
     class State:
         value: object
 
+    annotation = qd.RuntimeTyped if annotation_kind == "marker" else State
+
     @qd.kernel
-    def read(state: qd.RuntimeTyped) -> qd.i32:
+    def read(state: annotation) -> qd.i32:
         return state.value
 
-    with pytest.raises(Exception, match="requires a Python dataclass instance"):
+    @qd.func
+    def from_func(state: annotation):
+        return state.value
+
+    @qd.kernel
+    def invalid_func_argument() -> qd.i32:
+        return from_func(1)
+
+    with pytest.raises(qd.QuadrantsRuntimeTypeError, match="Argument 'state' requires a Python dataclass instance"):
         read(1)
+    with pytest.raises(qd.QuadrantsRuntimeTypeError, match="Argument 'state' requires a Python dataclass instance"):
+        invalid_func_argument()
     with pytest.raises(Exception, match="state.value.*unsupported runtime type"):
         read(State(object()))
     cyclic = State(None)
     cyclic.value = cyclic
     with pytest.raises(Exception, match="state.value.*cycle"):
         read(cyclic)
+    assert read(State(2)) == 2
 
 
 @test_utils.test(require=qd.extension.data64)

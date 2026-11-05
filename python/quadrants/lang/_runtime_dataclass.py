@@ -5,20 +5,35 @@ structure lets compilation, inlined calls, dispatch and launch packing share pre
 without modifying the user's class or its annotations.
 """
 
+import ast
 import copy
 import dataclasses
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
-from typing import Any
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol, TypeAlias, cast
+from weakref import ref
 
 import numpy as np
 
-from quadrants._tensor_wrapper import Tensor
+from quadrants import _tensor_wrapper
+from quadrants._lib.core.quadrants_python import DataTypeCxx
+from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES, Tensor
 from quadrants.lang import impl
 from quadrants.lang._dataclass_util import create_flat_name
+from quadrants.lang._deferred_dataclass import DeferredMemberType, deferred_member
 from quadrants.lang._final_dataclass_fields import final_field_names
 from quadrants.lang._ndarray import Ndarray
+from quadrants.lang._runtime_dataclass_cache import (
+    _runtime_kernels,
+    invalidate_tensor_bindings,
+)
+from quadrants.lang._runtime_dataclass_final import (
+    runtime_final_plan,
+    runtime_final_type,
+)
 from quadrants.lang._runtime_dataclass_guards import FrozenSchemaEntry
 from quadrants.lang._runtime_tuple import tuple_annotation
+from quadrants.lang._weak_identity_cache import WeakIdentityCache
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.buffer_view import BufferView
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
@@ -28,167 +43,226 @@ from quadrants.lang.matrix import Matrix, MatrixType, VectorType
 from quadrants.lang.struct import Struct, StructType
 from quadrants.lang.util import is_data_oriented, to_quadrants_type
 from quadrants.types import buffer_view_type, ndarray_type, primitive_types
-from quadrants.types.annotations import RuntimeTyped, template
+from quadrants.types.annotations import RuntimeTyped, Template
 
-_schemas: dict[tuple, type] = {}
-_field_plans: dict[int, tuple] = {}
-_direct_final_types: dict[int, type] = {}
-_matrix_types: dict[tuple, MatrixType] = {}
-_struct_types: dict[tuple, StructType] = {}
+_tensor_wrapper._dataclass_binding_invalidator = invalidate_tensor_bindings
+
+if TYPE_CHECKING:
+    from quadrants.lang._func_base import FuncBase
+    from quadrants.lang._quadrants_callable import (
+        BoundQuadrantsCallable,
+        QuadrantsCallable,
+    )
+    from quadrants.lang.kernel import Kernel
+
+
+class DataclassInstance(Protocol):
+    """Describe the field metadata shared by Python dataclass instances."""
+
+    __dataclass_fields__: ClassVar[dict[str, dataclasses.Field[Any]]]
+
+
+# Object identity maps to the retained object and its type-tagged Final specialization key.
+FinalValueKeyCache: TypeAlias = dict[int, tuple[Any, tuple[Any, ...]]]
+
+InferredMemberType: TypeAlias = (
+    type | DataTypeCxx | ndarray_type.NdarrayType | buffer_view_type.BufferViewType | MatrixType | StructType
+)
+
+# Per-instance schemas, separated by numeric defaults and ancestor validation context; keys are held weakly.
+InferenceContextKey: TypeAlias = tuple[int, int, int, str | None]
+_schema_by_context_by_instance: WeakIdentityCache[dict[InferenceContextKey, type | FrozenSchemaEntry]] = (
+    WeakIdentityCache()
+)
+
+# These caches retain dataclass classes, assuming applications define relatively few of them.
+# Repeatedly generating new dataclass classes will grow these caches for the lifetime of the process.
+# Generated schema classes, keyed by source class identity, stability, and ordered member names/type identities.
+_schemas: dict[tuple[int, bool, tuple[tuple[str, int], ...]], type] = {}
+# Source classes and their ordered field descriptions, reused across schema inference calls.
+_field_plans: dict[int, tuple[type, tuple[tuple[str, dataclasses.Field[Any], bool], ...]]] = {}
+# Matrix/vector type descriptions, keyed by rows, columns, dimensionality, and scalar dtype.
+_matrix_types: dict[tuple[int, int, int, DataTypeCxx], MatrixType] = {}
+# Inferred struct type descriptions, keyed by ordered member names and type identities.
+_struct_types: dict[tuple[tuple[str, int], ...], StructType] = {}
+# Shared buffer-view type description; contains no instance data.
 _buffer_annotation = buffer_view_type.BufferViewType()
+# Shared array type description; actual dtype and rank are checked during specialization.
 _array_annotation = ndarray_type.NdarrayType()
 
 
-def _direct_final_names(source: type) -> frozenset[str]:
-    """Validate direct Final declarations without following annotation-only nested dataclass types.
-
-    Nested paths are validated later against the actual values. Ordinary annotations must not introduce phantom
-    children (or reject a valid value) just because they happen to name a Final-bearing dataclass.
-    """
-    direct = _direct_final_types.get(id(source))
-    if direct is None:
-        fields = {}
-        for field in dataclasses.fields(source):
-            copied = copy.copy(field)
-            if isinstance(field.type, type) and dataclasses.is_dataclass(field.type):
-                copied.type = object
-            fields[field.name] = copied
-        direct = type(
-            source.__name__,
-            (),
-            {
-                "__module__": source.__module__,
-                "__annotations__": dict(source.__annotations__),
-                "__dataclass_fields__": fields,
-                "__dataclass_params__": source.__dataclass_params__,
-                "_qd_runtime_origin": source,
-            },
-        )
-        _direct_final_types[id(source)] = direct
-    return final_field_names(direct)
-
-
 def is_dataclass_annotation(annotation: Any) -> bool:
+    """Recognize RuntimeTyped and concrete dataclass annotations without inferring member types from them."""
     return annotation is RuntimeTyped or isinstance(annotation, type) and dataclasses.is_dataclass(annotation)
 
 
-def infer_member_type(value: Any, path: str, visiting: frozenset[int]) -> Any:
-    if isinstance(value, Tensor):
-        value = value._unwrap()
-    if hasattr(type(value), "__dataclass_fields__"):
-        return resolve_dataclass(value, path, visiting)
-    if is_data_oriented(value):
-        return template
-    if value is None:
+def infer_member_type(
+    py_obj: Any,
+    path: str,
+    ancestor_ids: frozenset[int],
+    non_frozen_ancestor_path: str | None = None,
+    final_value_key_by_value_id: FinalValueKeyCache | None = None,
+) -> InferredMemberType | DeferredMemberType:
+    """Infer a member type from its value, or defer an unsupported-value error until the member is used."""
+    if isinstance(py_obj, Tensor):
+        py_obj = py_obj._unwrap()
+    if hasattr(type(py_obj), "__dataclass_fields__"):
+        return infer_dataclass_type(py_obj, path, ancestor_ids, non_frozen_ancestor_path, final_value_key_by_value_id)
+    if is_data_oriented(py_obj):
+        return Template
+    if py_obj is None:
         return Tensor
-    if isinstance(value, Field):
+    if isinstance(py_obj, Field):
         return Tensor
-    if isinstance(value, (Ndarray, AnyArray, np.ndarray)):
+    if isinstance(py_obj, (Ndarray, AnyArray, np.ndarray)):
         return _array_annotation
     # Avoid importing torch on the inference path when it is not already in use.
     import sys  # pylint: disable=import-outside-toplevel
 
     torch = sys.modules.get("torch")
-    if torch is not None and isinstance(value, torch.Tensor):
+    if torch is not None and isinstance(py_obj, torch.Tensor):
         return _array_annotation
-    if isinstance(value, BufferView):
+    if isinstance(py_obj, BufferView):
         return _buffer_annotation
-    if isinstance(value, (bool, np.bool_)):
+    if isinstance(py_obj, (bool, np.bool_)):
         return primitive_types.u1
-    if isinstance(value, np.generic):
-        return to_quadrants_type(value.dtype)
-    if isinstance(value, int):
+    if isinstance(py_obj, np.generic):
+        return to_quadrants_type(py_obj.dtype)
+    if isinstance(py_obj, int):
         return impl.get_runtime().default_ip
-    if isinstance(value, float):
+    if isinstance(py_obj, float):
         return impl.get_runtime().default_fp
-    if isinstance(value, Matrix):
-        dtype = to_quadrants_type(np.asarray(value.to_numpy()).dtype)
-        key = (value.n, value.m, value.ndim, dtype)
+    if isinstance(py_obj, Matrix):
+        dtype = to_quadrants_type(np.asarray(py_obj.to_numpy()).dtype)
+        key = (py_obj.n, py_obj.m, py_obj.ndim, dtype)
         if key not in _matrix_types:
             _matrix_types[key] = (
-                VectorType(value.n, dtype) if value.ndim == 1 else MatrixType(value.n, value.m, value.ndim, dtype)
+                VectorType(py_obj.n, dtype) if py_obj.ndim == 1 else MatrixType(py_obj.n, py_obj.m, py_obj.ndim, dtype)
             )
         return _matrix_types[key]
-    if isinstance(value, Struct):
-        declared = getattr(value, "_qd_struct_type", None)
+    if isinstance(py_obj, Struct):
+        declared = getattr(py_obj, "_qd_struct_type", None)
         if declared is not None:
             return declared
-        members = {name: infer_member_type(child, f"{path}.{name}", visiting) for name, child in value.items}
+        members = {name: infer_member_type(child, f"{path}.{name}", ancestor_ids) for name, child in py_obj.items}
         key = tuple((name, id(dtype)) for name, dtype in members.items())
         if key not in _struct_types:
             _struct_types[key] = StructType(**members)
         return _struct_types[key]
-    raise QuadrantsRuntimeTypeError(f"Dataclass member {path!r} has unsupported runtime type {type(value).__name__}")
+    return deferred_member(QuadrantsRuntimeTypeError, f"unsupported runtime type {type(py_obj).__name__}")
 
 
-def resolve_dataclass(value: Any, path: str, visiting: frozenset[int] = frozenset()) -> type:
-    if not hasattr(type(value), "__dataclass_fields__"):
-        raise QuadrantsRuntimeTypeError(
-            f"Argument {path!r} requires a Python dataclass instance, got {type(value).__name__}"
-        )
-    if id(value) in visiting:
+def infer_dataclass_type(
+    dataclass_instance: DataclassInstance,
+    path: str,
+    ancestor_ids: frozenset[int] = frozenset(),
+    non_frozen_ancestor_path: str | None = None,
+    final_value_key_by_value_id: FinalValueKeyCache | None = None,
+) -> type:
+    """Build or reuse a private schema class; the caller must verify that dataclass_instance is a dataclass instance."""
+    if id(dataclass_instance) in ancestor_ids:
         raise QuadrantsRuntimeTypeError(f"Dataclass member {path!r} contains a cycle")
-    visiting = visiting | {id(value)}
-    source = type(value)
+    ancestor_ids = ancestor_ids | {id(dataclass_instance)}
+    dataclass_type = type(dataclass_instance)
     runtime = impl.get_runtime()
-    cache_key = (id(source), id(runtime.default_ip), id(runtime.default_fp))
-    cached = getattr(value, "_qd_runtime_schemas", {}).get(cache_key)
-    if cached is not None and cached._qd_runtime_origin is source:
-        return cached
-    # Guarded entries reuse schema metadata only. They retain _qd_runtime_stable=False so specialization and
-    # launch binding still inspect current arrays and template values.
-    guarded = getattr(value, "_qd_runtime_guarded_schemas", {}).get(cache_key)
-    if guarded is not None and guarded.schema._qd_runtime_origin is source:
-        if guarded.matches(path, visiting, infer_member_type):
-            return guarded.schema
-    plan = _field_plans.get(id(source))
+    # The same instance can need different schemas under different numeric defaults or non-frozen ancestor paths.
+    # These affect member types and Final validation, so each instance has a dictionary keyed by inference context.
+    inference_context_key = (
+        id(dataclass_type),
+        id(runtime.default_ip),
+        id(runtime.default_fp),
+        non_frozen_ancestor_path,
+    )
+    schema_by_context = _schema_by_context_by_instance.get(dataclass_instance)
+    cached_schema = schema_by_context.get(inference_context_key) if schema_by_context is not None else None
+    if isinstance(cached_schema, FrozenSchemaEntry):
+        if cached_schema.matches(dataclass_instance, path, ancestor_ids, infer_member_type):
+            return cached_schema.schema
+    elif cached_schema is not None:
+        return cached_schema
+    finals, final_errors = runtime_final_plan(dataclass_type)
+    plan = _field_plans.get(id(dataclass_type))
     if plan is None:
-        finals = _direct_final_names(source)
         plan = (
-            source,
-            source.__dataclass_params__,
-            bool(finals),
-            tuple((field.name, field, field.name in finals) for field in dataclasses.fields(source)),
+            dataclass_type,
+            tuple((field.name, field, field.name in finals) for field in dataclasses.fields(dataclass_type)),
         )
-        _field_plans[id(source)] = plan
-    _, params, has_finals, field_plan = plan
-    stable = params.frozen and not has_finals
+        _field_plans[id(dataclass_type)] = plan
+    _, field_plan = plan
+    params = getattr(dataclass_type, "__dataclass_params__")
+    stable = params.frozen and not finals and not final_errors
+    if stable:
+        try:
+            ref(dataclass_instance)
+        except TypeError:
+            # Tensor rebinding must be able to find and invalidate this instance's downstream caches.
+            stable = False
     member_types = []
+    has_deferred = False
     for name, field, is_final in field_plan:
-        member_type = field.type
-        if not is_final:
-            child = getattr(value, name)
-            member_type = infer_member_type(child, f"{path}.{name}", visiting)
+        if name in final_errors:
+            member_type = final_errors[name]
+        elif is_final:
+            member_type = runtime_final_type(
+                field.type,
+                getattr(dataclass_instance, name),
+                non_frozen_ancestor_path,
+                name,
+                final_value_key_by_value_id,
+            )
+        else:
+            child = getattr(dataclass_instance, name)
+            child_non_frozen_ancestor_path = None
+            if not (params.frozen or params.unsafe_hash):
+                child_non_frozen_ancestor_path = f"{dataclass_type.__name__}.{name}"
+            elif non_frozen_ancestor_path is not None:
+                child_non_frozen_ancestor_path = f"{non_frozen_ancestor_path}.{name}"
+            member_type = infer_member_type(
+                child, f"{path}.{name}", ancestor_ids, child_non_frozen_ancestor_path, final_value_key_by_value_id
+            )
             if dataclasses.is_dataclass(member_type):
                 stable &= getattr(member_type, "_qd_runtime_stable")
-            elif child is not None and not isinstance(child, (bool, int, float, np.generic, Ndarray, Field)):
+            elif (
+                child is not None
+                and type(child) not in _TENSOR_WRAPPER_TYPES
+                and not isinstance(child, (bool, int, float, np.generic, Ndarray, Field))
+            ):
                 stable = False
+        has_deferred |= isinstance(member_type, DeferredMemberType) or getattr(
+            member_type, "_qd_runtime_has_deferred", False
+        )
         member_types.append(member_type)
-    key = (id(source), stable, tuple(map(id, member_types)))
+    stable &= not has_deferred
+    key = (
+        id(dataclass_type),
+        stable,
+        tuple((name, id(member_type)) for (name, _, _), member_type in zip(field_plan, member_types)),
+    )
     schema = _schemas.get(key)
     if schema is None:
-        # Revalidate values on every uncached launch, but allocate field metadata only for a new inferred schema.
-        # The class plan retains the source and field order; only runtime member types and stability vary here.
+        # Revalidate py_objs on every uncached launch, but allocate field metadata only for a new inferred schema.
+        # The class plan retains the dataclass_type and field order; only runtime member types and stability vary here.
         fields = {}
         for (name, field, _), member_type in zip(field_plan, member_types):
             resolved = copy.copy(field)
             resolved.type = member_type
             fields[name] = resolved
         schema = type(
-            source.__name__,
+            dataclass_type.__name__,
             (),
             {
-                "__module__": source.__module__,
-                "__qualname__": source.__qualname__,
+                "__module__": dataclass_type.__module__,
+                "__qualname__": dataclass_type.__qualname__,
                 "__dataclass_fields__": fields,
                 "__dataclass_params__": params,
-                "__hash__": source.__hash__,
-                "_qd_runtime_origin": source,
+                "__hash__": dataclass_type.__hash__,
+                "_qd_runtime_origin": dataclass_type,
                 "_qd_runtime_stable": stable,
+                "_qd_runtime_has_deferred": has_deferred,
                 # Cache eligibility is not part of the compiled interface: a Tensor wrapper and its bare ndarray
                 # must share a specialization, even though the wrapper can change its underlying implementation.
                 "_qd_runtime_key": (
-                    id(source),
+                    id(dataclass_type),
                     tuple(
                         (name, getattr(field.type, "_qd_runtime_key", id(field.type))) for name, field in fields.items()
                     ),
@@ -198,95 +272,123 @@ def resolve_dataclass(value: Any, path: str, visiting: frozenset[int] = frozense
         # Validate Final-bearing paths against the inferred nesting, including children annotated as Any/object.
         final_field_names(schema)
         _schemas[key] = schema
-    if stable:
-        cache = getattr(value, "_qd_runtime_schemas", None)
-        if cache is None:
-            cache = {}
-            try:
-                object.__setattr__(value, "_qd_runtime_schemas", cache)
-            except AttributeError:
-                pass
-        cache[cache_key] = schema
-    elif params.frozen:
-        cache = getattr(value, "_qd_runtime_guarded_schemas", None)
-        if cache is None:
-            cache = {}
-            try:
-                object.__setattr__(value, "_qd_runtime_guarded_schemas", cache)
-            except AttributeError:
+    # Guard reuse must not bypass deferred diagnostics or validation of Final-bearing paths.
+    if stable or (params.frozen and not has_deferred and not finals and non_frozen_ancestor_path is None):
+        if schema_by_context is None:
+            schema_by_context = {}
+            if not _schema_by_context_by_instance.set(dataclass_instance, schema_by_context):
                 return schema
-        cache[cache_key] = FrozenSchemaEntry(value, schema, field_plan, member_types)
+        schema_by_context[inference_context_key] = (
+            schema if stable else FrozenSchemaEntry(dataclass_instance, schema, field_plan, member_types)
+        )
     return schema
 
 
-def _tuple_argument(arg, value, tuple_names, raise_on_templated_floats):
-    tuple_names.append(arg.name)
-    return ArgMetadata(tuple_annotation(value, arg.name, raise_on_templated_floats), arg.name, arg.default)
-
-
-def resolve_arguments(arguments, values, tuple_names, raise_on_templated_floats=False):
-    return [
-        (
-            ArgMetadata(resolve_dataclass(value, arg.name), arg.name, arg.default, optional=arg.optional)
-            if hasattr(type(value), "__dataclass_fields__")
-            or (is_dataclass_annotation(arg.annotation) and not isinstance(value, tuple))
-            else (
-                _tuple_argument(arg, value, tuple_names, raise_on_templated_floats) if isinstance(value, tuple) else arg
+def infer_kernel_dataclass_arg_types(
+    arg_metas: list[ArgMetadata],
+    py_objs: tuple[Any, ...],
+    final_value_key_by_value_id: FinalValueKeyCache | None = None,
+    raise_on_templated_floats: bool = False,
+) -> list[ArgMetadata]:
+    """Replace kernel dataclass parameter annotations with schemas inferred from their arriving values."""
+    resolved_arg_metas = []
+    for arg_meta, py_obj in zip(arg_metas, py_objs):
+        if hasattr(type(py_obj), "__dataclass_fields__"):
+            arg_meta = ArgMetadata(
+                infer_dataclass_type(py_obj, arg_meta.name, final_value_key_by_value_id=final_value_key_by_value_id),
+                arg_meta.name,
+                arg_meta.default,
+                optional=arg_meta.optional,
             )
-        )
-        for arg, value in zip(arguments, values)
-    ]
+        elif isinstance(py_obj, tuple):
+            arg_meta = ArgMetadata(
+                tuple_annotation(py_obj, arg_meta.name, raise_on_templated_floats),
+                arg_meta.name,
+                arg_meta.default,
+                optional=arg_meta.optional,
+            )
+        elif is_dataclass_annotation(arg_meta.annotation):
+            raise QuadrantsRuntimeTypeError(
+                f"Argument {arg_meta.name!r} requires a Python dataclass instance, got {type(py_obj).__name__}"
+            )
+        resolved_arg_metas.append(arg_meta)
+    return resolved_arg_metas
 
 
-def prepare_runtime_arguments(kernel, values):
-    """Prepare inferred metadata and dispatch-cache eligibility for one kernel launch."""
-    tuple_names = []
-    kernel.arg_metas = resolve_arguments(kernel.orig_arguments, values, tuple_names, kernel.raise_on_templated_floats)
+def prepare_kernel_dataclass_args_for_mapper(
+    kernel: "Kernel", py_objs: tuple[Any, ...], args_hash: tuple[int, ...] | None = None
+) -> FinalValueKeyCache | None:
+    """Update dataclass argument types, template slots, cache eligibility, and deferred-member status for a launch.
+
+    Reuse metadata when argument identities and numeric defaults match a live mapper cache entry.
+    Return Final keys already validated during this call so specialization can reuse them.
+    """
+    defaults = (id(kernel.runtime.default_ip), id(kernel.runtime.default_fp))
+    if (
+        args_hash is not None
+        and kernel._runtime_metadata_args_hash == args_hash
+        and kernel._runtime_metadata_defaults == defaults
+        and kernel.mapper._mapping_cache_tracker.get(args_hash)
+    ):
+        return None
+    _runtime_kernels.add(kernel)
+    if kernel._runtime_metadata_defaults is not None and kernel._runtime_metadata_defaults != defaults:
+        kernel.mapper._mapping_cache.clear()
+        kernel.mapper._mapping_cache_tracker.clear()
+    # Per-call cache: id(value) -> (value, specialization key); retain the value to verify its identity.
+    final_value_key_by_value_id: FinalValueKeyCache = {}
+    kernel.arg_metas = infer_kernel_dataclass_arg_types(
+        kernel.orig_arguments, py_objs, final_value_key_by_value_id, kernel.raise_on_templated_floats
+    )
     kernel.mapper.arguments = kernel.arg_metas
+    has_deferred = False
+    unstable = False
+    for meta in kernel.arg_metas:
+        schema = meta.annotation
+        if hasattr(schema, "_qd_runtime_origin"):
+            has_deferred |= schema._qd_runtime_has_deferred
+            unstable |= not schema._qd_runtime_stable
+    kernel._runtime_has_deferred = has_deferred
     kernel.template_slot_locations = [
         i
         for i in kernel.original_template_slot_locations
         if not hasattr(kernel.arg_metas[i].annotation, "_qd_runtime_origin")
     ]
-    if tuple_names:
-        kernel.template_slot_locations.extend(
-            i
-            for i, meta in enumerate(kernel.arg_metas)
-            if meta.name in tuple_names and i not in kernel.template_slot_locations
-        )
+    tuple_slots = [i for i, meta in enumerate(kernel.arg_metas) if hasattr(meta.annotation, "_qd_tuple_plan")]
+    kernel.template_slot_locations.extend(i for i in tuple_slots if i not in kernel.template_slot_locations)
+    # Handler captures can change without changing the root tuple, so always validate their plans again.
+    unstable |= bool(tuple_slots)
     kernel.mapper.template_slot_locations = kernel.template_slot_locations
-    # A dataclass's member types can change without changing the identity of the outer object. Tuple captures may
-    # reassign functions or data without changing the root tuple, so they also bypass the instance-keyed cache.
-    kernel.mapper._mapping_cache_disabled = (
-        bool(tuple_names)
-        or any(
-            hasattr(meta.annotation, "_qd_runtime_origin") and not meta.annotation._qd_runtime_stable
-            for meta in kernel.arg_metas
-        )
-        or None
-    )
+    # A dataclass's member types can change without changing the identity of the outer object.
+    kernel.mapper._mapping_cache_disabled = unstable or None
+    kernel._runtime_metadata_args_hash = args_hash if not unstable and not has_deferred else None
+    kernel._runtime_metadata_defaults = defaults
+
+    return final_value_key_by_value_id
 
 
-def runtime_template_members(schema, value, path=()):
+def runtime_template_members(
+    schema: type, dataclass_instance: DataclassInstance, path: tuple[str, ...] = ()
+) -> Iterator[tuple[tuple[str, ...], Any]]:
     """Yield template-valued subobjects with paths rooted at the original kernel argument."""
     if not hasattr(schema, "_qd_runtime_origin"):
         return
     for field in dataclasses.fields(schema):
-        child = getattr(value, field.name)
+        child = getattr(dataclass_instance, field.name)
         child_path = (*path, field.name)
-        if field.type is template:
+        if field.type is Template:
             yield child_path, child
         elif hasattr(field.type, "_qd_runtime_origin"):
-            yield from runtime_template_members(field.type, child, child_path)
+            yield from runtime_template_members(cast(type, field.type), child, child_path)
 
 
-def is_runtime_member_name(arguments: list[ArgMetadata], name: str) -> bool:
+def is_runtime_member_name(arg_metas: list[ArgMetadata], name: str) -> bool:
     """Whether a flattened AST name belongs to an inferred dataclass argument (including inlined functions)."""
-    for arg in arguments:
-        if not hasattr(arg.annotation, "_qd_runtime_origin"):
+    for arg_meta in arg_metas:
+        if not hasattr(arg_meta.annotation, "_qd_runtime_origin"):
             continue
-        for field in dataclasses.fields(arg.annotation):
-            child_name = create_flat_name(arg.name, field.name)
+        for field in dataclasses.fields(arg_meta.annotation):
+            child_name = create_flat_name(arg_meta.name, field.name)
             if name == child_name:
                 return True
             if is_runtime_member_name([ArgMetadata(field.type, child_name)], name):
@@ -295,32 +397,45 @@ def is_runtime_member_name(arguments: list[ArgMetadata], name: str) -> bool:
 
 
 @contextmanager
-def dataclass_call_arguments(func, args, keywords, bound: bool = False):
+def dataclass_call_arguments(
+    func: "QuadrantsCallable | BoundQuadrantsCallable",
+    args: Sequence[ast.expr],
+    keywords: Sequence[ast.keyword],
+    bound: bool = False,
+) -> Iterator[None]:
     """Carry a caller's inferred structures across the pre-flattening boundary of an inlined function call."""
-    wrapper = func.wrapper
-    original = wrapper.arg_metas
-    expanded = wrapper.arg_metas_expanded
-    declared = wrapper.orig_arguments
-    metas = list(declared)
+    wrapper = cast("FuncBase", func.wrapper)
+    original_arg_metas = wrapper.arg_metas
+    expanded_arg_metas = wrapper.arg_metas_expanded
+    declared_arg_metas = wrapper.orig_arguments
+    arg_metas = list(declared_arg_metas)
     offset = int(bound)
-    values = {meta.name: arg.ptr for meta, arg in zip(metas[offset:], args)}
-    values.update((kw.arg, kw.ptr[kw.arg]) for kw in keywords)
-    for i, meta in enumerate(metas):
-        if meta.name not in values:
+    py_objs = {meta.name: getattr(arg, "ptr") for meta, arg in zip(arg_metas[offset:], args)}
+    py_objs.update((kw.arg, getattr(kw, "ptr")[kw.arg]) for kw in keywords)
+    for i, meta in enumerate(arg_metas):
+        if meta.name not in py_objs:
+            if hasattr(type(meta.default), "__dataclass_fields__"):
+                raise QuadrantsRuntimeTypeError(
+                    f"Omitted dataclass defaults are not supported in @qd.func. Pass {meta.name!r} explicitly."
+                )
             continue
-        value = values[meta.name]
-        if isinstance(value, type) and hasattr(value, "_qd_runtime_origin"):
-            schema = value
-        elif hasattr(type(value), "__dataclass_fields__") or is_dataclass_annotation(meta.annotation):
-            schema = resolve_dataclass(value, meta.name)
+        py_obj = py_objs[meta.name]
+        if isinstance(py_obj, type) and hasattr(py_obj, "_qd_runtime_origin"):
+            schema = py_obj
+        elif hasattr(type(py_obj), "__dataclass_fields__"):
+            schema = infer_dataclass_type(cast(DataclassInstance, py_obj), meta.name)
+        elif is_dataclass_annotation(meta.annotation):
+            raise QuadrantsRuntimeTypeError(
+                f"Argument {meta.name!r} requires a Python dataclass instance, got {type(py_obj).__name__}"
+            )
         else:
             continue
-        metas[i] = ArgMetadata(schema, meta.name, meta.default, optional=meta.optional)
-    wrapper.arg_metas = metas
-    wrapper.orig_arguments = metas
+        arg_metas[i] = ArgMetadata(schema, meta.name, meta.default, optional=meta.optional)
+    wrapper.arg_metas = arg_metas
+    wrapper.orig_arguments = arg_metas
     try:
         yield
     finally:
-        wrapper.arg_metas = original
-        wrapper.orig_arguments = declared
-        wrapper.arg_metas_expanded = expanded
+        wrapper.arg_metas = original_arg_metas
+        wrapper.orig_arguments = declared_arg_metas
+        wrapper.arg_metas_expanded = expanded_arg_metas

@@ -63,7 +63,7 @@ def main():
         assert read(state) == 2
         report["cases"][f"{groups}x{width}"] = {
             "schema": measure(
-                lambda: _runtime_dataclass.resolve_dataclass(state, "state"), args.iterations, args.repeats
+                lambda: _runtime_dataclass.infer_dataclass_type(state, "state"), args.iterations, args.repeats
             ),
             "dispatch": measure(lambda: read._primal.ensure_compiled(state), args.iterations, args.repeats),
             "specializations": len(read._primal.materialized_kernels),
