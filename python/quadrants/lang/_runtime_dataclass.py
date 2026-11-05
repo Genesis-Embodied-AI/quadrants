@@ -28,8 +28,8 @@ from quadrants.lang._runtime_dataclass_cache import (
     invalidate_tensor_bindings,
 )
 from quadrants.lang._runtime_dataclass_final import (
+    get_final_field_names,
     runtime_final_type,
-    validate_final_field_declarations,
 )
 from quadrants.lang._runtime_dataclass_guards import FrozenSchemaEntry
 from quadrants.lang._weak_identity_cache import WeakIdentityCache
@@ -179,7 +179,7 @@ def infer_dataclass_type(
             return cached_schema.schema
     elif cached_schema is not None:
         return cached_schema
-    finals, final_errors = validate_final_field_declarations(dataclass_type)
+    finals = get_final_field_names(dataclass_type)
     plan = _field_plans.get(id(dataclass_type))
     if plan is None:
         plan = (
@@ -189,7 +189,11 @@ def infer_dataclass_type(
         _field_plans[id(dataclass_type)] = plan
     _, field_plan = plan
     params = getattr(dataclass_type, "__dataclass_params__")
-    stable = params.frozen and not finals and not final_errors
+    container_prevents_rebinding = params.frozen or params.unsafe_hash
+    final_non_frozen_path = non_frozen_ancestor_path
+    if not container_prevents_rebinding:
+        final_non_frozen_path = dataclass_type.__name__
+    stable = params.frozen and not finals
     if stable:
         try:
             ref(dataclass_instance)
@@ -199,16 +203,14 @@ def infer_dataclass_type(
     member_types = []
     has_deferred = False
     for name, field, is_final in field_plan:
-        if name in final_errors:
-            member_type = final_errors[name]
-        elif is_final:
+        if is_final:
             member_type = runtime_final_type(
-                getattr(dataclass_instance, name), non_frozen_ancestor_path, name, final_value_key_by_value_id
+                getattr(dataclass_instance, name), final_non_frozen_path, name, final_value_key_by_value_id
             )
         else:
             child = getattr(dataclass_instance, name)
             child_non_frozen_ancestor_path = None
-            if not (params.frozen or params.unsafe_hash):
+            if not container_prevents_rebinding:
                 child_non_frozen_ancestor_path = f"{dataclass_type.__name__}.{name}"
             elif non_frozen_ancestor_path is not None:
                 child_non_frozen_ancestor_path = f"{non_frozen_ancestor_path}.{name}"

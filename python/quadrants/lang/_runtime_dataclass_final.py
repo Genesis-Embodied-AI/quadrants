@@ -1,65 +1,29 @@
 """Discover Final members without letting an unsupported sibling reject an inferred dataclass."""
 
-import copy
 import dataclasses
 import typing
 
-from quadrants.lang._deferred_dataclass import DeferredMemberType, deferred_member
+from quadrants.lang._deferred_dataclass import deferred_member
 from quadrants.lang._final_annotation import is_final_field_annotation
-from quadrants.lang._final_dataclass_fields import (
-    final_field_names,
-    final_scalar_key,
-    is_final_annotation,
-)
+from quadrants.lang._final_dataclass_fields import final_scalar_key
 
-# Class identity maps to the retained class, validated Final field names, and deferred declaration errors.
+# Class identity maps to the retained class and its Final field names.
 # This cache retains classes, assuming applications define relatively few dataclass types.
-_final_declaration_validation_by_dataclass_type_id: dict[
-    int, tuple[type, frozenset[str], dict[str, DeferredMemberType]]
-] = {}
+_final_field_names_by_dataclass_type_id: dict[int, tuple[type, frozenset[str]]] = {}
 
 
-def validate_final_field_declarations(dataclass_type: type) -> tuple[frozenset[str], dict[str, DeferredMemberType]]:
-    """Find Final markers and defer invalid container declarations until the affected member is used.
-
-    Inner annotations are ignored. Nested paths are checked against arriving objects by the schema builder.
-    """
-    cached = _final_declaration_validation_by_dataclass_type_id.get(id(dataclass_type))
+def get_final_field_names(dataclass_type: type) -> frozenset[str]:
+    """Find and cache Final markers without checking their values or container constraints."""
+    cached = _final_field_names_by_dataclass_type_id.get(id(dataclass_type))
     if cached is not None and cached[0] is dataclass_type:
-        return cached[1], cached[2]
-    fields = {}
-    for field in dataclasses.fields(dataclass_type):
-        copied = copy.copy(field)
-        if is_final_field_annotation(dataclass_type, field.name, field.type):
-            copied.type = typing.Final
-        else:
-            # Ordinary annotations must not be reinterpreted in the temporary class, which lacks source aliases.
-            copied.type = object
-        fields[field.name] = copied
-    attributes = {
-        "__module__": dataclass_type.__module__,
-        "__annotations__": dict(dataclass_type.__annotations__),
-        "__dataclass_fields__": fields,
-        "__dataclass_params__": dataclass_type.__dataclass_params__,
-        "_qd_runtime_origin": dataclass_type,
-    }
-    direct = type(dataclass_type.__name__, (), attributes)
-    errors = {}
-    try:
-        names = final_field_names(direct)
-    except TypeError:
-        found = set()
-        for name, field in fields.items():
-            single = type(dataclass_type.__name__, (), {**attributes, "__dataclass_fields__": {name: field}})
-            try:
-                found.update(final_field_names(single))
-            except TypeError as error:
-                if not is_final_annotation(field.type):
-                    raise
-                errors[name] = deferred_member(TypeError, str(error))
-        names = frozenset(found)
-    _final_declaration_validation_by_dataclass_type_id[id(dataclass_type)] = (dataclass_type, names, errors)
-    return names, errors
+        return cached[1]
+    names = frozenset(
+        field.name
+        for field in dataclasses.fields(dataclass_type)
+        if is_final_field_annotation(dataclass_type, field.name, field.type)
+    )
+    _final_field_names_by_dataclass_type_id[id(dataclass_type)] = (dataclass_type, names)
+    return names
 
 
 def runtime_final_type(value, non_frozen_ancestor_path: str | None, name: str, final_value_key_by_value_id=None):
