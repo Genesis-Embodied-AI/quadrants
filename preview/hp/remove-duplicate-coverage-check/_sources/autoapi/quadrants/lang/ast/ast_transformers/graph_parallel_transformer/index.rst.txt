@@ -1,0 +1,90 @@
+quadrants.lang.ast.ast_transformers.graph_parallel_transformer
+==============================================================
+
+.. py:module:: quadrants.lang.ast.ast_transformers.graph_parallel_transformer
+
+.. autoapi-nested-parse::
+
+   AST recognition, validation, and lowering for ``qd.graph_parallel_context()`` / ``qd.graph_parallel()`` blocks.
+
+   Lives alongside ``checkpoint_transformer.py`` / ``function_def_transformer.py`` so that ``ast_transformer.py`` doesn't
+   have to grow per-feature. ``ASTTransformer.build_With`` forwards ``qd.graph_parallel_context()`` regions and their
+   ``qd.graph_parallel()`` sections into the static methods here.
+
+   A ``qd.graph_parallel_context()`` region tags its body with a per-kernel region id (via
+   ``begin/end_graph_parallel_context``) and each ``qd.graph_parallel()`` section inside lowers to a stream-parallel group
+   (via ``begin/end_stream_parallel``). The graph builder forks the distinct groups of one region in a contiguous run and
+   joins them; the region id keeps two back-to-back regions apart (each gets its own join). See
+   ``docs/source/user_guide/graph.md`` for the user-facing surface.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer
+
+
+Module Contents
+---------------
+
+.. py:class:: GraphParallelTransformer
+
+   .. py:method:: is_graph_parallel_context_call(node: ast.expr) -> bool
+      :staticmethod:
+
+
+      If *node* is a ``qd.graph.parallel_context()`` (or deprecated ``qd.graph_parallel_context()``) call return
+      True, else False.
+
+
+
+   .. py:method:: is_parallel_section_call(node: ast.expr) -> bool
+      :staticmethod:
+
+
+      If *node* is a ``qd.graph.parallel()`` (or deprecated ``qd.graph_parallel()``) section call return True, else
+      False. The call shape is validated here so misuse raises at the ``with`` site rather than later.
+
+
+
+   .. py:method:: build_graph_parallel_context_with(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.With, build_stmts) -> None
+      :staticmethod:
+
+
+      Handles ``with qd.graph_parallel_context():`` fork/join regions.
+
+      Validates the use-site (kernel must be graph=True, no nesting), then validates the whole region grammar up-front
+      via ``validate_region`` (the single source of truth for what a region / section may contain), then walks the
+      body. The region is bracketed with begin/end_graph_parallel_context() so its body carries a per-kernel region id,
+      and each ``qd.graph_parallel`` section inside lowers to a stream-parallel group (via begin/end_stream_parallel).
+      The graph builder forks the distinct groups of one region in a contiguous run and joins them; the region id keeps
+      two back-to-back regions apart (each gets its own join).
+
+
+
+   .. py:method:: validate_region(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.With) -> None
+      :staticmethod:
+
+
+      Validate an entire ``qd.graph_parallel_context()`` region (body + every section's body) up-front. The single
+      entry point for the region/section grammar; see the block comment above.
+
+
+
+   .. py:method:: build_parallel_section_with(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.With, build_stmts) -> None
+      :staticmethod:
+
+
+      Handles a ``with qd.graph_parallel():`` section of a ``qd.graph_parallel_context()`` region.
+
+      The section body grammar is validated up-front by ``validate_region`` (called from
+      ``build_graph_parallel_context_with``); here we only re-check the use-site (a section must be inside a region --
+      a case ``validate_region`` never sees) and then reuse the stream-parallel tagging: begin_stream_parallel()
+      assigns this ``qd.graph_parallel`` section a fresh ``stream_parallel_group_id`` that every for-loop in the body
+      inherits, so the offloaded tasks carry the ``qd.graph_parallel`` section id all the way to the graph builder.
+
+
+
