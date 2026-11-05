@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Combine kernel coverage data and generate diff coverage reports.
 
+Exit code 42 indicates a completed report with diff coverage below 80%.
+
 Run tests first with run_tests.py --coverage, then use this script:
 
   # Local dev: combine coverage data and generate HTML diff report
@@ -474,12 +476,6 @@ def main():
         help="Path(s) to coverage.xml file(s). Default: coverage.xml in repo root",
     )
     parser.add_argument(
-        "--fail-under",
-        type=float,
-        default=80,
-        help="Fail below this diff coverage percentage (default: 80; use 0 for informational reports)",
-    )
-    parser.add_argument(
         "--format",
         dest="output_format",
         default="html",
@@ -517,7 +513,7 @@ def main():
         sys.exit(1)
 
     total_pct = generate_report(args.compare_branch, xml_paths, args.output_format, output_path=args.output)
-    return 0 if total_pct >= args.fail_under else 1
+    return 0 if total_pct >= 80 else 42
 
 
 if __name__ == "__main__":
