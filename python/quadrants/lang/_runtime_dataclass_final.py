@@ -2,8 +2,10 @@
 
 import copy
 import dataclasses
+import typing
 
 from quadrants.lang._deferred_dataclass import DeferredMemberType, deferred_member
+from quadrants.lang._final_annotation import is_final_field_annotation
 from quadrants.lang._final_dataclass_fields import (
     final_field_names,
     final_scalar_key,
@@ -18,11 +20,9 @@ _final_declaration_validation_by_dataclass_type_id: dict[
 
 
 def validate_final_field_declarations(dataclass_type: type) -> tuple[frozenset[str], dict[str, DeferredMemberType]]:
-    """Reuse legacy declaration validation, isolating unsupported Final members in a per-field fallback.
+    """Find Final markers and defer invalid container declarations until the affected member is used.
 
-    Ordinary nested annotations must not introduce phantom children. Nested Final paths are checked against the
-    arriving values by the runtime schema builder. Malformed declarations (bare or unresolved Final) keep their
-    existing eager diagnostic; only real Final[T] members can defer unsupported-type or mutable-carrier errors.
+    Inner annotations are ignored. Nested paths are checked against arriving objects by the schema builder.
     """
     cached = _final_declaration_validation_by_dataclass_type_id.get(id(dataclass_type))
     if cached is not None and cached[0] is dataclass_type:
@@ -30,7 +30,9 @@ def validate_final_field_declarations(dataclass_type: type) -> tuple[frozenset[s
     fields = {}
     for field in dataclasses.fields(dataclass_type):
         copied = copy.copy(field)
-        if isinstance(field.type, type) and dataclasses.is_dataclass(field.type):
+        if is_final_field_annotation(dataclass_type, field.name, field.type):
+            copied.type = typing.Final
+        elif isinstance(field.type, type) and dataclasses.is_dataclass(field.type):
             copied.type = object
         fields[field.name] = copied
     attributes = {
@@ -59,9 +61,7 @@ def validate_final_field_declarations(dataclass_type: type) -> tuple[frozenset[s
     return names, errors
 
 
-def runtime_final_type(
-    annotation, value, non_frozen_ancestor_path: str | None, name: str, final_value_key_by_value_id=None
-):
+def runtime_final_type(value, non_frozen_ancestor_path: str | None, name: str, final_value_key_by_value_id=None):
     """Return a valid Final annotation or a deferred diagnostic for the current arriving value/path."""
     if non_frozen_ancestor_path is not None:
         parent_name = non_frozen_ancestor_path.split(".", 1)[0]
@@ -80,7 +80,8 @@ def runtime_final_type(
                 final_value_key_by_value_id[id(value)] = (value, key)
         except TypeError as error:
             return deferred_member(TypeError, str(error))
-    return annotation
+    # A schema needs only the marker; the specialization key and compiler retain the actual value and its type.
+    return typing.Final
 
 
 def runtime_final_key(value, final_value_key_by_value_id):
