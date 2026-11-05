@@ -191,17 +191,18 @@ jobs:
           name: coverage-report
           path: coverage-check.md
       - name: Write coverage report to job summary
-        if: always()
-        run: |
-          # Job summaries allow up to 1 MiB; leave room for the truncation notice.
-          MAX_BYTES=900000
-          if [ "$(wc -c < coverage-check.md)" -gt "$MAX_BYTES" ]; then
-            head -c "$MAX_BYTES" coverage-check.md >> "$GITHUB_STEP_SUMMARY"
-            printf '\n\n---\n*Report truncated. Download the full report from the workflow artifacts.*\n' \
-              >> "$GITHUB_STEP_SUMMARY"
-          else
-            cat coverage-check.md >> "$GITHUB_STEP_SUMMARY"
-          fi
+        if: always() && hashFiles('coverage-check.md') != ''
+        id: publish_report
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            let body = fs.readFileSync('coverage-check.md', 'utf8');
+            const MAX_TEXT = 65000;
+            if (body.length > MAX_TEXT) {
+              body = body.substring(0, MAX_TEXT) + '\n\n---\n*Report truncated. Download the full report from the workflow artifacts.*';
+            }
+            await core.summary.addRaw(body).write();
       - name: Publish coverage status
         if: always()
         uses: actions/github-script@v8
