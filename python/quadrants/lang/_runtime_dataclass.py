@@ -28,8 +28,8 @@ from quadrants.lang._runtime_dataclass_cache import (
     invalidate_tensor_bindings,
 )
 from quadrants.lang._runtime_dataclass_final import (
-    runtime_final_plan,
     runtime_final_type,
+    validate_final_field_declarations,
 )
 from quadrants.lang._runtime_dataclass_guards import FrozenSchemaEntry
 from quadrants.lang._weak_identity_cache import WeakIdentityCache
@@ -179,7 +179,7 @@ def infer_dataclass_type(
             return cached_schema.schema
     elif cached_schema is not None:
         return cached_schema
-    finals, final_errors = runtime_final_plan(dataclass_type)
+    finals, final_errors = validate_final_field_declarations(dataclass_type)
     plan = _field_plans.get(id(dataclass_type))
     if plan is None:
         plan = (

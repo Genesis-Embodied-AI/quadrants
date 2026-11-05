@@ -13,7 +13,7 @@ from quadrants.lang._final_dataclass_fields import (
 _plans: dict[int, tuple[type, frozenset[str], dict[str, DeferredMemberType]]] = {}
 
 
-def runtime_final_plan(source: type) -> tuple[frozenset[str], dict[str, DeferredMemberType]]:
+def validate_final_field_declarations(source: type) -> tuple[frozenset[str], dict[str, DeferredMemberType]]:
     """Reuse legacy declaration validation, isolating unsupported Final members in a per-field fallback.
 
     Ordinary nested annotations must not introduce phantom children. Nested Final paths are checked against the
