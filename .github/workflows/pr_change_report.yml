@@ -41,8 +41,9 @@ jobs:
             --output-dir /tmp/pr_change_report \
             --commit-hash "$SHORT_SHA"
 
-          # summary.json includes all supported changes. The agent-input subset in file_list.txt excludes deleted files
-          # and Markdown/shell/YAML, so it cannot be used to decide whether there is a report to publish.
+          # summary.json includes all supported changes. The agent-input subset in function_attribution_files.txt
+          # excludes deleted files and Markdown/shell/YAML, so it cannot be used to decide whether there is a report to
+          # publish.
           NUM_FILES=$(jq 'length' /tmp/pr_change_report/summary.json)
           if [ "$NUM_FILES" -eq 0 ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
@@ -55,11 +56,11 @@ jobs:
             cat /tmp/pr_change_report/report_header.md
 
             # Only non-deleted Python/C++ files need the per-function agent step.
-            if [ -s /tmp/pr_change_report/file_list.txt ]; then
+            if [ -s /tmp/pr_change_report/function_attribution_files.txt ]; then
               echo "skip_agent=false" >> "$GITHUB_OUTPUT"
               echo
               echo "Files for agent attribution:"
-              cat /tmp/pr_change_report/file_list.txt
+              cat /tmp/pr_change_report/function_attribution_files.txt
             else
               echo "skip_agent=true" >> "$GITHUB_OUTPUT"
               echo
@@ -84,8 +85,8 @@ jobs:
           lines yourself.
 
           Inputs under /tmp/pr_change_report/ :
-            - file_list.txt        changed source paths (.py / .c / .cc / .cpp / .h / .hpp /
-                                   .cu), one per line.
+            - function_attribution_files.txt
+                                   changed source paths (.py / .c / .cc / .cpp / .h / .hpp / .cu), one per line.
             - touched_ranges.txt   per-file, the line-number ranges in HEAD and base that the
                                    diff hunks cover. This tells you exactly where to look --
                                    you should only need to inspect lines inside (or close to)
@@ -95,10 +96,10 @@ jobs:
                                    workspace at the same path).
             - base/<path>          full base content (missing if the file is newly added).
 
-          For each file in file_list.txt, identify every function or method whose body
+          For each file in function_attribution_files.txt, identify every function or method whose body
           contains at least one ``+`` or ``-`` line in the diff. Emit ONE JSON object per
           such function on its own line, with these keys:
-            path : the file path, exactly as it appears in file_list.txt.
+            path : the file path, exactly as it appears in function_attribution_files.txt.
             name : the function or method name. C++ class methods MUST be
                    "ClassName::method"; free functions are just "func". Use the synthetic
                    name "<module>" ONLY for top-level non-function code (imports,
