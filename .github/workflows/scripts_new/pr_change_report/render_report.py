@@ -349,9 +349,7 @@ def render(summary_json: Path, jsonl_path: Path, output_dir: Path) -> str:
         removed = sum(s.removed for s in group_files)
         total_added += added
         total_removed += removed
-        out_lines.extend(
-            [f"{group_name}: {len(group_files)} file(s) changed, +{added} -{removed} counted lines.", ""]
-        )
+        out_lines.extend([f"{group_name}: {len(group_files)} file(s) changed, +{added} -{removed} counted lines.", ""])
         for s in group_files:
             book = _build_file_bookkeeping(summaries_by_path[s.path], output_dir)
             attributed = _attribute_all(by_path.get(book.path, []), book)
