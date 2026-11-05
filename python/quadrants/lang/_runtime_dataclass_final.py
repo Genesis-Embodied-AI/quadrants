@@ -32,7 +32,8 @@ def validate_final_field_declarations(dataclass_type: type) -> tuple[frozenset[s
         copied = copy.copy(field)
         if is_final_field_annotation(dataclass_type, field.name, field.type):
             copied.type = typing.Final
-        elif isinstance(field.type, type) and dataclasses.is_dataclass(field.type):
+        else:
+            # Ordinary annotations must not be reinterpreted in the temporary class, which lacks source aliases.
             copied.type = object
         fields[field.name] = copied
     attributes = {

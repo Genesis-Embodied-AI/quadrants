@@ -52,4 +52,4 @@ def is_final_field_annotation(dataclass_type: type, field_name: str, annotation:
         if not isinstance(value, (types.ModuleType, type)):
             return False
         value = vars(value).get(part, _MISSING)
-    return value is typing.Final
+    return is_final_annotation(value)

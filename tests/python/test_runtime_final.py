@@ -157,3 +157,20 @@ def test_nonfinal_string_annotation_is_not_a_marker():
     assert run(State(1, 2, 3)) == 6
     assert run(State(2, 3, 4)) == 9
     assert len(run._primal.materialized_kernels) == 1
+
+
+@test_utils.test()
+def test_string_alias_to_subscripted_final():
+    @dataclasses.dataclass(frozen=True)
+    class State:
+        Constant = typing.Final[list]
+        value: "Constant"
+
+    @qd.kernel
+    def run(state: qd.RuntimeTyped) -> qd.i32:
+        return qd.static(state.value)
+
+    assert run(State(3)) == 3
+    assert run(State(5)) == 5
+    assert run(State(3)) == 3
+    assert len(run._primal.materialized_kernels) == 2
