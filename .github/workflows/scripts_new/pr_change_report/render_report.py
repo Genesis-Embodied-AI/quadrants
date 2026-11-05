@@ -51,7 +51,7 @@ from build_inputs import (  # noqa: E402  (import after sys.path tweak)
     diff_changed_line_numbers,
     format_header,
     format_totals,
-    group_summaries,
+    get_group_summaries_by_name,
 )
 
 
@@ -339,7 +339,7 @@ def render(summary_json: Path, jsonl_path: Path, output_dir: Path) -> str:
     by_path = _load_function_entries(jsonl_path)
 
     out_lines: list[str] = []
-    groups = group_summaries([FileSummary(**s) for s in summaries])
+    groups = get_group_summaries_by_name([FileSummary(**s) for s in summaries])
     summaries_by_path = {s["path"]: s for s in summaries}
     for name, files in groups.items():
         if not files:

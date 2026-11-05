@@ -373,7 +373,8 @@ def format_header(s: FileSummary) -> str:
     return " ".join(parts)
 
 
-GROUPS = ("docs", "c++", "python", "tests", "github", "misc")
+MISC_GROUP_NAME = "misc"
+GROUPS = ("docs", "c++", "python", "tests", "github", MISC_GROUP_NAME)
 _GROUP_BY_FOLDER_NAME = {
     "docs": "docs",
     "quadrants": "c++",
@@ -384,12 +385,12 @@ _GROUP_BY_FOLDER_NAME = {
 }
 
 
-def group_summaries(summaries: list[FileSummary]) -> dict[str, list[FileSummary]]:
+def get_group_summaries_by_name(summaries: list[FileSummary]) -> dict[str, list[FileSummary]]:
     """Group by top-level folder, keeping the existing impact order within each group."""
     summaries_by_group_name: dict[str, list[FileSummary]] = {name: [] for name in GROUPS}
     for summary in summaries:
         folder, separator, _ = summary.path.partition("/")
-        group = _GROUP_BY_FOLDER_NAME.get(folder, "misc") if separator else "misc"
+        group = _GROUP_BY_FOLDER_NAME.get(folder, MISC_GROUP_NAME) if separator else MISC_GROUP_NAME
         summaries_by_group_name[group].append(summary)
     return summaries_by_group_name
 
@@ -411,7 +412,7 @@ def render_comment_markdown(summaries: list[FileSummary], commit: str) -> str:
         return "\n".join(lines) + "\n"
     lines.append("LoC = counted lines in the file BEFORE this PR (0 for newly-added files). " + COUNTING_NOTE)
     lines.append("")
-    groups = group_summaries(summaries)
+    groups = get_group_summaries_by_name(summaries)
     lines.append("| Group | Files | Added | Removed |")
     lines.append("|-------|-------|-------|---------|")
     for name, files in [*groups.items(), ("**Total**", summaries)]:
