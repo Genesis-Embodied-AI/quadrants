@@ -14,11 +14,26 @@ For each supported file changed in the PR (Python, C/C++, Markdown, shell, YAML)
 
 ``total`` is the number of code lines in the BASE (pre-PR, merge-base) version of the file, i.e. the size of the file
 before this PR's changes. For newly-added files this is 0. ``added`` and ``removed`` are the number of code lines added
-or removed by this PR (vs. merge-base). A "code line" excludes blank lines, lines whose only non-whitespace content is a
-comment, and (in Python) lines whose only token content is a string literal (i.e. docstrings and continuation lines of
-multi-line strings). C/C++ ``/* ... */`` block comments are stripped before counting. Markdown counts all nonblank
-lines. Shell and YAML use a line-based heuristic: skip blank and ``#``-prefixed lines, except shell shebangs. This does
-not parse multiline strings, YAML block scalars, or shell heredocs; ``#``-prefixed content inside them is also excluded.
+or removed by this PR (vs. merge-base).
+
+Counting rules:
+
++--------------+--------------------------------------------------------------------------------------------------+
+| File type    | Counting rule                                                                                    |
++==============+==================================================================================================+
+| All          | Exclude blank lines.                                                                             |
++--------------+--------------------------------------------------------------------------------------------------+
+| Python       | Exclude comment-only lines and lines whose only token content is a string literal (including     |
+|              | docstrings and continuation lines of multi-line strings).                                        |
++--------------+--------------------------------------------------------------------------------------------------+
+| C/C++        | Exclude comment-only lines. Strip /* ... */ block comments before counting.                      |
++--------------+--------------------------------------------------------------------------------------------------+
+| Markdown     | Count all nonblank lines.                                                                        |
++--------------+--------------------------------------------------------------------------------------------------+
+| Shell/YAML   | Skip lines starting with # after whitespace, except shell shebangs. This line-based heuristic    |
+|              | does not parse multiline strings, YAML block scalars, or shell heredocs; #-prefixed content      |
+|              | inside them is also excluded.                                                                    |
++--------------+--------------------------------------------------------------------------------------------------+
 
 The agent consumes these inputs to produce the per-function breakdown.
 """
