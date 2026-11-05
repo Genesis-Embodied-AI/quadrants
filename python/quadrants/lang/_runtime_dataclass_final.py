@@ -10,7 +10,10 @@ from quadrants.lang._final_dataclass_fields import (
     is_final_annotation,
 )
 
-_plans: dict[int, tuple[type, frozenset[str], dict[str, DeferredMemberType]]] = {}
+# Class identity maps to the retained class, validated Final field names, and deferred declaration errors.
+_final_declaration_validation_by_dataclass_type_id: dict[
+    int, tuple[type, frozenset[str], dict[str, DeferredMemberType]]
+] = {}
 
 
 def validate_final_field_declarations(source: type) -> tuple[frozenset[str], dict[str, DeferredMemberType]]:
@@ -20,7 +23,7 @@ def validate_final_field_declarations(source: type) -> tuple[frozenset[str], dic
     arriving values by the runtime schema builder. Malformed declarations (bare or unresolved Final) keep their
     existing eager diagnostic; only real Final[T] members can defer unsupported-type or mutable-carrier errors.
     """
-    cached = _plans.get(id(source))
+    cached = _final_declaration_validation_by_dataclass_type_id.get(id(source))
     if cached is not None and cached[0] is source:
         return cached[1], cached[2]
     fields = {}
@@ -51,7 +54,7 @@ def validate_final_field_declarations(source: type) -> tuple[frozenset[str], dic
                     raise
                 errors[name] = deferred_member(TypeError, str(error))
         names = frozenset(found)
-    _plans[id(source)] = (source, names, errors)
+    _final_declaration_validation_by_dataclass_type_id[id(source)] = (source, names, errors)
     return names, errors
 
 
