@@ -38,8 +38,8 @@ jobs:
           SHORT_SHA=$(echo "${HEAD_SHA:-$(git rev-parse HEAD)}" | cut -c1-9)
           python .github/workflows/scripts_new/pr_change_report/build_inputs.py \
             --base-ref "$BASE_REF" \
-            --output-dir /tmp/pr_change_report \
-            --commit-hash "$SHORT_SHA"
+            --output-dir /tmp/pr_change_report
+          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
 
           # summary.json includes all supported changes. The agent-input subset in
           # files_needing_function_attribution.txt excludes deleted files and Markdown/shell/YAML, so it cannot be used
@@ -51,9 +51,6 @@ jobs:
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
             echo "Files in summary.json: $NUM_FILES"
-            echo
-            echo "Pre-computed file headers:"
-            cat /tmp/pr_change_report/report_header.md
 
             # Only non-deleted Python/C++ files need the per-function agent step.
             if [ -s /tmp/pr_change_report/files_needing_function_attribution.txt ]; then
@@ -139,33 +136,20 @@ jobs:
           cat /tmp/pr_change_report/function_ranges.jsonl
           echo "---------------------------------"
 
-      - name: Render report.md deterministically
+      - name: Render report artifacts deterministically
         if: steps.inputs.outputs.skip != 'true'
+        env:
+          SHORT_SHA: ${{ steps.inputs.outputs.short_sha }}
         run: |
           python .github/workflows/scripts_new/pr_change_report/render_report.py \
             --output-dir /tmp/pr_change_report \
             --function-ranges /tmp/pr_change_report/function_ranges.jsonl \
-            --output /tmp/pr_change_report/report.md
+            --output /tmp/pr_change_report/report.md \
+            --commit-hash "$SHORT_SHA"
 
           echo "----- report.md -----"
           cat /tmp/pr_change_report/report.md
           echo "----------------------"
-
-      - name: Assemble Check-page markdown
-        if: steps.inputs.outputs.skip != 'true'
-        run: |
-          {
-            cat /tmp/pr_change_report/report_comment.md
-            echo
-            echo "## Per-function breakdown (Python/C++ only)"
-            echo
-            cat /tmp/pr_change_report/report.md
-          } > /tmp/pr_change_report/report_check.md
-
-          echo "----- report_check.md (head) -----"
-          head -40 /tmp/pr_change_report/report_check.md
-          echo "..."
-          echo "size: $(wc -c < /tmp/pr_change_report/report_check.md) bytes"
 
       - name: Upload report artifacts
         if: steps.inputs.outputs.skip != 'true'

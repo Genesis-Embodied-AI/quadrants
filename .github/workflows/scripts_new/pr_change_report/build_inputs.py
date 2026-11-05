@@ -6,8 +6,6 @@ For each supported file changed in the PR (Python, C/C++, Markdown, shell, YAML)
   ``<output_dir>/summary.json``        list of ``{path, language, total, added, removed, is_deleted}``
   ``<output_dir>/files_needing_function_attribution.txt``
                                      Python/C++ paths sent to the function-attribution agent (one per line)
-  ``<output_dir>/report_header.md``    pre-formatted file-header lines (verbatim for the report)
-  ``<output_dir>/report_comment.md``   compact PR-comment markdown (table + totals line)
   ``<output_dir>/diffs/<path>.diff``   per-file unified diff vs. merge-base
   ``<output_dir>/head/<path>``         HEAD content of the file (always present)
   ``<output_dir>/base/<path>``         file content at merge-base (absent for newly added files)
@@ -40,7 +38,8 @@ Counting rules:
 |              | inside them is also excluded.                                                                    |
 +--------------+--------------------------------------------------------------------------------------------------+
 
-The agent consumes these inputs to produce the per-function breakdown.
+The agent identifies function ranges from these inputs. ``render_report.py`` uses the inputs and agent output to render
+all report artifacts.
 """
 
 from __future__ import annotations
@@ -58,12 +57,6 @@ from pathlib import Path
 PY_EXTS = {".py"}
 CPP_EXTS = {".c", ".cc", ".cpp", ".h", ".hpp", ".cu"}
 TEXT_LANGUAGE_BY_EXTENSION = {".md": "md", ".sh": "sh", ".yaml": "yaml", ".yml": "yaml"}
-COUNTING_NOTE = (
-    "Counts exclude blank lines. Python/C++ exclude comment-only lines; Python also excludes "
-    "string-literal-only lines. Markdown counts all nonblank lines. Shell/YAML skip lines starting "
-    "with # after whitespace (shell shebangs count); this heuristic also skips #-prefixed data "
-    "inside multiline strings, YAML block scalars, and shell heredocs."
-)
 
 
 def run_git(args: list[str], *, check: bool = True) -> str:
@@ -220,7 +213,7 @@ def _cpp_code_line_set(src: str) -> set[int]:
 
 
 def code_line_set(src: str, language: str) -> set[int]:
-    """Return 1-indexed counted lines using the language rules described in ``COUNTING_NOTE``."""
+    """Return 1-indexed counted lines using the language rules documented at module level."""
     if not src:
         return set()
     if language == "py":
@@ -365,113 +358,11 @@ def write_file(path: Path, content: str) -> None:
     path.write_text(content)
 
 
-def format_header(s: FileSummary) -> str:
-    parts = [s.path, str(s.total)]
-    if s.added or not s.removed:
-        parts.append(f"+{s.added}")
-    if s.removed:
-        parts.append(f"-{s.removed}")
-    return " ".join(parts)
-
-
-MISC_GROUP_NAME = "misc"
-GROUPS = ("docs", "c++", "python", "tests", "github", MISC_GROUP_NAME)
-_GROUP_BY_FOLDER_NAME = {
-    "docs": "docs",
-    "quadrants": "c++",
-    "cmake": "c++",
-    "python": "python",
-    "tests": "tests",
-    ".github": "github",
-}
-
-
-def get_group_summaries_by_name(summaries: list[FileSummary]) -> dict[str, list[FileSummary]]:
-    """Group by top-level folder, keeping the existing impact order within each group."""
-    summaries_by_group_name: dict[str, list[FileSummary]] = {name: [] for name in GROUPS}
-    for summary in summaries:
-        folder, separator, _ = summary.path.partition("/")
-        group = _GROUP_BY_FOLDER_NAME.get(folder, MISC_GROUP_NAME) if separator else MISC_GROUP_NAME
-        summaries_by_group_name[group].append(summary)
-    return summaries_by_group_name
-
-
-def render_table(columns: list[str], rows: list[dict[str, str | int | float]]) -> list[str]:
-    """Render dictionary rows as a Markdown table in the specified column order."""
-    lines = ["| " + " | ".join(columns) + " |"]
-    lines.append("| " + " | ".join("---" for _ in columns) + " |")
-    for row in rows:
-        lines.append("| " + " | ".join(str(row[column]).replace("|", r"\|") for column in columns) + " |")
-    return lines
-
-
-def render_comment_markdown(summaries: list[FileSummary], commit: str) -> str:
-    """Render group totals and grouped per-file tables for the report summary."""
-    head = f"## PR change report (`{commit}`)\n" if commit else "## PR change report\n"
-    lines = [head]
-    if not summaries:
-        lines.append(
-            "No supported files (.py, .c, .cc, .cpp, .h, .hpp, .cu, .md, .sh, .yaml, .yml) changed in this PR."
-        )
-        return "\n".join(lines) + "\n"
-    lines.append("LoC = counted lines in the file BEFORE this PR (0 for newly-added files). " + COUNTING_NOTE)
-    lines.append("")
-    group_summaries_by_name = get_group_summaries_by_name(summaries)
-    group_rows: list[dict[str, str | int | float]] = []
-    for group_name, group_files in group_summaries_by_name.items():
-        group_rows.append(
-            {
-                "Group": group_name,
-                "Files": len(group_files),
-                "Added": sum(s.added for s in group_files),
-                "Removed": sum(s.removed for s in group_files),
-            }
-        )
-    total_added = sum(s.added for s in summaries)
-    total_removed = sum(s.removed for s in summaries)
-    group_rows.append(
-        {
-            "Group": "**Total**",
-            "Files": len(summaries),
-            "Added": total_added,
-            "Removed": total_removed,
-        }
-    )
-    lines.extend(render_table(["Group", "Files", "Added", "Removed"], group_rows))
-
-    for group_name, group_files in group_summaries_by_name.items():
-        if not group_files:
-            continue
-        lines.append("")
-        lines.append(f"### {group_name}")
-        lines.append("")
-        lines.append(
-            f"**Group total**: {len(group_files)} file(s) changed, "
-            f"+{sum(s.added for s in group_files)} -{sum(s.removed for s in group_files)} counted lines."
-        )
-        lines.append("")
-        file_rows: list[dict[str, str | int | float]] = []
-        for s in group_files:
-            file_rows.append(
-                {
-                    "File": f"`{s.path}`",
-                    "LoC": s.total,
-                    "Added": s.added,
-                    "Removed": s.removed,
-                }
-            )
-        lines.extend(render_table(["File", "LoC", "Added", "Removed"], file_rows))
-    lines.append("")
-    lines.append(f"**Total**: {len(summaries)} file(s) changed, +{total_added} -{total_removed} counted lines.")
-    return "\n".join(lines) + "\n"
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-ref", required=True, help="PR base ref name (e.g. main)")
     parser.add_argument("--head-ref", default="HEAD", help="PR head ref / sha (default: HEAD)")
     parser.add_argument("--output-dir", required=True, help="Where to write summary.json + diffs/ + base/")
-    parser.add_argument("--commit-hash", default="", help="Short commit hash to embed in the comment heading")
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
@@ -530,9 +421,7 @@ def main() -> int:
             )
         )
 
-    # Sort files by descending lines added, then descending lines removed, then path. This is the order used for every
-    # downstream artifact (summary.json, files_needing_function_attribution.txt, report_header.md, report_comment.md) so
-    # that each report group surfaces the largest-impact files first.
+    # Sort by descending additions, then descending removals, then path. Rendering preserves this order within each group.
     summaries.sort(key=lambda s: (-s.added, -s.removed, s.path))
 
     summary_dicts = [
@@ -554,11 +443,6 @@ def main() -> int:
         "".join(f"{s.path}\n" for s in files_needing_function_attribution)
     )
 
-    headers = "\n".join(format_header(s) for s in summaries)
-    (output_dir / "report_header.md").write_text(headers + ("\n" if headers else ""))
-
-    (output_dir / "report_comment.md").write_text(render_comment_markdown(summaries, args.commit_hash))
-
     touched_lines = []
     for s in files_needing_function_attribution:
         diff_text = (diffs_dir / f"{s.path}.diff").read_text()
@@ -569,9 +453,6 @@ def main() -> int:
     (output_dir / "touched_ranges.txt").write_text("\n".join(touched_lines) + ("\n" if touched_lines else ""))
 
     print(f"Wrote summaries for {len(summaries)} file(s) to {output_dir}")
-    if summaries:
-        print()
-        print(headers)
     return 0
 
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render the per-file / per-function PR change report as Markdown.
+"""Render all PR change report artifacts from prepared inputs and identified function ranges.
 
 Phase 1 is ``build_inputs.py``; phase 2 (this script) consumes those outputs plus the agent's JSONL output. The agent
 supplies function names and line ranges; counts are computed deterministically from the diffs and HEAD/base contents
@@ -8,6 +8,9 @@ using the same counting rules as ``build_inputs.py``.
 JSONL input (one object per line) -- emitted by the agent::
 
   {"path": "<path>", "name": "<func>", "head": [<start>, <end>] | null, "base": [<start>, <end>] | null}
+
+Output ``report_comment.md`` contains group and file tables; ``report_header.md`` contains compact file headers.
+``report_check.md`` combines the summary and detailed report for the workflow summary page.
 
 Output ``report.md`` contains folder-group headings, file totals, and per-function tables rendered by the shared
 ``render_table`` helper. Within each file, functions are split into New, Existing, and Deleted sections and sorted by
@@ -29,13 +32,119 @@ from pathlib import Path
 # Allow importing helper functions from ``build_inputs.py`` (in the same directory).
 sys.path.insert(0, str(Path(__file__).parent))
 from build_inputs import (  # noqa: E402  (import after sys.path tweak)
-    COUNTING_NOTE,
     FileSummary,
     code_line_set,
     diff_changed_line_numbers,
-    get_group_summaries_by_name,
-    render_table,
 )
+
+
+COUNTING_NOTE = (
+    "Counts exclude blank lines. Python/C++ exclude comment-only lines; Python also excludes "
+    "string-literal-only lines. Markdown counts all nonblank lines. Shell/YAML skip lines starting "
+    "with # after whitespace (shell shebangs count); this heuristic also skips #-prefixed data "
+    "inside multiline strings, YAML block scalars, and shell heredocs."
+)
+
+
+def format_header(s: FileSummary) -> str:
+    parts = [s.path, str(s.total)]
+    if s.added or not s.removed:
+        parts.append(f"+{s.added}")
+    if s.removed:
+        parts.append(f"-{s.removed}")
+    return " ".join(parts)
+
+
+MISC_GROUP_NAME = "misc"
+GROUPS = ("docs", "c++", "python", "tests", "github", MISC_GROUP_NAME)
+_GROUP_BY_FOLDER_NAME = {
+    "docs": "docs",
+    "quadrants": "c++",
+    "cmake": "c++",
+    "python": "python",
+    "tests": "tests",
+    ".github": "github",
+}
+
+
+def get_group_summaries_by_name(summaries: list[FileSummary]) -> dict[str, list[FileSummary]]:
+    """Group by top-level folder, keeping the existing impact order within each group."""
+    summaries_by_group_name: dict[str, list[FileSummary]] = {name: [] for name in GROUPS}
+    for summary in summaries:
+        folder, separator, _ = summary.path.partition("/")
+        group = _GROUP_BY_FOLDER_NAME.get(folder, MISC_GROUP_NAME) if separator else MISC_GROUP_NAME
+        summaries_by_group_name[group].append(summary)
+    return summaries_by_group_name
+
+
+def render_table(columns: list[str], rows: list[dict[str, str | int | float]]) -> list[str]:
+    """Render dictionary rows as a Markdown table in the specified column order."""
+    lines = ["| " + " | ".join(columns) + " |"]
+    lines.append("| " + " | ".join("---" for _ in columns) + " |")
+    for row in rows:
+        lines.append("| " + " | ".join(str(row[column]).replace("|", r"\|") for column in columns) + " |")
+    return lines
+
+
+def render_comment_markdown(summaries: list[FileSummary], commit: str) -> str:
+    """Render group totals and grouped per-file tables for the report summary."""
+    head = f"## PR change report (`{commit}`)\n" if commit else "## PR change report\n"
+    lines = [head]
+    if not summaries:
+        lines.append(
+            "No supported files (.py, .c, .cc, .cpp, .h, .hpp, .cu, .md, .sh, .yaml, .yml) changed in this PR."
+        )
+        return "\n".join(lines) + "\n"
+    lines.append("LoC = counted lines in the file BEFORE this PR (0 for newly-added files). " + COUNTING_NOTE)
+    lines.append("")
+    group_summaries_by_name = get_group_summaries_by_name(summaries)
+    group_rows: list[dict[str, str | int | float]] = []
+    for group_name, group_files in group_summaries_by_name.items():
+        group_rows.append(
+            {
+                "Group": group_name,
+                "Files": len(group_files),
+                "Added": sum(s.added for s in group_files),
+                "Removed": sum(s.removed for s in group_files),
+            }
+        )
+    total_added = sum(s.added for s in summaries)
+    total_removed = sum(s.removed for s in summaries)
+    group_rows.append(
+        {
+            "Group": "**Total**",
+            "Files": len(summaries),
+            "Added": total_added,
+            "Removed": total_removed,
+        }
+    )
+    lines.extend(render_table(["Group", "Files", "Added", "Removed"], group_rows))
+
+    for group_name, group_files in group_summaries_by_name.items():
+        if not group_files:
+            continue
+        lines.append("")
+        lines.append(f"### {group_name}")
+        lines.append("")
+        lines.append(
+            f"**Group total**: {len(group_files)} file(s) changed, "
+            f"+{sum(s.added for s in group_files)} -{sum(s.removed for s in group_files)} counted lines."
+        )
+        lines.append("")
+        file_rows: list[dict[str, str | int | float]] = []
+        for s in group_files:
+            file_rows.append(
+                {
+                    "File": f"`{s.path}`",
+                    "LoC": s.total,
+                    "Added": s.added,
+                    "Removed": s.removed,
+                }
+            )
+        lines.extend(render_table(["File", "LoC", "Added", "Removed"], file_rows))
+    lines.append("")
+    lines.append(f"**Total**: {len(summaries)} file(s) changed, +{total_added} -{total_removed} counted lines.")
+    return "\n".join(lines) + "\n"
 
 
 @dataclass
@@ -331,14 +440,25 @@ def main() -> int:
     parser.add_argument("--output-dir", required=True, help="Phase-1 output directory")
     parser.add_argument("--function-ranges", required=True, help="Path to JSONL of function ranges")
     parser.add_argument("--output", required=True, help="Where to write report.md")
+    parser.add_argument("--commit-hash", default="", help="Short commit hash to embed in the report heading")
     args = parser.parse_args()
 
+    output_dir = Path(args.output_dir)
+    summary_json = output_dir / "summary.json"
+    summaries = [FileSummary(**s) for s in json.loads(summary_json.read_text())]
+    headers = "\n".join(format_header(s) for s in summaries)
+    (output_dir / "report_header.md").write_text(headers + ("\n" if headers else ""))
+    summary_markdown = render_comment_markdown(summaries, args.commit_hash)
+    (output_dir / "report_comment.md").write_text(summary_markdown)
     text = render(
-        summary_json=Path(args.output_dir) / "summary.json",
+        summary_json=summary_json,
         jsonl_path=Path(args.function_ranges),
-        output_dir=Path(args.output_dir),
+        output_dir=output_dir,
     )
     Path(args.output).write_text(text)
+    (output_dir / "report_check.md").write_text(
+        summary_markdown + "\n## Per-function breakdown (Python/C++ only)\n\n" + text
+    )
     sys.stdout.write(text)
     return 0
 
