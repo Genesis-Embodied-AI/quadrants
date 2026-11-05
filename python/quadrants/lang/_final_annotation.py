@@ -15,7 +15,7 @@ def is_final_annotation(annotation: Any) -> bool:
 
 
 def is_final_field_annotation(dataclass_type: type, field_name: str, annotation: Any) -> bool:
-    """Resolve only a string annotation's outer name in the field's defining class and module."""
+    """Recognize a field's Final marker, resolving only the outer name when the annotation is a string."""
     if not isinstance(annotation, str):
         return is_final_annotation(annotation)
     try:
