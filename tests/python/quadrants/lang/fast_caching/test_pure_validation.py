@@ -150,7 +150,7 @@ def test_pure_validation_data_oriented_as_param():
 
     @qd.pure
     @qd.kernel
-    def k1(my_data_oriented: qd.template()) -> None:
+    def k1(my_data_oriented: qd.Template) -> None:
         my_data_oriented.b[0] = 5
 
     my_do = MyDataOriented()

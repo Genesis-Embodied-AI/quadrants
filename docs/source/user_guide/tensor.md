@@ -56,6 +56,21 @@ u = qd.Vector.tensor(3, qd.f32, shape=(4,), backend=qd.Backend.FIELD)
 m = qd.Matrix.tensor(2, 2, qd.f32, shape=(3,))
 ```
 
+## Initial values
+
+Pass `fill=` to initialize a tensor at allocation. All three factories support it on both storage backends:
+
+```python
+weights = qd.tensor(qd.f32, shape=(4, 5), fill=1.0)
+gravity = qd.tensor(qd.f32, shape=(), backend=qd.Backend.FIELD, fill=-9.81)
+directions = qd.Vector.tensor(3, qd.f32, shape=8, fill=[0, 0, 1])
+matrices = qd.Matrix.tensor(2, 2, qd.f32, shape=4, fill=[[1, 0], [0, 1]])
+```
+
+A scalar fills every component. Vector and matrix tensors also accept per-component lists, tuples, or Quadrants vectors and matrices. The values are captured at declaration. `fill=` initializes only the tensor's forward values, leaving gradient buffers at their defaults.
+
+With `Backend.FIELD`, initialization is deferred with allocation, so consecutive declarations can share storage allocation without an intervening kernel launch. With `Backend.NDARRAY`, initialization is submitted during allocation.
+
 ## Gradients
 
 `needs_grad=True` works on every tensor factory and on every backend, by passing the keyword through to the underlying `qd.field` / `qd.ndarray` call. Enabling it allocates a matching gradient buffer, reachable as `.grad`, alongside the tensor's own forward values (the *primal*):
@@ -112,6 +127,23 @@ b[i, j] = ...                   # canonical indexing in kernels still works
 ```
 
 Any permutation is supported, up to Quadrants' maximum number of tensor dimensions (`quadrants_max_num_indices`, a compile-time constant currently equal to 12). `layout=None` and the identity permutation (`(0, 1, ..., N-1)`) are equivalent and forward no permutation to the underlying allocator.
+
+For vector or matrix elements, pass the compound dtype to `qd.tensor`, or use `qd.Vector.tensor` / `qd.Matrix.tensor`. All three factories accept `layout=`. The permutation covers only the axes of `shape`; vector components and matrix rows/columns stay innermost in their original order:
+
+```python
+v = qd.tensor(qd.types.vector(3, qd.f32), shape=(4, 5), layout=(1, 0))
+m = qd.tensor(qd.types.matrix(2, 3, qd.f32), shape=(4, 5), layout=(1, 0), backend=qd.Backend.FIELD)
+assert v.shape == m.shape == (4, 5)
+assert v.to_numpy().shape == (4, 5, 3)
+assert m.to_numpy().shape == (4, 5, 2, 3)
+```
+
+The vector tensor above stores axis 1 outermost, then axis 0, then the three components. Indexing remains `v[i, j][component]`, and exports use canonical shape axes followed by component axes. The equivalent convenience-factory calls are:
+
+```python
+v = qd.Vector.tensor(3, qd.f32, shape=(4, 5), layout=(1, 0))
+m = qd.Matrix.tensor(2, 3, qd.f32, shape=(4, 5), layout=(1, 0), backend=qd.Backend.FIELD)
+```
 
 For best performance, pair `qd.tensor(..., layout=...)` with a matching iteration order via `qd.ndrange(..., axes=...)` (see [`parallelization`](parallelization.md#controlling-iteration-order-with-axes)): the permutation has the same meaning in both APIs (canonical axis index at each successive nesting level, outermost first), and using the same value on both lines adjacent flat threads up with adjacent physical memory slots.
 

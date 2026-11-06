@@ -29,7 +29,7 @@ def test_matrixfree_cg(qd_dtype):
             x[i, j] = 0.0
 
     @qd.kernel
-    def compute_Ax(v: qd.template(), mv: qd.template()):
+    def compute_Ax(v: qd.Template, mv: qd.Template):
         for i, j in v:
             l = v[i - 1, j] if i - 1 >= 0 else 0.0
             r = v[i + 1, j] if i + 1 <= GRID - 1 else 0.0
@@ -39,7 +39,7 @@ def test_matrixfree_cg(qd_dtype):
             mv[i, j] = 20 * v[i, j] - l - r - t - b
 
     @qd.kernel
-    def check_solution(sol: qd.template(), ans: qd.template(), tol: qd_dtype) -> bool:
+    def check_solution(sol: qd.Template, ans: qd.Template, tol: qd_dtype) -> bool:
         exit_code = True
         for i, j in qd.ndrange(GRID, GRID):
             if qd.abs(ans[i, j] - sol[i, j]) < tol:

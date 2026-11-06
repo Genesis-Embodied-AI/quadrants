@@ -42,7 +42,8 @@ While the repository still resembles upstream in structure, major changes includ
 
 ### Removed components
 
-To focus the compiler and reduce maintenance burden, we removed: GUI/GGUI, C-API, AOT, DX11/DX12, iOS/Android, OpenGL/GLES, argpack, CLI.
+To focus the compiler and reduce maintenance burden, we removed: GUI/GGUI, C-API, AOT, DX11/DX12, iOS/Android,
+OpenGL/GLES, argpack, CLI, SourceBuilder.
 
 ### Performance
 
@@ -65,13 +66,12 @@ To focus the compiler and reduce maintenance burden, we removed: GUI/GGUI, C-API
 
 ### Debugging & development
 
-* **[Python backend](https://genesis-embodied-ai.github.io/quadrants/user_guide/python_backend.html)** — `qd.init(qd.python)` interprets kernels as plain Python so they can be stepped through in a standard Python debugger
 
 ---
 
 # Installation
 ## Prerequisites
-- Python 3.10-3.13
+- Python 3.12-3.14
 - Mac OS 14, 15, Windows, or Ubuntu 22.04-24.04 or compatible
 - ROCm 5.2 or newer for AMD GPU support
 

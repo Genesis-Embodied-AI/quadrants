@@ -23,7 +23,7 @@ def _test_pow_i(dt):
     z = qd.field(dt, shape=())
 
     @qd.kernel
-    def func(x: dt, y: qd.template()):
+    def func(x: dt, y: qd.Template):
         z[()] = x**y
 
     for x in range(-5, 5):
@@ -56,7 +56,7 @@ def _ipow_negative_exp(dt):
     z = qd.field(dt, shape=())
 
     @qd.kernel
-    def foo(x: dt, y: qd.template()):
+    def foo(x: dt, y: qd.Template):
         z[()] = x**y
 
     with pytest.raises(QuadrantsRuntimeError):

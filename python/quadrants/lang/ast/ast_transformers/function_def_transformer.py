@@ -390,7 +390,7 @@ class FunctionDefTransformer:
             ctx.create_variable(argument_name, data)
             return None
         # Template arguments are passed by reference.
-        if isinstance(argument_type, annotations.template):
+        if argument_type is annotations.Template or type(argument_type) is annotations.template:
             ctx.create_variable(argument_name, data)
             return None
 
@@ -778,7 +778,7 @@ class FunctionDefTransformer:
 
     @staticmethod
     def _is_docstring(stmt: ast.stmt, index: int) -> bool:
-        return index == 0 and isinstance(stmt, ast.Expr) and isinstance(stmt.value, (ast.Constant, ast.Str))
+        return index == 0 and isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant)
 
     @staticmethod
     def _is_coverage_probe(stmt: ast.stmt) -> bool:

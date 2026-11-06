@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        PYTHON_VERSION: ['3.10', '3.11', '3.12', '3.13']
+        PYTHON_VERSION: ['3.12', '3.13', '3.14']
     steps:
       - name: Python check
         uses: actions/setup-python@v4
@@ -34,20 +34,8 @@ jobs:
       - name: Check Python CP version
         run: |
           echo "PYTHON_CP_VERSION=${{ steps.set_cp_version.outputs.PYTHON_CP_VERSION }}"
-      - name: Configure GitLab Authentication
-        shell: bash
-        run: |
-          git config --global credential.https://gitlab.com.helper \
-            '!f() {
-              if [ "$1" = get ] && [ -n "$GITLAB_PAT" ]; then
-                printf "%s\n" "username=oauth2" "password=$GITLAB_PAT"
-              fi
-            }; f'
       - name: Checkout
         uses: actions/checkout@v4
-        env:
-          # Token setup and renewal: docs/source/user_guide/contributing.md#gitlab-token-for-ci
-          GITLAB_PAT: ${{ secrets.GITLAB_PAT }}
         with:
           submodules: true
           fetch-depth: 0
@@ -67,7 +55,7 @@ jobs:
     needs: win_build
     strategy:
       matrix:
-        PYTHON_VERSION: ['3.10', '3.11', '3.12', '3.13']
+        PYTHON_VERSION: ['3.12', '3.13', '3.14']
       fail-fast: false
     steps:
       - name: Python check
@@ -111,7 +99,7 @@ jobs:
       cancel-in-progress: true
     strategy:
       matrix:
-        PYTHON_CP_VERSION: ["cp310", "cp311", "cp312", "cp313"]
+        PYTHON_CP_VERSION: ["cp312", "cp313", "cp314"]
       fail-fast: false
     with:
       artifact_name: win_wheel_${{ matrix.PYTHON_CP_VERSION }}

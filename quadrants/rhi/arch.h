@@ -6,8 +6,10 @@ namespace quadrants {
 
 enum class Arch : int {
 #define PER_ARCH(x) x,
+#define PER_ARCH_REMOVED(x) x,
 #include "quadrants/inc/archs.inc.h"
 
+#undef PER_ARCH_REMOVED
 #undef PER_ARCH
 };
 

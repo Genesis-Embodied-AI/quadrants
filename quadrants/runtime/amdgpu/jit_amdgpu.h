@@ -120,7 +120,8 @@ class JITSessionAMDGPU : public JITSession {
     create_directories(tmp_dir_);
   }
 
-  JITModule *add_module(std::unique_ptr<llvm::Module> M, int max_reg) override;
+  // Compile an LLVM IR module to HSACO bytes and load them; cache requests reuse of compiled bytes.
+  JITModule *add_module(std::unique_ptr<llvm::Module> M, int max_reg, bool cache = false) override;
 
   llvm::DataLayout get_data_layout() override {
     return data_layout;
@@ -146,6 +147,8 @@ class JITSessionAMDGPU : public JITSession {
   }
 
  private:
+  // Load HSACO bytes into this session.
+  JITModule *load_hsaco_bytes(const std::string &hsaco);
   std::string compile_module_to_hsaco(std::unique_ptr<llvm::Module> &module);
   uint64_t random_num_;
   std::string tmp_dir_;

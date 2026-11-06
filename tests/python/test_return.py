@@ -66,7 +66,7 @@ def test_binary_func_ret(dt1, dt2, dt3, castor):
 @test_utils.test()
 def test_return_in_static_if():
     @qd.kernel
-    def foo(a: qd.template()) -> qd.i32:
+    def foo(a: qd.Template) -> qd.i32:
         if qd.static(a == 1):
             return 1
         elif qd.static(a == 2):

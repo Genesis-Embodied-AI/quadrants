@@ -297,14 +297,6 @@ _
 
         field_dict = {}
 
-        if impl.is_python_backend():
-            for key, dtype in members.items():
-                if isinstance(dtype, StructType):
-                    field_dict[key] = dtype.field(shape=shape, name=name + "." + key)
-                else:
-                    field_dict[key] = impl.field(dtype, shape=shape or ())
-            return StructField(field_dict, methods, name=name, is_primal=False)
-
         for key, dtype in members.items():
             field_name = name + "." + key
             if isinstance(dtype, CompoundType):
@@ -515,8 +507,6 @@ class StructField(Field):
             v.fill(val)
 
     def _initialize_host_accessors(self):
-        if impl.is_python_backend():
-            return
         for v in self._members:
             v._initialize_host_accessors()
 

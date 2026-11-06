@@ -48,7 +48,7 @@ def bls_test_template(dim, N, bs, stencil, block_dim=None, scatter=False, benchm
             x[I] = s
 
     @qd.kernel
-    def apply(use_bls: qd.template(), y: qd.template()):
+    def apply(use_bls: qd.Template, y: qd.Template):
         if qd.static(use_bls and not scatter):
             qd.block_local(x)
         if qd.static(use_bls and scatter):
@@ -181,7 +181,7 @@ def bls_particle_grid(
     scatter_weight = (N * N / M) * 0.01
 
     @qd.kernel
-    def p2g(use_shared: qd.template(), m: qd.template()):
+    def p2g(use_shared: qd.Template, m: qd.Template):
         qd.loop_config(block_dim=256)
         if qd.static(use_shared):
             qd.block_local(m)
@@ -213,7 +213,7 @@ def bls_particle_grid(
             m1[i, j] = qd.random()
 
     @qd.kernel
-    def g2p(use_shared: qd.template(), s: qd.template()):
+    def g2p(use_shared: qd.Template, s: qd.Template):
         qd.loop_config(block_dim=256)
         if qd.static(use_shared):
             qd.block_local(m1)
@@ -236,7 +236,7 @@ def bls_particle_grid(
             s[p] = tot
 
     @qd.kernel
-    def g2p_naive(s: qd.template()):
+    def g2p_naive(s: qd.Template):
         qd.loop_config(block_dim=256)
         for p in x:
             u = qd.floor(x[p] * N).cast(qd.i32)

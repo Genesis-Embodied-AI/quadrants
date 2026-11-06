@@ -307,7 +307,7 @@ class VectorTensor(Tensor):
         data = self._impl.to_numpy()
         return (
             _rebuild_vector_tensor,
-            (backend_int, self._impl.dtype, shape, element_shape, data),
+            (backend_int, self._impl.dtype, shape, element_shape, data, self.layout),
         )
 
 
@@ -341,7 +341,7 @@ class MatrixTensor(Tensor):
         data = self._impl.to_numpy()
         return (
             _rebuild_matrix_tensor,
-            (backend_int, self._impl.dtype, shape, element_shape, data),
+            (backend_int, self._impl.dtype, shape, element_shape, data, self.layout),
         )
 
 
@@ -407,12 +407,13 @@ def _rebuild_vector_tensor(
     shape: typing.Tuple[int, ...],
     element_shape: typing.Tuple[int, ...],
     data: typing.Any,
+    layout: typing.Optional[typing.Tuple[int, ...]] = None,
 ) -> "VectorTensor":
     import quadrants as qd
 
     backend = qd.Backend(backend_int)  # type: ignore[reportOptionalCall]
     (n,) = element_shape
-    t = qd.Vector.tensor(n, dtype, shape, backend=backend)  # type: ignore[reportAttributeAccessIssue]
+    t = qd.Vector.tensor(n, dtype, shape, backend=backend, layout=layout)
     t.from_numpy(data)
     return t
 
@@ -423,11 +424,12 @@ def _rebuild_matrix_tensor(
     shape: typing.Tuple[int, ...],
     element_shape: typing.Tuple[int, ...],
     data: typing.Any,
+    layout: typing.Optional[typing.Tuple[int, ...]] = None,
 ) -> "MatrixTensor":
     import quadrants as qd
 
     backend = qd.Backend(backend_int)  # type: ignore[reportOptionalCall]
     n, m = element_shape
-    t = qd.Matrix.tensor(n, m, dtype, shape, backend=backend)  # type: ignore[reportAttributeAccessIssue]
+    t = qd.Matrix.tensor(n, m, dtype, shape, backend=backend, layout=layout)
     t.from_numpy(data)
     return t

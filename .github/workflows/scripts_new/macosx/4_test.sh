@@ -28,7 +28,8 @@ fi
 python tests/run_tests.py -v -r 1 --arch "${MAC_TEST_ARCH}" -m "not needs_torch"
 
 # Phase 2: install torch, run only torch tests
-pip install --upgrade torch
+# FIXME: Remove this cap once Torch 2.15+ passes Metal CI; 2.15.0 reports MPS unavailable and crashes workers.
+pip install --upgrade "torch<2.15"
 python tests/run_tests.py -v -r 1 --arch "${MAC_TEST_ARCH}" -m needs_torch
 
 if [ -f "$QD_FILE_TIMING_OUTPUT" ]; then

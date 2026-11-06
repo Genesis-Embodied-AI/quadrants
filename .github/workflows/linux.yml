@@ -28,7 +28,7 @@ jobs:
       - name: Python check
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: '3.12'
       - name: Linux prerequisites
         run: |
           bash .github/workflows/scripts_new/linux/1_prerequisites.sh
@@ -71,7 +71,7 @@ jobs:
       - name: Python check
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: '3.12'
       - name: Install CUDA libraries
         run: |
           sudo apt-get install -y libcusolver-dev-12-8 libcusolver-12-8 libcusparse-dev-12-8 libcusparse-12-8 libnvjitlink-12-8 libcublas-12-8
@@ -104,13 +104,13 @@ jobs:
           name: coverage-cuda
           path: coverage.xml
 
-  coverage-comment:
+  coverage-report:
     if: github.event_name == 'pull_request' && always()
     needs: [build, test-cuda]
     runs-on: ubuntu-latest
     permissions:
-      pull-requests: write
-      checks: write
+      contents: read
+      statuses: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -118,7 +118,7 @@ jobs:
       - name: Python check
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: '3.12'
       - name: Download CPU coverage
         uses: actions/download-artifact@v4
         continue-on-error: true
@@ -158,60 +158,42 @@ jobs:
             --compare-branch=origin/${{ github.base_ref }} \
             --coverage-xml $COV_XMLS \
             --commit-hash "$HEAD_SHA" \
-            --format markdown-summary > coverage-comment.md || true
+            --format markdown-summary > coverage-summary.md || true
       - name: Upload full coverage report
         if: always() && hashFiles('coverage-check.md') != ''
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
           path: coverage-check.md
-      - name: Publish coverage check
+      - name: Write coverage report to job summary
         if: always() && hashFiles('coverage-check.md') != ''
-        id: publish_check
+        id: publish_report
         uses: actions/github-script@v8
         with:
           script: |
             const fs = require('fs');
             let body = fs.readFileSync('coverage-check.md', 'utf8');
             const MAX_TEXT = 65000;
-            let truncated = false;
             if (body.length > MAX_TEXT) {
               body = body.substring(0, MAX_TEXT) + '\n\n---\n*Report truncated. Download the full report from the workflow artifacts.*';
-              truncated = true;
             }
-            const summary = truncated
-              ? 'Per-line coverage annotations (truncated — see artifacts for full report).'
-              : 'See details below for per-line coverage annotations.';
-            const check = await github.rest.checks.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              head_sha: context.payload.pull_request.head.sha,
-              name: 'Coverage Report',
-              status: 'completed',
-              conclusion: 'success',
-              output: {
-                title: 'Diff Coverage Report',
-                summary: summary,
-                text: body
-              }
-            });
-            core.setOutput('check-url', check.data.html_url);
-      - name: Post coverage comment
-        if: always() && hashFiles('coverage-comment.md') != ''
+            await core.summary.addRaw(body).write();
+      - name: Publish coverage status
+        if: always() && steps.publish_report.outcome == 'success' && hashFiles('coverage-summary.md') != ''
         uses: actions/github-script@v8
         env:
-          REPORT_URL: ${{ steps.publish_check.outputs.check-url }}
+          REPORT_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           script: |
             const fs = require('fs');
-            let body = fs.readFileSync('coverage-comment.md', 'utf8').trim();
-            const url = process.env.REPORT_URL;
-            if (url) {
-              body = `[${body}](${url})`;
-            }
-            await github.rest.issues.createComment({
+            const summary = fs.readFileSync('coverage-summary.md', 'utf8').trim();
+            await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.payload.pull_request.number,
-              body: body
+              sha: context.payload.pull_request.head.sha,
+              state: 'success',
+              context: '_Artifact: Diff coverage',
+              // GitHub limits commit status descriptions to 140 characters.
+              description: summary.substring(0, 140),
+              target_url: process.env.REPORT_URL
             });
