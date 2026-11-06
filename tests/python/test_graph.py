@@ -538,14 +538,25 @@ def test_graph_ndarray_grad_pointer_refreshed_on_replay():
     assert _graph_cache_size() == (1 if platform_supports_graph else 0)
 
 
+# PyTorch does not expose a Vulkan tensor device.
 @pytest.mark.needs_torch
-@test_utils.test(arch=[qd.cuda, qd.amdgpu])
+@test_utils.test(exclude=[qd.vulkan])
 def test_graph_torch_grad_pointer_refreshed_on_replay():
     """Reusing a graph with different PyTorch tensors must read each tensor's own gradient buffer."""
     torch = pytest.importorskip("torch")
-    torch_arch = qd.amdgpu if torch.version.hip else qd.cuda
-    assert torch.cuda.is_available(), "PyTorch must have GPU access for the external graph argument test"
-    assert impl.current_cfg().arch == torch_arch, "PyTorch and Quadrants must use the same GPU backend"
+    arch = impl.current_cfg().arch
+    if arch in (qd.cuda, qd.amdgpu):
+        torch_arch = qd.amdgpu if torch.version.hip else qd.cuda
+        assert torch.cuda.is_available(), "PyTorch must have GPU access for the external graph argument test"
+        assert arch == torch_arch, "PyTorch and Quadrants must use the same GPU backend"
+        device = "cuda"
+    elif arch == qd.metal:
+        if not torch.backends.mps.is_available():
+            pytest.skip("PyTorch MPS is unavailable")
+        device = "mps"
+    else:
+        device = "cpu"
+    platform_supports_graph = _platform_supports_graph()
     n = 8
 
     @qd.kernel(graph=True)
@@ -557,18 +568,18 @@ def test_graph_torch_grad_pointer_refreshed_on_replay():
 
     z = qd.ndarray(qd.f32, shape=(n,))
     w = qd.ndarray(qd.f32, shape=(n,))
-    x1 = torch.empty(n, dtype=torch.float32, device="cuda", requires_grad=True)
-    x2 = torch.empty(n, dtype=torch.float32, device="cuda", requires_grad=True)
+    x1 = torch.empty(n, dtype=torch.float32, device=device, requires_grad=True)
+    x2 = torch.empty(n, dtype=torch.float32, device=device, requires_grad=True)
     # Initialize on CPU, then upload: some ROCm wheels support GPU copies but not GPU fill kernels.
     x1.grad = torch.full((n,), 5.0).to(x1.device)
     x2.grad = torch.full((n,), 7.0).to(x2.device)
-    torch.cuda.synchronize()
+    test_utils.torch_synchronize(x1.device)
 
     for x, grad_value in ((x1, 5.0), (x2, 7.0), (x1, 5.0)):
         read_grad(x, z, w)
-        assert _graph_used()
+        assert _graph_used() == platform_supports_graph
         assert np.allclose(w.to_numpy(), (grad_value + 1.0) * 2.0)
-    assert _graph_cache_size() == 1
+    assert _graph_cache_size() == (1 if platform_supports_graph else 0)
 
 
 @pytest.mark.parametrize("mode", ["fwd", "tape_validation"])
