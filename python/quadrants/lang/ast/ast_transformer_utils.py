@@ -35,9 +35,7 @@ class Builder:
             if method is None:
                 error_msg = f'Unsupported node "{node.__class__.__name__}"'
                 raise QuadrantsSyntaxError(error_msg)
-            # Attach only the cheap file/line/function header to every IR node. Building the full source-line hint
-            # here runs TextWrapper for each uncached AST location. The compile-error path below still produces the
-            # full hint via memoized_get_pos_info.
+            # Defer full source formatting until an error occurs; attach only the location header here.
             info = ctx.get_pos_header(node) if isinstance(node, (ast.stmt, ast.expr)) else ""
             with impl.get_runtime().src_info_guard(info):
                 res = method(ctx, node)
