@@ -547,8 +547,6 @@ def test_graph_torch_grad_pointer_refreshed_on_replay():
     arch = impl.current_cfg().arch
     # PyTorch uses the "cuda" device name for both CUDA and ROCm.
     device = {qd.cuda: "cuda", qd.amdgpu: "cuda", qd.metal: "mps"}.get(arch, "cpu")
-    if device == "mps" and not torch.backends.mps.is_available():
-        pytest.skip("PyTorch MPS is unavailable")
     platform_supports_graph = _platform_supports_graph()
     n = 8
 
