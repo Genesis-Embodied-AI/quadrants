@@ -72,7 +72,7 @@ class CollectUsers : public BasicStmtVisitor {
  private:
   std::unordered_map<Stmt *, std::vector<Stmt *>> *const users_;
 
-  void add(Stmt *stmt) {
+  void collect_users(Stmt *stmt) {
     for (auto *op : stmt->get_operands()) {
       if (op != nullptr) {
         (*users_)[op].push_back(stmt);
@@ -89,11 +89,11 @@ class CollectUsers : public BasicStmtVisitor {
   }
 
   void visit(Stmt *stmt) override {
-    add(stmt);
+    collect_users(stmt);
   }
 
   void preprocess_container_stmt(Stmt *stmt) override {
-    add(stmt);
+    collect_users(stmt);
   }
 };
 
