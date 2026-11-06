@@ -101,10 +101,12 @@ _DATA_ORIENTED_MODULE_SRC = textwrap.dedent(
 
 @test_utils.test(arch=qd.cpu)
 def test_classfunc_after_module_reload(tmp_path, monkeypatch):
-    # Import a module and run its class kernel to populate the source cache. Then rewrite the file, adding seven
-    # lines above the class and changing the kernel's output from 1 to 2. Reload it and check that the new kernel
-    # still binds self and produces 2. The shifted lines expose stale-cache reads. This tests a file-size change,
-    # not an edit where only the modification time changes.
+    # 1. Import a temporary module and run its class kernel, populating the source cache.
+    # 2. Rewrite the file, adding seven lines above the class and changing the kernel's output from 1 to 2.
+    # 3. Reload the module and check that the new class kernel runs and produces 2.
+    #
+    # The shifted lines expose stale-cache reads. This covers a change in file size; it does not separately test
+    # an edit where only the modification time changes.
     module_path = tmp_path / "reloaded_data_oriented.py"
     module_path.write_text(_DATA_ORIENTED_MODULE_SRC.replace("VALUE", "1"))
     monkeypatch.syspath_prepend(tmp_path)
