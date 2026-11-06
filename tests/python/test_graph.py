@@ -541,7 +541,7 @@ def test_graph_ndarray_grad_pointer_refreshed_on_replay():
 @pytest.mark.needs_torch
 @test_utils.test(arch=[qd.cuda, qd.amdgpu])
 def test_graph_torch_grad_pointer_refreshed_on_replay():
-    """Graph replay uses the current external array's raw gradient pointer rather than a previous array's pointer."""
+    """Reusing a graph with different PyTorch tensors must read each tensor's own gradient buffer."""
     torch = pytest.importorskip("torch")
     torch_arch = qd.amdgpu if torch.version.hip else qd.cuda
     assert torch.cuda.is_available(), "PyTorch must have GPU access for the external graph argument test"
