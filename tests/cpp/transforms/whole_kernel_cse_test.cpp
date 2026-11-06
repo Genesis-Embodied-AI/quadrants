@@ -161,4 +161,131 @@ TEST(WholeKernelCSE, FullModeHoistThenEliminate) {
   EXPECT_EQ(adds, 1);
 }
 
+// Exercise both an index built by an earlier elimination and one first built by hoisting. Each branch hoists a
+// prefix constant and a suffix store; the second branch repeats this while the first branch's insertions are pending.
+class WholeKernelCSEHoistIndex : public ::testing::TestWithParam<bool> {};
+
+TEST_P(WholeKernelCSEHoistIndex, MultipleHoistsRewriteScalarAndContainerUsers) {
+  TestProgram test_prog;
+  test_prog.setup();
+  IRBuilder b;
+  auto *zero = b.get_int32(0);
+  if (GetParam()) {
+    b.get_int32(0);  // Build the index through elimination before the first hoist.
+  }
+  auto *n = b.get_int32(8);
+  auto *arr = b.create_ndarray_arg_load({0}, PrimitiveType::i32, 1);
+  auto *out = b.create_external_ptr(arr, {zero});
+  auto *loop = b.create_range_for(zero, n);
+  std::vector<BinaryOpStmt *> users;
+  std::vector<RangeForStmt *> nested_loops;
+  std::vector<GlobalStoreStmt *> suffix_stores;
+  {
+    auto guard = b.get_loop_guard(loop);
+    auto *i = b.get_loop_index(loop);
+    auto *cond = b.create_cmp_lt(i, n);
+    for (int branch_index = 0; branch_index < 2; ++branch_index) {
+      auto *branch = b.create_if(cond);
+      {
+        auto guard = b.get_if_guard(branch, true);
+        auto *three = b.get_int32(3);
+        auto *value = b.create_mul(i, three);
+        users.push_back(value);
+        b.create_global_store(out, value);
+        b.create_global_store(out, i);  // Shared suffix, hoisted after the if.
+        suffix_stores.push_back(branch->true_statements->statements.back()->as<GlobalStoreStmt>());
+      }
+      {
+        auto guard = b.get_if_guard(branch, false);
+        auto *three = b.get_int32(3);
+        auto *value = b.create_add(three, three);  // One user occurs twice in the collected list.
+        users.push_back(value);
+        auto *nested = b.create_range_for(three, n);  // A container operand uses the discarded prefix.
+        nested_loops.push_back(nested);
+        {
+          auto guard = b.get_loop_guard(nested);
+          b.create_global_store(out, value);
+        }
+        b.create_global_store(out, i);
+      }
+    }
+    auto *five_a = b.get_int32(5);
+    auto *five_b = b.get_int32(5);
+    b.create_global_store(out, b.create_add(five_a, five_b));  // Eliminate again after both hoists.
+  }
+
+  auto ir = b.extract_ir();
+  irpass::type_check(ir.get(), test_prog.prog()->compile_config());
+  EXPECT_TRUE(irpass::whole_kernel_cse(ir.get()));
+  irpass::analysis::verify(ir.get());
+
+  auto *body = loop->body.get();
+  ASSERT_EQ(count_stmts(body, [](Stmt *stmt) { return is_const_i32(stmt, 3); }), 1);
+  Stmt *three = nullptr;
+  for (auto &stmt : body->statements) {
+    if (is_const_i32(stmt.get(), 3)) {
+      three = stmt.get();
+    }
+  }
+  for (auto *user : users) {
+    EXPECT_EQ(user->rhs, three);
+    if (user->op_type == BinaryOpType::add) {
+      EXPECT_EQ(user->lhs, three);
+    }
+  }
+  for (auto *nested : nested_loops) {
+    EXPECT_EQ(nested->begin, three);
+  }
+  for (auto *store : suffix_stores) {
+    EXPECT_EQ(store->parent, body);
+    EXPECT_NE(body->locate(store), -1);
+  }
+  EXPECT_EQ(count_stmts(body, [](Stmt *stmt) { return is_const_i32(stmt, 5); }), 1);
+  EXPECT_FALSE(irpass::whole_kernel_cse(ir.get()));
+}
+
+INSTANTIATE_TEST_SUITE_P(IndexBuiltBeforeOrDuringHoisting, WholeKernelCSEHoistIndex, ::testing::Bool());
+
+// Moving a whole container preserves the indexed operands in its body, even while insertion is queued. The
+// discarded container's descendants remain alive in the block's trash bin until the next round clears the index.
+TEST(WholeKernelCSE, HoistedContainersKeepNestedUsersValid) {
+  TestProgram test_prog;
+  test_prog.setup();
+  IRBuilder b;
+  auto *zero = b.get_int32(0);
+  b.get_int32(0);  // Build the index before hoisting the container.
+  auto *n = b.get_int32(8);
+  auto *arr = b.create_ndarray_arg_load({0}, PrimitiveType::i32, 1);
+  auto *out = b.create_external_ptr(arr, {zero});
+  auto *branch = b.create_if(b.create_arg_load({1}, PrimitiveType::i32, false));
+  RangeForStmt *retained_loop = nullptr;
+  for (bool true_branch : {true, false}) {
+    auto guard = b.get_if_guard(branch, true_branch);
+    auto *loop = b.create_range_for(zero, n);
+    if (true_branch) {
+      retained_loop = loop;
+    }
+    auto loop_guard = b.get_loop_guard(loop);
+    auto *i = b.get_loop_index(loop);
+    auto *one_a = b.get_int32(1);
+    auto *one_b = b.get_int32(1);
+    b.create_global_store(out, b.create_add(i, b.create_add(one_a, one_b)));
+  }
+  auto *two_a = b.get_int32(2);
+  auto *two_b = b.get_int32(2);
+  auto *after = b.create_add(two_a, two_b);
+  b.create_global_store(out, after);
+
+  auto ir = b.extract_ir();
+  irpass::type_check(ir.get(), test_prog.prog()->compile_config());
+  EXPECT_TRUE(irpass::whole_kernel_cse(ir.get()));
+  irpass::analysis::verify(ir.get());
+
+  EXPECT_EQ(retained_loop->parent, ir.get());
+  EXPECT_EQ(count_stmts(ir.get(), [](Stmt *stmt) { return stmt->is<RangeForStmt>(); }), 1);
+  EXPECT_EQ(count_stmts(retained_loop->body.get(), [](Stmt *stmt) { return is_const_i32(stmt, 1); }), 1);
+  EXPECT_EQ(after->rhs, two_a);
+  EXPECT_FALSE(irpass::whole_kernel_cse(ir.get()));
+}
+
 }  // namespace quadrants::lang
