@@ -35,7 +35,8 @@ class Builder:
             if method is None:
                 error_msg = f'Unsupported node "{node.__class__.__name__}"'
                 raise QuadrantsSyntaxError(error_msg)
-            info = ctx.memoized_get_pos_info(node) if isinstance(node, (ast.stmt, ast.expr)) else ""
+            # Defer full source formatting until an error occurs; attach only the location header here.
+            info = ctx.get_pos_header(node) if isinstance(node, (ast.stmt, ast.expr)) else ""
             with impl.get_runtime().src_info_guard(info):
                 res = method(ctx, node)
                 if not hasattr(node, "violates_pure"):
@@ -405,6 +406,9 @@ class ASTTransformerFuncContext:
         except AttributeError:
             raise QuadrantsNameError(f'Name "{name}" is not defined')
 
+    def get_pos_header(self, node: ast.AST) -> str:
+        return f'File "{self.file}", line {node.lineno + self.lineno_offset}, in {self.func.func.__name__}:\n'
+
     def memoized_get_pos_info(self, node: ast.AST) -> str:
         key = (node.lineno, node.col_offset, node.end_lineno, node.end_col_offset, node.__class__.__name__)
         # self.func is persistent, whereas context is ephemeral
@@ -421,7 +425,7 @@ class ASTTransformerFuncContext:
         source line(s), and a caret (^) underline marking the exact columns the node spans — the same shape as a
         Python traceback frame.
         """
-        msg = f'File "{self.file}", line {node.lineno + self.lineno_offset}, in {self.func.func.__name__}:\n'
+        msg = self.get_pos_header(node)
         col_offset = self.indent + node.col_offset
         end_col_offset = self.indent + node.end_col_offset
 
