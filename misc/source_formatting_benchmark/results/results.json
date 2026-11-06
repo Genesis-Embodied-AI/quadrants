@@ -1,0 +1,112 @@
+[
+  {
+    "ast_seconds": 1.0352014979871456,
+    "outer_transforms": 448,
+    "all_transforms": 678,
+    "suite_seconds": 39.89820122899255,
+    "exit_code": 0,
+    "package": "/mnt/data/hugh/ais/ext_prs_940/tmp/measurement/main/quadrants/__init__.py",
+    "pair": 0,
+    "variant": "main",
+    "process_seconds": 40.845830696984194
+  },
+  {
+    "ast_seconds": 0.9965885332785547,
+    "outer_transforms": 448,
+    "all_transforms": 678,
+    "suite_seconds": 39.0902858240006,
+    "exit_code": 0,
+    "package": "/mnt/data/hugh/ais/ext_prs_940/tmp/measurement/pr1076/quadrants/__init__.py",
+    "pair": 0,
+    "variant": "pr1076",
+    "process_seconds": 39.802592121995986
+  },
+  {
+    "ast_seconds": 0.9672732639883179,
+    "outer_transforms": 448,
+    "all_transforms": 678,
+    "suite_seconds": 39.74902179700439,
+    "exit_code": 0,
+    "package": "/mnt/data/hugh/ais/ext_prs_940/tmp/measurement/pr1076/quadrants/__init__.py",
+    "pair": 1,
+    "variant": "pr1076",
+    "process_seconds": 40.50448712101206
+  },
+  {
+    "ast_seconds": 1.0153611252317205,
+    "outer_transforms": 448,
+    "all_transforms": 678,
+    "suite_seconds": 39.518597754009534,
+    "exit_code": 0,
+    "package": "/mnt/data/hugh/ais/ext_prs_940/tmp/measurement/main/quadrants/__init__.py",
+    "pair": 1,
+    "variant": "main",
+    "process_seconds": 40.15486166300252
+  },
+  {
+    "ast_seconds": 1.0108159550582059,
+    "outer_transforms": 448,
+    "all_transforms": 678,
+    "suite_seconds": 39.43597490299726,
+    "exit_code": 0,
+    "package": "/mnt/data/hugh/ais/ext_prs_940/tmp/measurement/main/quadrants/__init__.py",
+    "pair": 2,
+    "variant": "main",
+    "process_seconds": 40.188879509980325
+  },
+  {
+    "ast_seconds": 0.961269427993102,
+    "outer_transforms": 448,
+    "all_transforms": 678,
+    "suite_seconds": 39.186125523992814,
+    "exit_code": 0,
+    "package": "/mnt/data/hugh/ais/ext_prs_940/tmp/measurement/pr1076/quadrants/__init__.py",
+    "pair": 2,
+    "variant": "pr1076",
+    "process_seconds": 39.8978604520089
+  },
+  {
+    "ast_seconds": 0.964498724846635,
+    "outer_transforms": 448,
+    "all_transforms": 678,
+    "suite_seconds": 39.348243663000176,
+    "exit_code": 0,
+    "package": "/mnt/data/hugh/ais/ext_prs_940/tmp/measurement/pr1076/quadrants/__init__.py",
+    "pair": 3,
+    "variant": "pr1076",
+    "process_seconds": 40.09391212000628
+  },
+  {
+    "ast_seconds": 1.0137549577921163,
+    "outer_transforms": 448,
+    "all_transforms": 678,
+    "suite_seconds": 39.349480923003284,
+    "exit_code": 0,
+    "package": "/mnt/data/hugh/ais/ext_prs_940/tmp/measurement/main/quadrants/__init__.py",
+    "pair": 3,
+    "variant": "main",
+    "process_seconds": 40.0154707620095
+  },
+  {
+    "ast_seconds": 1.0092470649979077,
+    "outer_transforms": 448,
+    "all_transforms": 678,
+    "suite_seconds": 39.44431375700515,
+    "exit_code": 0,
+    "package": "/mnt/data/hugh/ais/ext_prs_940/tmp/measurement/main/quadrants/__init__.py",
+    "pair": 4,
+    "variant": "main",
+    "process_seconds": 40.194889934995444
+  },
+  {
+    "ast_seconds": 0.9734453019627836,
+    "outer_transforms": 448,
+    "all_transforms": 678,
+    "suite_seconds": 39.2307227300189,
+    "exit_code": 0,
+    "package": "/mnt/data/hugh/ais/ext_prs_940/tmp/measurement/pr1076/quadrants/__init__.py",
+    "pair": 4,
+    "variant": "pr1076",
+    "process_seconds": 39.946930987993255
+  }
+]
