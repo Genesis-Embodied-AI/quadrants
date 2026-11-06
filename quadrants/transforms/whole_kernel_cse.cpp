@@ -110,7 +110,7 @@ class WholeKernelCSE : public BasicStmtVisitor {
   std::vector<std::vector<std::pair<std::size_t, Stmt *>>> scope_inserts_;
   DelayedIRModifier modifier_;
 
-  // kUnbuilt: not built this round; kValid: usable; kStale: invalidated by tree edits.
+  // State of the `users_` index: kUnbuilt = not built this round; kValid = usable; kStale = invalidated by tree edits.
   enum class UsersState { kUnbuilt, kValid, kStale };
   // Root of the IR tree being optimized, saved at round start so CollectUsers can traverse the whole tree.
   IRNode *root_ = nullptr;
