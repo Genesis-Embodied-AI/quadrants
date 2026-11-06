@@ -1035,7 +1035,8 @@ class Kernel(FuncBase):
                 and (
                     # Reject an active FwdMode context or a tape with validation enabled. Check that target_tape
                     # exists before accessing validation; an ordinary tape with validation=False remains allowed.
-                    self.runtime.fwd_mode_manager or (self.runtime.target_tape and self.runtime.target_tape.validation)
+                    self.runtime.fwd_mode_manager
+                    or (self.runtime.target_tape and self.runtime.target_tape.validation)
                 )
             )
         ):
