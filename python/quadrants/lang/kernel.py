@@ -1021,7 +1021,7 @@ class Kernel(FuncBase):
                 if py_args_l is not None:
                     py_args = tuple(py_args_l)
 
-        # Reject before FwdMode / Tape record this call, so a rejected launch leaves no backward-pass side effects.
+        # Reject calls using graph=True with unsupported autodiff modes before FwdMode / Tape record the call.
         # When called inside a `with Tape(...)` block, this check runs inside that context, but before the tape records
         # the kernel call. It also runs for kernel calls outside a tape.
         if self.use_graph and (
