@@ -229,7 +229,7 @@ class FuncBase:
         self.orig_arguments: list[ArgMetadata] = []
         self.return_type = None
         # Shared by every AST transform of this function; see
-        # ASTTransformerFuncContext.get_formatted_location_with_source_context.
+        # ASTTransformerFuncContext.memoized_get_formatted_location_with_source_context.
         self.pos_info_cache: dict[tuple, str] = {}
 
         self.check_parameter_annotations()
