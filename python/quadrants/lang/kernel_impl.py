@@ -142,6 +142,7 @@ def _inside_class(level_of_class_stackframe: int) -> bool:
     try:
         maybe_class_frame = sys._getframe(level_of_class_stackframe)
     except ValueError:
+        # sys._getframe raises ValueError when the requested depth exceeds the available call stack.
         return False
     # Read the source directly to avoid inspect's module lookup. Check for file changes to support module reloads,
     # and pass globals so loaders such as zipimport can supply the source.
