@@ -110,11 +110,13 @@ class WholeKernelCSE : public BasicStmtVisitor {
   std::vector<std::vector<std::pair<std::size_t, Stmt *>>> scope_inserts_;
   DelayedIRModifier modifier_;
 
+  // kUnbuilt: not built this round; kValid: usable; kStale: invalidated by tree edits.
+  enum class UsersState { kUnbuilt, kValid, kStale };
+  IRNode *root_ = nullptr;
+
   // Indexes users under `root_` to avoid a tree walk per elimination. Built on the first elimination of each round.
   // Updated as operands change; eliminated statements stay alive until the round ends.
   // Branch hoisting invalidates the index, so the rest of that round uses the tree walk.
-  enum class UsersState { kUnbuilt, kValid, kStale };
-  IRNode *root_ = nullptr;
   std::unordered_map<Stmt *, std::vector<Stmt *>> users_;
   UsersState users_state_ = UsersState::kUnbuilt;
 
