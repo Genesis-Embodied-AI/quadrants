@@ -1023,7 +1023,7 @@ class Kernel(FuncBase):
 
         # Reject calls using graph=True with unsupported autodiff modes before FwdMode / Tape record the call.
         # When called inside a `with Tape(...)` block, this check runs inside that context, but before the tape records
-        # the kernel call. It also runs for kernel calls outside a tape.
+        # the kernel call. This check also runs for kernel calls outside a tape.
         if self.use_graph and (
             # Reject a kernel already in an autodiff mode. grad_replaced skips recording this call, but does not
             # reset an autodiff mode already set on the kernel.
