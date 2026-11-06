@@ -1,3 +1,7 @@
+import importlib
+import textwrap
+import zipfile
+
 import quadrants as qd
 from quadrants.lang.misc import get_host_arch_list
 
@@ -76,3 +80,50 @@ def test_class_with_field():
 
     a = A()
     a.start()
+
+
+_DATA_ORIENTED_MODULE_SRC = textwrap.dedent(
+    """
+    import quadrants as qd
+
+
+    @qd.data_oriented
+    class Foo:
+        def __init__(self):
+            self.val = qd.field(qd.i32, shape=())
+
+        @qd.kernel
+        def fill(self):
+            self.val[None] = VALUE
+    """
+)
+
+
+@test_utils.test(arch=qd.cpu)
+def test_classfunc_after_module_reload(tmp_path, monkeypatch):
+    module_path = tmp_path / "reloaded_data_oriented.py"
+    module_path.write_text(_DATA_ORIENTED_MODULE_SRC.replace("VALUE", "1"))
+    monkeypatch.syspath_prepend(tmp_path)
+    module = importlib.import_module("reloaded_data_oriented")
+    foo = module.Foo()
+    foo.fill()
+    assert foo.val[None] == 1
+
+    # Shift every line of the class so that the source lines cached from the first import point elsewhere.
+    module_path.write_text("# padding\n" * 7 + _DATA_ORIENTED_MODULE_SRC.replace("VALUE", "2"))
+    module = importlib.reload(module)
+    foo = module.Foo()
+    foo.fill()
+    assert foo.val[None] == 2
+
+
+@test_utils.test(arch=qd.cpu)
+def test_classfunc_in_zipimported_module(tmp_path, monkeypatch):
+    archive_path = tmp_path / "kernels.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("zipped_data_oriented.py", _DATA_ORIENTED_MODULE_SRC.replace("VALUE", "3"))
+    monkeypatch.syspath_prepend(archive_path)
+    module = importlib.import_module("zipped_data_oriented")
+    foo = module.Foo()
+    foo.fill()
+    assert foo.val[None] == 3
