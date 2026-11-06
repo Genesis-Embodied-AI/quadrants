@@ -330,7 +330,7 @@
                 <article class="bd-article">
                   
   <h1>Source code for quadrants.lang.kernel_impl</h1><div class="highlight"><pre>
-<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">inspect</span>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">linecache</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">typing</span>
@@ -482,16 +482,18 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">_inside_class</span><span class="p">(</span><span class="n">level_of_class_stackframe</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
     <span class="k">try</span><span class="p">:</span>
         <span class="n">maybe_class_frame</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">_getframe</span><span class="p">(</span><span class="n">level_of_class_stackframe</span><span class="p">)</span>
-        <span class="n">statement_list</span> <span class="o">=</span> <span class="n">inspect</span><span class="o">.</span><span class="n">getframeinfo</span><span class="p">(</span><span class="n">maybe_class_frame</span><span class="p">)[</span><span class="mi">3</span><span class="p">]</span>
-        <span class="k">if</span> <span class="n">statement_list</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">return</span> <span class="kc">False</span>
-        <span class="n">first_statment</span> <span class="o">=</span> <span class="n">statement_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
-        <span class="k">for</span> <span class="n">pat</span> <span class="ow">in</span> <span class="n">_KERNEL_CLASS_STACKFRAME_STMT_RES</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">pat</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">first_statment</span><span class="p">):</span>
-                <span class="k">return</span> <span class="kc">True</span>
-    <span class="k">except</span><span class="p">:</span>
-        <span class="k">pass</span>
-    <span class="k">return</span> <span class="kc">False</span>
+    <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+        <span class="c1"># sys._getframe raises ValueError when the requested depth exceeds the available call stack.</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    <span class="c1"># Read the source directly to avoid inspect's module lookup. Check for file changes to support module reloads,</span>
+    <span class="c1"># and pass globals so loaders such as zipimport can supply the source.</span>
+    <span class="n">filename</span> <span class="o">=</span> <span class="n">maybe_class_frame</span><span class="o">.</span><span class="n">f_code</span><span class="o">.</span><span class="n">co_filename</span>
+    <span class="c1"># Drop cached lines if the file's size or modification time changed; getline then reads fresh source.</span>
+    <span class="n">linecache</span><span class="o">.</span><span class="n">checkcache</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+    <span class="c1"># Use cached source if available. Otherwise, read the file or ask the module's loader for source, using</span>
+    <span class="c1"># module_globals (the frame's f_globals here) to find that loader.</span>
+    <span class="n">first_statement</span> <span class="o">=</span> <span class="n">linecache</span><span class="o">.</span><span class="n">getline</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">maybe_class_frame</span><span class="o">.</span><span class="n">f_lineno</span><span class="p">,</span> <span class="n">maybe_class_frame</span><span class="o">.</span><span class="n">f_globals</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="k">return</span> <span class="nb">any</span><span class="p">(</span><span class="n">pat</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">first_statement</span><span class="p">)</span> <span class="k">for</span> <span class="n">pat</span> <span class="ow">in</span> <span class="n">_KERNEL_CLASS_STACKFRAME_STMT_RES</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_kernel_impl</span><span class="p">(</span>
