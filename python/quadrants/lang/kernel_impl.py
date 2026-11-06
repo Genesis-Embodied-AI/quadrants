@@ -149,7 +149,8 @@ def _inside_class(level_of_class_stackframe: int) -> bool:
     filename = maybe_class_frame.f_code.co_filename
     # Drop cached lines if the file's size or modification time changed; getline then reads fresh source.
     linecache.checkcache(filename)
-    # Get the current source line from the cache, file, or module loader; return an empty string if unavailable.
+    # Use cached source if available. Otherwise, read the file or ask the module's loader for source, using
+    # module_globals (the frame's f_globals here) to find that loader.
     first_statement = linecache.getline(filename, maybe_class_frame.f_lineno, maybe_class_frame.f_globals).strip()
     return any(pat.match(first_statement) for pat in _KERNEL_CLASS_STACKFRAME_STMT_RES)
 
