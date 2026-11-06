@@ -66,6 +66,37 @@ class ReplaceUsesAndMarkUsersDirty : public BasicStmtVisitor {
   }
 };
 
+// Records the users of every statement under a root, with the same traversal as ReplaceUsesAndMarkUsersDirty (statement
+// operands and container-statement operands).
+class CollectUsers : public BasicStmtVisitor {
+ private:
+  std::unordered_map<Stmt *, std::vector<Stmt *>> *const users_;
+
+  void collect_users(Stmt *stmt) {
+    for (auto *op : stmt->get_operands()) {
+      if (op != nullptr) {
+        (*users_)[op].push_back(stmt);
+      }
+    }
+  }
+
+ public:
+  using BasicStmtVisitor::visit;
+
+  explicit CollectUsers(std::unordered_map<Stmt *, std::vector<Stmt *>> *users) : users_(users) {
+    allow_undefined_visitor = true;
+    invoke_default_visitor = true;
+  }
+
+  void visit(Stmt *stmt) override {
+    collect_users(stmt);
+  }
+
+  void preprocess_container_stmt(Stmt *stmt) override {
+    collect_users(stmt);
+  }
+};
+
 // Whole Kernel Common Subexpression Elimination
 class WholeKernelCSE : public BasicStmtVisitor {
  private:
@@ -78,6 +109,20 @@ class WholeKernelCSE : public BasicStmtVisitor {
   std::unordered_map<std::size_t, std::vector<Stmt *>> visible_stmts_;
   std::vector<std::vector<std::pair<std::size_t, Stmt *>>> scope_inserts_;
   DelayedIRModifier modifier_;
+
+  // State of the `users_` index: kUnbuilt = not built this round; kValid = usable; kStale = invalidated by tree edits.
+  enum class UsersState { kUnbuilt, kValid, kStale };
+  // Root of the IR tree being optimized, saved at round start so CollectUsers can traverse the whole tree.
+  IRNode *root_ = nullptr;
+  // Indexes users under `root_` to avoid a tree walk per elimination. Built on the first elimination of each round.
+  // Updated as operands change; eliminated statements stay alive until the round ends.
+  std::unordered_map<Stmt *, std::vector<Stmt *>> users_;
+  UsersState users_state_ = UsersState::kUnbuilt;
+
+  // Statements eliminated in the current round. Erased together at the end of the round, one pass per block: the
+  // per-statement DelayedIRModifier::erase does a linear find + vector erase each, quadratic in the block size when
+  // many root-block statements are eliminated.
+  std::vector<Stmt *> to_erase_;
 
   // When true, only address-computation statements (Global/External/MatrixPtr) are eliminated; all other statements
   // are left untouched. Used pre-offload to merge same-address read/write pointers (the cheap, load-bearing part of
@@ -178,6 +223,57 @@ class WholeKernelCSE : public BasicStmtVisitor {
     return irpass::analysis::same_statements(this_stmt, prev_stmt);
   }
 
+  void begin_round(IRNode *root) {
+    root_ = root;
+    users_.clear();
+    users_state_ = UsersState::kUnbuilt;
+  }
+
+  // Same effect as ReplaceUsesAndMarkUsersDirty::run(&visited_, duplicate_stmt, replacement_stmt).
+  void replace_uses_and_mark_users_dirty(Stmt *duplicate_stmt, Stmt *replacement_stmt) {
+    if (users_state_ == UsersState::kStale) {
+      // Branch hoisting invalidates the index, so the rest of this round uses the tree walk.
+      ReplaceUsesAndMarkUsersDirty::run(&visited_, duplicate_stmt, replacement_stmt);
+      return;
+    }
+    if (users_state_ == UsersState::kUnbuilt) {
+      CollectUsers collect(&users_);
+      root_->accept(&collect);
+      users_state_ = UsersState::kValid;
+    }
+    auto it = users_.find(duplicate_stmt);
+    if (it == users_.end()) {
+      return;
+    }
+    std::vector<Stmt *> duplicate_stmt_users = std::move(it->second);
+    users_.erase(it);
+    auto &replacement_stmt_users = users_[replacement_stmt];
+    for (auto *user : duplicate_stmt_users) {
+      // Entries go stale when an earlier elimination already rewrote that operand; has_operand filters them.
+      if (user->has_operand(duplicate_stmt)) {
+        // Mark the user dirty: remove its ID from the already-checked set so CSE can check its changed operands again.
+        visited_.erase(user->instance_id);
+        user->replace_operand_with(duplicate_stmt, replacement_stmt);
+        replacement_stmt_users.push_back(user);
+      }
+    }
+  }
+
+  bool erase_eliminated() {
+    if (to_erase_.empty()) {
+      return false;
+    }
+    std::unordered_map<Block *, std::unordered_set<Stmt *>> by_block;
+    for (auto *stmt : to_erase_) {
+      by_block[stmt->parent].insert(stmt);
+    }
+    for (auto &[block, stmts] : by_block) {
+      block->erase(std::move(stmts));
+    }
+    to_erase_.clear();
+    return true;
+  }
+
   void register_visible(std::size_t hash_value, Stmt *stmt) {
     visible_stmts_[hash_value].push_back(stmt);
     scope_inserts_.back().emplace_back(hash_value, stmt);
@@ -203,8 +299,8 @@ class WholeKernelCSE : public BasicStmtVisitor {
     if (it != visible_stmts_.end()) {
       for (auto *prev_stmt : it->second) {
         if (common_statement_eliminable(stmt, prev_stmt)) {
-          ReplaceUsesAndMarkUsersDirty::run(&visited_, stmt, prev_stmt);
-          modifier_.erase(stmt);
+          replace_uses_and_mark_users_dirty(stmt, prev_stmt);
+          to_erase_.push_back(stmt);
           return;
         }
       }
@@ -261,6 +357,7 @@ class WholeKernelCSE : public BasicStmtVisitor {
         irpass::replace_all_usages_with(false_clause.get(), false_clause->statements[0].get(), common_stmt.get());
         modifier_.insert_before(if_stmt, std::move(common_stmt));
         false_clause->erase(0);
+        users_state_ = UsersState::kStale;
       }
       if (!true_clause->statements.empty() && !false_clause->statements.empty() &&
           irpass::analysis::same_statements(true_clause->statements.back().get(),
@@ -270,6 +367,7 @@ class WholeKernelCSE : public BasicStmtVisitor {
         irpass::replace_all_usages_with(false_clause.get(), false_clause->statements.back().get(), common_stmt.get());
         modifier_.insert_after(if_stmt, std::move(common_stmt));
         false_clause->erase((int)false_clause->size() - 1);
+        users_state_ = UsersState::kStale;
       }
     }
 
@@ -283,8 +381,12 @@ class WholeKernelCSE : public BasicStmtVisitor {
     WholeKernelCSE eliminator(ptrs_only);
     bool modified = false;
     while (true) {
+      eliminator.begin_round(node);
       node->accept(&eliminator);
-      if (eliminator.modifier_.modify_ir())
+      // Inserts (if-branch hoisting) first, then erasures, as in DelayedIRModifier::modify_ir.
+      bool round_modified = eliminator.modifier_.modify_ir();
+      round_modified |= eliminator.erase_eliminated();
+      if (round_modified)
         modified = true;
       else
         break;
