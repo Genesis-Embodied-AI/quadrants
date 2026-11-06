@@ -53,7 +53,7 @@ class Builder:
             ctx.raised = True
             e = handle_exception_from_cpp(e)
             if not isinstance(e, QuadrantsCompilationError):
-                msg = ctx.get_formatted_location_with_source_context(node) + traceback.format_exc()
+                msg = ctx.memoized_get_formatted_location_with_source_context(node) + traceback.format_exc()
                 raise QuadrantsCompilationError(msg) from None
             msg = f"""quadrants stack trace:
 ===
@@ -61,7 +61,7 @@ class Builder:
 ===
 
 Your code:
-{ctx.get_formatted_location_with_source_context(node)}{e}
+{ctx.memoized_get_formatted_location_with_source_context(node)}{e}
 """
             raise type(e)(msg) from None
 
@@ -409,18 +409,18 @@ class ASTTransformerFuncContext:
     def get_formatted_location(self, node: ast.AST) -> str:
         return f'File "{self.file}", line {node.lineno + self.lineno_offset}, in {self.func.func.__name__}:\n'
 
-    def get_formatted_location_with_source_context(self, node: ast.AST) -> str:
+    def memoized_get_formatted_location_with_source_context(self, node: ast.AST) -> str:
         """Return the location, source lines, and caret markers, caching the result for each source span and node type."""
         key = (node.lineno, node.col_offset, node.end_lineno, node.end_col_offset, node.__class__.__name__)
         # self.func is persistent, whereas context is ephemeral
         cached = self.func.pos_info_cache.get(key)
         if cached is not None:
             return cached
-        msg = self._build_pos_info(node)
+        msg = self._get_formatted_location_with_source_context(node)
         self.func.pos_info_cache[key] = msg
         return msg
 
-    def _build_pos_info(self, node: ast.AST) -> str:
+    def _get_formatted_location_with_source_context(self, node: ast.AST) -> str:
         """
         Returns a formatted string: a source-location snippet for node, consisting of a location header, the relevant
         source line(s), and a caret (^) underline marking the exact columns the node spans — the same shape as a
