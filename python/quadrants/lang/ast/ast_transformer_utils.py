@@ -35,7 +35,9 @@ class Builder:
             if method is None:
                 error_msg = f'Unsupported node "{node.__class__.__name__}"'
                 raise QuadrantsSyntaxError(error_msg)
-            info = ctx.memoized_get_pos_info(node) if isinstance(node, (ast.stmt, ast.expr)) else ""
+            info = (
+                ctx.get_formatted_location_with_source_context(node) if isinstance(node, (ast.stmt, ast.expr)) else ""
+            )
             with impl.get_runtime().src_info_guard(info):
                 res = method(ctx, node)
                 if not hasattr(node, "violates_pure"):
@@ -52,7 +54,7 @@ class Builder:
             ctx.raised = True
             e = handle_exception_from_cpp(e)
             if not isinstance(e, QuadrantsCompilationError):
-                msg = ctx.memoized_get_pos_info(node) + traceback.format_exc()
+                msg = ctx.get_formatted_location_with_source_context(node) + traceback.format_exc()
                 raise QuadrantsCompilationError(msg) from None
             msg = f"""quadrants stack trace:
 ===
@@ -60,7 +62,7 @@ class Builder:
 ===
 
 Your code:
-{ctx.memoized_get_pos_info(node)}{e}
+{ctx.get_formatted_location_with_source_context(node)}{e}
 """
             raise type(e)(msg) from None
 
@@ -405,7 +407,8 @@ class ASTTransformerFuncContext:
         except AttributeError:
             raise QuadrantsNameError(f'Name "{name}" is not defined')
 
-    def memoized_get_pos_info(self, node: ast.AST) -> str:
+    def get_formatted_location_with_source_context(self, node: ast.AST) -> str:
+        """Return the location, source lines, and caret markers, caching the result for each source span and node type."""
         key = (node.lineno, node.col_offset, node.end_lineno, node.end_col_offset, node.__class__.__name__)
         # self.func is persistent, whereas context is ephemeral
         cached = self.func.pos_info_cache.get(key)
