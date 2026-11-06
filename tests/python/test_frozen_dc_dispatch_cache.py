@@ -493,7 +493,7 @@ def test_grouped_on_struct_ndarray_after_field_to_ndarray_switch():
         weights: qd.Tensor
 
     @qd.kernel
-    def sum_via_grouped(info: qd.template(), out: qd.types.ndarray()):
+    def sum_via_grouped(info: qd.Template, out: qd.types.ndarray()):
         for I in qd.grouped(info.weights):
             out[0] += info.weights[I]
 

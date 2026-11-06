@@ -1098,6 +1098,8 @@ int GfxRuntime::get_task_graph_do_while_level_id(KernelHandle handle, int task_i
 void GfxRuntime::buffer_copy(DevicePtr dst, DevicePtr src, size_t size) {
   ensure_current_cmdlist();
   current_cmdlist_->buffer_barrier(src);
+  // Earlier kernels may have read or written the destination before this copy overwrites it.
+  current_cmdlist_->buffer_barrier(dst);
   current_cmdlist_->buffer_copy(dst, src, size);
   current_cmdlist_->buffer_barrier(dst);
 }

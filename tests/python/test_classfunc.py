@@ -1,3 +1,7 @@
+import importlib
+import textwrap
+import zipfile
+
 import quadrants as qd
 from quadrants.lang.misc import get_host_arch_list
 
@@ -76,3 +80,59 @@ def test_class_with_field():
 
     a = A()
     a.start()
+
+
+_DATA_ORIENTED_MODULE_SRC = textwrap.dedent(
+    """
+    import quadrants as qd
+
+
+    @qd.data_oriented
+    class Foo:
+        def __init__(self):
+            self.val = qd.field(qd.i32, shape=())
+
+        @qd.kernel
+        def fill(self):
+            self.val[()] = VALUE
+    """
+)
+
+
+@test_utils.test(arch=qd.cpu)
+def test_classfunc_after_module_reload(tmp_path, monkeypatch):
+    # Check that class kernels still bind self after editing and reloading a module with cached source lines.
+    #
+    # 1. Import a temporary module and run its class kernel, populating the source cache.
+    # 2. Rewrite the file, adding seven lines above the class and changing the kernel's output from 1 to 2.
+    # 3. Reload the module and check that the new class kernel runs and produces 2.
+    #
+    # The shifted lines expose stale-cache reads. This covers a change in file size; it does not separately test
+    # an edit where only the modification time changes.
+    module_path = tmp_path / "reloaded_data_oriented.py"
+    module_path.write_text(_DATA_ORIENTED_MODULE_SRC.replace("VALUE", "1"))
+    monkeypatch.syspath_prepend(tmp_path)
+    module = importlib.import_module("reloaded_data_oriented")
+    foo = module.Foo()
+    foo.fill()
+    assert foo.val[()] == 1
+
+    # Shift every line of the class so that the source lines cached from the first import point elsewhere.
+    module_path.write_text("# padding\n" * 7 + _DATA_ORIENTED_MODULE_SRC.replace("VALUE", "2"))
+    module = importlib.reload(module)
+    foo = module.Foo()
+    foo.fill()
+    assert foo.val[()] == 2
+
+
+@test_utils.test(arch=qd.cpu)
+def test_classfunc_in_zipimported_module(tmp_path, monkeypatch):
+    # Check that class kernels bind self when their source comes from a ZIP loader instead of a file on disk.
+    archive_path = tmp_path / "kernels.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("zipped_data_oriented.py", _DATA_ORIENTED_MODULE_SRC.replace("VALUE", "3"))
+    monkeypatch.syspath_prepend(archive_path)
+    module = importlib.import_module("zipped_data_oriented")
+    foo = module.Foo()
+    foo.fill()
+    assert foo.val[()] == 3

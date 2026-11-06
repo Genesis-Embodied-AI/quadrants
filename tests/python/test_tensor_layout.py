@@ -53,7 +53,7 @@ def test_layout_field_kernel_canonical_indexing_rank2():
     a = qd.tensor(qd.i32, shape=(3, 4), backend=qd.Backend.FIELD, layout=(1, 0))
 
     @qd.kernel
-    def fill(x: qd.template()):
+    def fill(x: qd.Template):
         for i, j in qd.ndrange(3, 4):
             x[i, j] = i * 10 + j
 

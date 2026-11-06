@@ -76,6 +76,7 @@ def test_graph_do_while_namespace():
 
     @qd.kernel(graph=True)
     def graph_loop(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndim=0)):
+        """A graph kernel's leading docstring must be accepted on every supported Python version."""
         while qd.graph.do_while(counter):
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1

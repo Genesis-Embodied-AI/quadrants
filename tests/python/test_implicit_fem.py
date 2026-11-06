@@ -95,7 +95,7 @@ def test_implicit_fem():
             F_f[u].y -= 9.8 * F_m[u]
 
     @qd.kernel
-    def matmul_cell(ret: qd.template(), vel: qd.template()):
+    def matmul_cell(ret: qd.Template, vel: qd.Template):
         for i in ret:
             ret[i] = vel[i] * F_m[i]
         for c in F_vertices:
@@ -119,12 +119,12 @@ def test_implicit_fem():
                             ret[verts[u]][d] += -(dt**2) * dH[j, i] * tmp
 
     @qd.kernel
-    def add(ans: qd.template(), a: qd.template(), k: qd.f32, b: qd.template()):
+    def add(ans: qd.Template, a: qd.Template, k: qd.f32, b: qd.Template):
         for i in ans:
             ans[i] = a[i] + k * b[i]
 
     @qd.kernel
-    def dot(a: qd.template(), b: qd.template()) -> qd.f32:
+    def dot(a: qd.Template, b: qd.Template) -> qd.f32:
         ans = 0.0
         for i in a:
             ans += a[i].dot(b[i])
@@ -204,13 +204,13 @@ def test_implicit_fem():
                         A[3 * verts[u] + d, 3 * verts[3] + i] += -(dt**2) * (-dH[i, 0] - dH[i, 1] - dH[i, 2])
 
     @qd.kernel
-    def flatten(dest: qd.types.ndarray(), src: qd.template()):
+    def flatten(dest: qd.types.ndarray(), src: qd.Template):
         for i in range(n_verts):
             for j in range(3):
                 dest[3 * i + j] = src[i][j]
 
     @qd.kernel
-    def aggragate(dest: qd.template(), src: qd.types.ndarray()):
+    def aggragate(dest: qd.Template, src: qd.types.ndarray()):
         for i in range(n_verts):
             for j in range(3):
                 dest[i][j] = src[3 * i + j]

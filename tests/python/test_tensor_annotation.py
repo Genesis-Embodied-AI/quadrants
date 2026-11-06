@@ -1,6 +1,6 @@
 """Tests for ``qd.Tensor``: value-dispatch kernel-argument annotation.
 
-A kernel parameter annotated with ``qd.Tensor`` accepts either a Field (handled like ``qd.template()``) or an Ndarray
+A kernel parameter annotated with ``qd.Tensor`` accepts either a Field (handled like ``qd.Template``) or an Ndarray
 (handled like ``qd.types.ndarray()``). The same kernel object compiles distinct cache entries for each branch.
 """
 

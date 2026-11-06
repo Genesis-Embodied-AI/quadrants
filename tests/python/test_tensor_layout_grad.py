@@ -55,12 +55,12 @@ def test_layout_grad_canonical_kernel_roundtrip_rank2(backend):
     if backend is qd.Backend.FIELD:
 
         @qd.kernel
-        def write_primal(x: qd.template()):
+        def write_primal(x: qd.Template):
             for i, j in qd.ndrange(4, 5):
                 x[i, j] = i * 10.0 + j
 
         @qd.kernel
-        def write_grad(x: qd.template()):
+        def write_grad(x: qd.Template):
             for i, j in qd.ndrange(4, 5):
                 x.grad[i, j] = i * 100.0 + j * 10.0
 
@@ -105,12 +105,12 @@ def test_layout_grad_canonical_kernel_roundtrip_rank3_kij(backend):
     if backend is qd.Backend.FIELD:
 
         @qd.kernel
-        def write_primal(x: qd.template()):
+        def write_primal(x: qd.Template):
             for i, j, k in qd.ndrange(2, 3, 4):
                 x[i, j, k] = i * 100.0 + j * 10.0 + k
 
         @qd.kernel
-        def write_grad(x: qd.template()):
+        def write_grad(x: qd.Template):
             for i, j, k in qd.ndrange(2, 3, 4):
                 x.grad[i, j, k] = i * 1000.0 + j * 100.0 + k * 10.0
 
@@ -151,7 +151,7 @@ def test_layout_grad_all_rank3_permutations(layout, backend):
     if backend is qd.Backend.FIELD:
 
         @qd.kernel
-        def fill(x: qd.template()):
+        def fill(x: qd.Template):
             for i, j, k in qd.ndrange(2, 3, 4):
                 x[i, j, k] = i * 100.0 + j * 10.0 + k
                 x.grad[i, j, k] = 1000.0 + i * 100.0 + j * 10.0 + k

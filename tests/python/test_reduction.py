@@ -122,7 +122,7 @@ def test_reduction_single_f64(op):
 @test_utils.test()
 def test_reduction_different_scale():
     @qd.kernel
-    def func(n: qd.template()) -> qd.i32:
+    def func(n: qd.Template) -> qd.i32:
         x = 0
         for i in range(n):
             qd.atomic_add(x, 1)

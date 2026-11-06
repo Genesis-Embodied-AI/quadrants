@@ -11,7 +11,7 @@ def test_static_if_dead_branch_not_walked():
     x = qd.field(qd.i32, shape=())
 
     @qd.kernel
-    def kern(take_true: qd.template()):
+    def kern(take_true: qd.Template):
         if qd.static(take_true):
             x[()] = 1
         else:

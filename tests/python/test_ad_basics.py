@@ -479,12 +479,12 @@ def test_ad_frac():
         return fractional
 
     @qd.kernel
-    def qd_frac(input_field: qd.template(), output_field: qd.template()):
+    def qd_frac(input_field: qd.Template, output_field: qd.Template):
         for i in input_field:
             output_field[i] = frac(input_field[i]) ** 2
 
     @qd.kernel
-    def calc_loss(input_field: qd.template(), loss: qd.template()):
+    def calc_loss(input_field: qd.Template, loss: qd.Template):
         for i in input_field:
             loss[()] += input_field[i]
 
@@ -539,19 +539,19 @@ def test_ad_set_loss_grad():
     loss = qd.field(dtype=qd.f32, shape=(), needs_grad=True)
 
     @qd.kernel
-    def eval_x(x: qd.template()):
+    def eval_x(x: qd.Template):
         x[()] = 1.0
 
     @qd.kernel
-    def compute_1(x: qd.template(), loss: qd.template()):
+    def compute_1(x: qd.Template, loss: qd.Template):
         loss[()] = x[()]
 
     @qd.kernel
-    def compute_2(x: qd.template(), loss: qd.template()):
+    def compute_2(x: qd.Template, loss: qd.Template):
         loss[()] = 2 * x[()]
 
     @qd.kernel
-    def compute_3(x: qd.template(), loss: qd.template()):
+    def compute_3(x: qd.Template, loss: qd.Template):
         loss[()] = 4 * x[()]
 
     eval_x(x)
