@@ -1023,6 +1023,8 @@ class Kernel(FuncBase):
 
         # Reject before FwdMode / Tape record this call, so a rejected launch leaves no backward-pass side effects.
         if self.use_graph and (
+            # Reject a kernel already in an autodiff mode. grad_replaced skips recording this call, but does not
+            # reset an autodiff mode already set on the kernel.
             self.autodiff_mode != _NONE
             or (
                 # A gradient-handling wrapper skips automatic recording of inner calls. Check the active autodiff
