@@ -77,7 +77,7 @@ Module Contents
        >>> x = qd.field(qd.f32)
        >>> qd.root.pointer(qd.ij, 4).dense(qd.ij, 8).place(x)
 
-.. py:function:: field(dtype, shape=None, *args, **kwargs)
+.. py:function:: field(dtype, shape=None, *args, fill: quadrants.lang._fill_initializer._FillValue | None = None, **kwargs)
 
    Defines a Quadrants field.
 
@@ -103,6 +103,9 @@ Module Contents
    :param needs_dual: whether this field participates in autodiff (forward mode) and thus needs a dual
                       field to store the gradients.
    :type needs_dual: bool, optional
+   :param fill: Initial value, applied once when the field is materialized. Defaults to None (no explicit
+                initialization). Unlike calling ``field.fill()``, this does not materialize fields immediately.
+   :type fill: optional
 
    Example::
 
@@ -122,7 +125,7 @@ Module Contents
 
 
 
-.. py:function:: ndarray(dtype, shape, needs_grad=False)
+.. py:function:: ndarray(dtype, shape, needs_grad=False, *, fill: quadrants.lang._fill_initializer._FillValue | None = None)
 
    Defines a Quadrants ndarray with scalar elements.
 
@@ -130,6 +133,9 @@ Module Contents
    :type dtype: Union[DataType, MatrixType]
    :param shape: Shape of the ndarray.
    :type shape: Union[int, tuple[int]]
+   :param fill: Initial scalar or per-component values, applied before returning the ndarray. None (default)
+                preserves the allocator's default values. Gradient buffers are not filled.
+   :type fill: optional
 
    .. rubric:: Example
 
