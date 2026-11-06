@@ -17,7 +17,9 @@ from quadrants._lib import core as _qd_core
 from quadrants.lang import exception, expr, impl, matrix, mesh
 from quadrants.lang import ops as qd_ops
 from quadrants.lang._dataclass_util import create_flat_name
+from quadrants.lang._deferred_dataclass import DeferredMemberValue
 from quadrants.lang._ndrange import _Ndrange
+from quadrants.lang._runtime_dataclass import is_runtime_member_name
 from quadrants.lang._unpacked import _UnpackedVectorRef
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
@@ -107,6 +109,8 @@ class ASTTransformer(Builder):
         else:
             node._qd_arg_chain = None  # type: ignore[attr-defined]
         node.violates_pure, node.ptr, node.violates_pure_reason = ctx.get_var_by_name(node.id)
+        if isinstance(node.ptr, DeferredMemberValue) and not ctx.expanding_dataclass_call_parameters:
+            node.ptr.reject()
         # Flattened struct fields (``__qd_foo__qd_bar``) injected by ``populate_global_vars_from_dataclass`` are raw
         # ``Ndarray`` instances.  ``build_Attribute`` already promotes these via ``_promote_ndarray_if_declared`` but
         # the flattened-name path bypasses ``build_Attribute`` entirely, so we must promote here too.
@@ -1009,7 +1013,10 @@ class ASTTransformer(Builder):
                     template_node = None
                     template_side = None
                 template_arg_names = {ctx.func.arg_metas[index].name for index in ctx.template_slot_locations}
-                if (
+                runtime_member = isinstance(template_node, ast.Name) and is_runtime_member_name(
+                    ctx.func.arg_metas, template_node.id
+                )
+                if not runtime_member and (
                     not ctx.is_kernel
                     or not isinstance(template_node, ast.Name)
                     or template_node.id.startswith("__qd_")
@@ -1022,7 +1029,9 @@ class ASTTransformer(Builder):
                         "The argument must be annotated `qd.Tensor | None`, `qd.types.Template | None`, "
                         "or `qd.types.NDArray[...] | None`."
                     )
-                if template_side == "left":
+                if runtime_member:
+                    pass  # The inferred member's bound value already distinguishes None from present values.
+                elif template_side == "left":
                     l = ctx.template_vars[template_node.id]
                 else:
                     r = ctx.template_vars[template_node.id]

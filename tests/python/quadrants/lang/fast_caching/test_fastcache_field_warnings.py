@@ -8,7 +8,7 @@ Cases:
 4. Non-pure kernel with Fields → no warning (fastcache not attempted)
 5. Field passed directly to qd.Tensor kernel param → no warning
 6. Field passed directly to qd.Template kernel param → warning fires
-7. Struct with qd.Template-annotated field containing a Field → warning fires
+7. Dataclass member containing a Field: no warning regardless of its annotation
 """
 
 import dataclasses
@@ -159,15 +159,8 @@ def test_fastcache_field_warnings_warn_top_level_template(tmp_path, capfd):
 
 @test_utils.test(arch=qd.cpu)
 @pytest.mark.skipif(sys.platform.startswith("win"), reason="Windows stderr not working with capfd")
-def test_fastcache_field_warnings_warn_struct_template_field(tmp_path, capfd):
-    """Struct with qd.Template-annotated field containing a Field - warning should fire when the field is
-    actually read by the kernel.
-
-    Pruning-driven narrowing of args hashing only walks members the kernel reads; an unused dataclass field cannot
-    affect kernel codegen so it's correctly omitted from the hash (and from the Field-disables-fastcache check). For
-    the warning path to fire, the kernel must reference the Field - that matches the user-visible contract that
-    fastcache fails iff a "live" Field argument prevents safe parametrisation.
-    """
+def test_fastcache_field_warnings_ignore_dataclass_member_annotation(tmp_path, capfd):
+    """An arriving Field uses inferred Tensor handling, ignoring the member's Template annotation."""
     qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
 
     @dataclasses.dataclass(frozen=True)
@@ -185,4 +178,6 @@ def test_fastcache_field_warnings_warn_struct_template_field(tmp_path, capfd):
     capfd.readouterr()
     k(s)
     _out, err = capfd.readouterr()
-    assert "[FASTCACHE][INVALID_FUNC]" in err
+    assert "[FASTCACHE][INVALID_FUNC]" not in err
+    assert "[FASTCACHE][PARAM_INVALID]" not in err
+    assert f[0] == 1

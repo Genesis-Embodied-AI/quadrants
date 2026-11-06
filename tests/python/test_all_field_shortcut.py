@@ -24,8 +24,10 @@ from tests.helpers import test_utils
 
 def _cached_all_field(obj, annotated):
     """Read the ``_qd_all_field`` verdict for ``annotated`` (identity-guarded), or None if absent."""
-    entry = getattr(obj, "_qd_all_field", {}).get(id(annotated))
-    return entry[1] if entry is not None and entry[0] is annotated else None
+    for schema, verdict in getattr(obj, "_qd_all_field", {}).values():
+        if getattr(schema, "_qd_runtime_origin", schema) is annotated:
+            return verdict
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -334,9 +336,8 @@ def test_struct_with_int_field_not_skipped():
 
 
 @test_utils.test(arch=qd.cpu)
-def test_all_field_struct_wrong_annotation_raises():
-    """If an all-Field struct (with _qd_all_field=True cached) is passed to a kernel parameter annotated as a
-    different type (e.g. float), the kernel must raise an error — not silently skip due to the shortcut."""
+def test_all_field_struct_overrides_scalar_annotation():
+    """Cached all-Field dataclasses still override an unrelated parameter annotation."""
 
     @dataclasses.dataclass(frozen=True)
     class State:
@@ -349,25 +350,22 @@ def test_all_field_struct_wrong_annotation_raises():
 
     @qd.kernel
     def wrong_kernel(val: qd.f32):
-        pass
+        val.x[0] = 9
 
     x = qd.field(qd.i32, shape=(4,))
-    state = State(x=qd.Tensor(x))
+    state = State(x=x)
 
     # First call caches _qd_all_field[State]=True
     correct_kernel(state)
     assert _cached_all_field(state, State) is True
 
-    # Passing the struct to a kernel expecting a float must raise, not silently skip
-    import pytest
-
-    with pytest.raises(Exception):
-        wrong_kernel(state)
+    wrong_kernel(state)
+    assert x[0] == 9
 
 
 @test_utils.test(arch=qd.cpu)
-def test_all_field_struct_passed_as_ndarray_param_raises():
-    """If an all-Field struct is passed where an ndarray is expected, it must error."""
+def test_all_field_struct_overrides_ndarray_annotation():
+    """Dataclass inference precedes ndarray annotation handling."""
 
     @dataclasses.dataclass(frozen=True)
     class State:
@@ -381,15 +379,13 @@ def test_all_field_struct_passed_as_ndarray_param_raises():
     @qd.kernel
     def ndarray_kernel(arr: qd.types.ndarray()):
         for i in range(4):
-            arr[i] = 99
+            arr.x[i] = 99
 
     x = qd.field(qd.i32, shape=(4,))
-    state = State(x=qd.Tensor(x))
+    state = State(x=x)
 
     correct_kernel(state)
     assert _cached_all_field(state, State) is True
 
-    import pytest
-
-    with pytest.raises(Exception):
-        ndarray_kernel(state)
+    ndarray_kernel(state)
+    assert x[0] == 99

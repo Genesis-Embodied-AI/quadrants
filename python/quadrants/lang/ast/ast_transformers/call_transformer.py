@@ -18,6 +18,7 @@ from quadrants.lang import (
 )
 from quadrants.lang import ops as qd_ops
 from quadrants.lang._dataclass_util import create_flat_name
+from quadrants.lang._runtime_dataclass import dataclass_call_arguments
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
     get_decorator,
@@ -372,7 +373,18 @@ class CallTransformer:
         func = node.func.ptr
         func_type = type(func)
 
-        is_func_base_wrapper = func_type in {QuadrantsCallable, BoundQuadrantsCallable}
+        is_func_base_wrapper = func_type in {QuadrantsCallable, BoundQuadrantsCallable} and func._is_quadrants_function
+
+        with (
+            dataclass_call_arguments(func, node.args, node.keywords, func_type is BoundQuadrantsCallable)
+            if is_func_base_wrapper
+            else nullcontext()
+        ):
+            return CallTransformer._build_resolved_call(ctx, node, build_stmt, is_func_base_wrapper)
+
+    @staticmethod
+    def _build_resolved_call(ctx, node, build_stmt, is_func_base_wrapper):
+        func = node.func.ptr
 
         # A ``@qd.func(requires_top_level=True)`` may only be called at the top level of a kernel (or
         # directly inside a ``graph_do_while`` body). Nesting it in a runtime for / if / while demotes

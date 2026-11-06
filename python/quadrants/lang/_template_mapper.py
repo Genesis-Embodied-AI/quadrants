@@ -3,6 +3,7 @@ from typing import Any, TypeAlias
 from weakref import ReferenceType, WeakKeyDictionary
 
 from quadrants.lang import impl
+from quadrants.lang._runtime_dataclass import prepare_kernel_dataclass_args_for_mapper
 from quadrants.lang.impl import Program
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import is_data_oriented
@@ -74,20 +75,32 @@ class TemplateMapper:
         # ``annotation_has_final_subtree``). Computed lazily on first ``lookup`` so its ``Final`` validation runs then.
         self._mapping_cache_disabled: bool | None = None
 
-    def extract(self, raise_on_templated_floats: bool, args: tuple[Any, ...]) -> Key:
+    def extract(self, raise_on_templated_floats: bool, args: tuple[Any, ...], final_value_key_by_value_id=None) -> Key:
         # Optional ndarray + None gets its own key: _extract_arg's NdarrayType branch reads .shape and raises on None.
         return tuple(
             [
                 (
                     OPTIONAL_ABSENT
                     if arg is None and kernel_arg.optional and type(kernel_arg.annotation) is ndarray_type.NdarrayType
-                    else _extract_arg(raise_on_templated_floats, arg, kernel_arg.annotation, kernel_arg.name)
+                    else _extract_arg(
+                        raise_on_templated_floats,
+                        arg,
+                        kernel_arg.annotation,
+                        kernel_arg.name,
+                        final_value_key_by_value_id,
+                    )
                 )
                 for arg, kernel_arg in zip(args, self.arguments)
             ]
         )
 
-    def lookup(self, raise_on_templated_floats: bool, args: tuple[Any, ...]) -> tuple[int, Key]:
+    def lookup(
+        self,
+        raise_on_templated_floats: bool,
+        args: tuple[Any, ...],
+        final_value_key_by_value_id=None,
+        runtime_kernel=None,
+    ) -> tuple[int, Key]:
         if len(args) != self.num_args:
             raise TypeError(f"{self.num_args} argument(s) needed but {len(args)} provided.")
 
@@ -108,6 +121,8 @@ class TemplateMapper:
         # branching for primitive types dramatically improve performance of hash computation.
         mapping_cache_tracker: list[ReferenceType | None] | None = None
         args_hash: ArgsHash = tuple([id(arg) for arg in args])
+        if runtime_kernel is not None:
+            final_value_key_by_value_id = prepare_kernel_dataclass_args_for_mapper(runtime_kernel, args, args_hash)
         # A ``@qd.data_oriented`` container's member ndarrays can be reassigned between calls on the same instance
         # (``state.x = other_ndarray``), which ``id(arg)`` cannot see, so the spec-key cache would serve an entry
         # compiled for the old dtype/ndim. Fold the reachable ndarray ids in as well.
@@ -156,7 +171,7 @@ class TemplateMapper:
             if mapping_cache_tracker:
                 return self._mapping_cache[args_hash]
 
-        key = self.extract(raise_on_templated_floats, args)
+        key = self.extract(raise_on_templated_floats, args, final_value_key_by_value_id)
         try:
             count = self.mapping[key]
         except KeyError:

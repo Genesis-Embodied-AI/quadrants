@@ -13,10 +13,17 @@ import sys
 import types
 import typing
 import uuid
-import weakref
 from typing import Any
 
 import numpy as np
+
+from quadrants.lang._final_annotation import dataclass_field_is_final
+
+# Re-export the marker predicate for existing compiler callers.
+from quadrants.lang._final_annotation import (  # pylint: disable=unused-import
+    is_final_annotation as is_final_annotation,
+)
+from quadrants.lang._weak_identity_cache import WeakIdentityCache
 
 _MISSING = object()  # sentinel distinct from ``None`` (a legal attribute value) while resolving a qualname
 
@@ -34,74 +41,9 @@ def _reseed_process_nonce() -> None:
 if hasattr(os, "register_at_fork"):  # POSIX only; ``spawn``/Windows re-import and reseed
     os.register_at_fork(after_in_child=_reseed_process_nonce)
 
-# Types allowed inside ``Final[T]``: baked as a literal, so ``T`` must be a stable-by-value compile-time constant.
-# ``enum.Enum`` subclasses are allowed too (handled separately).
-_FINAL_SCALAR_TYPES = frozenset({bool, int, float, str})
-
-# Tailored hints for types where ``Final[T]`` is a likely mistake. Matched by name to avoid import cycles.
-_FINAL_REJECT_HINTS: "dict[str, str]" = {
-    "NdarrayType": "arrays are runtime data, not compile-time constants - drop the ``Final`` and annotate the field "
-    "with ``qd.types.NDArray[dtype, ndim]`` as usual",
-    "MatrixType": "matrices are runtime data, not compile-time constants - drop the ``Final``",
-    "StructType": "``qd.dataclass`` structs are runtime data, not compile-time constants - drop the ``Final``",
-    "Tensor": "``qd.Tensor`` is runtime data, not a compile-time constant - drop the ``Final``",
-    # ``qd.Template`` and ``qd.types.annotations.template`` are both named ``Template``.
-    "Template": "``Final[qd.Template]`` is redundant - a ``qd.Template`` field is already compile-time; use "
-    "``Final[<python type>]`` (e.g. ``Final[int]``) instead",
-}
-
-
-def is_final_annotation(annotation: Any) -> bool:
-    """True if ``annotation`` is a subscripted ``typing.Final[T]``.
-
-    Bare ``typing.Final`` returns False (no origin) but is rejected by ``_build_final_plan``, not treated as a field.
-    ``typing_extensions.Final`` is the same object (>=3.10).
-    """
-    return typing.get_origin(annotation) is typing.Final
-
 
 def _describe_annotation(annotation: Any) -> str:
     return getattr(annotation, "__name__", None) or repr(annotation)
-
-
-def _reject_hint_for(inner: Any) -> str | None:
-    """Tailored remediation hint if ``Final[inner]`` names a rejectable type, else None (matched by name, no import)."""
-    for name in (type(inner).__name__, _describe_annotation(inner)):
-        hint = _FINAL_REJECT_HINTS.get(name)
-        if hint is not None:
-            return hint
-    return None
-
-
-def _validate_final_inner_type(dc_type: type, field_name: str, annotation: Any) -> None:
-    """Raise unless ``Final[annotation]`` names a bakeable compile-time type. Only for a subscripted ``Final``."""
-    inner = typing.get_args(annotation)
-    if len(inner) != 1:
-        raise TypeError(
-            f"{dc_type.__name__}.{field_name}: ``typing.Final`` takes exactly one type argument, got "
-            f"``Final[{', '.join(_describe_annotation(a) for a in inner)}]``."
-        )
-    inner_type = inner[0]
-
-    if inner_type in _FINAL_SCALAR_TYPES:
-        return
-    if isinstance(inner_type, type) and issubclass(inner_type, enum.Enum):
-        return
-
-    hint = _reject_hint_for(inner_type)
-    if hint is None:
-        if isinstance(inner_type, type) and dataclasses.is_dataclass(inner_type):
-            hint = (
-                "nested dataclasses are walked structurally - drop the ``Final`` from this field and mark the "
-                "leaf fields inside it as ``Final[...]`` instead"
-            )
-        else:
-            allowed = ", ".join(sorted(t.__name__ for t in _FINAL_SCALAR_TYPES))
-            hint = f"``Final[T]`` supports T in {{{allowed}}} or an ``enum.Enum`` subclass"
-    raise TypeError(
-        f"{dc_type.__name__}.{field_name}: ``Final[{_describe_annotation(inner_type)}]`` cannot be baked as a "
-        f"Quadrants compile-time constant - {hint}."
-    )
 
 
 def _rebinding_is_prevented(dc_type: type) -> bool:
@@ -144,56 +86,12 @@ def _first_final_path(dc_type: type, visiting: "frozenset[int]") -> "tuple[str, 
     return path
 
 
-def _string_annotation_looks_final(dc_type: type, field_name: str, annotation: str) -> bool:
-    """Best-effort: does the string annotation for ``field_name`` name ``typing.Final`` (possibly aliased)?
-
-    Resolved per field, in the module + class that *define* it - not whole-class ``typing.get_type_hints``, which is
-    all-or-nothing: one unresolvable sibling (e.g. a ``TYPE_CHECKING``-only import) would blind us to an aliased
-    ``Final`` here. Tries the whole annotation, then (if only its inner type is unresolvable) the head symbol alone
-    (``F[Bad]`` -> ``F`` -> ``Final``); falls back to a literal substring test if nothing resolves. ``eval`` carries
-    the same trust as ``get_type_hints`` - both execute the defining module's own annotation expressions.
-    """
-    globalns: dict = {}
-    localns: dict = {}
-    for klass in dc_type.__mro__:
-        if field_name in getattr(klass, "__annotations__", {}):
-            module = sys.modules.get(klass.__module__)
-            globalns = getattr(module, "__dict__", None) or {}
-            localns = dict(vars(klass))
-            break
-    for expr in (annotation.strip(), annotation.split("[", 1)[0].strip()):
-        try:
-            resolved = eval(expr, globalns, localns)
-        except Exception:
-            continue
-        return resolved is typing.Final or is_final_annotation(resolved)
-    return "Final" in annotation
-
-
 def _build_final_plan(dc_type: type) -> "frozenset[str]":
     """Validate every ``Final`` field on ``dc_type`` and return their names. Once per type (memoised)."""
     final_names = []
     for field in dataclasses.fields(dc_type):
         annotation = field.type
-        if isinstance(annotation, str):
-            # ``from __future__ import annotations`` stringizes ``field.type``; we cannot see ``Final`` through it, so
-            # such a field would silently become a runtime arg. Detect a (possibly aliased) ``Final`` and reject.
-            if _string_annotation_looks_final(dc_type, field.name, annotation):
-                raise TypeError(
-                    f"{dc_type.__name__}.{field.name}: annotation is the unresolved string {annotation!r}. Quadrants "
-                    f"cannot see ``Final`` through a string annotation, so this field would silently become a runtime "
-                    f"kernel argument. Remove ``from __future__ import annotations`` from the module defining "
-                    f"{dc_type.__name__}, or annotate with the real type object."
-                )
-            continue
-        if annotation is typing.Final:
-            # Bare ``Final`` (no ``[T]``): ``is_final_annotation`` is False for it, so reject explicitly.
-            raise TypeError(
-                f"{dc_type.__name__}.{field.name}: bare ``typing.Final`` is not supported as a Quadrants "
-                f"compile-time template field. Write ``Final[T]`` with a concrete type, e.g. "
-                f"``{field.name}: Final[int]``."
-            )
-        if not is_final_annotation(annotation):
+        if not dataclass_field_is_final(dc_type, field.name, annotation):
             # A ``Final``-like form that is not ``typing.Final`` would also silently become a runtime arg.
             origin = typing.get_origin(annotation)
             if origin is not None and "Final" in _describe_annotation(origin):
@@ -203,7 +101,6 @@ def _build_final_plan(dc_type: type) -> "frozenset[str]":
                     f"library."
                 )
             continue
-        _validate_final_inner_type(dc_type, field.name, annotation)
         final_names.append(field.name)
 
     if final_names and not _rebinding_is_prevented(dc_type):
@@ -563,7 +460,7 @@ class _ClassRef:
 # ``get`` compares keys by ``__eq__``/``__hash__``, so a metaclass making distinct classes compare equal would alias
 # two objects to one serial. ``id`` alone is unsafe (after an object is freed CPython recycles its address), so the
 # entry holds a weakref: a callback drops it on death and the guard rejects a stale entry whose ``id`` was recycled.
-_dynamic_object_serials: "dict[int, tuple[weakref.ref, int]]" = {}
+_dynamic_object_serials: WeakIdentityCache[int] = WeakIdentityCache()
 _dynamic_class_serial_counter = itertools.count()
 
 
@@ -572,22 +469,10 @@ def _dynamic_class_serial(obj: Any) -> int:
     lifetime. An object that cannot be weakly referenced draws a fresh serial each call - a redundant miss, never a
     stale reuse.
     """
-    key = id(obj)
-    entry = _dynamic_object_serials.get(key)
-    if entry is not None and entry[0]() is obj:  # identity guard: same live object, ``id`` not recycled
-        return entry[1]
-    serial = next(_dynamic_class_serial_counter)
-
-    def _drop(ref: "weakref.ref", k: int = key) -> None:
-        cur = _dynamic_object_serials.get(k)
-        if cur is not None and cur[0] is ref:  # only our own entry, never one that recycled the ``id``
-            del _dynamic_object_serials[k]
-
-    try:
-        ref = weakref.ref(obj, _drop)
-    except TypeError:
-        return serial
-    _dynamic_object_serials[key] = (ref, serial)
+    serial = _dynamic_object_serials.get(obj)
+    if serial is None:
+        serial = next(_dynamic_class_serial_counter)
+        _dynamic_object_serials.set(obj, serial)
     return serial
 
 

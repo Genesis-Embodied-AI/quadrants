@@ -23,11 +23,13 @@ from quadrants.lang import (
 )
 from quadrants.lang import ops as qd_ops
 from quadrants.lang._dataclass_util import create_flat_name
+from quadrants.lang._deferred_dataclass import DeferredMemberType, DeferredMemberValue
 from quadrants.lang._final_dataclass_fields import (
     final_field_names,
     is_final_annotation,
 )
 from quadrants.lang._optional_annotation import OPTIONAL_ABSENT
+from quadrants.lang._runtime_dataclass import runtime_template_members
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
 )
@@ -63,6 +65,8 @@ class FunctionDefTransformer:
         this_arg_features: tuple[tuple[Any, ...], ...] | None,
         prefix_name: str,
     ) -> tuple[bool, Any]:
+        if isinstance(annotation, DeferredMemberType):
+            return True, annotation.bind(name)
         full_name = prefix_name + "_" + name
         if not isinstance(annotation, primitive_types.RefType):
             ctx.kernel_args.append(name)
@@ -353,6 +357,10 @@ class FunctionDefTransformer:
             anno = arg_meta.annotation
             is_template = anno is annotations.template or isinstance(anno, annotations.template)
             is_tensor_anno = anno is _TensorClass
+            if hasattr(anno, "_qd_runtime_origin"):
+                for path, child in runtime_template_members(anno, ctx.py_args[i]):
+                    _walk_obj(child, i, path, {id(child)})
+                continue
             if not (is_template or is_tensor_anno):
                 continue
             val = ctx.py_args[i]
@@ -383,6 +391,11 @@ class FunctionDefTransformer:
         # ``@qd.func`` (``static_rigid_sim_config.para_level``) reaches the kernel's pruning set - without it the
         # args-hasher never sees the value and configurations that differ only there collide in the fastcache key.
         ctx.fn_param_names.add(argument_name)
+        if isinstance(argument_type, DeferredMemberType):
+            # Captured Python dataclasses enter inlined calls before any kernel-argument binding exists.
+            binding = data if isinstance(data, DeferredMemberValue) else argument_type.bind(argument_name)
+            ctx.create_variable(argument_name, binding)
+            return None
 
         # A ``Final[T]`` leaf @qd.func arg: ``data`` already carries the resolved Python value, so bind it directly for
         # ``qd.static(cfg.field)``. Before the ``annotations.template`` check (``Final[T]`` is not a ``template``).
