@@ -143,12 +143,8 @@ def _inside_class(level_of_class_stackframe: int) -> bool:
         maybe_class_frame = sys._getframe(level_of_class_stackframe)
     except ValueError:
         return False
-    # Read the decoration-site source line via linecache rather than inspect.getframeinfo: getframeinfo
-    # resolves the frame's module through inspect.getmodule, an O(len(sys.modules)) scan run once per kernel
-    # creation. With thousands of modules loaded this dominates kernel build time; linecache.getline returns
-    # the same source line with no such scan. checkcache and the frame globals keep what getframeinfo provided:
-    # checkcache drops the cached lines of a file modified since they were read (e.g. before importlib.reload),
-    # and the globals let the module loader supply the source of a module with no file on disk (e.g. zipimport).
+    # Read the source directly to avoid inspect's module lookup. Check for file changes to support module reloads,
+    # and pass globals so loaders such as zipimport can supply the source.
     filename = maybe_class_frame.f_code.co_filename
     linecache.checkcache(filename)
     first_statement = linecache.getline(filename, maybe_class_frame.f_lineno, maybe_class_frame.f_globals).strip()
