@@ -110,15 +110,9 @@ class WholeKernelCSE : public BasicStmtVisitor {
   std::vector<std::vector<std::pair<std::size_t, Stmt *>>> scope_inserts_;
   DelayedIRModifier modifier_;
 
-  // Users of every statement under `root_`, so an elimination rewrites exactly the users of the eliminated statement
-  // instead of walking its parent block subtree (ReplaceUsesAndMarkUsersDirty). The walk made the pass quadratic: on
-  // large pre-offload kernels most eliminated statements are root-block integer constants, each walk then covers the
-  // whole kernel, and it finds about one user. Built lazily at the first elimination of a fixpoint round (rounds and
-  // small per-task runs without eliminations pay nothing) and kept current as eliminations move users from the
-  // eliminated statement to its replacement. Statements are only erased at the end of a round (modifier_), so entries
-  // never dangle within a round. The users found are the same as the walk's: SSA dominance puts every user of a
-  // statement in its parent block subtree or on an ancestor block's top level, the walk's scope. If the tree changes
-  // in another way during a round (the full mode's if-branch hoisting), the rest of that round uses the walk.
+  // Indexes users under `root_` to avoid a tree walk per elimination. Built on the first elimination of each round.
+  // Updated as operands change; eliminated statements stay alive until the round ends.
+  // Branch hoisting invalidates the index, so the rest of that round uses the tree walk.
   enum class UsersState { kUnbuilt, kValid, kStale };
   IRNode *root_ = nullptr;
   std::unordered_map<Stmt *, std::vector<Stmt *>> users_;
