@@ -101,6 +101,7 @@ _DATA_ORIENTED_MODULE_SRC = textwrap.dedent(
 
 @test_utils.test(arch=qd.cpu)
 def test_classfunc_after_module_reload(tmp_path, monkeypatch):
+    # Check that class kernels still bind self after editing and reloading a module with cached source lines.
     module_path = tmp_path / "reloaded_data_oriented.py"
     module_path.write_text(_DATA_ORIENTED_MODULE_SRC.replace("VALUE", "1"))
     monkeypatch.syspath_prepend(tmp_path)
@@ -119,6 +120,7 @@ def test_classfunc_after_module_reload(tmp_path, monkeypatch):
 
 @test_utils.test(arch=qd.cpu)
 def test_classfunc_in_zipimported_module(tmp_path, monkeypatch):
+    # Check that class kernels bind self when their source comes from a ZIP loader instead of a file on disk.
     archive_path = tmp_path / "kernels.zip"
     with zipfile.ZipFile(archive_path, "w") as archive:
         archive.writestr("zipped_data_oriented.py", _DATA_ORIENTED_MODULE_SRC.replace("VALUE", "3"))
