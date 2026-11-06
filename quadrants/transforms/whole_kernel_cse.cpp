@@ -112,6 +112,7 @@ class WholeKernelCSE : public BasicStmtVisitor {
 
   // kUnbuilt: not built this round; kValid: usable; kStale: invalidated by tree edits.
   enum class UsersState { kUnbuilt, kValid, kStale };
+  // Root of the IR tree being optimized, saved at round start so CollectUsers can traverse the whole tree.
   IRNode *root_ = nullptr;
 
   // Indexes users under `root_` to avoid a tree walk per elimination. Built on the first elimination of each round.
