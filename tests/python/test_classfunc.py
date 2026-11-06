@@ -101,6 +101,8 @@ _DATA_ORIENTED_MODULE_SRC = textwrap.dedent(
 
 @test_utils.test(arch=qd.cpu)
 def test_classfunc_after_module_reload(tmp_path, monkeypatch):
+    # Check that class kernels still bind self after editing and reloading a module with cached source lines.
+    #
     # 1. Import a temporary module and run its class kernel, populating the source cache.
     # 2. Rewrite the file, adding seven lines above the class and changing the kernel's output from 1 to 2.
     # 3. Reload the module and check that the new class kernel runs and produces 2.
