@@ -16,7 +16,7 @@ namespace quadrants::lang {
 // outer iteration of the CSE fixpoint loop re-evaluates it under the new operand pointer) and replace the operand
 // with `new_stmt`. Combining the previous separate `MarkUndone::run` and `replace_all_usages_with` walks halves the
 // IR-walking cost per CSE elimination.
-class ReplaceAndMarkUndone : public BasicStmtVisitor {
+class ReplaceUsesAndMarkUsersDirty : public BasicStmtVisitor {
  private:
   std::unordered_set<int> *const visited_;
   Stmt *const old_stmt_;
@@ -32,7 +32,7 @@ class ReplaceAndMarkUndone : public BasicStmtVisitor {
  public:
   using BasicStmtVisitor::visit;
 
-  ReplaceAndMarkUndone(std::unordered_set<int> *visited, Stmt *old_stmt, Stmt *new_stmt)
+  ReplaceUsesAndMarkUsersDirty(std::unordered_set<int> *visited, Stmt *old_stmt, Stmt *new_stmt)
       : visited_(visited), old_stmt_(old_stmt), new_stmt_(new_stmt) {
     allow_undefined_visitor = true;
     invoke_default_visitor = true;
@@ -47,7 +47,7 @@ class ReplaceAndMarkUndone : public BasicStmtVisitor {
   }
 
   static void run(std::unordered_set<int> *visited, Stmt *old_stmt, Stmt *new_stmt) {
-    ReplaceAndMarkUndone walker(visited, old_stmt, new_stmt);
+    ReplaceUsesAndMarkUsersDirty walker(visited, old_stmt, new_stmt);
     if (old_stmt->parent == nullptr) {
       old_stmt->get_ir_root()->accept(&walker);
       return;
@@ -66,7 +66,7 @@ class ReplaceAndMarkUndone : public BasicStmtVisitor {
   }
 };
 
-// Records the users of every statement under a root, with the same traversal as ReplaceAndMarkUndone (statement
+// Records the users of every statement under a root, with the same traversal as ReplaceUsesAndMarkUsersDirty (statement
 // operands and container-statement operands).
 class CollectUsers : public BasicStmtVisitor {
  private:
@@ -111,7 +111,7 @@ class WholeKernelCSE : public BasicStmtVisitor {
   DelayedIRModifier modifier_;
 
   // Users of every statement under `root_`, so an elimination rewrites exactly the users of the eliminated statement
-  // instead of re-walking its whole parent block subtree (ReplaceAndMarkUndone). The walk made the pass quadratic: on
+  // instead of walking its parent block subtree (ReplaceUsesAndMarkUsersDirty). The walk made the pass quadratic: on
   // large pre-offload kernels most eliminated statements are root-block integer constants, each walk then covers the
   // whole kernel, and it finds about one user. Built lazily at the first elimination of a fixpoint round (rounds and
   // small per-task runs without eliminations pay nothing) and kept current as eliminations move users from the
@@ -234,10 +234,10 @@ class WholeKernelCSE : public BasicStmtVisitor {
     users_state_ = UsersState::kUnbuilt;
   }
 
-  // Same effect as ReplaceAndMarkUndone::run(&visited_, duplicate_stmt, replacement_stmt).
+  // Same effect as ReplaceUsesAndMarkUsersDirty::run(&visited_, duplicate_stmt, replacement_stmt).
   void replace_uses_and_mark_users_dirty(Stmt *duplicate_stmt, Stmt *replacement_stmt) {
     if (users_state_ == UsersState::kStale) {
-      ReplaceAndMarkUndone::run(&visited_, duplicate_stmt, replacement_stmt);
+      ReplaceUsesAndMarkUsersDirty::run(&visited_, duplicate_stmt, replacement_stmt);
       return;
     }
     if (users_state_ == UsersState::kUnbuilt) {
