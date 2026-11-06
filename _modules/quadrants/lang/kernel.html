@@ -1487,6 +1487,30 @@
                 <span class="k">if</span> <span class="n">py_args_l</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                     <span class="n">py_args</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">py_args_l</span><span class="p">)</span>
 
+        <span class="c1"># Reject calls using graph=True with unsupported autodiff modes before FwdMode / Tape record the call.</span>
+        <span class="c1"># When called inside a `with Tape(...)` block, this check runs inside that context, but before the tape records</span>
+        <span class="c1"># the kernel call. This check also runs for kernel calls outside a tape.</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_graph</span> <span class="ow">and</span> <span class="p">(</span>
+            <span class="c1"># Reject a kernel already in an autodiff mode. grad_replaced skips recording this call, but does not</span>
+            <span class="c1"># reset an autodiff mode already set on the kernel.</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">autodiff_mode</span> <span class="o">!=</span> <span class="n">_NONE</span>
+            <span class="ow">or</span> <span class="p">(</span>
+                <span class="c1"># A gradient-handling wrapper skips automatic recording of inner calls. Check the active autodiff</span>
+                <span class="c1"># contexts only when no such wrapper is handling this call.</span>
+                <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">grad_replaced</span>
+                <span class="ow">and</span> <span class="p">(</span>
+                    <span class="c1"># Reject an active FwdMode context or a tape with validation enabled. Check that target_tape</span>
+                    <span class="c1"># exists before accessing validation; an ordinary tape with validation=False remains allowed.</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">fwd_mode_manager</span>
+                    <span class="ow">or</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">target_tape</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">target_tape</span><span class="o">.</span><span class="n">validation</span><span class="p">)</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+        <span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+                <span class="s2">"graph=True kernels do not support qd.ad.FwdMode or qd.ad.Tape(validation=True). "</span>
+                <span class="s2">"Only reverse-mode autodiff, via .grad() or qd.ad.Tape, is supported for graph=True kernels."</span>
+            <span class="p">)</span>
+
         <span class="c1"># Transform the primal kernel to forward mode grad kernel</span>
         <span class="c1"># then recover to primal when exiting the forward mode manager</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">fwd_mode_manager</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">grad_replaced</span><span class="p">:</span>
