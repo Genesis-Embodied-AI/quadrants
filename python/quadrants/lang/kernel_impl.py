@@ -147,6 +147,7 @@ def _inside_class(level_of_class_stackframe: int) -> bool:
     # Read the source directly to avoid inspect's module lookup. Check for file changes to support module reloads,
     # and pass globals so loaders such as zipimport can supply the source.
     filename = maybe_class_frame.f_code.co_filename
+    # Drop cached lines if the file's size or modification time changed; getline then reads fresh source.
     linecache.checkcache(filename)
     first_statement = linecache.getline(filename, maybe_class_frame.f_lineno, maybe_class_frame.f_globals).strip()
     return any(pat.match(first_statement) for pat in _KERNEL_CLASS_STACKFRAME_STMT_RES)
