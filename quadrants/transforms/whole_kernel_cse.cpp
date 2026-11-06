@@ -116,7 +116,6 @@ class WholeKernelCSE : public BasicStmtVisitor {
   IRNode *root_ = nullptr;
   // Indexes users under `root_` to avoid a tree walk per elimination. Built on the first elimination of each round.
   // Updated as operands change; eliminated statements stay alive until the round ends.
-  // Branch hoisting invalidates the index, so the rest of that round uses the tree walk.
   std::unordered_map<Stmt *, std::vector<Stmt *>> users_;
   UsersState users_state_ = UsersState::kUnbuilt;
 
@@ -233,6 +232,7 @@ class WholeKernelCSE : public BasicStmtVisitor {
   // Same effect as ReplaceUsesAndMarkUsersDirty::run(&visited_, duplicate_stmt, replacement_stmt).
   void replace_uses_and_mark_users_dirty(Stmt *duplicate_stmt, Stmt *replacement_stmt) {
     if (users_state_ == UsersState::kStale) {
+      // Branch hoisting invalidates the index, so the rest of this round uses the tree walk.
       ReplaceUsesAndMarkUsersDirty::run(&visited_, duplicate_stmt, replacement_stmt);
       return;
     }
