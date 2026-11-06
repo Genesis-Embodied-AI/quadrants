@@ -545,17 +545,10 @@ def test_graph_torch_grad_pointer_refreshed_on_replay():
     """Reusing a graph with different PyTorch tensors must read each tensor's own gradient buffer."""
     torch = pytest.importorskip("torch")
     arch = impl.current_cfg().arch
-    if arch in (qd.cuda, qd.amdgpu):
-        torch_arch = qd.amdgpu if torch.version.hip else qd.cuda
-        assert torch.cuda.is_available(), "PyTorch must have GPU access for the external graph argument test"
-        assert arch == torch_arch, "PyTorch and Quadrants must use the same GPU backend"
-        device = "cuda"
-    elif arch == qd.metal:
-        if not torch.backends.mps.is_available():
-            pytest.skip("PyTorch MPS is unavailable")
-        device = "mps"
-    else:
-        device = "cpu"
+    # PyTorch uses the "cuda" device name for both CUDA and ROCm.
+    device = {qd.cuda: "cuda", qd.amdgpu: "cuda", qd.metal: "mps"}.get(arch, "cpu")
+    if device == "mps" and not torch.backends.mps.is_available():
+        pytest.skip("PyTorch MPS is unavailable")
     platform_supports_graph = _platform_supports_graph()
     n = 8
 
