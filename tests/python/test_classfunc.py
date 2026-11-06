@@ -94,7 +94,7 @@ _DATA_ORIENTED_MODULE_SRC = textwrap.dedent(
 
         @qd.kernel
         def fill(self):
-            self.val[None] = VALUE
+            self.val[()] = VALUE
     """
 )
 
@@ -107,14 +107,14 @@ def test_classfunc_after_module_reload(tmp_path, monkeypatch):
     module = importlib.import_module("reloaded_data_oriented")
     foo = module.Foo()
     foo.fill()
-    assert foo.val[None] == 1
+    assert foo.val[()] == 1
 
     # Shift every line of the class so that the source lines cached from the first import point elsewhere.
     module_path.write_text("# padding\n" * 7 + _DATA_ORIENTED_MODULE_SRC.replace("VALUE", "2"))
     module = importlib.reload(module)
     foo = module.Foo()
     foo.fill()
-    assert foo.val[None] == 2
+    assert foo.val[()] == 2
 
 
 @test_utils.test(arch=qd.cpu)
@@ -126,4 +126,4 @@ def test_classfunc_in_zipimported_module(tmp_path, monkeypatch):
     module = importlib.import_module("zipped_data_oriented")
     foo = module.Foo()
     foo.fill()
-    assert foo.val[None] == 3
+    assert foo.val[()] == 3
