@@ -22,7 +22,7 @@ Three properties make this form graph-friendly:
    taken as a host int; ``num_blocks`` / ``hist_len`` are derived on-device. Because those sizes reach the per-phase
    loop bounds as ``Expr``s (dynamic, not compile-time constant), the CUDA codegen leaves each offload's grid at the
    *saturating* value (``num_SMs * max_blocks_per_SM * 2``) and the runtime grid-stride loop walks the actual range -
-   a fixed ~core-count grid regardless of ``n``. See ``perso_hugh/doc/qipc/qipc_sort_as_kernel.md`` §D4.
+   a fixed ~core-count grid regardless of ``n``.
 3. **Single call.** One :func:`sort` invocation replaces the host ping-pong loop.
 
 Algorithm (classical histogram-scan-scatter LSB radix sort, Knuth Vol. 3 §5.2.5, Blelloch 1990). Each digit pass
@@ -294,9 +294,9 @@ def sort(
     Call it at the **top level** of your own ``@qd.kernel`` (e.g. a qipc ``graph=True`` parent that chains it with other
     phases). Each phase helper's single top-level ``for`` stays its own offloaded GPU launch, so the inter-phase
     grid-wide synchronization survives and every phase is captured as a node in the parent's graph. A
-    ``while qd.graph_do_while(...):`` body **counts as top level** - the loops directly inside it still lower as
+    ``while qd.graph.do_while(...):`` body **counts as top level** - the loops directly inside it still lower as
     separate offloaded launches with grid-wide barriers between them, so calling this func directly in a
-    ``graph_do_while`` body is supported and re-sorts correctly every iteration (verified for ``n`` spanning many
+    ``qd.graph.do_while`` body is supported and re-sorts correctly every iteration (verified for ``n`` spanning many
     blocks). What you **must not** do is nest the call inside *ordinary* runtime control flow - another ``for``, an
     ``if``, or a plain ``while`` - which demotes the phase loops out of top-level position, collapses the per-phase
     grid-wide barriers and corrupts the sort. Compile-time ``static`` loops (like the pass loop here) are also fine.

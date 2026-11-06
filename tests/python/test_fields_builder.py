@@ -4,7 +4,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang.exception import QuadrantsRuntimeError
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test()
@@ -203,14 +203,14 @@ def test_field_initialize_zero():
 @test_utils.test()
 def test_field_builder_place_grad():
     @qd.kernel
-    def mul(arr: qd.template(), out: qd.template()):
+    def mul(arr: qd.Template, out: qd.Template):
         for i in arr:
             out[i] = arr[i] * 2.0
 
     @qd.kernel
-    def calc_loss(arr: qd.template(), loss: qd.template()):
+    def calc_loss(arr: qd.Template, loss: qd.Template):
         for i in arr:
-            loss[None] += arr[i]
+            loss[()] += arr[i]
 
     arr = qd.field(qd.f32, needs_grad=True)
     fb0 = qd.FieldsBuilder()
@@ -227,7 +227,7 @@ def test_field_builder_place_grad():
     arr.fill(1.0)
     mul(arr, out)
     calc_loss(out, loss)
-    loss.grad[None] = 1.0
+    loss.grad[()] = 1.0
     calc_loss.grad(out, loss)
     mul.grad(arr, out)
     for i in range(10):

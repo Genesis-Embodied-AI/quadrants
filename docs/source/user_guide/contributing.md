@@ -24,7 +24,7 @@ A fresh, empty cache directory is created for each test session by pytest's [`tm
 
 ## Creating your build/dev environment
 
-It is recommended to use a virtual env. Quadrants supports Python 3.10–3.13 for building and testing. However, `pre-commit` is configured with a pinned Python `3.10` to ensure consistent formatting, so you will need Python 3.10 available for running pre-commit hooks.
+It is recommended to use a virtual env. Quadrants supports Python 3.12-3.14 for building and testing. However, `pre-commit` is configured with a pinned Python `3.12` to ensure consistent formatting, so you will need Python 3.12 available for running pre-commit hooks.
 
 After cloning, make sure to initialize submodules:
 
@@ -36,7 +36,7 @@ git submodule update --init --recursive
 
 ```
 # create the venv for development
-uv venv --python 3.10
+uv venv --python 3.12
 
 # activate it
 source .venv/bin/activate
@@ -82,12 +82,12 @@ To build the release package:
 ./build.py wheel
 ```
 
-We use `cmake` to build the C++ core. scikit-build-core puts the CMake build tree under `build/{wheel_tag}`, where the wheel tag encodes the Python version and host platform. For example: `build/cp310-cp310-linux_x86_64`.
+We use `cmake` to build the C++ core. scikit-build-core puts the CMake build tree under `build/{wheel_tag}`, where the wheel tag encodes the Python version and host platform. For example: `build/cp312-cp312-linux_x86_64`.
 
 You can modify the cmake options to your liking in order to enable or disable some features you need or don't need. To discover them, you can use [ccmake](https://cmake.org/cmake/help/latest/manual/ccmake.1.html):
 
 ```
-ccmake build/cp310-cp310-linux_x86_64
+ccmake build/cp312-cp312-linux_x86_64
 ```
 
 You could then set the environment variable `CMAKE_ARGS` (scikit-build-core's CMake-args passthrough) to configure the build. `build.py` reads it, layers on the toolchain options it manages, and exports it back. For instance, to disable the CUDA and AMDGPU backends:
@@ -227,6 +227,21 @@ Quadrants comprises at least three important parts:
 1. `quadrants` host runtime: Made with a mix of Python and C++. The C++ core is compiled using the OS default C/C++ compiler.
 2. `quadrants` device runtime (bitcode): C++ code compiled using `clang++` from the distribution/OS. Using `clang++` is required as it has to support the same targets as `LLVM`.
 3. `LLVM` libraries used by host runtime: statically or dynamically linked, used to lower the kernel's final IR to machine code on the host. The CI uses an LLVM version compiled from source.
+
+### Running hand-edited IR or PTX
+
+A dump written by `QD_DUMP_IR` (see [Dumping compiled IR](./debug.md#dumping-compiled-ir)) can be edited and fed back in, which is a quick way to try an instruction sequence by hand before changing codegen. `QD_LOAD_IR=1` makes the LLVM backends reparse `<debug_dump_path>/<task>_llvm.ll` instead of using the module they just built, and `QUADRANTS_LOAD_PTX=1` makes the CUDA backend read `<debug_dump_path>/<name>.ptx` instead of the PTX it just compiled. Both are read as integers, so `0` leaves them off.
+
+Both caches have to be off in the script under test, since the replacement files are only read while a kernel is being compiled and a cached kernel is handed back without compiling. `qd.init` raises a `ValueError` rather than let an already-cached kernel keep silently running its old code. `offline_cache` has an environment variable, `src_ll_cache` does not, so the latter has to be passed to `qd.init`:
+
+```python
+qd.init(arch=qd.cuda, offline_cache=False, src_ll_cache=False)
+```
+
+```bash
+QD_DUMP_IR=1 QD_DEBUG_DUMP_PATH=/tmp/ir python my_script.py  # dump, then edit the files under /tmp/ir
+QD_LOAD_IR=1 QD_DEBUG_DUMP_PATH=/tmp/ir python my_script.py  # run what you edited
+```
 
 ### Building LLVM for debugging it
 

@@ -38,13 +38,15 @@ from quadrants._tensor_wrapper import (
     wrap,
 )
 
-# Back-compat aliases for stork-17/18 opt-in names. Drop in a future stork branch once downstream call sites have
-# switched to the unprefixed names.
+# Backward-compatible aliases for the prefixed tensor wrapper names.
 _Tensor = Tensor
 _VectorTensor = VectorTensor
 _MatrixTensor = MatrixTensor
 _wrap = wrap
 from quadrants.lang import *  # pylint: disable=W0622 # TODO(archibate): It's `quadrants.lang.core` overriding `quadrants.core`
+from quadrants.lang import (
+    graph,  # noqa: F401  # the `qd.graph` namespace (do_while / parallel_context / parallel)
+)
 from quadrants.lang.intrinsics import *
 from quadrants.types.annotations import *
 

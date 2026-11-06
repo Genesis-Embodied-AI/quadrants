@@ -41,11 +41,11 @@ ThreadPool::ThreadPool(int max_num_threads) : max_num_threads(max_num_threads) {
   }
 }
 
-void ThreadPool::run(int splits, int desired_num_threads, void *range_for_task_context, RangeForTaskFunc *func) {
+void ThreadPool::run(int splits, int desired_num_threads, void *task_context, TaskFn *task_fn) {
   {
     std::lock_guard _(mutex);
-    this->range_for_task_context = range_for_task_context;
-    this->func = func;
+    this->task_context = task_context;
+    this->task_fn = task_fn;
     this->desired_num_threads = std::min(desired_num_threads, max_num_threads);
     QD_ASSERT(this->desired_num_threads > 0);
     // QD_P(this->desired_num_threads);
@@ -104,7 +104,7 @@ void ThreadPool::target() {
           break;
       }
 
-      func(this->range_for_task_context, thread_id, task_id);
+      task_fn(this->task_context, thread_id, task_id);
     }
 
     bool all_finished = false;

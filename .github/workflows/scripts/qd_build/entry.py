@@ -13,11 +13,13 @@ from . import misc
 from .alter import handle_alternate_actions
 from .cmake import cmake_args
 from .compiler import setup_clang, setup_msvc
+from .glslang import setup_glslang
 from .llvm import setup_llvm
 from .misc import banner, path_prepend
 from .ospkg import setup_os_pkgs
 from .sccache import setup_sccache
 from .tinysh import Command, CommandFailed, nice, sh
+from .vulkan import setup_vulkan
 
 
 # -- code --
@@ -34,7 +36,7 @@ def build_wheel(python: Command) -> None:
         case ("Linux", "arm64") | ("Linux", "aarch64"):
             plat = "manylinux_2_27_aarch64"
         case ("Darwin", _):
-            plat = "macosx_11_0_arm64"
+            plat = "macosx_13_0_arm64"
 
     # Clear stale wheels so the tag-stamping step below is unambiguous.
     for whl in glob.glob("dist/quadrants-*.whl"):
@@ -62,18 +64,17 @@ def setup_basic_build_env():
         setup_msvc()
 
     setup_llvm()
-    if u.system in ("Linux", "Darwin"):
-        # Linux: validation layers + SPIR-V tools (shader debug printf support).
-        # macOS: the SDK bundles a current MoltenVK that advertises `VK_KHR_buffer_device_address`, which
-        # the adstack sizer shader needs for `ExternalTensorRead` via Physical Storage Buffer addressing.
-        # The Vulkan-Taichi-assets pin at `quadrants/rhi/CMakeLists.txt:40` is too old for PSB; wiring
-        # `setup_vulkan()` here lets the CMake glue pick up `$VULKAN_SDK/lib/libMoltenVK.dylib` (the flat
-        # layout LunarG's macOS SDK uses - see the layout note in `vulkan.py::setup_vulkan`) and ship
-        # that in the wheel instead.
-        from .vulkan import setup_vulkan
+    # Windows and macOS: the SDK supplies glslang for compiling GLSL helpers.
+    # Linux: validation layers + SPIR-V tools (shader debug printf support).
+    # macOS: the SDK bundles a current MoltenVK that advertises `VK_KHR_buffer_device_address`, which
+    # the adstack sizer shader needs for `ExternalTensorRead` via Physical Storage Buffer addressing.
+    # The Vulkan-Taichi-assets pin at `quadrants/rhi/CMakeLists.txt:40` is too old for PSB; wiring
+    # `setup_vulkan()` here lets the CMake glue pick up `$VULKAN_SDK/lib/libMoltenVK.dylib` (the flat
+    # layout LunarG's macOS SDK uses - see the layout note in `vulkan.py::setup_vulkan`) and ship
+    # that in the wheel instead.
+    setup_vulkan()
 
-        setup_vulkan()
-
+    setup_glslang()
     sccache = setup_sccache()
     python = sh.bake(sys.executable)
     return sccache, python
@@ -100,7 +101,7 @@ def ensure_venv() -> None:
     else:
         misc.warn(
             f"No active virtualenv and none found at {candidate}. The editable install would run "
-            "against the system interpreter. Create one first, e.g. `uv venv --python 3.10`."
+            "against the system interpreter. Create one first, e.g. `uv venv --python 3.12`."
         )
 
 
@@ -180,7 +181,7 @@ def parse_args():
     parser.add_argument("-s", "--shell", action="store_true", help=help)
 
     help = (
-        "Python version to use, e.g. '3.7', '3.11', or 'native' to not use an isolated python environment. "
+        "Python version to use, e.g. '3.12', '3.14', or 'native' to not use an isolated python environment. "
         "Defaults to the same version of the current python interpreter."
     )
     parser.add_argument("--python", default=None, help=help)

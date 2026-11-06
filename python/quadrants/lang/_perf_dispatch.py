@@ -13,8 +13,8 @@ from .exception import QuadrantsRuntimeError, QuadrantsSyntaxError
 NUM_FIRST_WARMUP: int = 1
 NUM_WARMUP: int = 0
 NUM_ACTIVE: int = 1
-REPEAT_AFTER_COUNT: int = 0
-REPEAT_AFTER_SECONDS: float = 1.0
+# Internal fallback used when the caller specifies neither repeat_after_count nor repeat_after_seconds.
+DEFAULT_REPEAT_AFTER_COUNT: int = 300
 
 QD_PERFDISPATCH_PRINT_DEBUG = os.environ.get("QD_PERFDISPATCH_PRINT_DEBUG", "0") == "1"
 
@@ -82,8 +82,13 @@ class PerformanceDispatcher(Generic[P, R]):
         self.num_first_warmup = num_first_warmup if num_first_warmup is not None else NUM_FIRST_WARMUP
         self.num_warmup = num_warmup if num_warmup is not None else NUM_WARMUP
         self.num_active = num_active if num_active is not None else NUM_ACTIVE
-        self.repeat_after_count = repeat_after_count if repeat_after_count is not None else REPEAT_AFTER_COUNT
-        self.repeat_after_seconds = repeat_after_seconds if repeat_after_seconds is not None else REPEAT_AFTER_SECONDS
+        # repeat_after_count and repeat_after_seconds are OR'd re-benchmarking triggers. None means "choose a
+        # suitable value for me" and a value <= 0 means "explicitly disabled". When BOTH are left as None we
+        # pick a count-based default, so the two triggers never silently combine.
+        if repeat_after_count is None and repeat_after_seconds is None:
+            repeat_after_count = DEFAULT_REPEAT_AFTER_COUNT
+        self.repeat_after_count: int | None = repeat_after_count
+        self.repeat_after_seconds: float | None = repeat_after_seconds
         sig = get_func_signature(fn)
         self._param_types: dict[str, Any] = {}
         for param_name, param in sig.parameters.items():
@@ -279,12 +284,12 @@ class PerformanceDispatcher(Generic[P, R]):
         fastest = self._fastest_dispatch_impl_by_geometry_hash.get(geometry_hash)
         if fastest:
             restart_measurements = False
-            if self.repeat_after_count > 0:
+            if self.repeat_after_count is not None and self.repeat_after_count > 0:
                 self._calls_since_last_update_by_geometry_hash[geometry_hash] += 1
                 calls = self._calls_since_last_update_by_geometry_hash[geometry_hash]
                 if calls >= self.repeat_after_count:
                     restart_measurements = True
-            if self.repeat_after_seconds > 0:
+            if self.repeat_after_seconds is not None and self.repeat_after_seconds > 0:
                 elapsed = time.time() - self._last_check_time_by_geometry_hash[geometry_hash]
                 if elapsed >= self.repeat_after_seconds:
                     restart_measurements = True
@@ -346,8 +351,8 @@ def perf_dispatch(
     first_warmup: int = NUM_FIRST_WARMUP,
     warmup: int = NUM_WARMUP,
     active: int = NUM_ACTIVE,
-    repeat_after_count: int = REPEAT_AFTER_COUNT,
-    repeat_after_seconds: float = REPEAT_AFTER_SECONDS,
+    repeat_after_count: int | None = None,
+    repeat_after_seconds: float | None = None,
 ):
     """
     This annotation designates a meta-function that can have one or more functions registered with it.
@@ -364,10 +369,17 @@ def perf_dispatch(
         warmup: Number of warmup iterations for subsequent re-evaluation cycles (default: 0).
             After the first evaluation, kernels are already compiled, so less warmup is needed.
         active: Number of active (timed) iterations to run for each implementation. Default 1.
-        repeat_after_count: repeats the cycle of warmup and active from scratch after repeat_after_count
-        additional calls.
-        repeat_after_seconds: repeats the cycle of warmup and active from scratch after repeat_after_seconds
-        seconds elapsed.
+        repeat_after_count: Re-run the warmup + active benchmarking cycle from scratch after this many
+            additional calls (counted per geometry hash). A value <= 0 disables count-based re-evaluation;
+            None lets perf_dispatch choose a suitable value (see note below).
+        repeat_after_seconds: Re-run the warmup + active benchmarking cycle from scratch after this many
+            seconds have elapsed (per geometry hash). A value <= 0 disables time-based re-evaluation;
+            None lets perf_dispatch choose a suitable value (see note below).
+
+        repeat_after_count and repeat_after_seconds are OR'd: whichever fires first restarts benchmarking.
+        A None trigger means "choose a suitable value for me": if the other trigger is given an explicit
+        value, the None one is left off; if both are None, perf_dispatch re-benchmarks every 300 calls
+        with no time-based trigger.
 
     Example usage:
 

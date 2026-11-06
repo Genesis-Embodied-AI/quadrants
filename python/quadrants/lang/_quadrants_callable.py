@@ -91,7 +91,11 @@ class QuadrantsCallable:
         self._adjoint: "Kernel | None" = None
         self.grad: "Kernel | None" = None
         self.is_pure: bool = False
+        self._attr_name: str | None = None
         update_wrapper(self, fn)
+
+    def __set_name__(self, owner: type, name: str) -> None:
+        self._attr_name = name
 
     def __call__(self, *args, **kwargs):
         return self.wrapper.__call__(*args, **kwargs)
@@ -141,7 +145,15 @@ class QuadrantsCallable:
     def __get__(self, instance, owner):
         if instance is None:
             return self
-        return BoundQuadrantsCallable(instance, self)
+        bound = BoundQuadrantsCallable(instance, self)
+        # This is a non-data descriptor, so an instance ``__dict__`` entry shadows it: stashing the bound callable there
+        # saves the ``__get__`` allocation (~0.6-1.2 us) on every later ``instance.method``.
+        name = self._attr_name
+        if name is not None:
+            inst_dict = getattr(instance, "__dict__", None)
+            if inst_dict is not None:
+                inst_dict[name] = bound
+        return bound
 
 
 class BoundQuadrantsCallable:

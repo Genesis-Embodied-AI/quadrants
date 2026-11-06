@@ -4,7 +4,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang.exception import QuadrantsTypeError
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 def _test_op(dt, quadrants_op, np_op):

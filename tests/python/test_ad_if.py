@@ -4,7 +4,7 @@ import quadrants as qd
 from quadrants.lang import impl
 from quadrants.lang.misc import get_host_arch_list
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test(require=qd.extension.adstack)
@@ -16,16 +16,16 @@ def test_ad_if_simple():
 
     @qd.kernel
     def func():
-        if x[None] > 0.0:
-            y[None] = x[None]
+        if x[()] > 0.0:
+            y[()] = x[()]
 
-    x[None] = 1
-    y.grad[None] = 1
+    x[()] = 1
+    y.grad[()] = 1
 
     func()
     func.grad()
 
-    assert x.grad[None] == 1
+    assert x.grad[()] == 1
 
 
 @test_utils.test(require=qd.extension.adstack)
@@ -286,12 +286,12 @@ def _run_nested_if_inside_for_loop(qd_dtype):
         for i in w:
             if w[i] > 0:
                 if w[i] < 10:
-                    loss[None] += w[i] * w[i]
+                    loss[()] += w[i] * w[i]
 
     for i, v in enumerate(w_vals):
         w[i] = v
-    loss[None] = 0.0
-    loss.grad[None] = 1.0
+    loss[()] = 0.0
+    loss.grad[()] = 1.0
     compute()
     compute.grad()
 
@@ -347,18 +347,18 @@ def test_ad_nested_if_elif_else_inside_for_loop():
         for i in w:
             if w[i] > 0:
                 if w[i] < 5:
-                    loss[None] += 2 * w[i] * w[i]
+                    loss[()] += 2 * w[i] * w[i]
                 elif w[i] < 10:
-                    loss[None] += w[i] * w[i]
+                    loss[()] += w[i] * w[i]
                 else:
-                    loss[None] += 3 * w[i]
+                    loss[()] += 3 * w[i]
             else:
-                loss[None] += -w[i]
+                loss[()] += -w[i]
 
     for i, v in enumerate(w_vals):
         w[i] = v
-    loss[None] = 0.0
-    loss.grad[None] = 1.0
+    loss[()] = 0.0
+    loss.grad[()] = 1.0
     compute()
     compute.grad()
 
@@ -399,12 +399,12 @@ def test_ad_nested_for_loops_global_load():
         for i in x:
             a = x[i]
             for _ in range(n_inner):
-                y[None] += a
+                y[()] += a
 
     for i in range(n):
         x[i] = 1.0
-    y[None] = 0.0
-    y.grad[None] = 1.0
+    y[()] = 0.0
+    y.grad[()] = 1.0
     compute()
     compute.grad()
 
@@ -439,13 +439,13 @@ def test_ad_nested_if_inside_while_loop():
             while step < 1:
                 if w[i] > 0:
                     if w[i] < 10:
-                        loss[None] += w[i] * w[i]
+                        loss[()] += w[i] * w[i]
                 step = step + 1
 
     for i, v in enumerate(w_vals):
         w[i] = v
-    loss[None] = 0.0
-    loss.grad[None] = 1.0
+    loss[()] = 0.0
+    loss.grad[()] = 1.0
     compute()
     compute.grad()
 

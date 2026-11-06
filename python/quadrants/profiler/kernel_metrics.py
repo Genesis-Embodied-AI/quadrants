@@ -25,12 +25,12 @@ class CuptiMetric:
 
         >>> x = qd.field(qd.f32, shape=num_elements)
         >>> y = qd.field(qd.f32, shape=())
-        >>> y[None] = 0
+        >>> y[()] = 0
 
         >>> @qd.kernel
         >>> def reduction():
         >>>     for i in x:
-        >>>         y[None] += x[i]
+        >>>         y[()] += x[i]
 
         >>> global_op_atom = qd.profiler.CuptiMetric(
         >>>     name='l1tex__t_set_accesses_pipe_lsu_mem_global_op_atom.sum',

@@ -6,7 +6,7 @@ import pytest
 import quadrants as qd
 from quadrants.math import vec4
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @pytest.mark.parametrize(

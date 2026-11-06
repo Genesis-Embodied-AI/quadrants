@@ -5,15 +5,14 @@ The factories pass ``needs_grad`` through to ``qd.field`` / ``qd.ndarray`` via `
 (real-only). These tests lock that behaviour as part of the public contract on every (factory, backend) combination.
 
 Behavioural tests are parametrized over both backends. The int-dtype rejection check is NDARRAY-only because the FIELD
-path goes through the older Vector/Matrix.field code which raises a different error (out of scope for this branch's
-contract).
+path goes through Vector/Matrix.field code which raises a different error.
 """
 
 import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 BACKENDS = [qd.Backend.FIELD, qd.Backend.NDARRAY]
 BACKEND_IDS = ["field", "ndarray"]
@@ -41,12 +40,12 @@ def test_tensor_grad_kernel_roundtrip(backend):
     if backend is qd.Backend.FIELD:
 
         @qd.kernel
-        def write_primal(x: qd.template()):
+        def write_primal(x: qd.Template):
             for i in range(4):
                 x[i] = i * 10.0
 
         @qd.kernel
-        def write_grad(x: qd.template()):
+        def write_grad(x: qd.Template):
             for i in range(4):
                 x.grad[i] = i * 100.0
 
@@ -97,13 +96,13 @@ def test_tensor_vec_grad_kernel_roundtrip(backend):
     if backend is qd.Backend.FIELD:
 
         @qd.kernel
-        def write_primal(x: qd.template()):
+        def write_primal(x: qd.Template):
             for i in range(2):
                 for j in qd.static(range(3)):
                     x[i][j] = i * 10.0 + j
 
         @qd.kernel
-        def write_grad(x: qd.template()):
+        def write_grad(x: qd.Template):
             for i in range(2):
                 for j in qd.static(range(3)):
                     x.grad[i][j] = i * 100.0 + j * 10.0
@@ -138,14 +137,14 @@ def test_tensor_mat_grad_kernel_roundtrip(backend):
     if backend is qd.Backend.FIELD:
 
         @qd.kernel
-        def write_primal(x: qd.template()):
+        def write_primal(x: qd.Template):
             for i in range(3):
                 for r in qd.static(range(2)):
                     for c in qd.static(range(2)):
                         x[i][r, c] = i * 10.0 + r * 2.0 + c
 
         @qd.kernel
-        def write_grad(x: qd.template()):
+        def write_grad(x: qd.Template):
             for i in range(3):
                 for r in qd.static(range(2)):
                     for c in qd.static(range(2)):
@@ -178,7 +177,7 @@ def test_tensor_mat_grad_kernel_roundtrip(backend):
 # ----------------------------------------------------------------------------
 # Negative path: int dtype + needs_grad on the NDARRAY backend. Kept NDARRAY-only because the FIELD path raises
 # through the legacy create_field machinery with a different error class / message; the Vector.ndarray / Matrix.ndarray
-# rejection added in this branch is the focused contract.
+# rejection is the focused contract.
 # ----------------------------------------------------------------------------
 
 

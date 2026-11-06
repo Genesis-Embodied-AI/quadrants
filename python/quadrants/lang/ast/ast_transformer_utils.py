@@ -35,10 +35,9 @@ class Builder:
             if method is None:
                 error_msg = f'Unsupported node "{node.__class__.__name__}"'
                 raise QuadrantsSyntaxError(error_msg)
-            # Attach only the cheap file/line/function header to every IR node. Building the full source-line
-            # hint (get_pos_info) here means running TextWrapper for every AST node of every kernel compilation,
-            # which dominates kernel build time. The full hint is still produced on the actual compile-error path
-            # below (get_pos_info in the except handler), so error messages are unchanged.
+            # Attach only the cheap file/line/function header to every IR node. Building the full source-line hint
+            # here runs TextWrapper for each uncached AST location. The compile-error path below still produces the
+            # full hint via memoized_get_pos_info.
             info = ctx.get_pos_header(node) if isinstance(node, (ast.stmt, ast.expr)) else ""
             with impl.get_runtime().src_info_guard(info):
                 res = method(ctx, node)
@@ -56,7 +55,7 @@ class Builder:
             ctx.raised = True
             e = handle_exception_from_cpp(e)
             if not isinstance(e, QuadrantsCompilationError):
-                msg = ctx.get_pos_info(node) + traceback.format_exc()
+                msg = ctx.memoized_get_pos_info(node) + traceback.format_exc()
                 raise QuadrantsCompilationError(msg) from None
             msg = f"""quadrants stack trace:
 ===
@@ -64,7 +63,7 @@ class Builder:
 ===
 
 Your code:
-{ctx.get_pos_info(node)}{e}
+{ctx.memoized_get_pos_info(node)}{e}
 """
             raise type(e)(msg) from None
 
@@ -187,6 +186,20 @@ class ASTTransformerGlobalContext:
         self.pass_idx: int = pass_idx
         self.ndarray_to_any_array: dict[int, Any] = {}
         self.struct_ndarray_launch_info: list[tuple] = []
+        # Lifted-primitive support for ``@qd.data_oriented(template_primitives=False)``. Mirrors the two ndarray
+        # structures above, plus a provenance map driving the two-pass pruning.
+        # * ``struct_primitive_provenance`` maps ``(id(parent_obj), attr_name)`` to ``(flat_name, arg_idx, attr_chain,
+        #   kind)`` for every reachable primitive member of a flagged template arg. Built (cheaply, no kernel-arg
+        #   declaration) on every compilation pass. ``build_Attribute`` uses it to ``mark_used`` the accessed
+        #   primitives during the non-enforcing discovery pass.
+        # * ``struct_primitive_to_expr`` maps the same key to the arg-load ``Expr``. Populated only in the enforcing
+        #   pass, and only for primitives actually accessed by the body (pruning), so ``build_Attribute`` can return
+        #   the runtime scalar arg instead of baking the value.
+        # * ``struct_primitive_launch_info`` records ``(arg_id, template_arg_idx, attr_chain, kind)`` tuples (``kind``
+        #   in ``{'f', 'i', 'u'}``) so the launch path can read the live value and bind it.
+        self.struct_primitive_provenance: dict[tuple[int, str], tuple] = {}
+        self.struct_primitive_to_expr: dict[tuple[int, str], Any] = {}
+        self.struct_primitive_launch_info: list[tuple] = []
         # Caller-side `loop_depth` snapshot for the in-flight `@qd.func` invocation. Each func compile creates a fresh
         # `ASTTransformerFuncContext` with `loop_depth = 0`, so without this snapshot a non-static `range(...)` loop
         # inside a func body would not see any outer for-loops in the caller and would skip the backward-mode dynamic-
@@ -262,6 +275,10 @@ class ASTTransformerFuncContext:
         self.visited_funcdef = False
         self.is_real_function = is_real_function
         self.kernel_args: list = []
+        # Bare (non-flattened) parameter names of the ``@qd.func`` being processed, so ``build_Name`` can seed
+        # ``_qd_arg_chain`` for chains rooted at them. Kept apart from ``kernel_args`` rather than appended to it, which
+        # would make the "kernel arg is immutable" diagnostic fire for func params.
+        self.fn_param_names: set[str] = set()
         self.only_parse_function_def: bool = False
         self.autodiff_mode = autodiff_mode
         self.loop_depth: int = 0
@@ -394,7 +411,22 @@ class ASTTransformerFuncContext:
     def get_pos_header(self, node: ast.AST) -> str:
         return f'File "{self.file}", line {node.lineno + self.lineno_offset}, in {self.func.func.__name__}:\n'
 
-    def get_pos_info(self, node: ast.AST) -> str:
+    def memoized_get_pos_info(self, node: ast.AST) -> str:
+        key = (node.lineno, node.col_offset, node.end_lineno, node.end_col_offset, node.__class__.__name__)
+        # self.func is persistent, whereas context is ephemeral
+        cached = self.func.pos_info_cache.get(key)
+        if cached is not None:
+            return cached
+        msg = self._build_pos_info(node)
+        self.func.pos_info_cache[key] = msg
+        return msg
+
+    def _build_pos_info(self, node: ast.AST) -> str:
+        """
+        Returns a formatted string: a source-location snippet for node, consisting of a location header, the relevant
+        source line(s), and a caret (^) underline marking the exact columns the node spans — the same shape as a
+        Python traceback frame.
+        """
         msg = self.get_pos_header(node)
         col_offset = self.indent + node.col_offset
         end_col_offset = self.indent + node.end_col_offset
@@ -454,3 +486,39 @@ def get_decorator(ctx: ASTTransformerFuncContext, node) -> str:
         if ASTResolver.resolve_to(node.func, wanted, ctx.global_vars):
             return name
     return ""
+
+
+def maybe_lifted_primitive(ctx: ASTTransformerFuncContext, parent: Any, attr: str):
+    """Handle access to a primitive member that ``@qd.data_oriented(template_primitives=False)`` lifted into a
+    runtime scalar kernel arg (see ``predeclare_struct_primitives``).
+
+    Returns the arg-load ``Expr`` to substitute for the baked value in the enforcing pass; returns ``None`` when
+    the attribute is not a lifted primitive, or during the non-enforcing discovery pass (where the access is
+    instead recorded via ``mark_used`` and the caller falls back to baking the throw-away discovery-pass IR).
+
+    Raises ``QuadrantsSyntaxError`` if the lifted primitive is used inside ``qd.static(...)``: that context
+    requires a compile-time constant, which a runtime-lifted primitive is not. Under this flag there is no
+    per-attribute baked escape hatch, so a ``qd.static`` use is unambiguously a mistake and we surface it loudly
+    rather than silently baking a value that will not track mutations.
+    """
+    provenance = ctx.global_context.struct_primitive_provenance
+    if not provenance:
+        return None
+    key = (id(parent), attr)
+    entry = provenance.get(key)
+    if entry is None:
+        return None
+    if ctx.is_in_static_scope():
+        raise QuadrantsSyntaxError(
+            f"'{attr}' is a primitive member of a @qd.data_oriented(template_primitives=False) object, so it is "
+            f"a runtime kernel argument and cannot be used inside qd.static(). Either remove qd.static(), or "
+            f"decorate the class @qd.data_oriented (the default, template_primitives=True) to bake '{attr}' as a "
+            f"compile-time constant."
+        )
+    pruning = ctx.global_context.pruning
+    if not pruning.enforcing:
+        # Record under the kernel's func id (see ``predeclare_struct_primitives``) so the enforcing pass declares
+        # this primitive and the existing fastcache serialisation captures it.
+        pruning.mark_used(pruning.KERNEL_FUNC_ID, entry[0])
+        return None
+    return ctx.global_context.struct_primitive_to_expr.get(key)

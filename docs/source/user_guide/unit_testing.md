@@ -81,7 +81,7 @@ The standard recipe combines `@test_utils.test(...)` (arch / option matrix) with
 ```python
 import pytest
 import quadrants as qd
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @pytest.mark.parametrize("n", [4, pytest.param(12, marks=pytest.mark.slow)])
@@ -90,9 +90,9 @@ def test_my_thing(n):
     ...
 ```
 
-`@test_utils.test` is what wires the test into the per-backend matrix and applies platform exclusions (`exclude=`), extension requirements (`require=`, e.g. `qd.extension.data64` for f64 tests), and per-test options (`default_fp`, `fast_math`, etc.). See `tests/test_utils.py` for the full surface.
+`@test_utils.test` is what wires the test into the per-backend matrix and applies platform exclusions (`exclude=`), extension requirements (`require=`, e.g. `qd.extension.data64` for f64 tests), and per-test options (`default_fp`, `fast_math`, etc.). See `tests/helpers/test_utils.py` for the full surface.
 
-Common helpers in `tests/test_utils.py`:
+Common helpers in `tests/helpers/test_utils.py`:
 
 - `test_utils.skip_if_f64_unsupported(dtype)` — skip the current test at runtime if `dtype == qd.f64` and the active backend can't carry f64 through buffer I/O (Metal, MoltenVK on Darwin). Use inside a parametrized test that sweeps both f32 and f64.
 - `test_utils.expected_archs()` — list of archs that the current `QD_WANTED_ARCHS` allows. Used to skip tests with no satisfiable arch.

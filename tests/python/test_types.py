@@ -4,7 +4,7 @@ import quadrants as qd
 from quadrants.lang import impl
 from quadrants.types import primitive_types
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 _QD_TYPES = [qd.i8, qd.i16, qd.i32, qd.u8, qd.u16, qd.u32, qd.f32]
 _QD_64_TYPES = [qd.i64, qd.u64, qd.f64]
@@ -15,10 +15,10 @@ def _test_type_assign_argument(dt):
 
     @qd.kernel
     def func(value: dt):
-        x[None] = value
+        x[()] = value
 
     func(3)
-    assert x[None] == 3
+    assert x[()] == 3
 
 
 @pytest.mark.parametrize("dt", _QD_TYPES)
@@ -41,16 +41,16 @@ def _test_type_operator(dt):
 
     @qd.kernel
     def func():
-        add[None] = x[None] + y[None]
-        mul[None] = x[None] * y[None]
+        add[()] = x[()] + y[()]
+        mul[()] = x[()] * y[()]
 
     for i in range(0, 3):
         for j in range(0, 3):
-            x[None] = i
-            y[None] = j
+            x[()] = i
+            y[()] = j
             func()
-            assert add[None] == x[None] + y[None]
-            assert mul[None] == x[None] * y[None]
+            assert add[()] == x[()] + y[()]
+            assert mul[()] == x[()] * y[()]
 
 
 @pytest.mark.parametrize("dt", _QD_TYPES)
@@ -97,20 +97,20 @@ def _test_overflow(dt, n):
 
     @qd.kernel
     def func():
-        c[None] = a[None] + b[None]
+        c[()] = a[()] + b[()]
 
-    a[None] = 2**n // 3
-    b[None] = 2**n // 3
+    a[()] = 2**n // 3
+    b[()] = 2**n // 3
 
     func()
 
-    assert a[None] == 2**n // 3
-    assert b[None] == 2**n // 3
+    assert a[()] == 2**n // 3
+    assert b[()] == 2**n // 3
 
     if qd.types.is_signed(dt):
-        assert c[None] == 2**n // 3 * 2 - (2**n)  # overflows
+        assert c[()] == 2**n // 3 * 2 - (2**n)  # overflows
     else:
-        assert c[None] == 2**n // 3 * 2  # does not overflow
+        assert c[()] == 2**n // 3 * 2  # does not overflow
 
 
 @pytest.mark.parametrize(

@@ -23,13 +23,18 @@ class ArgMetadata:
     Metadata about an argument to a function
     """
 
-    def __init__(self, annotation, name, default=inspect.Parameter.empty):
+    def __init__(self, annotation, name, default=inspect.Parameter.empty, optional=False):
         self.annotation = annotation
         self.name = name
         self.default = default
+        # ``None`` is an accepted value for this slot (spelled ``T | None``); ``annotation`` is the unwrapped ``T``.
+        self.optional = optional
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(annotation={self.annotation}, name={self.name}, default={self.default})"
+        return (
+            f"{self.__class__.__name__}(annotation={self.annotation}, name={self.name}, default={self.default}, "
+            f"optional={self.optional})"
+        )
 
 
 class SparseMatrixEntry:

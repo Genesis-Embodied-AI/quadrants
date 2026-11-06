@@ -1,6 +1,6 @@
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test(require=qd.extension.adstack)
@@ -168,9 +168,9 @@ def test_ad_fibonacci_index():
                 b[q] += a[q]
 
         for i in range(M):
-            f[None] += b[i]
+            f[()] += b[i]
 
-    f.grad[None] = 1
+    f.grad[()] = 1
     a.fill(1)
 
     fib()
@@ -198,9 +198,9 @@ def test_ad_global_ptr():
                 p += 1
 
         for i in range(N):
-            f[None] += b[i]
+            f[()] += b[i]
 
-    f.grad[None] = 1
+    f.grad[()] = 1
     for i in range(N):
         a[i] = i
 
@@ -427,17 +427,17 @@ def test_mixed_inner_loops():
     @qd.kernel
     def mixed_inner_loops():
         for i in arr:
-            loss[None] += qd.sin(x[None])
+            loss[()] += qd.sin(x[()])
             for j in range(2):
-                loss[None] += qd.sin(x[None]) + 1.0
+                loss[()] += qd.sin(x[()]) + 1.0
 
-    loss.grad[None] = 1.0
-    x[None] = 0.0
+    loss.grad[()] = 1.0
+    x[()] = 0.0
     mixed_inner_loops()
     mixed_inner_loops.grad()
 
-    assert loss[None] == 10.0
-    assert x.grad[None] == 15.0
+    assert loss[()] == 10.0
+    assert x.grad[()] == 15.0
 
 
 @test_utils.test(require=qd.extension.adstack)
@@ -449,16 +449,16 @@ def test_mixed_inner_loops_tape():
     @qd.kernel
     def mixed_inner_loops_tape():
         for i in arr:
-            loss[None] += qd.sin(x[None])
+            loss[()] += qd.sin(x[()])
             for j in range(2):
-                loss[None] += qd.sin(x[None]) + 1.0
+                loss[()] += qd.sin(x[()]) + 1.0
 
-    x[None] = 0.0
+    x[()] = 0.0
     with qd.ad.Tape(loss=loss):
         mixed_inner_loops_tape()
 
-    assert loss[None] == 10.0
-    assert x.grad[None] == 15.0
+    assert loss[()] == 10.0
+    assert x.grad[()] == 15.0
 
 
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=32)
@@ -474,16 +474,16 @@ def test_inner_loops_local_variable_fixed_stack_size_tape():
                 s = 0.0
                 t = 0.0
                 for k in range(3):
-                    s += qd.sin(x[None]) + 1.0
-                    t += qd.sin(x[None])
-                loss[None] += s + t
+                    s += qd.sin(x[()]) + 1.0
+                    t += qd.sin(x[()])
+                loss[()] += s + t
 
-    x[None] = 0.0
+    x[()] = 0.0
     with qd.ad.Tape(loss=loss):
         test_inner_loops_local_variable()
 
-    assert loss[None] == 18.0
-    assert x.grad[None] == 36.0
+    assert loss[()] == 18.0
+    assert x.grad[()] == 36.0
 
 
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=32)
@@ -499,17 +499,17 @@ def test_inner_loops_local_variable_fixed_stack_size_kernel_grad():
                 s = 0.0
                 t = 0.0
                 for k in range(3):
-                    s += qd.sin(x[None]) + 1.0
-                    t += qd.sin(x[None])
-                loss[None] += s + t
+                    s += qd.sin(x[()]) + 1.0
+                    t += qd.sin(x[()])
+                loss[()] += s + t
 
-    loss.grad[None] = 1.0
-    x[None] = 0.0
+    loss.grad[()] = 1.0
+    x[()] = 0.0
     test_inner_loops_local_variable()
     test_inner_loops_local_variable.grad()
 
-    assert loss[None] == 18.0
-    assert x.grad[None] == 36.0
+    assert loss[()] == 18.0
+    assert x.grad[()] == 36.0
 
 
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=0)
@@ -525,16 +525,16 @@ def test_inner_loops_local_variable_adaptive_stack_size_tape():
                 s = 0.0
                 t = 0.0
                 for k in range(3):
-                    s += qd.sin(x[None]) + 1.0
-                    t += qd.sin(x[None])
-                loss[None] += s + t
+                    s += qd.sin(x[()]) + 1.0
+                    t += qd.sin(x[()])
+                loss[()] += s + t
 
-    x[None] = 0.0
+    x[()] = 0.0
     with qd.ad.Tape(loss=loss):
         test_inner_loops_local_variable()
 
-    assert loss[None] == 18.0
-    assert x.grad[None] == 36.0
+    assert loss[()] == 18.0
+    assert x.grad[()] == 36.0
 
 
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=0)
@@ -550,17 +550,17 @@ def test_inner_loops_local_variable_adaptive_stack_size_kernel_grad():
                 s = 0.0
                 t = 0.0
                 for k in range(3):
-                    s += qd.sin(x[None]) + 1.0
-                    t += qd.sin(x[None])
-                loss[None] += s + t
+                    s += qd.sin(x[()]) + 1.0
+                    t += qd.sin(x[()])
+                loss[()] += s + t
 
-    loss.grad[None] = 1.0
-    x[None] = 0.0
+    loss.grad[()] = 1.0
+    x[()] = 0.0
     test_inner_loops_local_variable()
     test_inner_loops_local_variable.grad()
 
-    assert loss[None] == 18.0
-    assert x.grad[None] == 36.0
+    assert loss[()] == 18.0
+    assert x.grad[()] == 36.0
 
 
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=0)
@@ -576,18 +576,18 @@ def test_more_inner_loops_local_variable_adaptive_stack_size_tape():
                 s = 0.0
                 for k in range(3):
                     u = 0.0
-                    s += qd.sin(x[None]) + 1.0
+                    s += qd.sin(x[()]) + 1.0
                     for l in range(2):
-                        u += qd.sin(x[None])
-                    loss[None] += u
-                loss[None] += s
+                        u += qd.sin(x[()])
+                    loss[()] += u
+                loss[()] += s
 
-    x[None] = 0.0
+    x[()] = 0.0
     with qd.ad.Tape(loss=loss):
         test_more_inner_loops_local_variable()
 
-    assert loss[None] == 12.0
-    assert x.grad[None] == 36.0
+    assert loss[()] == 12.0
+    assert x.grad[()] == 36.0
 
 
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=32)
@@ -603,18 +603,18 @@ def test_more_inner_loops_local_variable_fixed_stack_size_tape():
                 s = 0.0
                 for k in range(3):
                     u = 0.0
-                    s += qd.sin(x[None]) + 1.0
+                    s += qd.sin(x[()]) + 1.0
                     for l in range(2):
-                        u += qd.sin(x[None])
-                    loss[None] += u
-                loss[None] += s
+                        u += qd.sin(x[()])
+                    loss[()] += u
+                loss[()] += s
 
-    x[None] = 0.0
+    x[()] = 0.0
     with qd.ad.Tape(loss=loss):
         test_more_inner_loops_local_variable()
 
-    assert loss[None] == 12.0
-    assert x.grad[None] == 36.0
+    assert loss[()] == 12.0
+    assert x.grad[()] == 36.0
 
 
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=32, arch=[qd.cpu, qd.gpu])
@@ -626,25 +626,25 @@ def test_stacked_inner_loops_local_variable_fixed_stack_size_kernel_grad():
     @qd.kernel
     def test_stacked_inner_loops_local_variable():
         for i in arr:
-            loss[None] += qd.sin(x[None])
+            loss[()] += qd.sin(x[()])
             for j in range(3):
                 s = 0.0
                 for k in range(3):
-                    s += qd.sin(x[None]) + 1.0
-                loss[None] += s
+                    s += qd.sin(x[()]) + 1.0
+                loss[()] += s
             for j in range(3):
                 s = 0.0
                 for k in range(3):
-                    s += qd.sin(x[None]) + 1.0
-                loss[None] += s
+                    s += qd.sin(x[()]) + 1.0
+                loss[()] += s
 
-    loss.grad[None] = 1.0
-    x[None] = 0.0
+    loss.grad[()] = 1.0
+    x[()] = 0.0
     test_stacked_inner_loops_local_variable()
     test_stacked_inner_loops_local_variable.grad()
 
-    assert loss[None] == 36.0
-    assert x.grad[None] == 38.0
+    assert loss[()] == 36.0
+    assert x.grad[()] == 38.0
 
 
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=32, arch=[qd.cpu, qd.gpu])
@@ -656,26 +656,26 @@ def test_stacked_mixed_ib_and_non_ib_inner_loops_local_variable_fixed_stack_size
     @qd.kernel
     def test_stacked_mixed_ib_and_non_ib_inner_loops_local_variable():
         for i in arr:
-            loss[None] += qd.sin(x[None])
+            loss[()] += qd.sin(x[()])
             for j in range(3):
                 for k in range(3):
-                    loss[None] += qd.sin(x[None]) + 1.0
+                    loss[()] += qd.sin(x[()]) + 1.0
             for j in range(3):
                 s = 0.0
                 for k in range(3):
-                    s += qd.sin(x[None]) + 1.0
-                loss[None] += s
+                    s += qd.sin(x[()]) + 1.0
+                loss[()] += s
             for j in range(3):
                 for k in range(3):
-                    loss[None] += qd.sin(x[None]) + 1.0
+                    loss[()] += qd.sin(x[()]) + 1.0
 
-    loss.grad[None] = 1.0
-    x[None] = 0.0
+    loss.grad[()] = 1.0
+    x[()] = 0.0
     test_stacked_mixed_ib_and_non_ib_inner_loops_local_variable()
     test_stacked_mixed_ib_and_non_ib_inner_loops_local_variable.grad()
 
-    assert loss[None] == 54.0
-    assert x.grad[None] == 56.0
+    assert loss[()] == 54.0
+    assert x.grad[()] == 56.0
 
 
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=0, arch=[qd.cpu, qd.gpu])
@@ -687,25 +687,25 @@ def test_stacked_inner_loops_local_variable_adaptive_stack_size_kernel_grad():
     @qd.kernel
     def test_stacked_inner_loops_local_variable():
         for i in arr:
-            loss[None] += qd.sin(x[None])
+            loss[()] += qd.sin(x[()])
             for j in range(3):
                 s = 0.0
                 for k in range(3):
-                    s += qd.sin(x[None]) + 1.0
-                loss[None] += s
+                    s += qd.sin(x[()]) + 1.0
+                loss[()] += s
             for j in range(3):
                 s = 0.0
                 for k in range(3):
-                    s += qd.sin(x[None]) + 1.0
-                loss[None] += s
+                    s += qd.sin(x[()]) + 1.0
+                loss[()] += s
 
-    loss.grad[None] = 1.0
-    x[None] = 0.0
+    loss.grad[()] = 1.0
+    x[()] = 0.0
     test_stacked_inner_loops_local_variable()
     test_stacked_inner_loops_local_variable.grad()
 
-    assert loss[None] == 36.0
-    assert x.grad[None] == 38.0
+    assert loss[()] == 36.0
+    assert x.grad[()] == 38.0
 
 
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=0, arch=[qd.cpu, qd.gpu])
@@ -717,26 +717,26 @@ def test_stacked_mixed_ib_and_non_ib_inner_loops_local_variable_adaptive_stack_s
     @qd.kernel
     def test_stacked_mixed_ib_and_non_ib_inner_loops_local_variable():
         for i in arr:
-            loss[None] += qd.sin(x[None])
+            loss[()] += qd.sin(x[()])
             for j in range(3):
                 for k in range(3):
-                    loss[None] += qd.sin(x[None]) + 1.0
+                    loss[()] += qd.sin(x[()]) + 1.0
             for j in range(3):
                 s = 0.0
                 for k in range(3):
-                    s += qd.sin(x[None]) + 1.0
-                loss[None] += s
+                    s += qd.sin(x[()]) + 1.0
+                loss[()] += s
             for j in range(3):
                 for k in range(3):
-                    loss[None] += qd.sin(x[None]) + 1.0
+                    loss[()] += qd.sin(x[()]) + 1.0
 
-    loss.grad[None] = 1.0
-    x[None] = 0.0
+    loss.grad[()] = 1.0
+    x[()] = 0.0
     test_stacked_mixed_ib_and_non_ib_inner_loops_local_variable()
     test_stacked_mixed_ib_and_non_ib_inner_loops_local_variable.grad()
 
-    assert loss[None] == 54.0
-    assert x.grad[None] == 56.0
+    assert loss[()] == 54.0
+    assert x.grad[()] == 56.0
 
 
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=0, arch=[qd.cpu, qd.gpu])
@@ -750,13 +750,13 @@ def test_large_for_loops_adaptive_stack_size():
         for i in range(5):
             for j in range(2000):
                 for k in range(1000):
-                    loss[None] += qd.sin(x[None]) + 1.0
+                    loss[()] += qd.sin(x[()]) + 1.0
 
     with qd.ad.Tape(loss=loss):
         test_large_loop()
 
-    assert loss[None] == 1e7
-    assert x.grad[None] == 1e7
+    assert loss[()] == 1e7
+    assert x.grad[()] == 1e7
 
 
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=1, arch=[qd.cpu, qd.gpu])
@@ -770,13 +770,13 @@ def test_large_for_loops_fixed_stack_size():
         for i in range(5):
             for j in range(2000):
                 for k in range(1000):
-                    loss[None] += qd.sin(x[None]) + 1.0
+                    loss[()] += qd.sin(x[()]) + 1.0
 
     with qd.ad.Tape(loss=loss):
         test_large_loop()
 
-    assert loss[None] == 1e7
-    assert x.grad[None] == 1e7
+    assert loss[()] == 1e7
+    assert x.grad[()] == 1e7
 
 
 @test_utils.test(require=qd.extension.adstack)
@@ -788,16 +788,16 @@ def test_multiple_ib():
     def compute_y():
         for j in range(2):
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
 
-    x[None] = 1.0
+    x[()] = 1.0
     with qd.ad.Tape(y):
         compute_y()
 
-    assert y[None] == 12.0
-    assert x.grad[None] == 12.0
+    assert y[()] == 12.0
+    assert x.grad[()] == 12.0
 
 
 @test_utils.test(require=qd.extension.adstack)
@@ -809,21 +809,21 @@ def test_multiple_ib_multiple_outermost():
     def compute_y():
         for j in range(2):
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
         for j in range(2):
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
 
-    x[None] = 1.0
+    x[()] = 1.0
     with qd.ad.Tape(y):
         compute_y()
 
-    assert y[None] == 24.0
-    assert x.grad[None] == 24.0
+    assert y[()] == 24.0
+    assert x.grad[()] == 24.0
 
 
 @test_utils.test(require=qd.extension.adstack)
@@ -835,23 +835,23 @@ def test_multiple_ib_multiple_outermost_mixed():
     def compute_y():
         for j in range(2):
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
         for j in range(2):
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
                 for ii in range(3):
-                    y[None] += x[None]
+                    y[()] += x[()]
 
-    x[None] = 1.0
+    x[()] = 1.0
     with qd.ad.Tape(y):
         compute_y()
 
-    assert y[None] == 42.0
-    assert x.grad[None] == 42.0
+    assert y[()] == 42.0
+    assert x.grad[()] == 42.0
 
 
 @test_utils.test(require=qd.extension.adstack)
@@ -863,20 +863,20 @@ def test_multiple_ib_mixed():
     def compute_y():
         for j in range(2):
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
                 for k in range(2):
-                    y[None] += x[None]
+                    y[()] += x[()]
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
 
-    x[None] = 1.0
+    x[()] = 1.0
     with qd.ad.Tape(y):
         compute_y()
 
-    assert y[None] == 30.0
-    assert x.grad[None] == 30.0
+    assert y[()] == 30.0
+    assert x.grad[()] == 30.0
 
 
 @test_utils.test(require=qd.extension.adstack)
@@ -888,21 +888,21 @@ def test_multiple_ib_deeper():
     def compute_y():
         for j in range(2):
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
             for i in range(3):
                 for ii in range(2):
-                    y[None] += x[None]
+                    y[()] += x[()]
             for i in range(3):
                 for ii in range(2):
                     for iii in range(2):
-                        y[None] += x[None]
+                        y[()] += x[()]
 
-    x[None] = 1.0
+    x[()] = 1.0
     with qd.ad.Tape(y):
         compute_y()
 
-    assert y[None] == 42.0
-    assert x.grad[None] == 42.0
+    assert y[()] == 42.0
+    assert x.grad[()] == 42.0
 
 
 @test_utils.test(require=qd.extension.adstack)
@@ -943,25 +943,25 @@ def test_multiple_ib_inner_mixed():
     def compute_y():
         for j in range(2):
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
             for i in range(3):
                 for ii in range(2):
-                    y[None] += x[None]
+                    y[()] += x[()]
                 for iii in range(2):
-                    y[None] += x[None]
+                    y[()] += x[()]
                     for iiii in range(2):
-                        y[None] += x[None]
+                        y[()] += x[()]
             for i in range(3):
                 for ii in range(2):
                     for iii in range(2):
-                        y[None] += x[None]
+                        y[()] += x[()]
 
-    x[None] = 1.0
+    x[()] = 1.0
     with qd.ad.Tape(y):
         compute_y()
 
-    assert y[None] == 78.0
-    assert x.grad[None] == 78.0
+    assert y[()] == 78.0
+    assert x.grad[()] == 78.0
 
 
 @test_utils.test(require=qd.extension.adstack)
@@ -1012,7 +1012,7 @@ def test_for_loop_index():
             x_sum = 0.0
             for j in range(M):
                 x_sum += x[i, j]
-            loss[None] += qd.exp(x_sum)
+            loss[()] += qd.exp(x_sum)
 
     @qd.kernel
     def compute_grad():
@@ -1022,14 +1022,14 @@ def test_for_loop_index():
             for j in range(M):
                 x_sum += x[i, j]
             # backward
-            x_sum_grad = loss.grad[None] * qd.exp(x_sum)
+            x_sum_grad = loss.grad[()] * qd.exp(x_sum)
             for j in range(M):
                 my_x_grad[i, j] = x_sum_grad
 
     # Compute gradient using AD
-    loss[None] = 0
+    loss[()] = 0
     compute()
-    loss.grad[None] = 1
+    loss.grad[()] = 1
     compute.grad()
 
     # Compute the mannually derived gradient
@@ -1065,16 +1065,16 @@ def test_ad_sibling_for_loops_with_dynamic_trip_count_between_them():
     def compute():
         for i in y:
             for _ in range(2):
-                loss[None] += y[i]
+                loss[()] += y[i]
             t = trip[i]
             for _ in range(t):
-                loss[None] += y[i] * 0.1
+                loss[()] += y[i] * 0.1
 
     for i in range(n):
         y[i] = 1.0
         trip[i] = 3
-    loss[None] = 0.0
-    loss.grad[None] = 1.0
+    loss[()] = 0.0
+    loss.grad[()] = 1.0
     compute()
     compute.grad()
 
@@ -1109,16 +1109,16 @@ def test_ad_sibling_for_loops_with_body_use_of_between_stmt():
     def compute():
         for i in y:
             for _ in range(2):
-                loss[None] += y[i]
+                loss[()] += y[i]
             s = scale[i]
             for _ in range(3):
-                loss[None] += y[i] * s
+                loss[()] += y[i] * s
 
     for i in range(n):
         y[i] = 1.0
         scale[i] = 0.5
-    loss[None] = 0.0
-    loss.grad[None] = 1.0
+    loss[()] = 0.0
+    loss.grad[()] = 1.0
     compute()
     compute.grad()
 

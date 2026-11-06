@@ -51,6 +51,10 @@ if (WIN32)
 endif()
 target_link_libraries(${TESTS_NAME} PRIVATE quadrants_core)
 target_link_libraries(${TESTS_NAME} PRIVATE gtest_main)
+if (QD_WITH_METAL)
+  target_link_libraries(${TESTS_NAME} PRIVATE spirv-cross-msl)
+endif()
+target_link_libraries(${TESTS_NAME} PRIVATE gmock)
 target_link_libraries(${TESTS_NAME} PRIVATE quadrants_common)
 
 if (QD_WITH_BACKTRACE)
@@ -74,6 +78,7 @@ target_include_directories(${TESTS_NAME}
     ${PROJECT_SOURCE_DIR}/external/volk
     ${PROJECT_SOURCE_DIR}/external/glad/include
     ${PROJECT_SOURCE_DIR}/external/SPIRV-Tools/include
+    ${PROJECT_SOURCE_DIR}/external/SPIRV-Headers/include
     ${PROJECT_SOURCE_DIR}/external/Vulkan-Headers/include
   )
 

@@ -4,6 +4,15 @@
 
 cmake_minimum_required(VERSION 3.17)
 
+# macOS minimum deployment target. Set before project() so CMake bakes -mmacosx-version-min into every
+# compiled target (LC_BUILD_VERSION minos). Respect an explicit -DCMAKE_OSX_DEPLOYMENT_TARGET or the
+# standard MACOSX_DEPLOYMENT_TARGET env var (CMake seeds the cache from it during project()); only apply
+# our default when neither is provided. Keep in sync with the wheel platform tag in
+# .github/workflows/scripts/qd_build/entry.py (macosx_13_0_arm64).
+if(NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET AND "$ENV{MACOSX_DEPLOYMENT_TARGET}" STREQUAL "")
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING "Minimum macOS deployment target")
+endif()
+
 project(quadrants)
 
 include("cmake/utils.cmake")
@@ -108,7 +117,6 @@ if((LINUX OR APPLE) AND NOT IOS)
 endif()
 
 if(APPLE)
-    add_definitions(-DOSX_DEPLOYMENT_TARGET=11.0)
     add_definitions(-DTARGET_OS_OSX)
 endif()
 
@@ -205,8 +213,6 @@ if (QD_WITH_LLVM)
       string(REGEX MATCH "([0-9]+)\\.[0-9]+(\\.[0-9]+)?" CLANG_VERSION "${CLANG_VERSION_OUTPUT}")
 
       message("${CLANG_EXECUTABLE} --version: ${CLANG_VERSION}")
-
-      set(CLANG_VERSION_MAJOR "${CMAKE_MATCH_1}")
     endmacro()
 
     if (APPLE)
@@ -216,9 +222,6 @@ if (QD_WITH_LLVM)
         set(CLANG_OSX_FLAGS "")
       endif()
     endif()
-
-    # Highest clang version that we've tested
-    set(CLANG_HIGHEST_VERSION "15")
 
     check_clang_version()
 

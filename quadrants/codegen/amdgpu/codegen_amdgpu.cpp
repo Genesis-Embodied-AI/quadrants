@@ -224,34 +224,6 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
 #undef UNARY_STD
   }
 
-  llvm::Value *optimized_reduction(AtomicOpStmt *stmt) override {
-    if (!stmt->is_reduction) {
-      return nullptr;
-    }
-    QD_ASSERT(stmt->val->ret_type->is<PrimitiveType>());
-    PrimitiveTypeID prim_type = stmt->val->ret_type->cast<PrimitiveType>()->type;
-
-    std::unordered_map<PrimitiveTypeID, std::unordered_map<AtomicOpType, std::string>> fast_reductions;
-
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::add] = "reduce_add_i32";
-    fast_reductions[PrimitiveTypeID::f32][AtomicOpType::add] = "reduce_add_f32";
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::min] = "reduce_min_i32";
-    fast_reductions[PrimitiveTypeID::f32][AtomicOpType::min] = "reduce_min_f32";
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::max] = "reduce_max_i32";
-    fast_reductions[PrimitiveTypeID::f32][AtomicOpType::max] = "reduce_max_f32";
-
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::bit_and] = "reduce_and_i32";
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::bit_or] = "reduce_or_i32";
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::bit_xor] = "reduce_xor_i32";
-
-    AtomicOpType op = stmt->op_type;
-    if (fast_reductions.find(prim_type) == fast_reductions.end()) {
-      return nullptr;
-    }
-    QD_ASSERT(fast_reductions.at(prim_type).find(op) != fast_reductions.at(prim_type).end());
-    return call(fast_reductions.at(prim_type).at(op), {llvm_val[stmt->dest], llvm_val[stmt->val]});
-  }
-
   void visit(RangeForStmt *for_stmt) override {
     create_naive_range_for(for_stmt);
   }
@@ -352,6 +324,39 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
         load->setVolatile(true);
       }
       llvm_val[stmt] = load;
+    }
+  }
+
+  // Device memory is addrspace(1) on AMDGPU. Tagging pointers where they are
+  // materialized lets InferAddressSpaces promote dependent flat_* accesses to
+  // global_*. (ndarray data pointers are tagged in the shared base codegen.)
+
+  void visit(GlobalTemporaryStmt *stmt) override {
+    TaskCodeGenLLVM::visit(stmt);
+    auto *current = llvm_val[stmt];
+    if (current && current->getType()->isPointerTy() && current->getType()->getPointerAddressSpace() != 1) {
+      auto *ptr_as1 = llvm::PointerType::get(*llvm_context, 1);
+      llvm_val[stmt] = builder->CreateAddrSpaceCast(current, ptr_as1);
+    }
+  }
+
+  void visit(MatrixPtrStmt *stmt) override {
+    // Base codegen strips the source tag (forces addrspace(0), via inttoptr on
+    // the byte-offset path); preserve the origin addrspace instead.
+    auto *origin_ptr = llvm_val[stmt->origin];
+    unsigned origin_as = origin_ptr->getType()->isPointerTy() ? origin_ptr->getType()->getPointerAddressSpace() : 0;
+    if (stmt->offset_used_as_index()) {
+      auto *origin_pointee_ty = tlctx->get_data_type(stmt->origin->ret_type.ptr_removed());
+      auto *casted_ptr = builder->CreateBitCast(origin_ptr, llvm::PointerType::get(origin_pointee_ty, origin_as));
+      llvm_val[stmt] =
+          builder->CreateGEP(origin_pointee_ty, casted_ptr, {tlctx->get_constant(0), llvm_val[stmt->offset]});
+    } else {
+      auto *byte_ptr =
+          builder->CreateBitCast(origin_ptr, llvm::PointerType::get(llvm::Type::getInt8Ty(*llvm_context), origin_as));
+      auto *address_offset = builder->CreateSExt(llvm_val[stmt->offset], llvm::Type::getInt64Ty(*llvm_context));
+      auto *offset_ptr = builder->CreateGEP(llvm::Type::getInt8Ty(*llvm_context), byte_ptr, address_offset);
+      auto pointee_ty = tlctx->get_data_type(stmt->ret_type.ptr_removed());
+      llvm_val[stmt] = builder->CreateBitCast(offset_ptr, llvm::PointerType::get(pointee_ty, origin_as));
     }
   }
 
@@ -524,7 +529,14 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       if (ret_quadrants_type->is_primitive(PrimitiveTypeID::f16)) {
         llvm_val[stmt] = call("__ocml_pow_f16", {lhs, rhs});
       } else if (ret_quadrants_type->is_primitive(PrimitiveTypeID::f32)) {
-        llvm_val[stmt] = call("__ocml_pow_f32", {lhs, rhs});
+        // __ocml_pow_f32 is exp2(z * log2(y)); the log2 rounding error is scaled by the exponent, so its relative
+        // error (~1e-3) is far looser than CUDA's __nv_powf. Compute in f64 and round back to f32 so the result is
+        // effectively correctly-rounded and matches CPU/CUDA within the default test tolerance. Mirrors the i32 path
+        // below.
+        auto lhs_f64 = builder->CreateFPExt(lhs, llvm::Type::getDoubleTy(*llvm_context));
+        auto rhs_f64 = builder->CreateFPExt(rhs, llvm::Type::getDoubleTy(*llvm_context));
+        auto ret_f64 = call("__ocml_pow_f64", {lhs_f64, rhs_f64});
+        llvm_val[stmt] = builder->CreateFPTrunc(ret_f64, llvm::Type::getFloatTy(*llvm_context));
       } else if (ret_quadrants_type->is_primitive(PrimitiveTypeID::f64)) {
         llvm_val[stmt] = call("__ocml_pow_f64", {lhs, rhs});
       } else if (ret_quadrants_type->is_primitive(PrimitiveTypeID::i32)) {

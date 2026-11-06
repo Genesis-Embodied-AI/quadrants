@@ -4,7 +4,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang.misc import get_host_arch_list
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test()
@@ -163,3 +163,35 @@ def test_field_with_offset_to_numpy(offset):
     val = qd.field(dtype=qd.f32, shape=shape, offset=offset)
     val.fill(1.0)
     assert np.allclose(val.to_numpy(), np.ones(shape, dtype=np.float32))
+
+
+@test_utils.test(arch=qd.cpu)
+def test_scalar_field_offset_with_order():
+    """qd.field with order= and non-zero offset must permute the offset so that canonical indexing lands at the correct
+    physical cell.
+    """
+    x = qd.field(qd.i32, shape=(4, 6), order="ji", offset=(1, 2))
+
+    @qd.kernel
+    def write():
+        x[1, 2] = 42
+
+    write()
+    assert x[1, 2] == 42
+
+
+@test_utils.test(arch=qd.cpu)
+def test_matrix_field_offset_with_order():
+    """Matrix.field with order= and non-zero offset must permute the offset so canonical indexing is correct."""
+    m = qd.Matrix.field(2, 2, qd.i32, shape=(4, 6), order="ji", offset=(1, 2))
+
+    @qd.kernel
+    def write():
+        m[1, 2] = qd.Matrix([[10, 20], [30, 40]])
+
+    write()
+    got = m[1, 2]
+    assert got[0, 0] == 10
+    assert got[0, 1] == 20
+    assert got[1, 0] == 30
+    assert got[1, 1] == 40

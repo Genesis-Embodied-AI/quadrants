@@ -30,8 +30,7 @@ class OffloadedTask;
 //      reads through (`Program::launch_kernel` populates `DiagnoseLaunchSnapshot`; the registry maps task ids
 //      to kernel + offload-task identities + per-stack capacities, and `diagnose_adstack_overflow` runs the
 //      synchronous sizer rerun against the captured snapshot to classify the failure mode).
-// Both pieces are adstack-internal and lived in `Program` historically; consolidating them here keeps the
-// `Program` surface focused on cross-feature program state.
+// Both pieces are adstack-internal; keeping them here leaves `Program` focused on cross-feature program state.
 class AdStackCache {
  public:
   // Back-reference to `Program` is used by the diagnose path to reach `evaluate_adstack_size_expr` /

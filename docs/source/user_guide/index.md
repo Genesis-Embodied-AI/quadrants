@@ -49,6 +49,7 @@ autodiff
 :maxdepth: 1
 :titlesonly:
 
+gpu_execution_model
 atomics
 block
 grid
@@ -93,7 +94,6 @@ kernel_coverage
 :titlesonly:
 
 unsupported_python
-python_backend
 debug
 quirks
 troubleshooting

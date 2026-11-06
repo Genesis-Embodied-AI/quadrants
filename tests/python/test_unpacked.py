@@ -12,7 +12,7 @@ import pytest
 import quadrants as qd
 
 try:
-    from tests import test_utils  # noqa: F401
+    from tests.helpers import test_utils  # noqa: F401
 except ImportError:  # standalone-run convenience
     test_utils = None  # type: ignore
 
@@ -63,7 +63,7 @@ def test_unpacked_static_index_write_then_read():
     out = qd.field(dtype=qd.f32, shape=(4,))
 
     @qd.kernel(fastcache=False)
-    def k(o: qd.template()):
+    def k(o: qd.Template):
         for _ in range(1):
             t = Tile()
             t.r[0] = qd.f32(1.0)
@@ -91,7 +91,7 @@ def test_unpacked_qd_static_loop_index():
     out = qd.field(dtype=qd.f32, shape=(4,))
 
     @qd.kernel(fastcache=False)
-    def k(o: qd.template()):
+    def k(o: qd.Template):
         for _ in range(1):
             t = Tile()
             for i in qd.static(range(4)):
@@ -122,7 +122,7 @@ def test_unpacked_runtime_index_rejected():
     out = qd.field(dtype=qd.f32, shape=(4,))
 
     @qd.kernel(fastcache=False)
-    def k(o: qd.template()):
+    def k(o: qd.Template):
         for _ in range(1):
             t = Tile()
             for i in range(4):  # runtime loop, not qd.static
@@ -146,7 +146,7 @@ def test_unpacked_oob_static_index():
     out = qd.field(dtype=qd.f32, shape=(4,))
 
     @qd.kernel(fastcache=False)
-    def k(o: qd.template()):
+    def k(o: qd.Template):
         for _ in range(1):
             t = Tile()
             t.r[7] = qd.f32(1.0)  # 7 >= count=4
@@ -217,7 +217,7 @@ def test_unpacked_nested_in_outer_dataclass():
     out = qd.field(dtype=qd.f32, shape=(1,))
 
     @qd.kernel(fastcache=False)
-    def k(o: qd.template()):
+    def k(o: qd.Template):
         for _ in range(1):
             t = Outer()
             for i in qd.static(range(4)):
@@ -244,7 +244,7 @@ def test_unpacked_struct_field_subscript():
     out = qd.field(dtype=qd.f32, shape=(1,))
 
     @qd.kernel(fastcache=False)
-    def k(o: qd.template()):
+    def k(o: qd.Template):
         for n in range(2):
             for i in qd.static(range(4)):
                 tile_field[n].r[i] = qd.cast(n * 10 + i, qd.f32)
@@ -273,7 +273,7 @@ def test_unpacked_struct_field_subscript_nested():
     out = qd.field(dtype=qd.f32, shape=(1,))
 
     @qd.kernel(fastcache=False)
-    def k(o: qd.template()):
+    def k(o: qd.Template):
         for i in qd.static(range(4)):
             outer_field[0].inner.r[i] = qd.cast(i + 5, qd.f32)
         outer_field[0].scale = qd.f32(3.0)

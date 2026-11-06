@@ -19,7 +19,7 @@ import pytest
 import quadrants as qd
 from quadrants._tensor import _with_layout
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 def _allocate_with_layout(canonical_shape, layout, dtype=qd.i32, needs_grad=False):

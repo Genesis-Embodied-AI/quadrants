@@ -4,7 +4,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @pytest.fixture
@@ -18,7 +18,7 @@ def qd_type(use_ndarray: bool) -> Any:
 def qd_annotation(use_ndarray: bool) -> Any:
     if use_ndarray:
         return qd.types.ndarray()
-    return qd.template()
+    return qd.Template
 
 
 @pytest.mark.parametrize("use_ndarray", [False, True])
@@ -41,11 +41,11 @@ def test_class_method(qd_type: Any, qd_annotation: Any) -> None:
             self.e = qd_type(qd.i32, shape)
 
         @qd.func
-        def f1(self_unused, c: qd_annotation, inner: qd.template()):
+        def f1(self_unused, c: qd_annotation, inner: qd.Template):
             c[0] = 4
 
         @qd.kernel
-        def test(self, c: qd_annotation, inner: qd.template()):
+        def test(self, c: qd_annotation, inner: qd.Template):
             self.f1(c, inner=inner)
 
         def run(self):

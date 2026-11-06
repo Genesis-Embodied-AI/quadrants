@@ -9,7 +9,7 @@ Pins two contracts:
 2. **Functional equivalence.** A kernel called with a wrapper must read and write the same memory as the same kernel
    called with the bare impl, on both backends. No data corruption, no shape confusion.
 
-Stork-19 flipped ``qd.tensor()`` to return wrappers, so to construct a *bare* impl for these tests we drop down to
+``qd.tensor()`` returns wrappers, so to construct a *bare* impl for these tests we drop down to
 ``qd.field`` / ``qd.ndarray`` directly. Wrapping then goes through ``qd.Tensor(impl)``.
 """
 
@@ -17,7 +17,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 BACKENDS = [qd.Backend.FIELD, qd.Backend.NDARRAY]
 BACKEND_IDS = ["field", "ndarray"]
@@ -34,7 +34,7 @@ def _alloc_bare(backend, dtype, shape):
 def test_kernel_accepts_wrapper_and_writes_correctly(backend):
     """Wrapper-as-arg writes match bare-impl writes (functional equivalence)."""
 
-    annotation = qd.template() if backend is qd.Backend.FIELD else qd.types.ndarray()
+    annotation = qd.Template if backend is qd.Backend.FIELD else qd.types.ndarray()
 
     @qd.kernel
     def fill(x: annotation):
@@ -53,7 +53,7 @@ def test_kernel_accepts_wrapper_and_writes_correctly(backend):
 def test_kernel_cache_no_fragmentation_under_wrapping(backend):
     """Calling with bare impl and with ``Tensor(impl)`` must hit the same cache entry: gotcha A regression test."""
 
-    annotation = qd.template() if backend is qd.Backend.FIELD else qd.types.ndarray()
+    annotation = qd.Template if backend is qd.Backend.FIELD else qd.types.ndarray()
 
     @qd.kernel
     def noop(x: annotation):
@@ -87,7 +87,7 @@ def test_kernel_cache_no_fragmentation_under_wrapping(backend):
 def test_kernel_wrapper_round_trips_through_to_numpy(backend):
     """End-to-end: write via wrapper, read via wrapper.to_numpy() (which forwards to impl.to_numpy()), values match."""
 
-    annotation = qd.template() if backend is qd.Backend.FIELD else qd.types.ndarray()
+    annotation = qd.Template if backend is qd.Backend.FIELD else qd.types.ndarray()
 
     @qd.kernel
     def fill(x: annotation):

@@ -291,8 +291,7 @@ void GfxRuntime::dispatch_checkpoint_yield_check(CommandList *cmdlist,
               int(dispatch_res));
 }
 
-// Per-launch preparation of the checkpoint subsystem on the GPU side. Mirrors what was previously inlined in
-// `runtime.cpp::launch_kernel` immediately after `ensure_checkpoint_state_for_handle`. Extracted here so the main
+// Per-launch preparation of the checkpoint subsystem on the GPU side. Kept separate so the main
 // per-task dispatch loop in `runtime.cpp` stays focused on the standard direct-dispatch path; this helper is only doing
 // checkpoint-specific work and always returns an empty plan when `kernel_has_checkpoints` is false.
 //

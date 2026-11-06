@@ -6,7 +6,6 @@ Regression tests for:
    multiply and the stored value is loop-invariant.
 2. Atomic operations on ndarrays accessed via physical storage buffers.
 
-See doc/metal_physical_ptr_miscompile.md in perso_hugh for full details.
 """
 
 import numpy as np
@@ -14,7 +13,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 archs_with_physical_storage_buffer = [qd.metal, qd.vulkan]
 

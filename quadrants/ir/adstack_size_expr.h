@@ -9,6 +9,7 @@
 namespace quadrants::lang {
 
 class SNode;
+class Stmt;
 
 // Flat, offline-cache-serialisable representation of a `SizeExpr` tree. Each node references at most two operands
 // by index into the same vector; the tree root is always the last element so the evaluator can walk the vector
@@ -86,6 +87,14 @@ class SizeExpr {
   std::vector<int32_t> arg_id_path;
   int32_t arg_shape_axis{-1};
   std::vector<std::unique_ptr<SizeExpr>> operands;
+  // Only used by `MaxOverRange`, and only while `determine_ad_stack_size` is still building trees: the source IR
+  // loop whose index the range wrapper iterates, or `nullptr` for the conservative whole-axis fallback wraps that
+  // bound an index shape the pre-pass could not chase to a `LoopIndexStmt`. Two wrappers pair the same iteration
+  // only when they come from the same source loop, so `expr_sub`'s fusion keys on this pointer; alpha-equal ranges
+  // alone also match two independent fallback wraps, whose fused body would pair unrelated indices. Intentionally
+  // absent from `SerializedSizeExprNode`: the pointer is dead weight once the pass returns (fusion never runs on
+  // deserialized trees) and would dangle across the offline-cache round trip anyway.
+  Stmt *source_loop{nullptr};
 
   SizeExpr() = default;
   SizeExpr(const SizeExpr &) = delete;
@@ -129,7 +138,8 @@ class SizeExpr {
   static std::unique_ptr<SizeExpr> make_max_over_range(int32_t var_id,
                                                        std::unique_ptr<SizeExpr> begin,
                                                        std::unique_ptr<SizeExpr> end,
-                                                       std::unique_ptr<SizeExpr> body) {
+                                                       std::unique_ptr<SizeExpr> body,
+                                                       Stmt *source_loop = nullptr) {
     auto e = std::make_unique<SizeExpr>();
     e->kind = Kind::MaxOverRange;
     e->var_id = var_id;
@@ -137,6 +147,7 @@ class SizeExpr {
     e->operands.push_back(std::move(begin));
     e->operands.push_back(std::move(end));
     e->operands.push_back(std::move(body));
+    e->source_loop = source_loop;
     return e;
   }
 
@@ -170,6 +181,7 @@ class SizeExpr {
     e->var_id = var_id;
     e->arg_id_path = arg_id_path;
     e->arg_shape_axis = arg_shape_axis;
+    e->source_loop = source_loop;
     e->operands.reserve(operands.size());
     for (const auto &child : operands) {
       e->operands.push_back(child ? child->clone() : nullptr);

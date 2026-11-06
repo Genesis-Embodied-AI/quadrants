@@ -54,7 +54,7 @@ Value atomic_operation_widened(IRBuilder &ir,
   ir.make_inst(spv::OpBranch, body);
   ir.make_inst(spv::OpLabel, body);
   {
-    // See IRBuilder::atomic_operation for why OpAtomicLoad is used here
+    // See SpirvOperations::atomic_operation for why OpAtomicLoad is used here
     // instead of OpLoad (prevents SPIRV-Cross inlining on Metal).
     Value old_val = ir.make_value(spv::OpAtomicLoad, res_type, addr_ptr,
                                   /*scope=*/ir.const_i32_one_,
@@ -215,18 +215,23 @@ Value float_to_shared_uint(IRBuilder &ir, Value val, const DataType &dt) {
   return val;
 }
 
-Value shared_float_atomic(IRBuilder &ir, AtomicOpType op_type, Value addr_ptr, Value data, const DataType &dt) {
+Value shared_float_atomic(IRBuilder &ir,
+                          SpirvOperations &ops_,
+                          AtomicOpType op_type,
+                          Value addr_ptr,
+                          Value data,
+                          const DataType &dt) {
   auto atomic_uint_dt = get_atomic_uint_dtype(ir, dt);
   auto float_type = ir.get_primitive_type(dt);
   if (op_type == AtomicOpType::add) {
     return atomic_operation_widened(
-        ir, addr_ptr, data, [&](Value lhs, Value rhs) { return ir.add(lhs, rhs); }, dt, atomic_uint_dt);
+        ir, addr_ptr, data, [&](Value lhs, Value rhs) { return ops_.add(lhs, rhs); }, dt, atomic_uint_dt);
   } else if (op_type == AtomicOpType::sub) {
     return atomic_operation_widened(
-        ir, addr_ptr, data, [&](Value lhs, Value rhs) { return ir.sub(lhs, rhs); }, dt, atomic_uint_dt);
+        ir, addr_ptr, data, [&](Value lhs, Value rhs) { return ops_.sub(lhs, rhs); }, dt, atomic_uint_dt);
   } else if (op_type == AtomicOpType::mul) {
     return atomic_operation_widened(
-        ir, addr_ptr, data, [&](Value lhs, Value rhs) { return ir.mul(lhs, rhs); }, dt, atomic_uint_dt);
+        ir, addr_ptr, data, [&](Value lhs, Value rhs) { return ops_.mul(lhs, rhs); }, dt, atomic_uint_dt);
   } else if (op_type == AtomicOpType::min) {
     return atomic_operation_widened(
         ir, addr_ptr, data, [&](Value lhs, Value rhs) { return ir.call_glsl450(float_type, /*FMin*/ 37, lhs, rhs); },

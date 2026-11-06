@@ -1,6 +1,6 @@
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test()
@@ -37,7 +37,7 @@ def test_break():
             i += 1
             if i > 10:
                 break
-        ret[None] = s
+        ret[()] = s
 
     func()
-    assert ret[None] == 55
+    assert ret[()] == 55

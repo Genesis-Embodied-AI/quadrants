@@ -9,13 +9,14 @@ import math
 import platform
 import warnings
 from ast import unparse
-from typing import Any, Generator, Sequence, Type
+from typing import Any, Generator, Sequence, Type, TypeAlias
 
 import numpy as np
 
 from quadrants._lib import core as _qd_core
 from quadrants.lang import exception, expr, impl, matrix, mesh
 from quadrants.lang import ops as qd_ops
+from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._ndrange import _Ndrange
 from quadrants.lang._unpacked import _UnpackedVectorRef
 from quadrants.lang.ast.ast_transformer_utils import (
@@ -24,7 +25,9 @@ from quadrants.lang.ast.ast_transformer_utils import (
     LoopStatus,
     ReturnStatus,
     get_decorator,
+    maybe_lifted_primitive,
 )
+from quadrants.lang.ast.ast_transformers import graph_api
 from quadrants.lang.ast.ast_transformers.call_transformer import CallTransformer
 from quadrants.lang.ast.ast_transformers.checkpoint_transformer import (
     CheckpointTransformer,
@@ -57,6 +60,10 @@ from quadrants.types import primitive_types
 from quadrants.types.utils import is_integral
 
 AutodiffMode = _qd_core.AutodiffMode
+
+_LayoutIndex: TypeAlias = (
+    int | np.integer | np.ndarray | Expr | Matrix | slice | None | list["_LayoutIndex"] | tuple["_LayoutIndex", ...]
+)
 
 
 def reshape_list(flat_list: list[Any], target_shape: Sequence[int]) -> list[Any]:
@@ -92,13 +99,20 @@ class ASTTransformer(Builder):
         pruning = ctx.global_context.pruning
         if not pruning.enforcing and not ctx.expanding_dataclass_call_parameters and node.id.startswith("__qd_"):
             ctx.global_context.pruning.mark_used(ctx.func.func_id, node.id)
+        # Seed the chain annotation that ``build_Attribute`` extends and records in pruning. Only non-flattened
+        # parameters need it - a data_oriented kernel arg (``self``), or a ``qd.template()`` func param; dataclass args
+        # arrive here already flattened and are handled by ``mark_used`` above.
+        if not node.id.startswith("__qd_") and (node.id in ctx.kernel_args or node.id in ctx.fn_param_names):
+            node._qd_arg_chain = node.id  # type: ignore[attr-defined]
+        else:
+            node._qd_arg_chain = None  # type: ignore[attr-defined]
         node.violates_pure, node.ptr, node.violates_pure_reason = ctx.get_var_by_name(node.id)
         # Flattened struct fields (``__qd_foo__qd_bar``) injected by ``populate_global_vars_from_dataclass`` are raw
         # ``Ndarray`` instances.  ``build_Attribute`` already promotes these via ``_promote_ndarray_if_declared`` but
         # the flattened-name path bypasses ``build_Attribute`` entirely, so we must promote here too.
         node.ptr = ASTTransformer._promote_ndarray_if_declared(ctx, node.ptr)
         if isinstance(node, (ast.stmt, ast.expr)) and isinstance(node.ptr, Expr):
-            node.ptr.dbg_info = _qd_core.DebugInfo(ctx.get_pos_info(node))
+            node.ptr.dbg_info = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
             node.ptr.ptr.set_dbg_info(node.ptr.dbg_info)
         # ``qd.static`` is intentionally NOT a purity escape hatch: a captured module global is still flagged inside
         # a static scope, since its value never enters the fastcache key regardless of static wrapping.
@@ -285,24 +299,26 @@ class ASTTransformer(Builder):
         return False
 
     @staticmethod
-    def _unpack_layout_vector_index(ast_builder, index, layout_len):
-        """If ``index`` is a rank-1 Vector of length ``layout_len``, return its component list so the layout permutation
-        can be applied per-axis. Otherwise return ``[index]`` unchanged.
+    def _unpack_layout_vector_index(ast_builder: _qd_core.ASTBuilder | None, index: _LayoutIndex) -> list[_LayoutIndex]:
+        """Unpack Python lists, tuples, single-column Matrix indices, and rank-1 Expr indices for per-axis layout
+        permutation. Otherwise return ``[index]`` unchanged.
 
-        Handles both forms a single subscript can take inside a kernel:
+        Handles the following forms a single subscript can take inside a kernel:
 
-        - ``Matrix`` (Python class) — produced when the kernel runs on the python backend, e.g. ``qd.grouped(field)``
-          returning a ``[Matrix([i, j])]`` list.
+        - Python ``list`` / ``tuple``, including indices passed through a ``@qd.func``.
+        - ``Matrix`` (Python class) indices supplied from Python scope.
         - ``Expr`` with tensor shape ``(N,)`` — produced by ``matrix.make_matrix(loop_indices, ...)`` in
           :func:`build_struct_for` / :func:`build_grouped_ndrange_for`, which is what real kernels see for
           ``for I in qd.grouped(...)``.
         """
-        if isinstance(index, Matrix) and index.n == layout_len and index.m == 1:
+        if isinstance(index, (list, tuple)):
+            return list(index)
+        if isinstance(index, Matrix) and index.m == 1:
             return index.to_list()
         if isinstance(index, expr.Expr) and index.is_tensor():
             shape = index.get_shape()
-            if len(shape) == 1 and shape[0] == layout_len:
-                return [impl.subscript(ast_builder, index, k) for k in range(layout_len)]
+            if len(shape) == 1:
+                return [impl.subscript(ast_builder, index, k) for k in range(shape[0])]
         return [index]
 
     @staticmethod
@@ -334,15 +350,13 @@ class ASTTransformer(Builder):
         #
         # Two indexing forms must be permuted:
         # 1. Multi-arg subscript ``x[i, j, ...]``: ``node.slice.ptr`` is already a list of N scalars; permute by axis.
-        # 2. Single-Vector subscript ``x[I]`` where I is a rank-N Matrix coming from ``qd.grouped(...)``: unpack into N
-        #    scalars first, then permute. Without this, ``x[I]`` writes at canonical indices into the smaller physical
-        #    buffer — silently OOB on permuted layouts.
+        # 2. Single-sequence subscript ``x[I]`` where I is a list, tuple, or vector coming from ``qd.grouped(...)``:
+        #    unpack into N scalars first, then permute. Without this, ``x[I]`` writes at canonical indices into the
+        #    permuted physical buffer, potentially going out of bounds.
         layout = getattr(node.value.ptr, "_qd_layout", None)
         if layout is not None:
             if len(node.slice.ptr) == 1:
-                node.slice.ptr = ASTTransformer._unpack_layout_vector_index(
-                    ctx.ast_builder, node.slice.ptr[0], len(layout)
-                )
+                node.slice.ptr = ASTTransformer._unpack_layout_vector_index(ctx.ast_builder, node.slice.ptr[0])
             if len(node.slice.ptr) == len(layout):
                 node.slice.ptr = [node.slice.ptr[axis] for axis in layout]
         node.ptr = impl.subscript(ctx.ast_builder, node.value.ptr, *node.slice.ptr)
@@ -487,7 +501,7 @@ class ASTTransformer(Builder):
             return node.ptr
         values = node.format_spec.values
         assert len(values) == 1
-        format_str = values[0].s
+        format_str = values[0].value
         assert format_str is not None
         # distinguished from normal list
         return ["__qd_fmt_value__", node.ptr, format_str]
@@ -502,8 +516,6 @@ class ASTTransformer(Builder):
                 args.append(build_stmt(ctx, sub_node))
             elif isinstance(sub_node, ast.Constant):
                 str_spec += sub_node.value
-            elif isinstance(sub_node, ast.Str):
-                str_spec += sub_node.s
             else:
                 raise QuadrantsSyntaxError("Invalid value for fstring.")
 
@@ -624,7 +636,7 @@ class ASTTransformer(Builder):
                     raise QuadrantsSyntaxError("The return type is not supported now!")
             ctx.ast_builder.create_kernel_exprgroup_return(
                 expr.make_expr_group(return_exprs),
-                _qd_core.DebugInfo(ctx.get_pos_info(node)),
+                _qd_core.DebugInfo(ctx.memoized_get_pos_info(node)),
             )
         else:
             ctx.return_data = node.value.ptr
@@ -681,14 +693,32 @@ class ASTTransformer(Builder):
     @staticmethod
     def _promote_ndarray_if_declared(ctx: ASTTransformerFuncContext, value: Any) -> Any:
         """If *value* is a bare ``Ndarray`` that was pre-declared as a kernel arg (in ``_predeclare_struct_ndarrays``),
-        return the ``AnyArray`` proxy from the cache. Otherwise return *value* unchanged."""
+        return the ``AnyArray`` proxy from the cache. Otherwise return *value* unchanged.
+
+        Also records the source ndarray id in ``pruning.used_struct_ndarray_ids`` on the non-enforcing first pass, so
+        that the enforcing pass can skip ndarrays the kernel never accesses. An already-promoted ``AnyArray`` (tagged
+        with ``_qd_source_ndarray_id``) counts too: that is how accesses inside an inlined ``@qd.func`` body arrive.
+        """
         from quadrants.lang._ndarray import Ndarray  # pylint: disable=C0415
 
-        if not isinstance(value, Ndarray):
+        pruning = ctx.global_context.pruning
+        # Same gate as ``build_Name``'s mark_used: the callee body's own accesses are what count, not the synthetic
+        # per-leaf expansion of a ``@qd.func`` call's arguments.
+        should_mark = not pruning.enforcing and not ctx.expanding_dataclass_call_parameters
+        if isinstance(value, Ndarray):
+            cache = ctx.global_context.ndarray_to_any_array
+            key = id(value)
+            arr = cache.get(key)
+            if arr is not None:
+                if should_mark:
+                    pruning.used_struct_ndarray_ids.add(key)
+                return arr
             return value
-        cache = ctx.global_context.ndarray_to_any_array
-        arr = cache.get(id(value))
-        return arr if arr is not None else value
+        if should_mark:
+            src_id = getattr(value, "_qd_source_ndarray_id", None)
+            if src_id is not None:
+                pruning.used_struct_ndarray_ids.add(src_id)
+        return value
 
     @staticmethod
     def build_Attribute(ctx: ASTTransformerFuncContext, node: ast.Attribute):
@@ -757,6 +787,10 @@ class ASTTransformer(Builder):
                 node.ptr = getattr(tensor_ops, node.attr)
                 setattr(node, "caller", node.value.ptr)
         elif dataclasses.is_dataclass(node.value.ptr):
+            lifted = maybe_lifted_primitive(ctx, node.value.ptr, node.attr)
+            if lifted is not None:
+                node.ptr = lifted
+                return node.ptr
             node.ptr = getattr(node.value.ptr, node.attr)
             from quadrants._tensor_wrapper import (  # pylint: disable=C0415
                 Tensor as _TensorClass,
@@ -776,12 +810,16 @@ class ASTTransformer(Builder):
                 count, dtype, naming_fn = groups[node.attr]
                 node.ptr = _UnpackedVectorRef(node.value.ptr, node.attr, count, dtype, naming_fn)
                 return node.ptr
+            lifted = maybe_lifted_primitive(ctx, node.value.ptr, node.attr)
+            if lifted is not None:
+                node.ptr = lifted
+                return node.ptr
             node.ptr = getattr(node.value.ptr, node.attr)
             # ``qd.Tensor`` wrappers reached via attribute access on a ``@qd.data_oriented`` struct field at AST-build
             # time. The IR layer downstream (``build_Subscript`` -> ``impl.subscript``) only knows about ``Ndarray`` /
             # ``Field`` / ``Expr``; the wrapper is host-side. Unwrap here so ``state.a[i, j]`` inside a kernel body
             # resolves to the bare impl. Top-level wrapper args (``def k(x: qd.Tensor)``) are unwrapped earlier in
-            # ``Kernel.__call__``; this handles the in-struct case. See ``perso_hugh/doc/quadrants-tensor.md`` §8.14.
+            # ``Kernel.__call__``; this handles the in-struct case.
             from quadrants._tensor_wrapper import (  # pylint: disable=C0415
                 Tensor as _TensorClass,
             )
@@ -810,6 +848,19 @@ class ASTTransformer(Builder):
                             warnings.warn(message)
                         else:
                             raise exception.QuadrantsCompilationError(message)
+        # Extend the chain annotation seeded by ``build_Name`` (``self`` -> ``__qd_self__qd_x`` -> ...) and record it.
+        # Not via ``mark_used``: ``used_vars_by_func_id`` becomes ``struct_locals`` on the enforcing pass, where
+        # ``FlattenAttributeNameTransformer`` would rewrite ``self.x`` to a ``Name('__qd_self__qd_x')`` that no scope
+        # defines. ``Pruning.fold_kernel_arg_chain_paths`` merges the two sets once both passes are done.
+        parent_chain = getattr(node.value, "_qd_arg_chain", None)
+        if parent_chain is not None:
+            flat = create_flat_name(parent_chain, node.attr)
+            node._qd_arg_chain = flat  # type: ignore[attr-defined]
+            pruning = ctx.global_context.pruning
+            if not pruning.enforcing and not ctx.expanding_dataclass_call_parameters:
+                pruning.mark_kernel_arg_chain_used(ctx.func.func_id, flat)
+        else:
+            node._qd_arg_chain = None  # type: ignore[attr-defined]
         return node.ptr
 
     @staticmethod
@@ -924,13 +975,16 @@ class ASTTransformer(Builder):
         ops_static = {
             ast.In: lambda l, r: l in r,
             ast.NotIn: lambda l, r: l not in r,
+            ast.Is: lambda l, r: l is r,
+            ast.IsNot: lambda l, r: l is not r,
         }
         if ctx.is_in_static_scope():
             ops = {**ops, **ops_static}
         operands = [node.left.ptr] + [comparator.ptr for comparator in node.comparators]
+        operand_nodes = (node.left, *node.comparators)
         val = True
         for i, node_op in enumerate(node.ops):
-            if isinstance(node_op, (ast.Is, ast.IsNot)):
+            if not ctx.is_in_static_scope() and isinstance(node_op, (ast.Is, ast.IsNot)):
                 name = "is" if isinstance(node_op, ast.Is) else "is not"
                 raise QuadrantsSyntaxError(f'Operator "{name}" in Quadrants scope is not supported.')
             l = operands[i]
@@ -942,6 +996,36 @@ class ASTTransformer(Builder):
                     raise QuadrantsSyntaxError(f'"{type(node_op).__name__}" is only supported inside `qd.static`.')
                 else:
                     raise QuadrantsSyntaxError(f'"{type(node_op).__name__}" is not supported in Quadrants kernels.')
+            if isinstance(node_op, (ast.Is, ast.IsNot)):
+                name = "is" if isinstance(node_op, ast.Is) else "is not"
+                l_node, r_node = operand_nodes[i : i + 2]
+                if isinstance(r_node, ast.Constant) and r_node.value is None:
+                    template_node = l_node
+                    template_side = "left"
+                elif isinstance(l_node, ast.Constant) and l_node.value is None:
+                    template_node = r_node
+                    template_side = "right"
+                else:
+                    template_node = None
+                    template_side = None
+                template_arg_names = {ctx.func.arg_metas[index].name for index in ctx.template_slot_locations}
+                if (
+                    not ctx.is_kernel
+                    or not isinstance(template_node, ast.Name)
+                    or template_node.id.startswith("__qd_")
+                    or any(template_node.id in scope for scope in ctx.local_scopes[1:])
+                    or template_node.id not in template_arg_names
+                    or template_node.id not in ctx.template_vars
+                ):
+                    raise QuadrantsSyntaxError(
+                        f'Operator "{name}" inside `qd.static` compares a direct kernel argument against `None`. '
+                        "The argument must be annotated `qd.Tensor | None`, `qd.types.Template | None`, "
+                        "or `qd.types.NDArray[...] | None`."
+                    )
+                if template_side == "left":
+                    l = ctx.template_vars[template_node.id]
+                else:
+                    r = ctx.template_vars[template_node.id]
             val = qd_ops.logical_and(val, op(l, r))
         if not isinstance(val, (bool, np.bool_)):
             val = qd_ops.cast(val, primitive_types.u1)
@@ -1061,7 +1145,7 @@ class ASTTransformer(Builder):
                 begin = qd_ops.cast(expr.Expr(0), primitive_types.i32)
                 end = qd_ops.cast(end_expr, primitive_types.i32)
 
-            for_di = _qd_core.DebugInfo(ctx.get_pos_info(node))
+            for_di = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
             ctx.ast_builder.begin_frontend_range_for(loop_var.ptr, begin.ptr, end.ptr, for_di)
             ctx.loop_depth += 1
             build_stmts(ctx, node.body)
@@ -1079,7 +1163,7 @@ class ASTTransformer(Builder):
                 primitive_types.i32,
             )
             ndrange_loop_var = expr.Expr(ctx.ast_builder.make_id_expr(""))
-            for_di = _qd_core.DebugInfo(ctx.get_pos_info(node))
+            for_di = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
             ctx.ast_builder.begin_frontend_range_for(ndrange_loop_var.ptr, ndrange_begin.ptr, ndrange_end.ptr, for_di)
             I = impl.expr_init(ndrange_loop_var)
             targets = ASTTransformer.get_for_loop_targets(node)
@@ -1132,7 +1216,7 @@ class ASTTransformer(Builder):
                 primitive_types.i32,
             )
             ndrange_loop_var = expr.Expr(ctx.ast_builder.make_id_expr(""))
-            for_di = _qd_core.DebugInfo(ctx.get_pos_info(node))
+            for_di = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
             ctx.ast_builder.begin_frontend_range_for(ndrange_loop_var.ptr, ndrange_begin.ptr, ndrange_end.ptr, for_di)
 
             targets = ASTTransformer.get_for_loop_targets(node)
@@ -1269,7 +1353,7 @@ class ASTTransformer(Builder):
             ctx.create_variable(loop_name, loop_var)
             begin = expr.Expr(0)
             end = qd_ops.cast(node.iter.ptr.size, primitive_types.i32)
-            for_di = _qd_core.DebugInfo(ctx.get_pos_info(node))
+            for_di = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
             ctx.ast_builder.begin_frontend_range_for(loop_var.ptr, begin.ptr, end.ptr, for_di)
             entry_expr = _qd_core.get_relation_access(
                 ctx.mesh.mesh_ptr,
@@ -1366,7 +1450,8 @@ class ASTTransformer(Builder):
 
     @staticmethod
     def _is_graph_do_while_call(node: ast.expr) -> ast.expr | None:
-        """If *node* is ``qd.graph_do_while(arg)`` return the arg AST node, else None.
+        """If *node* is ``qd.graph.do_while(arg)`` (or the deprecated ``qd.graph_do_while(arg)``) return the arg AST
+        node, else None.
 
         ``arg`` may be an ``ast.Name`` (a bare kernel parameter, e.g. ``counter``) or an ``ast.Attribute`` chain (a
         ``@qd.data_oriented`` member ndarray such as ``self.counter`` or a ``@dataclasses.dataclass`` parameter member
@@ -1375,11 +1460,7 @@ class ASTTransformer(Builder):
         """
         if not isinstance(node, ast.Call):
             return None
-        func = node.func
-        is_gdw = (isinstance(func, ast.Attribute) and func.attr == "graph_do_while") or (
-            isinstance(func, ast.Name) and func.id == "graph_do_while"
-        )
-        if not is_gdw:
+        if not graph_api.matches(node.func, "do_while"):
             return None
         if len(node.args) == 1 and isinstance(node.args[0], (ast.Name, ast.Attribute)):
             return node.args[0]
@@ -1417,25 +1498,26 @@ class ASTTransformer(Builder):
 
         graph_do_while_node = ASTTransformer._is_graph_do_while_call(node.test)
         if graph_do_while_node is not None:
+            graph_api.warn_if_deprecated(node.test.func, "do_while")
             from quadrants.lang.kernel import GraphDoWhileLevel  # pylint: disable=C0415
 
             kernel = ctx.global_context.current_kernel
             if not kernel.use_graph:
-                raise QuadrantsSyntaxError("qd.graph_do_while() requires @qd.kernel(graph=True)")
+                raise QuadrantsSyntaxError("qd.graph.do_while() requires @qd.kernel(graph=True)")
             # graph_do_while emits no loop IR; its body's for-loops must be top-level (offloaded) tasks. So it may only
             # appear at the kernel top level or directly inside another graph_do_while (both at loop_depth 0), never
             # inside a real for-loop.
             if ctx.loop_depth != 0:
                 raise QuadrantsSyntaxError(
-                    "qd.graph_do_while() must be at the kernel top level or directly nested inside "
-                    "another qd.graph_do_while(); it cannot appear inside a for-loop."
+                    "qd.graph.do_while() must be at the kernel top level or directly nested inside "
+                    "another qd.graph.do_while(); it cannot appear inside a for-loop."
                 )
             # Resolve the condition ndarray (bare parameter or @qd.data_oriented member) to its flat C++ arg-id at AST-
             # build time -- the same id the runtime needs -- so the launch path forwards it directly with no per-launch
             # name matching. ``cond_arg_name`` keeps the readable label (e.g. "counter" or "self.counter") for
             # introspection and for the legacy ``graph_do_while_arg`` alias surfaced on Kernel.
             cond_label, cond_cpp_arg_id = ASTTransformer._resolve_ndarray_kernel_arg_id(
-                ctx, kernel, graph_do_while_node, "qd.graph_do_while(...)"
+                ctx, kernel, graph_do_while_node, "qd.graph.do_while(...)"
             )
             # Register this loop as a new nesting level (the body restriction is validated up-front in
             # FunctionDefTransformer). Outer loops get lower ids than the inner loops they contain.
@@ -1457,7 +1539,7 @@ class ASTTransformer(Builder):
             return None
 
         with ctx.loop_scope_guard():
-            stmt_dbg_info = _qd_core.DebugInfo(ctx.get_pos_info(node))
+            stmt_dbg_info = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
             ctx.ast_builder.begin_frontend_while(expr.Expr(1, dtype=primitive_types.i32).ptr, stmt_dbg_info)
             while_cond = build_stmt(ctx, node.test)
             impl.begin_frontend_if(ctx.ast_builder, while_cond, stmt_dbg_info)
@@ -1483,7 +1565,7 @@ class ASTTransformer(Builder):
             return node
 
         with ctx.non_static_if_guard(node):
-            stmt_dbg_info = _qd_core.DebugInfo(ctx.get_pos_info(node))
+            stmt_dbg_info = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
             impl.begin_frontend_if(ctx.ast_builder, node.test.ptr, stmt_dbg_info)
             ctx.ast_builder.begin_frontend_if_true()
             build_stmts(ctx, node.body)
@@ -1543,8 +1625,6 @@ class ASTTransformer(Builder):
             return False
         if not isinstance(msg.op, ast.Mod):
             return False
-        if isinstance(msg.left, ast.Str):
-            return True
         if isinstance(msg.left, ast.Constant) and isinstance(msg.left.value, str):
             return True
         return False
@@ -1595,8 +1675,6 @@ class ASTTransformer(Builder):
                 msg = build_stmt(ctx, node.msg)
                 if isinstance(node.msg, ast.Constant):
                     msg = str(msg)
-                elif isinstance(node.msg, ast.Str):
-                    pass
                 elif isinstance(msg, collections.abc.Sequence) and len(msg) > 0 and msg[0] == "__qd_format__":
                     msg, extra_args = ASTTransformer.qd_format_list_to_assert_msg(msg)
                 else:
@@ -1604,7 +1682,7 @@ class ASTTransformer(Builder):
         else:
             msg = unparse(node.test)
         test = build_stmt(ctx, node.test)
-        impl.qd_assert(test, msg.strip(), extra_args, _qd_core.DebugInfo(ctx.get_pos_info(node)))
+        impl.qd_assert(test, msg.strip(), extra_args, _qd_core.DebugInfo(ctx.memoized_get_pos_info(node)))
         return None
 
     @staticmethod
@@ -1612,7 +1690,7 @@ class ASTTransformer(Builder):
         if ctx.is_in_static_for():
             nearest_non_static_if = ctx.current_loop_scope().nearest_non_static_if
             if nearest_non_static_if:
-                msg = ctx.get_pos_info(nearest_non_static_if.test)
+                msg = ctx.memoized_get_pos_info(nearest_non_static_if.test)
                 msg += (
                     "You are trying to `break` a static `for` loop, "
                     "but the `break` statement is inside a non-static `if`. "
@@ -1620,7 +1698,7 @@ class ASTTransformer(Builder):
                 raise QuadrantsSyntaxError(msg)
             ctx.set_loop_status(LoopStatus.Break)
         else:
-            ctx.ast_builder.insert_break_stmt(_qd_core.DebugInfo(ctx.get_pos_info(node)))
+            ctx.ast_builder.insert_break_stmt(_qd_core.DebugInfo(ctx.memoized_get_pos_info(node)))
         return None
 
     @staticmethod
@@ -1628,7 +1706,7 @@ class ASTTransformer(Builder):
         if ctx.is_in_static_for():
             nearest_non_static_if = ctx.current_loop_scope().nearest_non_static_if
             if nearest_non_static_if:
-                msg = ctx.get_pos_info(nearest_non_static_if.test)
+                msg = ctx.memoized_get_pos_info(nearest_non_static_if.test)
                 msg += (
                     "You are trying to `continue` a static `for` loop, "
                     "but the `continue` statement is inside a non-static `if`. "
@@ -1636,7 +1714,7 @@ class ASTTransformer(Builder):
                 raise QuadrantsSyntaxError(msg)
             ctx.set_loop_status(LoopStatus.Continue)
         else:
-            ctx.ast_builder.insert_continue_stmt(_qd_core.DebugInfo(ctx.get_pos_info(node)))
+            ctx.ast_builder.insert_continue_stmt(_qd_core.DebugInfo(ctx.memoized_get_pos_info(node)))
         return None
 
     @staticmethod
@@ -1662,7 +1740,7 @@ class ASTTransformer(Builder):
         if not FunctionDefTransformer._is_stream_parallel_with(node, ctx.global_vars):
             raise QuadrantsSyntaxError(
                 "'with' in Quadrants kernels only supports qd.stream_parallel(), qd.checkpoint(), "
-                "qd.graph_parallel_context(), or qd.graph_parallel()"
+                "qd.graph.parallel_context(), or qd.graph.parallel()"
             )
         if not ctx.is_kernel:
             raise QuadrantsSyntaxError("qd.stream_parallel() can only be used inside @qd.kernel, not @qd.func")

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @qd.kernel

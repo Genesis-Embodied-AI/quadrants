@@ -1,6 +1,7 @@
 #include "quadrants/codegen/spirv/checkpoint_gate_shader.h"
 
 #include "quadrants/codegen/spirv/spirv_ir_builder.h"
+#include "quadrants/codegen/spirv/spirv_operations.h"
 
 namespace quadrants::lang::spirv {
 
@@ -24,6 +25,7 @@ void store_buf_u32(IRBuilder &ir, Value buffer, Value word_idx, Value value) {
 
 std::vector<uint32_t> build_checkpoint_gate_spirv(Arch arch, const DeviceCapabilityConfig *caps) {
   IRBuilder ir(arch, caps);
+  SpirvOperations ops_(ir);
   ir.init_header();
 
   // Bindings: see header doc.
@@ -39,7 +41,7 @@ std::vector<uint32_t> build_checkpoint_gate_spirv(Arch arch, const DeviceCapabil
   // 1x1x1: a single thread runs the per-kernel write loop. The total number of writes is at most a few dozen per
   // checkpoint (one (gx,gy,gz) triple per body kernel in the checkpoint); a larger workgroup would just synchronise on
   // the same loop with extra book-keeping.
-  ir.set_work_group_size({1, 1, 1});
+  ops_.set_work_group_size({1, 1, 1});
 
   // resume_point + yield_signal are int32 in semantics ("yield_signal == -1" means no yield), but the SSBO is u32[];
   // reinterpret via `OpBitcast` for the comparisons. Same convention as the CUDA-native `_qd_checkpoint_if_gate`.
@@ -57,9 +59,9 @@ std::vector<uint32_t> build_checkpoint_gate_spirv(Arch arch, const DeviceCapabil
   Value cp_id_i32 = ir.make_value(spv::OpBitcast, ir.i32_type(), cp_id_u32);
 
   // skip := (cp_id < resume_point) || (yield_signal != -1)
-  Value cp_below = ir.lt(cp_id_i32, rp_i32);
+  Value cp_below = ops_.lt(cp_id_i32, rp_i32);
   Value neg_one = ir.int_immediate_number(ir.i32_type(), -1);
-  Value yield_set = ir.ne(ys_i32, neg_one);
+  Value yield_set = ops_.ne(ys_i32, neg_one);
   Value skip = ir.make_value(spv::OpLogicalOr, ir.bool_type(), cp_below, yield_set);
 
   // Per-kernel write loop. SPIR-V structured control flow: header (decides continue), body (writes the triple),
@@ -76,7 +78,7 @@ std::vector<uint32_t> build_checkpoint_gate_spirv(Arch arch, const DeviceCapabil
 
   ir.start_label(head);
   Value i_now = ir.load_variable(i_var, ir.u32_type());
-  Value loop_cond = ir.lt(i_now, n_kernels_u32);
+  Value loop_cond = ops_.lt(i_now, n_kernels_u32);
   ir.make_inst(spv::OpLoopMerge, merge, cont, spv::LoopControlMaskNone);
   ir.make_inst(spv::OpBranchConditional, loop_cond, body, merge);
 
@@ -84,8 +86,8 @@ std::vector<uint32_t> build_checkpoint_gate_spirv(Arch arch, const DeviceCapabil
   {
     Value three = ir.uint_immediate_number(ir.u32_type(), 3u);
     Value dims_base = ir.uint_immediate_number(ir.u32_type(), CheckpointGateParams::kWordOffsetDimsBase);
-    Value i3 = ir.mul(i_now, three);
-    Value params_base = ir.add(dims_base, i3);
+    Value i3 = ops_.mul(i_now, three);
+    Value params_base = ops_.add(dims_base, i3);
     Value out_base = i3;
 
     // For each of the three axes, load the active value from params and write either 0 or the active value into
@@ -94,10 +96,10 @@ std::vector<uint32_t> build_checkpoint_gate_spirv(Arch arch, const DeviceCapabil
     Value zero_u32 = ir.uint_immediate_number(ir.u32_type(), 0u);
     for (uint32_t axis = 0; axis < 3; ++axis) {
       Value off = ir.uint_immediate_number(ir.u32_type(), axis);
-      Value params_idx = ir.add(params_base, off);
-      Value out_idx = ir.add(out_base, off);
+      Value params_idx = ops_.add(params_base, off);
+      Value out_idx = ops_.add(out_base, off);
       Value active = load_buf_u32(ir, params_buf, params_idx);
-      Value chosen = ir.select(skip, zero_u32, active);
+      Value chosen = ops_.select(skip, zero_u32, active);
       store_buf_u32(ir, out_dims_buf, out_idx, chosen);
     }
     ir.make_inst(spv::OpBranch, cont);
@@ -106,7 +108,7 @@ std::vector<uint32_t> build_checkpoint_gate_spirv(Arch arch, const DeviceCapabil
   ir.start_label(cont);
   {
     Value one = ir.uint_immediate_number(ir.u32_type(), 1u);
-    Value i_next = ir.add(i_now, one);
+    Value i_next = ops_.add(i_now, one);
     ir.store_variable(i_var, i_next);
     ir.make_inst(spv::OpBranch, head);
   }

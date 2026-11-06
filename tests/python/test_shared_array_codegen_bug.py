@@ -10,7 +10,7 @@ import numpy as np
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 N = 128
 BLOCK = 32
@@ -19,7 +19,7 @@ LARGE = 64
 
 
 @qd.func
-def _func_small(out: qd.template()):
+def _func_small(out: qd.Template):
     """Uses a small SharedArray (SMALL floats)."""
     qd.loop_config(block_dim=BLOCK)
     for i in range(N * BLOCK):
@@ -37,7 +37,7 @@ def _func_small(out: qd.template()):
 
 
 @qd.func
-def _func_large(out: qd.template()):
+def _func_large(out: qd.Template):
     """Uses a large SharedArray (LARGE floats).
 
     Without the fix the linker keeps SMALL as the size for this array,

@@ -13,7 +13,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 def _expected_flat_to_canonical(dims, axes):
@@ -246,7 +246,7 @@ def test_axes_pairs_with_tensor_layout_field():
     A = qd.tensor(qd.i32, shape=(M, N), backend=qd.Backend.FIELD, layout=(1, 0))
 
     @qd.kernel
-    def fill(a: qd.template()):
+    def fill(a: qd.Template):
         for i, j in qd.ndrange(M, N, axes=(1, 0)):
             a[i, j] = i * 100 + j
 

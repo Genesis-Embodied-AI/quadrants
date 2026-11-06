@@ -5,7 +5,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 n = 128
 
@@ -26,12 +26,12 @@ def run_atomic_add_global_case(vartype, step, valproc=lambda x: x):
     def func():
         ck = init_ck
         for i in range(n):
-            x[i] = qd.atomic_add(c[None], step)
+            x[i] = qd.atomic_add(c[()], step)
             y[i] = qd.atomic_add(ck, step)
 
     func()
 
-    assert valproc(c[None]) == n * step
+    assert valproc(c[()]) == n * step
     x_actual = sorted(x.to_numpy())
     y_actual = sorted(y.to_numpy())
     expect = [i * step for i in range(n)]
@@ -89,11 +89,11 @@ def test_atomic_add_expr_evaled():
     def func():
         for i in range(n):
             # this is an expr with side effect, make sure it's not optimized out.
-            qd.atomic_add(c[None], step)
+            qd.atomic_add(c[()], step)
 
     func()
 
-    assert c[None] == n * step
+    assert c[()] == n * step
 
 
 @test_utils.test()
@@ -222,10 +222,10 @@ def test_local_atomic_with_if():
         if True:
             x = 0
             x += 1
-            ret[None] = x
+            ret[()] = x
 
     test()
-    assert ret[None] == 1
+    assert ret[()] == 1
 
 
 @test_utils.test()
@@ -264,12 +264,12 @@ def test_atomic_sub_with_type_promotion():
     @qd.kernel
     def test_with_field():
         v: qd.uint16 = 1000
-        v -= A[None]
-        B[None] = v
+        v -= A[()]
+        B[()] = v
 
-    A[None] = 255
+    A[()] = 255
     test_with_field()
-    assert B[None] == 745
+    assert B[()] == 745
 
 
 @test_utils.test()
@@ -283,11 +283,11 @@ def test_atomic_sub_expr_evaled():
     def func():
         for i in range(n):
             # this is an expr with side effect, make sure it's not optimized out.
-            qd.atomic_sub(c[None], step)
+            qd.atomic_sub(c[()], step)
 
     func()
 
-    assert c[None] == -n * step
+    assert c[()] == -n * step
 
 
 @test_utils.test()
@@ -299,14 +299,14 @@ def test_atomic_mul_expr_evaled():
 
     @qd.kernel
     def func():
-        c[None] = 1
+        c[()] = 1
         for i in range(16):
             # this is an expr with side effect, make sure it's not optimized out.
-            qd.atomic_mul(c[None], base)
+            qd.atomic_mul(c[()], base)
 
     func()
 
-    assert c[None] == base**16
+    assert c[()] == base**16
 
 
 @test_utils.test()
@@ -320,11 +320,11 @@ def test_atomic_max_expr_evaled():
     def func():
         for i in range(n):
             # this is an expr with side effect, make sure it's not optimized out.
-            qd.atomic_max(c[None], i * step)
+            qd.atomic_max(c[()], i * step)
 
     func()
 
-    assert c[None] == (n - 1) * step
+    assert c[()] == (n - 1) * step
 
 
 @test_utils.test()
@@ -336,14 +336,14 @@ def test_atomic_min_expr_evaled():
 
     @qd.kernel
     def func():
-        c[None] = 1000
+        c[()] = 1000
         for i in range(n):
             # this is an expr with side effect, make sure it's not optimized out.
-            qd.atomic_min(c[None], i * step)
+            qd.atomic_min(c[()], i * step)
 
     func()
 
-    assert c[None] == 0
+    assert c[()] == 0
 
 
 @test_utils.test()
@@ -357,14 +357,14 @@ def test_atomic_and_expr_evaled():
 
     @qd.kernel
     def func():
-        c[None] = 1023
+        c[()] = 1023
         for i in range(10):
             # this is an expr with side effect, make sure it's not optimized out.
-            qd.atomic_and(c[None], max_int - 2**i)
+            qd.atomic_and(c[()], max_int - 2**i)
 
     func()
 
-    assert c[None] == 0
+    assert c[()] == 0
 
 
 @test_utils.test()
@@ -376,14 +376,14 @@ def test_atomic_or_expr_evaled():
 
     @qd.kernel
     def func():
-        c[None] = 0
+        c[()] = 0
         for i in range(10):
             # this is an expr with side effect, make sure it's not optimized out.
-            qd.atomic_or(c[None], 2**i)
+            qd.atomic_or(c[()], 2**i)
 
     func()
 
-    assert c[None] == 1023
+    assert c[()] == 1023
 
 
 @test_utils.test()
@@ -395,14 +395,14 @@ def test_atomic_xor_expr_evaled():
 
     @qd.kernel
     def func():
-        c[None] = 1023
+        c[()] = 1023
         for i in range(10):
             # this is an expr with side effect, make sure it's not optimized out.
-            qd.atomic_xor(c[None], 2**i)
+            qd.atomic_xor(c[()], 2**i)
 
     func()
 
-    assert c[None] == 0
+    assert c[()] == 0
 
 
 @test_utils.test()
@@ -529,16 +529,16 @@ def test_atomic_mul_contention(dtype):
 def test_atomic_min_max_nan_seed(op, dtype):
     test_utils.skip_if_f64_unsupported(dtype)
     f = qd.field(dtype, shape=())
-    f[None] = float("nan")
+    f[()] = float("nan")
     atomic_op = getattr(qd, f"atomic_{op}")
 
     @qd.kernel
     def kern():
-        atomic_op(f[None], qd.cast(7.0, dtype))
+        atomic_op(f[()], qd.cast(7.0, dtype))
 
     kern()
-    assert not math.isnan(float(f[None]))
-    assert float(f[None]) == 7.0
+    assert not math.isnan(float(f[()]))
+    assert float(f[()]) == 7.0
 
 
 @pytest.mark.parametrize("op", ["min", "max"])
@@ -547,16 +547,16 @@ def test_atomic_min_max_nan_seed(op, dtype):
 def test_atomic_min_max_nan_arg(op, dtype):
     test_utils.skip_if_f64_unsupported(dtype)
     f = qd.field(dtype, shape=())
-    f[None] = 7.0
+    f[()] = 7.0
     atomic_op = getattr(qd, f"atomic_{op}")
 
     @qd.kernel
     def kern():
-        atomic_op(f[None], qd.cast(qd.math.nan, dtype))
+        atomic_op(f[()], qd.cast(qd.math.nan, dtype))
 
     kern()
-    assert not math.isnan(float(f[None]))
-    assert float(f[None]) == 7.0
+    assert not math.isnan(float(f[()]))
+    assert float(f[()]) == 7.0
 
 
 # Pins the doc claim that vector/matrix arguments to atomic ops fan out to one scalar atomic per component (no
@@ -565,17 +565,17 @@ def test_atomic_min_max_nan_arg(op, dtype):
 def test_atomic_add_vector_field_fanout():
     N = 256
     f = qd.Vector.field(3, qd.f32, shape=())
-    f[None] = qd.Vector([0.0, 0.0, 0.0])
+    f[()] = qd.Vector([0.0, 0.0, 0.0])
 
     @qd.kernel
     def kern():
         for _ in range(N):
-            qd.atomic_add(f[None], qd.Vector([1.0, 2.0, 3.0]))
+            qd.atomic_add(f[()], qd.Vector([1.0, 2.0, 3.0]))
 
     kern()
-    assert f[None][0] == test_utils.approx(N * 1.0, rel=1e-5)
-    assert f[None][1] == test_utils.approx(N * 2.0, rel=1e-5)
-    assert f[None][2] == test_utils.approx(N * 3.0, rel=1e-5)
+    assert f[()][0] == test_utils.approx(N * 1.0, rel=1e-5)
+    assert f[()][1] == test_utils.approx(N * 2.0, rel=1e-5)
+    assert f[()][2] == test_utils.approx(N * 3.0, rel=1e-5)
 
 
 def _skip_if_no_int64_atomic_rmw(dtype):
@@ -607,15 +607,15 @@ def test_atomic_add_int_contention(dtype):
     _skip_if_no_int64_atomic_rmw(dtype)
     N = 256
     f = qd.field(dtype, shape=())
-    f[None] = 0
+    f[()] = 0
 
     @qd.kernel
     def kern():
         for _ in range(N):
-            qd.atomic_add(f[None], qd.cast(1, dtype))
+            qd.atomic_add(f[()], qd.cast(1, dtype))
 
     kern()
-    assert int(f[None]) == N
+    assert int(f[()]) == N
 
 
 # Pins the doc-table claim that atomic_and / atomic_or / atomic_xor are "yes" on every integer dtype on every GPU
@@ -633,15 +633,15 @@ def test_atomic_add_int_contention(dtype):
 def test_atomic_bitwise_int_widths(op, seed, arg, expected, dtype):
     _skip_if_no_int64_atomic_rmw(dtype)
     f = qd.field(dtype, shape=())
-    f[None] = seed
+    f[()] = seed
     atomic_op = getattr(qd, f"atomic_{op}")
 
     @qd.kernel
     def kern():
-        atomic_op(f[None], qd.cast(arg, dtype))
+        atomic_op(f[()], qd.cast(arg, dtype))
 
     kern()
-    assert int(f[None]) == expected
+    assert int(f[()]) == expected
 
 
 # Pins the doc claim that bitwise atomics on float dtypes raise a type error at compile time (atomics page: "Integer
@@ -653,12 +653,12 @@ def test_atomic_bitwise_int_widths(op, seed, arg, expected, dtype):
 def test_atomic_bitwise_on_float_field_raises(op, dtype):
     test_utils.skip_if_f64_unsupported(dtype)
     f = qd.field(dtype, shape=())
-    f[None] = 0
+    f[()] = 0
     atomic_op = getattr(qd, f"atomic_{op}")
 
     @qd.kernel
     def kern():
-        atomic_op(f[None], qd.cast(1, dtype))
+        atomic_op(f[()], qd.cast(1, dtype))
 
     with pytest.raises(qd.lang.exception.QuadrantsCompilationError):
         kern()
@@ -668,19 +668,19 @@ def test_atomic_bitwise_on_float_field_raises(op, dtype):
 def test_atomic_add_matrix_field_fanout():
     N = 256
     m = qd.Matrix.field(2, 3, qd.f32, shape=())
-    m[None] = qd.Matrix([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]])
+    m[()] = qd.Matrix([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]])
     contrib = qd.Matrix([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
 
     @qd.kernel
     def kern():
         for _ in range(N):
-            qd.atomic_add(m[None], contrib)
+            qd.atomic_add(m[()], contrib)
 
     kern()
     for i in range(2):
         for j in range(3):
             expected = N * (i * 3 + j + 1)
-            assert m[None][i, j] == test_utils.approx(expected, rel=1e-5)
+            assert m[()][i, j] == test_utils.approx(expected, rel=1e-5)
 
 
 # Pins the documented semantics of qd.atomic_exchange: unconditionally write `val` into `dest` and return the
@@ -694,19 +694,19 @@ def test_atomic_exchange_returns_old_value(dtype):
     _skip_if_no_int64_atomic_rmw(dtype)
     f = qd.field(dtype, shape=())
     old_out = qd.field(dtype, shape=())
-    f[None] = 7
+    f[()] = 7
 
     @qd.kernel
     def kern():
-        old_out[None] = qd.atomic_exchange(f[None], qd.cast(42, dtype))
+        old_out[()] = qd.atomic_exchange(f[()], qd.cast(42, dtype))
 
     kern()
     if dtype in (qd.f32, qd.f64, qd.f16):
-        assert float(f[None]) == 42.0
-        assert float(old_out[None]) == 7.0
+        assert float(f[()]) == 42.0
+        assert float(old_out[()]) == 7.0
     else:
-        assert int(f[None]) == 42
-        assert int(old_out[None]) == 7
+        assert int(f[()]) == 42
+        assert int(old_out[()]) == 7
 
 
 # Stress test: N threads each xchg a unique nonzero value into a single shared slot, capturing the returned
@@ -722,17 +722,17 @@ def test_atomic_exchange_swap_under_contention(dtype):
     INIT = 1_000_000
     slot = qd.field(dtype, shape=())
     olds = qd.field(dtype, shape=(N,))
-    slot[None] = INIT
+    slot[()] = INIT
 
     @qd.kernel
     def kern():
         for i in range(N):
-            olds[i] = qd.atomic_exchange(slot[None], qd.cast(i + 1, dtype))
+            olds[i] = qd.atomic_exchange(slot[()], qd.cast(i + 1, dtype))
 
     kern()
 
     contributed = set(range(1, N + 1)) | {INIT}
-    seen = {int(olds[i]) for i in range(N)} | {int(slot[None])}
+    seen = {int(olds[i]) for i in range(N)} | {int(slot[()])}
     assert (
         seen == contributed
     ), f"atomic_exchange lost or duplicated values: missing={contributed - seen}, extra={seen - contributed}"
@@ -745,17 +745,17 @@ def test_atomic_exchange_swap_under_contention(dtype):
 def test_atomic_exchange_vector_field_fanout():
     N = 64
     f = qd.Vector.field(3, qd.f32, shape=())
-    f[None] = qd.Vector([0.0, 0.0, 0.0])
+    f[()] = qd.Vector([0.0, 0.0, 0.0])
 
     @qd.kernel
     def kern():
         for _ in range(N):
-            qd.atomic_exchange(f[None], qd.Vector([1.5, 2.5, 3.5]))
+            qd.atomic_exchange(f[()], qd.Vector([1.5, 2.5, 3.5]))
 
     kern()
-    assert f[None][0] == test_utils.approx(1.5, rel=1e-5)
-    assert f[None][1] == test_utils.approx(2.5, rel=1e-5)
-    assert f[None][2] == test_utils.approx(3.5, rel=1e-5)
+    assert f[()][0] == test_utils.approx(1.5, rel=1e-5)
+    assert f[()][1] == test_utils.approx(2.5, rel=1e-5)
+    assert f[()][2] == test_utils.approx(3.5, rel=1e-5)
 
 
 # Pins that matrix-typed atomic_exchange fans out to one scalar OpAtomicExchange per component, completing the
@@ -766,19 +766,19 @@ def test_atomic_exchange_vector_field_fanout():
 def test_atomic_exchange_matrix_field_fanout():
     N = 64
     m = qd.Matrix.field(2, 3, qd.f32, shape=())
-    m[None] = qd.Matrix([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]])
+    m[()] = qd.Matrix([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]])
     contrib = qd.Matrix([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
 
     @qd.kernel
     def kern():
         for _ in range(N):
-            qd.atomic_exchange(m[None], contrib)
+            qd.atomic_exchange(m[()], contrib)
 
     kern()
     for i in range(2):
         for j in range(3):
             expected = i * 3 + j + 1
-            assert m[None][i, j] == test_utils.approx(expected, rel=1e-5)
+            assert m[()][i, j] == test_utils.approx(expected, rel=1e-5)
 
 
 # Pins the new xchg branch in demote_atomics.cpp's DemoteAtomics::visit(AtomicOpStmt*). Unlike every other atomic
@@ -820,25 +820,25 @@ def test_atomic_cas_returns_old_value(dtype):
     f = qd.field(dtype, shape=())
     out_succ = qd.field(dtype, shape=())
     out_fail = qd.field(dtype, shape=())
-    f[None] = 7
+    f[()] = 7
 
     @qd.kernel
     def kern_success():
         # expected == current -> swap fires, return prior (= 7).
-        out_succ[None] = qd.atomic_cas(f[None], qd.cast(7, dtype), qd.cast(42, dtype))
+        out_succ[()] = qd.atomic_cas(f[()], qd.cast(7, dtype), qd.cast(42, dtype))
 
     kern_success()
-    assert int(out_succ[None]) == 7
-    assert int(f[None]) == 42
+    assert int(out_succ[()]) == 7
+    assert int(f[()]) == 42
 
     @qd.kernel
     def kern_failure():
         # expected != current (current is now 42) -> swap is a no-op, return prior (= 42).
-        out_fail[None] = qd.atomic_cas(f[None], qd.cast(99, dtype), qd.cast(123, dtype))
+        out_fail[()] = qd.atomic_cas(f[()], qd.cast(99, dtype), qd.cast(123, dtype))
 
     kern_failure()
-    assert int(out_fail[None]) == 42
-    assert int(f[None]) == 42
+    assert int(out_fail[()]) == 42
+    assert int(f[()]) == 42
 
 
 # Stress test for atomic CAS contention: N threads each attempt to flip a slot from INIT to their own unique id.
@@ -853,18 +853,18 @@ def test_atomic_cas_contention_single_winner(dtype):
     INIT = 0
     slot = qd.field(dtype, shape=())
     olds = qd.field(dtype, shape=(N,))
-    slot[None] = INIT
+    slot[()] = INIT
 
     @qd.kernel
     def kern():
         for i in range(N):
             # Each thread tries to flip the slot from INIT to (i + 1). Only the first one to land succeeds;
             # everyone else observes the winner's (i+1) value as the prior.
-            olds[i] = qd.atomic_cas(slot[None], qd.cast(INIT, dtype), qd.cast(i + 1, dtype))
+            olds[i] = qd.atomic_cas(slot[()], qd.cast(INIT, dtype), qd.cast(i + 1, dtype))
 
     kern()
 
-    final = int(slot[None])
+    final = int(slot[()])
     olds_seen = [int(olds[i]) for i in range(N)]
     winners = [i for i in range(N) if olds_seen[i] == INIT]
     assert len(winners) == 1, f"expected exactly one CAS winner, got {len(winners)}: indices {winners[:5]}..."
@@ -886,8 +886,8 @@ def test_atomic_cas_loop_increment_matches_atomic_add():
     N = 128
     counter_cas = qd.field(qd.i32, shape=())
     counter_add = qd.field(qd.i32, shape=())
-    counter_cas[None] = 0
-    counter_add[None] = 0
+    counter_cas[()] = 0
+    counter_add[()] = 0
 
     @qd.kernel
     def kern():
@@ -896,25 +896,25 @@ def test_atomic_cas_loop_increment_matches_atomic_add():
         qd.loop_config(serialize=True)
         for _ in range(N):
             # Reference: atomic_add.
-            qd.atomic_add(counter_add[None], 1)
+            qd.atomic_add(counter_add[()], 1)
             # CAS-loop equivalent of atomic_add: snapshot, compute new = snapshot + 1, try to swap. Under the
             # serialized outer loop there is exactly one in-flight increment, so the CAS always succeeds first
             # try; the bounded retry just demonstrates the pattern users would write.
             done = 0
             for _attempt in range(8):
                 if done == 0:
-                    expected = counter_cas[None]
-                    old = qd.atomic_cas(counter_cas[None], expected, expected + 1)
+                    expected = counter_cas[()]
+                    old = qd.atomic_cas(counter_cas[()], expected, expected + 1)
                     if old == expected:
                         done = 1
 
     kern()
     # Both counters must reach N. atomic_add is the trustworthy reference; the CAS loop should match it
     # exactly when the loop converges, and lag if it doesn't (which would catch a broken CAS).
-    assert int(counter_add[None]) == N
+    assert int(counter_add[()]) == N
     assert (
-        int(counter_cas[None]) == N
-    ), f"CAS-loop increment fell behind atomic_add: cas={int(counter_cas[None])}, add={int(counter_add[None])}"
+        int(counter_cas[()]) == N
+    ), f"CAS-loop increment fell behind atomic_add: cas={int(counter_cas[()])}, add={int(counter_add[()])}"
 
 
 # Pins the new cas branch in demote_atomics.cpp. Demotes to load + cmp_eq + select(cmp, val, load) + store
@@ -951,11 +951,11 @@ def test_atomic_cas_demoted():
 def test_atomic_cas_on_float_field_raises(dtype):
     test_utils.skip_if_f64_unsupported(dtype)
     f = qd.field(dtype, shape=())
-    f[None] = 0
+    f[()] = 0
 
     @qd.kernel
     def kern():
-        qd.atomic_cas(f[None], qd.cast(0, dtype), qd.cast(1, dtype))
+        qd.atomic_cas(f[()], qd.cast(0, dtype), qd.cast(1, dtype))
 
     with pytest.raises(qd.lang.exception.QuadrantsCompilationError):
         kern()
@@ -964,15 +964,15 @@ def test_atomic_cas_on_float_field_raises(dtype):
 # Pins that atomic_cas on a Vector / Matrix destination is rejected at compile time. The other atomic ops fan
 # out to per-component scalar AtomicOpStmts via scalarize / lower_matrix_ptr, but those passes use the 3-arg
 # AtomicOpStmt constructor that drops `expected`. Until the scalarizers grow a 4-arg path, refusing tensor
-# CAS up front is the correct behaviour. Codex / alanray-tech P1 from PR #690 review.
+# CAS up front is the correct behaviour.
 @test_utils.test(arch=qd.gpu)
 def test_atomic_cas_on_vector_field_raises():
     f = qd.Vector.field(3, qd.i32, shape=())
-    f[None] = qd.Vector([0, 0, 0])
+    f[()] = qd.Vector([0, 0, 0])
 
     @qd.kernel
     def kern():
-        qd.atomic_cas(f[None], qd.Vector([0, 0, 0]), qd.Vector([1, 1, 1]))
+        qd.atomic_cas(f[()], qd.Vector([0, 0, 0]), qd.Vector([1, 1, 1]))
 
     with pytest.raises(qd.lang.exception.QuadrantsCompilationError):
         kern()
@@ -981,32 +981,32 @@ def test_atomic_cas_on_vector_field_raises():
 # Pins that atomic_cas casts `expected` to match the destination element type, so plain Python int literals
 # work as the comparator on i64 destinations the same way they do for atomic_add. Without the cast in
 # AtomicOpExpression::type_check, this would either trip a backend type-mismatch assertion or silently
-# compare-then-corrupt at the codegen layer. Codex / alanray-tech P1 from PR #690 review.
+# compare-then-corrupt at the codegen layer.
 @test_utils.test(arch=qd.gpu)
 def test_atomic_cas_expected_int_literal_widens_to_i64():
     _skip_if_no_int64_atomic_rmw(qd.i64)
     f = qd.field(qd.i64, shape=())
     out = qd.field(qd.i64, shape=())
-    f[None] = 7
+    f[()] = 7
 
     @qd.kernel
     def kern():
         # `expected` and `desired` are Python int literals (default i32). The frontend must cast them to i64
         # so the CAS operands match the i64 in-memory value.
-        out[None] = qd.atomic_cas(f[None], 7, 42)
+        out[()] = qd.atomic_cas(f[()], 7, 42)
 
     kern()
-    assert int(out[None]) == 7
-    assert int(f[None]) == 42
+    assert int(out[()]) == 7
+    assert int(f[()]) == 42
 
 
-# Pins that passing a raw Field (instead of `field[None]`) to atomic_cas raises a clear QuadrantsSyntaxError
+# Pins that passing a raw Field (instead of `field[()]`) to atomic_cas raises a clear QuadrantsSyntaxError
 # instead of a confusing AttributeError on x.ptr. Mirrors @writeback_binary's Field guard for the rest of the
-# qd.atomic_* family. alanray-tech nit from PR #690 review.
+# qd.atomic_* family.
 @test_utils.test()
 def test_atomic_cas_raw_field_raises_clear_error():
     f = qd.field(qd.i32, shape=())
-    f[None] = 0
+    f[()] = 0
 
     @qd.kernel
     def kern():
@@ -1043,30 +1043,30 @@ def test_atomic_cas_on_ndarray():
 
 
 # Pins that the documented workaround for tensor-CAS rejection actually works: extract a scalar component
-# from a Vector field with `vec_field[None][i]` and CAS on that scalar. The MatrixPtrStmt-derived lvalue
+# from a Vector field with `vec_field[()][i]` and CAS on that scalar. The MatrixPtrStmt-derived lvalue
 # must reach codegen as a normal scalar AtomicOpStmt with `expected` populated. Without this, the docs
 # would tell users to do something we don't actually support.
 @test_utils.test(arch=qd.gpu)
 def test_atomic_cas_on_vector_field_scalar_component():
     f = qd.Vector.field(3, qd.i32, shape=())
-    f[None] = qd.Vector([10, 20, 30])
+    f[()] = qd.Vector([10, 20, 30])
     out = qd.field(qd.i32, shape=(3,))
 
     @qd.kernel
     def kern():
         # CAS each component independently. The expected-value matches in every case, so all three swaps fire.
-        out[0] = qd.atomic_cas(f[None][0], 10, 100)
-        out[1] = qd.atomic_cas(f[None][1], 20, 200)
-        out[2] = qd.atomic_cas(f[None][2], 30, 300)
+        out[0] = qd.atomic_cas(f[()][0], 10, 100)
+        out[1] = qd.atomic_cas(f[()][1], 20, 200)
+        out[2] = qd.atomic_cas(f[()][2], 30, 300)
 
     kern()
-    assert int(out[0]) == 10 and int(f[None][0]) == 100
-    assert int(out[1]) == 20 and int(f[None][1]) == 200
-    assert int(out[2]) == 30 and int(f[None][2]) == 300
+    assert int(out[0]) == 10 and int(f[()][0]) == 100
+    assert int(out[1]) == 20 and int(f[()][1]) == 200
+    assert int(out[2]) == 30 and int(f[()][2]) == 300
 
 
 # Pins that the `expected`-cast in AtomicOpExpression::type_check handles signed -> unsigned widening too.
-# `qd.atomic_cas(u32_field[None], -1, 0)` passes -1 as a Python int (default i32). The cast must convert
+# `qd.atomic_cas(u32_field[()], -1, 0)` passes -1 as a Python int (default i32). The cast must convert
 # it through cast_value to u32 (=0xFFFFFFFF), letting the swap-from-sentinel pattern work on unsigned
 # fields. Same shape for u64. Complements test_atomic_cas_expected_int_literal_widens_to_i64 which only
 # covers the positive i64 case.
@@ -1077,14 +1077,14 @@ def test_atomic_cas_expected_signed_int_literal_casts_to_unsigned(dtype):
     sentinel = (1 << 32) - 1 if dtype == qd.u32 else (1 << 64) - 1
     f = qd.field(dtype, shape=())
     out = qd.field(dtype, shape=())
-    f[None] = sentinel
+    f[()] = sentinel
 
     @qd.kernel
     def kern():
         # -1 is a Python int (i32 default). After signed -> unsigned cast it becomes the all-ones sentinel,
         # so the CAS fires and the slot is cleared to 0.
-        out[None] = qd.atomic_cas(f[None], -1, 0)
+        out[()] = qd.atomic_cas(f[()], -1, 0)
 
     kern()
-    assert int(out[None]) == sentinel
-    assert int(f[None]) == 0
+    assert int(out[()]) == sentinel
+    assert int(f[()]) == 0

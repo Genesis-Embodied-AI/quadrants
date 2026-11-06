@@ -25,15 +25,29 @@ class QD_DLL_EXPORT DeviceMemoryPool {
   void release(std::size_t size, void *ptr, bool release_raw = false);
   void reset();
   explicit DeviceMemoryPool(Arch arch, bool merge_upon_release);
-  ~DeviceMemoryPool();
+  virtual ~DeviceMemoryPool();
 
  protected:
-  void *allocate_raw_memory(std::size_t size, bool managed = false);
+  // The raw driver allocation, isolated behind a virtual so tests can substitute a base with a chosen misalignment.
+  // Whatever these return is only as aligned as the driver guarantees; honouring the caller's requested alignment is
+  // allocate_raw_memory's job.
+  virtual void *allocate_driver_memory(std::size_t size, bool managed);
+  virtual void deallocate_driver_memory(void *ptr);
+
+  void *allocate_raw_memory(std::size_t size, std::size_t alignment, bool managed = false);
   void deallocate_raw_memory(void *ptr);
 
-  // All the raw memory allocated from OS/Driver
-  // We need to keep track of them to guarantee that they are freed
-  std::map<void *, std::size_t> raw_memory_chunks_;
+  // The driver only guarantees an alignment suitable for any built-in type, so satisfying a larger requested
+  // alignment means handing out a pointer inside the driver's block rather than its base. `base` is the only address
+  // the driver will accept back, so it has to be kept alongside.
+  struct RawMemoryChunk {
+    void *base = nullptr;
+    std::size_t size = 0;
+  };
+
+  // All the raw memory allocated from OS/Driver, keyed by the aligned pointer handed to callers. We need to keep
+  // track of them to guarantee that they are freed
+  std::map<void *, RawMemoryChunk> raw_memory_chunks_;
 
   std::mutex mut_allocation_;
   bool merge_upon_release_ = true;

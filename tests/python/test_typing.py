@@ -1,6 +1,6 @@
-import test_utils
-
 import quadrants as qd
+
+from tests.helpers import test_utils
 
 
 @test_utils.test()
@@ -9,7 +9,7 @@ def test_typing_kernel_return_none():
 
     @qd.kernel
     def some_kernel() -> None:
-        x[None] += 1
+        x[()] += 1
 
     some_kernel()
 
@@ -20,7 +20,7 @@ def test_typing_func_return_none():
 
     @qd.func
     def some_func() -> None:
-        x[None] += 1
+        x[()] += 1
 
     @qd.kernel
     def some_kernel() -> None:

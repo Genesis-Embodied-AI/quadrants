@@ -11,11 +11,10 @@ from typing import Any
 import pytest
 
 import quadrants as qd
-import quadrants._test_tools.dataclass_test_tools as dataclass_test_tools
 import quadrants.lang._kernel_impl_dataclass as _kernel_impl_dataclass
 from quadrants.lang.kernel_arguments import ArgMetadata
 
-from tests import test_utils
+from tests.helpers import dataclass_helpers, test_utils
 
 __all__ = [
     "Attribute",
@@ -47,20 +46,20 @@ class MyStructEF:
 @dataclasses.dataclass
 class MyStructFieldAB:
     a: qd.Template
-    b: qd.template()
+    b: qd.Template
 
 
 @dataclasses.dataclass
 class MyStructFieldCD:
     c: qd.Template
-    d: qd.template()
+    d: qd.Template
     my_struct_ab: MyStructFieldAB
 
 
 @dataclasses.dataclass
 class MyStructFieldEF:
     e: qd.Template
-    f: qd.template()
+    f: qd.Template
     my_struct_cd: MyStructFieldCD
 
 
@@ -188,30 +187,30 @@ def test_expand_func_arguments(in_meta: list[ArgMetadata], expected_meta: list[A
             "my_struct_ab",
             MyStructFieldAB,
             {
-                "__qd_my_struct_ab__qd_a": qd.template,
-                "__qd_my_struct_ab__qd_b": qd.template,
+                "__qd_my_struct_ab__qd_a": qd.Template,
+                "__qd_my_struct_ab__qd_b": qd.Template,
             },
         ),
         (
             "my_struct_cd",
             MyStructFieldCD,
             {
-                "__qd_my_struct_cd__qd_c": qd.template,
-                "__qd_my_struct_cd__qd_d": qd.template,
-                "__qd_my_struct_cd__qd_my_struct_ab__qd_a": qd.template,
-                "__qd_my_struct_cd__qd_my_struct_ab__qd_b": qd.template,
+                "__qd_my_struct_cd__qd_c": qd.Template,
+                "__qd_my_struct_cd__qd_d": qd.Template,
+                "__qd_my_struct_cd__qd_my_struct_ab__qd_a": qd.Template,
+                "__qd_my_struct_cd__qd_my_struct_ab__qd_b": qd.Template,
             },
         ),
         (
             "my_struct_ef",
             MyStructFieldEF,
             {
-                "__qd_my_struct_ef__qd_e": qd.template,
-                "__qd_my_struct_ef__qd_f": qd.template,
-                "__qd_my_struct_ef__qd_my_struct_cd__qd_c": qd.template,
-                "__qd_my_struct_ef__qd_my_struct_cd__qd_d": qd.template,
-                "__qd_my_struct_ef__qd_my_struct_cd__qd_my_struct_ab__qd_a": qd.template,
-                "__qd_my_struct_ef__qd_my_struct_cd__qd_my_struct_ab__qd_b": qd.template,
+                "__qd_my_struct_ef__qd_e": qd.Template,
+                "__qd_my_struct_ef__qd_f": qd.Template,
+                "__qd_my_struct_ef__qd_my_struct_cd__qd_c": qd.Template,
+                "__qd_my_struct_ef__qd_my_struct_cd__qd_d": qd.Template,
+                "__qd_my_struct_ef__qd_my_struct_cd__qd_my_struct_ab__qd_a": qd.Template,
+                "__qd_my_struct_ef__qd_my_struct_cd__qd_my_struct_ab__qd_b": qd.Template,
             },
         ),
     ],
@@ -220,7 +219,7 @@ def test_expand_func_arguments(in_meta: list[ArgMetadata], expected_meta: list[A
 def test_populate_global_vars_from_dataclasses(
     param_name: str, param_type: Any, expected_global_args: dict[str, Any]
 ) -> None:
-    py_arg = dataclass_test_tools.build_struct(param_type)
+    py_arg = dataclass_helpers.build_struct(param_type)
     global_vars = {}
     _kernel_impl_dataclass.populate_global_vars_from_dataclass(param_name, param_type, py_arg, global_vars)
     expected_names = set(expected_global_args.keys())

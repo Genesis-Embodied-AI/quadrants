@@ -1,7 +1,7 @@
 import quadrants as qd
 
 from .bls_test_template import bls_particle_grid
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test(require=qd.extension.bls)

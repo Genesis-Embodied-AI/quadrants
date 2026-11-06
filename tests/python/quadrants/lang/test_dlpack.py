@@ -7,7 +7,7 @@ torch = pytest.importorskip("torch")
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 pytestmark = pytest.mark.needs_torch
 
@@ -253,7 +253,7 @@ def test_dlpack_mixed_types_memory_alignment_field(dtype, shape: tuple[int]) -> 
     pos = qd.field(qd.types.vector(3, vtype), shape=(1,))
 
     @qd.kernel
-    def kernel_update_render_fields(pos: qd.template()):
+    def kernel_update_render_fields(pos: qd.Template):
         pos[0] = qd.Vector([1, 2, 3], dt=vtype)
 
     kernel_update_render_fields(pos)
@@ -278,7 +278,7 @@ def test_dlpack_multiple_mixed_types_memory_alignment_field() -> None:
     pos = qd.field(qd.types.vector(3, vtype), shape=(1,))
 
     @qd.kernel
-    def kernel_update_render_fields(pos: qd.template()):
+    def kernel_update_render_fields(pos: qd.Template):
         pos[0] = qd.Vector([1, 2, 3], dt=vtype)
 
     kernel_update_render_fields(pos)
@@ -299,7 +299,7 @@ def test_dlpack_joints_case_memory_alignment_field() -> None:
     def kernel_init_joint_fields(
         joints_dof_start: qd.types.ndarray(),
         joints_dof_end: qd.types.ndarray(),
-        joints_n_dofs: qd.template(),
+        joints_n_dofs: qd.Template,
     ):
         for I_j in qd.grouped(joints_n_dofs):
             joints_n_dofs[I_j] = joints_dof_end[I_j] - joints_dof_start[I_j]

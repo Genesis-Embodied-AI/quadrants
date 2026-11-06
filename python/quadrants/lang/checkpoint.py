@@ -43,7 +43,7 @@ def checkpoint(cp_id, yield_on):
       - Must be used inside ``@qd.kernel(graph=True, checkpoints=True)``.
       - ``cp_id`` must be an ``int`` (or ``IntEnum`` value), and must be unique across the kernel.
       - ``yield_on`` must name a kernel parameter that is a 0-d ``qd.types.ndarray(qd.i32, ndim=0)``.
-      - Checkpoints cannot be nested inside other checkpoints. Checkpoints inside a ``qd.graph_do_while`` body are fine.
+      - Checkpoints cannot be nested inside other checkpoints. Checkpoints inside a ``qd.graph.do_while`` body are fine.
       - Cannot be combined with ``qd.stream_parallel()`` in the same kernel.
       - The body cannot contain bare top-level statements (assignments, expressions); wrap them in
         ``for _ in range(1):`` so the lowering surfaces the per-statement task cost.

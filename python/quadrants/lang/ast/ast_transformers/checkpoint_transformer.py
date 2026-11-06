@@ -7,8 +7,7 @@ methods here. ``FunctionDefTransformer.build_FunctionDef`` calls ``auto_wrap_for
 kernel was decorated with ``@qd.kernel(graph=True, checkpoints=True)``, so that every top-level for-loop not already
 inside a ``with qd.checkpoint(...)`` becomes its own implicit no-yield checkpoint.
 
-See ``docs/source/user_guide/graph.md`` for the user-facing surface and ``perso_hugh/doc/qipc/reentrant.md`` for the
-design.
+See ``docs/source/user_guide/graph.md`` for the user-facing surface.
 """
 
 from __future__ import annotations
@@ -222,7 +221,7 @@ class CheckpointTransformer:
         if getattr(ctx, "_in_checkpoint", False):
             raise QuadrantsSyntaxError(
                 "qd.checkpoint() cannot be nested inside another qd.checkpoint(); checkpoints in the "
-                "same kernel must be flat siblings (a checkpoint inside qd.graph_do_while is fine)"
+                "same kernel must be flat siblings (a checkpoint inside qd.graph.do_while is fine)"
             )
 
         yield_on_label: str | None = None

@@ -3,7 +3,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 _QD_DTYPE_TO_NP_DTYPE = {
     qd.u1: np.bool_,

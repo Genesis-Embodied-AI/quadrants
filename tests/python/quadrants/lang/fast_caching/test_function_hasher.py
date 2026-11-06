@@ -6,7 +6,7 @@ from quadrants.lang import _wrap_inspect
 from quadrants.lang._fast_caching import function_hasher
 from quadrants.lang._fast_caching.fast_caching_types import HashedFunctionSourceInfo
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test()

@@ -90,9 +90,6 @@ Program::Program(Arch desired_arch)
 #else
     QD_ERROR("This quadrants is not compiled with Vulkan")
 #endif
-  } else if (config.arch == Arch::python) {
-    program_impl_ = nullptr;  // Python backend doesn't have a ProgramImpl
-    return;
   } else {
     QD_NOT_IMPLEMENTED
   }
@@ -396,13 +393,6 @@ void Program::finalize() {
     return;
   }
 
-  if (compile_config().arch == Arch::python) {
-    QD_TRACE("Python backend does not require finalization.");
-    finalized_ = true;
-    num_instances_ -= 1;
-    return;
-  }
-
   // Notify the backend that teardown has started before the two teardown syncs below. On LLVM this flips
   // `LlvmProgramImpl::finalizing_` so `check_adstack_overflow()` short-circuits: otherwise a pending overflow flag from
   // a kernel the user never synced explicitly would throw into the Program destructor path.
@@ -431,7 +421,7 @@ void Program::finalize() {
 
 int Program::default_block_dim(const CompileConfig &config) {
   if (arch_is_cpu(config.arch)) {
-    return config.default_cpu_block_dim;
+    return config.cpu_fixed_block_dim;
   } else {
     return config.default_gpu_block_dim;
   }
@@ -513,7 +503,8 @@ Program::~Program() {
 }
 
 DeviceCapabilityConfig translate_devcaps(const std::vector<std::string> &device_caps) {
-  // Each device capability assignment is named like this: - `spirv_version=1.3` - `spirv_has_int8`
+  // Each device capability assignment uses an encoded integer (e.g. 0x10500 for SPIR-V 1.5, passed as decimal text),
+  // or a flag such as `spirv_has_int8`.
   DeviceCapabilityConfig cfg{};
   for (const std::string &cap : device_caps) {
     std::string_view key;
@@ -532,7 +523,7 @@ DeviceCapabilityConfig translate_devcaps(const std::vector<std::string> &device_
 
   // Assign default device_caps (that always present).
   if (!cfg.contains(DeviceCapability::spirv_version)) {
-    cfg.set(DeviceCapability::spirv_version, 0x10300);
+    cfg.set(DeviceCapability::spirv_version, 0x10500);
   }
   return cfg;
 }

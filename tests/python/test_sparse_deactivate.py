@@ -1,6 +1,6 @@
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test(require=qd.extension.sparse)
@@ -13,26 +13,26 @@ def test_pointer():
     ptr = qd.root.pointer(qd.i, n)
     ptr.dense(qd.i, n).place(x)
 
-    s[None] = 0
+    s[()] = 0
 
     @qd.kernel
     def func():
         for i in x:
-            s[None] += 1
+            s[()] += 1
 
     x[0] = 1
     x[19] = 1
     func()
-    assert s[None] == 32
+    assert s[()] == 32
 
     @qd.kernel
     def deactivate():
         qd.deactivate(ptr, 0)
 
     deactivate()
-    s[None] = 0
+    s[()] = 0
     func()
-    assert s[None] == 16
+    assert s[()] == 16
 
 
 @test_utils.test(require=qd.extension.sparse)
@@ -46,28 +46,28 @@ def test_pointer1():
     ptr.dense(qd.i, n).place(x)
     qd.root.place(s)
 
-    s[None] = 0
+    s[()] = 0
 
     @qd.kernel
     def func():
         for i in x:
-            s[None] += 1
+            s[()] += 1
 
     x[0] = 1
     x[19] = 1
     x[20] = 1
     x[45] = 1
     func()
-    assert s[None] == 48
+    assert s[()] == 48
 
     @qd.kernel
     def deactivate():
         qd.deactivate(ptr, 0)
 
     deactivate()
-    s[None] = 0
+    s[()] = 0
     func()
-    assert s[None] == 32
+    assert s[()] == 32
 
 
 @test_utils.test(require=qd.extension.sparse)

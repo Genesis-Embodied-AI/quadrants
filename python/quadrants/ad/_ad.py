@@ -162,7 +162,7 @@ class Tape:
             >>> @qd.kernel
             >>> def sum(a: qd.float32):
             >>>     for I in qd.grouped(x):
-            >>>         y[None] += x[I] ** a
+            >>>         y[()] += x[I] ** a
             >>>
             >>> with qd.ad.Tape(loss = y):
             >>>     sum(2)
@@ -267,7 +267,7 @@ class Tape:
         for func, args in reversed(self.calls):
             # we need to check whether "func" has "grad" attribute
             # since we insert write_int and write_float kernels to self.calls
-            # e.g. x[None] = 0.0, this func has no grad attribute
+            # e.g. x[()] = 0.0, this func has no grad attribute
             if hasattr(func, "grad"):
                 func.grad(*args)
 
@@ -478,7 +478,7 @@ class FwdMode:
         if len(self.seed) == 1:
             if len(self.param.shape) == 0:
                 # e.g., x= qd.field(float, shape = ())
-                self.param.dual[None] = 1.0 * self.seed[0]
+                self.param.dual[()] = 1.0 * self.seed[0]
             else:
                 # e.g., qd.root.dense(qd.i, 1).place(x.dual)
                 self.param.dual[0] = 1.0 * self.seed[0]
@@ -512,7 +512,7 @@ class FwdMode:
         if len(self.seed) == 1:
             if len(self.param.shape) == 0:
                 # e.g., x= qd.field(float, shape = ())
-                self.param.dual[None] = 0.0
+                self.param.dual[()] = 0.0
             else:
                 # e.g., qd.root.dense(qd.i, 1).place(x.dual)
                 self.param.dual[0] = 0.0

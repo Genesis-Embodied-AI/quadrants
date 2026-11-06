@@ -215,7 +215,7 @@ struct StaticAdStackAnalysisResult {
 // ad_stack_sparse_threshold_bytes` for the user-facing knob (default 100 MiB; 0 forces capture, useful for tests
 // that pin the reducer-backed sizing path).
 // `task_range_is_original_loop`: true when `task_ir->{begin_value, end_value}` is the original user-loop trip
-// count, false when an upstream pass (e.g. `make_cpu_multithreaded_range_for` on CPU LLVM) has rewritten it
+// count, false when an upstream pass (e.g. `make_cpu_per_worker_range_for` on CPU LLVM) has rewritten it
 // into a per-chunk subrange. The analyzer only fills `bound_expr.loop_iter_static` when this is true; on
 // rewritten loops the original trip count is no longer recoverable from `task_ir` and the runtime falls back to
 // the unclipped reducer count for that task.

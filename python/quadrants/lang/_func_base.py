@@ -35,6 +35,10 @@ from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import _kernel_impl_dataclass, impl
 from quadrants.lang._dataclass_util import create_flat_name
+from quadrants.lang._final_dataclass_fields import (
+    final_field_names,
+    subtree_has_final_fields,
+)
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang._signature import get_func_signature
 from quadrants.lang._wrap_inspect import get_source_info_and_src
@@ -73,7 +77,9 @@ from quadrants.types.utils import is_signed
 _TENSOR_T_NDARRAY_LAUNCH_ANNOTATION = ndarray_type.NdarrayType()
 
 from ._kernel_types import KernelBatchedArgType
+from ._optional_annotation import split_optional
 from ._template_mapper import TemplateMapper
+from ._template_mapper_hotpath import _is_external_array
 
 MAX_ARG_NUM = 512
 
@@ -96,9 +102,9 @@ _is_cpython = sys.implementation.name == "cpython"
 #    which fields are active and their (name, full_name, type) tuples. Reduces the 43-iteration filter loop to ~10-15
 #    direct entries.
 #
-# 2. **Unwrapped-value cache** (per-instance, stored as ``_qd_dc_unwrapped``): for a frozen dataclass, field values
-#    never change. Cache the unwrapped (post-``_unwrap()``) value for each field on the instance. Eliminates
-#    ``getattr`` + ``type() in _TENSOR_WRAPPER_TYPES`` + ``_unwrap()`` on every launch.
+# 2. **Unwrapped-value cache** (per-instance ``_qd_dc_unwrapped``): for a frozen dataclass, field values never change,
+#    so cache each field's unwrapped (post-``_unwrap()``) value, eliminating ``getattr`` + ``_unwrap()`` per launch.
+#    Keyed by ``id(annotated_type)`` so one instance reused under several ancestor annotations keeps a per-view entry.
 
 _frozen_dc_plans: dict[tuple[int, type, str], tuple[set[str], tuple[tuple[str, str, Any], ...]]] = {}
 
@@ -123,9 +129,14 @@ def _get_frozen_dc_plan(
     # check so a stale plan from a different kernel specialization is never returned.
     if entry is not None and entry[0] is used_params:
         return entry[1]
+    # ``Final[T]`` fields are baked constants with no runtime arg slot, so exclude them from the plan to keep the arg
+    # count consistent.
+    final_names = final_field_names(struct_cls)
     entries: list[tuple[str, str, Any]] = []
     for field in fields_dict.values():
         if field._field_type is not _FIELD:
+            continue
+        if field.name in final_names:
             continue
         full_name = create_flat_name(basename, field.name)
         if full_name not in used_params:
@@ -136,11 +147,8 @@ def _get_frozen_dc_plan(
     return plan
 
 
-def _get_frozen_dc_unwrapped(v: Any, fields_dict: dict) -> dict[str, Any]:
-    """Return a dict mapping field_name -> unwrapped value for a frozen dataclass, caching on the instance."""
-    cached = getattr(v, "_qd_dc_unwrapped", None)
-    if cached is not None:
-        return cached
+def _compute_frozen_dc_unwrapped(v: Any, fields_dict: dict) -> dict[str, Any]:
+    """field_name -> unwrapped value for a frozen dataclass (no caching)."""
     unwrapped: dict[str, Any] = {}
     for field in fields_dict.values():
         if field._field_type is not _FIELD:
@@ -149,21 +157,55 @@ def _get_frozen_dc_unwrapped(v: Any, fields_dict: dict) -> dict[str, Any]:
         if _tensor_wrapper._any_tensor_constructed and type(val) in _TENSOR_WRAPPER_TYPES:
             val = val._unwrap()
         unwrapped[field.name] = val
-    try:
-        object.__setattr__(v, "_qd_dc_unwrapped", unwrapped)
-    except AttributeError:
-        pass
-    # Cache whether ALL unwrapped values are Fields (zero launch-context slots).  This is a property of the instance
-    # alone — independent of which kernel or field-subset is active — so a simple boolean suffices and survives
-    # qd.reset() harmlessly (the boolean remains valid as long as the instance is alive).
-    if getattr(v, "_qd_all_field", None) is None:
+    return unwrapped
+
+
+def _get_frozen_dc_unwrapped(v: Any, struct_cls: type, fields_dict: dict) -> dict[str, Any]:
+    """field_name -> unwrapped value for a frozen dataclass, cached on the instance.
+
+    Keyed by ``id(struct_cls)`` so a subclass instance reused under several ancestor annotations keeps a distinct entry
+    per view. The stored ``(struct_cls, ...)`` tuple is identity-checked on read, so a recycled ``id`` or a metaclass
+    that makes two ancestors compare/hash equal cannot serve the wrong view.
+
+    A ``Final``-bearing subtree is exempt from the cache (and from the ``_qd_all_field`` shortcut): like the
+    spec-key/offline-repr/mapper caches it must re-read every launch so ``Final``-value validation re-runs, and an
+    ``unsafe_hash=True`` instance may also mutate an *ordinary* field between launches - a stale cache would keep
+    sending the first-launch value. (Such a config always has a non-``Field`` scalar leaf, so ``_qd_all_field`` would
+    be ``False`` anyway; leaving it unset defaults to ``False``, i.e. the full ``_recursive_set_args`` path.)
+
+    The Final gate uses the annotated ``struct_cls``, not ``type(v)``: only the base's fields reach the kernel, so a
+    subclass's application-only ``Final`` field (e.g. an unbakeable ``Final[list]``) must be ignored, not validated.
+    """
+    if subtree_has_final_fields(struct_cls):
+        return _compute_frozen_dc_unwrapped(v, fields_dict)
+    cache = getattr(v, "_qd_dc_unwrapped", None)
+    if cache is not None:
+        hit = cache.get(id(struct_cls))
+        if hit is not None and hit[0] is struct_cls:  # identity guard against a recycled id
+            return hit[1]
+    unwrapped = _compute_frozen_dc_unwrapped(v, fields_dict)
+    if cache is None:
+        try:
+            object.__setattr__(v, "_qd_dc_unwrapped", {id(struct_cls): (struct_cls, unwrapped)})
+        except AttributeError:
+            pass
+    else:
+        cache[id(struct_cls)] = (struct_cls, unwrapped)
+    # Cache whether ALL unwrapped values are Fields (zero launch-context slots); this depends on the active field
+    # subset, so it is keyed per annotated type like the unwrapped values above.
+    all_field_cache = getattr(v, "_qd_all_field", None)
+    _af_hit = None if all_field_cache is None else all_field_cache.get(id(struct_cls))
+    if _af_hit is None or _af_hit[0] is not struct_cls:
         from quadrants.lang.field import Field as _Field  # pylint: disable=C0415
 
         _all_field = all(isinstance(fv, _Field) for fv in unwrapped.values())
-        try:
-            object.__setattr__(v, "_qd_all_field", _all_field)
-        except (AttributeError, TypeError):
-            pass
+        if all_field_cache is None:
+            try:
+                object.__setattr__(v, "_qd_all_field", {id(struct_cls): (struct_cls, _all_field)})
+            except (AttributeError, TypeError):
+                pass
+        else:
+            all_field_cache[id(struct_cls)] = (struct_cls, _all_field)
     return unwrapped
 
 
@@ -186,6 +228,8 @@ class FuncBase:
         self.arg_metas_expanded: list[ArgMetadata] = []
         self.orig_arguments: list[ArgMetadata] = []
         self.return_type = None
+        # Shared by every AST transform of this function; see ASTTransformerFuncContext.memoized_get_pos_info.
+        self.pos_info_cache: dict[tuple, str] = {}
 
         self.check_parameter_annotations()
 
@@ -238,12 +282,14 @@ class FuncBase:
             if param.kind != inspect.Parameter.POSITIONAL_OR_KEYWORD:
                 raise QuadrantsSyntaxError('Quadrants kernels only support "positional or keyword" parameters')
             annotation = param.annotation
+            optional = False
             if param.annotation is inspect.Parameter.empty:
                 if i == 0 and (self.is_classkernel or self.is_classfunc):  # The |self| parameter
                     annotation = template()
                 elif self.is_kernel or self.is_real_function:
                     raise QuadrantsSyntaxError("Quadrants kernels parameters must be type annotated")
             else:
+                annotation, optional = split_optional(annotation)
                 annotation_type = type(annotation)
                 if annotation_type is ndarray_type.NdarrayType:
                     pass
@@ -280,12 +326,18 @@ class FuncBase:
                     raise QuadrantsSyntaxError(
                         f"Invalid type annotation (argument {i}) of Quadrants kernel: {annotation}"
                     )
-            self.arg_metas.append(ArgMetadata(annotation, param.name, param.default))
-            self.orig_arguments.append(ArgMetadata(annotation, param.name, param.default))
+            self.arg_metas.append(ArgMetadata(annotation, param.name, param.default, optional=optional))
+            self.orig_arguments.append(ArgMetadata(annotation, param.name, param.default, optional=optional))
 
         self.template_slot_locations: list[int] = []
         for i, arg in enumerate(self.arg_metas):
-            if arg.annotation == template or isinstance(arg.annotation, template) or arg.annotation is _TensorClass:
+            if (
+                arg.annotation == template
+                or isinstance(arg.annotation, template)
+                or arg.annotation is _TensorClass
+                # An optional ndarray registers as a template slot so presence (None vs array) can specialize.
+                or (arg.optional and type(arg.annotation) is ndarray_type.NdarrayType)
+            ):
                 self.template_slot_locations.append(i)
 
     def _populate_global_vars_for_templates(
@@ -596,7 +648,7 @@ class FuncBase:
         # it does **not** walk into struct args. When the recursion below descends into a ``@qd.data_oriented`` (or
         # plain dataclass) struct field whose value is a wrapper, we land here with ``needed_arg_type`` set to whatever
         # annotation the struct declared on the field (e.g. ``NdarrayType``) and ``v`` set to a ``Tensor`` instance.
-        # Unwrap defensively so the rest of the function sees the bare impl, matching what callers expect post-stork-19.
+        # Unwrap defensively so the rest of the function sees the bare impl, matching what callers expect.
         # Idempotent for top-level args (already unwrapped).
         #
         # PERF-CRITICAL: The _any_tensor_constructed guard makes this check zero-cost when no qd.Tensor has been
@@ -617,7 +669,7 @@ class FuncBase:
         if needed_arg_type is _TensorClass:
             if type(v) in _TENSOR_WRAPPER_TYPES:
                 v = v._unwrap()
-            if isinstance(v, Ndarray):
+            if isinstance(v, Ndarray) or _is_external_array(v):
                 needed_arg_type = cast(Type, _TENSOR_T_NDARRAY_LAUNCH_ANNOTATION)
                 needed_arg_type_id = id(needed_arg_type)
                 needed_arg_basetype = type(needed_arg_type)
@@ -645,10 +697,20 @@ class FuncBase:
             # See for reference: https://docs.python.org/3/c-api/long.html#c.PyLong_FromLong
             return 1, _is_cpython and -5 <= v <= 256
         needed_arg_fields = getattr(needed_arg_type, _FIELDS, None)
+        # We get the fields from the needed arg type, thus subclasses are allowed
         if needed_arg_fields is not None:
-            if provided_arg_type is not needed_arg_type:
-                raise QuadrantsRuntimeError("needed", needed_arg_type, "!= provided", provided_arg_type)
+            if provided_arg_type is not needed_arg_type and not issubclass(provided_arg_type, needed_arg_type):
+                # PERF: Check immediate case first (`is not needed_arg_type`), fallback to subclass
+                raise QuadrantsRuntimeTypeError(
+                    "needed", needed_arg_type, "cannot be assigned the provided", provided_arg_type
+                )
+            # Must agree with the compile-time gate (``_rebinding_is_prevented``): ``__hash__ is not None`` alone
+            # disagrees for a ``frozen=True`` class that also hand-sets ``__hash__ = None`` (compile bakes its ``Final``
+            # fields, so launch must take the frozen plan too). The ``or`` only runs when ``__hash__ is None``.
             is_frozen = needed_arg_type.__hash__ is not None
+            if not is_frozen:
+                params = getattr(needed_arg_type, "__dataclass_params__", None)
+                is_frozen = params is not None and (params.frozen or params.unsafe_hash)
             idx = 0
             if is_frozen:
                 # PERF: Frozen-dataclass fast path. Uses the pre-computed field plan (which fields are active for this
@@ -658,7 +720,7 @@ class FuncBase:
                 plan = _get_frozen_dc_plan(
                     used_py_dataclass_parameters, needed_arg_type, py_dataclass_basename, needed_arg_fields
                 )
-                unwrapped = _get_frozen_dc_unwrapped(v, needed_arg_fields)
+                unwrapped = _get_frozen_dc_unwrapped(v, needed_arg_type, needed_arg_fields)
                 for field_name, field_full_name, field_type in plan:
                     field_value = unwrapped[field_name]
                     num_args_, _ = FuncBase._recursive_set_args(
@@ -674,8 +736,12 @@ class FuncBase:
                         callbacks,
                     )
                     idx += num_args_
-                return idx, True
-            # Non-frozen dataclass: original path with full iteration and filtering.
+                # A Final-bearing subtree must not cache its launch context (``args_hash`` keys on ``id(arg)``, so a
+                # cached buffer would resend the first-launch values): re-read every launch so a mutated ordinary field
+                # supplies its new value and ``final_scalar_key`` re-validates. Matches ``args_hasher``'s repr gate.
+                return idx, not subtree_has_final_fields(needed_arg_type)
+            # Non-frozen dataclass: original path. No ``Final`` handling - ``final_field_names`` rejects ``Final`` on a
+            # non-frozen class, so such a class already failed during template mapping.
             is_launch_ctx_cacheable = False
             for field in needed_arg_fields.values():
                 if field._field_type is not _FIELD:
@@ -760,10 +826,18 @@ class FuncBase:
                             "passing it into quadrants kernel."
                         )
                     quadrants_arch = impl.current_cfg().arch
+                    # PyTorch uses the "cuda" device spelling for both CUDA and HIP tensors. Both GPU contexts use
+                    # device 0; tensors from other GPU devices must retain the CPU staging/copy-back path.
+                    torch_gpu_arch = _qd_core.Arch.amdgpu if torch.version.hip else _arch_cuda
+                    direct_gpu = v.device.type == "cuda" and quadrants_arch == torch_gpu_arch and v.device.index == 0
 
                     # FIXME: only allocate when launching grad kernel
                     if v.requires_grad and v.grad is None:
                         v.grad = torch.zeros_like(v)
+                        if direct_gpu and quadrants_arch == _qd_core.Arch.amdgpu:
+                            # This producer is internal: callers cannot synchronize it before launching on a custom
+                            # Quadrants stream. Complete the first-time initialization before handing off.
+                            torch.cuda.current_stream(v.device).synchronize()
 
                     if v.requires_grad:
                         if not isinstance(v.grad, torch.Tensor):
@@ -777,9 +851,11 @@ class FuncBase:
                             )
 
                     grad = v.grad
-                    if (v.device.type != "cpu") and not (v.device.type == "cuda" and quadrants_arch == _arch_cuda):
+                    if grad is not None and grad.device != v.device:
+                        raise ValueError("The gradient tensor must be on the same device as its tensor.")
+                    if v.device.type != "cpu" and not direct_gpu:
                         # For a torch tensor to be passed as as input argument (in and/or out) of a quadrants kernel, its
-                        # memory must be hosted either on CPU, or on CUDA if and only if Quadrants is using CUDA backend.
+                        # memory must be hosted either on CPU, or on a GPU with a matching runtime and backend.
                         # We just replace it with a CPU tensor and by the end of kernel execution we'll use the callback
                         # to copy the values back to the original tensor.
                         v_cpu = v.to(device="cpu")

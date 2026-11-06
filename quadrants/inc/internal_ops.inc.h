@@ -23,6 +23,7 @@ PER_INTERNAL_OP(test_internal_func_args)
 PER_INTERNAL_OP(workgroupBarrier)
 PER_INTERNAL_OP(workgroupMemoryBarrier)
 PER_INTERNAL_OP(gridMemoryBarrier)
+PER_INTERNAL_OP(workgroupId)
 PER_INTERNAL_OP(localInvocationId)
 PER_INTERNAL_OP(globalInvocationId)
 PER_INTERNAL_OP(vkGlobalThreadIdx)
@@ -85,3 +86,6 @@ PER_INTERNAL_OP(amdgpu_clock_i64)
 
 // CPU
 PER_INTERNAL_OP(cpu_clock_i64)
+
+// CPU and GPU
+PER_INTERNAL_OP(global_block_idx)
