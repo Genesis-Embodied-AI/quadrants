@@ -43,3 +43,27 @@ The workload is the existing `classfunc`, `class_method`, `matrix`, `loops`, and
 One warm-up pair is excluded. Each measured run uses a new Python process. Pair order alternates main/PR and PR/main. Results include process wall time, test-runner wall time, and time inside outermost `transform_tree` calls. Nested transformations are counted but not double-counted in the AST duration. Instrumentation wraps whole transformations, not individual nodes, and is identical in both variants.
 
 The output directory contains metadata (including wheel SHA-256 and CPU details), full logs for each run, individual JSON measurements, and combined `results.json`. These measurements describe this CPU compilation/test workload. They do not measure Genesis scene-build time or GPU runtime performance. PR #1076 omits some diagnostic source context, so it provides an optimistic comparison for a future lazy formatter, not a universal mathematical upper bound.
+
+## Results: 2026-11-06
+
+Ran on cluster node `h100-206-029` in `genesis-v1_25.sqsh`, with an eight-core CPU allocation and 16 GiB allocated RAM. No GPU was used. Python was 3.12.14. The harness revision was `c6c1bda47`; exact compared source revisions and wheel hash are in `results/metadata.json`. Both variants used the same main wheel and dependencies.
+
+Five alternating measured pairs followed one excluded warm-up pair. Every run passed all 141 tests (19 warnings), with 448 outer and 678 total AST transformations. The initial pilot is excluded from these results.
+
+| Metric | Main median | PR #1076 median | Reduction of medians |
+| --- | ---: | ---: | ---: |
+| Whole process | 40.188880 s | 39.946931 s | 0.602% |
+| Test runner | 39.444314 s | 39.230723 s | 0.542% |
+| Outermost AST transformation | 1.013755 s | 0.967273 s | 4.585% |
+
+The median paired AST saving was 0.048088 s (4.736%), with savings of 0.035802 to 0.049547 s across all five pairs. Whole-process differences were less consistent: the PR was faster in three of five pairs, with paired savings ranging from -0.349625 s to +1.043239 s. These runs show a consistent reduction in AST time but do not establish a reliable whole-process speedup. The median paired AST saving is about 0.12% of the main process median.
+
+This is a CPU compilation/test workload, not a Genesis scene-build benchmark. No conclusions about Genesis-wide speedups or GPU workloads follow from these results. The comparison is optimistic for a future lazy formatter because #1076 omits source context rather than preserving it lazily; it is not a strict upper bound on every possible implementation.
+
+Raw measured timings, metadata, and dependency versions are committed under `results/`. Recompute the summary and CSV with:
+
+```bash
+.venv/bin/python misc/source_formatting_benchmark/summarize.py misc/source_formatting_benchmark/results/results.json
+```
+
+Full run logs are retained at `/mnt/data/hugh/ais/ext_prs_940/tmp/measurement/` on the cluster and `/home/hugh/ais/ext_prs_940/tmp/benchmark-results/` on the 5090 host. The combined log is `/home/hugh/ais/ext_prs_940/tmp/output.log`; an archive of the individual logs and JSON files is `/home/hugh/ais/ext_prs_940/tmp/benchmark-results.tar.gz`.
