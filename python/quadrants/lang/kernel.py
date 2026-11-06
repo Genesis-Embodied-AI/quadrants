@@ -1025,8 +1025,12 @@ class Kernel(FuncBase):
         if self.use_graph and (
             self.autodiff_mode != _NONE
             or (
+                # A gradient-handling wrapper skips automatic recording of inner calls. Check the active autodiff
+                # contexts only when no such wrapper is handling this call.
                 not self.runtime.grad_replaced
                 and (
+                    # Reject an active FwdMode context or a tape with validation enabled. Check that target_tape
+                    # exists before accessing validation; an ordinary tape with validation=False remains allowed.
                     self.runtime.fwd_mode_manager or (self.runtime.target_tape and self.runtime.target_tape.validation)
                 )
             )
