@@ -25,9 +25,9 @@ class DeferredMemberType(NamedTuple):
 class DeferredMemberError(NamedTuple):
     """Combine the description from DeferredMemberType with where it occurred: the member's path.
 
-    An example path is state.velocity.
+    An example path is "state.velocity".
 
-    Its reject() method raises the error when compilation actually uses that member.
+    Its reject() method raises the error if compilation actually uses that member.
     """
 
     member_type: DeferredMemberType
