@@ -121,16 +121,16 @@ def dataclass_field_is_final(dataclass_type: type, field_name: str, annotation: 
     name_parts = extract_dotted_name_parts(annotation_node)
     if name_parts is None:
         return False
-    owner = next(
+    declaring_class = next(
         (cls for cls in dataclass_type.__mro__ if field_name in vars(cls).get("__annotations__", {})), dataclass_type
     )
     value = _MISSING
-    for cls in owner.__mro__:
+    for cls in declaring_class.__mro__:
         value = vars(cls).get(name_parts[0], _MISSING)
         if value is not _MISSING:
             break
     if value is _MISSING:
-        module = sys.modules.get(owner.__module__)
+        module = sys.modules.get(declaring_class.__module__)
         value = vars(module).get(name_parts[0], _MISSING) if module is not None else _MISSING
     if value is _MISSING:
         # Canonical spellings can also occur in function-local classes whose local imports are no longer available.
