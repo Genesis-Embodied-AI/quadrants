@@ -9,15 +9,8 @@ class DeferredMemberType(NamedTuple):
 
     It is cached and can be shared by multiple members.
 
-    An unsupported member gets this description instead of a normal inferred type. The schema cache key includes each
-    member type's identity. For example, a State with count=7 and notes={1, 2} has key entries like:
-
-        ("count", id(qd.i32)), ("notes", id(notes_type))
-
-    Here, notes_type is the DeferredMemberType describing the unsupported set. Creating it through
-    deferred_member_for_value() returns the cached description for matching errors, so id(notes_type) stays the same
-    across calls and the schema can be reused. Creating a new description each time would give it a different identity
-    and cause a schema cache miss even though the member types had not changed.
+    An unsupported member in a schema gets this description instead of a normal inferred type. The schema cache key
+    includes each member type's identity.
     """
 
     error_type: type[Exception]
