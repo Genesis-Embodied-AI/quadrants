@@ -13,7 +13,10 @@ def extract_dotted_name_parts(ast_node: ast.expr) -> list[str] | None:
     |   `-- attr: "typing"           <- a string
     `-- attr: "Final"                <- a string
 
-    Output: ["module", "typing", "Final"]. A plain Name("Final") produces ["Final"].
+    Output: ["module", "typing", "Final"].
+
+    A plain Name("Final") produces ["Final"].
+
     The loop collects "Final", then "typing", and stops at Name("module"). Appending "module" and
     reversing puts the components in lookup order. Calls and subscripts, such as factory().Final or
     items[0].Final, return None. The input tree is not modified, and no Python objects are looked up.
