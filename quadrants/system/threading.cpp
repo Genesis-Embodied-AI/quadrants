@@ -28,7 +28,9 @@ bool test_threading() {
 }
 
 ThreadPool::ThreadPool(int max_num_threads, int worker_spin_us)
-    : max_num_threads(max_num_threads), worker_spin_us_(worker_spin_us) {
+    : max_num_threads(max_num_threads),
+      worker_spin_us_(worker_spin_us),
+      worker_wait_mode_(benchmark_thread_pool_wait_mode()) {
   QD_ASSERT_INFO(worker_spin_us >= 0, "cpu_worker_spin_us must be >= 0");
   exiting = false;
   started = false;
@@ -89,7 +91,7 @@ void ThreadPool::target() {
       if (worker_spin_us_ > 0 && last_timestamp != 0 && thread_id < desired_num_threads && !ready()) {
         auto observed = wakeup_generation_.load(std::memory_order_relaxed);
         lock.unlock();
-        poll_thread_pool_generation(wakeup_generation_, observed, worker_spin_us_);
+        poll_thread_pool_generation(wakeup_generation_, observed, worker_spin_us_, worker_wait_mode_);
         lock.lock();
       }
       // Rechecking under the publisher's mutex prevents missed notifications at the polling-to-sleep boundary.

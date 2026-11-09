@@ -6,6 +6,7 @@
 #pragma once
 
 #include "quadrants/common/core.h"
+#include "quadrants/system/thread_pool_wait.h"
 
 #include <atomic>
 #include <condition_variable>
@@ -53,6 +54,7 @@ class ThreadPool {
 
  private:
   const int worker_spin_us_;
+  const ThreadPoolWaitMode worker_wait_mode_;
   std::atomic<std::uint64_t> wakeup_generation_{0};
 };
 
