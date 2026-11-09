@@ -6,6 +6,7 @@
 #pragma once
 
 #include "quadrants/common/core.h"
+#include "quadrants/system/thread_pool_greedy.h"
 
 #include <atomic>
 #include <condition_variable>
@@ -39,7 +40,7 @@ class ThreadPool {
   void *task_context;
   int thread_counter;
 
-  explicit ThreadPool(int max_num_threads, int worker_spin_us = 0);
+  explicit ThreadPool(int max_num_threads, int worker_spin_us = greedy_default_worker_spin_us);
 
   void run(int splits, int desired_num_threads, void *task_context, TaskFn *task_fn);
 
@@ -52,6 +53,11 @@ class ThreadPool {
   ~ThreadPool();
 
  private:
+  // A negative active count closes dynamic registration when the final participating worker finishes.
+  static constexpr int closed_completion = -1;
+  const ThreadPoolGreedyOptions greedy_;
+  std::atomic<int> active_atomic_{0};
+  std::atomic<uint64> completed_generation_{0};
   const int worker_spin_us_;
   std::atomic<std::uint64_t> wakeup_generation_{0};
 };

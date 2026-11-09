@@ -54,6 +54,10 @@ void ThreadPool::run(int splits, int desired_num_threads, void *task_context, Ta
     QD_ASSERT(this->desired_num_threads > 0);
     // QD_P(this->desired_num_threads);
     started = false;
+    if (greedy_.static_tasks)
+      running_threads = this->desired_num_threads;
+    if (greedy_.atomic_completion)
+      active_atomic_.store(greedy_.static_tasks ? this->desired_num_threads : 0, std::memory_order_relaxed);
     task_head = 0;
     task_tail = splits;
     timestamp++;
@@ -64,12 +68,18 @@ void ThreadPool::run(int splits, int desired_num_threads, void *task_context, Ta
 
   // wake up all slaves
   slave_cv.notify_all();
-  {
+  if (greedy_.caller_poll) {
+    // Completion publication is separate from completion counting, so caller polling can be tested on its own.
+    while (completed_generation_.load(std::memory_order_acquire) != timestamp) {
+    }
+  } else {
     std::unique_lock<std::mutex> lock(mutex);
-    // TODO: the workers may have finished before master waiting on master_cv
-    master_cv.wait(lock, [this] { return started && running_threads == 0; });
+    master_cv.wait(lock, [this] {
+      return greedy_.atomic_completion ? completed_generation_.load(std::memory_order_acquire) == timestamp
+                                       : started && running_threads == 0;
+    });
   }
-  QD_ASSERT(task_head >= task_tail);
+  QD_ASSERT(greedy_.static_tasks || task_head >= task_tail);
 }
 
 void ThreadPool::target() {
@@ -98,40 +108,72 @@ void ThreadPool::target() {
       if (exiting) {
         break;
       } else {
-        if (last_finished >= last_timestamp) {
+        if (!greedy_.atomic_completion && last_finished >= last_timestamp) {
           continue;
           // This could happen when part of the desired threads wake up and
           // finish all the task, and then this thread wake up finding nothing
           // to do. Should skip this task directly.
         } else {
+          if (greedy_.atomic_completion && !greedy_.static_tasks) {
+            // Preserve production's late-worker skipping. Registration races atomically with final completion.
+            int active = active_atomic_.load(std::memory_order_acquire);
+            while (active != closed_completion &&
+                   !active_atomic_.compare_exchange_weak(active, active + 1, std::memory_order_acq_rel)) {
+            }
+            if (active == closed_completion)
+              continue;
+          }
           started = true;
-          running_threads++;
+          if (!greedy_.atomic_completion && !greedy_.static_tasks)
+            running_threads++;
         }
       }
     }
 
-    while (true) {
-      // For a single parallel task
-      int task_id;
-      {
-        task_id = task_head.fetch_add(1, std::memory_order_relaxed);
-        if (task_id >= task_tail)
-          break;
-      }
+    if (greedy_.static_tasks) {
+      for (int task = thread_id; task < task_tail; task += desired_num_threads)
+        task_fn(this->task_context, thread_id, task);
+    } else {
+      while (true) {
+        // For a single parallel task
+        int task_id;
+        {
+          task_id = task_head.fetch_add(1, std::memory_order_relaxed);
+          if (task_id >= task_tail)
+            break;
+        }
 
-      task_fn(this->task_context, thread_id, task_id);
+        task_fn(this->task_context, thread_id, task_id);
+      }
     }
 
     bool all_finished = false;
-    {
+    if (greedy_.atomic_completion) {
+      int active = active_atomic_.load(std::memory_order_relaxed);
+      while (!active_atomic_.compare_exchange_weak(active, active == 1 ? closed_completion : active - 1,
+                                                   std::memory_order_acq_rel)) {
+      }
+      all_finished = active == 1;
+      if (all_finished) {
+        if (greedy_.caller_poll) {
+          completed_generation_.store(last_timestamp, std::memory_order_release);
+        } else {
+          // Only the final worker locks. Pair CV publication with its predicate check to avoid missed wakeups.
+          std::lock_guard<std::mutex> lock(mutex);
+          completed_generation_.store(last_timestamp, std::memory_order_release);
+        }
+      }
+    } else {
       std::lock_guard<std::mutex> lock(mutex);
       running_threads--;
       if (running_threads == 0) {
         all_finished = true;
         last_finished = last_timestamp;
+        if (greedy_.caller_poll)
+          completed_generation_.store(last_timestamp, std::memory_order_release);
       }
     }
-    if (all_finished)
+    if (all_finished && !greedy_.caller_poll)
       master_cv.notify_one();
   }
 }
