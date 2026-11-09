@@ -57,7 +57,10 @@ def _create_deferred_member_type(
 
 
 def create_deferred_member_error(error_type: type[Exception], message: str, py_obj: object) -> DeferredMemberType:
-    """Capture runtime type names only in debug mode, without retaining the application value or its class."""
+    """Return a cached description of an invalid dataclass member for later error reporting.
+
+    Capture runtime type names only in debug mode, without retaining the application value or its class.
+    """
     # Import lazily: impl also loads compiler modules that use deferred descriptions.
     from quadrants.lang import impl  # pylint: disable=import-outside-toplevel
 
