@@ -43,7 +43,7 @@ class DeferredMemberValue(NamedTuple):
 
 
 @cache
-def deferred_member(
+def _deferred_member(
     error_type: type[Exception],
     message: str,
     runtime_type_names: tuple[str, str] | None = None,
@@ -61,4 +61,4 @@ def deferred_member_for_value(error_type: type[Exception], message: str, py_obj:
     if impl.current_cfg().debug:
         runtime_type = type(py_obj)
         runtime_type_names = (runtime_type.__module__, runtime_type.__qualname__)
-    return deferred_member(error_type, message, runtime_type_names)
+    return _deferred_member(error_type, message, runtime_type_names)
