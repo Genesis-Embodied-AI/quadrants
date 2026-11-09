@@ -28,9 +28,6 @@ class DeferredMemberError(NamedTuple):
     An example path is state.velocity.
 
     Its reject() method raises the error when compilation actually uses that member.
-
-    For example, state.notes and config.tags could share the same DeferredMemberType for an unsupported set, but each
-    has its own DeferredMemberError carrying its path.
     """
 
     member_type: DeferredMemberType
