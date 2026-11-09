@@ -3,7 +3,7 @@ from collections import defaultdict, deque
 from typing import TYPE_CHECKING, Any
 
 from ._ast_name_parts import extract_dotted_name_parts
-from ._dataclass_util import create_flat_name
+from ._dataclass_util import create_flat_name, create_flat_name_from_parts
 from ._exceptions import raise_exception
 from ._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
 from .exception import QuadrantsSyntaxError
@@ -20,11 +20,7 @@ def _flatten_arg_node(node: expr) -> tuple[str, str] | None:
     name_parts = extract_dotted_name_parts(node)
     if name_parts is None:
         return None
-    root_id = name_parts[0]
-    flat_name = root_id
-    for member_name in name_parts[1:]:
-        flat_name = create_flat_name(flat_name, member_name)
-    return flat_name, root_id
+    return create_flat_name_from_parts(name_parts), name_parts[0]
 
 
 if TYPE_CHECKING:

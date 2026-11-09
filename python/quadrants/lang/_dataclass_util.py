@@ -28,3 +28,11 @@ def create_flat_name(basename: str, child_name: str) -> str:
     if basename.startswith("__qd_"):
         return f"{basename}__qd_{child_name}"
     return f"__qd_{basename}__qd_{child_name}"
+
+
+def create_flat_name_from_parts(name_parts: list[str]) -> str:
+    """Flatten a nonempty list of names; a single name passes through unchanged."""
+    flat_name = "__qd_".join(name_parts)
+    if len(name_parts) > 1 and not name_parts[0].startswith("__qd_"):
+        flat_name = "__qd_" + flat_name
+    return flat_name
