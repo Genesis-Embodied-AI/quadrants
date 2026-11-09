@@ -8,6 +8,7 @@ import re
 import warnings
 from ast import unparse
 from collections import ChainMap
+from collections.abc import Callable
 from contextlib import nullcontext
 from typing import Any
 
@@ -383,7 +384,13 @@ class CallTransformer:
             return CallTransformer._build_resolved_call(ctx, node, build_stmt, is_func_base_wrapper)
 
     @staticmethod
-    def _build_resolved_call(ctx, node, build_stmt, is_func_base_wrapper):
+    def _build_resolved_call(
+        ctx: ASTTransformerFuncContext,
+        node: ast.Call,
+        build_stmt: Callable[[ASTTransformerFuncContext, ast.AST], Any],
+        is_func_base_wrapper: bool,
+    ) -> Any:
+        """Expand dataclass arguments and compile a call whose callee has already been resolved."""
         func = node.func.ptr
 
         # A ``@qd.func(requires_top_level=True)`` may only be called at the top level of a kernel (or

@@ -501,20 +501,24 @@ def _extract_arg(
 class RuntimeDataclassFeatures(tuple):
     """Tuple-compatible field features whose dispatch identity also includes the inferred scalar types."""
 
-    def __new__(cls, features, schema):
+    def __new__(cls, features: tuple[Any, ...], schema: AnnotationType) -> "RuntimeDataclassFeatures":
+        """Attach the inferred schema to tuple-compatible dispatch features."""
         result = super().__new__(cls, features)
         result.schema = schema
         return result
 
-    def __hash__(self):
+    def __hash__(self) -> int:
+        """Hash the inferred schema key together with the field features."""
         return hash((self.schema._qd_runtime_key, tuple(self)))
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
+        """Compare both inferred schema keys and field features."""
         return (
             type(other) is type(self)
             and self.schema._qd_runtime_key == other.schema._qd_runtime_key
             and tuple.__eq__(self, other)
         )
 
-    def __ne__(self, other):
+    def __ne__(self, other: object) -> bool:
+        """Return whether the schema keys or field features differ."""
         return not self == other

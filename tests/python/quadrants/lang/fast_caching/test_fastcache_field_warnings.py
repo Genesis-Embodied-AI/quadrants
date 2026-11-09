@@ -13,6 +13,7 @@ Cases:
 
 import dataclasses
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -159,7 +160,9 @@ def test_fastcache_field_warnings_warn_top_level_template(tmp_path, capfd):
 
 @test_utils.test(arch=qd.cpu)
 @pytest.mark.skipif(sys.platform.startswith("win"), reason="Windows stderr not working with capfd")
-def test_fastcache_field_warnings_ignore_dataclass_member_annotation(tmp_path, capfd):
+def test_fastcache_field_warnings_ignore_dataclass_member_annotation(
+    tmp_path: Path, capfd: pytest.CaptureFixture[str]
+) -> None:
     """An arriving Field uses inferred Tensor handling, ignoring the member's Template annotation."""
     qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
 

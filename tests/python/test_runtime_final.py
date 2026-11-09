@@ -17,7 +17,7 @@ class Mode(enum.IntEnum):
     B = 2
 
 
-def encode(value):
+def encode(value: typing.Any) -> int:
     """Expose the actual constant's type and value through a kernel result."""
     return len(type(value).__name__) * 100 + (len(value) if isinstance(value, str) else int(value))
 
@@ -34,7 +34,7 @@ def encode(value):
     ],
 )
 @test_utils.test()
-def test_final_uses_actual_type_and_value(annotation):
+def test_final_uses_actual_type_and_value(annotation: typing.Any) -> None:
     @dataclasses.dataclass(frozen=True)
     class State:
         value: annotation
@@ -59,7 +59,7 @@ def test_final_uses_actual_type_and_value(annotation):
 
 
 @test_utils.test()
-def test_final_unsupported_arriving_value_is_deferred():
+def test_final_unsupported_arriving_value_is_deferred() -> None:
     @dataclasses.dataclass(frozen=True)
     class State:
         value: typing.Final[int]
@@ -80,7 +80,7 @@ def test_final_unsupported_arriving_value_is_deferred():
 
 
 @test_utils.test()
-def test_bare_final_requires_frozen_container_path():
+def test_bare_final_requires_frozen_container_path() -> None:
     @dataclasses.dataclass(frozen=True)
     class Inner:
         value: typing.Final
@@ -98,7 +98,7 @@ def test_bare_final_requires_frozen_container_path():
 
 
 @test_utils.test(raise_on_templated_floats=True)
-def test_final_float_policy_uses_arriving_value():
+def test_final_float_policy_uses_arriving_value() -> None:
     @dataclasses.dataclass(frozen=True)
     class State:
         value: typing.Final[int]
@@ -113,7 +113,7 @@ def test_final_float_policy_uses_arriving_value():
 
 
 @test_utils.test()
-def test_string_final_resolves_only_marker_in_defining_scope():
+def test_string_final_resolves_only_marker_in_defining_scope() -> None:
     module = types.ModuleType("_qd_runtime_final_annotation_test")
     sys.modules[module.__name__] = module
     try:
@@ -142,7 +142,7 @@ def test_string_final_resolves_only_marker_in_defining_scope():
 
 
 @test_utils.test()
-def test_nonfinal_string_annotation_is_not_a_marker():
+def test_nonfinal_string_annotation_is_not_a_marker() -> None:
     @dataclasses.dataclass(frozen=True)
     class State:
         Final = int
@@ -160,7 +160,7 @@ def test_nonfinal_string_annotation_is_not_a_marker():
 
 
 @test_utils.test()
-def test_string_alias_to_subscripted_final():
+def test_string_alias_to_subscripted_final() -> None:
     @dataclasses.dataclass(frozen=True)
     class State:
         Constant = typing.Final[list]

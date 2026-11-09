@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from quadrants.lang._weak_identity_cache import WeakIdentityCache
 
 
-def test_unhashable_equal_keys_are_distinct_and_collected():
+def test_unhashable_equal_keys_are_distinct_and_collected() -> None:
     @dataclass
     class Key:
         value: int
@@ -26,7 +26,7 @@ def test_unhashable_equal_keys_are_distinct_and_collected():
     assert cache.get(second) == "second"
 
 
-def test_stale_identity_and_callback_do_not_alias_or_evict_new_entry():
+def test_stale_identity_and_callback_do_not_alias_or_evict_new_entry() -> None:
     class Key:
         pass
 
@@ -42,7 +42,7 @@ def test_stale_identity_and_callback_do_not_alias_or_evict_new_entry():
     assert cache.get(first) == "replacement"
 
 
-def test_non_weak_referenceable_key_is_not_retained():
+def test_non_weak_referenceable_key_is_not_retained() -> None:
     cache = WeakIdentityCache()
     key = []
     assert not cache.set(key, "value")

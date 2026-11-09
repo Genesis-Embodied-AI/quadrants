@@ -1,5 +1,8 @@
 """Validate mutable descendants before reusing a frozen dataclass's inferred schema."""
 
+from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING, Any
+
 import numpy as np
 
 from quadrants._tensor_wrapper import Tensor
@@ -7,13 +10,27 @@ from quadrants.lang._ndarray import Ndarray
 from quadrants.lang.field import Field
 from quadrants.types.ndarray_type import NdarrayType
 
+if TYPE_CHECKING:
+    import dataclasses
+    from typing import _SpecialForm
+
+    from quadrants.lang._deferred_errors import DeferredMemberType
+    from quadrants.lang._runtime_dataclass import DataclassInstance, InferredMemberType
+
 
 class FrozenSchemaEntry:
     """Store member names and types, never child objects that could retain the owning dataclass."""
 
     __slots__ = ("schema", "tensor_guards", "member_guards")
 
-    def __init__(self, value, schema, field_plan, member_types):
+    def __init__(
+        self,
+        value: "DataclassInstance",
+        schema: type,
+        field_plan: Sequence[tuple[str, "dataclasses.Field[Any]", bool]],
+        member_types: "Sequence[InferredMemberType | DeferredMemberType | _SpecialForm]",
+    ) -> None:
+        """Record guards for members whose runtime representation can change inside a frozen dataclass."""
         self.schema = schema
         self.tensor_guards = []
         self.member_guards = []
@@ -30,13 +47,20 @@ class FrozenSchemaEntry:
                     self.tensor_guards.append((name, type(child), type(backing)))
                     continue
             if hasattr(member_type, "_qd_runtime_origin"):
-                if member_type._qd_runtime_stable:
+                if getattr(member_type, "_qd_runtime_stable"):
                     continue
             elif child is None or isinstance(child, (bool, int, float, np.generic, Ndarray, Field)):
                 continue
             self.member_guards.append((name, member_type))
 
-    def matches(self, dataclass_instance, path, ancestor_ids, infer_member_type):
+    def matches(
+        self,
+        dataclass_instance: "DataclassInstance",
+        path: str,
+        ancestor_ids: frozenset[int],
+        infer_member_type: "Callable[[Any, str, frozenset[int]], InferredMemberType | DeferredMemberType]",
+    ) -> bool:
+        """Check whether the current members still match the cached schema's wrapper and type guards."""
         for name, wrapper_type, backing_type in self.tensor_guards:
             tensor = getattr(dataclass_instance, name)
             if type(tensor) is not wrapper_type or type(tensor._unwrap()) is not backing_type:

@@ -3166,7 +3166,7 @@ def test_pruning_iterate_function_no_iterate() -> None:
 
 
 @test_utils.test()
-def test_dataclass_with_template_uses_runtime_types():
+def test_dataclass_with_template_uses_runtime_types() -> None:
     """An arriving dataclass overrides the template annotation without a deprecation warning."""
 
     @dataclass(frozen=True)
@@ -3359,7 +3359,7 @@ def test_kernel_accepts_data_oriented_subclass_of_dataclass_param():
 
 
 @test_utils.test()
-def test_kernel_accepts_unrelated_dataclass():
+def test_kernel_accepts_unrelated_dataclass() -> None:
     @dataclass
     class Expected:
         x: int
@@ -3819,7 +3819,7 @@ def test_nested_final_field_recompiles_per_frozen_carrier_instance():
 
 
 @test_utils.test()
-def test_final_field_ignores_inner_types():
+def test_final_field_ignores_inner_types() -> None:
     """Final marks compile-time values without constraining their arriving types."""
     import enum
     from typing import Final
@@ -3907,7 +3907,7 @@ def test_final_field_int_annotation_holding_intenum_value():
 
 
 @test_utils.test()
-def test_bare_final_annotation_specializes():
+def test_bare_final_annotation_specializes() -> None:
     """Bare Final uses the arriving value as a compile-time constant."""
     import typing
 
@@ -4079,7 +4079,7 @@ def test_final_unsafe_hash_ordinary_field_reread_each_launch():
 
 
 @test_utils.test()
-def test_final_field_string_annotation_is_recognized():
+def test_final_field_string_annotation_is_recognized() -> None:
     """String Final markers are recognized without resolving their inner annotations."""
     from quadrants.lang._final_dataclass_fields import final_field_names
 
@@ -4098,7 +4098,7 @@ def test_final_field_string_annotation_is_recognized():
 
 
 @test_utils.test()
-def test_final_field_aliased_string_annotation_is_recognized():
+def test_final_field_aliased_string_annotation_is_recognized() -> None:
     """An aliased string marker is resolved through its defining module."""
     import sys
     import types

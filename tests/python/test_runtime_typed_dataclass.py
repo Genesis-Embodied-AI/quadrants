@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Final
 
 import numpy as np
@@ -12,7 +13,7 @@ from tests.helpers import test_utils
 @pytest.mark.parametrize("annotation_kind", ["marker", "concrete", "scalar"])
 @pytest.mark.parametrize("bound", [False, True])
 @test_utils.test()
-def test_runtime_dataclass_default_requires_explicit_argument(annotation_kind, bound):
+def test_runtime_dataclass_default_requires_explicit_argument(annotation_kind: str, bound: bool) -> None:
     @dataclass
     class State:
         value: object
@@ -51,7 +52,7 @@ def test_runtime_dataclass_default_requires_explicit_argument(annotation_kind, b
 
 @pytest.mark.parametrize("annotation_kind", ["marker", "concrete", "unrelated", "scalar", "template", "ndarray"])
 @test_utils.test()
-def test_runtime_members_ignore_annotations(annotation_kind):
+def test_runtime_members_ignore_annotations(annotation_kind: str) -> None:
     @dataclass
     class State:
         values: str
@@ -98,7 +99,7 @@ def test_runtime_members_ignore_annotations(annotation_kind):
 
 
 @test_utils.test()
-def test_runtime_nested_func_calls_and_pruning():
+def test_runtime_nested_func_calls_and_pruning() -> None:
     @dataclass
     class Inner:
         value: object
@@ -130,7 +131,7 @@ def test_runtime_nested_func_calls_and_pruning():
 
 
 @test_utils.test()
-def test_runtime_unrelated_dataclass_classes():
+def test_runtime_unrelated_dataclass_classes() -> None:
     @dataclass
     class First:
         value: object
@@ -149,7 +150,7 @@ def test_runtime_unrelated_dataclass_classes():
 
 
 @test_utils.test()
-def test_runtime_array_dtype_and_rank_changes():
+def test_runtime_array_dtype_and_rank_changes() -> None:
     @dataclass
     class State:
         array: object
@@ -173,7 +174,7 @@ def test_runtime_array_dtype_and_rank_changes():
 
 
 @test_utils.test()
-def test_runtime_external_array_and_field():
+def test_runtime_external_array_and_field() -> None:
     @dataclass
     class State:
         array: object
@@ -191,7 +192,7 @@ def test_runtime_external_array_and_field():
 
 
 @test_utils.test()
-def test_runtime_final_through_nested_func():
+def test_runtime_final_through_nested_func() -> None:
     @dataclass(frozen=True)
     class Config:
         enabled: Final[bool]
@@ -218,7 +219,7 @@ def test_runtime_final_through_nested_func():
 
 
 @test_utils.test(require=qd.extension.data64, default_ip=qd.i64, default_fp=qd.f64)
-def test_runtime_scalar_precision():
+def test_runtime_scalar_precision() -> None:
     @dataclass
     class State:
         value: qd.i32
@@ -239,7 +240,7 @@ def test_runtime_scalar_precision():
 
 @pytest.mark.parametrize("annotation_kind", ["marker", "concrete"])
 @test_utils.test()
-def test_runtime_bad_inputs(annotation_kind):
+def test_runtime_bad_inputs(annotation_kind: str) -> None:
     @dataclass
     class State:
         value: object
@@ -272,7 +273,7 @@ def test_runtime_bad_inputs(annotation_kind):
 
 
 @test_utils.test(require=qd.extension.data64)
-def test_runtime_matrix_and_quadrants_struct_members():
+def test_runtime_matrix_and_quadrants_struct_members() -> None:
     @qd.dataclass
     class Pair:
         count: qd.i64
@@ -299,7 +300,7 @@ def test_runtime_matrix_and_quadrants_struct_members():
 
 
 @test_utils.test()
-def test_runtime_bool_members():
+def test_runtime_bool_members() -> None:
     @dataclass
     class State:
         enabled: object
@@ -313,7 +314,7 @@ def test_runtime_bool_members():
 
 
 @test_utils.test()
-def test_runtime_offline_cache(tmp_path):
+def test_runtime_offline_cache(tmp_path: Path) -> None:
     @dataclass(frozen=True)
     class Config:
         bias: Final[int]
@@ -343,7 +344,7 @@ def test_runtime_offline_cache(tmp_path):
 
 
 @test_utils.test()
-def test_runtime_unresolved_member_annotations():
+def test_runtime_unresolved_member_annotations() -> None:
     @dataclass
     class Inner:
         value: "NotImported"
@@ -360,7 +361,7 @@ def test_runtime_unresolved_member_annotations():
 
 
 @test_utils.test()
-def test_runtime_optional_member():
+def test_runtime_optional_member() -> None:
     @dataclass
     class State:
         value: object
@@ -389,7 +390,7 @@ def test_runtime_optional_member():
 
 
 @test_utils.test()
-def test_runtime_dataclass_then_scalar_restores_annotation():
+def test_runtime_dataclass_then_scalar_restores_annotation() -> None:
     @dataclass
     class State:
         value: int
@@ -408,7 +409,7 @@ def test_runtime_dataclass_then_scalar_restores_annotation():
 
 
 @test_utils.test()
-def test_runtime_subclass_fields_visible_through_base_annotation():
+def test_runtime_subclass_fields_visible_through_base_annotation() -> None:
     @dataclass
     class Base:
         value: int
@@ -429,7 +430,7 @@ def test_runtime_subclass_fields_visible_through_base_annotation():
 
 
 @test_utils.test()
-def test_runtime_frozen_wrapper_backing_and_nested_scalar_changes():
+def test_runtime_frozen_wrapper_backing_and_nested_scalar_changes() -> None:
     @dataclass
     class Inner:
         increment: object
@@ -471,7 +472,7 @@ def test_runtime_frozen_wrapper_backing_and_nested_scalar_changes():
 
 @pytest.mark.parametrize("slots", [False, True])
 @test_utils.test(require=qd.extension.data64)
-def test_runtime_frozen_nested_wrapper_dtype_rank_and_replacement(slots):
+def test_runtime_frozen_nested_wrapper_dtype_rank_and_replacement(slots: bool) -> None:
     @dataclass(frozen=True, slots=slots)
     class Inner:
         array: object
@@ -508,7 +509,7 @@ def test_runtime_frozen_nested_wrapper_dtype_rank_and_replacement(slots):
 
 
 @test_utils.test()
-def test_runtime_frozen_guard_detects_mutable_child_cycle_and_bad_type():
+def test_runtime_frozen_guard_detects_mutable_child_cycle_and_bad_type() -> None:
     @dataclass
     class Inner:
         value: object
@@ -535,7 +536,7 @@ def test_runtime_frozen_guard_detects_mutable_child_cycle_and_bad_type():
 
 
 @test_utils.test()
-def test_runtime_frozen_guards_keep_final_value_validation():
+def test_runtime_frozen_guards_keep_final_value_validation() -> None:
     @dataclass(frozen=True)
     class State:
         array: object

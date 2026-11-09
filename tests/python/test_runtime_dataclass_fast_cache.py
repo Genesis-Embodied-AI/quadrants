@@ -1,4 +1,7 @@
+import typing
 from dataclasses import dataclass
+
+import pytest
 
 import quadrants as qd
 from quadrants.lang import _runtime_dataclass
@@ -7,7 +10,7 @@ from tests.helpers import test_utils
 
 
 @test_utils.test()
-def test_frozen_tensor_rebinding_invalidates_both_kernels(monkeypatch):
+def test_frozen_tensor_rebinding_invalidates_both_kernels(monkeypatch: pytest.MonkeyPatch) -> None:
     @dataclass(frozen=True)
     class State:
         tensor: object
@@ -28,7 +31,7 @@ def test_frozen_tensor_rebinding_invalidates_both_kernels(monkeypatch):
     assert twice(state) == 6
     infer = _runtime_dataclass.infer_kernel_dataclass_arg_types
 
-    def reject_inference(*args, **kwargs):
+    def reject_inference(*args: object, **kwargs: object) -> typing.NoReturn:
         raise AssertionError("unchanged arguments should reuse inferred metadata")
 
     monkeypatch.setattr(_runtime_dataclass, "infer_kernel_dataclass_arg_types", reject_inference)
@@ -55,7 +58,7 @@ def test_frozen_tensor_rebinding_invalidates_both_kernels(monkeypatch):
 
 
 @test_utils.test()
-def test_non_weakrefable_dataclass_with_dict_rechecks_tensor():
+def test_non_weakrefable_dataclass_with_dict_rechecks_tensor() -> None:
     @dataclass(frozen=True)
     class State:
         __slots__ = ("tensor", "__dict__")
@@ -77,7 +80,7 @@ def test_non_weakrefable_dataclass_with_dict_rechecks_tensor():
 
 
 @test_utils.test(arch=qd.cpu, require=qd.extension.data64)
-def test_cached_inference_rechecks_numeric_defaults():
+def test_cached_inference_rechecks_numeric_defaults() -> None:
     @dataclass(frozen=True)
     class State:
         value: object
@@ -94,7 +97,7 @@ def test_cached_inference_rechecks_numeric_defaults():
 
 
 @test_utils.test(require=qd.extension.data64)
-def test_nested_frozen_tensor_rebinding_changes_inferred_dtype():
+def test_nested_frozen_tensor_rebinding_changes_inferred_dtype() -> None:
     @dataclass(frozen=True)
     class Inner:
         tensor: object

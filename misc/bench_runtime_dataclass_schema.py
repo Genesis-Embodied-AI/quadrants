@@ -13,13 +13,15 @@ import inspect
 import json
 import statistics
 import time
+from collections.abc import Callable
 from importlib.metadata import version
 
 import quadrants as qd
 from quadrants.lang import _runtime_dataclass
 
 
-def measure(call, iterations, repeats):
+def measure(call: Callable[[], object], iterations: int, repeats: int) -> dict[str, float | list[float]]:
+    """Warm a callable and report per-call timings in microseconds across repeated batches."""
     for _ in range(20):
         call()
     samples = []
@@ -31,7 +33,8 @@ def measure(call, iterations, repeats):
     return {"median_us": statistics.median(samples), "samples_us": samples}
 
 
-def main():
+def main() -> None:
+    """Benchmark schema inference and compiled dispatch for several nested dataclass sizes."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--label", required=True)
     parser.add_argument("--iterations", type=int, default=1000)

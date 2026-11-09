@@ -2,12 +2,23 @@
 
 import dataclasses
 import typing
+from typing import TYPE_CHECKING, Any
 
 from quadrants.lang._deferred_errors import (
     create_deferred_member_type_for_invalid_dataclass_member,
 )
 from quadrants.lang._final_annotation import dataclass_field_is_final
 from quadrants.lang._final_dataclass_fields import final_scalar_key
+
+if TYPE_CHECKING:
+    from typing import _SpecialForm
+
+    from quadrants.lang._deferred_errors import DeferredMemberType
+    from quadrants.lang._runtime_dataclass import FinalValueKeyCache
+
+
+# Final is a special-form object at runtime, although static checkers treat it as a type expression.
+_FINAL_MARKER = typing.cast("_SpecialForm", typing.Final)
 
 # Class identity maps to the retained class and its Final field names.
 # This cache retains classes, assuming applications define relatively few dataclass types.
@@ -30,7 +41,12 @@ def get_final_field_names(dataclass_type: type) -> frozenset[str]:
     return names
 
 
-def runtime_final_type(value, non_frozen_ancestor_path: str | None, name: str, final_value_key_by_value_id=None):
+def runtime_final_type(
+    value: object,
+    non_frozen_ancestor_path: str | None,
+    name: str,
+    final_value_key_by_value_id: "FinalValueKeyCache | None" = None,
+) -> "_SpecialForm | DeferredMemberType":
     """Return a valid Final annotation or a deferred diagnostic for the current arriving value/path."""
     if non_frozen_ancestor_path is not None:
         parent_name = non_frozen_ancestor_path.split(".", 1)[0]
@@ -51,10 +67,10 @@ def runtime_final_type(value, non_frozen_ancestor_path: str | None, name: str, f
         except TypeError as error:
             return create_deferred_member_type_for_invalid_dataclass_member(TypeError, str(error), value)
     # A schema needs only the marker; the specialization key and compiler retain the actual value and its type.
-    return typing.Final
+    return _FINAL_MARKER
 
 
-def runtime_final_key(value, final_value_key_by_value_id):
+def runtime_final_key(value: object, final_value_key_by_value_id: "FinalValueKeyCache | None") -> tuple[Any, ...]:
     """Reuse a value key validated during this dispatch only; never retain it across kernel calls."""
     cached = final_value_key_by_value_id.get(id(value)) if final_value_key_by_value_id is not None else None
     if cached is not None and cached[0] is value:

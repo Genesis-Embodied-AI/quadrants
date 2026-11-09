@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from pathlib import Path
 
 import pytest
 
@@ -9,7 +10,7 @@ from tests.helpers import test_utils
 
 @pytest.mark.parametrize("unused", ["application notes", {1, 2}, object(), [1, 2]])
 @test_utils.test()
-def test_unused_runtime_member(unused):
+def test_unused_runtime_member(unused: object) -> None:
     @dataclass
     class State:
         value: str
@@ -24,7 +25,7 @@ def test_unused_runtime_member(unused):
 
 @pytest.mark.parametrize("keyword", [False, True])
 @test_utils.test()
-def test_unused_runtime_member_through_nested_func(keyword):
+def test_unused_runtime_member_through_nested_func(keyword: bool) -> None:
     @dataclass
     class Inner:
         value: object
@@ -58,7 +59,7 @@ def test_unused_runtime_member_through_nested_func(keyword):
 
 
 @test_utils.test()
-def test_used_unsupported_runtime_member_reports_original_path():
+def test_used_unsupported_runtime_member_reports_original_path() -> None:
     @dataclass
     class State:
         value: object
@@ -76,7 +77,7 @@ def test_used_unsupported_runtime_member_reports_original_path():
 
 
 @test_utils.test()
-def test_unused_runtime_member_through_bound_method():
+def test_unused_runtime_member_through_bound_method() -> None:
     @dataclass
     class State:
         value: object
@@ -98,7 +99,7 @@ def test_unused_runtime_member_through_bound_method():
 
 
 @test_utils.test()
-def test_runtime_deferred_member_type_transitions():
+def test_runtime_deferred_member_type_transitions() -> None:
     @dataclass
     class State:
         value: object
@@ -121,7 +122,7 @@ def test_runtime_deferred_member_type_transitions():
 
 
 @test_utils.test()
-def test_runtime_deferred_static_and_runtime_branches():
+def test_runtime_deferred_static_and_runtime_branches() -> None:
     from typing import Final
 
     @dataclass(frozen=True)
@@ -158,7 +159,7 @@ def test_runtime_deferred_static_and_runtime_branches():
 
 @pytest.mark.parametrize("invalid_annotation", [False, True])
 @test_utils.test()
-def test_unused_final_member_preserves_valid_sibling(invalid_annotation):
+def test_unused_final_member_preserves_valid_sibling(invalid_annotation: bool) -> None:
     from typing import Final
 
     @dataclass(frozen=True)
@@ -186,7 +187,7 @@ def test_unused_final_member_preserves_valid_sibling(invalid_annotation):
 
 
 @test_utils.test()
-def test_unused_final_below_mutable_ancestor():
+def test_unused_final_below_mutable_ancestor() -> None:
     from typing import Final
 
     @dataclass(frozen=True)
@@ -220,7 +221,7 @@ def test_unused_final_below_mutable_ancestor():
 
 
 @test_utils.test()
-def test_unused_final_on_mutable_carrier():
+def test_unused_final_on_mutable_carrier() -> None:
     from typing import Final
 
     @dataclass
@@ -246,7 +247,7 @@ def test_unused_final_on_mutable_carrier():
 
 
 @test_utils.test()
-def test_runtime_deferred_members_disable_offline_cache(tmp_path):
+def test_runtime_deferred_members_disable_offline_cache(tmp_path: Path) -> None:
     from typing import Final
 
     @dataclass(frozen=True)
@@ -285,7 +286,7 @@ def test_runtime_deferred_members_disable_offline_cache(tmp_path):
 
 
 @test_utils.test()
-def test_unused_member_in_captured_dataclass():
+def test_unused_member_in_captured_dataclass() -> None:
     @dataclass(frozen=True)
     class State:
         value: object
@@ -297,7 +298,7 @@ def test_unused_member_in_captured_dataclass():
 
     @qd.data_oriented
     class Reader:
-        def __init__(self, state):
+        def __init__(self, state: "State") -> None:
             self.state = state
 
         @qd.kernel
@@ -312,7 +313,7 @@ def test_unused_member_in_captured_dataclass():
 @pytest.mark.parametrize("debug_settings", [(False, True, False), (True, False, True)])
 @pytest.mark.parametrize("member_kind", ["ordinary", "final_value", "final_container"])
 @test_utils.test(arch=[qd.cpu])
-def test_deferred_runtime_type_debug_cache_isolation(debug_settings, member_kind):
+def test_deferred_runtime_type_debug_cache_isolation(debug_settings: tuple[bool, ...], member_kind: str) -> None:
     from typing import Final
 
     from quadrants.lang._runtime_dataclass import infer_dataclass_type
@@ -364,7 +365,7 @@ def test_deferred_runtime_type_debug_cache_isolation(debug_settings, member_kind
 
 
 @test_utils.test(arch=[qd.cpu], debug=True)
-def test_deferred_debug_type_names_do_not_retain_application_class():
+def test_deferred_debug_type_names_do_not_retain_application_class() -> None:
     import gc
     import weakref
 
@@ -401,7 +402,7 @@ def test_deferred_debug_type_names_do_not_retain_application_class():
     ],
 )
 @test_utils.test(arch=[qd.cpu])
-def test_deferred_error_dotted_argument_path(flat_name, dotted_argument_path):
+def test_deferred_error_dotted_argument_path(flat_name: str, dotted_argument_path: str) -> None:
     from quadrants.lang._deferred_errors import DeferredMemberType
     from quadrants.lang._name_utils import dotted_argument_path_from_flat_name
 

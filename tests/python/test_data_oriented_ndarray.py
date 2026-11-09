@@ -15,6 +15,7 @@ import dataclasses
 import numpy as np
 
 import quadrants as qd
+from quadrants.lang._ndarray import Ndarray
 
 from tests.helpers import test_utils
 
@@ -863,10 +864,10 @@ def test_data_oriented_nested_ndarray_reassign_different_dtype():
 
 
 @test_utils.test(arch=qd.cpu)
-def test_typed_dataclass_with_data_oriented_field_uses_runtime_type():
+def test_typed_dataclass_with_data_oriented_field_uses_runtime_type() -> None:
     @qd.data_oriented
     class Inner:
-        def __init__(self, x):
+        def __init__(self, x: Ndarray) -> None:
             self.x = x
 
     @dataclasses.dataclass

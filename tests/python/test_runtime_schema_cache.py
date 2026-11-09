@@ -15,7 +15,7 @@ from tests.helpers import test_utils
 
 @pytest.mark.parametrize("slots", [False, True])
 @test_utils.test(arch=qd.cpu)
-def test_schema_cache_does_not_modify_instances(slots):
+def test_schema_cache_does_not_modify_instances(slots: bool) -> None:
     @dataclass(frozen=True, slots=slots)
     class State:
         value: object
@@ -34,7 +34,7 @@ def test_schema_cache_does_not_modify_instances(slots):
 
 
 @test_utils.test(arch=qd.cpu)
-def test_guard_cache_does_not_retain_parent_through_child():
+def test_guard_cache_does_not_retain_parent_through_child() -> None:
     @qd.data_oriented
     class Child:
         pass

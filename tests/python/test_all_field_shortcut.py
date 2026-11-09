@@ -336,7 +336,7 @@ def test_struct_with_int_field_not_skipped():
 
 
 @test_utils.test(arch=qd.cpu)
-def test_all_field_struct_overrides_scalar_annotation():
+def test_all_field_struct_overrides_scalar_annotation() -> None:
     """Cached all-Field dataclasses still override an unrelated parameter annotation."""
 
     @dataclasses.dataclass(frozen=True)
@@ -364,7 +364,7 @@ def test_all_field_struct_overrides_scalar_annotation():
 
 
 @test_utils.test(arch=qd.cpu)
-def test_all_field_struct_overrides_ndarray_annotation():
+def test_all_field_struct_overrides_ndarray_annotation() -> None:
     """Dataclass inference precedes ndarray annotation handling."""
 
     @dataclasses.dataclass(frozen=True)
