@@ -8,7 +8,7 @@
 
 namespace quadrants {
 
-// Experiment switches are read once at pool construction; absent switches preserve production behavior.
+// Experiment switches are read once at pool construction; absent switches use the selected branch defaults.
 struct ThreadPoolGreedyOptions {
   bool static_tasks = flag("QD_GREEDY_STATIC_TASKS", 1);
   bool caller_poll = flag("QD_GREEDY_CALLER_POLL", 2);
