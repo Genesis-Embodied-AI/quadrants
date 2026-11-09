@@ -4,6 +4,7 @@ from typing import Any
 
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import util
+from quadrants.lang._ast_name_parts import extract_dotted_name_parts
 from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang.ast import (
     ASTTransformerFuncContext,
@@ -155,14 +156,13 @@ class FlattenAttributeNameTransformer(ast.NodeTransformer):
         """
         see unpack_ast_struct_expressions docstring for more explanation
         """
-        if isinstance(node.value, ast.Name):
-            return create_flat_name(node.value.id, node.attr)
-        if isinstance(node.value, ast.Attribute):
-            child_flat_name = FlattenAttributeNameTransformer._flatten_attribute_name(node.value)
-            if not child_flat_name:
-                return None
-            return create_flat_name(child_flat_name, node.attr)
-        return None
+        name_parts = extract_dotted_name_parts(node)
+        if name_parts is None:
+            return None
+        flat_name = name_parts[0]
+        for member_name in name_parts[1:]:
+            flat_name = create_flat_name(flat_name, member_name)
+        return flat_name
 
 
 def unpack_ast_struct_expressions(tree: ast.Module, struct_locals: set[str]) -> ast.Module:
