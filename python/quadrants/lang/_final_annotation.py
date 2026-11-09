@@ -39,22 +39,15 @@ def dataclass_field_is_final(dataclass_type: type, field_name: str, annotation: 
         Python 3.14 adds annotationlib.get_annotations. These do not directly provide the operation we need:
         resolve just the outer marker without resolving or evaluating its inner annotation.
 
-    Why don't we want to resolve the stuff inside Final?
-        The arriving value determines its type. Resolving an ignored inner name could fail unnecessarily,
-        and evaluating an inner expression could execute code we do not need.
-
-    Yes. Why can't we simply resolve the type in a standard way, then ignore the [type] bit?
-        We can when the whole annotation resolves. But "Final[UnknownType]" can fail before we get a chance
-        to discard UnknownType. Our current behavior accepts it without needing that inner type to resolve.
-
-    Is there any reason why we would get some UnknownType?
-        A type imported only under TYPE_CHECKING exists for static checking but is unavailable at runtime:
+    Why can't we resolve the whole annotation in a standard way, then ignore the type inside Final?
+        An inner type imported only under TYPE_CHECKING is unavailable at runtime:
 
         if TYPE_CHECKING:
             from somewhere import SomeType
 
-        # A dataclass field can then have the string annotation "Final[SomeType]".
-        # Resolving SomeType would fail at runtime even when the arriving value is a supported constant.
+        Resolving "Final[SomeType]" would fail before we could discard SomeType, even if the arriving value
+        is a supported constant. Resolving only Final avoids that failure and does not execute expressions
+        inside the ignored brackets. The arriving value supplies the type instead.
 
     What if we removed anything inside pairs of square brackets first? Like remove something like '\\[.*\\]'?
         That greedy regex turns "Final[int] | list[str]" into "Final", incorrectly recognizing a union as a
