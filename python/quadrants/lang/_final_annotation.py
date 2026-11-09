@@ -6,6 +6,8 @@ import types
 import typing
 from typing import Any
 
+from quadrants.lang._ast_name_parts import extract_dotted_name_parts
+
 _MISSING = object()
 
 
@@ -116,38 +118,24 @@ def dataclass_field_is_final(dataclass_type: type, field_name: str, annotation: 
     except SyntaxError:
         return False
     annotation_node = strip_annotation_subscript(unwrapped_node)
-    # "module.typing.Final" parses as:
-    # Attribute
-    # |-- value: Attribute
-    # |   |-- value: Name("module")
-    # |   `-- attr: "typing"           <- a string
-    # `-- attr: "Final"                <- a string
-    # The loop collects "Final", then "typing", and stops at Name("module"). Below, we append "module"
-    # and reverse the list to get ["module", "typing", "Final"]. This lets us look up module first,
-    # then its typing attribute, then that object's Final attribute.
-    parts = []
-    while isinstance(annotation_node, ast.Attribute):
-        parts.append(annotation_node.attr)
-        annotation_node = annotation_node.value
-    if not isinstance(annotation_node, ast.Name):
+    name_parts = extract_dotted_name_parts(annotation_node)
+    if name_parts is None:
         return False
-    parts.append(annotation_node.id)
-    parts.reverse()
     owner = next(
         (cls for cls in dataclass_type.__mro__ if field_name in vars(cls).get("__annotations__", {})), dataclass_type
     )
     value = _MISSING
     for cls in owner.__mro__:
-        value = vars(cls).get(parts[0], _MISSING)
+        value = vars(cls).get(name_parts[0], _MISSING)
         if value is not _MISSING:
             break
     if value is _MISSING:
         module = sys.modules.get(owner.__module__)
-        value = vars(module).get(parts[0], _MISSING) if module is not None else _MISSING
+        value = vars(module).get(name_parts[0], _MISSING) if module is not None else _MISSING
     if value is _MISSING:
         # Canonical spellings can also occur in function-local classes whose local imports are no longer available.
-        return parts in (["Final"], ["typing", "Final"], ["typing_extensions", "Final"])
-    for part in parts[1:]:
+        return name_parts in (["Final"], ["typing", "Final"], ["typing_extensions", "Final"])
+    for part in name_parts[1:]:
         if not isinstance(value, (types.ModuleType, type)):
             return False
         value = vars(value).get(part, _MISSING)
