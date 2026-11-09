@@ -20,7 +20,11 @@ class DeferredMemberType(NamedTuple):
     runtime_type_names: tuple[str, str] | None = None
 
     def bind(self, flat_name: str) -> "DeferredMemberError":
-        """Bind this description to the original member path for a compiler error."""
+        """Bind this description to the original member path for a compiler error.
+
+        flat_name is the compiler's flattened member name, such as "__qd_state__qd_velocity". Convert it to the readable
+        path "state.velocity" stored in the returned DeferredMemberError.
+        """
         return DeferredMemberError(self, flat_name.removeprefix("__qd_").replace("__qd_", "."))
 
 
