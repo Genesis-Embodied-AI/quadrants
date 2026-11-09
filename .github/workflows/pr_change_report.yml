@@ -38,37 +38,30 @@ jobs:
           SHORT_SHA=$(echo "${HEAD_SHA:-$(git rev-parse HEAD)}" | cut -c1-9)
           python .github/workflows/scripts_new/pr_change_report/build_inputs.py \
             --base-ref "$BASE_REF" \
-            --output-dir /tmp/pr_change_report \
-            --commit-hash "$SHORT_SHA"
+            --output-dir /tmp/pr_change_report
+          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
 
-          # Primary skip gate: any source-file change at all (modifications, additions, OR
-          # deletions). summary.json is the full set; file_list.txt is the agent-input subset
-          # that excludes deletions, so gating on file_list.txt would silently drop
-          # deletion-only PRs.
+          # summary.json includes all supported changes. The agent-input subset in
+          # files_needing_function_attribution.txt excludes deleted files and Markdown/shell/YAML, so it cannot be used
+          # to decide whether there is a report to publish.
           NUM_FILES=$(jq 'length' /tmp/pr_change_report/summary.json)
           if [ "$NUM_FILES" -eq 0 ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "No source files changed."
+            echo "No supported files changed."
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
-            echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
             echo "Files in summary.json: $NUM_FILES"
-            echo
-            echo "Pre-computed file headers:"
-            cat /tmp/pr_change_report/report_header.md
 
-            # Secondary skip gate: per-function attribution requires at least one non-deleted
-            # file (the agent reads HEAD content). For deletion-only PRs there is nothing for
-            # the agent to do, so skip the Cursor CLI install and agent invocation.
-            if [ -s /tmp/pr_change_report/file_list.txt ]; then
+            # Only non-deleted Python/C++ files need the per-function agent step.
+            if [ -s /tmp/pr_change_report/files_needing_function_attribution.txt ]; then
               echo "skip_agent=false" >> "$GITHUB_OUTPUT"
               echo
               echo "Files for agent attribution:"
-              cat /tmp/pr_change_report/file_list.txt
+              cat /tmp/pr_change_report/files_needing_function_attribution.txt
             else
               echo "skip_agent=true" >> "$GITHUB_OUTPUT"
               echo
-              echo "All changed source files are deletions; skipping per-function agent step."
+              echo "No files need per-function attribution; skipping agent step."
             fi
           fi
 
@@ -89,8 +82,8 @@ jobs:
           lines yourself.
 
           Inputs under /tmp/pr_change_report/ :
-            - file_list.txt        changed source paths (.py / .c / .cc / .cpp / .h / .hpp /
-                                   .cu), one per line.
+            - files_needing_function_attribution.txt
+                                   changed source paths (.py / .c / .cc / .cpp / .h / .hpp / .cu), one per line.
             - touched_ranges.txt   per-file, the line-number ranges in HEAD and base that the
                                    diff hunks cover. This tells you exactly where to look --
                                    you should only need to inspect lines inside (or close to)
@@ -100,10 +93,10 @@ jobs:
                                    workspace at the same path).
             - base/<path>          full base content (missing if the file is newly added).
 
-          For each file in file_list.txt, identify every function or method whose body
+          For each file in files_needing_function_attribution.txt, identify every function or method whose body
           contains at least one ``+`` or ``-`` line in the diff. Emit ONE JSON object per
           such function on its own line, with these keys:
-            path : the file path, exactly as it appears in file_list.txt.
+            path : the file path, exactly as it appears in files_needing_function_attribution.txt.
             name : the function or method name. C++ class methods MUST be
                    "ClassName::method"; free functions are just "func". Use the synthetic
                    name "<module>" ONLY for top-level non-function code (imports,
@@ -143,43 +136,20 @@ jobs:
           cat /tmp/pr_change_report/function_ranges.jsonl
           echo "---------------------------------"
 
-      - name: Render report.txt deterministically
-        if: steps.inputs.outputs.skip != 'true'
-        run: |
-          python .github/workflows/scripts_new/pr_change_report/render_report.py \
-            --output-dir /tmp/pr_change_report \
-            --function-ranges /tmp/pr_change_report/function_ranges.jsonl \
-            --output /tmp/pr_change_report/report.txt
-
-          echo "----- report.txt -----"
-          cat /tmp/pr_change_report/report.txt
-          echo "----------------------"
-
-      - name: Assemble Check-page markdown
+      - name: Render report artifacts deterministically
         if: steps.inputs.outputs.skip != 'true'
         env:
           SHORT_SHA: ${{ steps.inputs.outputs.short_sha }}
         run: |
-          {
-            echo "## PR change report (\`${SHORT_SHA}\`)"
-            echo
-            echo "Per-file totals + per-function breakdown of code-line additions and removals."
-            echo "Code lines exclude blank lines, comment-only lines, and Python multi-line strings."
-            echo
-            # Reuse the table from report_comment.md (skip its leading heading + intro lines).
-            sed -n '/^| File /,/^\*\*Total\*\*/p' /tmp/pr_change_report/report_comment.md
-            echo
-            echo "### Per-function breakdown"
-            echo
-            echo '```text'
-            cat /tmp/pr_change_report/report.txt
-            echo '```'
-          } > /tmp/pr_change_report/report_check.md
+          python .github/workflows/scripts_new/pr_change_report/render_report.py \
+            --output-dir /tmp/pr_change_report \
+            --function-ranges /tmp/pr_change_report/function_ranges.jsonl \
+            --output /tmp/pr_change_report/report.md \
+            --commit-hash "$SHORT_SHA"
 
-          echo "----- report_check.md (head) -----"
-          head -40 /tmp/pr_change_report/report_check.md
-          echo "..."
-          echo "size: $(wc -c < /tmp/pr_change_report/report_check.md) bytes"
+          echo "----- report.md -----"
+          cat /tmp/pr_change_report/report.md
+          echo "----------------------"
 
       - name: Upload report artifacts
         if: steps.inputs.outputs.skip != 'true'
@@ -187,9 +157,7 @@ jobs:
         with:
           name: pr-change-report
           path: |
-            /tmp/pr_change_report/report.txt
-            /tmp/pr_change_report/report_check.md
-            /tmp/pr_change_report/report_comment.md
+            /tmp/pr_change_report/report.md
             /tmp/pr_change_report/summary.json
             /tmp/pr_change_report/report_header.md
             /tmp/pr_change_report/touched_ranges.txt
@@ -206,12 +174,12 @@ jobs:
           # Job summaries allow up to 1 MiB; cap well under that and fall back to the uploaded
           # artifact for the (rare) oversized report.
           MAX_BYTES=900000
-          if [ "$(wc -c < /tmp/pr_change_report/report_check.md)" -gt "$MAX_BYTES" ]; then
-            head -c "$MAX_BYTES" /tmp/pr_change_report/report_check.md >> "$GITHUB_STEP_SUMMARY"
+          if [ "$(wc -c < /tmp/pr_change_report/report.md)" -gt "$MAX_BYTES" ]; then
+            head -c "$MAX_BYTES" /tmp/pr_change_report/report.md >> "$GITHUB_STEP_SUMMARY"
             printf '\n\n---\n*Report truncated. Download the full report from the workflow artifacts.*\n' \
               >> "$GITHUB_STEP_SUMMARY"
           else
-            cat /tmp/pr_change_report/report_check.md >> "$GITHUB_STEP_SUMMARY"
+            cat /tmp/pr_change_report/report.md >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Publish files changed status
@@ -226,7 +194,7 @@ jobs:
             const totalAdded = summary.reduce((acc, s) => acc + s.added, 0);
             const totalRemoved = summary.reduce((acc, s) => acc + s.removed, 0);
             const text = `Total: ${numFiles} file(s) changed, ` +
-              `+${totalAdded} -${totalRemoved} code lines.`;
+              `+${totalAdded} -${totalRemoved} counted lines.`;
             // Link to this run's summary page, which hosts the full per-file / per-function report.
             const url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}` +
               `/actions/runs/${context.runId}`;
@@ -235,7 +203,7 @@ jobs:
               repo: context.repo.repo,
               sha: context.payload.pull_request.head.sha,
               state: 'success',
-              context: 'Files changed',
+              context: '_Artifact: Files changed',
               // GitHub limits commit status descriptions to 140 characters.
               description: text.substring(0, 140),
               target_url: url,

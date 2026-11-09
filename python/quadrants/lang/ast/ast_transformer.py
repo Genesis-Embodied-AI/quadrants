@@ -116,7 +116,7 @@ class ASTTransformer(Builder):
         # the flattened-name path bypasses ``build_Attribute`` entirely, so we must promote here too.
         node.ptr = ASTTransformer._promote_ndarray_if_declared(ctx, node.ptr)
         if isinstance(node, (ast.stmt, ast.expr)) and isinstance(node.ptr, Expr):
-            node.ptr.dbg_info = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
+            node.ptr.dbg_info = _qd_core.DebugInfo(ctx.memoized_get_formatted_location_with_source_context(node))
             node.ptr.ptr.set_dbg_info(node.ptr.dbg_info)
         # ``qd.static`` is intentionally NOT a purity escape hatch: a captured module global is still flagged inside
         # a static scope, since its value never enters the fastcache key regardless of static wrapping.
@@ -640,7 +640,7 @@ class ASTTransformer(Builder):
                     raise QuadrantsSyntaxError("The return type is not supported now!")
             ctx.ast_builder.create_kernel_exprgroup_return(
                 expr.make_expr_group(return_exprs),
-                _qd_core.DebugInfo(ctx.memoized_get_pos_info(node)),
+                _qd_core.DebugInfo(ctx.memoized_get_formatted_location_with_source_context(node)),
             )
         else:
             ctx.return_data = node.value.ptr
@@ -1154,7 +1154,7 @@ class ASTTransformer(Builder):
                 begin = qd_ops.cast(expr.Expr(0), primitive_types.i32)
                 end = qd_ops.cast(end_expr, primitive_types.i32)
 
-            for_di = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
+            for_di = _qd_core.DebugInfo(ctx.memoized_get_formatted_location_with_source_context(node))
             ctx.ast_builder.begin_frontend_range_for(loop_var.ptr, begin.ptr, end.ptr, for_di)
             ctx.loop_depth += 1
             build_stmts(ctx, node.body)
@@ -1172,7 +1172,7 @@ class ASTTransformer(Builder):
                 primitive_types.i32,
             )
             ndrange_loop_var = expr.Expr(ctx.ast_builder.make_id_expr(""))
-            for_di = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
+            for_di = _qd_core.DebugInfo(ctx.memoized_get_formatted_location_with_source_context(node))
             ctx.ast_builder.begin_frontend_range_for(ndrange_loop_var.ptr, ndrange_begin.ptr, ndrange_end.ptr, for_di)
             I = impl.expr_init(ndrange_loop_var)
             targets = ASTTransformer.get_for_loop_targets(node)
@@ -1225,7 +1225,7 @@ class ASTTransformer(Builder):
                 primitive_types.i32,
             )
             ndrange_loop_var = expr.Expr(ctx.ast_builder.make_id_expr(""))
-            for_di = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
+            for_di = _qd_core.DebugInfo(ctx.memoized_get_formatted_location_with_source_context(node))
             ctx.ast_builder.begin_frontend_range_for(ndrange_loop_var.ptr, ndrange_begin.ptr, ndrange_end.ptr, for_di)
 
             targets = ASTTransformer.get_for_loop_targets(node)
@@ -1362,7 +1362,7 @@ class ASTTransformer(Builder):
             ctx.create_variable(loop_name, loop_var)
             begin = expr.Expr(0)
             end = qd_ops.cast(node.iter.ptr.size, primitive_types.i32)
-            for_di = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
+            for_di = _qd_core.DebugInfo(ctx.memoized_get_formatted_location_with_source_context(node))
             ctx.ast_builder.begin_frontend_range_for(loop_var.ptr, begin.ptr, end.ptr, for_di)
             entry_expr = _qd_core.get_relation_access(
                 ctx.mesh.mesh_ptr,
@@ -1548,7 +1548,7 @@ class ASTTransformer(Builder):
             return None
 
         with ctx.loop_scope_guard():
-            stmt_dbg_info = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
+            stmt_dbg_info = _qd_core.DebugInfo(ctx.memoized_get_formatted_location_with_source_context(node))
             ctx.ast_builder.begin_frontend_while(expr.Expr(1, dtype=primitive_types.i32).ptr, stmt_dbg_info)
             while_cond = build_stmt(ctx, node.test)
             impl.begin_frontend_if(ctx.ast_builder, while_cond, stmt_dbg_info)
@@ -1574,7 +1574,7 @@ class ASTTransformer(Builder):
             return node
 
         with ctx.non_static_if_guard(node):
-            stmt_dbg_info = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
+            stmt_dbg_info = _qd_core.DebugInfo(ctx.memoized_get_formatted_location_with_source_context(node))
             impl.begin_frontend_if(ctx.ast_builder, node.test.ptr, stmt_dbg_info)
             ctx.ast_builder.begin_frontend_if_true()
             build_stmts(ctx, node.body)
@@ -1691,7 +1691,12 @@ class ASTTransformer(Builder):
         else:
             msg = unparse(node.test)
         test = build_stmt(ctx, node.test)
-        impl.qd_assert(test, msg.strip(), extra_args, _qd_core.DebugInfo(ctx.memoized_get_pos_info(node)))
+        impl.qd_assert(
+            test,
+            msg.strip(),
+            extra_args,
+            _qd_core.DebugInfo(ctx.memoized_get_formatted_location_with_source_context(node)),
+        )
         return None
 
     @staticmethod
@@ -1699,7 +1704,7 @@ class ASTTransformer(Builder):
         if ctx.is_in_static_for():
             nearest_non_static_if = ctx.current_loop_scope().nearest_non_static_if
             if nearest_non_static_if:
-                msg = ctx.memoized_get_pos_info(nearest_non_static_if.test)
+                msg = ctx.memoized_get_formatted_location_with_source_context(nearest_non_static_if.test)
                 msg += (
                     "You are trying to `break` a static `for` loop, "
                     "but the `break` statement is inside a non-static `if`. "
@@ -1707,7 +1712,9 @@ class ASTTransformer(Builder):
                 raise QuadrantsSyntaxError(msg)
             ctx.set_loop_status(LoopStatus.Break)
         else:
-            ctx.ast_builder.insert_break_stmt(_qd_core.DebugInfo(ctx.memoized_get_pos_info(node)))
+            ctx.ast_builder.insert_break_stmt(
+                _qd_core.DebugInfo(ctx.memoized_get_formatted_location_with_source_context(node))
+            )
         return None
 
     @staticmethod
@@ -1715,7 +1722,7 @@ class ASTTransformer(Builder):
         if ctx.is_in_static_for():
             nearest_non_static_if = ctx.current_loop_scope().nearest_non_static_if
             if nearest_non_static_if:
-                msg = ctx.memoized_get_pos_info(nearest_non_static_if.test)
+                msg = ctx.memoized_get_formatted_location_with_source_context(nearest_non_static_if.test)
                 msg += (
                     "You are trying to `continue` a static `for` loop, "
                     "but the `continue` statement is inside a non-static `if`. "
@@ -1723,7 +1730,9 @@ class ASTTransformer(Builder):
                 raise QuadrantsSyntaxError(msg)
             ctx.set_loop_status(LoopStatus.Continue)
         else:
-            ctx.ast_builder.insert_continue_stmt(_qd_core.DebugInfo(ctx.memoized_get_pos_info(node)))
+            ctx.ast_builder.insert_continue_stmt(
+                _qd_core.DebugInfo(ctx.memoized_get_formatted_location_with_source_context(node))
+            )
         return None
 
     @staticmethod

@@ -419,3 +419,184 @@ def test_graph_annotation_cross_platform(tensor_type):
     y_np = y.to_numpy()
     assert np.allclose(x_np, 2.0), f"Expected 2.0, got {x_np[:5]}"
     assert np.allclose(y_np, 4.0), f"Expected 4.0, got {y_np[:5]}"
+
+
+# Vulkan does not support ndarray autodiff.
+@test_utils.test(exclude=[qd.vulkan])
+def test_graph_ndarray_with_grad():
+    """An ndarray that owns a gradient buffer is accepted by a graph=True kernel, and its adjoint still works."""
+    platform_supports_graph = _platform_supports_graph()
+    n = 16
+
+    @qd.kernel(graph=True)
+    def square_then_sum(x: qd.types.ndarray(), y: qd.types.ndarray(), loss: qd.types.ndarray()):
+        for i in range(n):
+            y[i] = x[i] * x[i]
+        for i in range(n):
+            loss[None] += y[i]
+
+    x = qd.ndarray(qd.f32, shape=(n,), needs_grad=True)
+    y = qd.ndarray(qd.f32, shape=(n,), needs_grad=True)
+    loss = qd.ndarray(qd.f32, shape=(), needs_grad=True)
+    x.fill(2.0)
+
+    square_then_sum(x, y, loss)
+    assert _graph_used() == platform_supports_graph
+    assert loss[None] == pytest.approx(4.0 * n)
+
+    loss.grad.fill(1.0)
+    square_then_sum.grad(x, y, loss)
+    assert np.allclose(x.grad.to_numpy(), 4.0)
+
+
+# Vulkan does not support ndarray autodiff.
+@test_utils.test(exclude=[qd.vulkan])
+def test_graph_ndarray_with_tape():
+    """An ordinary tape records the graph forward call and computes the correct gradients on exit."""
+    n = 8
+    x = qd.ndarray(qd.f32, shape=(n,), needs_grad=True)
+    y = qd.ndarray(qd.f32, shape=(n,), needs_grad=True)
+    loss = qd.ndarray(qd.f32, shape=(), needs_grad=True)
+    x.fill(2.0)
+
+    @qd.kernel(graph=True)
+    def square_then_sum(x: qd.types.ndarray(), y: qd.types.ndarray(), loss: qd.types.ndarray()):
+        for i in range(n):
+            y[i] = x[i] * x[i]
+        for i in range(n):
+            loss[None] += y[i]
+
+    with qd.ad.Tape(loss=loss):
+        square_then_sum(x, y, loss)
+        assert _graph_used() == _platform_supports_graph()
+
+    assert loss[None] == pytest.approx(4.0 * n)
+    assert np.allclose(x.grad.to_numpy(), 4.0)
+
+
+@test_utils.test(debug=True)
+def test_graph_grad_replaced_with_validation_tape():
+    """A custom-gradient wrapper can run a graph kernel inside a validation tape without rewriting its mode."""
+    n = 8
+    x = qd.field(qd.f32, shape=(n,), needs_grad=True)
+    y = qd.field(qd.f32, shape=(n,))
+    loss = qd.field(qd.f32, shape=(), needs_grad=True)
+    x.fill(2.0)
+
+    @qd.kernel(graph=True)
+    def square_then_sum():
+        for i in range(n):
+            y[i] = x[i] * x[i]
+        for i in range(n):
+            loss[None] += y[i]
+
+    @qd.kernel
+    def custom_backward():
+        for i in range(n):
+            # Deliberately differ from the ordinary derivative, 2*x, to verify that the custom backward is used.
+            x.grad[i] += 3.0 * x[i] * loss.grad[None]
+
+    @qd.ad.grad_replaced
+    def forward():
+        square_then_sum()
+        assert _graph_used() == _platform_supports_graph()
+
+    @qd.ad.grad_for(forward)
+    def backward():
+        custom_backward()
+
+    with qd.ad.Tape(loss=loss, validation=True):
+        forward()
+
+    assert loss[None] == pytest.approx(4.0 * n)
+    assert np.allclose(x.grad.to_numpy(), 6.0)
+
+
+@test_utils.test()
+def test_graph_ndarray_grad_pointer_refreshed_on_replay():
+    """The gradient pointer reaches the graph kernel, and is re-resolved when another ndarray is passed."""
+    platform_supports_graph = _platform_supports_graph()
+    n = 8
+
+    @qd.kernel(graph=True)
+    def read_grad(x: qd.types.ndarray(), z: qd.types.ndarray(), w: qd.types.ndarray()):
+        for i in range(n):
+            z[i] = x.grad[i] + 1.0
+        for i in range(n):
+            w[i] = z[i] * 2.0
+
+    z = qd.ndarray(qd.f32, shape=(n,))
+    w = qd.ndarray(qd.f32, shape=(n,))
+    x1 = qd.ndarray(qd.f32, shape=(n,), needs_grad=True)
+    x2 = qd.ndarray(qd.f32, shape=(n,), needs_grad=True)
+    x1.grad.fill(5.0)
+    x2.grad.fill(7.0)
+    for x, grad_value in ((x1, 5.0), (x2, 7.0), (x1, 5.0)):
+        read_grad(x, z, w)
+        assert _graph_used() == platform_supports_graph
+        assert np.allclose(w.to_numpy(), (grad_value + 1.0) * 2.0)
+    assert _graph_cache_size() == (1 if platform_supports_graph else 0)
+
+
+# PyTorch does not expose a Vulkan tensor device.
+@pytest.mark.needs_torch
+@test_utils.test(exclude=[qd.vulkan])
+def test_graph_torch_grad_pointer_refreshed_on_replay():
+    """Reusing a graph with different PyTorch tensors must read each tensor's own gradient buffer."""
+    torch = pytest.importorskip("torch")
+    arch = impl.current_cfg().arch
+    # PyTorch uses the "cuda" device name for both CUDA and ROCm.
+    device = {qd.cuda: "cuda", qd.amdgpu: "cuda", qd.metal: "mps"}.get(arch, "cpu")
+    platform_supports_graph = _platform_supports_graph()
+    n = 8
+
+    @qd.kernel(graph=True)
+    def read_grad(x: qd.types.ndarray(), z: qd.types.ndarray(), w: qd.types.ndarray()):
+        for i in range(n):
+            z[i] = x.grad[i] + 1.0
+        for i in range(n):
+            w[i] = z[i] * 2.0
+
+    z = qd.ndarray(qd.f32, shape=(n,))
+    w = qd.ndarray(qd.f32, shape=(n,))
+    x1 = torch.empty(n, dtype=torch.float32, device=device, requires_grad=True)
+    x2 = torch.empty(n, dtype=torch.float32, device=device, requires_grad=True)
+    # Initialize on CPU, then upload: some ROCm wheels support GPU copies but not GPU fill kernels.
+    x1.grad = torch.full((n,), 5.0).to(x1.device)
+    x2.grad = torch.full((n,), 7.0).to(x2.device)
+    test_utils.torch_synchronize(x1.device)
+
+    for x, grad_value in ((x1, 5.0), (x2, 7.0), (x1, 5.0)):
+        read_grad(x, z, w)
+        assert _graph_used() == platform_supports_graph
+        assert np.allclose(w.to_numpy(), (grad_value + 1.0) * 2.0)
+    assert _graph_cache_size() == (1 if platform_supports_graph else 0)
+
+
+@pytest.mark.parametrize("mode", ["fwd", "tape_validation"])
+@test_utils.test()
+def test_graph_rejects_non_primal_autodiff_mode(mode):
+    """Autodiff modes that rewrite the primal kernel itself must raise rather than run through the graph."""
+    x = qd.field(qd.f32, shape=(), needs_grad=True, needs_dual=True)
+    loss = qd.field(qd.f32, shape=(), needs_grad=True, needs_dual=True)
+    x[None] = 3.0
+
+    @qd.kernel(graph=True)
+    def compute():
+        loss[None] = x[None] * x[None]
+
+    with pytest.raises(RuntimeError, match="graph=True kernels do not support"):
+        if mode == "fwd":
+            with qd.ad.FwdMode(loss=loss, param=x):
+                compute()
+        else:
+            with qd.ad.Tape(loss=loss, validation=True):
+                compute()
+    assert x.grad[None] == 0.0, "rejected call must not be recorded and back-propagated by the tape"
+
+    # Leaving the rejected context must leave the kernel usable for an ordinary forward call and its adjoint.
+    compute()
+    assert loss[None] == pytest.approx(9.0)
+    loss.grad[None] = 1.0
+    compute.grad()
+    assert x.grad[None] == pytest.approx(6.0)
