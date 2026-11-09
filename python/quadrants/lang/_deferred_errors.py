@@ -64,7 +64,9 @@ def _create_deferred_member_type(
     return DeferredMemberType(error_type, message, runtime_type_names)
 
 
-def create_deferred_member_error(error_type: type[Exception], message: str, py_obj: object) -> DeferredMemberType:
+def create_deferred_member_type_for_invalid_dataclass_member(
+    error_type: type[Exception], message: str, invalid_dataclass_member_object: object
+) -> DeferredMemberType:
     """Return a cached description of an invalid dataclass member for later error reporting.
 
     Capture runtime type names only in debug mode, without retaining the application value or its class.
@@ -74,6 +76,6 @@ def create_deferred_member_error(error_type: type[Exception], message: str, py_o
 
     runtime_type_names = None
     if impl.current_cfg().debug:
-        runtime_type = type(py_obj)
+        runtime_type = type(invalid_dataclass_member_object)
         runtime_type_names = (runtime_type.__module__, runtime_type.__qualname__)
     return _create_deferred_member_type(error_type, message, runtime_type_names)

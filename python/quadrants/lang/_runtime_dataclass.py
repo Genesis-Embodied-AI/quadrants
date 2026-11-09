@@ -21,7 +21,7 @@ from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES, Tensor
 from quadrants.lang import impl
 from quadrants.lang._deferred_errors import (
     DeferredMemberType,
-    create_deferred_member_error,
+    create_deferred_member_type_for_invalid_dataclass_member,
 )
 from quadrants.lang._final_dataclass_fields import final_field_names
 from quadrants.lang._name_utils import create_flat_name
@@ -151,7 +151,7 @@ def infer_member_type(
         if key not in _struct_types:
             _struct_types[key] = StructType(**members)
         return _struct_types[key]
-    return create_deferred_member_error(
+    return create_deferred_member_type_for_invalid_dataclass_member(
         QuadrantsRuntimeTypeError, f"unsupported runtime type {type(py_obj).__name__}", py_obj
     )
 
