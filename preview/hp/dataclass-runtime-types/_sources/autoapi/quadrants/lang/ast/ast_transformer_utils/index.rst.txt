@@ -492,7 +492,10 @@ Module Contents
    .. py:method:: get_var_by_name(name: str) -> tuple[bool, Any, str | None]
 
 
-   .. py:method:: memoized_get_pos_info(node: ast.AST) -> str
+   .. py:method:: memoized_get_formatted_location_with_source_context(node: ast.AST) -> str
+
+      Return the location, source lines, and caret markers, caching the result for each source span and node type.
+
 
 
 .. py:function:: get_decorator(ctx: ASTTransformerFuncContext, node) -> str
