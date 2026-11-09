@@ -20,7 +20,7 @@ class DeferredMemberType(NamedTuple):
 
 
 class DeferredMemberValue(NamedTuple):
-    """Combine that description with where it occurred: the member's path, such as state.velocity.
+    """Combine the description from DeferredMemberType with where it occurred: the member's path, such as state.velocity.
 
     Its reject() method raises the error when compilation actually uses that member.
 
