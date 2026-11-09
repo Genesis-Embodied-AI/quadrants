@@ -307,3 +307,86 @@ def test_unused_member_in_captured_dataclass():
     values = qd.ndarray(qd.i32, shape=1)
     values[0] = 9
     assert Reader(State(values, object())).run() == 9
+
+
+@pytest.mark.parametrize("debug_settings", [(False, True, False), (True, False, True)])
+@pytest.mark.parametrize("member_kind", ["ordinary", "final_value", "final_container"])
+@test_utils.test(arch=[qd.cpu])
+def test_deferred_runtime_type_debug_cache_isolation(debug_settings, member_kind):
+    from typing import Final
+
+    from quadrants.lang._runtime_dataclass import infer_dataclass_type
+
+    @dataclass(frozen=member_kind != "final_container")
+    class Inner:
+        value: Final if member_kind != "ordinary" else object
+
+    @dataclass(frozen=True)
+    class Outer:
+        child: object
+        valid: object
+
+    value = 1 if member_kind == "final_container" else {1, 2}
+    state = Outer(Inner(value), 7)
+    schemas = {}
+    for debug in debug_settings:
+        qd.reset()
+        qd.init(arch=qd.cpu, debug=debug, offline_cache=False)
+        schema = infer_dataclass_type(state, "state")
+        if debug in schemas:
+            assert schema is schemas[debug]
+        elif schemas:
+            assert schema is not next(iter(schemas.values()))
+        schemas[debug] = schema
+
+        @qd.kernel
+        def read_valid(state: qd.RuntimeTyped) -> qd.i32:
+            return state.valid
+
+        @qd.kernel
+        def read_invalid(state: qd.RuntimeTyped) -> qd.i32:
+            return state.child.value
+
+        # An unused invalid member remains harmless, including after cached launches and runtime resets.
+        assert read_valid(state) == 7
+        assert read_valid(state) == 7
+        with pytest.raises(Exception, match=r"state.child.value") as error:
+            read_invalid(state)
+        message = str(error.value)
+        expected_type = "builtins.int" if member_kind == "final_container" else "builtins.set"
+        assert (f"(runtime type: {expected_type})" in message) == debug
+        expected_error = {
+            "ordinary": "unsupported runtime type set",
+            "final_value": "Final",
+            "final_container": "not frozen",
+        }[member_kind]
+        assert expected_error in message
+
+
+@test_utils.test(arch=[qd.cpu], debug=True)
+def test_deferred_debug_type_names_do_not_retain_application_class():
+    import gc
+    import weakref
+
+    from quadrants.lang._runtime_dataclass import infer_dataclass_type
+
+    @dataclass(frozen=True)
+    class State:
+        value: object
+
+    class Unsupported:
+        pass
+
+    value = Unsupported()
+    class_ref = weakref.ref(Unsupported)
+    value_ref = weakref.ref(value)
+    schema = infer_dataclass_type(State(value), "state")
+    description = schema.__dataclass_fields__["value"].type
+    expected_name = f"{Unsupported.__module__}.{Unsupported.__qualname__}"
+    del value, Unsupported
+    gc.collect()
+    assert value_ref() is None
+    assert class_ref() is None
+    with pytest.raises(Exception) as error:
+        description.bind("__qd_state__qd_value").reject()
+    assert f"(runtime type: {expected_name})" in str(error.value)

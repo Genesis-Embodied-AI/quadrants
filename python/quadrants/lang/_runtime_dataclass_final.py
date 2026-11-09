@@ -3,7 +3,7 @@
 import dataclasses
 import typing
 
-from quadrants.lang._deferred_dataclass import deferred_member
+from quadrants.lang._deferred_dataclass import deferred_member_for_value
 from quadrants.lang._final_annotation import dataclass_field_is_final
 from quadrants.lang._final_dataclass_fields import final_scalar_key
 
@@ -32,10 +32,11 @@ def runtime_final_type(value, non_frozen_ancestor_path: str | None, name: str, f
     """Return a valid Final annotation or a deferred diagnostic for the current arriving value/path."""
     if non_frozen_ancestor_path is not None:
         parent_name = non_frozen_ancestor_path.split(".", 1)[0]
-        return deferred_member(
+        return deferred_member_for_value(
             TypeError,
             f"{parent_name} is not frozen but reaches the ``Final`` field {non_frozen_ancestor_path}.{name}. "
             "No dataclass on the path to a used Final value may be reassignable.",
+            value,
         )
     # Exact Python primitives cannot fail the existing value validator. Other values must still be checked on each
     # launch: an enum or primitive subclass can acquire mutable state even inside a frozen dataclass.
@@ -46,7 +47,7 @@ def runtime_final_type(value, non_frozen_ancestor_path: str | None, name: str, f
             if final_value_key_by_value_id is not None:
                 final_value_key_by_value_id[id(value)] = (value, key)
         except TypeError as error:
-            return deferred_member(TypeError, str(error))
+            return deferred_member_for_value(TypeError, str(error), value)
     # A schema needs only the marker; the specialization key and compiler retain the actual value and its type.
     return typing.Final
 

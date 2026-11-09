@@ -19,7 +19,7 @@ from quadrants import _tensor_wrapper
 from quadrants._lib.core.quadrants_python import DataTypeCxx
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES, Tensor
 from quadrants.lang import impl
-from quadrants.lang._deferred_dataclass import DeferredMemberType, deferred_member
+from quadrants.lang._deferred_dataclass import DeferredMemberType, deferred_member_for_value
 from quadrants.lang._final_dataclass_fields import final_field_names
 from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._ndarray import Ndarray
@@ -148,7 +148,9 @@ def infer_member_type(
         if key not in _struct_types:
             _struct_types[key] = StructType(**members)
         return _struct_types[key]
-    return deferred_member(QuadrantsRuntimeTypeError, f"unsupported runtime type {type(py_obj).__name__}")
+    return deferred_member_for_value(
+        QuadrantsRuntimeTypeError, f"unsupported runtime type {type(py_obj).__name__}", py_obj
+    )
 
 
 def infer_dataclass_type(
@@ -229,6 +231,7 @@ def infer_dataclass_type(
             member_type, "_qd_runtime_has_deferred", False
         )
         member_types.append(member_type)
+    # Deferred descriptions depend on debug mode. Re-infer them each launch instead of caching them by instance.
     stable &= not has_deferred
     key = (
         id(dataclass_type),
