@@ -16,7 +16,7 @@ import numpy as np
 from quadrants._lib import core as _qd_core
 from quadrants.lang import exception, expr, impl, matrix, mesh
 from quadrants.lang import ops as qd_ops
-from quadrants.lang._deferred_dataclass import DeferredMemberValue
+from quadrants.lang._deferred_dataclass import DeferredMemberError
 from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._ndrange import _Ndrange
 from quadrants.lang._runtime_dataclass import is_runtime_member_name
@@ -109,7 +109,7 @@ class ASTTransformer(Builder):
         else:
             node._qd_arg_chain = None  # type: ignore[attr-defined]
         node.violates_pure, node.ptr, node.violates_pure_reason = ctx.get_var_by_name(node.id)
-        if isinstance(node.ptr, DeferredMemberValue) and not ctx.expanding_dataclass_call_parameters:
+        if isinstance(node.ptr, DeferredMemberError) and not ctx.expanding_dataclass_call_parameters:
             node.ptr.reject()
         # Flattened struct fields (``__qd_foo__qd_bar``) injected by ``populate_global_vars_from_dataclass`` are raw
         # ``Ndarray`` instances.  ``build_Attribute`` already promotes these via ``_promote_ndarray_if_declared`` but

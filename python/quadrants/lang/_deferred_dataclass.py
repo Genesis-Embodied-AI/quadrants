@@ -17,12 +17,12 @@ class DeferredMemberType(NamedTuple):
     message: str
     runtime_type_names: tuple[str, str] | None = None
 
-    def bind(self, flat_name: str) -> "DeferredMemberValue":
+    def bind(self, flat_name: str) -> "DeferredMemberError":
         """Bind this description to the original member path for a compiler error."""
-        return DeferredMemberValue(self, flat_name.removeprefix("__qd_").replace("__qd_", "."))
+        return DeferredMemberError(self, flat_name.removeprefix("__qd_").replace("__qd_", "."))
 
 
-class DeferredMemberValue(NamedTuple):
+class DeferredMemberError(NamedTuple):
     """Combine the description from DeferredMemberType with where it occurred: the member's path.
 
     An example path is state.velocity.
@@ -30,7 +30,7 @@ class DeferredMemberValue(NamedTuple):
     Its reject() method raises the error when compilation actually uses that member.
 
     For example, state.notes and config.tags could share the same DeferredMemberType for an unsupported set, but each
-    has its own DeferredMemberValue carrying its path.
+    has its own DeferredMemberError carrying its path.
     """
 
     member_type: DeferredMemberType

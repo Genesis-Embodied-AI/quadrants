@@ -22,7 +22,7 @@ from quadrants.lang import (
     matrix,
 )
 from quadrants.lang import ops as qd_ops
-from quadrants.lang._deferred_dataclass import DeferredMemberType, DeferredMemberValue
+from quadrants.lang._deferred_dataclass import DeferredMemberType, DeferredMemberError
 from quadrants.lang._final_dataclass_fields import (
     final_field_names,
     is_final_annotation,
@@ -393,7 +393,7 @@ class FunctionDefTransformer:
         ctx.fn_param_names.add(argument_name)
         if isinstance(argument_type, DeferredMemberType):
             # Captured Python dataclasses enter inlined calls before any kernel-argument binding exists.
-            binding = data if isinstance(data, DeferredMemberValue) else argument_type.bind(argument_name)
+            binding = data if isinstance(data, DeferredMemberError) else argument_type.bind(argument_name)
             ctx.create_variable(argument_name, binding)
             return None
 
