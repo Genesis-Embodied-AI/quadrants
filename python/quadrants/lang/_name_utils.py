@@ -73,6 +73,6 @@ def create_flat_name_from_parts(name_parts: list[str]) -> str:
     return flat_name
 
 
-def qualified_member_name_from_flat_name(flat_name: str) -> str:
-    """Convert a compiler name such as "__qd_state__qd_velocity" to the qualified member name "state.velocity"."""
+def dotted_argument_path_from_flat_name(flat_name: str) -> str:
+    """Convert a compiler name such as "__qd_state__qd_velocity" to the dotted argument path "state.velocity"."""
     return flat_name.removeprefix("__qd_").replace("__qd_", ".")

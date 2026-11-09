@@ -393,7 +393,7 @@ def test_deferred_debug_type_names_do_not_retain_application_class():
 
 
 @pytest.mark.parametrize(
-    "flat_name, qualified_member_name",
+    "flat_name, dotted_argument_path",
     [
         ("__qd_state__qd_velocity", "state.velocity"),
         ("__qd_state__qd_inner__qd_velocity", "state.inner.velocity"),
@@ -401,17 +401,17 @@ def test_deferred_debug_type_names_do_not_retain_application_class():
     ],
 )
 @test_utils.test(arch=[qd.cpu])
-def test_deferred_error_qualified_member_name(flat_name, qualified_member_name):
+def test_deferred_error_dotted_argument_path(flat_name, dotted_argument_path):
     from quadrants.lang._deferred_errors import DeferredMemberType
-    from quadrants.lang._name_utils import qualified_member_name_from_flat_name
+    from quadrants.lang._name_utils import dotted_argument_path_from_flat_name
 
     description = DeferredMemberType(TypeError, "unsupported member")
-    assert qualified_member_name_from_flat_name(flat_name) == qualified_member_name
-    error = description.bind(qualified_member_name)
+    assert dotted_argument_path_from_flat_name(flat_name) == dotted_argument_path
+    error = description.bind(dotted_argument_path)
     assert error.member_type is description
-    assert error.qualified_member_name == qualified_member_name
+    assert error.dotted_argument_path == dotted_argument_path
     with pytest.raises(TypeError) as raised:
         error.reject()
-    assert str(raised.value) == f"Dataclass member {qualified_member_name!r}: unsupported member"
+    assert str(raised.value) == f"Dataclass member {dotted_argument_path!r}: unsupported member"
     # bind() stores its input unchanged; compiler-name conversion belongs to the caller.
-    assert description.bind("state.literal__qd_name").qualified_member_name == "state.literal__qd_name"
+    assert description.bind("state.literal__qd_name").dotted_argument_path == "state.literal__qd_name"

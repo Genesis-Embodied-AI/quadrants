@@ -29,7 +29,7 @@ from quadrants.lang._final_dataclass_fields import (
 )
 from quadrants.lang._name_utils import (
     create_flat_name,
-    qualified_member_name_from_flat_name,
+    dotted_argument_path_from_flat_name,
 )
 from quadrants.lang._optional_annotation import OPTIONAL_ABSENT
 from quadrants.lang._runtime_dataclass import runtime_template_members
@@ -69,7 +69,7 @@ class FunctionDefTransformer:
         prefix_name: str,
     ) -> tuple[bool, Any]:
         if isinstance(annotation, DeferredMemberType):
-            return True, annotation.bind(qualified_member_name_from_flat_name(name))
+            return True, annotation.bind(dotted_argument_path_from_flat_name(name))
         full_name = prefix_name + "_" + name
         if not isinstance(annotation, primitive_types.RefType):
             ctx.kernel_args.append(name)
@@ -399,7 +399,7 @@ class FunctionDefTransformer:
             binding = (
                 data
                 if isinstance(data, DeferredMemberError)
-                else argument_type.bind(qualified_member_name_from_flat_name(argument_name))
+                else argument_type.bind(dotted_argument_path_from_flat_name(argument_name))
             )
             ctx.create_variable(argument_name, binding)
             return None

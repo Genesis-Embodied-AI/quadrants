@@ -19,34 +19,34 @@ class DeferredMemberType(NamedTuple):
     # otherwise None. Store strings instead of the class so cached diagnostics do not keep application classes alive.
     runtime_type_names: tuple[str, str] | None = None
 
-    def bind(self, qualified_member_name: str) -> "DeferredMemberError":
-        """Combine this description with a qualified member name for a compiler error.
+    def bind(self, dotted_argument_path: str) -> "DeferredMemberError":
+        """Combine this description with a dotted argument path for a compiler error.
 
-        The name starts from the root argument or variable in the compiled code, followed by its member names.
+        The path starts with the argument name in the compiled code, followed by member names separated by dots.
         For example:
 
-            qualified_member_name = "state.inner.velocity"
+            dotted_argument_path = "state.inner.velocity"
 
-        Here, "state" is the root argument or variable name, and "inner.velocity" identifies the member relative to
-        that object. "state" is not a module or dataclass class name.
+        Here, "state" is the argument name, and "inner.velocity" identifies the member relative to that argument.
+        The path is relative to the callable's argument names, not a module or dataclass class name.
         """
-        return DeferredMemberError(self, qualified_member_name)
+        return DeferredMemberError(self, dotted_argument_path)
 
 
 class DeferredMemberError(NamedTuple):
-    """Combine the description from DeferredMemberType with where it occurred: the qualified member name.
+    """Combine the description from DeferredMemberType with where it occurred: the dotted argument path.
 
-    An example qualified member name is "state.velocity".
+    An example dotted argument path is "state.velocity".
 
     Its reject() method raises the error if compilation actually uses that member.
     """
 
     member_type: DeferredMemberType
-    qualified_member_name: str
+    dotted_argument_path: str
 
     def reject(self) -> NoReturn:
         """Raise the recorded error, formatting optional debug type names only when the member is used."""
-        message = f"Dataclass member {self.qualified_member_name!r}: {self.member_type.message}"
+        message = f"Dataclass member {self.dotted_argument_path!r}: {self.member_type.message}"
         if self.member_type.runtime_type_names is not None:
             module, qualname = self.member_type.runtime_type_names
             message += f" (runtime type: {module}.{qualname})"
