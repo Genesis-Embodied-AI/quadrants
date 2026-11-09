@@ -28,7 +28,6 @@ class DeferredMemberType(NamedTuple):
             dotted_argument_path = "state.inner.velocity"
 
         Here, "state" is the argument name, and "inner.velocity" identifies the member relative to that argument.
-        The path is relative to the callable's argument names, not a module or dataclass class name.
         """
         return DeferredMemberError(self, dotted_argument_path)
 
