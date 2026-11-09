@@ -7,7 +7,7 @@ from typing import NamedTuple, NoReturn
 class DeferredMemberType(NamedTuple):
     """Store what is wrong: the exception class, message, and optional debug type names.
 
-    It is cached and can be shared by multiple members.
+    When created via _deferred_member, it is cached and can be shared by multiple members.
 
     An unsupported member in a schema gets this description instead of a normal inferred type. The schema cache key
     includes each member type's identity.
