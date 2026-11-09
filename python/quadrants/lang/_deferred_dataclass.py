@@ -7,7 +7,7 @@ from typing import NamedTuple, NoReturn
 class DeferredMemberType(NamedTuple):
     """Store what is wrong: the exception class, message, and optional debug type names.
 
-    When created via _deferred_member, it is cached and can be shared by multiple members.
+    When created via _create_deferred_member_type, it is cached and can be shared by multiple members.
 
     An unsupported member in a schema gets this description instead of a normal inferred type. The schema cache key
     includes each member type's identity.
@@ -45,7 +45,7 @@ class DeferredMemberError(NamedTuple):
 
 
 @cache
-def _deferred_member(
+def _create_deferred_member_type(
     error_type: type[Exception],
     message: str,
     # (type(py_obj).__module__, type(py_obj).__qualname__), e.g. ("builtins", "set"). Captured only with debug=True;
@@ -56,7 +56,7 @@ def _deferred_member(
     return DeferredMemberType(error_type, message, runtime_type_names)
 
 
-def deferred_member_for_value(error_type: type[Exception], message: str, py_obj: object) -> DeferredMemberType:
+def create_deferred_member_error(error_type: type[Exception], message: str, py_obj: object) -> DeferredMemberType:
     """Capture runtime type names only in debug mode, without retaining the application value or its class."""
     # Import lazily: impl also loads compiler modules that use deferred descriptions.
     from quadrants.lang import impl  # pylint: disable=import-outside-toplevel
@@ -65,4 +65,4 @@ def deferred_member_for_value(error_type: type[Exception], message: str, py_obj:
     if impl.current_cfg().debug:
         runtime_type = type(py_obj)
         runtime_type_names = (runtime_type.__module__, runtime_type.__qualname__)
-    return _deferred_member(error_type, message, runtime_type_names)
+    return _create_deferred_member_type(error_type, message, runtime_type_names)
