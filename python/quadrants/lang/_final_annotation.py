@@ -25,9 +25,6 @@ def dataclass_field_is_final(dataclass_type: type, field_name: str, annotation: 
         If the first name is unavailable, the canonical spellings Final, typing.Final, and typing_extensions.Final
         are accepted as a fallback.
 
-    Why do we need to parse off the annotation string?
-        We discard the inner annotation, such as [int], because we only need to identify the outer Final marker.
-
     Why do we need to parse into an AST? Is it because we are assuming the input to this function is a string?
         Only string annotations take this path. Actual typing objects go directly to is_final_annotation.
         The AST describes the string's Python syntax without evaluating it.
