@@ -71,6 +71,7 @@ def dataclass_field_is_final(dataclass_type: type, field_name: str, annotation: 
     """
     if not isinstance(annotation, str):
         return is_final_annotation(annotation)
+    # Catch syntax errors from both parsing calls: the initial parse and parsing unwrapped string constants.
     try:
         ast_tree = ast.parse(annotation, mode="eval").body
         annotation_node = unwrap_and_parse_string_constants(ast_tree)
