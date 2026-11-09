@@ -28,6 +28,7 @@ def dataclass_field_is_final(dataclass_type: type, field_name: str, annotation: 
     # Subscript
     # |-- value: Name("Final")  <- keep this node
     # `-- slice: Name("int")    <- discard the inner annotation
+    # After this if, annotation_node is Name("Final") in this example.
     if isinstance(annotation_node, ast.Subscript):
         annotation_node = annotation_node.value
     # "module.typing.Final" parses as:
