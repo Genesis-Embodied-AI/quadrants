@@ -17,39 +17,59 @@ def is_final_annotation(annotation: Any) -> bool:
 def dataclass_field_is_final(dataclass_type: type, field_name: str, annotation: Any) -> bool:
     """Recognize a field's Final marker, including when the annotation is a string.
 
-    Why do we read annotations if member types come from runtime values?
-        We read only the Final marker, which makes a member a compile-time constant. Its inner type is ignored.
+    Why do we need the name components? Why don't we just need the Final string?
+        typing.Final is the real marker, but some_module.Final could be unrelated. An alias such as Constant
+        could also refer to typing.Final. We need the components to resolve the actual object and check it.
 
-    Why does this need the dataclass type and field name?
-        A string can use aliases defined in the class or its module. An inherited field must use the namespace
-        of the class that declared it. Non-string annotations go directly to is_final_annotation instead.
-
-    Why not resolve the whole annotation with Python's standard annotation helpers, then ignore its arguments?
-        That works when every name resolves, but an inner type may be imported only under TYPE_CHECKING and
-        therefore be unavailable at runtime. For example, "Final[SomeType]" can describe an arriving integer
-        even when SomeType is unavailable. We must recognize Final without resolving or evaluating SomeType.
-        Resolving the whole expression could also execute code inside the ignored brackets.
-
-    Why parse a string into an AST instead of splitting it?
-        An AST describes Python syntax without evaluating it. It handles whitespace, parentheses, quoted
-        strings, and nested subscripts. For "Final[int]", we keep the outer subscript's value, Name("Final").
-        For "module.typing.Final", we extract the dotted name. Both paths produce a list of name components.
-
-    Why not first remove square brackets with a regex such as r"\\[.*\\]"?
-        That greedy pattern would turn "Final[int] | list[str]" into "Final", incorrectly accepting a union.
-        The AST lets us strip a subscript only when it is the outermost expression, without writing a parser.
-
-    Why keep the full dotted name rather than just the string "Final"?
-        some_module.Final might be unrelated to typing.Final. Conversely, an alias such as Constant can refer
-        to the real marker. We resolve the actual object before testing whether it is Final or Final[T].
-
-    What are annotation_node and parts used for?
-        annotation_node tracks our current position in the syntax tree. parts accumulates the names, initially
-        in reverse order. For module.typing.Final, the completed list is ["module", "typing", "Final"].
-        The AST stores "Final" as an Attribute.attr string here, not as a Name("Final") node.
-        We resolve module in the declaring class or module namespace, then follow its typing and Final attributes.
+    Can you give an overview of the process we are following? Is it something like:
+    - convert the AST back into the path of strings, a.b.Final
+    - somehow look this up in the module, and see whether it 'is' Final?
+        Yes. Parse the string, discard an outer subscript, and extract ["a", "b", "Final"]. Resolve a in the
+        declaring class, its bases, or its defining module, then follow b and Final. Check the resulting object.
         If the first name is unavailable, the canonical spellings Final, typing.Final, and typing_extensions.Final
-        are accepted as a fallback. The function's final output is a boolean, not the node or list of names.
+        are accepted as a fallback.
+
+    Why do we need to parse off the annotation string?
+        We discard the inner annotation, such as [int], because we only need to identify the outer Final marker.
+
+    Why do we need to parse into an AST? Is it because we are assuming the input to this function is a string?
+        Only string annotations take this path. Actual typing objects go directly to is_final_annotation.
+        The AST describes the string's Python syntax without evaluating it.
+
+    But if we already have a string, why can't we do simply input_string.split()?
+        Splitting on dots works for "typing.Final", but annotations can contain parentheses, whitespace,
+        quoted strings, and nested subscripts. The AST handles those forms without a custom string parser.
+
+    Does Python not already provide us functions to do this stuff for us?
+    What do other people use for reading string annotations?
+        The standard options include typing.get_type_hints and inspect.get_annotations(eval_str=True).
+        Python 3.14 adds annotationlib.get_annotations. These do not directly provide the operation we need:
+        resolve just the outer marker without resolving or evaluating its inner annotation.
+
+    Why don't we want to resolve the stuff inside Final?
+        The arriving value determines its type. Resolving an ignored inner name could fail unnecessarily,
+        and evaluating an inner expression could execute code we do not need.
+
+    Yes. Why can't we simply resolve the type in a standard way, then ignore the [type] bit?
+        We can when the whole annotation resolves. But "Final[UnknownType]" can fail before we get a chance
+        to discard UnknownType. Our current behavior accepts it without needing that inner type to resolve.
+
+    Is there any reason why we would get some UnknownType?
+        A type imported only under TYPE_CHECKING exists for static checking but is unavailable at runtime:
+
+        if TYPE_CHECKING:
+            from somewhere import SomeType
+
+        # A dataclass field can then have the string annotation "Final[SomeType]".
+        # Resolving SomeType would fail at runtime even when the arriving value is a supported constant.
+
+    What if we removed anything inside pairs of square brackets first? Like remove something like '\\[.*\\]'?
+        That greedy regex turns "Final[int] | list[str]" into "Final", incorrectly recognizing a union as a
+        Final field. The AST lets us remove a subscript only when it is the outermost expression.
+
+    So AST parsing is the easier way to do this?
+        Yes. Python handles the syntax, and we inspect the outer expression without evaluating its contents.
+        Resolving names and aliases in the correct class or module is a separate step.
     """
     if not isinstance(annotation, str):
         return is_final_annotation(annotation)
