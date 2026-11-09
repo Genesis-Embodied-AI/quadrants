@@ -22,9 +22,13 @@ class DeferredMemberType(NamedTuple):
     def bind(self, qualified_member_name: str) -> "DeferredMemberError":
         """Combine this description with a qualified member name for a compiler error.
 
-        The name starts from the root argument or variable in the compiled code, followed by its member names. For
-        example, "state.inner.velocity" identifies velocity through state.inner; "state" is the root name, not a module
-        or dataclass class name.
+        The name starts from the root argument or variable in the compiled code, followed by its member names.
+        For example:
+
+            qualified_member_name = "state.inner.velocity"
+
+        Here, "state" is the root argument or variable name, and "inner.velocity" identifies the member relative to
+        that object. "state" is not a module or dataclass class name.
         """
         return DeferredMemberError(self, qualified_member_name)
 
