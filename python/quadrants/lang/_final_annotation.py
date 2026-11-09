@@ -17,10 +17,6 @@ def is_final_annotation(annotation: Any) -> bool:
 def dataclass_field_is_final(dataclass_type: type, field_name: str, annotation: Any) -> bool:
     """Recognize a field's Final marker, including when the annotation is a string.
 
-    Why do we need the name components? Why don't we just need the Final string?
-        typing.Final is the real marker, but some_module.Final could be unrelated. An alias such as Constant
-        could also refer to typing.Final. We need the components to resolve the actual object and check it.
-
     Can you give an overview of the process we are following? Is it something like:
     - convert the AST back into the path of strings, a.b.Final
     - somehow look this up in the module, and see whether it 'is' Final?
