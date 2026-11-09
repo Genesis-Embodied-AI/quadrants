@@ -19,7 +19,7 @@ from quadrants import _tensor_wrapper
 from quadrants._lib.core.quadrants_python import DataTypeCxx
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES, Tensor
 from quadrants.lang import impl
-from quadrants.lang._deferred_dataclass import (
+from quadrants.lang._deferred_errors import (
     DeferredMemberType,
     create_deferred_member_error,
 )

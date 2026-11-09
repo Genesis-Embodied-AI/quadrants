@@ -41,7 +41,7 @@ from quadrants._tensor import (
 )
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorClass
-from quadrants.lang._deferred_dataclass import DeferredMemberType
+from quadrants.lang._deferred_errors import DeferredMemberType
 from quadrants.lang._final_dataclass_fields import (
     final_field_names,
     subtree_has_final_fields,

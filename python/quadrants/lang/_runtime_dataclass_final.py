@@ -3,7 +3,7 @@
 import dataclasses
 import typing
 
-from quadrants.lang._deferred_dataclass import create_deferred_member_error
+from quadrants.lang._deferred_errors import create_deferred_member_error
 from quadrants.lang._final_annotation import dataclass_field_is_final
 from quadrants.lang._final_dataclass_fields import final_scalar_key
 
