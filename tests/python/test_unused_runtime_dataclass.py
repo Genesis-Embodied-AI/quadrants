@@ -388,5 +388,30 @@ def test_deferred_debug_type_names_do_not_retain_application_class():
     assert value_ref() is None
     assert class_ref() is None
     with pytest.raises(Exception) as error:
-        description.bind("__qd_state__qd_value").reject()
+        description.bind("state.value").reject()
     assert f"(runtime type: {expected_name})" in str(error.value)
+
+
+@pytest.mark.parametrize(
+    "flat_name, qualified_member_name",
+    [
+        ("__qd_state__qd_velocity", "state.velocity"),
+        ("__qd_state__qd_inner__qd_velocity", "state.inner.velocity"),
+        ("state", "state"),
+    ],
+)
+@test_utils.test(arch=[qd.cpu])
+def test_deferred_error_qualified_member_name(flat_name, qualified_member_name):
+    from quadrants.lang._deferred_errors import DeferredMemberType
+    from quadrants.lang._name_utils import qualified_member_name_from_flat_name
+
+    description = DeferredMemberType(TypeError, "unsupported member")
+    assert qualified_member_name_from_flat_name(flat_name) == qualified_member_name
+    error = description.bind(qualified_member_name)
+    assert error.member_type is description
+    assert error.qualified_member_name == qualified_member_name
+    with pytest.raises(TypeError) as raised:
+        error.reject()
+    assert str(raised.value) == f"Dataclass member {qualified_member_name!r}: unsupported member"
+    # bind() stores its input unchanged; compiler-name conversion belongs to the caller.
+    assert description.bind("state.literal__qd_name").qualified_member_name == "state.literal__qd_name"

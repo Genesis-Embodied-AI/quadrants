@@ -71,3 +71,8 @@ def create_flat_name_from_parts(name_parts: list[str]) -> str:
     if len(name_parts) > 1 and not name_parts[0].startswith("__qd_"):
         flat_name = "__qd_" + flat_name
     return flat_name
+
+
+def qualified_member_name_from_flat_name(flat_name: str) -> str:
+    """Convert a compiler name such as "__qd_state__qd_velocity" to the qualified member name "state.velocity"."""
+    return flat_name.removeprefix("__qd_").replace("__qd_", ".")

@@ -19,29 +19,25 @@ class DeferredMemberType(NamedTuple):
     # otherwise None. Store strings instead of the class so cached diagnostics do not keep application classes alive.
     runtime_type_names: tuple[str, str] | None = None
 
-    def bind(self, flat_name: str) -> "DeferredMemberError":
-        """Bind this description to the original member path for a compiler error.
-
-        flat_name is the compiler's flattened member name, such as "__qd_state__qd_velocity". Convert it to the readable
-        path "state.velocity" stored in the returned DeferredMemberError.
-        """
-        return DeferredMemberError(self, flat_name.removeprefix("__qd_").replace("__qd_", "."))
+    def bind(self, qualified_member_name: str) -> "DeferredMemberError":
+        """Combine this description with a qualified member name, such as "state.velocity", for a compiler error."""
+        return DeferredMemberError(self, qualified_member_name)
 
 
 class DeferredMemberError(NamedTuple):
-    """Combine the description from DeferredMemberType with where it occurred: the member's path.
+    """Combine the description from DeferredMemberType with where it occurred: the qualified member name.
 
-    An example path is "state.velocity".
+    An example qualified member name is "state.velocity".
 
     Its reject() method raises the error if compilation actually uses that member.
     """
 
     member_type: DeferredMemberType
-    path: str
+    qualified_member_name: str
 
     def reject(self) -> NoReturn:
         """Raise the recorded error, formatting optional debug type names only when the member is used."""
-        message = f"Dataclass member {self.path!r}: {self.member_type.message}"
+        message = f"Dataclass member {self.qualified_member_name!r}: {self.member_type.message}"
         if self.member_type.runtime_type_names is not None:
             module, qualname = self.member_type.runtime_type_names
             message += f" (runtime type: {module}.{qualname})"

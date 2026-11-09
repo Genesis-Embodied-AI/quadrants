@@ -27,7 +27,10 @@ from quadrants.lang._final_dataclass_fields import (
     final_field_names,
     is_final_annotation,
 )
-from quadrants.lang._name_utils import create_flat_name
+from quadrants.lang._name_utils import (
+    create_flat_name,
+    qualified_member_name_from_flat_name,
+)
 from quadrants.lang._optional_annotation import OPTIONAL_ABSENT
 from quadrants.lang._runtime_dataclass import runtime_template_members
 from quadrants.lang.ast.ast_transformer_utils import (
@@ -66,7 +69,7 @@ class FunctionDefTransformer:
         prefix_name: str,
     ) -> tuple[bool, Any]:
         if isinstance(annotation, DeferredMemberType):
-            return True, annotation.bind(name)
+            return True, annotation.bind(qualified_member_name_from_flat_name(name))
         full_name = prefix_name + "_" + name
         if not isinstance(annotation, primitive_types.RefType):
             ctx.kernel_args.append(name)
@@ -393,7 +396,11 @@ class FunctionDefTransformer:
         ctx.fn_param_names.add(argument_name)
         if isinstance(argument_type, DeferredMemberType):
             # Captured Python dataclasses enter inlined calls before any kernel-argument binding exists.
-            binding = data if isinstance(data, DeferredMemberError) else argument_type.bind(argument_name)
+            binding = (
+                data
+                if isinstance(data, DeferredMemberError)
+                else argument_type.bind(qualified_member_name_from_flat_name(argument_name))
+            )
             ctx.create_variable(argument_name, binding)
             return None
 

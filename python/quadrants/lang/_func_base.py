@@ -39,7 +39,10 @@ from quadrants.lang._final_dataclass_fields import (
     final_field_names,
     subtree_has_final_fields,
 )
-from quadrants.lang._name_utils import create_flat_name
+from quadrants.lang._name_utils import (
+    create_flat_name,
+    qualified_member_name_from_flat_name,
+)
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang._runtime_dataclass import is_dataclass_annotation
 from quadrants.lang._signature import get_func_signature
@@ -666,7 +669,7 @@ class FuncBase:
         needed_arg_type_id = id(needed_arg_type)
         needed_arg_basetype = type(needed_arg_type)
         if needed_arg_basetype is DeferredMemberType:
-            needed_arg_type.bind(py_dataclass_basename).reject()
+            needed_arg_type.bind(qualified_member_name_from_flat_name(py_dataclass_basename)).reject()
 
         # qd.Tensor value-dispatch at launch time. Re-target the annotation to the concrete branch resolved from the
         # runtime value, then fall through to the existing dispatch logic. Wrapper instances are unwrapped earlier (in
