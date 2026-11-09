@@ -126,6 +126,21 @@ def dataclass_field_is_final(dataclass_type: type, field_name: str, annotation: 
         (cls for cls in dataclass_type.__mro__ if field_name in vars(cls).get("__annotations__", {})), dataclass_type
     )
     value = _MISSING
+    # Searching from dataclass_type could pick up a subclass's override:
+    #
+    # @dataclasses.dataclass
+    # class Base:
+    #     Marker = typing.Final
+    #     value: "Marker[int]"
+    #
+    # @dataclasses.dataclass
+    # class Child(Base):
+    #     Marker = int
+    #
+    # For Child(7), the field's annotation was declared in Base.
+    #
+    # - Searching from Child finds Marker = int.
+    # - Searching from Base finds Marker = typing.Final.
     for cls in declaring_dataclass.__mro__:
         value = vars(cls).get(name_parts[0], _MISSING)
         if value is not _MISSING:
