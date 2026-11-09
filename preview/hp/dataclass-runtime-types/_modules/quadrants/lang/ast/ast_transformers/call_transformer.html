@@ -340,6 +340,7 @@
 <span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">ast</span><span class="w"> </span><span class="kn">import</span> <span class="n">unparse</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">collections</span><span class="w"> </span><span class="kn">import</span> <span class="n">ChainMap</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Callable</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">contextlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">nullcontext</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span>
 
@@ -720,7 +721,13 @@
 
 
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_build_resolved_call</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">build_stmt</span><span class="p">,</span> <span class="n">is_func_base_wrapper</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_build_resolved_call</span><span class="p">(</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span>
+        <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">,</span>
+        <span class="n">build_stmt</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">AST</span><span class="p">],</span> <span class="n">Any</span><span class="p">],</span>
+        <span class="n">is_func_base_wrapper</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Expand dataclass arguments and compile a call whose callee has already been resolved."""</span>
         <span class="n">func</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">ptr</span>
 
         <span class="c1"># A ``@qd.func(requires_top_level=True)`` may only be called at the top level of a kernel (or</span>
