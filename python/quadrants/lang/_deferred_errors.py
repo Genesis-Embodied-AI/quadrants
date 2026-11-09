@@ -1,4 +1,4 @@
-"""Carry unsupported dataclass leaves through argument discovery until a kernel actually uses them."""
+"""Store deferred errors and raise them if compilation uses the affected members."""
 
 from functools import cache
 from typing import NamedTuple, NoReturn
