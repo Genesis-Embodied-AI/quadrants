@@ -146,6 +146,19 @@ def dataclass_field_is_final(dataclass_type: type, field_name: str, annotation: 
         if value is not _MISSING:
             break
     if value is _MISSING:
+        # vars(Config) contains only attributes stored directly on Config. It doesn't include names from the
+        # surrounding module.
+        #
+        # import typing
+        #
+        # class Config:
+        #     local_alias = typing.Final
+        #
+        # vars(Config)["local_alias"]  # typing.Final
+        # vars(Config)["typing"]       # KeyError
+        #
+        # Python can use the module-level name typing while executing the class body, but that doesn't make it
+        # a class attribute. Only the assignment to local_alias creates one here.
         module = sys.modules.get(declaring_dataclass.__module__)
         value = vars(module).get(name_parts[0], _MISSING) if module is not None else _MISSING
     if value is _MISSING:
