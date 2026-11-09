@@ -15,7 +15,42 @@ def is_final_annotation(annotation: Any) -> bool:
 
 
 def dataclass_field_is_final(dataclass_type: type, field_name: str, annotation: Any) -> bool:
-    """Recognize a field's Final marker, including when the annotation is a string."""
+    """Recognize a field's Final marker, including when the annotation is a string.
+
+    Why do we read annotations if member types come from runtime values?
+        We read only the Final marker, which makes a member a compile-time constant. Its inner type is ignored.
+
+    Why does this need the dataclass type and field name?
+        A string can use aliases defined in the class or its module. An inherited field must use the namespace
+        of the class that declared it. Non-string annotations go directly to is_final_annotation instead.
+
+    Why not resolve the whole annotation with Python's standard annotation helpers, then ignore its arguments?
+        That works when every name resolves, but an inner type may be imported only under TYPE_CHECKING and
+        therefore be unavailable at runtime. For example, "Final[SomeType]" can describe an arriving integer
+        even when SomeType is unavailable. We must recognize Final without resolving or evaluating SomeType.
+        Resolving the whole expression could also execute code inside the ignored brackets.
+
+    Why parse a string into an AST instead of splitting it?
+        An AST describes Python syntax without evaluating it. It handles whitespace, parentheses, quoted
+        strings, and nested subscripts. For "Final[int]", we keep the outer subscript's value, Name("Final").
+        For "module.typing.Final", we extract the dotted name. Both paths produce a list of name components.
+
+    Why not first remove square brackets with a regex such as r"\\[.*\\]"?
+        That greedy pattern would turn "Final[int] | list[str]" into "Final", incorrectly accepting a union.
+        The AST lets us strip a subscript only when it is the outermost expression, without writing a parser.
+
+    Why keep the full dotted name rather than just the string "Final"?
+        some_module.Final might be unrelated to typing.Final. Conversely, an alias such as Constant can refer
+        to the real marker. We resolve the actual object before testing whether it is Final or Final[T].
+
+    What are annotation_node and parts used for?
+        annotation_node tracks our current position in the syntax tree. parts accumulates the names, initially
+        in reverse order. For module.typing.Final, the completed list is ["module", "typing", "Final"].
+        The AST stores "Final" as an Attribute.attr string here, not as a Name("Final") node.
+        We resolve module in the declaring class or module namespace, then follow its typing and Final attributes.
+        If the first name is unavailable, the canonical spellings Final, typing.Final, and typing_extensions.Final
+        are accepted as a fallback. The function's final output is a boolean, not the node or list of names.
+    """
     if not isinstance(annotation, str):
         return is_final_annotation(annotation)
     try:
