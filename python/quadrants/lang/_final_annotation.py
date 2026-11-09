@@ -49,6 +49,21 @@ def unwrap_and_parse_string_constants(ast_tree: ast.expr) -> ast.expr:
     return unwrapped_node
 
 
+def strip_annotation_subscript(annotation_node: ast.expr) -> ast.expr:
+    """Return the outer subscript's value node, or the input node unchanged if it is not a subscript.
+
+    Input: the expression tree for "Final[int]".
+    Subscript
+    |-- value: Name("Final")  <- keep this node
+    `-- slice: Name("int")    <- discard the inner annotation
+
+    Output: Name("Final") in this example. The input tree is not modified.
+    """
+    if isinstance(annotation_node, ast.Subscript):
+        return annotation_node.value
+    return annotation_node
+
+
 def dataclass_field_is_final(dataclass_type: type, field_name: str, annotation: Any) -> bool:
     """Recognize a field's Final marker, including when the annotation is a string.
 
@@ -97,16 +112,10 @@ def dataclass_field_is_final(dataclass_type: type, field_name: str, annotation: 
     # Catch syntax errors from both parsing calls: the initial parse and parsing unwrapped string constants.
     try:
         ast_tree = ast.parse(annotation, mode="eval").body
-        annotation_node = unwrap_and_parse_string_constants(ast_tree)
+        unwrapped_node = unwrap_and_parse_string_constants(ast_tree)
     except SyntaxError:
         return False
-    # "Final[int]" parses as:
-    # Subscript
-    # |-- value: Name("Final")  <- keep this node
-    # `-- slice: Name("int")    <- discard the inner annotation
-    # After this if, annotation_node is Name("Final") in this example.
-    if isinstance(annotation_node, ast.Subscript):
-        annotation_node = annotation_node.value
+    annotation_node = strip_annotation_subscript(unwrapped_node)
     # "module.typing.Final" parses as:
     # Attribute
     # |-- value: Attribute
