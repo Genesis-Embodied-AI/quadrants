@@ -149,7 +149,25 @@ def dataclass_field_is_final(dataclass_type: type, field_name: str, annotation: 
         module = sys.modules.get(declaring_dataclass.__module__)
         value = vars(module).get(name_parts[0], _MISSING) if module is not None else _MISSING
     if value is _MISSING:
-        # Canonical spellings can also occur in function-local classes whose local imports are no longer available.
+        # If the first name could not be found in either the class or its module, recognize these spellings by name:
+        #
+        # "Final"
+        # "typing.Final"
+        # "typing_extensions.Final"
+        #
+        # This supports cases such as a function-local import:
+        #
+        # def make_config():
+        #     from typing import Final
+        #
+        #     @dataclasses.dataclass(frozen=True)
+        #     class Config:
+        #         value: "Final[int]"
+        #
+        #     return Config(7)
+        #
+        # Later, that local Final binding is not available through Config or its module.
+        # The fallback nevertheless treats "Final" as the marker.
         return name_parts in (["Final"], ["typing", "Final"], ["typing_extensions", "Final"])
     for part in name_parts[1:]:
         if not isinstance(value, (types.ModuleType, type)):
