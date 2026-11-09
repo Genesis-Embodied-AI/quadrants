@@ -15,9 +15,32 @@ def is_final_annotation(annotation: Any) -> bool:
 
 
 def unwrap_and_parse_string_constants(ast_tree: ast.expr) -> ast.expr:
-    """Parse away string-constant layers, returning the enclosed expression tree without evaluating it.
+    """Unwrap annotations that contain an extra layer of quotes.
 
-    For example, Constant(value="Final[int]") becomes a Subscript with value Name("Final") and slice Name("int").
+    For example, with postponed annotations:
+
+    ```python
+    from __future__ import annotations
+
+    class Config:
+        value: "Final[int]"
+    ```
+
+    The stored annotation can be the string "'Final[int]'". Parsing it once produces:
+
+    ```text
+    Constant(value="Final[int]")
+    ```
+
+    The loop parses that constant's string value again, producing the actual annotation tree:
+
+    ```text
+    Subscript
+    ├── value: Name("Final")
+    └── slice: Name("int")
+    ```
+
+    It repeats while another string layer remains. No expression is evaluated.
     Non-string nodes pass through unchanged. Invalid syntax inside a string raises SyntaxError.
     """
     unwrapped_node = ast_tree
