@@ -19,9 +19,9 @@ from quadrants import _tensor_wrapper
 from quadrants._lib.core.quadrants_python import DataTypeCxx
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES, Tensor
 from quadrants.lang import impl
-from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._deferred_dataclass import DeferredMemberType, deferred_member
 from quadrants.lang._final_dataclass_fields import final_field_names
+from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang._runtime_dataclass_cache import (
     _runtime_kernels,

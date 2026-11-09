@@ -2,9 +2,12 @@ from ast import Name, Starred, expr, keyword
 from collections import defaultdict, deque
 from typing import TYPE_CHECKING, Any
 
-from ._ast_name_parts import extract_dotted_name_parts
-from ._dataclass_util import create_flat_name, create_flat_name_from_parts
 from ._exceptions import raise_exception
+from ._name_utils import (
+    create_flat_name,
+    create_flat_name_from_parts,
+    extract_dotted_name_parts,
+)
 from ._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
 from .exception import QuadrantsSyntaxError
 from .func import Func

@@ -16,8 +16,8 @@ import numpy as np
 from quadrants._lib import core as _qd_core
 from quadrants.lang import exception, expr, impl, matrix, mesh
 from quadrants.lang import ops as qd_ops
-from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._deferred_dataclass import DeferredMemberValue
+from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._ndrange import _Ndrange
 from quadrants.lang._runtime_dataclass import is_runtime_member_name
 from quadrants.lang._unpacked import _UnpackedVectorRef

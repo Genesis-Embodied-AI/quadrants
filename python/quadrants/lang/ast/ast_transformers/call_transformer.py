@@ -17,7 +17,7 @@ from quadrants.lang import (
     matrix,
 )
 from quadrants.lang import ops as qd_ops
-from quadrants.lang._dataclass_util import create_flat_name
+from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._runtime_dataclass import dataclass_call_arguments
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
