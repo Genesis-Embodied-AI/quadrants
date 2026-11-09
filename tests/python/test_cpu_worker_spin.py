@@ -16,14 +16,14 @@ def test_cpu_worker_spin_launches(budget):
     result = qd.ndarray(qd.i32, shape=137)
 
     @qd.kernel
-    def fill(generation: qd.i32, threads: qd.Template):
+    def fill(output: qd.Tensor, generation: qd.i32, threads: qd.Template):
         qd.loop_config(parallelize=threads)
         for i in range(137):
-            result[i] = generation * 1000 + i
+            output[i] = generation * 1000 + i
 
     for generation in range(40):
         threads = (1, 4, 2)[generation % 3]
-        fill(generation, threads)
+        fill(result, generation, threads)
         np.testing.assert_array_equal(result.to_numpy(), generation * 1000 + np.arange(137))
         if generation % 7 == 0:
             time.sleep(0.002)
