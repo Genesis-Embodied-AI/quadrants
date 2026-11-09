@@ -15,6 +15,8 @@ class DeferredMemberType(NamedTuple):
 
     error_type: type[Exception]
     message: str
+    # (type(py_obj).__module__, type(py_obj).__qualname__), e.g. ("builtins", "set"). Captured only with debug=True;
+    # otherwise None. Store strings instead of the class so cached diagnostics do not keep application classes alive.
     runtime_type_names: tuple[str, str] | None = None
 
     def bind(self, flat_name: str) -> "DeferredMemberError":
@@ -46,6 +48,8 @@ class DeferredMemberError(NamedTuple):
 def _deferred_member(
     error_type: type[Exception],
     message: str,
+    # (type(py_obj).__module__, type(py_obj).__qualname__), e.g. ("builtins", "set"). Captured only with debug=True;
+    # otherwise None. Store strings instead of the class so cached diagnostics do not keep application classes alive.
     runtime_type_names: tuple[str, str] | None = None,
 ) -> DeferredMemberType:
     """Intern descriptions including debug metadata; schema keys include the resulting description's identity."""
