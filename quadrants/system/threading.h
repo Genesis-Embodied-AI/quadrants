@@ -16,6 +16,7 @@
 namespace quadrants {
 
 class LowLatencyThreadPool;
+class ControlledThreadPool;
 
 using TaskFn = void(void *ctx, int thread_id, int task_id);
 using ParallelFor = void(int n, int num_threads, void *, TaskFn task_fn);
@@ -55,6 +56,7 @@ class ThreadPool {
 
  private:
   std::unique_ptr<LowLatencyThreadPool> low_latency_pool_;
+  std::unique_ptr<ControlledThreadPool> controlled_pool_;
 };
 
 }  // namespace quadrants

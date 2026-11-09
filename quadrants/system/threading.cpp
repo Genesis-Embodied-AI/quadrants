@@ -4,6 +4,7 @@
 *******************************************************************************/
 
 #include "quadrants/system/threading.h"
+#include "quadrants/system/controlled_thread_pool.h"
 #include "quadrants/system/low_latency_thread_pool.h"
 
 #include <algorithm>
@@ -31,6 +32,11 @@ bool test_threading() {
 
 ThreadPool::ThreadPool(int max_num_threads) : max_num_threads(max_num_threads) {
   const char *mode = std::getenv("QD_CPU_POOL_MODE");
+  if (mode && std::string(mode) == "ablation") {
+    controlled_pool_ =
+        std::make_unique<ControlledThreadPool>(max_num_threads, ControlledThreadPool::environment_options());
+    return;
+  }
   if (mode && std::string(mode) != "baseline") {
     QD_ASSERT(std::string(mode) == "dynamic" || std::string(mode) == "static");
     const char *spin = std::getenv("QD_CPU_POOL_SPIN_US");
@@ -53,6 +59,10 @@ ThreadPool::ThreadPool(int max_num_threads) : max_num_threads(max_num_threads) {
 }
 
 void ThreadPool::run(int splits, int desired_num_threads, void *task_context, TaskFn *task_fn) {
+  if (controlled_pool_) {
+    controlled_pool_->run(splits, desired_num_threads, task_context, task_fn);
+    return;
+  }
   if (low_latency_pool_) {
     low_latency_pool_->run(splits, desired_num_threads, task_context, task_fn);
     return;
@@ -137,6 +147,9 @@ void ThreadPool::target() {
 }
 
 ThreadPool::~ThreadPool() {
+  if (controlled_pool_) {
+    return;
+  }
   if (low_latency_pool_) {
     return;
   }
