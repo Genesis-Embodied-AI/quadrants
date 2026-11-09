@@ -10,9 +10,12 @@
 #include <atomic>
 #include <condition_variable>
 #include <functional>
+#include <memory>
 #include <thread>
 
 namespace quadrants {
+
+class LowLatencyThreadPool;
 
 using TaskFn = void(void *ctx, int thread_id, int task_id);
 using ParallelFor = void(int n, int num_threads, void *, TaskFn task_fn);
@@ -49,6 +52,9 @@ class ThreadPool {
   void target();
 
   ~ThreadPool();
+
+ private:
+  std::unique_ptr<LowLatencyThreadPool> low_latency_pool_;
 };
 
 }  // namespace quadrants

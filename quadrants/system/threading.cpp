@@ -4,9 +4,12 @@
 *******************************************************************************/
 
 #include "quadrants/system/threading.h"
+#include "quadrants/system/low_latency_thread_pool.h"
 
 #include <algorithm>
 #include <condition_variable>
+#include <cstdlib>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -27,6 +30,14 @@ bool test_threading() {
 }
 
 ThreadPool::ThreadPool(int max_num_threads) : max_num_threads(max_num_threads) {
+  const char *mode = std::getenv("QD_CPU_POOL_MODE");
+  if (mode && std::string(mode) != "baseline") {
+    QD_ASSERT(std::string(mode) == "dynamic" || std::string(mode) == "static");
+    const char *spin = std::getenv("QD_CPU_POOL_SPIN_US");
+    low_latency_pool_ = std::make_unique<LowLatencyThreadPool>(max_num_threads, spin ? std::stoi(spin) : 200,
+                                                               std::string(mode) == "static");
+    return;
+  }
   exiting = false;
   started = false;
   running_threads = 0;
@@ -42,6 +53,10 @@ ThreadPool::ThreadPool(int max_num_threads) : max_num_threads(max_num_threads) {
 }
 
 void ThreadPool::run(int splits, int desired_num_threads, void *task_context, TaskFn *task_fn) {
+  if (low_latency_pool_) {
+    low_latency_pool_->run(splits, desired_num_threads, task_context, task_fn);
+    return;
+  }
   {
     std::lock_guard _(mutex);
     this->task_context = task_context;
@@ -122,6 +137,9 @@ void ThreadPool::target() {
 }
 
 ThreadPool::~ThreadPool() {
+  if (low_latency_pool_) {
+    return;
+  }
   {
     std::lock_guard<std::mutex> lg(mutex);
     exiting = true;
