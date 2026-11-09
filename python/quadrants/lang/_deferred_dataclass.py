@@ -43,7 +43,8 @@ def deferred_member(
 
 def deferred_member_for_value(error_type: type[Exception], message: str, py_obj: object) -> DeferredMemberType:
     """Capture runtime type names only in debug mode, without retaining the application value or its class."""
-    from quadrants.lang import impl
+    # Import lazily: impl also loads compiler modules that use deferred descriptions.
+    from quadrants.lang import impl  # pylint: disable=import-outside-toplevel
 
     runtime_type_names = None
     if impl.current_cfg().debug:
