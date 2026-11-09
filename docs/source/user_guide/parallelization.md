@@ -371,3 +371,11 @@ However, we might need to break into multiple launches in order to synchronize w
 ## Compromise
 
 The recommendations above often are self-conflicting. For example, maximizing the number of cores being used might require using atomics for synchronization, which might make the kernels slower. Reducing kernel launches similarly might require using atomics, which would make the kernels run more slowly. So it will not in general be possible to satisfy all the above guidelines. But, it's useful to be aware of the design choices above, and strive to achieve them. Exact choices for best performance will often be an empirical question.
+
+### CPU worker polling between launches
+
+`qd.init(arch=qd.cpu, cpu_worker_spin_us=200)` allows eligible CPU workers to poll for another launch for approximately 200 microseconds before blocking on a condition variable. Work arriving within that interval can be noticed without waking a sleeping worker. The default is `0`, which disables polling. Negative values are rejected. The equivalent environment variable is `QD_CPU_WORKER_SPIN_US`; an explicit `qd.init()` argument takes precedence.
+
+Polling can reduce latency for closely spaced CPU kernel launches, but consumes CPU time while workers wait. Choose a budget for your workload and CPU allocation; a larger value is not necessarily faster. Once the budget expires, workers sleep until notified of work or shutdown. The budget is approximate and can be exceeded when a thread is descheduled. Newly created workers and workers excluded by the current launch's worker limit wait directly on the condition variable.
+
+This setting changes worker waiting only. It does not change task assignment, the number of worker threads, or how the calling thread waits for completion. It does not affect GPU kernel execution. Polling uses a processor spin-loop hint on x86 and ARM; it does not request timed OS sleeps. CPU time measurements do not establish its effect on electrical power consumption.

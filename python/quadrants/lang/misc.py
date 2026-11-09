@@ -358,6 +358,8 @@ def init(
             `qd.init options <https://genesis-embodied-ai.github.io/quadrants/user_guide/init_options.html#all-options>`_.
 
             * ``cpu_max_num_threads`` (int): Sets the number of threads used by the CPU thread pool.
+            * ``cpu_worker_spin_us`` (int): CPU worker polling budget in microseconds before CV sleep. Default 0
+              disables polling. Higher values may reduce launch latency at the cost of CPU time. Must be nonnegative.
             * ``debug`` (bool): Enables the debug mode, under which Quadrants does a few more things like boundary checks.
             * ``print_ir`` (bool): Prints the CHI IR of the Quadrants kernels.
             *``offline_cache`` (bool): Enables offline cache of the compiled kernels. Default to True. When this is enabled Quadrants will cache compiled kernel on your local disk to accelerate future calls.

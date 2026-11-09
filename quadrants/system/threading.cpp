@@ -4,6 +4,7 @@
 *******************************************************************************/
 
 #include "quadrants/system/threading.h"
+#include "quadrants/system/thread_pool_wait.h"
 
 #include <algorithm>
 #include <condition_variable>
@@ -26,7 +27,9 @@ bool test_threading() {
   return true;
 }
 
-ThreadPool::ThreadPool(int max_num_threads) : max_num_threads(max_num_threads) {
+ThreadPool::ThreadPool(int max_num_threads, int worker_spin_us)
+    : max_num_threads(max_num_threads), worker_spin_us_(worker_spin_us) {
+  QD_ASSERT_INFO(worker_spin_us >= 0, "cpu_worker_spin_us must be >= 0");
   exiting = false;
   started = false;
   running_threads = 0;
@@ -34,6 +37,7 @@ ThreadPool::ThreadPool(int max_num_threads) : max_num_threads(max_num_threads) {
   last_finished = 0;
   task_head = 0;
   task_tail = 0;
+  desired_num_threads = 0;
   thread_counter = 0;
   threads.resize((std::size_t)max_num_threads);
   for (int i = 0; i < max_num_threads; i++) {
@@ -54,6 +58,8 @@ void ThreadPool::run(int splits, int desired_num_threads, void *task_context, Ta
     task_tail = splits;
     timestamp++;
     QD_ASSERT(timestamp < (1LL << 62));  // avoid overflowing here
+    if (worker_spin_us_ > 0)
+      wakeup_generation_.store(timestamp, std::memory_order_relaxed);
   }
 
   // wake up all slaves
@@ -76,9 +82,18 @@ void ThreadPool::target() {
   while (true) {
     {
       std::unique_lock<std::mutex> lock(mutex);
-      slave_cv.wait(lock, [this, last_timestamp, thread_id] {
+      auto ready = [this, last_timestamp, thread_id] {
         return (timestamp > last_timestamp && thread_id < desired_num_threads) || this->exiting;
-      });
+      };
+      // Only workers that have observed a launch and are still eligible poll. New or excluded workers use the CV.
+      if (worker_spin_us_ > 0 && last_timestamp != 0 && thread_id < desired_num_threads && !ready()) {
+        auto observed = wakeup_generation_.load(std::memory_order_relaxed);
+        lock.unlock();
+        poll_thread_pool_generation(wakeup_generation_, observed, worker_spin_us_);
+        lock.lock();
+      }
+      // Rechecking under the publisher's mutex prevents missed notifications at the polling-to-sleep boundary.
+      slave_cv.wait(lock, ready);
       last_timestamp = timestamp;
       if (exiting) {
         break;
@@ -125,6 +140,8 @@ ThreadPool::~ThreadPool() {
   {
     std::lock_guard<std::mutex> lg(mutex);
     exiting = true;
+    if (worker_spin_us_ > 0)
+      wakeup_generation_.store(timestamp + 1, std::memory_order_relaxed);
   }
   slave_cv.notify_all();
   for (auto &th : threads)
