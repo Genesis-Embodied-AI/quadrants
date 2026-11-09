@@ -5,10 +5,9 @@ from typing import NamedTuple, NoReturn
 
 
 class DeferredMemberType(NamedTuple):
-    """Describe what is wrong: the exception class, message, and optional debug type names.
+    """Store what is wrong: the exception class, message, and optional debug type names.
 
-    Equal descriptions are cached and shared across members. For example, state.notes and config.tags can share the
-    same description for an unsupported set. This stores neither the application value nor an exception traceback.
+    It is cached and can be shared by multiple members.
     """
 
     error_type: type[Exception]
@@ -21,10 +20,12 @@ class DeferredMemberType(NamedTuple):
 
 
 class DeferredMemberValue(NamedTuple):
-    """Combine a shared error description with where it occurred: the original member path.
+    """Combine that description with where it occurred: the member's path, such as state.velocity.
 
-    state.notes and config.tags each have their own binding, even if they share a DeferredMemberType. The path survives
-    inlined function argument renaming. reject() raises the error only when compilation actually uses the member.
+    Its reject() method raises the error when compilation actually uses that member.
+
+    For example, state.notes and config.tags could share the same DeferredMemberType for an unsupported set, but each
+    has its own DeferredMemberValue carrying its path.
     """
 
     member_type: DeferredMemberType
