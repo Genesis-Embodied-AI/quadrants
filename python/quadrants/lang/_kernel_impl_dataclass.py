@@ -4,8 +4,11 @@ from typing import Any
 
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import util
-from quadrants.lang._ast_name_parts import extract_dotted_name_parts
-from quadrants.lang._dataclass_util import create_flat_name, create_flat_name_from_parts
+from quadrants.lang._name_utils import (
+    create_flat_name,
+    create_flat_name_from_parts,
+    extract_dotted_name_parts,
+)
 from quadrants.lang._signature import get_func_signature
 from quadrants.lang.ast import (
     ASTTransformerFuncContext,

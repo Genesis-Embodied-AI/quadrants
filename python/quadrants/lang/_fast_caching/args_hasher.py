@@ -12,12 +12,12 @@ from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorWrapper
 from quadrants.types.annotations import Template
 
-from .._dataclass_util import create_flat_name
 from .._final_dataclass_fields import (
     final_field_names,
     final_scalar_key,
     subtree_has_final_fields,
 )
+from .._name_utils import create_flat_name
 from .._ndarray import ScalarNdarray
 from .._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
 from ..field import ScalarField

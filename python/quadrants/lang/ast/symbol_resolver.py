@@ -4,7 +4,7 @@
 
 import ast
 
-from quadrants.lang._ast_name_parts import extract_dotted_name_parts
+from quadrants.lang._name_utils import extract_dotted_name_parts
 
 
 class ASTResolver:

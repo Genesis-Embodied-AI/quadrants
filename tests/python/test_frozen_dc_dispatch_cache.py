@@ -387,7 +387,7 @@ def test_frozen_dc_plan_id_reuse_guard():
     """Simulate id() reuse: after the original used_params set is deleted, a new set at the same address must not
     receive the stale cached plan.  CPython 3.13+ (mimalloc) makes this scenario likely in practice.
     """
-    from quadrants.lang._dataclass_util import create_flat_name
+    from quadrants.lang._name_utils import create_flat_name
 
     @dataclasses.dataclass(frozen=True)
     class S:
