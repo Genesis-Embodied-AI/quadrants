@@ -14,12 +14,7 @@ def is_final_annotation(annotation: Any) -> bool:
     return annotation is typing.Final or typing.get_origin(annotation) is typing.Final
 
 
-def parse_annotation(annotation: str) -> ast.expr:
-    """Parse annotation text into an expression tree without evaluating it; invalid syntax raises SyntaxError."""
-    return ast.parse(annotation, mode="eval").body
-
-
-def unwrap_string_constants(ast_tree: ast.expr) -> ast.expr:
+def unwrap_and_parse_string_constants(ast_tree: ast.expr) -> ast.expr:
     """Parse away string-constant layers, returning the enclosed expression tree without evaluating it.
 
     For example, Constant(value="Final[int]") becomes a Subscript with value Name("Final") and slice Name("int").
@@ -27,7 +22,7 @@ def unwrap_string_constants(ast_tree: ast.expr) -> ast.expr:
     """
     unwrapped_node = ast_tree
     while isinstance(unwrapped_node, ast.Constant) and isinstance(unwrapped_node.value, str):
-        unwrapped_node = parse_annotation(unwrapped_node.value)
+        unwrapped_node = ast.parse(unwrapped_node.value, mode="eval").body
     return unwrapped_node
 
 
@@ -77,8 +72,8 @@ def dataclass_field_is_final(dataclass_type: type, field_name: str, annotation: 
     if not isinstance(annotation, str):
         return is_final_annotation(annotation)
     try:
-        ast_tree = parse_annotation(annotation)
-        annotation_node = unwrap_string_constants(ast_tree)
+        ast_tree = ast.parse(annotation, mode="eval").body
+        annotation_node = unwrap_and_parse_string_constants(ast_tree)
     except SyntaxError:
         return False
     # "Final[int]" parses as:
