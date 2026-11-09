@@ -5,7 +5,11 @@ from typing import NamedTuple, NoReturn
 
 
 class DeferredMemberType(NamedTuple):
-    """An interned type description, without the application value or an exception traceback."""
+    """Describe what is wrong: the exception class, message, and optional debug type names.
+
+    Equal descriptions are cached and shared across members. For example, state.notes and config.tags can share the
+    same description for an unsupported set. This stores neither the application value nor an exception traceback.
+    """
 
     error_type: type[Exception]
     message: str
@@ -17,7 +21,11 @@ class DeferredMemberType(NamedTuple):
 
 
 class DeferredMemberValue(NamedTuple):
-    """Compiler binding retaining the original kernel path across inlined function argument renaming."""
+    """Combine a shared error description with where it occurred: the original member path.
+
+    state.notes and config.tags each have their own binding, even if they share a DeferredMemberType. The path survives
+    inlined function argument renaming. reject() raises the error only when compilation actually uses the member.
+    """
 
     member_type: DeferredMemberType
     path: str
