@@ -4,7 +4,9 @@ import dataclasses
 import typing
 from typing import TYPE_CHECKING, Any
 
-from quadrants.lang._deferred_errors import create_deferred_member_type_for_invalid_dataclass_member
+from quadrants.lang._deferred_errors import (
+    create_deferred_member_type_for_invalid_dataclass_member,
+)
 from quadrants.lang._final_annotation import dataclass_field_is_final
 from quadrants.lang._final_annotation import (  # pylint: disable=unused-import
     is_final_annotation as is_final_annotation,

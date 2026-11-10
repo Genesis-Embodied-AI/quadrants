@@ -3911,7 +3911,10 @@ def test_bare_final_annotation_specializes() -> None:
     """Bare Final uses the arriving value as a compile-time constant."""
     import typing
 
-    from quadrants.lang._final_dataclass_fields import final_field_names, is_final_annotation
+    from quadrants.lang._final_dataclass_fields import (
+        final_field_names,
+        is_final_annotation,
+    )
 
     assert is_final_annotation(typing.Final) is True
     assert is_final_annotation(typing.Final[int]) is True
@@ -4644,7 +4647,6 @@ def test_final_offline_dynamic_class_serial_is_monotonic_not_recyclable():
     import weakref as _weakref
 
     from quadrants.lang import _final_class_identity as fdf
-    from quadrants.lang._final_constant_values import final_scalar_key
 
     def _make():
         class Local(int):
