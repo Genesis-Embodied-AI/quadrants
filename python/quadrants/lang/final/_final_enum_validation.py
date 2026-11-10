@@ -190,7 +190,7 @@ def _enum_machinery_class_dict(cls: type) -> "dict[str, Any] | None":
     """Rebuild an enum without members to obtain its generated attributes, or return None."""
     mcls = type(cls)
     try:
-        # Preserve the enum metaclass’s namespace object; converting it to a plain dict would break construction.
+        # Preserve the enum metaclass's namespace object; converting it to a plain dict would break construction.
         namespace = mcls.__prepare__("_qd_enum_probe", cls.__bases__)
         reference = mcls("_qd_enum_probe", cls.__bases__, namespace)  # pyright: ignore[reportArgumentType]
     except Exception:  # pylint: disable=broad-except  # any build failure -> conservative allowlist fallback
@@ -270,7 +270,7 @@ def _is_official_enum_member(klass: type, name: str, member: Any) -> bool:
 def _observable_class_dict_attr(klass: type) -> "str | None":
     """Return the first unsupported enum class attribute name, or None.
 
-    Compare against this enum’s reference. An attribute generated for another enum kind must not exempt a user attribute
+    Compare against this enum's reference. An attribute generated for another enum kind must not exempt a user attribute
     here.
     """
     reference: Any = _MISSING  # member-free machinery reference; built lazily, at most once per call
@@ -332,7 +332,7 @@ def _enum_class_behavior_attr(enum_cls: type) -> "str | None":
 def _reject_stateful_enum_member(value: Any) -> None:
     """Reject enum members with unsupported instance state or class behavior."""
     cls = type(value)
-    # Reject state on sibling members too: compiled code can access them through the selected member’s class.
+    # Reject state on sibling members too: compiled code can access them through the selected member's class.
     # Include the selected value separately for unnamed IntFlag composites.
     member_map = getattr(cls, "_member_map_", None)
     members = list(member_map.values()) if isinstance(member_map, dict) else []

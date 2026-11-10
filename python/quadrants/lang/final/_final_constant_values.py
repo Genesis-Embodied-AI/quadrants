@@ -64,7 +64,7 @@ def _reject_stateful_primitive_subclass(value: Any) -> None:
                     f"specialization. Pass a plain ``bool`` / ``int`` / ``float`` / ``str`` (or an ``enum`` "
                     f"member) instead."
                 )
-    # Metaclasses can expose additional behavior outside the class’s own MRO.
+    # Metaclasses can expose additional behavior outside the class's own MRO.
     metacls: type = type(cls)
     for mcls in metacls.__mro__:
         if mcls in _FRAMEWORK_PRIMITIVE_METACLASSES:
@@ -82,9 +82,9 @@ def _reject_stateful_primitive_subclass(value: Any) -> None:
 
 
 def _enum_member_map_key(cls: type, live: bool) -> tuple:
-    """Build a key for every enum member’s name and value.
+    """Build a key for every enum member's name and value.
 
-    Include siblings because compiled code can access them through the selected member’s class.
+    Include siblings because compiled code can access them through the selected member's class.
     """
     member_map = getattr(cls, "_member_map_", None)
     if not isinstance(member_map, dict):
@@ -98,7 +98,7 @@ def final_scalar_key(value: Any, live: bool = False) -> tuple[Any, ...]:
     Keep distinct constants separate even when Python considers them equal, such as True and 1 or an IntEnum member and
     its integer value. Float keys preserve exact bits, including signed zero and NaN payloads.
 
-    Revalidate on each launch so a later change to a constant’s class cannot silently reuse compiled code.
+    Revalidate on each launch so a later change to a constant's class cannot silently reuse compiled code.
     """
     if type(value) is float:
         return (_FLOAT_KEY_TAG, _unpack_u64(_pack_f64(value))[0])

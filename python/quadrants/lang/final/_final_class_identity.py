@@ -132,7 +132,7 @@ class _ClassRef:
         return isinstance(other, _ClassRef) and self.cls is other.cls
 
     def __repr__(self) -> str:
-        """Display the retained object’s identity without invoking its representation."""
+        """Display the retained object's identity without invoking its representation."""
         return f"<_ClassRef 0x{id(self.cls):x}>"  # identity only; the live key is never serialized
 
 
@@ -155,7 +155,7 @@ def _dynamic_class_serial(obj: Any) -> int:
     serial = next(_dynamic_class_serial_counter)
 
     def _drop(ref: "weakref.ref", k: int = key) -> None:
-        """Remove this object’s serial entry when its weak reference expires."""
+        """Remove this object's serial entry when its weak reference expires."""
         cur = _dynamic_object_serials.get(k)
         if cur is not None and cur[0] is ref:  # only our own entry, never one that recycled the ``id``
             del _dynamic_object_serials[k]
@@ -261,7 +261,7 @@ def _canonical_attr_value(val: Any, live: bool) -> Any:
         items = tuple((_canonical_attr_value(k, live), _canonical_attr_value(v, live)) for k, v in val.items())
         return ("dict", items)
     if isinstance(val, _DESCRIPTOR_ATTR_TYPES):
-        # Include the descriptor’s owner so descriptors borrowed from different classes remain distinct.
+        # Include the descriptor's owner so descriptors borrowed from different classes remain distinct.
         owner = getattr(val, "__objclass__", None)
         identified = owner if owner is not None else val
         return (
@@ -297,7 +297,7 @@ def _attr_kind(klass: type, name: str, live: bool) -> Any:
 
 
 def _kind_entry(klass: type, live: bool) -> tuple:
-    """Build a key for one class’s identity and observable structural attributes.
+    """Build a key for one class's identity and observable structural attributes.
 
     Static built-in classes are immutable, so their structural values are omitted to keep keys small.
     """
@@ -313,7 +313,7 @@ def _kind_entry(klass: type, live: bool) -> tuple:
 
 
 def _class_kind(cls: type, live: bool) -> tuple:
-    """Build a key for a class’s base classes and metaclasses.
+    """Build a key for a class's base classes and metaclasses.
 
     A class can keep its module and qualified name while its bases, metaclass, or structural attributes change.
     """
