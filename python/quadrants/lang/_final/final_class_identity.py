@@ -45,7 +45,7 @@ def _is_exact_baked_type(cls: type) -> bool:
     return any(cls is t for t in _EXACT_BAKED_TYPES)
 
 
-# Distinguish static library types from user-defined subclasses, even if they spoof their module.
+# CPython Py_TPFLAGS_HEAPTYPE distinguishes heap types from static library types without trusting __module__.
 _HEAPTYPE_FLAG = 1 << 9
 
 # Attributes allowed on an otherwise empty scalar subclass.
@@ -57,8 +57,8 @@ _STRUCTURAL_CLASS_ATTRS = frozenset(
         "__dict__",
         "__weakref__",
         "__slots__",
-        "__firstlineno__",
-        "__static_attributes__",
+        "__firstlineno__",  # Added in Python 3.13.
+        "__static_attributes__",  # Added in Python 3.13.
     }
 )
 
@@ -67,7 +67,10 @@ _FRAMEWORK_PRIMITIVE_METACLASSES = frozenset({type, object})
 
 
 def _observable_metaclass_attr(mcls: type) -> "str | None":
-    """Return the first unsupported metaclass attribute name, or None."""
+    """Return the first unsupported metaclass attribute name, or None.
+
+    Identity keys prevent equality collisions, but kernels can still observe custom __eq__ and __hash__ behavior.
+    """
     for name in vars(mcls):
         if name not in _STRUCTURAL_CLASS_ATTRS:
             return name
@@ -86,7 +89,10 @@ def _is_baked_base_type(klass: type) -> bool:
 
 
 def _slot_names(klass: type) -> tuple[str, ...]:
-    """Return the string slot names declared directly on a class."""
+    """Return the string slot names declared directly on a class.
+
+    Defensive checks handle __slots__ being reassigned after class creation, including to a non-iterable.
+    """
     slots = getattr(klass, "__slots__", ())
     if isinstance(slots, str):
         return (slots,)
@@ -115,7 +121,10 @@ def _class_not_uniquely_identified(obj: Any) -> bool:
 
 
 class _ClassRef:
-    """Hold an object strongly and compare it by identity for an in-process cache key."""
+    """Hold an object strongly and compare it by identity for an in-process cache key.
+
+    The strong reference prevents object-ID reuse; identity comparison bypasses custom metaclass equality and hashing.
+    """
 
     __slots__ = ("cls",)
 
@@ -138,6 +147,7 @@ class _ClassRef:
 
 # Assign unique serials to dynamic objects for offline cache keys.
 # Weak references and identity checks prevent reuse after collection or confusion between objects that compare equal.
+# WeakKeyDictionary uses equality, so distinct classes that compare equal could incorrectly share an entry.
 _dynamic_object_serials: "dict[int, tuple[weakref.ref, int]]" = {}
 _dynamic_class_serial_counter = itertools.count()
 
@@ -199,6 +209,7 @@ _DESCRIPTOR_ATTR_TYPES = (
 )
 
 # Reject Python classes and callables as attribute values: their mutable behavior is not captured by the key.
+# The source cache does not validate these objects, so unchanged identity does not guarantee unchanged behavior.
 _IDENTIFIED_ATTR_TYPES = (
     types.FunctionType,
     types.MethodType,
