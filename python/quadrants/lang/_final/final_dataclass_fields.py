@@ -58,6 +58,9 @@ def infer_final_field_annotation(
         name: The field's name as a string, such as "count", used in error messages.
         final_value_key_by_value_id: Optional cache shared within the current kernel call, mapping id(value) to
             (value, specialization_key). Stores successful validation results for reuse later in the call.
+            Passing the cache lets validation and compiled-kernel selection share results within one call. A fresh
+            cache is needed for each call because objects can change between calls; a module-level cache would need
+            explicit clearing and isolation between overlapping or nested calls.
     """
     if non_frozen_ancestor_path is not None:
         parent_name = non_frozen_ancestor_path.split(".", 1)[0]
