@@ -1,0 +1,11 @@
+quadrants.lang.final
+====================
+
+.. py:module:: quadrants.lang.final
+
+.. autoapi-nested-parse::
+
+   Final annotation discovery and constant validation.
+
+
+
