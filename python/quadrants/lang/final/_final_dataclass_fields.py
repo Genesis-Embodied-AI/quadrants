@@ -24,20 +24,20 @@ _FINAL_REJECT_HINTS: "dict[str, str]" = {
 
 
 def is_final_annotation(annotation: Any) -> bool:
-    """Check whether an annotation is a subscripted Final marker.
+    """True if ``annotation`` is a subscripted ``typing.Final[T]``.
 
-    Bare Final is rejected by declaration validation rather than recognized here.
+    Bare ``typing.Final`` returns False (no origin) but is rejected by ``_build_final_plan``, not treated as a field.
+    ``typing_extensions.Final`` is the same object (>=3.10).
     """
     return typing.get_origin(annotation) is typing.Final
 
 
 def _describe_annotation(annotation: Any) -> str:
-    """Return a readable name for an annotation."""
     return getattr(annotation, "__name__", None) or repr(annotation)
 
 
 def _reject_hint_for(inner: Any) -> str | None:
-    """Return a suggested fix for an unsupported Final annotation, if available."""
+    """Tailored remediation hint if ``Final[inner]`` names a rejectable type, else None (matched by name, no import)."""
     for name in (type(inner).__name__, _describe_annotation(inner)):
         hint = _FINAL_REJECT_HINTS.get(name)
         if hint is not None:
@@ -46,7 +46,7 @@ def _reject_hint_for(inner: Any) -> str | None:
 
 
 def _validate_final_inner_type(dc_type: type, field_name: str, annotation: Any) -> None:
-    """Reject Final annotations whose inner type cannot be a compile-time constant."""
+    """Raise unless ``Final[annotation]`` names a bakeable compile-time type. Only for a subscripted ``Final``."""
     inner = typing.get_args(annotation)
     if len(inner) != 1:
         raise TypeError(
@@ -77,9 +77,10 @@ def _validate_final_inner_type(dc_type: type, field_name: str, annotation: Any) 
 
 
 def _rebinding_is_prevented(dc_type: type) -> bool:
-    """Check whether the dataclass declares frozen or unsafe_hash.
+    """True if ``dc_type`` forbids field rebinding: ``frozen=True`` or ``unsafe_hash=True``.
 
-    A hashable class is not necessarily frozen: dataclass(eq=False) can inherit object.__hash__.
+    Not the ``__hash__ is not None`` proxy: ``@dataclass(eq=False)`` inherits ``object.__hash__`` and would look
+    frozen, letting a baked ``Final`` constant be silently reassigned.
     """
     params = getattr(dc_type, "__dataclass_params__", None)
     if params is None:
@@ -93,7 +94,9 @@ _final_path_cache: "dict[int, tuple[type, tuple[str, ...] | None]]" = {}
 
 
 def _first_final_path(dc_type: type, visiting: "frozenset[int]") -> "tuple[str, ...] | None":
-    """Validate nested dataclass declarations and return the first Final field path, if any."""
+    """Field path from ``dc_type`` down to some ``Final`` leaf, or None. First hit wins; recursing eagerly validates
+    every nested type. ``visiting`` holds ``id``s (not types) so a metaclass ``__eq__`` cannot fake "already visited".
+    """
     entry = _final_path_cache.get(id(dc_type))
     if entry is not None and entry[0] is dc_type:  # identity guard against a recycled ``id``
         return entry[1]
@@ -114,10 +117,13 @@ def _first_final_path(dc_type: type, visiting: "frozenset[int]") -> "tuple[str, 
 
 
 def _string_annotation_looks_final(dc_type: type, field_name: str, annotation: str) -> bool:
-    """Check whether a string annotation appears to name Final.
+    """Best-effort: does the string annotation for ``field_name`` name ``typing.Final`` (possibly aliased)?
 
-    Resolve fields separately so an unrelated unresolved annotation cannot hide a Final marker. Like get_type_hints,
-    this evaluates annotation expressions from the defining module.
+    Resolved per field, in the module + class that *define* it - not whole-class ``typing.get_type_hints``, which is
+    all-or-nothing: one unresolvable sibling (e.g. a ``TYPE_CHECKING``-only import) would blind us to an aliased
+    ``Final`` here. Tries the whole annotation, then (if only its inner type is unresolvable) the head symbol alone
+    (``F[Bad]`` -> ``F`` -> ``Final``); falls back to a literal substring test if nothing resolves. ``eval`` carries
+    the same trust as ``get_type_hints`` - both execute the defining module's own annotation expressions.
     """
     globalns: dict = {}
     localns: dict = {}
@@ -137,7 +143,7 @@ def _string_annotation_looks_final(dc_type: type, field_name: str, annotation: s
 
 
 def _build_final_plan(dc_type: type) -> "frozenset[str]":
-    """Validate the dataclass’s Final declarations and return their field names."""
+    """Validate every ``Final`` field on ``dc_type`` and return their names. Once per type (memoised)."""
     final_names = []
     for field in dataclasses.fields(dc_type):
         annotation = field.type
@@ -209,7 +215,8 @@ _final_plan_cache: "dict[int, tuple[type, frozenset[str]]]" = {}
 
 
 def final_field_names(dc_type: Any) -> "frozenset[str]":
-    """Return cached Final field names, validating declarations on the first lookup."""
+    """Cached set of ``Final`` field names on ``dc_type`` (validated on first sighting). Hot path: one ``dict.get`` +
+    ``is``; callers short-circuit on the empty result. ``Any`` avoids a per-launch ``cast`` at the call site."""
     entry = _final_plan_cache.get(id(dc_type))
     if entry is not None and entry[0] is dc_type:  # identity guard against a recycled ``id``
         return entry[1]
@@ -219,9 +226,10 @@ def final_field_names(dc_type: Any) -> "frozenset[str]":
 
 
 def subtree_has_final_fields(dc_type: Any) -> bool:
-    """Check whether a dataclass or any nested dataclass declares Final fields.
+    """True if ``dc_type`` or any transitively nested dataclass has a ``Final`` field.
 
-    Final-bearing subtrees must bypass instance launch caches because a constant’s class behavior can change between
-    launches.
+    Gates the per-instance launch caches (``_qd_spec_key``, ``_qd_dc_repr``): a ``Final`` value's class *behavior* can
+    change after launch one (a plain ``enum`` later monkey-patched), so cache writers skip such dataclasses and the
+    read falls through to a revalidating recompute. Transitive, since a cache hit also skips recursion into a leaf.
     """
     return _first_final_path(dc_type, frozenset()) is not None
