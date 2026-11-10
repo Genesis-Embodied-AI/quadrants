@@ -458,7 +458,7 @@
 <p>You can still call <code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> when you need to read results back to the CPU (e.g. <code class="docutils literal notranslate"><span class="pre">to_numpy()</span></code>); what changes is that you no longer need <em>both</em> <code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> and <code class="docutils literal notranslate"><span class="pre">torch.mps.synchronize()</span></code> at every framework boundary.</p>
 </section>
 <section id="extracting-pytorch-s-mtlcommandqueue">
-<h2>Extracting PyTorch’s MTLCommandQueue<a class="headerlink" href="#extracting-pytorch-s-mtlcommandqueue" title="Link to this heading">#</a></h2>
+<span id="extracting-pytorchs-mtlcommandqueue"></span><h2>Extracting PyTorch’s MTLCommandQueue<a class="headerlink" href="#extracting-pytorch-s-mtlcommandqueue" title="Link to this heading">#</a></h2>
 <p>PyTorch does not expose its MPS command queue through a public Python API. Quadrants provides a built-in helper that extracts it at runtime using <code class="docutils literal notranslate"><span class="pre">ctypes</span></code> and the Objective-C runtime:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.interop</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_mps_command_queue</span>
 

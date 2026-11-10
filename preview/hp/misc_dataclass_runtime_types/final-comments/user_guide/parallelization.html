@@ -490,17 +490,17 @@
 <p>Select the mode with <code class="docutils literal notranslate"><span class="pre">qd.init(arch=qd.cpu,</span> <span class="pre">cpu_work_scheduling=qd.CPUWorkScheduling.PER_WORKER)</span></code> or <code class="docutils literal notranslate"><span class="pre">qd.init(arch=qd.cpu,</span> <span class="pre">cpu_work_scheduling=qd.CPUWorkScheduling.FIXED_SIZE)</span></code>. Omitting the argument selects <code class="docutils literal notranslate"><span class="pre">PER_WORKER</span></code>.</p>
 </section>
 <section id="parameterizing-per-worker">
-<h3>Parameterizing PER_WORKER<a class="headerlink" href="#parameterizing-per-worker" title="Link to this heading">#</a></h3>
+<span id="parameterizing-per_worker"></span><h3>Parameterizing PER_WORKER<a class="headerlink" href="#parameterizing-per-worker" title="Link to this heading">#</a></h3>
 <p>Select this mode with <code class="docutils literal notranslate"><span class="pre">qd.init(arch=qd.cpu,</span> <span class="pre">cpu_work_scheduling=qd.CPUWorkScheduling.PER_WORKER)</span></code>. It is also the default when the argument is omitted. The two settings that determine work partitioning are <code class="docutils literal notranslate"><span class="pre">cpu_max_num_threads</span></code> and <code class="docutils literal notranslate"><span class="pre">cpu_per_worker_min_block_dim</span></code>.</p>
 <section id="cpu-max-num-threads">
-<h4>cpu_max_num_threads<a class="headerlink" href="#cpu-max-num-threads" title="Link to this heading">#</a></h4>
+<span id="cpu_max_num_threads"></span><h4>cpu_max_num_threads<a class="headerlink" href="#cpu-max-num-threads" title="Link to this heading">#</a></h4>
 <p><code class="docutils literal notranslate"><span class="pre">cpu_max_num_threads</span></code> sets the number of CPU worker threads in the thread pool. Its default is the system-reported number of logical cores. In this mode, it also sets the number of tasks created for each parallel <code class="docutils literal notranslate"><span class="pre">range()</span></code> loop.</p>
 <p>The pool size is not capped to the number of logical cores. However, a loop without an explicit <code class="docutils literal notranslate"><span class="pre">qd.loop_config(parallelize=...)</span></code> requests the system-reported number of logical cores, capped to the pool size. Increasing the pool size above that count does not make such a loop use more workers.</p>
 <p>For example, with eight logical cores and <code class="docutils literal notranslate"><span class="pre">cpu_max_num_threads=16</span></code>, the pool contains sixteen workers. A loop without a <code class="docutils literal notranslate"><span class="pre">parallelize</span></code> setting uses at most eight of them to process its sixteen tasks.</p>
 <p>To request more participating workers, place <code class="docutils literal notranslate"><span class="pre">qd.loop_config(parallelize=16)</span></code> immediately before the loop. The request is capped to the pool size. When more workers participate than there are logical cores, the operating system shares CPU time among them. Changing <code class="docutils literal notranslate"><span class="pre">parallelize</span></code> does not change the number of blocks in <code class="docutils literal notranslate"><span class="pre">PER_WORKER</span></code> mode.</p>
 </section>
 <section id="cpu-per-worker-min-block-dim">
-<h4>cpu_per_worker_min_block_dim<a class="headerlink" href="#cpu-per-worker-min-block-dim" title="Link to this heading">#</a></h4>
+<span id="cpu_per_worker_min_block_dim"></span><h4>cpu_per_worker_min_block_dim<a class="headerlink" href="#cpu-per-worker-min-block-dim" title="Link to this heading">#</a></h4>
 <p><code class="docutils literal notranslate"><span class="pre">cpu_per_worker_min_block_dim</span></code> sets the minimum number of original iterations per block. Its default is 512, and its value must be at least 1.</p>
 <p>For a nonempty loop, the block size is:</p>
 <div class="highlight-text notranslate"><div class="highlight"><pre><span></span>block_size = max(ceil(iteration_count / cpu_max_num_threads), cpu_per_worker_min_block_dim)
@@ -523,15 +523,15 @@
 </section>
 </section>
 <section id="parameterizing-fixed-size">
-<h3>Parameterizing FIXED_SIZE<a class="headerlink" href="#parameterizing-fixed-size" title="Link to this heading">#</a></h3>
+<span id="parameterizing-fixed_size"></span><h3>Parameterizing FIXED_SIZE<a class="headerlink" href="#parameterizing-fixed-size" title="Link to this heading">#</a></h3>
 <p>Select this mode with <code class="docutils literal notranslate"><span class="pre">qd.init(arch=qd.cpu,</span> <span class="pre">cpu_work_scheduling=qd.CPUWorkScheduling.FIXED_SIZE)</span></code>. Worker count and task size are independent. The two settings are <code class="docutils literal notranslate"><span class="pre">cpu_max_num_threads</span></code> and <code class="docutils literal notranslate"><span class="pre">cpu_fixed_block_dim</span></code>.</p>
 <section id="id1">
-<h4>cpu_max_num_threads<a class="headerlink" href="#id1" title="Link to this heading">#</a></h4>
+<span id="cpu_max_num_threads-1"></span><h4>cpu_max_num_threads<a class="headerlink" href="#id1" title="Link to this heading">#</a></h4>
 <p><code class="docutils literal notranslate"><span class="pre">cpu_max_num_threads</span></code> sets the number of CPU worker threads in the thread pool. Its default is the system-reported number of logical cores. It does not set the number of tasks in this mode. As in <code class="docutils literal notranslate"><span class="pre">PER_WORKER</span></code> mode, a loop without an explicit <code class="docutils literal notranslate"><span class="pre">parallelize</span></code> setting requests the system-reported number of logical cores, capped to the pool size. Use <code class="docutils literal notranslate"><span class="pre">qd.loop_config(parallelize=N)</span></code> to request a different number of participating workers, still capped to the pool size.</p>
 <p>For example, four workers can process 32 tasks. As a worker finishes one task, it takes another until all tasks are complete. Increasing the worker count does not change those tasks’ iteration ranges.</p>
 </section>
 <section id="cpu-fixed-block-dim">
-<h4>cpu_fixed_block_dim<a class="headerlink" href="#cpu-fixed-block-dim" title="Link to this heading">#</a></h4>
+<span id="cpu_fixed_block_dim"></span><h4>cpu_fixed_block_dim<a class="headerlink" href="#cpu-fixed-block-dim" title="Link to this heading">#</a></h4>
 <p><code class="docutils literal notranslate"><span class="pre">cpu_fixed_block_dim</span></code> sets the number of original iterations per task when the loop does not specify its own block size. Its default is 32, and its value must be at least 1. The final task can contain fewer iterations.</p>
 <p>For a nonempty loop without a loop-specific block size:</p>
 <div class="highlight-text notranslate"><div class="highlight"><pre><span></span>task_count = ceil(iteration_count / cpu_fixed_block_dim)
@@ -650,7 +650,7 @@
 </section>
 </section>
 <section id="multi-dimensional-parallelization-with-qd-ndrange">
-<h2>Multi-dimensional parallelization with qd.ndrange<a class="headerlink" href="#multi-dimensional-parallelization-with-qd-ndrange" title="Link to this heading">#</a></h2>
+<span id="multi-dimensional-parallelization-with-qdndrange"></span><h2>Multi-dimensional parallelization with qd.ndrange<a class="headerlink" href="#multi-dimensional-parallelization-with-qd-ndrange" title="Link to this heading">#</a></h2>
 <p>Since only top-level for loops are parallelized, nested for loops will run sequentially on each thread. To parallelize over multiple dimensions, use <code class="docutils literal notranslate"><span class="pre">qd.ndrange()</span></code> to flatten them into a single top-level loop:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">process_image</span><span class="p">(</span><span class="n">image</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -675,7 +675,7 @@
 </div>
 </section>
 <section id="qd-grouped-with-qd-ndrange">
-<h3>qd.grouped with qd.ndrange<a class="headerlink" href="#qd-grouped-with-qd-ndrange" title="Link to this heading">#</a></h3>
+<span id="qdgrouped-with-qdndrange"></span><h3>qd.grouped with qd.ndrange<a class="headerlink" href="#qd-grouped-with-qd-ndrange" title="Link to this heading">#</a></h3>
 <p><code class="docutils literal notranslate"><span class="pre">qd.grouped()</span></code> packs the loop indices into a single vector, which is useful for writing dimension-independent code:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">fill</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>

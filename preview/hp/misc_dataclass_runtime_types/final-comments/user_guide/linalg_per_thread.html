@@ -434,7 +434,7 @@
 <p>Each entry point here implements an <em>iterative or multi-step numerical algorithm</em> (Jacobi sweeps, Gauss elimination, Givens rotations) rather than a single closed-form formula.</p>
 <p>All ops live at the top level (<code class="docutils literal notranslate"><span class="pre">qd.svd</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.sym_eig</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.make_spd</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.polar_decompose</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.eig</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.solve</span></code>) and are intended to be called from inside a <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> or <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code>.</p>
 <section id="what-s-available">
-<h2>What’s available<a class="headerlink" href="#what-s-available" title="Link to this heading">#</a></h2>
+<span id="whats-available"></span><h2>What’s available<a class="headerlink" href="#what-s-available" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
 <tr class="row-odd"><th class="head"><p>Op</p></th>
@@ -488,7 +488,7 @@
 <section id="semantics">
 <h2>Semantics<a class="headerlink" href="#semantics" title="Link to this heading">#</a></h2>
 <section id="qd-svd-a-dt-none">
-<h3><code class="docutils literal notranslate"><span class="pre">qd.svd(A,</span> <span class="pre">dt=None)</span></code><a class="headerlink" href="#qd-svd-a-dt-none" title="Link to this heading">#</a></h3>
+<span id="qdsvda-dtnone"></span><h3><code class="docutils literal notranslate"><span class="pre">qd.svd(A,</span> <span class="pre">dt=None)</span></code><a class="headerlink" href="#qd-svd-a-dt-none" title="Link to this heading">#</a></h3>
 <p>Singular value decomposition — produces <code class="docutils literal notranslate"><span class="pre">(U,</span> <span class="pre">S,</span> <span class="pre">V)</span></code> such that <code class="docutils literal notranslate"><span class="pre">A</span> <span class="pre">=</span> <span class="pre">U</span> <span class="pre">&#64;</span> <span class="pre">S</span> <span class="pre">&#64;</span> <span class="pre">V.transpose()</span></code>, with:</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">U</span></code> orthogonal (<code class="docutils literal notranslate"><span class="pre">U</span> <span class="pre">&#64;</span> <span class="pre">U.transpose()</span> <span class="pre">=</span> <span class="pre">I</span></code>).</p></li>
@@ -500,7 +500,7 @@
 <p>For 3×3 the implementation enforces <code class="docutils literal notranslate"><span class="pre">det(U)</span> <span class="pre">=</span> <span class="pre">det(V)</span> <span class="pre">=</span> <span class="pre">+1</span></code> regardless of input — useful for ARAP-style rotations <code class="docutils literal notranslate"><span class="pre">R</span> <span class="pre">=</span> <span class="pre">U</span> <span class="pre">&#64;</span> <span class="pre">V.transpose()</span></code> (which is then guaranteed to be a proper rotation). The 2×2 path does not enforce this convention; if you need a particular handedness on 2×2, check it explicitly and flip a column if needed.</p>
 </section>
 <section id="qd-sym-eig-a-dt-none">
-<h3><code class="docutils literal notranslate"><span class="pre">qd.sym_eig(A,</span> <span class="pre">dt=None)</span></code><a class="headerlink" href="#qd-sym-eig-a-dt-none" title="Link to this heading">#</a></h3>
+<span id="qdsym_eiga-dtnone"></span><h3><code class="docutils literal notranslate"><span class="pre">qd.sym_eig(A,</span> <span class="pre">dt=None)</span></code><a class="headerlink" href="#qd-sym-eig-a-dt-none" title="Link to this heading">#</a></h3>
 <p>Symmetric eigendecomposition — for a real symmetric <code class="docutils literal notranslate"><span class="pre">A</span></code>, returns <code class="docutils literal notranslate"><span class="pre">(eigenvalues,</span> <span class="pre">eigenvectors)</span></code> with:</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">eigenvalues</span></code>: a <code class="docutils literal notranslate"><span class="pre">Vector(n)</span></code> of real eigenvalues.</p></li>
@@ -515,7 +515,7 @@
 <p><code class="docutils literal notranslate"><span class="pre">A</span></code> is <em>assumed</em> symmetric; the implementation does not symmetrize first. If your matrix is only approximately symmetric (e.g. accumulated floating-point error), explicitly compute <code class="docutils literal notranslate"><span class="pre">(A</span> <span class="pre">+</span> <span class="pre">A.transpose())</span> <span class="pre">*</span> <span class="pre">0.5</span></code> before calling.</p>
 </section>
 <section id="qd-make-spd-a-dt-none">
-<h3><code class="docutils literal notranslate"><span class="pre">qd.make_spd(A,</span> <span class="pre">dt=None)</span></code><a class="headerlink" href="#qd-make-spd-a-dt-none" title="Link to this heading">#</a></h3>
+<span id="qdmake_spda-dtnone"></span><h3><code class="docutils literal notranslate"><span class="pre">qd.make_spd(A,</span> <span class="pre">dt=None)</span></code><a class="headerlink" href="#qd-make-spd-a-dt-none" title="Link to this heading">#</a></h3>
 <p>Project a symmetric matrix <code class="docutils literal notranslate"><span class="pre">A</span></code> to the closest positive semi-definite matrix in the Frobenius-norm sense. Implemented as <code class="docutils literal notranslate"><span class="pre">Q</span> <span class="pre">·</span> <span class="pre">diag(max(λ,</span> <span class="pre">0))</span> <span class="pre">·</span> <span class="pre">Qᵀ</span></code> where <code class="docutils literal notranslate"><span class="pre">A</span> <span class="pre">=</span> <span class="pre">Q</span> <span class="pre">·</span> <span class="pre">diag(λ)</span> <span class="pre">·</span> <span class="pre">Qᵀ</span></code> is the symmetric eigendecomposition computed by <code class="docutils literal notranslate"><span class="pre">qd.sym_eig</span></code>.</p>
 <p>Available for shapes 4×4 .. 6×6 (it shares the cyclic-Jacobi path with <code class="docutils literal notranslate"><span class="pre">qd.sym_eig</span></code>; for 2×2 / 3×3 you can write the same projection by hand using <code class="docutils literal notranslate"><span class="pre">qd.sym_eig</span></code> directly — see the example below).</p>
 <p>Use cases:</p>
@@ -527,7 +527,7 @@
 <p><code class="docutils literal notranslate"><span class="pre">make_spd</span></code> is a Frobenius-projector onto the SPD cone: <code class="docutils literal notranslate"><span class="pre">make_spd(make_spd(A))</span> <span class="pre">==</span> <span class="pre">make_spd(A)</span></code>. If <code class="docutils literal notranslate"><span class="pre">A</span></code> is already SPD it is returned essentially unchanged (up to <code class="docutils literal notranslate"><span class="pre">sym_eig</span></code> round-trip error); if <code class="docutils literal notranslate"><span class="pre">A</span></code> is negative-definite the result is the zero matrix.</p>
 </section>
 <section id="qd-polar-decompose-a-dt-none">
-<h3><code class="docutils literal notranslate"><span class="pre">qd.polar_decompose(A,</span> <span class="pre">dt=None)</span></code><a class="headerlink" href="#qd-polar-decompose-a-dt-none" title="Link to this heading">#</a></h3>
+<span id="qdpolar_decomposea-dtnone"></span><h3><code class="docutils literal notranslate"><span class="pre">qd.polar_decompose(A,</span> <span class="pre">dt=None)</span></code><a class="headerlink" href="#qd-polar-decompose-a-dt-none" title="Link to this heading">#</a></h3>
 <p>Polar decomposition — produces <code class="docutils literal notranslate"><span class="pre">(R,</span> <span class="pre">S)</span></code> such that <code class="docutils literal notranslate"><span class="pre">A</span> <span class="pre">=</span> <span class="pre">R</span> <span class="pre">&#64;</span> <span class="pre">S</span></code>, with:</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">R</span></code> orthogonal (the closest-rotation factor, modulo handedness).</p></li>
@@ -536,7 +536,7 @@
 <p>Built on top of SVD: <code class="docutils literal notranslate"><span class="pre">A</span> <span class="pre">=</span> <span class="pre">U</span> <span class="pre">&#64;</span> <span class="pre">Σ</span> <span class="pre">&#64;</span> <span class="pre">Vᵀ</span></code> ⇒ <code class="docutils literal notranslate"><span class="pre">R</span> <span class="pre">=</span> <span class="pre">U</span> <span class="pre">&#64;</span> <span class="pre">Vᵀ</span></code>, <code class="docutils literal notranslate"><span class="pre">S</span> <span class="pre">=</span> <span class="pre">V</span> <span class="pre">&#64;</span> <span class="pre">Σ</span> <span class="pre">&#64;</span> <span class="pre">Vᵀ</span></code>. The same caveats about sign convention as <code class="docutils literal notranslate"><span class="pre">qd.svd</span></code> apply — <code class="docutils literal notranslate"><span class="pre">R</span></code> is the closest orthogonal factor to <code class="docutils literal notranslate"><span class="pre">A</span></code> but is not guaranteed to be a proper rotation (positive determinant) without a manual fix-up.</p>
 </section>
 <section id="qd-eig-a-dt-none">
-<h3><code class="docutils literal notranslate"><span class="pre">qd.eig(A,</span> <span class="pre">dt=None)</span></code><a class="headerlink" href="#qd-eig-a-dt-none" title="Link to this heading">#</a></h3>
+<span id="qdeiga-dtnone"></span><h3><code class="docutils literal notranslate"><span class="pre">qd.eig(A,</span> <span class="pre">dt=None)</span></code><a class="headerlink" href="#qd-eig-a-dt-none" title="Link to this heading">#</a></h3>
 <p>General eigendecomposition for <strong>2×2 only</strong>. Returns:</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">eigenvalues</span></code>: a <code class="docutils literal notranslate"><span class="pre">Matrix(n,</span> <span class="pre">2)</span></code> where row <code class="docutils literal notranslate"><span class="pre">i</span></code> is <code class="docutils literal notranslate"><span class="pre">(real_part,</span> <span class="pre">imaginary_part)</span></code> of the i-th eigenvalue.</p></li>
@@ -545,7 +545,7 @@
 <p>Eigenvalues of a real 2×2 matrix come in complex-conjugate pairs when the discriminant is negative; the packed layout keeps the function single-return-shape. Calling with <code class="docutils literal notranslate"><span class="pre">n=3</span></code> raises — for 3×3 general (non-symmetric) eigendecomposition, there is no Quadrants entry point today; the canonical path is <code class="docutils literal notranslate"><span class="pre">qd.sym_eig</span></code> if your matrix happens to be symmetric.</p>
 </section>
 <section id="qd-solve-a-b-dt-none">
-<h3><code class="docutils literal notranslate"><span class="pre">qd.solve(A,</span> <span class="pre">b,</span> <span class="pre">dt=None)</span></code><a class="headerlink" href="#qd-solve-a-b-dt-none" title="Link to this heading">#</a></h3>
+<span id="qdsolvea-b-dtnone"></span><h3><code class="docutils literal notranslate"><span class="pre">qd.solve(A,</span> <span class="pre">b,</span> <span class="pre">dt=None)</span></code><a class="headerlink" href="#qd-solve-a-b-dt-none" title="Link to this heading">#</a></h3>
 <p>Direct solve of <code class="docutils literal notranslate"><span class="pre">A</span> <span class="pre">&#64;</span> <span class="pre">x</span> <span class="pre">=</span> <span class="pre">b</span></code> via Gauss elimination with partial pivoting. Returns the solution vector <code class="docutils literal notranslate"><span class="pre">x</span></code>.</p>
 <ul class="simple">
 <li><p>Shapes 2×2 and 3×3.</p></li>
@@ -614,7 +614,7 @@
 <p>Each thread does an independent Gauss elimination on its own 2×2 system. For larger systems a CG / PCG iteration over the whole array is the standard Quadrants pattern; <code class="docutils literal notranslate"><span class="pre">qd.solve</span></code> is for the per-element case.</p>
 </section>
 <section id="polar-decomposition-for-shape-matching">
-<h3>2×2 polar decomposition for shape matching<a class="headerlink" href="#polar-decomposition-for-shape-matching" title="Link to this heading">#</a></h3>
+<span id="22-polar-decomposition-for-shape-matching"></span><h3>2×2 polar decomposition for shape matching<a class="headerlink" href="#polar-decomposition-for-shape-matching" title="Link to this heading">#</a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">shape_match</span><span class="p">(</span><span class="n">A</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">matrix</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">))</span> <span class="o">-&gt;</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">matrix</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">):</span>
     <span class="n">R</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">polar_decompose</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
