@@ -451,16 +451,12 @@ def _extract_arg(
                     # ``live=True``: in-process key, so a subclass/enum is keyed by class identity. The offline
                     # fastcache passes ``live=False`` (see ``validate_value_for_final_field_and_get_key`` /
                     # ``args_hasher``).
-                    cached = (
-                        final_value_key_by_value_id.get(id(field_value))
-                        if final_value_key_by_value_id is not None
-                        else None
-                    )
+                    cache = final_value_key_by_value_id
+                    cached = cache.get(id(field_value)) if cache is not None else None
                     if cached is not None and cached[0] is field_value:
-                        field_key = cached[1]
+                        key_parts.append(cached[1])
                     else:
-                        field_key = validate_value_for_final_field_and_get_key(field_value, live=True)
-                    key_parts.append(field_key)
+                        key_parts.append(validate_value_for_final_field_and_get_key(field_value, live=True))
                 else:
                     key_parts.append(
                         _extract_arg(
