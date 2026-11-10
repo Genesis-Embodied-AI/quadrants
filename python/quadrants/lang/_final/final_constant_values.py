@@ -154,4 +154,3 @@ def validate_value_for_final_field_and_get_key(value: Any, live: bool = False) -
         return (_SCALAR_KEY_TAG, cls.__module__, cls.__qualname__, canonical)
     # A behavior-free user subclass (``class Grams(int): pass``): carry the class-identity token like the other cases.
     return (_SCALAR_KEY_TAG, *_subclass_identity(cls, live), canonical)
-
