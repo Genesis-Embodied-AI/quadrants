@@ -26,7 +26,7 @@ _final_field_names_by_dataclass_type_id: dict[int, tuple[type, frozenset[str]]] 
 
 
 def get_final_field_names(dataclass_type: type) -> frozenset[str]:
-    """Find and cache Final markers without checking their values or container constraints."""
+    """Find and cache the names of fields marked Final."""
     cached_dataclass_type, cached_final_field_names = _final_field_names_by_dataclass_type_id.get(
         id(dataclass_type), (None, None)
     )
