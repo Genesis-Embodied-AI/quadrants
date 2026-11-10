@@ -8,7 +8,9 @@ from quadrants.lang._final.final_annotation import dataclass_field_is_final
 from quadrants.lang._final.final_annotation import (  # pylint: disable=unused-import
     is_final_annotation as is_final_annotation,
 )
-from quadrants.lang._final.final_constant_values import validate_value_for_final_field_and_get_key
+from quadrants.lang._final.final_constant_values import (
+    validate_value_for_final_field_and_get_key,
+)
 from quadrants.lang._runtime_typing.deferred_errors import (
     create_deferred_member_type_for_invalid_dataclass_member,
 )

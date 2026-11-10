@@ -234,7 +234,9 @@ def _canonical_attr_value(val: Any, live: bool) -> Any:
     ):
         # Scalar keys include class identity too. Import only for this recursive case, after both modules are loaded.
         # pylint: disable-next=import-outside-toplevel
-        from quadrants.lang._final.final_constant_values import validate_value_for_final_field_and_get_key
+        from quadrants.lang._final.final_constant_values import (
+            validate_value_for_final_field_and_get_key,
+        )
 
         return ("scalarsub", validate_value_for_final_field_and_get_key(val, live))
     if isinstance(val, float):  # exact float (subclasses routed above); IEEE bits so ``0.0``/``-0.0`` never collapse
