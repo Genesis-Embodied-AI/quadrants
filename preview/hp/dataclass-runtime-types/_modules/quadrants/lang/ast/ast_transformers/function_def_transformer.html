@@ -32,7 +32,7 @@
     <link rel="stylesheet" type="text/css" href="../../../../../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../../../../../_static/togglebutton.css?v=9c3e77be" />
     <link rel="stylesheet" type="text/css" href="../../../../../_static/graphviz.css?v=4ae1632d" />
-    <link rel="stylesheet" type="text/css" href="../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/sphinx-design.min.css?v=6a604523" />
     <link rel="stylesheet" type="text/css" href="../../../../../_static/css/custom.css" />
   
   <!-- So that users can add custom icons -->
@@ -51,7 +51,7 @@
     <script>let toggleOpenOnPrint = 'true';</script>
     <script src="../../../../../_static/togglebutton.js?v=b8b12719"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script src="../../../../../_static/design-tabs.js?v=f930bc37"></script>
+    <script data-sd-tabs-storage-prefix="sphinx-design-tab-id-" src="../../../../../_static/design-tabs.js?v=fcb327ea"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = '_modules/quadrants/lang/ast/ast_transformers/function_def_transformer';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../../../../../genindex.html" />
@@ -354,8 +354,7 @@
     <span class="n">matrix</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">ops</span> <span class="k">as</span> <span class="n">qd_ops</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._deferred_errors</span><span class="w"> </span><span class="kn">import</span> <span class="n">DeferredMemberError</span><span class="p">,</span> <span class="n">DeferredMemberType</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._final_dataclass_fields</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._final.final_dataclass_fields</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">final_field_names</span><span class="p">,</span>
     <span class="n">is_final_annotation</span><span class="p">,</span>
 <span class="p">)</span>
@@ -364,7 +363,11 @@
     <span class="n">dotted_argument_path_from_flat_name</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._optional_annotation</span><span class="w"> </span><span class="kn">import</span> <span class="n">OPTIONAL_ABSENT</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._runtime_dataclass</span><span class="w"> </span><span class="kn">import</span> <span class="n">runtime_template_members</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._runtime_typing.deferred_errors</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">DeferredMemberError</span><span class="p">,</span>
+    <span class="n">DeferredMemberType</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._runtime_typing.runtime_dataclass</span><span class="w"> </span><span class="kn">import</span> <span class="n">runtime_template_members</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">ASTTransformerFuncContext</span><span class="p">,</span>
 <span class="p">)</span>
