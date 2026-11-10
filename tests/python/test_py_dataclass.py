@@ -3660,7 +3660,7 @@ def test_final_field_on_non_frozen_dataclass_is_rejected():
     message. ``frozen=True`` and ``unsafe_hash=True`` are both accepted."""
     from typing import Final
 
-    from quadrants.lang._final._final_dataclass_fields import final_field_names
+    from quadrants.lang._final.final_dataclass_fields import final_field_names
 
     @dataclass  # not frozen
     class Mutable:
@@ -3703,7 +3703,7 @@ def test_mutable_ancestor_of_nested_final_field_is_rejected():
     child's baked constant and produce results for the old value. Reject the mutable ancestor instead."""
     from typing import Final
 
-    from quadrants.lang._final._final_dataclass_fields import final_field_names
+    from quadrants.lang._final.final_dataclass_fields import final_field_names
 
     @dataclass(frozen=True)
     class Inner:
@@ -3824,7 +3824,7 @@ def test_final_field_ignores_inner_types() -> None:
     import enum
     from typing import Final
 
-    from quadrants.lang._final._final_dataclass_fields import final_field_names
+    from quadrants.lang._final.final_dataclass_fields import final_field_names
 
     @dataclass(frozen=True)
     class Leaf:
@@ -3911,7 +3911,7 @@ def test_bare_final_annotation_specializes() -> None:
     """Bare Final uses the arriving value as a compile-time constant."""
     import typing
 
-    from quadrants.lang._final._final_dataclass_fields import (
+    from quadrants.lang._final.final_dataclass_fields import (
         final_field_names,
         is_final_annotation,
     )
@@ -4081,7 +4081,7 @@ def test_final_unsafe_hash_ordinary_field_reread_each_launch():
 @test_utils.test()
 def test_final_field_string_annotation_is_recognized() -> None:
     """String Final markers are recognized without resolving their inner annotations."""
-    from quadrants.lang._final._final_dataclass_fields import final_field_names
+    from quadrants.lang._final.final_dataclass_fields import final_field_names
 
     @dataclass(frozen=True)
     class StringAnnotated:
@@ -4104,7 +4104,7 @@ def test_final_field_aliased_string_annotation_is_recognized() -> None:
     import types
     from typing import Final
 
-    from quadrants.lang._final._final_dataclass_fields import final_field_names
+    from quadrants.lang._final.final_dataclass_fields import final_field_names
 
     # A real module whose globals carry the ``Final as F`` alias, so ``typing.get_type_hints`` can resolve ``"F[int]"``
     # (a function-local class would not expose the alias to the resolver).
@@ -4129,7 +4129,7 @@ def test_final_aliased_string_detected_despite_unresolvable_sibling():
     import types
     from typing import Final
 
-    from quadrants.lang._final._final_dataclass_fields import final_field_names
+    from quadrants.lang._final.final_dataclass_fields import final_field_names
 
     mod = types.ModuleType("_qd_final_alias_unresolvable_mod")
     mod.F = Final
@@ -4153,7 +4153,7 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     import math
     import struct
 
-    from quadrants.lang._final._final_constant_values import final_scalar_key
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     # Signed zero: Python conflates these; the bit encoding must not.
     assert 0.0 == -0.0 and hash(0.0) == hash(-0.0)
@@ -4527,7 +4527,7 @@ def test_final_scalar_key_live_preserves_class_identity_across_module_rebind():
     import sys
     import types
 
-    from quadrants.lang._final._final_constant_values import final_scalar_key
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     mod_name = "qd_reload_identity_probe"
     mod = types.ModuleType(mod_name)
@@ -4564,8 +4564,8 @@ def test_final_scalar_key_live_uses_object_identity_not_class_equality():
     keys - ``cfg.x.__class__ is First`` is observable, so distinct classes must key apart, and the component also
     retains the class as a strong ref (pinning its ``id``). This identity behavior is defense-in-depth: such a
     metaclass carries observable equality behavior, so ``final_scalar_key`` itself now *rejects* the value."""
-    from quadrants.lang._final import _final_class_identity as _fdf
-    from quadrants.lang._final._final_constant_values import final_scalar_key
+    from quadrants.lang._final import final_class_identity as _fdf
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class EqMeta(type):
         # Distinct classes with the same qualname compare equal with equal hashes (a pathological metaclass).
@@ -4616,8 +4616,8 @@ def test_final_scalar_key_offline_dynamic_class_is_process_unique():
     process, guaranteeing a dynamic class is a cross-process cache miss (never a wrong reuse of a kernel baked for a
     distinct class in another worker). The *in-process* (``live=True``) key is process-local anyway, so it stays
     nonce-free."""
-    from quadrants.lang._final import _final_class_identity as fdf
-    from quadrants.lang._final._final_constant_values import final_scalar_key
+    from quadrants.lang._final import final_class_identity as fdf
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     def _make_local_int():
         class Local(int):
@@ -4646,7 +4646,7 @@ def test_final_offline_dynamic_class_serial_is_monotonic_not_recyclable():
     import gc
     import weakref as _weakref
 
-    from quadrants.lang._final import _final_class_identity as fdf
+    from quadrants.lang._final import final_class_identity as fdf
 
     def _make():
         class Local(int):
@@ -4679,8 +4679,8 @@ def test_final_scalar_key_live_hashable_under_unhashable_metaclass():
     retains the class via a ``_ClassRef`` token that hashes/compares by object identity, so the whole key stays
     hashable - a mapper's ``self.mapping[key]`` would otherwise raise ``TypeError``. This is defense-in-depth: such a
     metaclass carries observable behavior, so ``final_scalar_key`` itself rejects the value."""
-    from quadrants.lang._final import _final_class_identity as _fdf
-    from quadrants.lang._final._final_constant_values import final_scalar_key
+    from quadrants.lang._final import final_class_identity as _fdf
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class Unhashable(type):
         __hash__ = None  # the classes this metaclass produces are themselves unhashable
@@ -4719,7 +4719,7 @@ def test_final_plan_cache_keyed_by_type_identity():
     import dataclasses as dcs
     from typing import Final
 
-    from quadrants.lang._final._final_dataclass_fields import final_field_names
+    from quadrants.lang._final.final_dataclass_fields import final_field_names
 
     class DcMeta(type):
         def __eq__(cls, other):
@@ -4751,7 +4751,7 @@ def test_final_first_final_path_tracks_visited_by_identity():
     import dataclasses as dcs
     from typing import Final
 
-    from quadrants.lang._final._final_dataclass_fields import final_field_names
+    from quadrants.lang._final.final_dataclass_fields import final_field_names
 
     class DcMeta(type):
         def __eq__(cls, other):
@@ -4781,7 +4781,7 @@ def test_final_enum_rejects_observable_metaclass_state():
     metaclasses (or a mutated one) would select the same specialization. A plain enum (framework metaclass) is fine."""
     import enum as en
 
-    from quadrants.lang._final._final_constant_values import final_scalar_key
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class LabeledMeta(en.EnumMeta):
         label = "x"  # observable via ``Mode.label`` / ``cfg.mode.__class__.label``, absent from the key
@@ -4811,8 +4811,8 @@ def test_final_is_baked_base_type_ignores_spoofed_module():
     the mutable ``__module__`` string. A user subclass that spoofs ``__module__ = "numpy"`` is still a heap type, so it
     must not masquerade as a trusted base: its state/behavior is inspected (and rejected) and it is keyed by class
     identity like any other user subclass."""
-    from quadrants.lang._final._final_class_identity import _is_baked_base_type
-    from quadrants.lang._final._final_constant_values import final_scalar_key
+    from quadrants.lang._final.final_class_identity import _is_baked_base_type
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class BehaviorSubclass(int):
         def __eq__(self, other):  # observable class-level behavior a kernel could read (``cfg.x == 1``)
@@ -4841,7 +4841,7 @@ def test_final_primitive_subclass_rejects_observable_metaclass_state():
     differing) would reuse a stale specialization. Even a metaclass ``__eq__`` / ``__hash__`` is rejected: identity-safe
     keying stops dict collisions but the operator is still observable via ``qd.static(cfg.x.__class__ == Expected)``.
     A metaclass that is a bare ``type`` subclass (no observable attrs) stays accepted."""
-    from quadrants.lang._final._final_constant_values import final_scalar_key
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class UnitMeta(type):
         label = "m"  # observable via ``cfg.x.__class__.label``, absent from the key
@@ -4939,7 +4939,7 @@ def test_final_subtree_has_final_fields_predicate():
     recompute and revalidate each launch."""
     from typing import Final
 
-    from quadrants.lang._final._final_dataclass_fields import (
+    from quadrants.lang._final.final_dataclass_fields import (
         subtree_has_final_fields as shf,
     )
 
@@ -5066,8 +5066,8 @@ def test_final_exact_baked_type_membership_is_identity_not_equality():
     for an exact builtin: equality-based membership would skip subclass/metaclass validation and canonicalize ``X`` as
     a builtin, collapsing two distinct same-qualified factory classes onto one live key while ``cfg.x.__class__ is
     First`` is observable. Such a metaclass carries observable equality behavior, so the value is rejected outright."""
-    from quadrants.lang._final._final_class_identity import _is_exact_baked_type
-    from quadrants.lang._final._final_constant_values import final_scalar_key
+    from quadrants.lang._final.final_class_identity import _is_exact_baked_type
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class EqIntMeta(type):
         # Make the class compare (and hash) as the builtin ``int`` - a hostile spoof of exact-builtin-ness.
@@ -5098,7 +5098,7 @@ def test_final_enum_rejects_user_override_of_generated_hook():
     the unwrapped function identity rather than the wrapper's."""
     import enum
 
-    from quadrants.lang._final._final_constant_values import final_scalar_key
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class Clean(enum.Enum):
         A = 1
@@ -5145,7 +5145,7 @@ def test_final_enum_rejects_user_override_of_mixin_dependent_hook():
     default - including a direct ``class M(int, enum.Enum)`` - is *not* mistaken for a user override."""
     import enum
 
-    from quadrants.lang._final._final_constant_values import final_scalar_key
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class DirectIntMixin(int, enum.Enum):  # a hand-written IntEnum: its _value_repr_/_new_member_ are int's, not Enum's
         A = 1
@@ -5174,7 +5174,7 @@ def test_final_enum_rejects_user_added_enum_valued_class_attribute():
     (``IntFlag._boundary_`` is a ``FlagBoundary`` member) must stay exempt, so an ordinary ``IntFlag`` is unaffected."""
     import enum
 
-    from quadrants.lang._final._final_constant_values import final_scalar_key
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class WithAlias(enum.Enum):
         A = 1
@@ -5212,7 +5212,7 @@ def test_final_enum_rejects_cross_kind_machinery_sunder():
     ``_boundary_`` to a different value is itself observable and must flip it to rejected."""
     import enum
 
-    from quadrants.lang._final._final_constant_values import final_scalar_key
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class Mode(enum.Enum):
         A = 1
@@ -5243,7 +5243,7 @@ def test_final_primitive_subclass_rejects_mixin_after_base():
     at the first primitive base. ``class Unit(int, Labels)`` has MRO ``(Unit, int, Labels, object)``, so a scan that
     broke at ``int`` would never see ``Labels.label`` - observable as ``cfg.x.__class__.label`` yet absent from the
     key (which identifies the subclass only by module/qualname). A behavior-free subclass is still accepted."""
-    from quadrants.lang._final._final_constant_values import final_scalar_key
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class Labels:
         label = "kg"
@@ -5269,7 +5269,7 @@ def test_final_enum_rejects_state_on_unselected_member():
     be rejected."""
     import enum
 
-    from quadrants.lang._final._final_constant_values import final_scalar_key
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class Mode(enum.Enum):
         A = 1
@@ -5291,7 +5291,7 @@ def test_final_enum_kind_in_offline_key():
     import sys
     import types
 
-    from quadrants.lang._final._final_constant_values import final_scalar_key
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     def offline_key(base_name):
         mod = types.ModuleType("qd_enum_kind_probe")
@@ -5318,7 +5318,7 @@ def test_final_scalar_subclass_base_kind_in_offline_key():
 
     import numpy as np
 
-    from quadrants.lang._final._final_constant_values import final_scalar_key
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     def offline_key(base_expr):
         mod = types.ModuleType("qd_scalar_kind_probe")
@@ -5344,7 +5344,7 @@ def test_final_subclass_metaclass_kind_in_offline_key():
     import sys
     import types
 
-    from quadrants.lang._final._final_constant_values import final_scalar_key
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     def offline_key(use_meta):
         mod = types.ModuleType("qd_metaclass_kind_probe")
@@ -5373,7 +5373,7 @@ def test_final_subclass_dynamic_metaclass_identity_in_offline_key():
     import sys
     import types
 
-    from quadrants.lang._final._final_constant_values import final_scalar_key
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     def make_meta():
         class M(type):  # <locals> -> a distinct object each call, same qualname
@@ -5402,7 +5402,7 @@ def test_final_subclass_structural_identified_object_rejected():
     (``cfg.x.__class__.__doc__.__defaults__``) yet uncapturable by the key, and it is not among the sources the source
     cache validates, so keying it by identity/qualname alone could reuse a stale specialization after its body
     changes. Rejection also covers such an object nested in a container structural value."""
-    from quadrants.lang._final._final_constant_values import final_scalar_key
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class Unit(int):
         pass
@@ -5433,7 +5433,7 @@ def test_final_subclass_structural_identified_object_rejected():
 def test_final_subclass_structural_float_bits_in_key():
     """A keyed structural attr holding a float is encoded by exact IEEE bits, so ``0.0`` and ``-0.0`` (equal with equal
     hashes, yet distinguishable at compile time via ``float.hex()``/``math.copysign``) do not share a key."""
-    from quadrants.lang._final._final_constant_values import final_scalar_key
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class Unit(int):
         pass
@@ -5453,7 +5453,7 @@ def test_final_subclass_docstring_in_key():
     rather than reuse a stale specialization. It is *keyed*, not rejected - documented classes stay legal."""
     import enum
 
-    from quadrants.lang._final._final_constant_values import final_scalar_key
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class Unit(int):
         pass
@@ -5481,7 +5481,7 @@ def test_final_subclass_slots_in_key():
     reused."""
     import enum
 
-    from quadrants.lang._final._final_constant_values import final_scalar_key
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class Unit(int):
         __slots__ = ()
@@ -5525,7 +5525,7 @@ def test_final_subclass_weakref_in_key():
     a user value like ``None`` is kept), not rejected."""
     import enum
 
-    from quadrants.lang._final._final_constant_values import final_scalar_key
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class Unit(int):
         pass
@@ -5550,7 +5550,7 @@ def test_final_subclass_name_in_key():
     """``__name__`` is a mutable ``type`` getset (not in ``vars(cls)``, so the behavior scan misses it) that is
     independently reassignable from ``__qualname__`` and observable as ``cfg.x.__class__.__name__``, so renaming a
     class between launches must change the key."""
-    from quadrants.lang._final._final_constant_values import final_scalar_key
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class Unit(int):
         pass
@@ -5567,7 +5567,7 @@ def test_final_subclass_structural_dict_value_is_lossless():
     """A structural attr rebound to a ``dict`` must be serialized faithfully: two distinct mappings cannot collapse to
     one token (a compile-time branch can tell them apart). A value we cannot represent faithfully is rejected, not
     silently collapsed."""
-    from quadrants.lang._final._final_constant_values import final_scalar_key
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class Unit(int):
         pass
@@ -5595,7 +5595,7 @@ def test_final_subclass_313_metadata_in_key():
     if sys.version_info < (3, 13):
         return
 
-    from quadrants.lang._final._final_constant_values import final_scalar_key
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class Unit(int):
         pass
@@ -5619,7 +5619,7 @@ def test_final_subclass_structural_scalar_subclass_state_rejected():
     """A scalar subclass bound in a keyed structural attr routes through ``final_scalar_key``, not a bare-value token:
     per-instance state (``cfg.x.__class__.__doc__.label``) is rejected, and two distinct stateless subclasses sharing a
     qualname/value key apart instead of collapsing."""
-    from quadrants.lang._final._final_constant_values import final_scalar_key
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class Unit(int):
         pass
@@ -5654,7 +5654,7 @@ def test_final_subclass_structural_scalar_subclass_state_rejected():
 def test_final_subclass_structural_container_subclass_rejected():
     """A container *subclass* in a keyed structural attr can add per-instance state / a distinct identity that keying by
     its elements alone would drop, so it is rejected (exact ``tuple``/``list``/``set``/``dict`` stay legal)."""
-    from quadrants.lang._final._final_constant_values import final_scalar_key
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class MyList(list):
         pass
@@ -5673,7 +5673,7 @@ def test_final_subclass_structural_foreign_descriptor_identity():
     owner's identity: its address-based ``repr`` is unkeyable and its own ``__qualname__`` is just the slot name, so
     without the owner two distinct descriptors collapse to one token and a compile-time ``... is A.__weakref__`` branch
     would reuse the wrong specialization."""
-    from quadrants.lang._final._final_constant_values import final_scalar_key
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class OwnerA:
         pass
@@ -5710,7 +5710,7 @@ def test_final_subclass_dynamic_serial_keyed_by_identity():
     compare equal with equal hashes must not alias them to one serial (a ``WeakKeyDictionary`` would), or a
     ``fastcache`` offline key could load code baked for a different object. Each serial is stable per object and
     distinct across objects."""
-    from quadrants.lang._final._final_class_identity import _dynamic_class_serial
+    from quadrants.lang._final.final_class_identity import _dynamic_class_serial
 
     class Meta(type):
         def __eq__(cls, other):
@@ -5745,7 +5745,7 @@ def test_final_enum_key_incorporates_full_member_map():
     import sys
     import types
 
-    from quadrants.lang._final._final_constant_values import final_scalar_key
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     mod_name = "qd_member_map_probe"
     mod = types.ModuleType(mod_name)

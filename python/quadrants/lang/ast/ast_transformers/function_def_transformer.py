@@ -22,6 +22,10 @@ from quadrants.lang import (
     matrix,
 )
 from quadrants.lang import ops as qd_ops
+from quadrants.lang._final.final_dataclass_fields import (
+    final_field_names,
+    is_final_annotation,
+)
 from quadrants.lang._name_utils import (
     create_flat_name,
     dotted_argument_path_from_flat_name,
@@ -41,10 +45,6 @@ from quadrants.lang.ast.symbol_resolver import ASTResolver
 from quadrants.lang.buffer_view import BufferView
 from quadrants.lang.exception import (
     QuadrantsSyntaxError,
-)
-from quadrants.lang._final._final_dataclass_fields import (
-    final_field_names,
-    is_final_annotation,
 )
 from quadrants.lang.matrix import MatrixType
 from quadrants.lang.runtime_typing._deferred_errors import (

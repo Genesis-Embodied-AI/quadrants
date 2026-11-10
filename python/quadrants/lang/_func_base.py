@@ -34,6 +34,10 @@ from quadrants._lib.core.quadrants_python import KernelLaunchContext
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import _kernel_impl_dataclass, impl
+from quadrants.lang._final.final_dataclass_fields import (
+    final_field_names,
+    subtree_has_final_fields,
+)
 from quadrants.lang._name_utils import (
     create_flat_name,
     dotted_argument_path_from_flat_name,
@@ -47,10 +51,6 @@ from quadrants.lang.exception import (
     QuadrantsRuntimeError,
     QuadrantsRuntimeTypeError,
     QuadrantsSyntaxError,
-)
-from quadrants.lang._final._final_dataclass_fields import (
-    final_field_names,
-    subtree_has_final_fields,
 )
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.matrix import MatrixType
