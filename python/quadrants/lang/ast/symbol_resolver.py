@@ -4,6 +4,8 @@
 
 import ast
 
+from quadrants.lang._name_utils import extract_dotted_name_parts
+
 
 class ASTResolver:
     """Provides helper methods to resolve AST nodes."""
@@ -28,24 +30,11 @@ class ASTResolver:
         if isinstance(node, ast.Name):
             return scope.get(node.id) is wanted
 
-        if not isinstance(node, ast.Attribute):
+        name_parts = extract_dotted_name_parts(node)
+        if name_parts is None:
             return False
 
-        v = node.value
-        chain = [node.attr]
-        while isinstance(v, ast.Attribute):
-            chain.append(v.attr)
-            v = v.value
-        if not isinstance(v, ast.Name):
-            # Example cases that fall under this branch:
-            #
-            # x[i].attr: ast.Subscript
-            # (a + b).attr: ast.BinOp
-            # ...
-            return False
-        chain.append(v.id)
-
-        for attr in reversed(chain):
+        for attr in name_parts:
             try:
                 if isinstance(scope, dict):
                     scope = scope[attr]
@@ -66,19 +55,11 @@ class ASTResolver:
         if isinstance(node, ast.Name):
             return scope.get(node.id) if isinstance(scope, dict) else None
 
-        if not isinstance(node, ast.Attribute):
+        name_parts = extract_dotted_name_parts(node)
+        if name_parts is None:
             return None
 
-        v = node.value
-        chain = [node.attr]
-        while isinstance(v, ast.Attribute):
-            chain.append(v.attr)
-            v = v.value
-        if not isinstance(v, ast.Name):
-            return None
-        chain.append(v.id)
-
-        for attr in reversed(chain):
+        for attr in name_parts:
             try:
                 if isinstance(scope, dict):
                     scope = scope[attr]
