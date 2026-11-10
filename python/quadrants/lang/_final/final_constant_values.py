@@ -5,7 +5,7 @@ from typing import Any
 
 import numpy as np
 
-from quadrants.lang._final._final_class_identity import (
+from quadrants.lang._final.final_class_identity import (
     _FRAMEWORK_PRIMITIVE_METACLASSES,
     _STRUCTURAL_CLASS_ATTRS,
     _is_baked_base_type,
@@ -16,7 +16,7 @@ from quadrants.lang._final._final_class_identity import (
     _subclass_identity,
     _unpack_u64,
 )
-from quadrants.lang._final._final_enum_validation import _reject_stateful_enum_member
+from quadrants.lang._final.final_enum_validation import _reject_stateful_enum_member
 
 # Separate constants that Python considers equal, such as True, 1, and an IntEnum member.
 _FLOAT_KEY_TAG = "f64"
