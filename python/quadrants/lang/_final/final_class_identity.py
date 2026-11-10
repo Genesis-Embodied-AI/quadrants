@@ -98,6 +98,7 @@ def _slot_names(klass: type) -> tuple[str, ...]:
         return (slots,)
     if not hasattr(slots, "__iter__"):
         return ()
+    # Ignored non-string entries still affect the class key through its __slots__ attribute.
     return tuple(s for s in slots if isinstance(s, str))
 
 
@@ -317,6 +318,7 @@ def _kind_entry(klass: type, live: bool) -> tuple:
     return (
         klass.__module__,
         klass.__qualname__,
+        # __name__ can change independently of __qualname__ and is absent from vars(klass).
         klass.__name__,
         *(_attr_kind(klass, name, live) for name in _KEYED_STRUCTURAL_ATTRS),
         _identity_component(klass, live),
