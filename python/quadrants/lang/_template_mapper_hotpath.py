@@ -41,7 +41,9 @@ from quadrants._tensor import (
 )
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorClass
-from quadrants.lang._final.final_constant_values import runtime_final_key
+from quadrants.lang._final.final_constant_values import (
+    get_cached_or_validate_value_for_final_field_and_get_key,
+)
 from quadrants.lang._final.final_dataclass_fields import (
     final_field_names,
     subtree_has_final_fields,
@@ -449,7 +451,11 @@ def _extract_arg(
                     # ``live=True``: in-process key, so a subclass/enum is keyed by class identity. The offline
                     # fastcache passes ``live=False`` (see ``validate_value_for_final_field_and_get_key`` /
                     # ``args_hasher``).
-                    key_parts.append(runtime_final_key(field_value, final_value_key_by_value_id))
+                    key_parts.append(
+                        get_cached_or_validate_value_for_final_field_and_get_key(
+                            field_value, final_value_key_by_value_id
+                        )
+                    )
                 else:
                     key_parts.append(
                         _extract_arg(
