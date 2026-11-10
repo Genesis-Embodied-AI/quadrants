@@ -29,8 +29,8 @@ _final_field_names_by_dataclass_type_id: dict[int, tuple[type, frozenset[str]]] 
 
 def get_final_field_names(dataclass_type: type) -> frozenset[str]:
     """Find and cache the names of fields marked Final."""
-    cached_dataclass_type, cached_final_field_names = _final_field_names_by_dataclass_type_id.get(
-        id(dataclass_type), (None, None)
+    cached_dataclass_type, cached_final_field_names = (
+        _final_field_names_by_dataclass_type_id.get(id(dataclass_type), (None, None))
     )
     if cached_dataclass_type is dataclass_type and cached_final_field_names is not None:
         return cached_final_field_names
@@ -39,7 +39,10 @@ def get_final_field_names(dataclass_type: type) -> frozenset[str]:
         for field in dataclasses.fields(dataclass_type)
         if dataclass_field_is_final(dataclass_type, field.name, field.type)
     )
-    _final_field_names_by_dataclass_type_id[id(dataclass_type)] = (dataclass_type, names)
+    _final_field_names_by_dataclass_type_id[id(dataclass_type)] = (
+        dataclass_type,
+        names,
+    )
     return names
 
 
@@ -61,26 +64,33 @@ def infer_final_field_annotation(
     # Exact Python primitives cannot fail the existing value validator. Other values must still be checked on each
     # launch: an enum or primitive subclass can acquire mutable state even inside a frozen dataclass.
     value_type = type(value)
-    if value_type is not bool and value_type is not int and value_type is not float and value_type is not str:
+    if (
+        value_type is not bool
+        and value_type is not int
+        and value_type is not float
+        and value_type is not str
+    ):
         try:
             key = final_scalar_key(value, live=True)
             if final_value_key_by_value_id is not None:
                 final_value_key_by_value_id[id(value)] = (value, key)
         except TypeError as error:
-            return create_deferred_member_type_for_invalid_dataclass_member(TypeError, str(error), value)
+            return create_deferred_member_type_for_invalid_dataclass_member(
+                TypeError, str(error), value
+            )
     # A schema needs only the marker; the specialization key and compiler retain the actual value and its type.
     return _FINAL_MARKER
 
 
 def _describe_annotation(annotation: Any) -> str:
+    """Return a readable name for an annotation."""
     return getattr(annotation, "__name__", None) or repr(annotation)
 
 
 def _rebinding_is_prevented(dc_type: type) -> bool:
-    """True if ``dc_type`` forbids field rebinding: ``frozen=True`` or ``unsafe_hash=True``.
+    """Check whether the dataclass declares frozen or unsafe_hash.
 
-    Not the ``__hash__ is not None`` proxy: ``@dataclass(eq=False)`` inherits ``object.__hash__`` and would look
-    frozen, letting a baked ``Final`` constant be silently reassigned.
+    A hashable class is not necessarily frozen: dataclass(eq=False) can inherit object.__hash__.
     """
     params = getattr(dc_type, "__dataclass_params__", None)
     if params is None:
@@ -93,12 +103,14 @@ def _rebinding_is_prevented(dc_type: type) -> bool:
 _final_path_cache: "dict[int, tuple[type, tuple[str, ...] | None]]" = {}
 
 
-def _first_final_path(dc_type: type, visiting: "frozenset[int]") -> "tuple[str, ...] | None":
-    """Field path from ``dc_type`` down to some ``Final`` leaf, or None. First hit wins; recursing eagerly validates
-    every nested type. ``visiting`` holds ``id``s (not types) so a metaclass ``__eq__`` cannot fake "already visited".
-    """
+def _first_final_path(
+    dc_type: type, visiting: "frozenset[int]"
+) -> "tuple[str, ...] | None":
+    """Validate nested dataclass declarations and return the first Final field path, if any."""
     entry = _final_path_cache.get(id(dc_type))
-    if entry is not None and entry[0] is dc_type:  # identity guard against a recycled ``id``
+    if (
+        entry is not None and entry[0] is dc_type
+    ):  # identity guard against a recycled ``id``
         return entry[1]
     if id(dc_type) in visiting:
         return None
@@ -117,7 +129,7 @@ def _first_final_path(dc_type: type, visiting: "frozenset[int]") -> "tuple[str, 
 
 
 def _build_final_plan(dc_type: type) -> "frozenset[str]":
-    """Validate every ``Final`` field on ``dc_type`` and return their names. Once per type (memoised)."""
+    """Validate the dataclass’s Final declarations and return their field names."""
     final_names = []
     for field in dataclasses.fields(dc_type):
         annotation = field.type
@@ -147,7 +159,9 @@ def _build_final_plan(dc_type: type) -> "frozenset[str]":
     # ``final_names`` covers only own fields, so reject every mutable dataclass on a path to a Final leaf.
     if not _rebinding_is_prevented(dc_type):
         for field in dataclasses.fields(dc_type):
-            if not (isinstance(field.type, type) and dataclasses.is_dataclass(field.type)):
+            if not (
+                isinstance(field.type, type) and dataclasses.is_dataclass(field.type)
+            ):
                 continue
             nested = _first_final_path(field.type, frozenset({id(dc_type)}))
             if nested is None:
@@ -170,10 +184,11 @@ _final_plan_cache: "dict[int, tuple[type, frozenset[str]]]" = {}
 
 
 def final_field_names(dc_type: Any) -> "frozenset[str]":
-    """Cached set of ``Final`` field names on ``dc_type`` (validated on first sighting). Hot path: one ``dict.get`` +
-    ``is``; callers short-circuit on the empty result. ``Any`` avoids a per-launch ``cast`` at the call site."""
+    """Return cached Final field names, validating declarations on the first lookup."""
     entry = _final_plan_cache.get(id(dc_type))
-    if entry is not None and entry[0] is dc_type:  # identity guard against a recycled ``id``
+    if (
+        entry is not None and entry[0] is dc_type
+    ):  # identity guard against a recycled ``id``
         return entry[1]
     names = _build_final_plan(dc_type)
     _final_plan_cache[id(dc_type)] = (dc_type, names)
@@ -181,10 +196,9 @@ def final_field_names(dc_type: Any) -> "frozenset[str]":
 
 
 def subtree_has_final_fields(dc_type: Any) -> bool:
-    """True if ``dc_type`` or any transitively nested dataclass has a ``Final`` field.
+    """Check whether a dataclass or any nested dataclass declares Final fields.
 
-    Gates the per-instance launch caches (``_qd_spec_key``, ``_qd_dc_repr``): a ``Final`` value's class *behavior* can
-    change after launch one (a plain ``enum`` later monkey-patched), so cache writers skip such dataclasses and the
-    read falls through to a revalidating recompute. Transitive, since a cache hit also skips recursion into a leaf.
+    Final-bearing subtrees must bypass instance launch caches because a constant’s class behavior can change between
+    launches.
     """
     return _first_final_path(dc_type, frozenset()) is not None
