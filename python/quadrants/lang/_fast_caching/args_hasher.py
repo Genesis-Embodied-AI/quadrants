@@ -75,6 +75,7 @@ class FastcacheSkip(enum.Enum):
     """Why fastcache does not apply to this call."""
 
     FIELD_VIA_TENSOR = "field_via_tensor"
+    RUNTIME_TUPLE = "runtime_tuple"
     WARN = "warn"
 
 
@@ -462,6 +463,8 @@ def hash_args(
     for i_arg, arg in enumerate(args):
         start = time.time()
         arg_meta = arg_metas[i_arg]
+        if arg_meta is not None and hasattr(arg_meta.annotation, "_qd_tuple_plan"):
+            return FastcacheSkip.RUNTIME_TUPLE
         # Root flat name carries no ``__qd_`` prefix, matching ``pruning.used_vars_by_func_id``.
         top_flat = arg_meta.name if arg_meta is not None else None
         _hash = stringify_obj_type(

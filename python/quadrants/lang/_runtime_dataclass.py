@@ -35,6 +35,7 @@ from quadrants.lang._runtime_dataclass_final import (
     runtime_final_type,
 )
 from quadrants.lang._runtime_dataclass_guards import FrozenSchemaEntry
+from quadrants.lang._runtime_tuple import tuple_annotation
 from quadrants.lang._weak_identity_cache import WeakIdentityCache
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.buffer_view import BufferView
@@ -291,6 +292,7 @@ def infer_kernel_dataclass_arg_types(
     arg_metas: list[ArgMetadata],
     py_objs: tuple[Any, ...],
     final_value_key_by_value_id: FinalValueKeyCache | None = None,
+    raise_on_templated_floats: bool = False,
 ) -> list[ArgMetadata]:
     """Replace kernel dataclass parameter annotations with schemas inferred from their arriving values."""
     resolved_arg_metas = []
@@ -298,6 +300,13 @@ def infer_kernel_dataclass_arg_types(
         if hasattr(type(py_obj), "__dataclass_fields__"):
             arg_meta = ArgMetadata(
                 infer_dataclass_type(py_obj, arg_meta.name, final_value_key_by_value_id=final_value_key_by_value_id),
+                arg_meta.name,
+                arg_meta.default,
+                optional=arg_meta.optional,
+            )
+        elif isinstance(py_obj, tuple):
+            arg_meta = ArgMetadata(
+                tuple_annotation(py_obj, arg_meta.name, raise_on_templated_floats),
                 arg_meta.name,
                 arg_meta.default,
                 optional=arg_meta.optional,
@@ -332,7 +341,9 @@ def prepare_kernel_dataclass_args_for_mapper(
         kernel.mapper._mapping_cache_tracker.clear()
     # Per-call cache: id(value) -> (value, specialization key); retain the value to verify its identity.
     final_value_key_by_value_id: FinalValueKeyCache = {}
-    kernel.arg_metas = infer_kernel_dataclass_arg_types(kernel.orig_arguments, py_objs, final_value_key_by_value_id)
+    kernel.arg_metas = infer_kernel_dataclass_arg_types(
+        kernel.orig_arguments, py_objs, final_value_key_by_value_id, kernel.raise_on_templated_floats
+    )
     kernel.mapper.arguments = kernel.arg_metas
     has_deferred = False
     unstable = False
@@ -347,6 +358,10 @@ def prepare_kernel_dataclass_args_for_mapper(
         for i in kernel.original_template_slot_locations
         if not hasattr(kernel.arg_metas[i].annotation, "_qd_runtime_origin")
     ]
+    tuple_slots = [i for i, meta in enumerate(kernel.arg_metas) if hasattr(meta.annotation, "_qd_tuple_plan")]
+    kernel.template_slot_locations.extend(i for i in tuple_slots if i not in kernel.template_slot_locations)
+    # Handler captures can change without changing the root tuple, so always validate their plans again.
+    unstable |= bool(tuple_slots)
     kernel.mapper.template_slot_locations = kernel.template_slot_locations
     # A dataclass's member types can change without changing the identity of the outer object.
     kernel.mapper._mapping_cache_disabled = unstable or None
