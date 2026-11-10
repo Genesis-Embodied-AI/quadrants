@@ -45,9 +45,6 @@ __all__ = [
 # Genesis benchmarks.
 _any_tensor_constructed = False
 
-# Installed by runtime dataclass inference; ordinary Tensor construction needs no invalidation.
-_dataclass_binding_invalidator = None
-
 
 def _is_identity(layout: typing.Optional[typing.Tuple[int, ...]]) -> bool:
     if layout is None:
@@ -80,14 +77,6 @@ class Tensor:
         self._impl: typing.Any = impl
         global _any_tensor_constructed  # noqa: PLW0603
         _any_tensor_constructed = True  # see comment on the flag definition above
-
-    def __setattr__(self, name: str, value: typing.Any) -> None:
-        """Invalidate dataclass bindings when an existing wrapper changes its backing object or class."""
-        changed_binding = name == "_impl" and "_impl" in self.__dict__ and self._impl is not value
-        changed_type = name == "__class__" and type(self) is not value
-        object.__setattr__(self, name, value)
-        if (changed_binding or changed_type) and _dataclass_binding_invalidator is not None:
-            _dataclass_binding_invalidator()
 
     # ------------------------------------------------------------------
     # Identity / debug

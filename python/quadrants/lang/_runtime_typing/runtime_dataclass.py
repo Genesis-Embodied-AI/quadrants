@@ -11,11 +11,9 @@ import dataclasses
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol, TypeAlias, cast
-from weakref import ref
 
 import numpy as np
 
-from quadrants import _tensor_wrapper
 from quadrants._lib.core.quadrants_python import DataTypeCxx
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES, Tensor
 from quadrants.lang import impl
@@ -30,10 +28,6 @@ from quadrants.lang._runtime_typing.deferred_errors import (
     DeferredMemberType,
     create_deferred_member_type_for_invalid_dataclass_member,
 )
-from quadrants.lang._runtime_typing.runtime_dataclass_cache import (
-    _runtime_kernels,
-    invalidate_tensor_bindings,
-)
 from quadrants.lang._runtime_typing.runtime_dataclass_guards import FrozenSchemaEntry
 from quadrants.lang._weak_identity_cache import WeakIdentityCache
 from quadrants.lang.any_array import AnyArray
@@ -47,7 +41,6 @@ from quadrants.lang.util import is_data_oriented, to_quadrants_type
 from quadrants.types import buffer_view_type, ndarray_type, primitive_types
 from quadrants.types.annotations import RuntimeTyped, Template
 
-_tensor_wrapper._dataclass_binding_invalidator = invalidate_tensor_bindings
 
 if TYPE_CHECKING:
     from quadrants.lang._func_base import FuncBase
@@ -199,12 +192,6 @@ def infer_dataclass_type(
     if not container_prevents_rebinding:
         final_non_frozen_path = dataclass_type.__name__
     stable = params.frozen and not finals
-    if stable:
-        try:
-            ref(dataclass_instance)
-        except TypeError:
-            # Tensor rebinding must be able to find and invalidate this instance's downstream caches.
-            stable = False
     member_types = []
     has_deferred = False
     for name, field, is_final in field_plan:
@@ -263,7 +250,7 @@ def infer_dataclass_type(
                 "_qd_runtime_stable": stable,
                 "_qd_runtime_has_deferred": has_deferred,
                 # Cache eligibility is not part of the compiled interface: a Tensor wrapper and its bare ndarray
-                # must share a specialization, even though the wrapper can change its underlying implementation.
+                # must share a specialization.
                 "_qd_runtime_key": (
                     id(dataclass_type),
                     tuple(
@@ -326,7 +313,6 @@ def prepare_kernel_dataclass_args_for_mapper(
         and kernel.mapper._mapping_cache_tracker.get(args_hash)
     ):
         return None
-    _runtime_kernels.add(kernel)
     if kernel._runtime_metadata_defaults is not None and kernel._runtime_metadata_defaults != defaults:
         kernel.mapper._mapping_cache.clear()
         kernel.mapper._mapping_cache_tracker.clear()

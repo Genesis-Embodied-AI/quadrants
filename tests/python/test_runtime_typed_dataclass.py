@@ -430,7 +430,7 @@ def test_runtime_subclass_fields_visible_through_base_annotation() -> None:
 
 
 @test_utils.test()
-def test_runtime_frozen_wrapper_backing_and_nested_scalar_changes() -> None:
+def test_runtime_frozen_wrapper_and_nested_scalar_changes() -> None:
     @dataclass
     class Inner:
         increment: object
@@ -446,10 +446,6 @@ def test_runtime_frozen_wrapper_backing_and_nested_scalar_changes() -> None:
 
     array = qd.ndarray(qd.f32, shape=1)
     array[0] = 2
-    field = qd.field(qd.i32, shape=1)
-    field[0] = 7
-    replacement_field = qd.field(qd.i32, shape=1)
-    replacement_field[0] = 11
     wrapped = qd.Tensor(array)
     inner = Inner(1.5)
     state = State(wrapped, inner)
@@ -458,54 +454,12 @@ def test_runtime_frozen_wrapper_backing_and_nested_scalar_changes() -> None:
     inner.increment = 2.5
     assert read(state) == 4.5
     assert len(read._primal.materialized_kernels) == compiled
-    wrapped._impl = field
-    assert read(state) == 9.5
-    wrapped._impl = replacement_field
-    assert read(state) == 13.5
     inner.increment = 3
-    assert read(state) == 14
-    wrapped._impl = array
+    assert read(state) == 5
+    assert len(read._primal.materialized_kernels) == compiled + 1
     inner.increment = 1.5
     assert read(state) == 3.5
-    assert len(read._primal.materialized_kernels) == compiled + 3
-
-
-@pytest.mark.parametrize("slots", [False, True])
-@test_utils.test(require=qd.extension.data64)
-def test_runtime_frozen_nested_wrapper_dtype_rank_and_replacement(slots: bool) -> None:
-    @dataclass(frozen=True, slots=slots)
-    class Inner:
-        array: object
-
-    @dataclass(frozen=True, slots=slots)
-    class Outer:
-        inner: object
-
-    @qd.kernel
-    def fill(state: qd.RuntimeTyped):
-        for i in qd.grouped(state.inner.array):
-            state.inner.array[i] = 3
-
-    first = qd.ndarray(qd.i32, shape=2)
-    wrapped = qd.Tensor(first)
-    state = Outer(Inner(wrapped))
-    fill(state)
-    np.testing.assert_array_equal(first.to_numpy(), [3, 3])
-    compiled = len(fill._primal.materialized_kernels)
-    compatible = qd.ndarray(qd.i32, shape=4)
-    wrapped._impl = compatible
-    fill(state)
-    np.testing.assert_array_equal(compatible.to_numpy(), [3] * 4)
-    assert len(fill._primal.materialized_kernels) == compiled
-    wrapped._impl = qd.ndarray(qd.f64, shape=(2, 3))
-    fill(state)
-    np.testing.assert_array_equal(wrapped.to_numpy(), np.full((2, 3), 3))
-    assert len(fill._primal.materialized_kernels) == compiled + 1
-    first.fill(0)
-    wrapped._impl = first
-    fill(state)
-    np.testing.assert_array_equal(first.to_numpy(), [3, 3])
-    assert len(fill._primal.materialized_kernels) == compiled + 1
+    assert len(read._primal.materialized_kernels) == compiled + 1
 
 
 @test_utils.test()
