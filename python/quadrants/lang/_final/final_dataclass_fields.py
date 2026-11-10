@@ -49,7 +49,16 @@ def infer_final_field_annotation(
     name: str,
     final_value_key_by_value_id: "FinalValueKeyCache | None" = None,
 ) -> "_SpecialForm | DeferredMemberType":
-    """Infer a Final field's schema annotation from its runtime value and ancestor constraints."""
+    """Infer a Final field's schema annotation from its runtime value and ancestor constraints.
+
+    Args:
+        value: The actual Python object stored in the Final field, such as 7.
+        non_frozen_ancestor_path: Dotted path from a reassignable dataclass to the dataclass containing this field,
+            such as "State.config". None means no reassignable dataclass was found on the path.
+        name: The field's name as a string, such as "count", used in error messages.
+        final_value_key_by_value_id: Optional cache shared within the current kernel call, mapping id(value) to
+            (value, specialization_key). Stores successful validation results for reuse later in the call.
+    """
     if non_frozen_ancestor_path is not None:
         parent_name = non_frozen_ancestor_path.split(".", 1)[0]
         return create_deferred_member_type_for_invalid_dataclass_member(
