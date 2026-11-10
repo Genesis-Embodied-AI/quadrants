@@ -371,3 +371,7 @@ However, we might need to break into multiple launches in order to synchronize w
 ## Compromise
 
 The recommendations above often are self-conflicting. For example, maximizing the number of cores being used might require using atomics for synchronization, which might make the kernels slower. Reducing kernel launches similarly might require using atomics, which would make the kernels run more slowly. So it will not in general be possible to satisfy all the above guidelines. But, it's useful to be aware of the design choices above, and strive to achieve them. Exact choices for best performance will often be an empirical question.
+
+## CPU pool experiments
+
+For CPU workloads with many short parallel loops, see the [opt-in CPU pool comparison](cpu_pool_experiment.md) for caller participation, static task assignment, and bounded worker polling. These experimental settings require workload-specific timing and numerical validation.

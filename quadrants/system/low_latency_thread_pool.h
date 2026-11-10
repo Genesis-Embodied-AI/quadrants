@@ -9,7 +9,7 @@
 
 namespace quadrants {
 
-// Experimental caller-participating pool for measuring issue #1080. Based on the launch protocol in Alexis Duburcq's
+// Caller-participating CPU pool with bounded idle polling. Based on the launch protocol in Alexis Duburcq's
 // duburcqa/cpu_multithreading_poc branch (d5428164516366ac60e5a0d23f7a96eeae831a50). Like ThreadPool, run() has one
 // caller.
 class LowLatencyThreadPool {
