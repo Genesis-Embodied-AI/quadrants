@@ -3,7 +3,7 @@
 import enum
 from typing import Any
 
-from quadrants.lang.final._final_class_identity import (
+from quadrants.lang._final._final_class_identity import (
     _STRUCTURAL_CLASS_ATTRS,
     _is_baked_base_type,
     _observable_metaclass_attr,

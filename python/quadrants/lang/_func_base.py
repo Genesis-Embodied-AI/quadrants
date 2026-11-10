@@ -48,7 +48,7 @@ from quadrants.lang.exception import (
     QuadrantsRuntimeTypeError,
     QuadrantsSyntaxError,
 )
-from quadrants.lang.final._final_dataclass_fields import (
+from quadrants.lang._final._final_dataclass_fields import (
     final_field_names,
     subtree_has_final_fields,
 )
