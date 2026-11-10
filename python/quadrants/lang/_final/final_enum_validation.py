@@ -188,6 +188,7 @@ def _dict_entry_is_inherited_default(klass: type, name: str, member: Any) -> boo
 
 def _enum_machinery_class_dict(cls: type) -> "dict[str, Any] | None":
     """Rebuild an enum without members to obtain its generated attributes, or return None."""
+    # Generated hooks depend on the combination of bases, so inherited defaults alone are insufficient.
     mcls = type(cls)
     try:
         # Preserve the enum metaclass's namespace object; converting it to a plain dict would break construction.
