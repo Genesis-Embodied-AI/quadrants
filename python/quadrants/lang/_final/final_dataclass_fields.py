@@ -97,6 +97,7 @@ def _first_final_path(dc_type: type, visiting: "frozenset[int]") -> "tuple[str, 
     entry = _final_path_cache.get(id(dc_type))
     if entry is not None and entry[0] is dc_type:  # identity guard against a recycled ``id``
         return entry[1]
+    # IDs keep custom metaclass equality and hashing out of cycle detection.
     if id(dc_type) in visiting:
         return None
     direct = final_field_names(dc_type)
