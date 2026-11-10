@@ -15,9 +15,7 @@ from quadrants.lang._weak_identity_cache import WeakIdentityCache
 
 _MISSING = object()  # Distinguish missing attributes from attributes whose value is None.
 
-# Per-process token mixed into the *offline* key of a dynamically created class (see ``_subclass_identity``): its
-# serial is only process-local, so the nonce makes such a class a guaranteed cross-process miss rather than a wrong
-# reuse. Reseeded after ``fork`` (the child inherits the string); ``spawn`` re-imports and reseeds on its own.
+# Prevent dynamic class keys from being reused across processes. Refresh this token after fork.
 _PROCESS_NONCE = uuid.uuid4().hex
 
 
@@ -48,12 +46,10 @@ def _is_exact_baked_type(cls: type) -> bool:
     return any(cls is t for t in _EXACT_BAKED_TYPES)
 
 
-# ``Py_TPFLAGS_HEAPTYPE``: clear on C static types (builtins, NumPy scalars), set on any Python-defined type and not
-# user-settable, so it tells a library scalar base from a user subclass spoofing ``__module__`` (see below).
+# Distinguish static library types from user-defined subclasses, even if they spoof their module.
 _HEAPTYPE_FLAG = 1 << 9
 
-# Names CPython auto-generates for a bare ``class X(base): pass``. A primitive subclass may carry only these; anything
-# else is observable behavior we cannot key on. ``__firstlineno__`` / ``__static_attributes__`` are 3.13+.
+# Attributes allowed on an otherwise empty scalar subclass.
 _STRUCTURAL_CLASS_ATTRS = frozenset(
     {
         "__module__",
@@ -171,11 +167,7 @@ def _identity_component(obj: Any, live: bool) -> _ClassRef | tuple[str, int] | N
     return (_PROCESS_NONCE, _dynamic_class_serial(obj)) if _class_not_uniquely_identified(obj) else None
 
 
-# Structural attrs (from ``_STRUCTURAL_CLASS_ATTRS``) that are user-writable *and* readable at compile time
-# (``cfg.x.__class__.<attr>``), so their *value* is folded into the class kind rather than exempted. ``__module__`` /
-# ``__qualname__`` are omitted (already the entry's leading elements). Absence is itself observable, so it is kept
-# distinct from an explicit ``None`` via ``_ATTR_ABSENT``. ``__firstlineno__`` / ``__static_attributes__`` are 3.13+
-# (absent -> ``_ATTR_ABSENT`` on older runtimes); both are writable and observable, so their value is keyed too.
+# Mutable class attributes whose values must be included in the cache key.
 _KEYED_STRUCTURAL_ATTRS = (
     "__doc__",
     "__slots__",
@@ -185,9 +177,7 @@ _KEYED_STRUCTURAL_ATTRS = (
 )
 _ATTR_ABSENT = "<qd:attr-absent>"  # not a valid identifier, so it can never equal a real ``__slots__`` name/value
 
-# Auto-generated slot descriptors (the common case: a class's own ``__dict__``/``__weakref__``). Their only stable,
-# address-free content is ``(type, __name__)``; the owning class - separately keyed with its own identity - already
-# separates two classes' same-named descriptors, so no per-value identity is needed.
+# Built-in descriptors can be keyed by type, name, and owner instead of their memory address.
 _DESCRIPTOR_ATTR_TYPES = (
     types.GetSetDescriptorType,
     types.MemberDescriptorType,
@@ -196,9 +186,7 @@ _DESCRIPTOR_ATTR_TYPES = (
     types.BuiltinFunctionType,
 )
 
-# User-bound Python classes/callables: rejected as structural attr values (their mutable behavior/state - ``__code__``
-# / ``__defaults__`` / a class dict - is observable at compile time yet uncapturable by the key, and unvalidated by the
-# source cache). Contrast ``_DESCRIPTOR_ATTR_TYPES``, whose behavior is fixed at the C level, so they stay keyable.
+# Reject Python classes and callables as attribute values: their mutable behavior is not captured by the key.
 _IDENTIFIED_ATTR_TYPES = (
     types.FunctionType,
     types.MethodType,
@@ -228,9 +216,7 @@ def _canonical_attr_value(val: Any, live: bool) -> Any:
     """
     if val is None:
         return None
-    # A scalar *subclass* (or enum member) may carry per-instance state or a distinct class identity that the bare
-    # value discards, so route it through the full baked-scalar machinery (stateful-subclass rejection + subclass
-    # identity + IEEE bits). Exact builtins below skip that and encode directly.
+    # Scalar subclasses and enums need state validation and class identity in their keys.
     if (isinstance(val, (bool, int, float, str)) and type(val) not in (bool, int, float, str)) or isinstance(
         val, enum.Enum
     ):
@@ -263,10 +249,7 @@ def _canonical_attr_value(val: Any, live: bool) -> Any:
         items = tuple((_canonical_attr_value(k, live), _canonical_attr_value(v, live)) for k, v in val.items())
         return ("dict", items)
     if isinstance(val, _DESCRIPTOR_ATTR_TYPES):
-        # An auto-generated descriptor has an address-based ``repr`` (unkeyable) and its own ``__qualname__`` is just
-        # the slot name, so its identity is its owner (``__objclass__``): a *foreign* descriptor (``A.__weakref__``
-        # bound elsewhere) must carry ``A``'s module/qualname + identity so it never collides with ``B``'s. An own
-        # descriptor's owner is this class (identity ``None`` when module-resolvable), keeping the offline key stable.
+        # Include the descriptor’s owner so descriptors borrowed from different classes remain distinct.
         owner = getattr(val, "__objclass__", None)
         identified = owner if owner is not None else val
         return (
@@ -277,11 +260,7 @@ def _canonical_attr_value(val: Any, live: bool) -> Any:
             _identity_component(identified, live),
         )
     if isinstance(val, _IDENTIFIED_ATTR_TYPES):
-        # A Python-level class/callable carries mutable behavior/state (``__code__`` / ``__defaults__`` / a class
-        # dict) that no ``module``/``qualname``/identity token captures, and - unlike a kernel or ``@qd.func`` - it is
-        # not among the sources the source cache validates. So a *resolvable* one keeps the same offline key even after
-        # its body changes between processes (``cfg.x.__class__.<attr>.__defaults__`` flips), which would reuse a stale
-        # specialization. Reject rather than key it unsoundly.
+        # These objects can change behavior without changing identity, making cached compiled code stale.
         cls = type(val)
         raise TypeError(
             f"A ``Final``-baked class carries a structural attribute holding a {cls.__qualname__} "

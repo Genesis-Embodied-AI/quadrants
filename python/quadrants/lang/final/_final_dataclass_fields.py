@@ -88,8 +88,7 @@ def _rebinding_is_prevented(dc_type: type) -> bool:
     return params.frozen or params.unsafe_hash
 
 
-# ``id(type) -> (type, path to a Final leaf or None)``. Identity-keyed with a strong-ref+``is`` guard (a metaclass
-# ``__eq__`` must not merge distinct types); the stored type pins the ``id`` against recycling.
+# Cache nested Final paths by type identity. Retain each type to prevent id reuse.
 _final_path_cache: "dict[int, tuple[type, tuple[str, ...] | None]]" = {}
 
 
@@ -141,8 +140,7 @@ def _build_final_plan(dc_type: type) -> "frozenset[str]":
             f"responsibility for never reassigning these fields)."
         )
 
-    # A mutable *ancestor* of a Final leaf is equally unsound (``outer.child = Inner(...)`` swaps a baked constant);
-    # ``final_names`` covers only own fields, so reject every mutable dataclass on a path to a Final leaf.
+    # Reject mutable ancestors too: replacing a child can change a nested compile-time constant.
     if not _rebinding_is_prevented(dc_type):
         for field in dataclasses.fields(dc_type):
             if not (isinstance(field.type, type) and dataclasses.is_dataclass(field.type)):
@@ -162,8 +160,7 @@ def _build_final_plan(dc_type: type) -> "frozenset[str]":
     return frozenset(final_names)
 
 
-# ``id(type) -> (type, frozenset of Final field names)``. Identity-keyed (a metaclass ``__eq__`` must not merge
-# distinct types' schemas); the stored type is a strong ref pinning the ``id`` and verifying identity on lookup.
+# Cache Final field names by type identity. Retain each type to prevent id reuse.
 _final_plan_cache: "dict[int, tuple[type, frozenset[str]]]" = {}
 
 
