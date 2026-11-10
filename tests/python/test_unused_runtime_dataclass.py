@@ -403,8 +403,8 @@ def test_deferred_debug_type_names_do_not_retain_application_class() -> None:
 )
 @test_utils.test(arch=[qd.cpu])
 def test_deferred_error_dotted_argument_path(flat_name: str, dotted_argument_path: str) -> None:
-    from quadrants.lang.runtime_typing._deferred_errors import DeferredMemberType
     from quadrants.lang._name_utils import dotted_argument_path_from_flat_name
+    from quadrants.lang.runtime_typing._deferred_errors import DeferredMemberType
 
     description = DeferredMemberType(TypeError, "unsupported member")
     assert dotted_argument_path_from_flat_name(flat_name) == dotted_argument_path

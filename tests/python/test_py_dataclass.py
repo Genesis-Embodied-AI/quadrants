@@ -4939,7 +4939,9 @@ def test_final_subtree_has_final_fields_predicate():
     recompute and revalidate each launch."""
     from typing import Final
 
-    from quadrants.lang.final._final_dataclass_fields import subtree_has_final_fields as shf
+    from quadrants.lang.final._final_dataclass_fields import (
+        subtree_has_final_fields as shf,
+    )
 
     @dataclass(frozen=True)
     class PlainLeaf:

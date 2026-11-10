@@ -19,29 +19,29 @@ from quadrants import _tensor_wrapper
 from quadrants._lib.core.quadrants_python import DataTypeCxx
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES, Tensor
 from quadrants.lang import impl
-from quadrants.lang.runtime_typing._deferred_errors import (
-    DeferredMemberType,
-    create_deferred_member_type_for_invalid_dataclass_member,
-)
-from quadrants.lang.final._final_dataclass_fields import (
-    final_field_names,
-    get_final_field_names,
-    infer_final_field_annotation,
-)
 from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._ndarray import Ndarray
-from quadrants.lang.runtime_typing._runtime_dataclass_cache import (
-    _runtime_kernels,
-    invalidate_tensor_bindings,
-)
-from quadrants.lang.runtime_typing._runtime_dataclass_guards import FrozenSchemaEntry
 from quadrants.lang._weak_identity_cache import WeakIdentityCache
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.buffer_view import BufferView
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.field import Field
+from quadrants.lang.final._final_dataclass_fields import (
+    final_field_names,
+    get_final_field_names,
+    infer_final_field_annotation,
+)
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.matrix import Matrix, MatrixType, VectorType
+from quadrants.lang.runtime_typing._deferred_errors import (
+    DeferredMemberType,
+    create_deferred_member_type_for_invalid_dataclass_member,
+)
+from quadrants.lang.runtime_typing._runtime_dataclass_cache import (
+    _runtime_kernels,
+    invalidate_tensor_bindings,
+)
+from quadrants.lang.runtime_typing._runtime_dataclass_guards import FrozenSchemaEntry
 from quadrants.lang.struct import Struct, StructType
 from quadrants.lang.util import is_data_oriented, to_quadrants_type
 from quadrants.types import buffer_view_type, ndarray_type, primitive_types

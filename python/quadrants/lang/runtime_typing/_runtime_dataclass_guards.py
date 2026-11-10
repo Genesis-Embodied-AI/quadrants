@@ -15,7 +15,10 @@ if TYPE_CHECKING:
     from typing import _SpecialForm
 
     from quadrants.lang.runtime_typing._deferred_errors import DeferredMemberType
-    from quadrants.lang.runtime_typing._runtime_dataclass import DataclassInstance, InferredMemberType
+    from quadrants.lang.runtime_typing._runtime_dataclass import (
+        DataclassInstance,
+        InferredMemberType,
+    )
 
 
 class FrozenSchemaEntry:

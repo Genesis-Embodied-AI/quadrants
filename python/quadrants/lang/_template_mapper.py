@@ -3,9 +3,11 @@ from typing import Any, TypeAlias
 from weakref import ReferenceType, WeakKeyDictionary
 
 from quadrants.lang import impl
-from quadrants.lang.runtime_typing._runtime_dataclass import prepare_kernel_dataclass_args_for_mapper
 from quadrants.lang.impl import Program
 from quadrants.lang.kernel_arguments import ArgMetadata
+from quadrants.lang.runtime_typing._runtime_dataclass import (
+    prepare_kernel_dataclass_args_for_mapper,
+)
 from quadrants.lang.util import is_data_oriented
 from quadrants.types import ndarray_type
 

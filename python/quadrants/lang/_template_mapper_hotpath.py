@@ -41,19 +41,19 @@ from quadrants._tensor import (
 )
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorClass
-from quadrants.lang.runtime_typing._deferred_errors import DeferredMemberType
-from quadrants.lang.final._final_constant_values import runtime_final_key
-from quadrants.lang.final._final_dataclass_fields import (
-    final_field_names,
-    subtree_has_final_fields,
-)
 from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.buffer_view import BufferView as BufferViewInstance
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.expr import Expr
+from quadrants.lang.final._final_constant_values import runtime_final_key
+from quadrants.lang.final._final_dataclass_fields import (
+    final_field_names,
+    subtree_has_final_fields,
+)
 from quadrants.lang.matrix import MatrixType
+from quadrants.lang.runtime_typing._deferred_errors import DeferredMemberType
 from quadrants.lang.snode import SNode
 from quadrants.lang.util import (
     is_data_oriented,
