@@ -40,7 +40,10 @@ def _reject_stateful_primitive_subclass(value: Any) -> None:
     else:
         stateful = False
         for klass in cls.__mro__:
-            if any(slot not in ("__dict__", "__weakref__") and hasattr(value, slot) for slot in _slot_names(klass)):
+            if any(
+                slot not in ("__dict__", "__weakref__") and hasattr(value, slot)
+                for slot in _slot_names(klass)
+            ):
                 stateful = True
                 break
     if stateful:
@@ -88,21 +91,24 @@ def _reject_stateful_primitive_subclass(value: Any) -> None:
 
 def _enum_member_map_key(cls: type, live: bool) -> tuple:
     """Build a key for every enum member’s name and value.
-    
+
     Include siblings because compiled code can access them through the selected member’s class.
     """
     member_map = getattr(cls, "_member_map_", None)
     if not isinstance(member_map, dict):
         return ()
-    return tuple((name, final_scalar_key(member.value, live)) for name, member in member_map.items())
+    return tuple(
+        (name, final_scalar_key(member.value, live))
+        for name, member in member_map.items()
+    )
 
 
 def final_scalar_key(value: Any, live: bool = False) -> tuple[Any, ...]:
     """Validate a Final value and build its specialization key.
-    
-    Keep distinct constants separate even when Python considers them equal, such as True and 1 or an IntEnum
-    member and its integer value. Float keys preserve exact bits, including signed zero and NaN payloads.
-    
+
+    Keep distinct constants separate even when Python considers them equal, such as True and 1 or an IntEnum member and
+    its integer value. Float keys preserve exact bits, including signed zero and NaN payloads.
+
     Revalidate on each launch so a later change to a constant’s class cannot silently reuse compiled code.
     """
     if type(value) is float:
@@ -122,14 +128,25 @@ def final_scalar_key(value: Any, live: bool = False) -> tuple[Any, ...]:
         # ``dtype.str`` + ``tobytes()`` preserves sign/NaN/width, in the float-tagged space.
         _reject_stateful_primitive_subclass(value)
         cls = type(value)
-        if _is_baked_base_type(cls):  # an exact NumPy float scalar (``np.float32``/``np.float64``/...)
+        if _is_baked_base_type(
+            cls
+        ):  # an exact NumPy float scalar (``np.float32``/``np.float64``/...)
             return (_FLOAT_KEY_TAG, value.dtype.str, value.tobytes())
-        return (_FLOAT_KEY_TAG, *_subclass_identity(cls, live), value.dtype.str, value.tobytes())
+        return (
+            _FLOAT_KEY_TAG,
+            *_subclass_identity(cls, live),
+            value.dtype.str,
+            value.tobytes(),
+        )
     if isinstance(value, float):
         # A ``float`` subclass (the exact builtin took the fast path); bit-encode but keep the subclass identity.
         _reject_stateful_primitive_subclass(value)
         cls = type(value)
-        return (_FLOAT_KEY_TAG, *_subclass_identity(cls, live), _unpack_u64(_pack_f64(value))[0])
+        return (
+            _FLOAT_KEY_TAG,
+            *_subclass_identity(cls, live),
+            _unpack_u64(_pack_f64(value))[0],
+        )
     # ``bool``/``int``/``str`` + NumPy analogues; the exact type completes the tag so value-equal but distinct-typed
     # constants (``True``/``1``/``np.int64(1)``) never share a specialization.
     _reject_stateful_primitive_subclass(value)
@@ -138,11 +155,17 @@ def final_scalar_key(value: Any, live: bool = False) -> tuple[Any, ...]:
     # value must not serialize two distinct values to one string.
     if _is_exact_baked_type(cls):
         canonical = value
-    elif isinstance(value, int):  # a Python ``int`` subclass (``bool`` cannot be subclassed)
-        canonical = int.__int__(value)  # base slot: bypass an overridden ``__int__`` / ``__index__``
+    elif isinstance(
+        value, int
+    ):  # a Python ``int`` subclass (``bool`` cannot be subclassed)
+        canonical = int.__int__(
+            value
+        )  # base slot: bypass an overridden ``__int__`` / ``__index__``
     elif isinstance(value, np.integer):  # NumPy integer scalar (no base int slot)
         canonical = value.item()  # override-proof extraction of the Python ``int``
-    elif isinstance(value, str):  # a ``str`` subclass, including ``np.str_``; bypass any ``__str__`` override
+    elif isinstance(
+        value, str
+    ):  # a ``str`` subclass, including ``np.str_``; bypass any ``__str__`` override
         canonical = str.__str__(value)
     elif isinstance(value, np.bool_):  # NumPy boolean scalar -> plain ``bool``
         canonical = bool(value)
