@@ -7,11 +7,10 @@ import struct
 import sys
 import types
 import uuid
+import weakref
 from typing import Any, NoReturn
 
 import numpy as np
-
-import weakref
 
 _MISSING = object()  # Distinguish missing attributes from attributes whose value is None.
 

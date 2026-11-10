@@ -3931,7 +3931,10 @@ def test_bare_final_annotation_is_rejected():
     for ``Final[T]``, so it must not be how the unsupported spelling behaves."""
     import typing
 
-    from quadrants.lang.final._final_dataclass_fields import final_field_names, is_final_annotation
+    from quadrants.lang.final._final_dataclass_fields import (
+        final_field_names,
+        is_final_annotation,
+    )
 
     # The bare form genuinely is not a subscripted Final...
     assert is_final_annotation(typing.Final) is False
@@ -4678,7 +4681,6 @@ def test_final_offline_dynamic_class_serial_is_monotonic_not_recyclable():
     import weakref as _weakref
 
     from quadrants.lang.final import _final_class_identity as fdf
-    from quadrants.lang.final._final_constant_values import final_scalar_key
 
     def _make():
         class Local(int):
@@ -4971,7 +4973,9 @@ def test_final_subtree_has_final_fields_predicate():
     recompute and revalidate each launch."""
     from typing import Final
 
-    from quadrants.lang.final._final_dataclass_fields import subtree_has_final_fields as shf
+    from quadrants.lang.final._final_dataclass_fields import (
+        subtree_has_final_fields as shf,
+    )
 
     @dataclass(frozen=True)
     class PlainLeaf:
