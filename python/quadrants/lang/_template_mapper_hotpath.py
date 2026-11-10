@@ -47,8 +47,8 @@ from quadrants.lang.any_array import AnyArray
 from quadrants.lang.buffer_view import BufferView as BufferViewInstance
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.expr import Expr
-from quadrants.lang.final._final_constant_values import final_scalar_key
-from quadrants.lang.final._final_dataclass_fields import (
+from quadrants.lang._final._final_constant_values import final_scalar_key
+from quadrants.lang._final._final_dataclass_fields import (
     final_field_names,
     subtree_has_final_fields,
 )

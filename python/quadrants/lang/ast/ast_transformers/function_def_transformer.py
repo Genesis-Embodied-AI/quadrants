@@ -39,7 +39,7 @@ from quadrants.lang.buffer_view import BufferView
 from quadrants.lang.exception import (
     QuadrantsSyntaxError,
 )
-from quadrants.lang.final._final_dataclass_fields import (
+from quadrants.lang._final._final_dataclass_fields import (
     final_field_names,
     is_final_annotation,
 )
