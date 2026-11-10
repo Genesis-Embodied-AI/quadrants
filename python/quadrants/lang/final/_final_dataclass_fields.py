@@ -114,7 +114,7 @@ def _first_final_path(dc_type: type, visiting: "frozenset[int]") -> "tuple[str, 
 
 
 def _build_final_plan(dc_type: type) -> "frozenset[str]":
-    """Validate the dataclass’s Final declarations and return their field names."""
+    """Validate the dataclass's Final declarations and return their field names."""
     final_names = []
     for field in dataclasses.fields(dc_type):
         annotation = field.type
@@ -177,7 +177,7 @@ def final_field_names(dc_type: Any) -> "frozenset[str]":
 def subtree_has_final_fields(dc_type: Any) -> bool:
     """Check whether a dataclass or any nested dataclass declares Final fields.
 
-    Final-bearing subtrees must bypass instance launch caches because a constant’s class behavior can change between
+    Final-bearing subtrees must bypass instance launch caches because a constant's class behavior can change between
     launches.
     """
     return _first_final_path(dc_type, frozenset()) is not None
