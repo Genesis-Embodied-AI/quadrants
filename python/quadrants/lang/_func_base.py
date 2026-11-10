@@ -43,8 +43,8 @@ from quadrants.lang._name_utils import (
     dotted_argument_path_from_flat_name,
 )
 from quadrants.lang._ndarray import Ndarray
-from quadrants.lang._runtime_typing._deferred_errors import DeferredMemberType
-from quadrants.lang._runtime_typing._runtime_dataclass import is_dataclass_annotation
+from quadrants.lang._runtime_typing.deferred_errors import DeferredMemberType
+from quadrants.lang._runtime_typing.runtime_dataclass import is_dataclass_annotation
 from quadrants.lang._signature import get_func_signature
 from quadrants.lang._wrap_inspect import get_source_info_and_src
 from quadrants.lang.ast import ASTTransformerFuncContext

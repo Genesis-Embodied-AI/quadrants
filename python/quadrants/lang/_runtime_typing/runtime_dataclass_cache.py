@@ -13,7 +13,7 @@ _runtime_kernels: WeakSet["Kernel"] = WeakSet()
 def invalidate_tensor_bindings() -> None:
     """Drop schema, specialization, and launch caches before a changed Tensor can be reused."""
     # pylint: disable=import-outside-toplevel
-    from quadrants.lang._runtime_typing._runtime_dataclass import (
+    from quadrants.lang._runtime_typing.runtime_dataclass import (
         _schema_by_context_by_instance,
     )
 

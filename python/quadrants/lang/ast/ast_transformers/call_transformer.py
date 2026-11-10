@@ -19,7 +19,7 @@ from quadrants.lang import (
 )
 from quadrants.lang import ops as qd_ops
 from quadrants.lang._name_utils import create_flat_name
-from quadrants.lang._runtime_typing._runtime_dataclass import dataclass_call_arguments
+from quadrants.lang._runtime_typing.runtime_dataclass import dataclass_call_arguments
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
     get_decorator,

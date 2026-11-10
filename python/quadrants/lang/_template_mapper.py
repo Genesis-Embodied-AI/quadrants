@@ -3,7 +3,7 @@ from typing import Any, TypeAlias
 from weakref import ReferenceType, WeakKeyDictionary
 
 from quadrants.lang import impl
-from quadrants.lang._runtime_typing._runtime_dataclass import (
+from quadrants.lang._runtime_typing.runtime_dataclass import (
     prepare_kernel_dataclass_args_for_mapper,
 )
 from quadrants.lang.impl import Program

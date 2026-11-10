@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import pytest
 
 import quadrants as qd
-from quadrants.lang._runtime_typing import _runtime_dataclass
+from quadrants.lang._runtime_typing import runtime_dataclass as _runtime_dataclass
 
 from tests.helpers import test_utils
 

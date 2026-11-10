@@ -9,15 +9,15 @@ from quadrants.lang._final.final_annotation import (  # pylint: disable=unused-i
     is_final_annotation as is_final_annotation,
 )
 from quadrants.lang._final.final_constant_values import final_scalar_key
-from quadrants.lang._runtime_typing._deferred_errors import (
+from quadrants.lang._runtime_typing.deferred_errors import (
     create_deferred_member_type_for_invalid_dataclass_member,
 )
 
 if TYPE_CHECKING:
     from typing import _SpecialForm
 
-    from quadrants.lang._runtime_typing._deferred_errors import DeferredMemberType
-    from quadrants.lang._runtime_typing._runtime_dataclass import FinalValueKeyCache
+    from quadrants.lang._runtime_typing.deferred_errors import DeferredMemberType
+    from quadrants.lang._runtime_typing.runtime_dataclass import FinalValueKeyCache
 
 # Final is a special-form object at runtime, although static checkers treat it as a type expression.
 _FINAL_MARKER = typing.cast("_SpecialForm", typing.Final)

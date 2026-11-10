@@ -316,7 +316,7 @@ def test_unused_member_in_captured_dataclass() -> None:
 def test_deferred_runtime_type_debug_cache_isolation(debug_settings: tuple[bool, ...], member_kind: str) -> None:
     from typing import Final
 
-    from quadrants.lang._runtime_typing._runtime_dataclass import infer_dataclass_type
+    from quadrants.lang._runtime_typing.runtime_dataclass import infer_dataclass_type
 
     @dataclass(frozen=member_kind != "final_container")
     class Inner:
@@ -369,7 +369,7 @@ def test_deferred_debug_type_names_do_not_retain_application_class() -> None:
     import gc
     import weakref
 
-    from quadrants.lang._runtime_typing._runtime_dataclass import infer_dataclass_type
+    from quadrants.lang._runtime_typing.runtime_dataclass import infer_dataclass_type
 
     @dataclass(frozen=True)
     class State:
@@ -404,7 +404,7 @@ def test_deferred_debug_type_names_do_not_retain_application_class() -> None:
 @test_utils.test(arch=[qd.cpu])
 def test_deferred_error_dotted_argument_path(flat_name: str, dotted_argument_path: str) -> None:
     from quadrants.lang._name_utils import dotted_argument_path_from_flat_name
-    from quadrants.lang._runtime_typing._deferred_errors import DeferredMemberType
+    from quadrants.lang._runtime_typing.deferred_errors import DeferredMemberType
 
     description = DeferredMemberType(TypeError, "unsupported member")
     assert dotted_argument_path_from_flat_name(flat_name) == dotted_argument_path
