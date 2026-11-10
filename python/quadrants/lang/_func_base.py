@@ -43,6 +43,8 @@ from quadrants.lang._name_utils import (
     dotted_argument_path_from_flat_name,
 )
 from quadrants.lang._ndarray import Ndarray
+from quadrants.lang._runtime_typing._deferred_errors import DeferredMemberType
+from quadrants.lang._runtime_typing._runtime_dataclass import is_dataclass_annotation
 from quadrants.lang._signature import get_func_signature
 from quadrants.lang._wrap_inspect import get_source_info_and_src
 from quadrants.lang.ast import ASTTransformerFuncContext
@@ -54,8 +56,6 @@ from quadrants.lang.exception import (
 )
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.matrix import MatrixType
-from quadrants.lang.runtime_typing._deferred_errors import DeferredMemberType
-from quadrants.lang.runtime_typing._runtime_dataclass import is_dataclass_annotation
 from quadrants.lang.struct import StructType
 from quadrants.lang.util import cook_dtype, has_pytorch
 from quadrants.types import (

@@ -19,7 +19,7 @@ from quadrants.lang._final.final_class_identity import (
 from quadrants.lang._final.final_enum_validation import _reject_stateful_enum_member
 
 if TYPE_CHECKING:
-    from quadrants.lang.runtime_typing._runtime_dataclass import FinalValueKeyCache
+    from quadrants.lang._runtime_typing._runtime_dataclass import FinalValueKeyCache
 
 # Separate constants that Python considers equal, such as True, 1, and an IntEnum member.
 _FLOAT_KEY_TAG = "f64"

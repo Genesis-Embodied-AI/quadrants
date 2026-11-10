@@ -19,6 +19,7 @@ from quadrants.lang import (
 )
 from quadrants.lang import ops as qd_ops
 from quadrants.lang._name_utils import create_flat_name
+from quadrants.lang._runtime_typing._runtime_dataclass import dataclass_call_arguments
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
     get_decorator,
@@ -29,7 +30,6 @@ from quadrants.lang.exception import (
 )
 from quadrants.lang.expr import Expr
 from quadrants.lang.matrix import Matrix, Vector
-from quadrants.lang.runtime_typing._runtime_dataclass import dataclass_call_arguments
 from quadrants.lang.util import is_quadrants_class
 from quadrants.types import primitive_types
 

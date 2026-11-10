@@ -18,6 +18,8 @@ from quadrants.lang import exception, expr, impl, matrix, mesh
 from quadrants.lang import ops as qd_ops
 from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._ndrange import _Ndrange
+from quadrants.lang._runtime_typing._deferred_errors import DeferredMemberError
+from quadrants.lang._runtime_typing._runtime_dataclass import is_runtime_member_name
 from quadrants.lang._unpacked import _UnpackedVectorRef
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
@@ -48,8 +50,6 @@ from quadrants.lang.exception import (
 from quadrants.lang.expr import Expr, make_expr_group
 from quadrants.lang.field import Field
 from quadrants.lang.matrix import Matrix, MatrixType
-from quadrants.lang.runtime_typing._deferred_errors import DeferredMemberError
-from quadrants.lang.runtime_typing._runtime_dataclass import is_runtime_member_name
 from quadrants.lang.snode import append, deactivate, length
 from quadrants.lang.struct import Struct, StructType
 from quadrants.lang.util import (

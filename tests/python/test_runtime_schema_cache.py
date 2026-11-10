@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import pytest
 
 import quadrants as qd
-from quadrants.lang.runtime_typing._runtime_dataclass import (
+from quadrants.lang._runtime_typing._runtime_dataclass import (
     _schema_by_context_by_instance,
     infer_dataclass_type,
 )

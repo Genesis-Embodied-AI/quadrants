@@ -31,6 +31,11 @@ from quadrants.lang._name_utils import (
     dotted_argument_path_from_flat_name,
 )
 from quadrants.lang._optional_annotation import OPTIONAL_ABSENT
+from quadrants.lang._runtime_typing._deferred_errors import (
+    DeferredMemberError,
+    DeferredMemberType,
+)
+from quadrants.lang._runtime_typing._runtime_dataclass import runtime_template_members
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
 )
@@ -47,11 +52,6 @@ from quadrants.lang.exception import (
     QuadrantsSyntaxError,
 )
 from quadrants.lang.matrix import MatrixType
-from quadrants.lang.runtime_typing._deferred_errors import (
-    DeferredMemberError,
-    DeferredMemberType,
-)
-from quadrants.lang.runtime_typing._runtime_dataclass import runtime_template_members
 from quadrants.lang.stream import stream_parallel
 from quadrants.lang.struct import StructType
 from quadrants.lang.util import (
