@@ -503,7 +503,7 @@
 </ul>
 </section>
 <section id="dataclasses-dataclass">
-<h2>dataclasses.dataclass<a class="headerlink" href="#dataclasses-dataclass" title="Link to this heading">#</a></h2>
+<span id="dataclassesdataclass"></span><h2>dataclasses.dataclass<a class="headerlink" href="#dataclasses-dataclass" title="Link to this heading">#</a></h2>
 <section id="runtime-member-types">
 <h3>Runtime member types<a class="headerlink" href="#runtime-member-types" title="Link to this heading">#</a></h3>
 <p>Use <code class="docutils literal notranslate"><span class="pre">qd.RuntimeTyped</span></code> on a kernel or <code class="docutils literal notranslate"><span class="pre">qd.func</span></code> parameter to accept a Python dataclass instance without naming its concrete class:</p>
@@ -590,7 +590,7 @@ my_struct.b[37] 5
 </div>
 </section>
 <section id="passing-nested-sub-structs-to-a-qd-func">
-<h3>Passing nested sub-structs to a <code class="docutils literal notranslate"><span class="pre">qd.func</span></code><a class="headerlink" href="#passing-nested-sub-structs-to-a-qd-func" title="Link to this heading">#</a></h3>
+<span id="passing-nested-sub-structs-to-a-qdfunc"></span><h3>Passing nested sub-structs to a <code class="docutils literal notranslate"><span class="pre">qd.func</span></code><a class="headerlink" href="#passing-nested-sub-structs-to-a-qd-func" title="Link to this heading">#</a></h3>
 <p>You can pass either a whole nested-dataclass argument or one of its sub-struct members to a <code class="docutils literal notranslate"><span class="pre">qd.func</span></code>. The callee declares the sub-struct’s type as the parameter annotation; the caller writes the attribute access at the call site:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@dataclass</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">Inner</span><span class="p">:</span>
@@ -651,7 +651,7 @@ my_struct.b[37] 5
 <p>Do not bypass a frozen dataclass’s assignment restrictions with <code class="docutils literal notranslate"><span class="pre">object.__setattr__</span></code> after its first launch: cached type descriptions and launch arguments assume those member bindings remain fixed. Mutable nested dataclasses and <code class="docutils literal notranslate"><span class="pre">Final</span></code>-bearing containers are re-read on each launch.</p>
 </section>
 <section id="compile-time-constant-fields-typing-final">
-<h3>Compile-time constant fields: <code class="docutils literal notranslate"><span class="pre">typing.Final</span></code><a class="headerlink" href="#compile-time-constant-fields-typing-final" title="Link to this heading">#</a></h3>
+<span id="compile-time-constant-fields-typingfinal"></span><h3>Compile-time constant fields: <code class="docutils literal notranslate"><span class="pre">typing.Final</span></code><a class="headerlink" href="#compile-time-constant-fields-typing-final" title="Link to this heading">#</a></h3>
 <p>By default a primitive dataclass field becomes a <strong>runtime</strong> kernel argument: you can change its value between launches without recompiling, and the kernel reads the fresh value each launch. That also means the value is not known at compile time, so it cannot be used inside <a class="reference internal" href="static.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">qd.static(...)</span></code></span></a>, as a static loop bound, or to eliminate a branch at compile time.</p>
 <p>Annotate the field with <code class="docutils literal notranslate"><span class="pre">typing.Final</span></code> or <code class="docutils literal notranslate"><span class="pre">typing.Final[T]</span></code> to make it a <strong>compile-time constant</strong> instead. Quadrants ignores <code class="docutils literal notranslate"><span class="pre">T</span></code> when present and uses the arriving value and its actual Python type. The value is baked into the compiled kernel:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">dataclasses</span>
@@ -701,7 +701,7 @@ my_struct.b[37] 5
 </section>
 </section>
 <section id="qd-data-oriented">
-<h2>qd.data_oriented<a class="headerlink" href="#qd-data-oriented" title="Link to this heading">#</a></h2>
+<span id="qddata_oriented"></span><h2>qd.data_oriented<a class="headerlink" href="#qd-data-oriented" title="Link to this heading">#</a></h2>
 <p><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> is designed for classes that define <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> methods as class members. It wraps these methods to correctly bind <code class="docutils literal notranslate"><span class="pre">self</span></code> during kernel compilation.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">data_oriented</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">Simulation</span><span class="p">:</span>
@@ -719,7 +719,7 @@ my_struct.b[37] 5
 </div>
 <p><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> objects can also be passed as <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code> parameters to kernels defined outside the class, and they support nesting (one <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> struct containing another).</p>
 <section id="stable-members">
-<h3>stable_members<a class="headerlink" href="#stable-members" title="Link to this heading">#</a></h3>
+<span id="stable_members"></span><h3>stable_members<a class="headerlink" href="#stable-members" title="Link to this heading">#</a></h3>
 <p><strong>Recommended for any <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> class whose ndarray members are allocated once (typically in <code class="docutils literal notranslate"><span class="pre">__init__</span></code>) and not subsequently rebound - the common case.</strong> Decorate with <code class="docutils literal notranslate"><span class="pre">stable_members=True</span></code>:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">data_oriented</span><span class="p">(</span><span class="n">stable_members</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">Simulation</span><span class="p">:</span>
@@ -773,7 +773,7 @@ my_struct.b[37] 5
 </pre></div>
 </div>
 <section id="runtime-primitives-template-primitives-false">
-<h4>Runtime primitives: <code class="docutils literal notranslate"><span class="pre">template_primitives=False</span></code><a class="headerlink" href="#runtime-primitives-template-primitives-false" title="Link to this heading">#</a></h4>
+<span id="runtime-primitives-template_primitivesfalse"></span><h4>Runtime primitives: <code class="docutils literal notranslate"><span class="pre">template_primitives=False</span></code><a class="headerlink" href="#runtime-primitives-template-primitives-false" title="Link to this heading">#</a></h4>
 <p>If you want to change a primitive member’s value <strong>from Python between launches without triggering a recompile</strong>, decorate the class with <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented(template_primitives=False)</span></code>. Every primitive member the kernel actually accesses (<code class="docutils literal notranslate"><span class="pre">int</span></code>, <code class="docutils literal notranslate"><span class="pre">float</span></code>, <code class="docutils literal notranslate"><span class="pre">bool</span></code>, including those reached through nested <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> / <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> members) is then lifted into a runtime scalar kernel argument and read fresh on every launch, instead of being compiled into the kernel as a constant. The member stays read-only inside the kernel (it is a kernel argument, not a writable variable): you mutate it in Python, and the kernel sees the new value on the next launch.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">data_oriented</span><span class="p">(</span><span class="n">template_primitives</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">Simulation</span><span class="p">:</span>
@@ -831,12 +831,12 @@ my_struct.b[37] 5
 <p><code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(fastcache=True)</span></code> is supported on methods of <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> classes, but is disabled for fields; see <a class="reference internal" href="fastcache.html#compound-type-cache-keying"><span class="std std-ref">Appendix — compound-type cache keying</span></a> for more information.</p>
 </section>
 <section id="id1">
-<h3>Under the hood<a class="headerlink" href="#id1" title="Link to this heading">#</a></h3>
+<span id="under-the-hood-1"></span><h3>Under the hood<a class="headerlink" href="#id1" title="Link to this heading">#</a></h3>
 <p>Like <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code>, a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> object is Python-only - the compiler flattens it into individual kernel parameters and the object itself has no kernel-side representation. Unlike <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> it needs no member annotations: the compiler reads the live instance’s attributes directly. Primitive members are baked into the kernel as constants by default, so each distinct primitive value compiles a new specialized kernel - unless the class is decorated <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented(template_primitives=False)</span></code>, in which case the accessed primitives become runtime kernel arguments (see <a class="reference internal" href="#runtime-primitives-template-primitives-false">Runtime primitives</a> above).</p>
 </section>
 </section>
 <section id="qd-dataclass-qd-types-struct">
-<h2>qd.dataclass / qd.types.struct<a class="headerlink" href="#qd-dataclass-qd-types-struct" title="Link to this heading">#</a></h2>
+<span id="qddataclass--qdtypesstruct"></span><h2>qd.dataclass / qd.types.struct<a class="headerlink" href="#qd-dataclass-qd-types-struct" title="Link to this heading">#</a></h2>
 <p>Unlike <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> and <code class="docutils literal notranslate"><span class="pre">&#64;dataclasses.dataclass</span></code>, <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> creates a struct type that is available <em>inside</em> the kernels themselves. The other two compound types only exist on the Python side, before compilation, and don’t appear in compiled kernel code at all.</p>
 <p><code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> members can only be:</p>
 <ul class="simple">
@@ -892,7 +892,7 @@ my_struct.b[37] 5
 </pre></div>
 </div>
 <section id="id2">
-<h3>Under the hood<a class="headerlink" href="#id2" title="Link to this heading">#</a></h3>
+<span id="under-the-hood-2"></span><h3>Under the hood<a class="headerlink" href="#id2" title="Link to this heading">#</a></h3>
 <p>Unlike the other two compound types, <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> is a real kernel-side type with a fixed memory layout. Each instance is laid out contiguously in memory, members are stored by value, and a tensor of the struct can be allocated (<code class="docutils literal notranslate"><span class="pre">Particle.field(...)</span></code>). Storing by value is also why ndarrays can’t be members — ndarrays are heap-allocated buffers with dynamic shape and don’t fit into a fixed-size cell.</p>
 </section>
 </section>

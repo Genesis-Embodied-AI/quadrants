@@ -520,7 +520,7 @@ python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> <
 </div>
 </section>
 <section id="how-it-s-used-at-runtime">
-<h2>How it’s used at runtime<a class="headerlink" href="#how-it-s-used-at-runtime" title="Link to this heading">#</a></h2>
+<span id="how-its-used-at-runtime"></span><h2>How it’s used at runtime<a class="headerlink" href="#how-it-s-used-at-runtime" title="Link to this heading">#</a></h2>
 <p><code class="docutils literal notranslate"><span class="pre">GraphManager::ensure_condition_kernel_loaded()</span></code> in <code class="docutils literal notranslate"><span class="pre">quadrants/runtime/cuda/graph_manager.cpp</span></code> loads the fatbins via <code class="docutils literal notranslate"><span class="pre">GraphManager::load_first_matching_fatbin()</span></code>, which tries each bundled per-toolkit fatbin with <code class="docutils literal notranslate"><span class="pre">cuModuleLoadData</span></code> and keeps the first that loads (a device only loads the fatbin containing SASS for its SM). If none contain SASS for the current GPU’s SM architecture, loading fails with a clear error pointing to the relevant regeneration script. The checkpoint kernels load the same way from <code class="docutils literal notranslate"><span class="pre">graph_manager_checkpoint.cpp</span></code>.</p>
 </section>
 </section>

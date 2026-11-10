@@ -431,7 +431,7 @@
 <h1>Sub-functions<a class="headerlink" href="#sub-functions" title="Link to this heading">#</a></h1>
 <p>A <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> can call other functions, as long as those functions are annotated with <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code>.</p>
 <section id="qd-func">
-<h2>qd.func<a class="headerlink" href="#qd-func" title="Link to this heading">#</a></h2>
+<span id="qdfunc"></span><h2>qd.func<a class="headerlink" href="#qd-func" title="Link to this heading">#</a></h2>
 <p><code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> is the standard annotation for a function that can be called from a kernel. <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> functions can also call other <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> functions.</p>
 <p><code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> is <strong>inlined</strong> into the calling kernel at compile time. This means:</p>
 <ul class="simple">
@@ -465,7 +465,7 @@
 </section>
 </section>
 <section id="restricting-a-func-to-the-top-level-requires-top-level-true">
-<h2>Restricting a func to the top level (<code class="docutils literal notranslate"><span class="pre">requires_top_level=True</span></code>)<a class="headerlink" href="#restricting-a-func-to-the-top-level-requires-top-level-true" title="Link to this heading">#</a></h2>
+<span id="restricting-a-func-to-the-top-level-requires_top_leveltrue"></span><h2>Restricting a func to the top level (<code class="docutils literal notranslate"><span class="pre">requires_top_level=True</span></code>)<a class="headerlink" href="#restricting-a-func-to-the-top-level-requires-top-level-true" title="Link to this heading">#</a></h2>
 <p><strong>Experimental.</strong> <code class="docutils literal notranslate"><span class="pre">requires_top_level</span></code> is an experimental feature and its behavior or API may change in a future release.</p>
 <p>Some qd.func contain for-loops that are assumed and intended to be top-level for-loops, that each become separate offloaded tasks, and ultimately separate device kernels. If such qd.func’s are placed inside other for-loops, the qd.func will no longer generate the structure of offloaded tasks and device kernels assumed, and might either run very slowly, or crash, or give incorrect results.</p>
 <p>To enforce that a qd.func can only be used at top-level, a <code class="docutils literal notranslate"><span class="pre">qd.func</span></code> maybe be annotated with <code class="docutils literal notranslate"><span class="pre">qd.func(requires_top_level=True)</span></code>. This will throws <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code> at compile time if the <code class="docutils literal notranslate"><span class="pre">qd.func</span></code> is not called from top level.</p>
