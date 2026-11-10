@@ -34,8 +34,8 @@ from quadrants._lib.core.quadrants_python import KernelLaunchContext
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import _kernel_impl_dataclass, impl
-from quadrants.lang._deferred_errors import DeferredMemberType
-from quadrants.lang._final_dataclass_fields import (
+from quadrants.lang.runtime_typing._deferred_errors import DeferredMemberType
+from quadrants.lang.final._final_dataclass_fields import (
     final_field_names,
     subtree_has_final_fields,
 )
@@ -44,7 +44,7 @@ from quadrants.lang._name_utils import (
     dotted_argument_path_from_flat_name,
 )
 from quadrants.lang._ndarray import Ndarray
-from quadrants.lang._runtime_dataclass import is_dataclass_annotation
+from quadrants.lang.runtime_typing._runtime_dataclass import is_dataclass_annotation
 from quadrants.lang._signature import get_func_signature
 from quadrants.lang._wrap_inspect import get_source_info_and_src
 from quadrants.lang.ast import ASTTransformerFuncContext

@@ -41,9 +41,9 @@ from quadrants._tensor import (
 )
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorClass
-from quadrants.lang._deferred_errors import DeferredMemberType
-from quadrants.lang._final_constant_values import runtime_final_key
-from quadrants.lang._final_dataclass_fields import (
+from quadrants.lang.runtime_typing._deferred_errors import DeferredMemberType
+from quadrants.lang.final._final_constant_values import runtime_final_key
+from quadrants.lang.final._final_dataclass_fields import (
     final_field_names,
     subtree_has_final_fields,
 )

@@ -22,8 +22,8 @@ from quadrants.lang import (
     matrix,
 )
 from quadrants.lang import ops as qd_ops
-from quadrants.lang._deferred_errors import DeferredMemberError, DeferredMemberType
-from quadrants.lang._final_dataclass_fields import (
+from quadrants.lang.runtime_typing._deferred_errors import DeferredMemberError, DeferredMemberType
+from quadrants.lang.final._final_dataclass_fields import (
     final_field_names,
     is_final_annotation,
 )
@@ -32,7 +32,7 @@ from quadrants.lang._name_utils import (
     dotted_argument_path_from_flat_name,
 )
 from quadrants.lang._optional_annotation import OPTIONAL_ABSENT
-from quadrants.lang._runtime_dataclass import runtime_template_members
+from quadrants.lang.runtime_typing._runtime_dataclass import runtime_template_members
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
 )

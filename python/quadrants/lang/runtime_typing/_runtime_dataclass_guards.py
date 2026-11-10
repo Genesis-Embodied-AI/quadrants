@@ -14,8 +14,8 @@ if TYPE_CHECKING:
     import dataclasses
     from typing import _SpecialForm
 
-    from quadrants.lang._deferred_errors import DeferredMemberType
-    from quadrants.lang._runtime_dataclass import DataclassInstance, InferredMemberType
+    from quadrants.lang.runtime_typing._deferred_errors import DeferredMemberType
+    from quadrants.lang.runtime_typing._runtime_dataclass import DataclassInstance, InferredMemberType
 
 
 class FrozenSchemaEntry:
