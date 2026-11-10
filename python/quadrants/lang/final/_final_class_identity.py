@@ -141,11 +141,8 @@ class _ClassRef:
         return f"<_ClassRef 0x{id(self.cls):x}>"  # identity only; the live key is never serialized
 
 
-# Monotonic, never-reused serials for dynamically created objects (classes, or callables bound as attr values), used
-# only in the *offline* key. Keyed by ``id`` with an identity (``is``) guard - not a ``WeakKeyDictionary``, whose
-# ``get`` compares keys by ``__eq__``/``__hash__``, so a metaclass making distinct classes compare equal would alias
-# two objects to one serial. ``id`` alone is unsafe (after an object is freed CPython recycles its address), so the
-# entry holds a weakref: a callback drops it on death and the guard rejects a stale entry whose ``id`` was recycled.
+# Assign unique serials to dynamic objects for offline cache keys.
+# Weak references and identity checks prevent reuse after collection or confusion between objects that compare equal.
 _dynamic_object_serials: WeakIdentityCache[int] = WeakIdentityCache()
 _dynamic_class_serial_counter = itertools.count()
 
