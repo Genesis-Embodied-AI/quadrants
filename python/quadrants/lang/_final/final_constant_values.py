@@ -1,7 +1,7 @@
 """Validate Final constant values and construct their specialization keys."""
 
 import enum
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import numpy as np
 
@@ -17,9 +17,6 @@ from quadrants.lang._final.final_class_identity import (
     _unpack_u64,
 )
 from quadrants.lang._final.final_enum_validation import _reject_stateful_enum_member
-
-if TYPE_CHECKING:
-    from quadrants.lang._runtime_typing.runtime_dataclass import FinalValueKeyCache
 
 # Separate constants that Python considers equal, such as True, 1, and an IntEnum member.
 _FLOAT_KEY_TAG = "f64"
@@ -158,10 +155,3 @@ def validate_value_for_final_field_and_get_key(value: Any, live: bool = False) -
     # A behavior-free user subclass (``class Grams(int): pass``): carry the class-identity token like the other cases.
     return (_SCALAR_KEY_TAG, *_subclass_identity(cls, live), canonical)
 
-
-def runtime_final_key(value: object, final_value_key_by_value_id: "FinalValueKeyCache | None") -> tuple[Any, ...]:
-    """Reuse a value key validated during this dispatch only; never retain it across kernel calls."""
-    cached = final_value_key_by_value_id.get(id(value)) if final_value_key_by_value_id is not None else None
-    if cached is not None and cached[0] is value:
-        return cached[1]
-    return validate_value_for_final_field_and_get_key(value, live=True)
