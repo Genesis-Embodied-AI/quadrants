@@ -12,8 +12,7 @@ from quadrants.lang.final._final_class_identity import (
 
 _MISSING = object()  # Distinguish missing enum attributes from attributes whose value is None.
 
-# Standard per-member bookkeeping (not user state). A strict allowlist, not "skip all dunders", since a user could
-# stash state under a dunder (``self.__unit__``). ``_inverted_`` is CPython's lazy inverted-Flag cache (>=3.11).
+# Allowed enum bookkeeping. Other attributes, including user-defined dunders, count as state.
 _ENUM_INTERNAL_MEMBER_ATTRS = frozenset(
     {"_name_", "_value_", "_sort_order_", "_inverted_", "__objclass__", "__dict__", "__weakref__"}
 )
@@ -47,9 +46,7 @@ _FRAMEWORK_ENUM_METACLASSES = frozenset(
     c for c in (type, object, getattr(enum, "EnumMeta", None), getattr(enum, "EnumType", None)) if isinstance(c, type)
 )
 
-# Dunders whose override is observable at compile time. One in an enum's own dict is a candidate override; on >=3.11
-# the machinery copies the mix-in's ``__str__`` / ``__format__`` / ``__repr__`` in, so ``_dunder_copied_from_base``
-# filters those out.
+# Potential behavior overrides; inherited methods copied by Python are filtered out.
 _OBSERVABLE_DUNDERS = frozenset(
     {
         "__eq__",
@@ -193,8 +190,7 @@ def _enum_machinery_class_dict(cls: type) -> "dict[str, Any] | None":
     """Rebuild an enum without members to obtain its generated attributes, or return None."""
     mcls = type(cls)
     try:
-        # ``__prepare__`` returns the metaclass's own namespace (``_EnumDict``), which must be passed through verbatim.
-        # Pyright types it as ``MutableMapping``, hence the local ignore.
+        # Preserve the enum metaclass’s namespace object; converting it to a plain dict would break construction.
         namespace = mcls.__prepare__("_qd_enum_probe", cls.__bases__)
         reference = mcls("_qd_enum_probe", cls.__bases__, namespace)  # pyright: ignore[reportArgumentType]
     except Exception:  # pylint: disable=broad-except  # any build failure -> conservative allowlist fallback
@@ -251,8 +247,7 @@ _ENUM_GENERATED_CLASS_ATTRS = _compute_enum_generated_class_attrs()
 # Names fixed by the bases/mix-in, so an override is caught by comparing to a member-free reference.
 _ENUM_REFERENCE_CHECKED_ATTRS = _compute_enum_reference_checked_attrs()
 
-# Fallback allowlist used only when the member-free reference cannot be built: exempt only when the stored object *is*
-# the inherited default (``_dict_entry_is_inherited_default``); the reference path also catches mix-in-dependent hooks.
+# If a reference cannot be built, allow these hooks only when they match the inherited default.
 _ENUM_OVERRIDABLE_HOOK_NAMES = frozenset({"_generate_next_value_"})
 
 
@@ -297,16 +292,13 @@ def _observable_class_dict_attr(klass: type) -> "str | None":
             if reference is not None:
                 if name not in reference:
                     return name  # a user-added sunder/dunder the machinery does not generate for this shape
-                # A bases/mix-in-fixed hook (incl. ``_boundary_``) is a user override iff it no longer holds the
-                # machinery's value.
+                # Check hooks against their generated defaults.
                 if name in _ENUM_REFERENCE_CHECKED_ATTRS and _generated_attr_is_user_override(
                     klass, name, member, reference
                 ):
                     return name
-                # Otherwise untouched machinery bookkeeping for this shape: member-derived data or a matched hook,
-                # exempt. Member-derived data is a function of the member map, already folded into the keys via
-                # ``_enum_member_map_key``. Directly reassigning these private enum internals (``Mode._member_names_ =
-                # [...]``) is unsupported - like the ``_qd_`` names reserved for Quadrants - so we do not guard it.
+                # Member-derived bookkeeping is already represented by the member-map key.
+                # Direct mutation of private enum internals is unsupported.
                 continue
             # Reference unbuildable: best-effort fallback to the global-union allowlist.
             if name in _ENUM_GENERATED_CLASS_ATTRS:
@@ -321,8 +313,7 @@ def _observable_class_dict_attr(klass: type) -> "str | None":
 def _enum_class_behavior_attr(enum_cls: type) -> "str | None":
     """Find unsupported attributes on an enum, its bases, or its metaclass."""
     for klass in enum_cls.__mro__:
-        # Framework internals: the mixed-in primitive, ``object`` / a NumPy base, and library enum bases. Every user
-        # base is inspected, enum or not: a non-enum mixin can add observable behavior too.
+        # Skip library bases but inspect all user bases, including non-enum mixins.
         if _is_baked_base_type(klass) or klass in _FRAMEWORK_ENUM_CLASSES:
             continue
         attr = _observable_class_dict_attr(klass)
@@ -341,9 +332,8 @@ def _enum_class_behavior_attr(enum_cls: type) -> "str | None":
 def _reject_stateful_enum_member(value: Any) -> None:
     """Reject enum members with unsupported instance state or class behavior."""
     cls = type(value)
-    # Check *every* member, not just the selected one: a sibling's per-member state (``Mode.B.unit``) is observable
-    # (``cfg.mode.__class__.B.unit``) yet the member-map key records only each member's value, so any member carrying
-    # state must be rejected. ``value`` is appended in case it is an ``IntFlag`` composite (absent from the map).
+    # Reject state on sibling members too: compiled code can access them through the selected member’s class.
+    # Include the selected value separately for unnamed IntFlag composites.
     member_map = getattr(cls, "_member_map_", None)
     members = list(member_map.values()) if isinstance(member_map, dict) else []
     members.append(value)

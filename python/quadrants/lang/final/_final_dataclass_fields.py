@@ -6,8 +6,7 @@ import sys
 import typing
 from typing import Any
 
-# Types allowed inside ``Final[T]``: baked as a literal, so ``T`` must be a stable-by-value compile-time constant.
-# ``enum.Enum`` subclasses are allowed too (handled separately).
+# Supported Final scalar types; enums are handled separately.
 _FINAL_SCALAR_TYPES = frozenset({bool, int, float, str})
 
 # Tailored hints for types where ``Final[T]`` is a likely mistake. Matched by name to avoid import cycles.
@@ -87,8 +86,7 @@ def _rebinding_is_prevented(dc_type: type) -> bool:
     return params.frozen or params.unsafe_hash
 
 
-# ``id(type) -> (type, path to a Final leaf or None)``. Identity-keyed with a strong-ref+``is`` guard (a metaclass
-# ``__eq__`` must not merge distinct types); the stored type pins the ``id`` against recycling.
+# Cache nested Final paths by type identity. Retain each type to prevent id reuse.
 _final_path_cache: "dict[int, tuple[type, tuple[str, ...] | None]]" = {}
 
 
@@ -142,8 +140,7 @@ def _build_final_plan(dc_type: type) -> "frozenset[str]":
     for field in dataclasses.fields(dc_type):
         annotation = field.type
         if isinstance(annotation, str):
-            # ``from __future__ import annotations`` stringizes ``field.type``; we cannot see ``Final`` through it, so
-            # such a field would silently become a runtime arg. Detect a (possibly aliased) ``Final`` and reject.
+            # Reject string Final annotations rather than silently treating them as runtime fields.
             if _string_annotation_looks_final(dc_type, field.name, annotation):
                 raise TypeError(
                     f"{dc_type.__name__}.{field.name}: annotation is the unresolved string {annotation!r}. Quadrants "
@@ -153,7 +150,7 @@ def _build_final_plan(dc_type: type) -> "frozenset[str]":
                 )
             continue
         if annotation is typing.Final:
-            # Bare ``Final`` (no ``[T]``): ``is_final_annotation`` is False for it, so reject explicitly.
+            # Reject bare Final, which is_final_annotation does not recognize.
             raise TypeError(
                 f"{dc_type.__name__}.{field.name}: bare ``typing.Final`` is not supported as a Quadrants "
                 f"compile-time template field. Write ``Final[T]`` with a concrete type, e.g. "
@@ -182,8 +179,7 @@ def _build_final_plan(dc_type: type) -> "frozenset[str]":
             f"responsibility for never reassigning these fields)."
         )
 
-    # A mutable *ancestor* of a Final leaf is equally unsound (``outer.child = Inner(...)`` swaps a baked constant);
-    # ``final_names`` covers only own fields, so reject every mutable dataclass on a path to a Final leaf.
+    # Reject mutable ancestors too: replacing a child can change a nested compile-time constant.
     if not _rebinding_is_prevented(dc_type):
         for field in dataclasses.fields(dc_type):
             if not (isinstance(field.type, type) and dataclasses.is_dataclass(field.type)):
@@ -203,8 +199,7 @@ def _build_final_plan(dc_type: type) -> "frozenset[str]":
     return frozenset(final_names)
 
 
-# ``id(type) -> (type, frozenset of Final field names)``. Identity-keyed (a metaclass ``__eq__`` must not merge
-# distinct types' schemas); the stored type is a strong ref pinning the ``id`` and verifying identity on lookup.
+# Cache Final field names by type identity. Retain each type to prevent id reuse.
 _final_plan_cache: "dict[int, tuple[type, frozenset[str]]]" = {}
 
 
