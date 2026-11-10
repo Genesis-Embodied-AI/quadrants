@@ -1,6 +1,7 @@
 """Discover and validate Final dataclass fields and their containers."""
 
 import dataclasses
+import enum
 import sys
 import typing
 from typing import Any
