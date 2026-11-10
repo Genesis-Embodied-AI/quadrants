@@ -12,9 +12,7 @@ from typing import Any, NoReturn
 
 import numpy as np
 
-_MISSING = (
-    object()
-)  # Distinguish missing attributes from attributes whose value is None.
+_MISSING = object()  # Distinguish missing attributes from attributes whose value is None.
 
 # Per-process token mixed into the *offline* key of a dynamically created class (see ``_subclass_identity``): its
 # serial is only process-local, so the nonce makes such a class a guaranteed cross-process miss rather than a wrong
@@ -28,9 +26,7 @@ def _reseed_process_nonce() -> None:
     _PROCESS_NONCE = uuid.uuid4().hex
 
 
-if hasattr(
-    os, "register_at_fork"
-):  # POSIX only; ``spawn``/Windows re-import and reseed
+if hasattr(os, "register_at_fork"):  # POSIX only; ``spawn``/Windows re-import and reseed
     os.register_at_fork(after_in_child=_reseed_process_nonce)
 
 
@@ -161,18 +157,14 @@ def _dynamic_class_serial(obj: Any) -> int:
     """
     key = id(obj)
     entry = _dynamic_object_serials.get(key)
-    if (
-        entry is not None and entry[0]() is obj
-    ):  # identity guard: same live object, ``id`` not recycled
+    if entry is not None and entry[0]() is obj:  # identity guard: same live object, ``id`` not recycled
         return entry[1]
     serial = next(_dynamic_class_serial_counter)
 
     def _drop(ref: "weakref.ref", k: int = key) -> None:
         """Remove this object’s serial entry when its weak reference expires."""
         cur = _dynamic_object_serials.get(k)
-        if (
-            cur is not None and cur[0] is ref
-        ):  # only our own entry, never one that recycled the ``id``
+        if cur is not None and cur[0] is ref:  # only our own entry, never one that recycled the ``id``
             del _dynamic_object_serials[k]
 
     try:
@@ -191,11 +183,7 @@ def _identity_component(obj: Any, live: bool) -> _ClassRef | tuple[str, int] | N
     """
     if live:
         return _ClassRef(obj)
-    return (
-        (_PROCESS_NONCE, _dynamic_class_serial(obj))
-        if _class_not_uniquely_identified(obj)
-        else None
-    )
+    return (_PROCESS_NONCE, _dynamic_class_serial(obj)) if _class_not_uniquely_identified(obj) else None
 
 
 # Structural attrs (from ``_STRUCTURAL_CLASS_ATTRS``) that are user-writable *and* readable at compile time
@@ -258,67 +246,36 @@ def _canonical_attr_value(val: Any, live: bool) -> Any:
     # A scalar *subclass* (or enum member) may carry per-instance state or a distinct class identity that the bare
     # value discards, so route it through the full baked-scalar machinery (stateful-subclass rejection + subclass
     # identity + IEEE bits). Exact builtins below skip that and encode directly.
-    if (
-        isinstance(val, (bool, int, float, str))
-        and type(val) not in (bool, int, float, str)
-    ) or isinstance(val, enum.Enum):
+    if (isinstance(val, (bool, int, float, str)) and type(val) not in (bool, int, float, str)) or isinstance(
+        val, enum.Enum
+    ):
         # Scalar keys include class identity too. Import only for this recursive case, after both modules are loaded.
         # pylint: disable-next=import-outside-toplevel
         from quadrants.lang.final._final_constant_values import final_scalar_key
 
         return ("scalarsub", final_scalar_key(val, live))
-    if isinstance(
-        val, float
-    ):  # exact float (subclasses routed above); IEEE bits so ``0.0``/``-0.0`` never collapse
+    if isinstance(val, float):  # exact float (subclasses routed above); IEEE bits so ``0.0``/``-0.0`` never collapse
         return (type(val).__qualname__, _unpack_u64(_pack_f64(val))[0])
     if isinstance(val, complex):
-        if (
-            type(val) is not complex
-        ):  # a ``complex`` subclass may add state/identity the bare bits drop
+        if type(val) is not complex:  # a ``complex`` subclass may add state/identity the bare bits drop
             _reject_structural_subclass(val)
-        return (
-            type(val).__qualname__,
-            _unpack_u64(_pack_f64(val.real))[0],
-            _unpack_u64(_pack_f64(val.imag))[0],
-        )
-    if isinstance(
-        val, (bool, int, str, bytes)
-    ):  # exact only: bool/int/str subclasses routed above, so a subclass here
-        if type(val) not in (
-            bool,
-            int,
-            str,
-            bytes,
-        ):  # is a ``bytes`` subclass, unkeyable by ``final_scalar_key``
+        return (type(val).__qualname__, _unpack_u64(_pack_f64(val.real))[0], _unpack_u64(_pack_f64(val.imag))[0])
+    if isinstance(val, (bool, int, str, bytes)):  # exact only: bool/int/str subclasses routed above, so a subclass here
+        if type(val) not in (bool, int, str, bytes):  # is a ``bytes`` subclass, unkeyable by ``final_scalar_key``
             _reject_structural_subclass(val)
-        return (
-            type(val).__qualname__,
-            val,
-        )  # tag the exact type: ``True``/``1`` compare equal but differ
+        return (type(val).__qualname__, val)  # tag the exact type: ``True``/``1`` compare equal but differ
     if isinstance(val, (tuple, list)):
-        if type(val) not in (
-            tuple,
-            list,
-        ):  # a container subclass may add per-instance state / a distinct identity
+        if type(val) not in (tuple, list):  # a container subclass may add per-instance state / a distinct identity
             _reject_structural_subclass(val)
-        return (
-            type(val).__qualname__,
-            tuple(_canonical_attr_value(v, live) for v in val),
-        )
+        return (type(val).__qualname__, tuple(_canonical_attr_value(v, live) for v in val))
     if isinstance(val, (set, frozenset)):
         if type(val) not in (set, frozenset):
             _reject_structural_subclass(val)
-        return (
-            type(val).__qualname__,
-            frozenset(_canonical_attr_value(v, live) for v in val),
-        )
+        return (type(val).__qualname__, frozenset(_canonical_attr_value(v, live) for v in val))
     if isinstance(val, dict):
         if type(val) is not dict:
             _reject_structural_subclass(val)
-        items = tuple(
-            (_canonical_attr_value(k, live), _canonical_attr_value(v, live))
-            for k, v in val.items()
-        )
+        items = tuple((_canonical_attr_value(k, live), _canonical_attr_value(v, live)) for k, v in val.items())
         return ("dict", items)
     if isinstance(val, _DESCRIPTOR_ATTR_TYPES):
         # An auto-generated descriptor has an address-based ``repr`` (unkeyable) and its own ``__qualname__`` is just
@@ -384,9 +341,7 @@ def _class_kind(cls: type, live: bool) -> tuple:
 
     A class can keep its module and qualified name while its bases, metaclass, or structural attributes change.
     """
-    metaclass: type = type(
-        cls
-    )  # annotate as instance so ``.__mro__`` is the tuple, not the descriptor (pyright)
+    metaclass: type = type(cls)  # annotate as instance so ``.__mro__`` is the tuple, not the descriptor (pyright)
     base_kind = tuple(_kind_entry(base, live) for base in cls.__mro__)
     meta_kind = tuple(_kind_entry(meta, live) for meta in metaclass.__mro__)
     return (base_kind, meta_kind)
@@ -394,9 +349,4 @@ def _class_kind(cls: type, live: bool) -> tuple:
 
 def _subclass_identity(cls: type, live: bool) -> tuple:
     """Build a key that distinguishes scalar or enum classes and their observable structure."""
-    return (
-        cls.__module__,
-        cls.__qualname__,
-        _class_kind(cls, live),
-        _identity_component(cls, live),
-    )
+    return (cls.__module__, cls.__qualname__, _class_kind(cls, live), _identity_component(cls, live))

@@ -69,9 +69,7 @@ def _validate_final_inner_type(dc_type: type, field_name: str, annotation: Any) 
             )
         else:
             allowed = ", ".join(sorted(t.__name__ for t in _FINAL_SCALAR_TYPES))
-            hint = (
-                f"``Final[T]`` supports T in {{{allowed}}} or an ``enum.Enum`` subclass"
-            )
+            hint = f"``Final[T]`` supports T in {{{allowed}}} or an ``enum.Enum`` subclass"
     raise TypeError(
         f"{dc_type.__name__}.{field_name}: ``Final[{_describe_annotation(inner_type)}]`` cannot be baked as a "
         f"Quadrants compile-time constant - {hint}."
@@ -94,14 +92,10 @@ def _rebinding_is_prevented(dc_type: type) -> bool:
 _final_path_cache: "dict[int, tuple[type, tuple[str, ...] | None]]" = {}
 
 
-def _first_final_path(
-    dc_type: type, visiting: "frozenset[int]"
-) -> "tuple[str, ...] | None":
+def _first_final_path(dc_type: type, visiting: "frozenset[int]") -> "tuple[str, ...] | None":
     """Validate nested dataclass declarations and return the first Final field path, if any."""
     entry = _final_path_cache.get(id(dc_type))
-    if (
-        entry is not None and entry[0] is dc_type
-    ):  # identity guard against a recycled ``id``
+    if entry is not None and entry[0] is dc_type:  # identity guard against a recycled ``id``
         return entry[1]
     if id(dc_type) in visiting:
         return None
@@ -119,9 +113,7 @@ def _first_final_path(
     return path
 
 
-def _string_annotation_looks_final(
-    dc_type: type, field_name: str, annotation: str
-) -> bool:
+def _string_annotation_looks_final(dc_type: type, field_name: str, annotation: str) -> bool:
     """Check whether a string annotation appears to name Final.
 
     Resolve fields separately so an unrelated unresolved annotation cannot hide a Final marker. Like get_type_hints,
@@ -194,9 +186,7 @@ def _build_final_plan(dc_type: type) -> "frozenset[str]":
     # ``final_names`` covers only own fields, so reject every mutable dataclass on a path to a Final leaf.
     if not _rebinding_is_prevented(dc_type):
         for field in dataclasses.fields(dc_type):
-            if not (
-                isinstance(field.type, type) and dataclasses.is_dataclass(field.type)
-            ):
+            if not (isinstance(field.type, type) and dataclasses.is_dataclass(field.type)):
                 continue
             nested = _first_final_path(field.type, frozenset({id(dc_type)}))
             if nested is None:
@@ -221,9 +211,7 @@ _final_plan_cache: "dict[int, tuple[type, frozenset[str]]]" = {}
 def final_field_names(dc_type: Any) -> "frozenset[str]":
     """Return cached Final field names, validating declarations on the first lookup."""
     entry = _final_plan_cache.get(id(dc_type))
-    if (
-        entry is not None and entry[0] is dc_type
-    ):  # identity guard against a recycled ``id``
+    if entry is not None and entry[0] is dc_type:  # identity guard against a recycled ``id``
         return entry[1]
     names = _build_final_plan(dc_type)
     _final_plan_cache[id(dc_type)] = (dc_type, names)
