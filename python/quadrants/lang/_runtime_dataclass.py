@@ -30,10 +30,7 @@ from quadrants.lang._runtime_dataclass_cache import (
     _runtime_kernels,
     invalidate_tensor_bindings,
 )
-from quadrants.lang._runtime_dataclass_final import (
-    get_final_field_names,
-    infer_final_field_annotation,
-)
+from quadrants.lang._final_dataclass_fields import get_final_field_names, infer_final_field_annotation
 from quadrants.lang._runtime_dataclass_guards import FrozenSchemaEntry
 from quadrants.lang._weak_identity_cache import WeakIdentityCache
 from quadrants.lang.any_array import AnyArray
