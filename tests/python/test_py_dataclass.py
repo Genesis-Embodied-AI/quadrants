@@ -4079,17 +4079,9 @@ def test_final_unsafe_hash_ordinary_field_reread_each_launch():
 
 
 @test_utils.test()
-<<<<<<< HEAD
 def test_final_field_string_annotation_is_recognized() -> None:
     """String Final markers are recognized without resolving their inner annotations."""
-    from quadrants.lang.final._final_dataclass_fields import final_field_names
-=======
-def test_final_field_string_annotation_is_rejected():
-    """``from __future__ import annotations`` (or any explicit string annotation) leaves ``field.type`` as an
-    unresolved string, so Quadrants cannot see the ``Final`` and would silently lower the field as a *runtime* kernel
-    argument - a field the user believes is a compile-time constant. Rather than half-support it, raise."""
     from quadrants.lang._final._final_dataclass_fields import final_field_names
->>>>>>> hp/misc_dataclass_runtime_types/final-comments
 
     @dataclass(frozen=True)
     class StringAnnotated:

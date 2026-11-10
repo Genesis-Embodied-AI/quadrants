@@ -26,7 +26,7 @@ from quadrants.lang.any_array import AnyArray
 from quadrants.lang.buffer_view import BufferView
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.field import Field
-from quadrants.lang.final._final_dataclass_fields import (
+from quadrants.lang._final._final_dataclass_fields import (
     final_field_names,
     get_final_field_names,
     infer_final_field_annotation,
