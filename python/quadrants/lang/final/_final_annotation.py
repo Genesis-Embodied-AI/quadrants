@@ -12,10 +12,7 @@ _MISSING = object()
 
 
 def is_final_annotation(annotation: Any) -> bool:
-    """Check whether an annotation is a subscripted Final marker.
-
-    Bare Final is rejected by declaration validation rather than recognized here.
-    """
+    """Recognize bare Final and Final[T]; typing_extensions uses the same marker on supported Python versions."""
     return annotation is typing.Final or typing.get_origin(annotation) is typing.Final
 
 
@@ -49,9 +46,7 @@ def unwrap_and_parse_string_constants(ast_tree: ast.expr) -> ast.expr:
     Non-string nodes pass through unchanged. Invalid syntax inside a string raises SyntaxError.
     """
     unwrapped_node = ast_tree
-    while isinstance(unwrapped_node, ast.Constant) and isinstance(
-        unwrapped_node.value, str
-    ):
+    while isinstance(unwrapped_node, ast.Constant) and isinstance(unwrapped_node.value, str):
         unwrapped_node = ast.parse(unwrapped_node.value, mode="eval").body
     return unwrapped_node
 
@@ -75,12 +70,7 @@ def find_field_declaring_dataclass(dataclass_type: type, field_name: str) -> typ
     """Return the class declaring the field's annotation, or dataclass_type if no declaration is found."""
     # An inherited field may have its annotation declared on a base class rather than dataclass_type itself.
     return next(
-        (
-            cls
-            for cls in dataclass_type.__mro__
-            if field_name in vars(cls).get("__annotations__", {})
-        ),
-        dataclass_type,
+        (cls for cls in dataclass_type.__mro__ if field_name in vars(cls).get("__annotations__", {})), dataclass_type
     )
 
 
@@ -148,11 +138,7 @@ def is_canonical_final_name(name_parts: list[str]) -> bool:
     #
     # Later, that local Final binding is not available through Config or its module.
     # The fallback nevertheless treats "Final" as the marker.
-    return name_parts in (
-        ["Final"],
-        ["typing", "Final"],
-        ["typing_extensions", "Final"],
-    )
+    return name_parts in (["Final"], ["typing", "Final"], ["typing_extensions", "Final"])
 
 
 def resolve_attribute_path(root_object: object, attribute_names: list[str]) -> object:
@@ -165,9 +151,7 @@ def resolve_attribute_path(root_object: object, attribute_names: list[str]) -> o
     return value
 
 
-def dataclass_field_is_final(
-    dataclass_type: type, field_name: str, annotation: Any
-) -> bool:
+def dataclass_field_is_final(dataclass_type: type, field_name: str, annotation: Any) -> bool:
     """Recognize a field's Final marker, including when the annotation is a string.
 
     Can you give an overview of the process we are following? Is it something like:

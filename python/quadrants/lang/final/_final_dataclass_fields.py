@@ -29,8 +29,8 @@ _final_field_names_by_dataclass_type_id: dict[int, tuple[type, frozenset[str]]] 
 
 def get_final_field_names(dataclass_type: type) -> frozenset[str]:
     """Find and cache the names of fields marked Final."""
-    cached_dataclass_type, cached_final_field_names = (
-        _final_field_names_by_dataclass_type_id.get(id(dataclass_type), (None, None))
+    cached_dataclass_type, cached_final_field_names = _final_field_names_by_dataclass_type_id.get(
+        id(dataclass_type), (None, None)
     )
     if cached_dataclass_type is dataclass_type and cached_final_field_names is not None:
         return cached_final_field_names
@@ -39,10 +39,7 @@ def get_final_field_names(dataclass_type: type) -> frozenset[str]:
         for field in dataclasses.fields(dataclass_type)
         if dataclass_field_is_final(dataclass_type, field.name, field.type)
     )
-    _final_field_names_by_dataclass_type_id[id(dataclass_type)] = (
-        dataclass_type,
-        names,
-    )
+    _final_field_names_by_dataclass_type_id[id(dataclass_type)] = (dataclass_type, names)
     return names
 
 
@@ -64,20 +61,13 @@ def infer_final_field_annotation(
     # Exact Python primitives cannot fail the existing value validator. Other values must still be checked on each
     # launch: an enum or primitive subclass can acquire mutable state even inside a frozen dataclass.
     value_type = type(value)
-    if (
-        value_type is not bool
-        and value_type is not int
-        and value_type is not float
-        and value_type is not str
-    ):
+    if value_type is not bool and value_type is not int and value_type is not float and value_type is not str:
         try:
             key = final_scalar_key(value, live=True)
             if final_value_key_by_value_id is not None:
                 final_value_key_by_value_id[id(value)] = (value, key)
         except TypeError as error:
-            return create_deferred_member_type_for_invalid_dataclass_member(
-                TypeError, str(error), value
-            )
+            return create_deferred_member_type_for_invalid_dataclass_member(TypeError, str(error), value)
     # A schema needs only the marker; the specialization key and compiler retain the actual value and its type.
     return _FINAL_MARKER
 
@@ -103,14 +93,10 @@ def _rebinding_is_prevented(dc_type: type) -> bool:
 _final_path_cache: "dict[int, tuple[type, tuple[str, ...] | None]]" = {}
 
 
-def _first_final_path(
-    dc_type: type, visiting: "frozenset[int]"
-) -> "tuple[str, ...] | None":
+def _first_final_path(dc_type: type, visiting: "frozenset[int]") -> "tuple[str, ...] | None":
     """Validate nested dataclass declarations and return the first Final field path, if any."""
     entry = _final_path_cache.get(id(dc_type))
-    if (
-        entry is not None and entry[0] is dc_type
-    ):  # identity guard against a recycled ``id``
+    if entry is not None and entry[0] is dc_type:  # identity guard against a recycled ``id``
         return entry[1]
     if id(dc_type) in visiting:
         return None
@@ -159,9 +145,7 @@ def _build_final_plan(dc_type: type) -> "frozenset[str]":
     # ``final_names`` covers only own fields, so reject every mutable dataclass on a path to a Final leaf.
     if not _rebinding_is_prevented(dc_type):
         for field in dataclasses.fields(dc_type):
-            if not (
-                isinstance(field.type, type) and dataclasses.is_dataclass(field.type)
-            ):
+            if not (isinstance(field.type, type) and dataclasses.is_dataclass(field.type)):
                 continue
             nested = _first_final_path(field.type, frozenset({id(dc_type)}))
             if nested is None:
@@ -186,9 +170,7 @@ _final_plan_cache: "dict[int, tuple[type, frozenset[str]]]" = {}
 def final_field_names(dc_type: Any) -> "frozenset[str]":
     """Return cached Final field names, validating declarations on the first lookup."""
     entry = _final_plan_cache.get(id(dc_type))
-    if (
-        entry is not None and entry[0] is dc_type
-    ):  # identity guard against a recycled ``id``
+    if entry is not None and entry[0] is dc_type:  # identity guard against a recycled ``id``
         return entry[1]
     names = _build_final_plan(dc_type)
     _final_plan_cache[id(dc_type)] = (dc_type, names)
