@@ -5,7 +5,7 @@ from typing import Any
 
 import numpy as np
 
-from quadrants.lang._final._final_class_identity import (
+from quadrants.lang._final.final_class_identity import (
     _FRAMEWORK_PRIMITIVE_METACLASSES,
     _STRUCTURAL_CLASS_ATTRS,
     _is_baked_base_type,
@@ -16,7 +16,7 @@ from quadrants.lang._final._final_class_identity import (
     _subclass_identity,
     _unpack_u64,
 )
-from quadrants.lang._final._final_enum_validation import _reject_stateful_enum_member
+from quadrants.lang._final.final_enum_validation import _reject_stateful_enum_member
 
 # Type tags keeping the key spaces disjoint: Python treats distinct constants as ``==`` with equal hashes (a float's
 # bits vs an int; an ``IntEnum`` member vs its bare scalar; ``True`` vs ``1`` vs ``np.int64(1)``), so bare values
