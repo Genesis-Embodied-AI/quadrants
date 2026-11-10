@@ -158,7 +158,7 @@ class TemplateMapper:
         if nd_ids:
             args_hash = args_hash + tuple(nd_ids)
         # A Final-bearing argument disables this cache: serving a prior ``(count, key)`` would skip ``extract()`` and
-        # its per-launch ``final_scalar_key`` revalidation. Final-free mappers are unaffected.
+        # its per-launch ``validate_value_for_final_field_and_get_key`` revalidation. Final-free mappers are unaffected.
         cache_disabled = self._mapping_cache_disabled
         if cache_disabled is None:
             cache_disabled = self._mapping_cache_disabled = any(

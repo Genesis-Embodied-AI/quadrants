@@ -12,7 +12,7 @@ from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorWrapper
 from quadrants.types.annotations import Template
 
-from .._final.final_constant_values import final_scalar_key
+from .._final.final_constant_values import validate_value_for_final_field_and_get_key
 from .._final.final_dataclass_fields import final_field_names, subtree_has_final_fields
 from .._name_utils import create_flat_name
 from .._ndarray import ScalarNdarray
@@ -238,7 +238,8 @@ def dataclass_to_repr(
     # subclass carrying extra app-only fields still fast-caches on the base's field set. Only the runtime type's own
     # unpruned view is cacheable: the repr/verdict depend on the visited (pruning) set and the active field set, so a
     # narrower pruning set - or a subclass passed under a different base - must not inherit another view's verdict.
-    # Final-bearing subtrees are excluded too (their repr recomputes each launch to re-run ``final_scalar_key``).
+    # Final-bearing subtrees are excluded too (their repr recomputes each launch to re-run
+    # ``validate_value_for_final_field_and_get_key``).
     field_source = annotated_type if annotated_type is not None else type(arg)
     is_frozen = type(arg).__hash__ is not None
     final_names = final_field_names(field_source)
@@ -255,11 +256,11 @@ def dataclass_to_repr(
     for field in dataclasses.fields(field_source):
         child_value = getattr(arg, field.name)
         if field.name in final_names:
-            # ``final_scalar_key`` rather than ``stringify_obj_type``: the latter has no bare-``str`` case, so a
-            # ``Final[str]`` would disable fastcache for the whole arg. Included even when ``pruning_paths`` does not
-            # mention the field - the value is baked into the generated code, so a key that omits it could serve a
-            # kernel baked with a different constant.
-            repr_l.append(f"{field.name}: (final) = {final_scalar_key(child_value)}")
+            # ``validate_value_for_final_field_and_get_key`` rather than ``stringify_obj_type``: the latter has no
+            # bare-``str`` case, so a ``Final[str]`` would disable fastcache for the whole arg. Included even when
+            # ``pruning_paths`` does not mention the field - the value is baked into the generated code, so a key that
+            # omits it could serve a kernel baked with a different constant.
+            repr_l.append(f"{field.name}: (final) = {validate_value_for_final_field_and_get_key(child_value)}")
             continue
         child_flat = _child_flat(parent_flat, field.name)
         if not _is_path_used(pruning_paths, child_flat):

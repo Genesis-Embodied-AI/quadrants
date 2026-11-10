@@ -8,7 +8,7 @@ from quadrants.lang._final.final_annotation import dataclass_field_is_final
 from quadrants.lang._final.final_annotation import (  # pylint: disable=unused-import
     is_final_annotation as is_final_annotation,
 )
-from quadrants.lang._final.final_constant_values import final_scalar_key
+from quadrants.lang._final.final_constant_values import validate_value_for_final_field_and_get_key
 from quadrants.lang._runtime_typing.deferred_errors import (
     create_deferred_member_type_for_invalid_dataclass_member,
 )
@@ -74,7 +74,7 @@ def infer_final_field_annotation(
     value_type = type(value)
     if value_type is not bool and value_type is not int and value_type is not float and value_type is not str:
         try:
-            key = final_scalar_key(value, live=True)
+            key = validate_value_for_final_field_and_get_key(value, live=True)
             if final_value_key_by_value_id is not None:
                 final_value_key_by_value_id[id(value)] = (value, key)
         except TypeError as error:

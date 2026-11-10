@@ -29,7 +29,7 @@ if hasattr(os, "register_at_fork"):  # POSIX only; ``spawn``/Windows re-import a
     os.register_at_fork(after_in_child=_reseed_process_nonce)
 
 
-# Pack/unpack a ``float`` as its exact IEEE-754 bits (see ``final_scalar_key``).
+# Pack/unpack a ``float`` as its exact IEEE-754 bits (see ``validate_value_for_final_field_and_get_key``).
 _pack_f64 = struct.Struct("<d").pack
 _unpack_u64 = struct.Struct("<Q").unpack
 
@@ -234,9 +234,9 @@ def _canonical_attr_value(val: Any, live: bool) -> Any:
     ):
         # Scalar keys include class identity too. Import only for this recursive case, after both modules are loaded.
         # pylint: disable-next=import-outside-toplevel
-        from quadrants.lang._final.final_constant_values import final_scalar_key
+        from quadrants.lang._final.final_constant_values import validate_value_for_final_field_and_get_key
 
-        return ("scalarsub", final_scalar_key(val, live))
+        return ("scalarsub", validate_value_for_final_field_and_get_key(val, live))
     if isinstance(val, float):  # exact float (subclasses routed above); IEEE bits so ``0.0``/``-0.0`` never collapse
         return (type(val).__qualname__, _unpack_u64(_pack_f64(val))[0])
     if isinstance(val, complex):
@@ -244,7 +244,12 @@ def _canonical_attr_value(val: Any, live: bool) -> Any:
             _reject_structural_subclass(val)
         return (type(val).__qualname__, _unpack_u64(_pack_f64(val.real))[0], _unpack_u64(_pack_f64(val.imag))[0])
     if isinstance(val, (bool, int, str, bytes)):  # exact only: bool/int/str subclasses routed above, so a subclass here
-        if type(val) not in (bool, int, str, bytes):  # is a ``bytes`` subclass, unkeyable by ``final_scalar_key``
+        if type(val) not in (
+            bool,
+            int,
+            str,
+            bytes,
+        ):  # is a ``bytes`` subclass, unkeyable by ``validate_value_for_final_field_and_get_key``
             _reject_structural_subclass(val)
         return (type(val).__qualname__, val)  # tag the exact type: ``True``/``1`` compare equal but differ
     if isinstance(val, (tuple, list)):

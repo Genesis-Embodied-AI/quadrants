@@ -447,7 +447,8 @@ def _extract_arg(
                             f"field, or unset ``raise_on_templated_floats``."
                         )
                     # ``live=True``: in-process key, so a subclass/enum is keyed by class identity. The offline
-                    # fastcache passes ``live=False`` (see ``final_scalar_key`` / ``args_hasher``).
+                    # fastcache passes ``live=False`` (see ``validate_value_for_final_field_and_get_key`` /
+                    # ``args_hasher``).
                     key_parts.append(runtime_final_key(field_value, final_value_key_by_value_id))
                 else:
                     key_parts.append(

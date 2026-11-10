@@ -92,10 +92,12 @@ def _enum_member_map_key(cls: type, live: bool) -> tuple:
     member_map = getattr(cls, "_member_map_", None)
     if not isinstance(member_map, dict):
         return ()
-    return tuple((name, final_scalar_key(member.value, live)) for name, member in member_map.items())
+    return tuple(
+        (name, validate_value_for_final_field_and_get_key(member.value, live)) for name, member in member_map.items()
+    )
 
 
-def final_scalar_key(value: Any, live: bool = False) -> tuple[Any, ...]:
+def validate_value_for_final_field_and_get_key(value: Any, live: bool = False) -> tuple[Any, ...]:
     """Validate a Final value and build its specialization key.
 
     Keep distinct constants separate even when Python considers them equal, such as True and 1 or an IntEnum member and
@@ -113,7 +115,7 @@ def final_scalar_key(value: Any, live: bool = False) -> tuple[Any, ...]:
             _ENUM_KEY_TAG,
             *_subclass_identity(cls, live),
             value.name,
-            final_scalar_key(value.value, live),
+            validate_value_for_final_field_and_get_key(value.value, live),
             _enum_member_map_key(cls, live),
         )
     if isinstance(value, np.floating):
@@ -162,4 +164,4 @@ def runtime_final_key(value: object, final_value_key_by_value_id: "FinalValueKey
     cached = final_value_key_by_value_id.get(id(value)) if final_value_key_by_value_id is not None else None
     if cached is not None and cached[0] is value:
         return cached[1]
-    return final_scalar_key(value, live=True)
+    return validate_value_for_final_field_and_get_key(value, live=True)
