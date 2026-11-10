@@ -41,9 +41,9 @@ from quadrants._tensor import (
 )
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorClass
-from quadrants.lang._final_dataclass_fields import (
+from quadrants.lang._final.final_constant_values import final_scalar_key
+from quadrants.lang._final.final_dataclass_fields import (
     final_field_names,
-    final_scalar_key,
     subtree_has_final_fields,
 )
 from quadrants.lang._name_utils import create_flat_name

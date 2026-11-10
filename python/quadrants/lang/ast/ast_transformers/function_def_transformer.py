@@ -22,7 +22,7 @@ from quadrants.lang import (
     matrix,
 )
 from quadrants.lang import ops as qd_ops
-from quadrants.lang._final_dataclass_fields import (
+from quadrants.lang._final.final_dataclass_fields import (
     final_field_names,
     is_final_annotation,
 )
