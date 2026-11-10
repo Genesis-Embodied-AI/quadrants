@@ -84,4 +84,47 @@ TEST(LowLatencyThreadPool, SingleThreadRunsOnCallerAndStaticTasksKeepTheirWorker
   }
 }
 
+TEST(LowLatencyThreadPool, ShutdownInterruptsPollingAndSleeping) {
+  for (int spin_us : {200, 10000000}) {
+    for (int launches : {0, 1, 2}) {
+      auto start = std::chrono::steady_clock::now();
+      {
+        LowLatencyThreadPool pool(8, spin_us, true);
+        std::atomic<int> visits{0};
+        for (int launch = 0; launch < launches; ++launch) {
+          pool.run(8, 8, &visits, [](void *raw, int, int) { static_cast<std::atomic<int> *>(raw)->fetch_add(1); });
+        }
+        EXPECT_EQ(visits.load(), launches * 8);
+        if (launches == 2)
+          std::this_thread::sleep_for(std::chrono::milliseconds(2));
+      }
+      EXPECT_LT(std::chrono::steady_clock::now() - start, std::chrono::seconds(2));
+    }
+  }
+}
+
+TEST(LowLatencyThreadPool, PublicationAcrossSleepBoundaries) {
+  for (int spin_us : {0, 20, 200}) {
+    LowLatencyThreadPool pool(8, spin_us, true);
+    std::array<int, 8> values{};
+    for (int generation = 1; generation <= 1000; ++generation) {
+      if (generation % 3 == 0)
+        std::this_thread::sleep_for(std::chrono::microseconds(std::max(0, spin_us - 1)));
+      if (generation % 3 == 1)
+        std::this_thread::sleep_for(std::chrono::microseconds(spin_us + 1));
+      struct Work {
+        std::array<int, 8> *values;
+        int generation;
+      } work{&values, generation};
+      int threads = std::array<int, 4>{8, 1, 4, 2}[generation % 4];
+      pool.run(8, threads, &work, [](void *raw, int, int task) {
+        auto &work = *static_cast<Work *>(raw);
+        (*work.values)[task] = work.generation;
+      });
+      for (int value : values)
+        ASSERT_EQ(value, generation);
+    }
+  }
+}
+
 }  // namespace quadrants
