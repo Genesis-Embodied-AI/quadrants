@@ -41,7 +41,6 @@ from quadrants.lang.util import is_data_oriented, to_quadrants_type
 from quadrants.types import buffer_view_type, ndarray_type, primitive_types
 from quadrants.types.annotations import RuntimeTyped, Template
 
-
 if TYPE_CHECKING:
     from quadrants.lang._func_base import FuncBase
     from quadrants.lang._quadrants_callable import (
