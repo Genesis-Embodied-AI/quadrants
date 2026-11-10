@@ -41,13 +41,13 @@ def get_final_field_names(dataclass_type: type) -> frozenset[str]:
     return names
 
 
-def runtime_final_type(
+def infer_final_field_annotation(
     value: object,
     non_frozen_ancestor_path: str | None,
     name: str,
     final_value_key_by_value_id: "FinalValueKeyCache | None" = None,
 ) -> "_SpecialForm | DeferredMemberType":
-    """Return a valid Final annotation or a deferred diagnostic for the current arriving value/path."""
+    """Infer a Final field's schema annotation from its runtime value and ancestor constraints."""
     if non_frozen_ancestor_path is not None:
         parent_name = non_frozen_ancestor_path.split(".", 1)[0]
         return create_deferred_member_type_for_invalid_dataclass_member(

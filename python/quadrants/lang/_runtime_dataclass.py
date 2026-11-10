@@ -32,7 +32,7 @@ from quadrants.lang._runtime_dataclass_cache import (
 )
 from quadrants.lang._runtime_dataclass_final import (
     get_final_field_names,
-    runtime_final_type,
+    infer_final_field_annotation,
 )
 from quadrants.lang._runtime_dataclass_guards import FrozenSchemaEntry
 from quadrants.lang._weak_identity_cache import WeakIdentityCache
@@ -209,7 +209,7 @@ def infer_dataclass_type(
     has_deferred = False
     for name, field, is_final in field_plan:
         if is_final:
-            member_type = runtime_final_type(
+            member_type = infer_final_field_annotation(
                 getattr(dataclass_instance, name), final_non_frozen_path, name, final_value_key_by_value_id
             )
         else:
