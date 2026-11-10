@@ -16,8 +16,8 @@ from .._name_utils import create_flat_name
 from .._ndarray import ScalarNdarray
 from .._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
 from ..field import ScalarField
-from ..final._final_constant_values import final_scalar_key
-from ..final._final_dataclass_fields import final_field_names, subtree_has_final_fields
+from .._final._final_constant_values import final_scalar_key
+from .._final._final_dataclass_fields import final_field_names, subtree_has_final_fields
 from ..kernel_arguments import ArgMetadata
 from ..matrix import MatrixField, MatrixNdarray, VectorNdarray
 from ..util import is_data_oriented, is_dataclass_instance, wants_runtime_primitives
