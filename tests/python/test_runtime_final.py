@@ -47,7 +47,7 @@ def test_final_uses_actual_type_and_value(annotation: typing.Any) -> None:
     def run(state: qd.RuntimeTyped) -> qd.i32:
         return inner(state)
 
-    values = [True, 1, 1.0, "one", Mode.A, np.int32(1), np.float32(1)]
+    values = [True, 1, 1.0, "one", Mode.A]
     for value in values:
         assert run(State(value)) == encode(value)
     assert len(run._primal.materialized_kernels) == len(values)
@@ -174,3 +174,40 @@ def test_string_alias_to_subscripted_final() -> None:
     assert run(State(5)) == 5
     assert run(State(3)) == 3
     assert len(run._primal.materialized_kernels) == 2
+
+
+@pytest.mark.parametrize(
+    "value", [np.bool_(True), np.int32(3), np.int64(3), np.uint64(3), np.float32(0.5), np.float64(0.5), np.str_("x")]
+)
+@test_utils.test()
+def test_numpy_final_scalar_is_rejected_when_used(value: object) -> None:
+    """Reject NumPy Final scalars while allowing unused unsupported fields."""
+    from quadrants.lang._final.final_constant_values import (
+        validate_value_for_final_field_and_get_key,
+    )
+
+    @dataclasses.dataclass(frozen=True)
+    class Config:
+        value: typing.Final
+        good: typing.Final = 7
+
+    @qd.kernel
+    def unused(config: qd.RuntimeTyped) -> qd.i32:
+        return config.good
+
+    @qd.kernel
+    def used(config: qd.RuntimeTyped) -> qd.i32:
+        return qd.static(int(config.value))
+
+    assert unused(Config(value)) == 7
+    with pytest.raises(TypeError, match="config.value.*NumPy scalars are not supported"):
+        used(Config(value))
+
+    class Mode(enum.Enum):
+        VALUE = value
+
+    for live in (False, True):
+        with pytest.raises(TypeError, match="NumPy scalars are not supported"):
+            validate_value_for_final_field_and_get_key(value, live=live)
+        with pytest.raises(TypeError, match="NumPy scalars are not supported"):
+            validate_value_for_final_field_and_get_key(Mode.VALUE, live=live)
