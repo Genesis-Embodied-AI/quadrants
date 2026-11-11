@@ -47,6 +47,7 @@ from quadrants.lang.matrix import MatrixType
 from quadrants.lang.stream import stream_parallel
 from quadrants.lang.struct import StructType
 from quadrants.lang.util import (
+    data_oriented_members,
     is_data_oriented,
     is_dataclass_instance,
     to_quadrants_type,
@@ -299,7 +300,7 @@ class FunctionDefTransformer:
                         seen.add(child_id)
                         _walk_obj(child, arg_idx, (*path, field.name), seen)
             else:
-                for attr_name, attr_val in vars(obj).items():
+                for attr_name, attr_val in data_oriented_members(obj):
                     if isinstance(attr_val, _TensorClass):
                         attr_val = attr_val._unwrap()
                     if isinstance(attr_val, _ndarray.Ndarray):
@@ -360,9 +361,7 @@ class FunctionDefTransformer:
                 val = val._unwrap()
             if isinstance(val, _ndarray.Ndarray):
                 continue
-            if is_dataclass_instance(val):
-                _walk_obj(val, i, (), {id(val)})
-            elif hasattr(val, "__dict__"):
+            if is_dataclass_instance(val) or is_data_oriented(val) or hasattr(val, "__dict__"):
                 _walk_obj(val, i, (), {id(val)})
 
     @staticmethod

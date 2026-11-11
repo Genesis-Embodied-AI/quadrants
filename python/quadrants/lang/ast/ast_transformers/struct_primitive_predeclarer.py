@@ -18,6 +18,7 @@ from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import expr, impl
 from quadrants.lang.ast.ast_transformer_utils import ASTTransformerFuncContext
 from quadrants.lang.util import (
+    data_oriented_members,
     is_data_oriented,
     is_dataclass_instance,
     wants_runtime_primitives,
@@ -113,8 +114,8 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
         seen.add(obj_id)
         if is_dataclass_instance(obj):
             items = [(f.name, getattr(obj, f.name)) for f in dataclasses.fields(obj)]
-        elif hasattr(obj, "__dict__"):
-            items = list(vars(obj).items())
+        elif is_data_oriented(obj) or hasattr(obj, "__dict__"):
+            items = list(data_oriented_members(obj))
         else:
             return
         for attr_name, attr_val in items:
