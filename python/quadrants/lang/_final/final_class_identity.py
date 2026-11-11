@@ -36,7 +36,7 @@ _unpack_u64 = struct.Struct("<Q").unpack
 _EXACT_BAKED_TYPES = (bool, int, float, str)
 
 
-def _is_exact_baked_type(cls: type) -> bool:
+def _is_supported_builtin_scalar_type(cls: type) -> bool:
     """Check whether a class is exactly one of the supported built-in scalar types.
 
     Use identity because a metaclass can make distinct classes compare equal.
