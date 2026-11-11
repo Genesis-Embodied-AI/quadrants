@@ -33,7 +33,7 @@ _unpack_u64 = struct.Struct("<Q").unpack
 
 
 # Exact built-in scalar types accepted as Final constants.
-_EXACT_BAKED_TYPES = (bool, int, float, str)
+_SUPPORTED_BUILTIN_SCALAR_TYPES = (bool, int, float, str)
 
 
 def _is_supported_builtin_scalar_type(cls: type) -> bool:
@@ -41,7 +41,7 @@ def _is_supported_builtin_scalar_type(cls: type) -> bool:
 
     Use identity because a metaclass can make distinct classes compare equal.
     """
-    return any(cls is t for t in _EXACT_BAKED_TYPES)
+    return any(cls is t for t in _SUPPORTED_BUILTIN_SCALAR_TYPES)
 
 
 # CPython Py_TPFLAGS_HEAPTYPE distinguishes heap types from static library types without trusting __module__.
