@@ -5095,7 +5095,10 @@ def test_subclass_extra_field_offline_fastcache_uses_runtime_schema() -> None:
     """Runtime subclass fields are hashed when used and pruned when unused, regardless of base annotations."""
     from typing import Final
 
-    from quadrants.lang._fast_caching.args_hasher import _FAIL_FASTCACHE, dataclass_to_repr
+    from quadrants.lang._fast_caching.args_hasher import (
+        _FAIL_FASTCACHE,
+        dataclass_to_repr,
+    )
     from quadrants.lang._name_utils import create_flat_name
     from quadrants.lang._runtime_typing.runtime_dataclass import infer_dataclass_type
 
