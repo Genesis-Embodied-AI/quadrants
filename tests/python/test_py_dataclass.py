@@ -4330,13 +4330,9 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
 
 @test_utils.test()
 def test_final_scalar_key_live_preserves_class_identity_across_module_rebind():
-    """The in-process spec key (``live=True``) must distinguish two *distinct* class objects even when they transiently
-    share ``module``/``qualname`` - e.g. a module-level enum redefined by a module reload, each resolvable to its own
-    definition while bound. In the offline (``live=False``) form ``validate_value_for_final_field_and_get_key`` keys a
-    resolvable class by ``module``/``qualname`` alone (process-stable, so it cannot tell the rebinding apart - a safe
-    cross-process strategy, never a wrong reuse), but the in-process key keys on ``id(cls)`` so a second launch with the
-    fresh class does not reuse the kernel baked for the first (``cfg.x.__class__ is SavedOldClass`` is observable at
-    compile time).
+    """Live keys distinguish redefined enum classes; offline keys stay equal for equivalent importable definitions.
+
+    Class identity matters because compiled code can compare the enum class with a saved class object.
     """
     import sys
     import types
