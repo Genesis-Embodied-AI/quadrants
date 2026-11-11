@@ -4646,9 +4646,8 @@ def test_final_enum_rejects_observable_metaclass_state():
 
 
 @test_utils.test()
-def test_final_is_baked_base_type_ignores_spoofed_module():
+def test_final_rejects_scalar_subclasses_with_spoofed_module():
     """Spoofing the NumPy module name does not make a custom scalar subclass supported."""
-    from quadrants.lang._final.final_class_identity import _is_baked_base_type
     from quadrants.lang._final.final_constant_values import (
         validate_value_for_final_field_and_get_key,
     )
@@ -4660,7 +4659,6 @@ def test_final_is_baked_base_type_ignores_spoofed_module():
         __hash__ = int.__hash__
 
     BehaviorSubclass.__module__ = "numpy"  # spoof - must not buy trusted-base treatment
-    assert _is_baked_base_type(BehaviorSubclass) is False  # heap type, so not a baked base despite the module string
     with pytest.raises(TypeError, match="Custom scalar subclasses"):
         validate_value_for_final_field_and_get_key(BehaviorSubclass(1))
 
@@ -4668,7 +4666,6 @@ def test_final_is_baked_base_type_ignores_spoofed_module():
         pass
 
     FreeSubclass.__module__ = "numpy"
-    assert _is_baked_base_type(FreeSubclass) is False  # still not a supported NumPy scalar
     with pytest.raises(TypeError, match="Custom scalar subclasses"):
         validate_value_for_final_field_and_get_key(FreeSubclass(1))
 

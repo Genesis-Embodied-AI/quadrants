@@ -73,11 +73,6 @@ def _observable_metaclass_attr(mcls: type) -> "str | None":
     return None
 
 
-def _is_baked_base_type(klass: type) -> bool:
-    """Check whether a class is a supported built-in scalar base or object."""
-    return _is_exact_baked_type(klass) or klass is object
-
-
 def _slot_names(klass: type) -> tuple[str, ...]:
     """Return the string slot names declared directly on a class.
 
