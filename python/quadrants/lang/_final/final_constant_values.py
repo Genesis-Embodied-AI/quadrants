@@ -1,7 +1,7 @@
 """Validate Final constant values and construct their specialization keys."""
 
 import enum
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from quadrants.lang._final.final_class_identity import (
     _is_exact_baked_type,
@@ -10,9 +10,6 @@ from quadrants.lang._final.final_class_identity import (
     _unpack_u64,
 )
 from quadrants.lang._final.final_enum_validation import _reject_stateful_enum_member
-
-if TYPE_CHECKING:
-    from quadrants.lang._runtime_typing.runtime_dataclass import FinalValueKeyCache
 
 # Separate constants that Python considers equal, such as True, 1, and an IntEnum member.
 _FLOAT_KEY_TAG = "f64"
@@ -28,12 +25,10 @@ def _enum_member_map_key(cls: type, live: bool) -> tuple:
     member_map = getattr(cls, "_member_map_", None)
     if not isinstance(member_map, dict):
         return ()
-    return tuple(
-        (name, validate_value_for_final_field_and_get_key(member.value, live)) for name, member in member_map.items()
-    )
+    return tuple((name, final_scalar_key(member.value, live)) for name, member in member_map.items())
 
 
-def validate_value_for_final_field_and_get_key(value: Any, live: bool = False) -> tuple[Any, ...]:
+def final_scalar_key(value: Any, live: bool = False) -> tuple[Any, ...]:
     """Validate a Final value and build its specialization key.
 
     Keep distinct constants separate even when Python considers them equal, such as True and 1 or an IntEnum member and
@@ -51,7 +46,7 @@ def validate_value_for_final_field_and_get_key(value: Any, live: bool = False) -
             _ENUM_KEY_TAG,
             *_subclass_identity(cls, live),
             value.name,
-            validate_value_for_final_field_and_get_key(value.value, live),
+            final_scalar_key(value.value, live),
             _enum_member_map_key(cls, live),
         )
     cls = type(value)
@@ -62,13 +57,3 @@ def validate_value_for_final_field_and_get_key(value: Any, live: bool = False) -
             "Custom scalar subclasses and NumPy scalars are not supported."
         )
     return (_SCALAR_KEY_TAG, cls.__module__, cls.__qualname__, value)
-
-
-def get_cached_or_validate_value_for_final_field_and_get_key(
-    value: object, final_value_key_by_value_id: "FinalValueKeyCache | None"
-) -> tuple[Any, ...]:
-    """Reuse a value key validated during this dispatch only; never retain it across kernel calls."""
-    cached = final_value_key_by_value_id.get(id(value)) if final_value_key_by_value_id is not None else None
-    if cached is not None and cached[0] is value:
-        return cached[1]
-    return validate_value_for_final_field_and_get_key(value, live=True)

@@ -18,11 +18,6 @@ from quadrants.lang import exception, expr, impl, matrix, mesh
 from quadrants.lang import ops as qd_ops
 from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._ndrange import _Ndrange
-from quadrants.lang._runtime_typing.deferred_errors import DeferredMemberError
-from quadrants.lang._runtime_typing.nested_dataclasses import (
-    reject_undiscovered_dataclass_member,
-)
-from quadrants.lang._runtime_typing.runtime_dataclass import is_runtime_member_name
 from quadrants.lang._unpacked import _UnpackedVectorRef
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
@@ -112,8 +107,6 @@ class ASTTransformer(Builder):
         else:
             node._qd_arg_chain = None  # type: ignore[attr-defined]
         node.violates_pure, node.ptr, node.violates_pure_reason = ctx.get_var_by_name(node.id)
-        if isinstance(node.ptr, DeferredMemberError) and not ctx.expanding_dataclass_call_parameters:
-            node.ptr.reject()
         # Flattened struct fields (``__qd_foo__qd_bar``) injected by ``populate_global_vars_from_dataclass`` are raw
         # ``Ndarray`` instances.  ``build_Attribute`` already promotes these via ``_promote_ndarray_if_declared`` but
         # the flattened-name path bypasses ``build_Attribute`` entirely, so we must promote here too.
@@ -794,21 +787,11 @@ class ASTTransformer(Builder):
                 node.ptr = getattr(tensor_ops, node.attr)
                 setattr(node, "caller", node.value.ptr)
         elif dataclasses.is_dataclass(node.value.ptr):
-            errors = getattr(ctx.global_context, "nested_dataclass_errors", None)
-            error = errors.get((id(node.value.ptr), node.attr)) if errors else None
-            if error is not None:
-                node.ptr = error
-                if not ctx.expanding_dataclass_call_parameters:
-                    error.reject()
-                return node.ptr
             lifted = maybe_lifted_primitive(ctx, node.value.ptr, node.attr)
             if lifted is not None:
                 node.ptr = lifted
                 return node.ptr
             node.ptr = getattr(node.value.ptr, node.attr)
-            reject_undiscovered_dataclass_member(
-                node.value.ptr, node.attr, node.ptr, ctx.global_context.runtime_dataclass_members
-            )
             from quadrants._tensor_wrapper import (  # pylint: disable=C0415
                 Tensor as _TensorClass,
             )
@@ -832,9 +815,6 @@ class ASTTransformer(Builder):
                 node.ptr = lifted
                 return node.ptr
             node.ptr = getattr(node.value.ptr, node.attr)
-            reject_undiscovered_dataclass_member(
-                node.value.ptr, node.attr, node.ptr, ctx.global_context.runtime_dataclass_members
-            )
             # ``qd.Tensor`` wrappers reached via attribute access on a ``@qd.data_oriented`` struct field at AST-build
             # time. The IR layer downstream (``build_Subscript`` -> ``impl.subscript``) only knows about ``Ndarray`` /
             # ``Field`` / ``Expr``; the wrapper is host-side. Unwrap here so ``state.a[i, j]`` inside a kernel body
@@ -1029,10 +1009,7 @@ class ASTTransformer(Builder):
                     template_node = None
                     template_side = None
                 template_arg_names = {ctx.func.arg_metas[index].name for index in ctx.template_slot_locations}
-                runtime_member = isinstance(template_node, ast.Name) and is_runtime_member_name(
-                    ctx.func.arg_metas, template_node.id
-                )
-                if not runtime_member and (
+                if (
                     not ctx.is_kernel
                     or not isinstance(template_node, ast.Name)
                     or template_node.id.startswith("__qd_")
@@ -1045,9 +1022,7 @@ class ASTTransformer(Builder):
                         "The argument must be annotated `qd.Tensor | None`, `qd.types.Template | None`, "
                         "or `qd.types.NDArray[...] | None`."
                     )
-                if runtime_member:
-                    pass  # The inferred member's bound value already distinguishes None from present values.
-                elif template_side == "left":
+                if template_side == "left":
                     l = ctx.template_vars[template_node.id]
                 else:
                     r = ctx.template_vars[template_node.id]

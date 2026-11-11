@@ -38,13 +38,8 @@ from quadrants.lang._final.final_dataclass_fields import (
     final_field_names,
     subtree_has_final_fields,
 )
-from quadrants.lang._name_utils import (
-    create_flat_name,
-    dotted_argument_path_from_flat_name,
-)
+from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._ndarray import Ndarray
-from quadrants.lang._runtime_typing.deferred_errors import DeferredMemberType
-from quadrants.lang._runtime_typing.runtime_dataclass import is_dataclass_annotation
 from quadrants.lang._signature import get_func_signature
 from quadrants.lang._wrap_inspect import get_source_info_and_src
 from quadrants.lang.ast import ASTTransformerFuncContext
@@ -238,7 +233,6 @@ class FuncBase:
         self.pos_info_cache: dict[tuple, str] = {}
 
         self.check_parameter_annotations()
-        self.original_template_slot_locations = tuple(self.template_slot_locations)
 
         self.mapper = TemplateMapper(self.arg_metas, self.template_slot_locations)
 
@@ -320,7 +314,7 @@ class FuncBase:
                     # ``qd.Tensor`` (the wrapper class) used as the polymorphic kernel-arg annotation. Behaves like a
                     # template slot upfront; the actual dispatch happens at extract-time / AST-build-time.
                     pass
-                elif is_dataclass_annotation(annotation):
+                elif annotation_type is type and is_dataclass(annotation):
                     pass
                 elif self.is_kernel and isinstance(annotation, sparse_matrix_builder):
                     pass
@@ -365,8 +359,8 @@ class FuncBase:
         for i in template_slot_locations:
             template_var_name = argument_metas[i].name
             global_vars[template_var_name] = py_args[i]
-        for i, parameter in enumerate(argument_metas):
-            parameter_name = parameter.name
+        parameters = get_func_signature(fn).parameters
+        for i, (parameter_name, parameter) in enumerate(parameters.items()):
             anno = parameter.annotation
             if is_dataclass(anno):
                 _kernel_impl_dataclass.populate_global_vars_from_dataclass(
@@ -668,8 +662,6 @@ class FuncBase:
 
         needed_arg_type_id = id(needed_arg_type)
         needed_arg_basetype = type(needed_arg_type)
-        if needed_arg_basetype is DeferredMemberType:
-            needed_arg_type.bind(dotted_argument_path_from_flat_name(py_dataclass_basename)).reject()
 
         # qd.Tensor value-dispatch at launch time. Re-target the annotation to the concrete branch resolved from the
         # runtime value, then fall through to the existing dispatch logic. Wrapper instances are unwrapped earlier (in
@@ -696,8 +688,6 @@ class FuncBase:
             launch_ctx_buffer[_FLOAT].append((index, float(v)))
             return 1, False
         if needed_arg_type_id in primitive_types.integer_type_ids:
-            if isinstance(v, np.bool_):
-                v = bool(v)
             if not isinstance(v, (int, np.integer)):
                 raise QuadrantsRuntimeTypeError.get((index,), needed_arg_type.to_string(), provided_arg_type)
             v = int(v)
@@ -710,8 +700,7 @@ class FuncBase:
         needed_arg_fields = getattr(needed_arg_type, _FIELDS, None)
         # We get the fields from the needed arg type, thus subclasses are allowed
         if needed_arg_fields is not None:
-            expected_type = getattr(needed_arg_type, "_qd_runtime_origin", needed_arg_type)
-            if provided_arg_type is not expected_type and not issubclass(provided_arg_type, expected_type):
+            if provided_arg_type is not needed_arg_type and not issubclass(provided_arg_type, needed_arg_type):
                 # PERF: Check immediate case first (`is not needed_arg_type`), fallback to subclass
                 raise QuadrantsRuntimeTypeError(
                     "needed", needed_arg_type, "cannot be assigned the provided", provided_arg_type
@@ -723,10 +712,6 @@ class FuncBase:
             if not is_frozen:
                 params = getattr(needed_arg_type, "__dataclass_params__", None)
                 is_frozen = params is not None and (params.frozen or params.unsafe_hash)
-            # Runtime schemas can contain mutable children even when the outer dataclass is frozen. Re-read their
-            # leaves on each launch; instance identity alone cannot validate a cached launch buffer.
-            if hasattr(needed_arg_type, "_qd_runtime_origin") and not needed_arg_type._qd_runtime_stable:
-                is_frozen = False
             idx = 0
             if is_frozen:
                 # PERF: Frozen-dataclass fast path. Uses the pre-computed field plan (which fields are active for this
@@ -745,7 +730,7 @@ class FuncBase:
                         launch_ctx,
                         launch_ctx_buffer,
                         field_type,
-                        type(field_value),
+                        field_type,
                         field_value,
                         index + idx,
                         actual_argument_slot,
@@ -754,16 +739,13 @@ class FuncBase:
                     idx += num_args_
                 # A Final-bearing subtree must not cache its launch context (``args_hash`` keys on ``id(arg)``, so a
                 # cached buffer would resend the first-launch values): re-read every launch so a mutated ordinary field
-                # supplies its new value and ``validate_value_for_final_field_and_get_key`` re-validates. Matches
-                # ``args_hasher``'s repr gate.
+                # supplies its new value and ``final_scalar_key`` re-validates. Matches ``args_hasher``'s repr gate.
                 return idx, not subtree_has_final_fields(needed_arg_type)
             # Non-frozen dataclass: original path. No ``Final`` handling - ``final_field_names`` rejects ``Final`` on a
             # non-frozen class, so such a class already failed during template mapping.
             is_launch_ctx_cacheable = False
             for field in needed_arg_fields.values():
                 if field._field_type is not _FIELD:
-                    continue
-                if field.name in final_field_names(needed_arg_type):
                     continue
                 field_name = field.name
                 field_full_name = create_flat_name(py_dataclass_basename, field_name)
@@ -779,7 +761,7 @@ class FuncBase:
                     launch_ctx,
                     launch_ctx_buffer,
                     field_type,
-                    type(field_value),
+                    field_type,
                     field_value,
                     index + idx,
                     actual_argument_slot,

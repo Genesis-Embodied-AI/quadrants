@@ -11,6 +11,7 @@ import pytest
 
 import quadrants as qd
 from quadrants.lang._kernel_types import KernelBatchedArgType
+from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.impl import Kernel, QuadrantsSyntaxError
 
 from tests.helpers import test_utils
@@ -410,7 +411,10 @@ def test_ndarray_struct_primitives(qd_type: Any, qd_annotation: Any) -> None:
 
     @qd.kernel
     def k1(
-        z: qd_annotation[qd.i32, 1], my_struct_ab: MyStructAB, bar: qd_annotation[qd.i32, 1], my_struct_c: MyStructC
+        z: qd_annotation[qd.i32, 1],
+        my_struct_ab: MyStructAB,
+        bar: qd_annotation[qd.i32, 1],
+        my_struct_c: MyStructC,
     ) -> None:
         my_struct_ab.a[36] += my_struct_ab.p1
         my_struct_ab.a[37] += my_struct_ab.p2
@@ -451,7 +455,9 @@ def test_ndarray_struct_nested_ndarray():
         struct_cd: MyStructCD
 
     @qd.func
-    def f3(my_struct_ab3: MyStructAB) -> None:
+    def f3(
+        my_struct_ab3: MyStructAB,
+    ) -> None:
         my_struct_ab3.a[47] += 23
         my_struct_ab3.b[42] += 25
         my_struct_ab3.struct_cd.c[51] += 33
@@ -464,7 +470,9 @@ def test_ndarray_struct_nested_ndarray():
         my_struct_ab3.a[52] = my_struct_ab3.struct_cd.struct_ef.e.shape[0]
 
     @qd.func
-    def f2(my_struct_ab2: MyStructAB) -> None:
+    def f2(
+        my_struct_ab2: MyStructAB,
+    ) -> None:
         my_struct_ab2.a[27] += 13
         my_struct_ab2.b[22] += 15
         my_struct_ab2.struct_cd.c[31] += 23
@@ -477,7 +485,9 @@ def test_ndarray_struct_nested_ndarray():
         my_struct_ab2.a[62] = my_struct_ab2.struct_cd.struct_ef.e.shape[0]
 
     @qd.kernel
-    def k1(my_struct_ab: MyStructAB) -> None:
+    def k1(
+        my_struct_ab: MyStructAB,
+    ) -> None:
         my_struct_ab.a[7] += 3
         my_struct_ab.b[2] += 5
         my_struct_ab.struct_cd.c[11] += 13
@@ -556,7 +566,9 @@ def test_field_struct_nested_field() -> None:
         struct_cd: MyStructCD
 
     @qd.func
-    def f3(my_struct_ab3: MyStructAB) -> None:
+    def f3(
+        my_struct_ab3: MyStructAB,
+    ) -> None:
         my_struct_ab3.a[47] += 23
         my_struct_ab3.b[42] += 25
         my_struct_ab3.struct_cd.c[51] += 33
@@ -568,7 +580,9 @@ def test_field_struct_nested_field() -> None:
         my_struct_ab3.a[52] = my_struct_ab3.struct_cd.struct_ef.e.shape[0]
 
     @qd.func
-    def f2(my_struct_ab2: MyStructAB) -> None:
+    def f2(
+        my_struct_ab2: MyStructAB,
+    ) -> None:
         my_struct_ab2.a[27] += 13
         my_struct_ab2.b[22] += 15
         my_struct_ab2.struct_cd.c[31] += 23
@@ -581,7 +595,9 @@ def test_field_struct_nested_field() -> None:
         my_struct_ab2.a[62] = my_struct_ab2.struct_cd.struct_ef.e.shape[0]
 
     @qd.kernel
-    def k1(my_struct_ab: MyStructAB) -> None:
+    def k1(
+        my_struct_ab: MyStructAB,
+    ) -> None:
         my_struct_ab.a[7] += 3
         my_struct_ab.b[2] += 5
         my_struct_ab.struct_cd.c[11] += 13
@@ -660,7 +676,9 @@ def test_field_struct_nested_field_kwargs() -> None:
         struct_cd: MyStructCD
 
     @qd.func
-    def f3(my_struct_ab3: MyStructAB) -> None:
+    def f3(
+        my_struct_ab3: MyStructAB,
+    ) -> None:
         my_struct_ab3.a[47] += 23
         my_struct_ab3.b[42] += 25
         my_struct_ab3.struct_cd.c[51] += 33
@@ -672,7 +690,9 @@ def test_field_struct_nested_field_kwargs() -> None:
         my_struct_ab3.a[52] = my_struct_ab3.struct_cd.struct_ef.e.shape[0]
 
     @qd.func
-    def f2(my_struct_ab2: MyStructAB) -> None:
+    def f2(
+        my_struct_ab2: MyStructAB,
+    ) -> None:
         my_struct_ab2.a[27] += 13
         my_struct_ab2.b[22] += 15
         my_struct_ab2.struct_cd.c[31] += 23
@@ -685,7 +705,9 @@ def test_field_struct_nested_field_kwargs() -> None:
         my_struct_ab2.a[62] = my_struct_ab2.struct_cd.struct_ef.e.shape[0]
 
     @qd.kernel
-    def k1(my_struct_ab: MyStructAB) -> None:
+    def k1(
+        my_struct_ab: MyStructAB,
+    ) -> None:
         my_struct_ab.a[7] += 3
         my_struct_ab.b[2] += 5
         my_struct_ab.struct_cd.c[11] += 13
@@ -887,7 +909,9 @@ _SUBSTRUCT_LEAF_KINDS = [
     pytest.param(qd.ndarray, qd.types.ndarray, id="ndarray"),
     pytest.param(qd.field, _TemplateBuilder(), id="field"),
     pytest.param(
-        lambda dtype, shape: qd.tensor(dtype, shape=shape, backend=qd.Backend.NDARRAY), qd.types.ndarray, id="tensor"
+        lambda dtype, shape: qd.tensor(dtype, shape=shape, backend=qd.Backend.NDARRAY),
+        qd.types.ndarray,
+        id="tensor",
     ),
 ]
 
@@ -952,7 +976,12 @@ def test_substruct_passed_to_func(qd_make: Any, qd_anno: Any, request) -> None:
         a=a,
         b=b,
         extra=extra_ab,
-        struct_cd=MyStructCD(c=c, d=d, extra=extra_cd, struct_ef=MyStructEF(e=e, f=f, extra=extra_ef)),
+        struct_cd=MyStructCD(
+            c=c,
+            d=d,
+            extra=extra_cd,
+            struct_ef=MyStructEF(e=e, f=f, extra=extra_ef),
+        ),
     )
     k1(s)
 
@@ -1090,8 +1119,7 @@ def test_substruct_inside_func() -> None:
 @test_utils.test()
 def test_substruct_scalar_leaf() -> None:
     """Sub-struct contains scalar (int) fields, mixed with an ndarray sibling. ``extra_ab`` is an unused ndarray on
-    the outer struct and must be pruned out of the kernel arg list (only ``out`` survives as QD_ARRAY).
-    """
+    the outer struct and must be pruned out of the kernel arg list (only ``out`` survives as QD_ARRAY)."""
     out = qd.ndarray(qd.i32, shape=(8,))
     extra_ab = qd.ndarray(qd.i32, shape=(8,))
 
@@ -1181,7 +1209,19 @@ def test_substruct_deep_nesting() -> None:
         touch_l1(s.inner)
         touch_l3(s.inner.inner.inner)
 
-    s = L0(leaf=n0, extra=x0, inner=L1(leaf=n1, extra=x1, inner=L2(leaf=n2, extra=x2, inner=L3(leaf=n3, extra=x3))))
+    s = L0(
+        leaf=n0,
+        extra=x0,
+        inner=L1(
+            leaf=n1,
+            extra=x1,
+            inner=L2(
+                leaf=n2,
+                extra=x2,
+                inner=L3(leaf=n3, extra=x3),
+            ),
+        ),
+    )
     k(s)
 
     assert n0[0] == 1000
@@ -3129,8 +3169,12 @@ def test_pruning_iterate_function_no_iterate() -> None:
 
 
 @test_utils.test()
-def test_dataclass_with_template_uses_runtime_types() -> None:
-    """An arriving dataclass overrides the template annotation without a deprecation warning."""
+def test_dataclass_with_template_emits_deprecation_warning():
+    """A frozen ``@dataclasses.dataclass`` passed into a ``qd.Template``-annotated kernel parameter must emit a
+    ``DeprecationWarning`` at materialize time. The pattern was never an intentional Quadrants pattern (the template
+    walker happens to handle dataclass-shaped objects, but the supported annotation is the dataclass type itself).
+    The warning is emitted from ``Kernel.materialize`` after the cache-hit early return, so it fires once per
+    (kernel, spec-key) and stays off the steady-state launch hot path. See ``compound_types.md`` Overview."""
 
     @dataclass(frozen=True)
     class Foo:
@@ -3144,11 +3188,8 @@ def test_dataclass_with_template_uses_runtime_types() -> None:
         for i in range(4):
             foo.x[i] = float(i)
 
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
+    with pytest.warns(DeprecationWarning, match="qd.Template-annotated kernel parameter"):
         run(f)
-    assert not any(issubclass(w.category, DeprecationWarning) for w in caught)
-    assert x[3] == 3
 
 
 @test_utils.test()
@@ -3180,6 +3221,10 @@ def test_data_oriented_with_template_does_not_emit_deprecation_warning():
 
 @test_utils.test()
 def test_typed_dataclass_does_not_emit_deprecation_warning():
+    """The recommended path — frozen ``@dataclasses.dataclass`` passed as a typed kernel parameter (the dataclass
+    type itself) — must NOT emit the deprecation warning. Only the ``qd.Template`` outer-annotation path is
+    deprecated; the typed-dataclass flatten-to-args path is the supported pattern."""
+
     @dataclass(frozen=True)
     class Foo:
         x: qd.types.NDArray[qd.f32, 1]
@@ -3274,8 +3319,8 @@ def test_kernel_accepts_subclass_of_annotated_frozen_dataclass_param():
 @test_utils.test()
 def test_kernel_accepts_subclass_with_unsupported_final_app_field():
     """A subclass may carry an application-only ``Final`` field of a type Quadrants cannot bake (e.g. ``Final[list]``).
-    The kernel never reads the extra field, so its unsupported value must not prevent the kernel from running.
-    """
+    Only the annotated base's fields reach the kernel, so the extra ``Final`` field must be ignored, not validated
+    (validating it would reject the supported subclass pattern)."""
     from typing import Final
 
     import numpy as np
@@ -3286,7 +3331,7 @@ def test_kernel_accepts_subclass_with_unsupported_final_app_field():
 
     @dataclass(frozen=True)
     class Sub(Base):
-        extra: Final[list]  # unsupported as a Quadrants Final value, but unused by the kernel
+        extra: Final[list]  # unbakeable as a Quadrants Final field, but the kernel (annotated Base) never sees it
 
     @qd.kernel
     def fill(dat: Base):
@@ -3295,7 +3340,7 @@ def test_kernel_accepts_subclass_with_unsupported_final_app_field():
 
     x = qd.ndarray(qd.i32, shape=(4,))
     sub = Sub(x=x, extra=[1, 2, 3])
-    fill(sub)  # must not reject the unused ``extra`` field
+    fill(sub)  # must not raise while validating the ignored ``extra`` field
     np.testing.assert_array_equal(x.to_numpy(), [7, 7, 7, 7])
 
 
@@ -3323,7 +3368,7 @@ def test_kernel_accepts_data_oriented_subclass_of_dataclass_param():
 
 
 @test_utils.test()
-def test_kernel_accepts_unrelated_dataclass() -> None:
+def test_kernel_disallows_unassignable_dataclass():
     @dataclass
     class Expected:
         x: int
@@ -3333,10 +3378,11 @@ def test_kernel_accepts_unrelated_dataclass() -> None:
         x: int
 
     @qd.kernel
-    def mykernel(value: Expected) -> int:
-        return value.x
+    def mykernel(_: Expected) -> None: ...
 
-    assert mykernel(Unrelated(x=7)) == 7
+    other = Unrelated(x=0)
+    with pytest.raises(QuadrantsRuntimeTypeError):
+        mykernel(other)
 
 
 @test_utils.test()
@@ -3665,8 +3711,7 @@ def test_mutable_ancestor_of_nested_final_field_is_rejected():
     A frozen ``Inner`` holding ``n: Final[int]`` protects ``inner.n``, but a mutable ``Outer`` holding ``child: Inner``
     still allows ``outer.child = Inner(n=9)``. ``TemplateMapper.lookup`` memoises the specialisation on the top-level
     ``id(arg)``, so re-launching with that same ``outer`` would silently reuse the kernel compiled with the previous
-    child's baked constant and produce results for the old value. Reject the mutable ancestor instead.
-    """
+    child's baked constant and produce results for the old value. Reject the mutable ancestor instead."""
     from typing import Final
 
     from quadrants.lang._final.final_dataclass_fields import final_field_names
@@ -3785,8 +3830,11 @@ def test_nested_final_field_recompiles_per_frozen_carrier_instance():
 
 
 @test_utils.test()
-def test_final_field_ignores_inner_types() -> None:
-    """Final marks compile-time values without constraining their arriving types."""
+def test_final_field_rejects_non_bakeable_inner_types():
+    """``Final[T]`` only accepts a ``T`` that is meaningful as a compile-time literal and hashes / reprs by value
+    stably across processes: ``bool`` / ``int`` / ``float`` / ``str`` and ``enum.Enum`` subclasses. Arrays, structs,
+    nested dataclasses and arbitrary objects are rejected with a tailored remediation hint rather than silently
+    miscompiling."""
     import enum
     from typing import Final
 
@@ -3800,27 +3848,31 @@ def test_final_field_ignores_inner_types() -> None:
     class FinalNestedDataclass:
         inner: Final[Leaf]
 
-    assert final_field_names(FinalNestedDataclass) == {"inner"}
+    with pytest.raises(TypeError, match="nested dataclasses are walked structurally"):
+        final_field_names(FinalNestedDataclass)
 
     @dataclass(frozen=True)
     class FinalNdarrayType:
         buf: Final[qd.types.ndarray_type.NdarrayType]
 
-    assert final_field_names(FinalNdarrayType) == {"buf"}
+    with pytest.raises(TypeError, match="arrays are runtime data"):
+        final_field_names(FinalNdarrayType)
 
     @dataclass(frozen=True)
     class FinalTemplate:
         x: Final[qd.Template]
 
-    assert final_field_names(FinalTemplate) == {"x"}
+    with pytest.raises(TypeError, match="is redundant"):
+        final_field_names(FinalTemplate)
 
     @dataclass(frozen=True)
     class FinalObject:
         x: Final[object]
 
-    assert final_field_names(FinalObject) == {"x"}
+    with pytest.raises(TypeError, match="supports T in"):
+        final_field_names(FinalObject)
 
-    # Scalar and enum annotations remain accepted as well.
+    # Accepted: the scalar set plus any Enum subclass.
     class Mode(enum.IntEnum):
         A = 0
         B = 1
@@ -3841,8 +3893,8 @@ def test_final_field_ignores_inner_types() -> None:
 def test_final_field_int_annotation_holding_intenum_value():
     """Genesis's static-config classes declare ``ccd_algorithm: int`` / ``integrator: int`` etc. but store ``IntEnum``
     members in them. Baking such a value must work: an ``IntEnum`` member is a valid literal, compares and does
-    arithmetic as an ``int``, and ``repr``s stably for the cache key. The inner annotation is ignored, so
-    ``Final[int]`` holding an ``IntEnum`` uses the actual enum value and type."""
+    arithmetic as an ``int``, and ``repr``s stably for the cache key. Validation is on the declared annotation, so
+    ``Final[int]`` holding an ``IntEnum`` is accepted without an ``isinstance`` check on the hot path."""
     import enum
     from typing import Final
 
@@ -3873,8 +3925,13 @@ def test_final_field_int_annotation_holding_intenum_value():
 
 
 @test_utils.test()
-def test_bare_final_annotation_specializes() -> None:
-    """Bare Final uses the arriving value as a compile-time constant."""
+def test_bare_final_annotation_is_rejected():
+    """A bare ``Final`` (no ``[T]``) must be rejected up front with a message naming the fix.
+
+    ``typing.get_origin(typing.Final)`` is ``None``, so the bare spelling does not look like a Final annotation and
+    would otherwise be treated as an ordinary runtime field - reaching ``decl_scalar_arg`` and dying in ``cook_dtype``
+    with ``ValueError: Invalid data type typing.Final``. That is precisely the confusing failure this feature removes
+    for ``Final[T]``, so it must not be how the unsupported spelling behaves."""
     import typing
 
     from quadrants.lang._final.final_dataclass_fields import (
@@ -3882,23 +3939,26 @@ def test_bare_final_annotation_specializes() -> None:
         is_final_annotation,
     )
 
-    assert is_final_annotation(typing.Final) is True
+    # The bare form genuinely is not a subscripted Final...
+    assert is_final_annotation(typing.Final) is False
     assert is_final_annotation(typing.Final[int]) is True
 
+    # ...but it is still rejected rather than silently lowered to a runtime arg.
     @dataclass(frozen=True)
     class BareFinal:
         x: typing.Final
 
-    assert final_field_names(BareFinal) == {"x"}
+    with pytest.raises(TypeError, match="bare ``typing.Final`` is not supported"):
+        final_field_names(BareFinal)
 
+    # And end-to-end, so the user sees that error instead of a cook_dtype failure.
     @qd.kernel
-    def k(cfg: BareFinal) -> qd.i32:
-        return qd.static(cfg.x)
+    def k(cfg: BareFinal, out: qd.types.NDArray[qd.i32, 1]):
+        for i in out:
+            out[i] = 1
 
-    assert k(BareFinal(5)) == 5
-    assert k(BareFinal(8)) == 8
-    assert k(BareFinal(5)) == 5
-    assert len(k._primal.materialized_kernels) == 2
+    with pytest.raises(Exception, match="bare ``typing.Final`` is not supported"):
+        k(BareFinal(x=5), qd.ndarray(qd.i32, shape=(2,)))
 
 
 @test_utils.test()
@@ -4008,15 +4068,18 @@ def test_final_unsafe_hash_ordinary_field_reread_each_launch():
 
 
 @test_utils.test()
-def test_final_field_string_annotation_is_recognized() -> None:
-    """String Final markers are recognized without resolving their inner annotations."""
+def test_final_field_string_annotation_is_rejected():
+    """``from __future__ import annotations`` (or any explicit string annotation) leaves ``field.type`` as an
+    unresolved string, so Quadrants cannot see the ``Final`` and would silently lower the field as a *runtime* kernel
+    argument - a field the user believes is a compile-time constant. Rather than half-support it, raise."""
     from quadrants.lang._final.final_dataclass_fields import final_field_names
 
     @dataclass(frozen=True)
     class StringAnnotated:
         x: "Final[int]"
 
-    assert final_field_names(StringAnnotated) == {"x"}
+    with pytest.raises(TypeError, match="unresolved string"):
+        final_field_names(StringAnnotated)
 
     # A non-Final string annotation stays on the pre-existing path (unchanged behavior, no error from us).
     @dataclass(frozen=True)
@@ -4027,8 +4090,11 @@ def test_final_field_string_annotation_is_recognized() -> None:
 
 
 @test_utils.test()
-def test_final_field_aliased_string_annotation_is_recognized() -> None:
-    """An aliased string marker is resolved through its defining module."""
+def test_final_field_aliased_string_annotation_is_rejected():
+    """A substring test for the literal name ``Final`` misses an *aliased* spelling: with
+    ``from __future__ import annotations`` and ``from typing import Final as F``, ``x: F[int]`` is stored as the string
+    ``"F[int]"``. ``final_field_names`` resolves the class's hints (which sees the alias in the module globals) so the
+    field is recognised as ``Final`` and rejected, rather than silently lowered as an ordinary runtime argument."""
     import sys
     import types
     from typing import Final
@@ -4043,7 +4109,8 @@ def test_final_field_aliased_string_annotation_is_recognized() -> None:
     sys.modules[mod.__name__] = mod
     try:
         exec("@dc.dataclass(frozen=True)\nclass Cfg:\n    x: 'F[int]'\n", mod.__dict__)
-        assert final_field_names(mod.Cfg) == {"x"}
+        with pytest.raises(TypeError, match="unresolved string"):
+            final_field_names(mod.Cfg)
     finally:
         sys.modules.pop(mod.__name__, None)
 
@@ -4067,15 +4134,19 @@ def test_final_aliased_string_detected_despite_unresolvable_sibling():
     try:
         # ``y``'s annotation names a type never defined in the module, so class-wide ``get_type_hints`` raises; the
         # aliased ``Final`` on ``x`` must still be seen.
-        exec("@dc.dataclass(frozen=True)\nclass Cfg:\n    x: 'F[int]'\n    y: 'OnlyUnderTypeChecking'\n", mod.__dict__)
-        assert final_field_names(mod.Cfg) == {"x"}
+        exec(
+            "@dc.dataclass(frozen=True)\nclass Cfg:\n    x: 'F[int]'\n    y: 'OnlyUnderTypeChecking'\n",
+            mod.__dict__,
+        )
+        with pytest.raises(TypeError, match="unresolved string"):
+            final_field_names(mod.Cfg)
     finally:
         sys.modules.pop(mod.__name__, None)
 
 
 @test_utils.test()
 def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
-    """``validate_value_for_final_field_and_get_key`` encodes floats by their IEEE-754 bits so values that Python
+    """``final_scalar_key`` encodes floats by their IEEE-754 bits so values that Python
     conflates stay distinct in both the in-process spec key and the on-disk fastcache key: ``-0.0`` vs ``0.0`` (equal
     under ``==`` with equal hashes) and NaNs differing only in sign/payload (all rendered ``"nan"`` by ``str``).
     Non-float values pass through unchanged.
@@ -4084,29 +4155,29 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     import struct
 
     from quadrants.lang._final.final_constant_values import (
-        validate_value_for_final_field_and_get_key,
+        final_scalar_key,
     )
 
     # Signed zero: Python conflates these; the bit encoding must not.
     assert 0.0 == -0.0 and hash(0.0) == hash(-0.0)
-    assert validate_value_for_final_field_and_get_key(0.0) != validate_value_for_final_field_and_get_key(-0.0)
+    assert final_scalar_key(0.0) != final_scalar_key(-0.0)
 
     # NaN sign/payload: ``str`` renders them all ``"nan"``; the bit encoding keeps them distinct.
     payload_nan = struct.unpack("<d", struct.pack("<Q", 0x7FF8000000000ABC))[0]
     nan_keys = {
-        validate_value_for_final_field_and_get_key(math.nan),
-        validate_value_for_final_field_and_get_key(-math.nan),
-        validate_value_for_final_field_and_get_key(payload_nan),
+        final_scalar_key(math.nan),
+        final_scalar_key(-math.nan),
+        final_scalar_key(payload_nan),
     }
     assert len(nan_keys) == 3, "distinct NaN bit patterns must produce distinct keys"
 
     # Equal floats produce equal keys, so kernel reuse stays correct.
-    assert validate_value_for_final_field_and_get_key(1.5) == validate_value_for_final_field_and_get_key(1.5)
+    assert final_scalar_key(1.5) == final_scalar_key(1.5)
 
     # A ``Final[float]`` field may legally receive an ``int`` at runtime, so the encoded float is tagged: its bits
     # must not collide with a bare int equal to those bits (both bake different constants).
     one_as_bits = struct.unpack("<Q", struct.pack("<d", 1.0))[0]  # == 4607182418800017408
-    assert validate_value_for_final_field_and_get_key(1.0) != validate_value_for_final_field_and_get_key(one_as_bits)
+    assert final_scalar_key(1.0) != final_scalar_key(one_as_bits)
 
     # ``IntEnum`` / ``StrEnum`` members are ``==`` (with equal hashes) to their bare scalar value and to same-valued
     # members of other enum classes; keying on class + member identity must keep all of these distinct.
@@ -4118,15 +4189,9 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     class ModeB(enum.IntEnum):
         Y = 0
 
-    assert validate_value_for_final_field_and_get_key(ModeA.X) != validate_value_for_final_field_and_get_key(
-        0
-    )  # enum vs bare int
-    assert validate_value_for_final_field_and_get_key(ModeA.X) != validate_value_for_final_field_and_get_key(
-        ModeB.Y
-    )  # same value, different enum class
-    assert validate_value_for_final_field_and_get_key(ModeA.X) == validate_value_for_final_field_and_get_key(
-        ModeA.X
-    )  # same member is stable
+    assert final_scalar_key(ModeA.X) != final_scalar_key(0)  # enum vs bare int
+    assert final_scalar_key(ModeA.X) != final_scalar_key(ModeB.Y)  # same value, different enum class
+    assert final_scalar_key(ModeA.X) == final_scalar_key(ModeA.X)  # same member is stable
 
     # Unnamed ``IntFlag`` composites have ``name is None``, so distinct bitmasks must be kept apart by their value.
     class Perm(enum.IntFlag):
@@ -4134,21 +4199,15 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
         W = 2
         X = 4
 
-    assert validate_value_for_final_field_and_get_key(Perm.R | Perm.W) != validate_value_for_final_field_and_get_key(
-        Perm.R | Perm.X
-    )  # values 3 vs 5 (name may be None)
-    assert validate_value_for_final_field_and_get_key(Perm.R | Perm.W) == validate_value_for_final_field_and_get_key(
-        Perm.R | Perm.W
-    )  # stable
+    assert final_scalar_key(Perm.R | Perm.W) != final_scalar_key(Perm.R | Perm.X)  # values 3 vs 5 (name may be None)
+    assert final_scalar_key(Perm.R | Perm.W) == final_scalar_key(Perm.R | Perm.W)  # stable
 
     # Inverting a flag member caches the value-derived ``_inverted_`` on the member (CPython >=3.11). That is enum
     # bookkeeping, not user state, so a member that has been inverted anywhere must still be accepted and key the
     # same as before the inversion.
-    key_before = validate_value_for_final_field_and_get_key(Perm.R)
+    key_before = final_scalar_key(Perm.R)
     _ = ~Perm.R  # populates ``Perm.R._inverted_`` on 3.11+
-    assert (
-        validate_value_for_final_field_and_get_key(Perm.R) == key_before
-    )  # not rejected, and the cache does not perturb the key
+    assert final_scalar_key(Perm.R) == key_before  # not rejected, and the cache does not perturb the key
 
     # Enum members follow the same rule: user-defined per-member state (attributes set in ``__init__``) is rejected,
     # while plain members and unnamed ``IntFlag`` composites (name/value bookkeeping only) are accepted above.
@@ -4160,7 +4219,7 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
             self.unit = unit
 
     with pytest.raises(TypeError, match="user-defined per-member state"):
-        validate_value_for_final_field_and_get_key(StatefulMode.A)
+        final_scalar_key(StatefulMode.A)
 
     # Per-member state stored in a ``__slots__`` slot never appears in ``__dict__``, so the rejection must inspect
     # populated slots too (otherwise the slot stays observable by kernel code while the Final key ignores it).
@@ -4178,7 +4237,7 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     }  # __dict__ carries only enum bookkeeping; the state lives in the ``unit`` slot
     assert SlottedMode.A.unit == "m"
     with pytest.raises(TypeError, match="user-defined per-member state"):
-        validate_value_for_final_field_and_get_key(SlottedMode.A)
+        final_scalar_key(SlottedMode.A)
 
     # State stashed under a *dunder-looking* name is still observable (``cfg.mode.__unit__``), so the allowlist is
     # exact rather than "skip every dunder" - only the known enum bookkeeping dunders (e.g. ``__objclass__``) pass.
@@ -4190,7 +4249,7 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
 
     assert DunderStateMode.A.__unit__ == "m"  # a genuine dunder-named per-member attribute
     with pytest.raises(TypeError, match="user-defined per-member state"):
-        validate_value_for_final_field_and_get_key(DunderStateMode.A)
+        final_scalar_key(DunderStateMode.A)
 
     # Class-level behavior on the enum class is unkeyable, like for primitive subclasses: a factory can build
     # same-named enum classes whose ``label`` property closes over different strings, colliding while
@@ -4209,7 +4268,7 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     lab_x, lab_y = _labeled_enum("x"), _labeled_enum("y")
     assert type(lab_x.A).__qualname__ == type(lab_y.A).__qualname__  # same qualname, distinct classes/behavior
     with pytest.raises(TypeError, match="observable class-level behavior"):
-        validate_value_for_final_field_and_get_key(lab_x.A)
+        final_scalar_key(lab_x.A)
 
     # An overridden operator dunder on the enum class is observable behavior too (``qd.static(cfg.mode == 1)``),
     # and the enum machinery never injects e.g. ``__eq__`` into a user enum's own class dict, so it is rejected -
@@ -4224,7 +4283,7 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
             return 0
 
     with pytest.raises(TypeError, match="observable class-level behavior"):
-        validate_value_for_final_field_and_get_key(EqEnum.A)
+        final_scalar_key(EqEnum.A)
 
     # An enum can also inherit observable behavior/state from a *non-enum* mixin (``class Mode(Labels, enum.Enum)``).
     # ``cfg.mode.label`` is then observable at compile time but absent from the key (which records only
@@ -4241,7 +4300,7 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
 
     assert MixinMode.A.label == "x"  # observable via cfg.mode.label, not captured by the key
     with pytest.raises(TypeError, match="observable class-level behavior"):
-        validate_value_for_final_field_and_get_key(MixinMode.A)
+        final_scalar_key(MixinMode.A)
 
     # A user-defined enum *sunder hook* (``_missing_`` on any version; ``_repr_html_`` on 3.13+) is observable
     # behavior on the baked member, but a blanket "skip every ``_x_`` name" would mistake it for enum bookkeeping.
@@ -4257,7 +4316,7 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
 
     assert "_missing_" in vars(MissingHook)  # the user hook lands in the class's own dict, not merely inherited
     with pytest.raises(TypeError, match="observable class-level behavior"):
-        validate_value_for_final_field_and_get_key(MissingHook.A)
+        final_scalar_key(MissingHook.A)
 
     # Enum classes rebuilt by a local factory share module+qualname and can have same-named members with different
     # values; the key includes the value so those stay distinct.
@@ -4269,11 +4328,9 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
 
     e1, e2 = _make_int_enum(1), _make_int_enum(2)
     assert type(e1.A).__qualname__ == type(e2.A).__qualname__  # identical qualname across the two factory enums
-    assert validate_value_for_final_field_and_get_key(e1.A) != validate_value_for_final_field_and_get_key(
-        e2.A
-    )  # but different values -> distinct keys
+    assert final_scalar_key(e1.A) != final_scalar_key(e2.A)  # but different values -> distinct keys
 
-    # The member value is itself routed through ``validate_value_for_final_field_and_get_key``, so two factory members
+    # The member value is itself routed through ``final_scalar_key``, so two factory members
     # named ``A`` whose raw values are ``True`` vs ``1`` (``==`` with equal hashes) stay distinct rather than collapsing
     # to one key.
     def _make_enum(v):
@@ -4285,7 +4342,7 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     et, eo = _make_enum(True), _make_enum(1)
     assert type(et.A).__qualname__ == type(eo.A).__qualname__
     assert et.A.value == eo.A.value and hash(et.A.value) == hash(eo.A.value)  # True == 1, equal hashes
-    assert validate_value_for_final_field_and_get_key(et.A) != validate_value_for_final_field_and_get_key(eo.A)
+    assert final_scalar_key(et.A) != final_scalar_key(eo.A)
 
     # Even with identical name AND value, two dynamically recreated (behavior-free) classes have genuinely distinct
     # members - for a plain ``Enum``, ``First.A != Second.A`` - so a kernel branching on ``cfg.mode == First.A``
@@ -4295,20 +4352,16 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     first, second = _make_enum(1), _make_enum(1)
     assert type(first.A).__qualname__ == type(second.A).__qualname__ and first.A.value == second.A.value
     assert first.A != second.A  # plain Enum uses identity equality: distinct class objects -> distinct members
-    assert validate_value_for_final_field_and_get_key(first.A) != validate_value_for_final_field_and_get_key(
-        second.A
-    )  # ...kept distinct via the per-class identity token
-    assert validate_value_for_final_field_and_get_key(first.A) == validate_value_for_final_field_and_get_key(
-        first.A
-    )  # stable for the same class
+    assert final_scalar_key(first.A) != final_scalar_key(second.A)  # ...kept distinct via the per-class identity token
+    assert final_scalar_key(first.A) == final_scalar_key(first.A)  # stable for the same class
 
     # Equal constants with different Python types must select distinct specializations.
-    assert validate_value_for_final_field_and_get_key(True) != validate_value_for_final_field_and_get_key(1)
-    assert validate_value_for_final_field_and_get_key(7) != validate_value_for_final_field_and_get_key("7")
+    assert final_scalar_key(True) != final_scalar_key(1)
+    assert final_scalar_key(7) != final_scalar_key("7")
     # ...but equal values of the same type stay equal, so legitimate kernel reuse is preserved.
-    assert validate_value_for_final_field_and_get_key(7) == validate_value_for_final_field_and_get_key(7)
-    assert validate_value_for_final_field_and_get_key("abc") == validate_value_for_final_field_and_get_key("abc")
-    assert validate_value_for_final_field_and_get_key(True) == validate_value_for_final_field_and_get_key(True)
+    assert final_scalar_key(7) == final_scalar_key(7)
+    assert final_scalar_key("abc") == final_scalar_key("abc")
+    assert final_scalar_key(True) == final_scalar_key(True)
 
     # Annotations are not enforced at runtime: an arbitrary object (whose ``__eq__``/``__hash__`` we cannot trust to
     # capture all observable state) is rejected rather than keyed by identity/value.
@@ -4323,16 +4376,16 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
             return 0
 
     with pytest.raises(TypeError, match="not a supported compile-time constant"):
-        validate_value_for_final_field_and_get_key(Arbitrary("a"))
+        final_scalar_key(Arbitrary("a"))
 
     # An enum whose member value is mutable/unsupported (e.g. a ``list``) is rejected too, since the value is routed
-    # through ``validate_value_for_final_field_and_get_key`` and a mutable value could silently change under the cached
+    # through ``final_scalar_key`` and a mutable value could silently change under the cached
     # spec key.
     class ListValued(enum.Enum):
         A = [1, 2, 3]
 
     with pytest.raises(TypeError, match="not a supported compile-time constant"):
-        validate_value_for_final_field_and_get_key(ListValued.A)
+        final_scalar_key(ListValued.A)
 
 
 @test_utils.test()
@@ -4340,7 +4393,7 @@ def test_final_scalar_key_live_preserves_class_identity_across_module_rebind():
     """The in-process spec key (``live=True``) must distinguish two *distinct* class objects even when they transiently
     share ``module``/``qualname`` - e.g. a module-level enum redefined by a module reload, each
     resolvable to its own definition while bound. In the offline (``live=False``) form
-    ``validate_value_for_final_field_and_get_key`` keys a resolvable class by ``module``/``qualname`` alone
+    ``final_scalar_key`` keys a resolvable class by ``module``/``qualname`` alone
     (process-stable, so it cannot tell the rebinding apart - a safe cross-process strategy, never a wrong reuse), but
     the in-process key keys on ``id(cls)`` so a second launch with the fresh class does not reuse the kernel baked for
     the first (``cfg.x.__class__ is SavedOldClass`` is observable at compile time).
@@ -4349,7 +4402,7 @@ def test_final_scalar_key_live_preserves_class_identity_across_module_rebind():
     import types
 
     from quadrants.lang._final.final_constant_values import (
-        validate_value_for_final_field_and_get_key,
+        final_scalar_key,
     )
 
     mod_name = "qd_reload_identity_probe"
@@ -4359,14 +4412,14 @@ def test_final_scalar_key_live_preserves_class_identity_across_module_rebind():
         # Bind a class so it is uniquely resolvable via ``module``/``qualname`` (offline id component is None).
         old = enum.IntEnum("Foo", {"VALUE": 1}, module=mod_name, qualname="Foo")
         mod.Foo = old
-        old_offline = validate_value_for_final_field_and_get_key(old(1))
-        old_live = validate_value_for_final_field_and_get_key(old(1), live=True)
+        old_offline = final_scalar_key(old(1))
+        old_live = final_scalar_key(old(1), live=True)
 
         # "Reload": rebind the same name to a fresh, equally resolvable class object.
         new = enum.IntEnum("Foo", {"VALUE": 1}, module=mod_name, qualname="Foo")
         mod.Foo = new
-        new_offline = validate_value_for_final_field_and_get_key(new(1))
-        new_live = validate_value_for_final_field_and_get_key(new(1), live=True)
+        new_offline = final_scalar_key(new(1))
+        new_live = final_scalar_key(new(1), live=True)
 
         assert old is not new
         # Offline: both resolvable while bound, so both carry a None id component and collide. That is the safe,
@@ -4375,7 +4428,7 @@ def test_final_scalar_key_live_preserves_class_identity_across_module_rebind():
         # In-process: ``id(cls)`` keeps the two distinct classes apart.
         assert old_live != new_live
         # Same class -> stable in-process key across launches, so legitimate kernel reuse is preserved.
-        assert validate_value_for_final_field_and_get_key(old(1), live=True) == old_live
+        assert final_scalar_key(old(1), live=True) == old_live
     finally:
         del sys.modules[mod_name]
 
@@ -4386,11 +4439,11 @@ def test_final_scalar_key_live_uses_object_identity_not_class_equality():
     object's ``==``, so a metaclass that makes two distinct classes ``==`` with equal hashes cannot collapse their keys
     - ``cfg.x.__class__ is First`` is observable, so distinct classes must key apart, and the component also retains the
     class as a strong ref (pinning its ``id``). This identity behavior is defense-in-depth: such a metaclass carries
-    observable equality behavior, so ``validate_value_for_final_field_and_get_key`` itself now *rejects* the value.
+    observable equality behavior, so ``final_scalar_key`` itself now *rejects* the value.
     """
     from quadrants.lang._final import final_class_identity as _fdf
     from quadrants.lang._final.final_constant_values import (
-        validate_value_for_final_field_and_get_key,
+        final_scalar_key,
     )
 
     class EqMeta(type):
@@ -4431,7 +4484,7 @@ def test_final_scalar_key_live_uses_object_identity_not_class_equality():
     # But a metaclass ``__eq__``/``__hash__`` is observable (``qd.static(cfg.x.__class__ == Expected)``) and the key
     # cannot capture a later mutation of the state it consults, so the value itself is rejected.
     with pytest.raises(TypeError, match="Custom scalar subclasses"):
-        validate_value_for_final_field_and_get_key(first(1))
+        final_scalar_key(first(1))
 
 
 @test_utils.test()
@@ -4444,7 +4497,7 @@ def test_final_scalar_key_offline_dynamic_class_is_process_unique():
     nonce-free."""
     from quadrants.lang._final import final_class_identity as fdf
     from quadrants.lang._final.final_constant_values import (
-        validate_value_for_final_field_and_get_key,
+        final_scalar_key,
     )
 
     def _make_local_enum():
@@ -4454,16 +4507,12 @@ def test_final_scalar_key_offline_dynamic_class_is_process_unique():
         return Local
 
     loc = _make_local_enum()
-    assert fdf._PROCESS_NONCE in str(
-        validate_value_for_final_field_and_get_key(loc(1))
-    )  # dynamic-class offline key -> process-unique
-    assert fdf._PROCESS_NONCE not in str(
-        validate_value_for_final_field_and_get_key(loc(1), live=True)
-    )  # live key never carries the nonce
+    assert fdf._PROCESS_NONCE in str(final_scalar_key(loc(1)))  # dynamic-class offline key -> process-unique
+    assert fdf._PROCESS_NONCE not in str(final_scalar_key(loc(1), live=True))  # live key never carries the nonce
     # Distinct dynamic classes still separate within this process (same nonce, different serial); the class is stable.
     other = _make_local_enum()
-    assert validate_value_for_final_field_and_get_key(loc(1)) != validate_value_for_final_field_and_get_key(other(1))
-    assert validate_value_for_final_field_and_get_key(loc(1)) == validate_value_for_final_field_and_get_key(loc(1))
+    assert final_scalar_key(loc(1)) != final_scalar_key(other(1))
+    assert final_scalar_key(loc(1)) == final_scalar_key(loc(1))
 
 
 @test_utils.test()
@@ -4511,11 +4560,11 @@ def test_final_scalar_key_live_hashable_under_unhashable_metaclass():
     """A metaclass may set ``__hash__ = None`` (making the *class* itself unhashable). The class-identity key component
     retains the class via a ``_ClassRef`` token that hashes/compares by object identity, so the whole key stays hashable
     - a mapper's ``self.mapping[key]`` would otherwise raise ``TypeError``. This is defense-in-depth: such a metaclass
-    carries observable behavior, so ``validate_value_for_final_field_and_get_key`` itself rejects the value.
+    carries observable behavior, so ``final_scalar_key`` itself rejects the value.
     """
     from quadrants.lang._final import final_class_identity as _fdf
     from quadrants.lang._final.final_constant_values import (
-        validate_value_for_final_field_and_get_key,
+        final_scalar_key,
     )
 
     class Unhashable(type):
@@ -4543,7 +4592,7 @@ def test_final_scalar_key_live_hashable_under_unhashable_metaclass():
 
     # But the value itself is rejected: the metaclass carries observable ``__hash__``/``__eq__`` behavior.
     with pytest.raises(TypeError, match="Custom scalar subclasses"):
-        validate_value_for_final_field_and_get_key(a(1))
+        final_scalar_key(a(1))
 
 
 @test_utils.test()
@@ -4620,7 +4669,7 @@ def test_final_enum_rejects_observable_metaclass_state():
     import enum as en
 
     from quadrants.lang._final.final_constant_values import (
-        validate_value_for_final_field_and_get_key,
+        final_scalar_key,
     )
 
     class LabeledMeta(en.EnumMeta):
@@ -4631,18 +4680,18 @@ def test_final_enum_rejects_observable_metaclass_state():
         B = 2
 
     with pytest.raises(TypeError, match="observable class-level behavior"):
-        validate_value_for_final_field_and_get_key(Mode.A)
+        final_scalar_key(Mode.A)
 
     class Plain(en.Enum):  # metaclass is the framework ``EnumMeta`` -> not inspected -> accepted
         A = 1
         B = 2
 
-    validate_value_for_final_field_and_get_key(Plain.A)  # does not raise
+    final_scalar_key(Plain.A)  # does not raise
 
     class Weekday(en.IntEnum):  # IntEnum still uses the framework metaclass -> accepted
         MON = 0
 
-    validate_value_for_final_field_and_get_key(Weekday.MON)  # does not raise
+    final_scalar_key(Weekday.MON)  # does not raise
 
 
 @test_utils.test()
@@ -4650,7 +4699,7 @@ def test_final_is_baked_base_type_ignores_spoofed_module():
     """Spoofing the NumPy module name does not make a custom scalar subclass supported."""
     from quadrants.lang._final.final_class_identity import _is_baked_base_type
     from quadrants.lang._final.final_constant_values import (
-        validate_value_for_final_field_and_get_key,
+        final_scalar_key,
     )
 
     class BehaviorSubclass(int):
@@ -4662,7 +4711,7 @@ def test_final_is_baked_base_type_ignores_spoofed_module():
     BehaviorSubclass.__module__ = "numpy"  # spoof - must not buy trusted-base treatment
     assert _is_baked_base_type(BehaviorSubclass) is False  # heap type, so not a baked base despite the module string
     with pytest.raises(TypeError, match="Custom scalar subclasses"):
-        validate_value_for_final_field_and_get_key(BehaviorSubclass(1))
+        final_scalar_key(BehaviorSubclass(1))
 
     class FreeSubclass(int):  # behavior-free, also spoofing the module
         pass
@@ -4670,7 +4719,7 @@ def test_final_is_baked_base_type_ignores_spoofed_module():
     FreeSubclass.__module__ = "numpy"
     assert _is_baked_base_type(FreeSubclass) is False  # still not a supported NumPy scalar
     with pytest.raises(TypeError, match="Custom scalar subclasses"):
-        validate_value_for_final_field_and_get_key(FreeSubclass(1))
+        final_scalar_key(FreeSubclass(1))
 
 
 @test_utils.test()
@@ -4767,12 +4816,14 @@ def test_final_subtree_has_final_fields_predicate():
 
 
 @test_utils.test()
-def test_offline_dataclass_repr_does_not_modify_instance() -> None:
-    """Hashing inferred schemas must not attach repr caches to application objects."""
+def test_final_offline_repr_not_cached_on_final_bearing_config():
+    """The offline fastcache repr is cached on a frozen instance as ``_qd_dc_repr`` - but never on a Final-bearing one.
+    A cached repr could not notice a ``Final`` value's class turning behaviorful between launches (e.g. an enum whose
+    ``__eq__`` is monkey-patched), so such a config recomputes each launch to re-run ``final_scalar_key`` validation.
+    A Final-free frozen dataclass still caches, keeping the offline hot path intact."""
     from typing import Final
 
     from quadrants.lang._fast_caching.args_hasher import dataclass_to_repr
-    from quadrants.lang._runtime_typing.runtime_dataclass import infer_dataclass_type
 
     @dataclass(frozen=True)
     class PlainCfg:
@@ -4782,11 +4833,13 @@ def test_offline_dataclass_repr_does_not_modify_instance() -> None:
     class FinalCfg:
         x: Final[int]
 
-    for config in (PlainCfg(a=1), FinalCfg(x=1)):
-        original_members = vars(config).copy()
-        schema = infer_dataclass_type(config, "config")
-        assert isinstance(dataclass_to_repr(False, (), config, schema), str)
-        assert vars(config) == original_members
+    plain = PlainCfg(a=1)
+    dataclass_to_repr(False, (), plain)
+    assert hasattr(plain, "_qd_dc_repr")  # Final-free frozen dataclass caches its repr (result or the NONE sentinel)
+
+    fcfg = FinalCfg(x=1)
+    dataclass_to_repr(False, (), fcfg)
+    assert not hasattr(fcfg, "_qd_dc_repr")  # Final-bearing config is never repr-cached; it recomputes+revalidates
 
 
 @test_utils.test()
@@ -4794,67 +4847,61 @@ def test_final_str_field_does_not_disable_offline_fastcache():
     """A ``Final[str]`` field must not disable the *offline* fastcache. ``stringify_obj_type`` has no case for a bare
     ``str`` (it fails and logs an UNKNOWN_TYPE warning), so routing the Final field's value through it would make
     ``dataclass_to_repr`` fail and force a recompile in every process for an explicitly supported field type. Final
-    fields are serialized directly via ``validate_value_for_final_field_and_get_key``, which yields a non-None,
-    value-distinguishing repr; the neighbouring non-Final field confirms the ordinary type-only path still works
-    alongside it.
-    """
+    fields are serialized directly via ``final_scalar_key``, which yields a non-None, value-distinguishing repr; the
+    neighbouring non-Final field confirms the ordinary type-only path still works alongside it."""
     from typing import Final
 
     from quadrants.lang._fast_caching.args_hasher import dataclass_to_repr
-    from quadrants.lang._runtime_typing.runtime_dataclass import infer_dataclass_type
 
     @dataclass(frozen=True)
     class Cfg:
         name: Final[str]
         scale: int
 
-    r_a, r_a2, r_b = [
-        dataclass_to_repr(False, (), config, infer_dataclass_type(config, "config"))
-        for config in (Cfg(name="a", scale=1), Cfg(name="a", scale=1), Cfg(name="b", scale=1))
-    ]
-    assert isinstance(r_a, str), "a Final[str] field must not disable the offline fastcache"
+    r_a = dataclass_to_repr(False, (), Cfg(name="a", scale=1))
+    r_a2 = dataclass_to_repr(False, (), Cfg(name="a", scale=1))
+    r_b = dataclass_to_repr(False, (), Cfg(name="b", scale=1))
+    assert r_a is not None, "a Final[str] field must not disable the offline fastcache"
     assert r_a == r_a2, "equal Final[str] values must produce equal offline keys"
     assert r_a != r_b, "distinct Final[str] values must produce distinct offline keys"
 
 
 @test_utils.test()
-def test_subclass_extra_field_offline_fastcache_uses_runtime_schema() -> None:
-    """Runtime subclass fields are hashed when used and pruned when unused, regardless of base annotations."""
+def test_subclass_extra_field_offline_fastcache_uses_annotated_field_set():
+    """A subclass passed where a *base* dataclass is annotated must fast-cache against the base's field set. Without an
+    ``annotated_type``, ``dataclass_to_repr`` hashes the runtime type, so a subclass adding a non-fastcacheable field
+    (``list``) fails and disables the offline cache. Passing the base restricts hashing to its fields: the subclass
+    then hashes identically to a plain base instance, and the extra field cannot affect the key."""
     from typing import Final
 
     from quadrants.lang._fast_caching.args_hasher import (
         _FAIL_FASTCACHE,
         dataclass_to_repr,
     )
-    from quadrants.lang._name_utils import create_flat_name
-    from quadrants.lang._runtime_typing.runtime_dataclass import infer_dataclass_type
 
     @dataclass(frozen=True)
     class Base:
-        scale: Final[int]
+        scale: Final[int]  # baked -> its value drives the offline key
 
     @dataclass(frozen=True)
     class Sub(Base):
-        name: list
+        name: list  # extra application-only field; not fastcacheable on its own and never seen by the kernel
 
-    base = Base(scale=1)
-    base_repr = dataclass_to_repr(False, (), base, infer_dataclass_type(base, "config"))
-    assert isinstance(base_repr, str) and "scale" in base_repr
+    base_repr = dataclass_to_repr(False, (), Base(scale=1))
+    assert base_repr is not None and "scale" in base_repr
 
-    config = Sub(scale=1, name=["a"])
-    schema = infer_dataclass_type(config, "config")
-    assert "name" in schema.__dataclass_fields__
-    assert dataclass_to_repr(False, (), config, schema) is _FAIL_FASTCACHE
-    used_fields = {create_flat_name("config", "scale")}
-    pruned_repr = dataclass_to_repr(False, (), config, schema, pruning_paths=used_fields, parent_flat="config")
-    assert pruned_repr == base_repr
-    config2 = Sub(scale=2, name=["a"])
+    # Runtime-type hashing (no annotation) trips on the ``list`` field and disables the offline cache.
+    assert dataclass_to_repr(False, (), Sub(scale=1, name=["a"])) is _FAIL_FASTCACHE
+
+    # Hashing against the annotated base drops the extra field, so the subclass hashes identically to its base.
+    assert dataclass_to_repr(False, (), Sub(scale=1, name=["a"]), Base) == base_repr
     assert (
-        dataclass_to_repr(
-            False, (), config2, infer_dataclass_type(config2, "config"), pruning_paths=used_fields, parent_flat="config"
-        )
-        != base_repr
-    ), "a Final field still distinguishes the offline key by value"
+        dataclass_to_repr(False, (), Sub(scale=1, name=["b"]), Base) == base_repr
+    ), "the extra (non-annotated) field must not affect the offline key"
+    # The base's own field still drives the key: a different ``Final`` value splits it.
+    assert (
+        dataclass_to_repr(False, (), Sub(scale=2, name=["a"]), Base) != base_repr
+    ), "a baked base field must still split the offline key by value"
 
 
 @test_utils.test()
@@ -4867,7 +4914,7 @@ def test_final_exact_baked_type_membership_is_identity_not_equality():
     """
     from quadrants.lang._final.final_class_identity import _is_exact_baked_type
     from quadrants.lang._final.final_constant_values import (
-        validate_value_for_final_field_and_get_key,
+        final_scalar_key,
     )
 
     class EqIntMeta(type):
@@ -4886,7 +4933,7 @@ def test_final_exact_baked_type_membership_is_identity_not_equality():
     assert _is_exact_baked_type(int) and _is_exact_baked_type(bool)  # exact builtins still recognised
     # A metaclass ``__eq__``/``__hash__`` is observable, so the value is rejected rather than keyed as an exact int.
     with pytest.raises(TypeError, match="Custom scalar subclasses"):
-        validate_value_for_final_field_and_get_key(Spoof(1))
+        final_scalar_key(Spoof(1))
 
 
 @test_utils.test()
@@ -4899,9 +4946,7 @@ def test_final_enum_rejects_user_override_of_generated_hook():
     the unwrapped function identity rather than the wrapper's."""
     import enum
 
-    from quadrants.lang._final.final_constant_values import (
-        validate_value_for_final_field_and_get_key,
-    )
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class Clean(enum.Enum):
         A = 1
@@ -4913,13 +4958,9 @@ def test_final_enum_rejects_user_override_of_generated_hook():
     class CleanFlag(enum.IntFlag):
         A = 1
 
-    validate_value_for_final_field_and_get_key(
-        Clean.A
-    )  # inherited ``_generate_next_value_`` default -> accepted (plain Enum)
-    validate_value_for_final_field_and_get_key(CleanInt.A)  # ... IntEnum
-    validate_value_for_final_field_and_get_key(
-        CleanFlag.A
-    )  # ... IntFlag (all three would fail on 3.12+ under a wrapper-identity check)
+    final_scalar_key(Clean.A)  # inherited ``_generate_next_value_`` default -> accepted (plain Enum)
+    final_scalar_key(CleanInt.A)  # ... IntEnum
+    final_scalar_key(CleanFlag.A)  # ... IntFlag (all three would fail on 3.12+ under a wrapper-identity check)
 
     class Overridden(enum.Enum):
         def _generate_next_value_(name, start, count, last_values):  # observable custom auto-value policy
@@ -4929,16 +4970,16 @@ def test_final_enum_rejects_user_override_of_generated_hook():
         B = enum.auto()
 
     with pytest.raises(TypeError, match="observable class-level behavior"):
-        validate_value_for_final_field_and_get_key(Overridden.A)
+        final_scalar_key(Overridden.A)
 
     # Monkey-patching the hook onto a previously-clean enum must flip it from accepted to rejected on the next key.
     class Patched(enum.Enum):
         A = 1
 
-    validate_value_for_final_field_and_get_key(Patched.A)  # accepted while it holds the inherited default
+    final_scalar_key(Patched.A)  # accepted while it holds the inherited default
     Patched._generate_next_value_ = staticmethod(lambda name, start, count, last_values: name)
     with pytest.raises(TypeError, match="observable class-level behavior"):
-        validate_value_for_final_field_and_get_key(Patched.A)
+        final_scalar_key(Patched.A)
 
 
 @test_utils.test()
@@ -4954,25 +4995,23 @@ def test_final_enum_rejects_user_override_of_mixin_dependent_hook():
     import enum
 
     from quadrants.lang._final.final_constant_values import (
-        validate_value_for_final_field_and_get_key,
+        final_scalar_key,
     )
 
     class DirectIntMixin(int, enum.Enum):  # a hand-written IntEnum: its _value_repr_/_new_member_ are int's, not Enum's
         A = 1
         B = 2
 
-    validate_value_for_final_field_and_get_key(
-        DirectIntMixin.A
-    )  # a legitimate mix-in default must not be flagged as a user override
+    final_scalar_key(DirectIntMixin.A)  # a legitimate mix-in default must not be flagged as a user override
 
     class Patched(enum.Enum):
         A = 1
         B = 2
 
-    validate_value_for_final_field_and_get_key(Patched.A)  # accepted while it holds the machinery default
+    final_scalar_key(Patched.A)  # accepted while it holds the machinery default
     Patched._value_repr_ = staticmethod(lambda value: "custom")  # observable as cfg.mode._value_repr_
     with pytest.raises(TypeError, match="observable class-level behavior"):
-        validate_value_for_final_field_and_get_key(Patched.A)
+        final_scalar_key(Patched.A)
 
 
 @test_utils.test()
@@ -4988,7 +5027,7 @@ def test_final_enum_rejects_user_added_enum_valued_class_attribute():
     import enum
 
     from quadrants.lang._final.final_constant_values import (
-        validate_value_for_final_field_and_get_key,
+        final_scalar_key,
     )
 
     class WithAlias(enum.Enum):
@@ -4996,25 +5035,23 @@ def test_final_enum_rejects_user_added_enum_valued_class_attribute():
         B = 2
         ALIAS = 1  # a machinery-defined alias for A - keyed by member identity, must stay accepted
 
-    validate_value_for_final_field_and_get_key(WithAlias.A)  # a plain enum carrying a canonical alias is accepted
-    validate_value_for_final_field_and_get_key(WithAlias.ALIAS)  # the alias resolves to A and is likewise accepted
+    final_scalar_key(WithAlias.A)  # a plain enum carrying a canonical alias is accepted
+    final_scalar_key(WithAlias.ALIAS)  # the alias resolves to A and is likewise accepted
 
     class Flags(enum.IntFlag):  # carries the enum-valued machinery sunder ``_boundary_`` (a FlagBoundary member)
         A = 1
         B = 2
 
-    validate_value_for_final_field_and_get_key(
-        Flags.A
-    )  # a plain IntFlag must not be rejected for its ``_boundary_`` bookkeeping
+    final_scalar_key(Flags.A)  # a plain IntFlag must not be rejected for its ``_boundary_`` bookkeeping
 
     class Mode(enum.Enum):
         A = 1
         B = 2
 
-    validate_value_for_final_field_and_get_key(Mode.A)  # clean, accepted
+    final_scalar_key(Mode.A)  # clean, accepted
     Mode.X = Mode.A  # a user-added enum-valued class attribute (not an official member), observable and unkeyed
     with pytest.raises(TypeError, match="observable class-level behavior"):
-        validate_value_for_final_field_and_get_key(Mode.A)
+        final_scalar_key(Mode.A)
 
 
 @test_utils.test()
@@ -5031,17 +5068,17 @@ def test_final_enum_rejects_cross_kind_machinery_sunder():
     import enum
 
     from quadrants.lang._final.final_constant_values import (
-        validate_value_for_final_field_and_get_key,
+        final_scalar_key,
     )
 
     class Mode(enum.Enum):
         A = 1
         B = 2
 
-    validate_value_for_final_field_and_get_key(Mode.A)  # clean, accepted
+    final_scalar_key(Mode.A)  # clean, accepted
     Mode._boundary_ = 1  # a name generated only for Flag/IntFlag, added by a user to a plain Enum (not this shape)
     with pytest.raises(TypeError, match="observable class-level behavior"):
-        validate_value_for_final_field_and_get_key(Mode.A)
+        final_scalar_key(Mode.A)
 
     if hasattr(enum, "IntFlag") and hasattr(enum, "FlagBoundary"):
 
@@ -5049,14 +5086,12 @@ def test_final_enum_rejects_cross_kind_machinery_sunder():
             A = 1
             B = 2
 
-        validate_value_for_final_field_and_get_key(
-            Flags.A
-        )  # ``_boundary_`` here is genuine machinery for this kind -> accepted
+        final_scalar_key(Flags.A)  # ``_boundary_`` here is genuine machinery for this kind -> accepted
         default_boundary = Flags._boundary_
         other = next(b for b in enum.FlagBoundary if b is not default_boundary)
         Flags._boundary_ = other  # override the machinery value -> observable as cfg.mode.__class__._boundary_
         with pytest.raises(TypeError, match="observable class-level behavior"):
-            validate_value_for_final_field_and_get_key(Flags.A)
+            final_scalar_key(Flags.A)
 
 
 @test_utils.test()
@@ -5067,19 +5102,17 @@ def test_final_enum_rejects_state_on_unselected_member():
     be rejected."""
     import enum
 
-    from quadrants.lang._final.final_constant_values import (
-        validate_value_for_final_field_and_get_key,
-    )
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class Mode(enum.Enum):
         A = 1
         B = 2
 
-    validate_value_for_final_field_and_get_key(Mode.A)  # clean, accepted
+    final_scalar_key(Mode.A)  # clean, accepted
     Mode.B.unit = "m"  # state on a *sibling* of the selected member
     assert not Mode.A.__dict__.get("unit")  # the selected member itself stays state-free
     with pytest.raises(TypeError, match="per-member state"):
-        validate_value_for_final_field_and_get_key(Mode.A)
+        final_scalar_key(Mode.A)
 
 
 @test_utils.test()
@@ -5093,7 +5126,7 @@ def test_final_enum_kind_in_offline_key():
     import types
 
     from quadrants.lang._final.final_constant_values import (
-        validate_value_for_final_field_and_get_key,
+        final_scalar_key,
     )
 
     def offline_key(base_name):
@@ -5101,7 +5134,7 @@ def test_final_enum_kind_in_offline_key():
         sys.modules[mod.__name__] = mod
         try:
             exec(f"import enum\nclass Mode(enum.{base_name}):\n    A = 1\n    B = 2\n", mod.__dict__)
-            return str(validate_value_for_final_field_and_get_key(mod.Mode.A, live=False))
+            return str(final_scalar_key(mod.Mode.A, live=False))
         finally:
             sys.modules.pop(mod.__name__, None)
 
@@ -5120,7 +5153,7 @@ def test_final_subclass_structural_identified_object_rejected():
     import enum
 
     from quadrants.lang._final.final_constant_values import (
-        validate_value_for_final_field_and_get_key,
+        final_scalar_key,
     )
 
     class Unit(enum.IntEnum):
@@ -5131,21 +5164,21 @@ def test_final_subclass_structural_identified_object_rejected():
 
     Unit.__doc__ = helper
     with pytest.raises(TypeError, match="mutable behavior"):
-        validate_value_for_final_field_and_get_key(Unit(1), live=True)
+        final_scalar_key(Unit(1), live=True)
     with pytest.raises(TypeError, match="mutable behavior"):
-        validate_value_for_final_field_and_get_key(Unit(1), live=False)
+        final_scalar_key(Unit(1), live=False)
 
     class Payload:  # a class bound as a structural value
         pass
 
     Unit.__doc__ = Payload
     with pytest.raises(TypeError, match="mutable behavior"):
-        validate_value_for_final_field_and_get_key(Unit(1), live=False)
+        final_scalar_key(Unit(1), live=False)
 
     Unit.__doc__ = "plain"  # reset so the next rejection is attributable to the nested value, not this attr
     Unit.__slots__ = (helper,)  # nested inside a container value -> rejected recursively
     with pytest.raises(TypeError, match="mutable behavior"):
-        validate_value_for_final_field_and_get_key(Unit(1), live=True)
+        final_scalar_key(Unit(1), live=True)
 
 
 @test_utils.test()
@@ -5156,18 +5189,18 @@ def test_final_subclass_structural_float_bits_in_key():
     import enum
 
     from quadrants.lang._final.final_constant_values import (
-        validate_value_for_final_field_and_get_key,
+        final_scalar_key,
     )
 
     class Unit(enum.IntEnum):
         VALUE = 1
 
     Unit.__doc__ = 0.0
-    live_before = validate_value_for_final_field_and_get_key(Unit(1), live=True)
-    offline_before = str(validate_value_for_final_field_and_get_key(Unit(1), live=False))
+    live_before = final_scalar_key(Unit(1), live=True)
+    offline_before = str(final_scalar_key(Unit(1), live=False))
     Unit.__doc__ = -0.0  # == 0.0 with an equal hash, but a distinct bit pattern
-    assert validate_value_for_final_field_and_get_key(Unit(1), live=True) != live_before
-    assert str(validate_value_for_final_field_and_get_key(Unit(1), live=False)) != offline_before
+    assert final_scalar_key(Unit(1), live=True) != live_before
+    assert str(final_scalar_key(Unit(1), live=False)) != offline_before
 
 
 @test_utils.test()
@@ -5179,29 +5212,25 @@ def test_final_subclass_docstring_in_key():
     import enum
 
     from quadrants.lang._final.final_constant_values import (
-        validate_value_for_final_field_and_get_key,
+        final_scalar_key,
     )
 
     class Unit(enum.IntEnum):
         VALUE = 1
 
-    live_before = validate_value_for_final_field_and_get_key(Unit(1), live=True)
-    offline_before = str(validate_value_for_final_field_and_get_key(Unit(1), live=False))
+    live_before = final_scalar_key(Unit(1), live=True)
+    offline_before = str(final_scalar_key(Unit(1), live=False))
     Unit.__doc__ = "mutated between launches"
-    assert (
-        validate_value_for_final_field_and_get_key(Unit(1), live=True) != live_before
-    )  # in-process key flips (same class object)
-    assert (
-        str(validate_value_for_final_field_and_get_key(Unit(1), live=False)) != offline_before
-    )  # offline string flips too
+    assert final_scalar_key(Unit(1), live=True) != live_before  # in-process key flips (same class object)
+    assert str(final_scalar_key(Unit(1), live=False)) != offline_before  # offline string flips too
 
     class Mode(enum.Enum):
         A = 1
         B = 2
 
-    enum_before = validate_value_for_final_field_and_get_key(Mode.A, live=True)
+    enum_before = final_scalar_key(Mode.A, live=True)
     Mode.__doc__ = "changed"
-    assert validate_value_for_final_field_and_get_key(Mode.A, live=True) != enum_before
+    assert final_scalar_key(Mode.A, live=True) != enum_before
 
 
 @test_utils.test()
@@ -5213,43 +5242,43 @@ def test_final_subclass_slots_in_key():
     import enum
 
     from quadrants.lang._final.final_constant_values import (
-        validate_value_for_final_field_and_get_key,
+        final_scalar_key,
     )
 
     class Unit(enum.IntEnum):
         VALUE = 1
         __slots__ = ()
 
-    live_before = validate_value_for_final_field_and_get_key(Unit(1), live=True)
-    offline_before = str(validate_value_for_final_field_and_get_key(Unit(1), live=False))
+    live_before = final_scalar_key(Unit(1), live=True)
+    offline_before = str(final_scalar_key(Unit(1), live=False))
     Unit.__slots__ = ("relabeled",)  # rebinds the observable value without adding a real slot descriptor
-    assert validate_value_for_final_field_and_get_key(Unit(1), live=True) != live_before
-    assert str(validate_value_for_final_field_and_get_key(Unit(1), live=False)) != offline_before
+    assert final_scalar_key(Unit(1), live=True) != live_before
+    assert str(final_scalar_key(Unit(1), live=False)) != offline_before
 
     # Container type is retained: () and [] compare unequal, so they must not collapse to the same key.
     class Empty(enum.IntEnum):
         VALUE = 1
         __slots__ = ()
 
-    empty_tuple = validate_value_for_final_field_and_get_key(Empty(1), live=True)
+    empty_tuple = final_scalar_key(Empty(1), live=True)
     Empty.__slots__ = []
-    assert validate_value_for_final_field_and_get_key(Empty(1), live=True) != empty_tuple
+    assert final_scalar_key(Empty(1), live=True) != empty_tuple
 
     # Absent __slots__ must stay distinct from an explicit ``__slots__ = None`` ('__slots__' in cls.__dict__ differs).
     class Absent(enum.IntEnum):
         VALUE = 1
 
-    absent_key = validate_value_for_final_field_and_get_key(Absent(1), live=True)
+    absent_key = final_scalar_key(Absent(1), live=True)
     Absent.__slots__ = None
-    assert validate_value_for_final_field_and_get_key(Absent(1), live=True) != absent_key
+    assert final_scalar_key(Absent(1), live=True) != absent_key
 
     class Mode(enum.Enum):
         A = 1
         B = 2
 
-    enum_before = validate_value_for_final_field_and_get_key(Mode.A, live=True)
+    enum_before = final_scalar_key(Mode.A, live=True)
     Mode.__slots__ = ("relabeled",)
-    assert validate_value_for_final_field_and_get_key(Mode.A, live=True) != enum_before
+    assert final_scalar_key(Mode.A, live=True) != enum_before
 
 
 @test_utils.test()
@@ -5261,25 +5290,25 @@ def test_final_subclass_weakref_in_key():
     import enum
 
     from quadrants.lang._final.final_constant_values import (
-        validate_value_for_final_field_and_get_key,
+        final_scalar_key,
     )
 
     class Unit(enum.IntEnum):
         VALUE = 1
 
-    live_before = validate_value_for_final_field_and_get_key(Unit(1), live=True)
-    offline_before = str(validate_value_for_final_field_and_get_key(Unit(1), live=False))
+    live_before = final_scalar_key(Unit(1), live=True)
+    offline_before = str(final_scalar_key(Unit(1), live=False))
     Unit.__weakref__ = None  # rebinding an exempt machinery attr to an observable value
-    assert validate_value_for_final_field_and_get_key(Unit(1), live=True) != live_before
-    assert str(validate_value_for_final_field_and_get_key(Unit(1), live=False)) != offline_before
+    assert final_scalar_key(Unit(1), live=True) != live_before
+    assert str(final_scalar_key(Unit(1), live=False)) != offline_before
 
     class Mode(enum.Enum):
         A = 1
         B = 2
 
-    enum_before = validate_value_for_final_field_and_get_key(Mode.A, live=True)
+    enum_before = final_scalar_key(Mode.A, live=True)
     Mode.__weakref__ = None
-    assert validate_value_for_final_field_and_get_key(Mode.A, live=True) != enum_before
+    assert final_scalar_key(Mode.A, live=True) != enum_before
 
 
 @test_utils.test()
@@ -5290,17 +5319,17 @@ def test_final_subclass_name_in_key():
     import enum
 
     from quadrants.lang._final.final_constant_values import (
-        validate_value_for_final_field_and_get_key,
+        final_scalar_key,
     )
 
     class Unit(enum.IntEnum):
         VALUE = 1
 
-    live_before = validate_value_for_final_field_and_get_key(Unit(1), live=True)
-    offline_before = str(validate_value_for_final_field_and_get_key(Unit(1), live=False))
+    live_before = final_scalar_key(Unit(1), live=True)
+    offline_before = str(final_scalar_key(Unit(1), live=False))
     Unit.__name__ = "Renamed"  # __qualname__ still ends in ".Unit", so only a __name__-aware key separates them
-    assert validate_value_for_final_field_and_get_key(Unit(1), live=True) != live_before
-    assert str(validate_value_for_final_field_and_get_key(Unit(1), live=False)) != offline_before
+    assert final_scalar_key(Unit(1), live=True) != live_before
+    assert str(final_scalar_key(Unit(1), live=False)) != offline_before
 
 
 @test_utils.test()
@@ -5311,25 +5340,23 @@ def test_final_subclass_structural_dict_value_is_lossless():
     import enum
 
     from quadrants.lang._final.final_constant_values import (
-        validate_value_for_final_field_and_get_key,
+        final_scalar_key,
     )
 
     class Unit(enum.IntEnum):
         VALUE = 1
 
     Unit.__slots__ = {"a": 1}
-    key_a = validate_value_for_final_field_and_get_key(Unit(1), live=True)
+    key_a = final_scalar_key(Unit(1), live=True)
     Unit.__slots__ = {"b": 2}
-    assert (
-        validate_value_for_final_field_and_get_key(Unit(1), live=True) != key_a
-    )  # distinct dicts -> distinct keys, no lossy collapse
+    assert final_scalar_key(Unit(1), live=True) != key_a  # distinct dicts -> distinct keys, no lossy collapse
 
     class Opaque(enum.IntEnum):
         VALUE = 1
 
     Opaque.__slots__ = object()  # not plain data and not a descriptor/callable -> unrepresentable
     with pytest.raises(TypeError, match="cannot be keyed faithfully"):
-        validate_value_for_final_field_and_get_key(Opaque(1), live=True)
+        final_scalar_key(Opaque(1), live=True)
 
 
 @test_utils.test()
@@ -5346,24 +5373,24 @@ def test_final_subclass_313_metadata_in_key():
     import enum
 
     from quadrants.lang._final.final_constant_values import (
-        validate_value_for_final_field_and_get_key,
+        final_scalar_key,
     )
 
     class Unit(enum.IntEnum):
         VALUE = 1
 
-    live_before = validate_value_for_final_field_and_get_key(Unit(1), live=True)
-    offline_before = str(validate_value_for_final_field_and_get_key(Unit(1), live=False))
+    live_before = final_scalar_key(Unit(1), live=True)
+    offline_before = str(final_scalar_key(Unit(1), live=False))
     Unit.__firstlineno__ = 424242
-    assert validate_value_for_final_field_and_get_key(Unit(1), live=True) != live_before
-    assert str(validate_value_for_final_field_and_get_key(Unit(1), live=False)) != offline_before
+    assert final_scalar_key(Unit(1), live=True) != live_before
+    assert str(final_scalar_key(Unit(1), live=False)) != offline_before
 
     class Other(enum.IntEnum):
         VALUE = 1
 
-    static_before = validate_value_for_final_field_and_get_key(Other(1), live=True)
+    static_before = final_scalar_key(Other(1), live=True)
     Other.__static_attributes__ = ("zzz",)
-    assert validate_value_for_final_field_and_get_key(Other(1), live=True) != static_before
+    assert final_scalar_key(Other(1), live=True) != static_before
 
 
 @test_utils.test()
@@ -5374,7 +5401,7 @@ def test_final_subclass_structural_container_subclass_rejected():
     import enum
 
     from quadrants.lang._final.final_constant_values import (
-        validate_value_for_final_field_and_get_key,
+        final_scalar_key,
     )
 
     class MyList(list):
@@ -5385,7 +5412,7 @@ def test_final_subclass_structural_container_subclass_rejected():
 
     Unit.__slots__ = MyList()
     with pytest.raises(TypeError, match="builtin subclass"):
-        validate_value_for_final_field_and_get_key(Unit(1), live=True)
+        final_scalar_key(Unit(1), live=True)
 
 
 @test_utils.test()
@@ -5397,7 +5424,7 @@ def test_final_subclass_structural_foreign_descriptor_identity():
     import enum
 
     from quadrants.lang._final.final_constant_values import (
-        validate_value_for_final_field_and_get_key,
+        final_scalar_key,
     )
 
     class OwnerA:
@@ -5410,11 +5437,11 @@ def test_final_subclass_structural_foreign_descriptor_identity():
         VALUE = 1
 
     Unit.__weakref__ = OwnerA.__dict__["__weakref__"]
-    live_a = validate_value_for_final_field_and_get_key(Unit(1), live=True)
-    offline_a = str(validate_value_for_final_field_and_get_key(Unit(1), live=False))
+    live_a = final_scalar_key(Unit(1), live=True)
+    offline_a = str(final_scalar_key(Unit(1), live=False))
     Unit.__weakref__ = OwnerB.__dict__["__weakref__"]  # distinct owner -> distinct qualname
-    assert validate_value_for_final_field_and_get_key(Unit(1), live=True) != live_a
-    assert str(validate_value_for_final_field_and_get_key(Unit(1), live=False)) != offline_a
+    assert final_scalar_key(Unit(1), live=True) != live_a
+    assert str(final_scalar_key(Unit(1), live=False)) != offline_a
 
     def make_owner():  # two owners sharing a qualname but distinct identity
         class Owner:
@@ -5423,11 +5450,9 @@ def test_final_subclass_structural_foreign_descriptor_identity():
         return Owner
 
     Unit.__weakref__ = make_owner().__dict__["__weakref__"]
-    live_c = validate_value_for_final_field_and_get_key(Unit(1), live=True)
+    live_c = final_scalar_key(Unit(1), live=True)
     Unit.__weakref__ = make_owner().__dict__["__weakref__"]
-    assert (
-        validate_value_for_final_field_and_get_key(Unit(1), live=True) != live_c
-    )  # separated by the owner's identity component
+    assert final_scalar_key(Unit(1), live=True) != live_c  # separated by the owner's identity component
 
 
 @test_utils.test()
@@ -5472,9 +5497,7 @@ def test_final_enum_key_incorporates_full_member_map():
     import sys
     import types
 
-    from quadrants.lang._final.final_constant_values import (
-        validate_value_for_final_field_and_get_key,
-    )
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     mod_name = "qd_member_map_probe"
     mod = types.ModuleType(mod_name)
@@ -5491,22 +5514,18 @@ def test_final_enum_key_incorporates_full_member_map():
             mod.Mode = Mode  # resolvable via module+qualname -> None class-identity component (member map is the guard)
             return Mode
 
-        key_b2 = validate_value_for_final_field_and_get_key(define(2).A)
-        assert (
-            validate_value_for_final_field_and_get_key(define(2).A) == key_b2
-        )  # identical resolvable definition -> identical key (reuse kept)
+        key_b2 = final_scalar_key(define(2).A)
+        assert final_scalar_key(define(2).A) == key_b2  # identical resolvable definition -> identical key (reuse kept)
         changed = define(3)  # a changed *sibling* value, selected member A and class name unchanged
-        assert validate_value_for_final_field_and_get_key(changed.A) != key_b2  # in-process key flips
-        assert str(validate_value_for_final_field_and_get_key(changed.A)) != str(
-            key_b2
-        )  # and the offline (fastcache) string flips too
+        assert final_scalar_key(changed.A) != key_b2  # in-process key flips
+        assert str(final_scalar_key(changed.A)) != str(key_b2)  # and the offline (fastcache) string flips too
 
         class Bad(enum.Enum):
             A = 1
             B = [1, 2]  # a mutable, unkeyable sibling - observable as cfg.mode.__class__.B.value
 
         with pytest.raises(TypeError, match="not a supported"):
-            validate_value_for_final_field_and_get_key(Bad.A)
+            final_scalar_key(Bad.A)
     finally:
         del sys.modules[mod_name]
 
@@ -5515,11 +5534,10 @@ def test_final_enum_key_incorporates_full_member_map():
 def test_final_outer_mapping_cache_disabled_for_final_bearing_arg():
     """``TemplateMapper.lookup`` keeps an instance-keyed ``(count, key)`` cache that returns the prior result for the
     same live argument *before* calling ``extract()``. For a Final-bearing argument that would bypass
-    ``validate_value_for_final_field_and_get_key``'s per-launch revalidation - so a launch could reuse the
-    specialization compiled before a ``Final`` value's class was monkey-patched behaviorful. This cache is therefore
-    disabled for any mapper carrying a Final-bearing argument: it stores nothing and revalidates every launch. A
-    Final-free mapper still caches, so the common hot path is untouched.
-    """
+    ``final_scalar_key``'s per-launch revalidation - so a launch could reuse the specialization compiled before a
+    ``Final`` value's class was monkey-patched behaviorful. This cache is therefore disabled for any mapper carrying a
+    Final-bearing argument: it stores nothing and revalidates every launch. A Final-free mapper still caches, so the
+    common hot path is untouched."""
     import enum
     from typing import Final
 
@@ -5564,7 +5582,7 @@ def test_final_rejects_custom_scalar_subclasses(base: type, live: bool) -> None:
     import enum
 
     from quadrants.lang._final.final_constant_values import (
-        validate_value_for_final_field_and_get_key,
+        final_scalar_key,
     )
 
     class Custom(base):
@@ -5572,18 +5590,18 @@ def test_final_rejects_custom_scalar_subclasses(base: type, live: bool) -> None:
 
     value = Custom(1)
     with pytest.raises(TypeError, match="Custom scalar subclasses"):
-        validate_value_for_final_field_and_get_key(value, live=live)
+        final_scalar_key(value, live=live)
 
     class Mode(enum.Enum):
         VALUE = value
 
     with pytest.raises(TypeError, match="Custom scalar subclasses"):
-        validate_value_for_final_field_and_get_key(Mode.VALUE, live=live)
+        final_scalar_key(Mode.VALUE, live=live)
 
 
 @test_utils.test()
 def test_final_custom_scalar_rejected_when_accessed() -> None:
-    """Report an unsupported Final scalar when a kernel accesses its field."""
+    """Report an unsupported Final scalar when a kernel receives its containing dataclass."""
     from typing import Final
 
     class Custom(int):
@@ -5591,11 +5609,41 @@ def test_final_custom_scalar_rejected_when_accessed() -> None:
 
     @dataclass(frozen=True)
     class Config:
-        count: Final
+        count: Final[int]
 
     @qd.kernel
-    def read(config: qd.RuntimeTyped) -> qd.i32:
+    def read(config: Config) -> qd.i32:
         return config.count
 
     with pytest.raises(TypeError, match="Custom scalar subclasses"):
         read(Config(Custom(1)))
+
+
+@pytest.mark.parametrize(
+    "value", [np.bool_(True), np.int64(3), np.uint64(3), np.float32(0.5), np.float64(0.5), np.str_("x")]
+)
+@test_utils.test()
+def test_final_rejects_numpy_scalars(value: object) -> None:
+    """Reject NumPy scalars directly, in enum values, and as dataclass Final arguments."""
+    from typing import Final
+
+    from quadrants.lang._final.final_constant_values import final_scalar_key
+
+    class Mode(enum.Enum):
+        VALUE = value
+
+    for live in (False, True):
+        for invalid in (value, Mode.VALUE):
+            with pytest.raises(TypeError, match="NumPy scalars are not supported"):
+                final_scalar_key(invalid, live=live)
+
+    @dataclass(frozen=True)
+    class Config:
+        count: Final[int]
+
+    @qd.kernel
+    def read(config: Config) -> qd.i32:
+        return qd.static(int(config.count))
+
+    with pytest.raises(TypeError, match="NumPy scalars are not supported"):
+        read(Config(value))

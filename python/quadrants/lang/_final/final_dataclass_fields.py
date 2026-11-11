@@ -1,93 +1,78 @@
-"""Discover Final dataclass fields, infer their schema annotations, and validate their containers."""
+"""Discover and validate Final dataclass fields and their containers."""
 
 import dataclasses
+import enum
+import sys
 import typing
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from quadrants.lang._final.final_annotation import dataclass_field_is_final
-from quadrants.lang._final.final_annotation import (  # pylint: disable=unused-import
-    is_final_annotation as is_final_annotation,
-)
-from quadrants.lang._final.final_constant_values import (
-    validate_value_for_final_field_and_get_key,
-)
-from quadrants.lang._runtime_typing.deferred_errors import (
-    create_deferred_member_type_for_invalid_dataclass_member,
-)
+# Supported Final scalar types; enums are handled separately.
+_FINAL_SCALAR_TYPES = frozenset({bool, int, float, str})
 
-if TYPE_CHECKING:
-    from typing import _SpecialForm
-
-    from quadrants.lang._runtime_typing.deferred_errors import DeferredMemberType
-    from quadrants.lang._runtime_typing.runtime_dataclass import FinalValueKeyCache
-
-# Final is a special-form object at runtime, although static checkers treat it as a type expression.
-_FINAL_MARKER = typing.cast("_SpecialForm", typing.Final)
-
-# Class identity maps to the retained class and its Final field names.
-# This cache retains classes, assuming applications define relatively few dataclass types.
-_final_field_names_by_dataclass_type_id: dict[int, tuple[type, frozenset[str]]] = {}
+# Tailored hints for types where ``Final[T]`` is a likely mistake. Matched by name to avoid import cycles.
+_FINAL_REJECT_HINTS: "dict[str, str]" = {
+    "NdarrayType": "arrays are runtime data, not compile-time constants - drop the ``Final`` and annotate the field "
+    "with ``qd.types.NDArray[dtype, ndim]`` as usual",
+    "MatrixType": "matrices are runtime data, not compile-time constants - drop the ``Final``",
+    "StructType": "``qd.dataclass`` structs are runtime data, not compile-time constants - drop the ``Final``",
+    "Tensor": "``qd.Tensor`` is runtime data, not a compile-time constant - drop the ``Final``",
+    # ``qd.Template`` and ``qd.types.annotations.template`` are both named ``Template``.
+    "Template": "``Final[qd.Template]`` is redundant - a ``qd.Template`` field is already compile-time; use "
+    "``Final[<python type>]`` (e.g. ``Final[int]``) instead",
+}
 
 
-def get_final_field_names(dataclass_type: type) -> frozenset[str]:
-    """Find and cache the names of fields marked Final."""
-    cached_dataclass_type, cached_final_field_names = _final_field_names_by_dataclass_type_id.get(
-        id(dataclass_type), (None, None)
-    )
-    if cached_dataclass_type is dataclass_type and cached_final_field_names is not None:
-        return cached_final_field_names
-    names = frozenset(
-        field.name
-        for field in dataclasses.fields(dataclass_type)
-        if dataclass_field_is_final(dataclass_type, field.name, field.type)
-    )
-    _final_field_names_by_dataclass_type_id[id(dataclass_type)] = (dataclass_type, names)
-    return names
+def is_final_annotation(annotation: Any) -> bool:
+    """Check whether an annotation is a subscripted Final marker.
 
-
-def infer_final_field_annotation(
-    value: object,
-    non_frozen_ancestor_path: str | None,
-    name: str,
-    final_value_key_by_value_id: "FinalValueKeyCache | None" = None,
-) -> "_SpecialForm | DeferredMemberType":
-    """Infer a Final field's schema annotation from its runtime value and ancestor constraints.
-
-    Args:
-        value: The actual Python object stored in the Final field, such as 7.
-        non_frozen_ancestor_path: Dotted path from a reassignable dataclass to the dataclass containing this field,
-            such as "State.config". None means no reassignable dataclass was found on the path.
-        name: The field's name as a string, such as "count", used in error messages.
-        final_value_key_by_value_id: Optional cache shared within the current kernel call, mapping id(value) to
-            (value, specialization_key). Stores successful validation results for reuse later in the call.
-            Passing the cache lets validation and compiled-kernel selection share results within one call. A fresh
-            cache is needed for each call because objects can change between calls.
+    Bare Final is rejected by declaration validation rather than recognized here.
     """
-    if non_frozen_ancestor_path is not None:
-        parent_name = non_frozen_ancestor_path.split(".", 1)[0]
-        return create_deferred_member_type_for_invalid_dataclass_member(
-            TypeError,
-            f"{parent_name} is not frozen but reaches the ``Final`` field {non_frozen_ancestor_path}.{name}. "
-            "No dataclass on the path to a used Final value may be reassignable.",
-            value,
-        )
-    # Exact Python primitives cannot fail validation. Recheck other values each launch: enum members can acquire
-    # mutable state even inside a frozen dataclass.
-    value_type = type(value)
-    if value_type is not bool and value_type is not int and value_type is not float and value_type is not str:
-        try:
-            key = validate_value_for_final_field_and_get_key(value, live=True)
-            if final_value_key_by_value_id is not None:
-                final_value_key_by_value_id[id(value)] = (value, key)
-        except TypeError as error:
-            return create_deferred_member_type_for_invalid_dataclass_member(TypeError, str(error), value)
-    # A schema needs only the marker; the specialization key and compiler retain the actual value and its type.
-    return _FINAL_MARKER
+    return typing.get_origin(annotation) is typing.Final
 
 
 def _describe_annotation(annotation: Any) -> str:
     """Return a readable name for an annotation."""
     return getattr(annotation, "__name__", None) or repr(annotation)
+
+
+def _reject_hint_for(inner: Any) -> str | None:
+    """Return a suggested fix for an unsupported Final annotation, if available."""
+    for name in (type(inner).__name__, _describe_annotation(inner)):
+        hint = _FINAL_REJECT_HINTS.get(name)
+        if hint is not None:
+            return hint
+    return None
+
+
+def _validate_final_inner_type(dc_type: type, field_name: str, annotation: Any) -> None:
+    """Reject Final annotations whose inner type cannot be a compile-time constant."""
+    inner = typing.get_args(annotation)
+    if len(inner) != 1:
+        raise TypeError(
+            f"{dc_type.__name__}.{field_name}: ``typing.Final`` takes exactly one type argument, got "
+            f"``Final[{', '.join(_describe_annotation(a) for a in inner)}]``."
+        )
+    inner_type = inner[0]
+
+    if inner_type in _FINAL_SCALAR_TYPES:
+        return
+    if isinstance(inner_type, type) and issubclass(inner_type, enum.Enum):
+        return
+
+    hint = _reject_hint_for(inner_type)
+    if hint is None:
+        if isinstance(inner_type, type) and dataclasses.is_dataclass(inner_type):
+            hint = (
+                "nested dataclasses are walked structurally - drop the ``Final`` from this field and mark the "
+                "leaf fields inside it as ``Final[...]`` instead"
+            )
+        else:
+            allowed = ", ".join(sorted(t.__name__ for t in _FINAL_SCALAR_TYPES))
+            hint = f"``Final[T]`` supports T in {{{allowed}}} or an ``enum.Enum`` subclass"
+    raise TypeError(
+        f"{dc_type.__name__}.{field_name}: ``Final[{_describe_annotation(inner_type)}]`` cannot be baked as a "
+        f"Quadrants compile-time constant - {hint}."
+    )
 
 
 def _rebinding_is_prevented(dc_type: type) -> bool:
@@ -127,12 +112,52 @@ def _first_final_path(dc_type: type, visiting: "frozenset[int]") -> "tuple[str, 
     return path
 
 
+def _string_annotation_looks_final(dc_type: type, field_name: str, annotation: str) -> bool:
+    """Check whether a string annotation appears to name Final.
+
+    Resolve fields separately so an unrelated unresolved annotation cannot hide a Final marker. Like get_type_hints,
+    this evaluates annotation expressions from the defining module.
+    """
+    globalns: dict = {}
+    localns: dict = {}
+    for klass in dc_type.__mro__:
+        if field_name in getattr(klass, "__annotations__", {}):
+            module = sys.modules.get(klass.__module__)
+            globalns = getattr(module, "__dict__", None) or {}
+            localns = dict(vars(klass))
+            break
+    for expr in (annotation.strip(), annotation.split("[", 1)[0].strip()):
+        try:
+            resolved = eval(expr, globalns, localns)
+        except Exception:
+            continue
+        return resolved is typing.Final or is_final_annotation(resolved)
+    return "Final" in annotation
+
+
 def _build_final_plan(dc_type: type) -> "frozenset[str]":
     """Validate the dataclass's Final declarations and return their field names."""
     final_names = []
     for field in dataclasses.fields(dc_type):
         annotation = field.type
-        if not dataclass_field_is_final(dc_type, field.name, annotation):
+        if isinstance(annotation, str):
+            # Reject string Final annotations rather than silently treating them as runtime fields.
+            if _string_annotation_looks_final(dc_type, field.name, annotation):
+                raise TypeError(
+                    f"{dc_type.__name__}.{field.name}: annotation is the unresolved string {annotation!r}. Quadrants "
+                    f"cannot see ``Final`` through a string annotation, so this field would silently become a runtime "
+                    f"kernel argument. Remove ``from __future__ import annotations`` from the module defining "
+                    f"{dc_type.__name__}, or annotate with the real type object."
+                )
+            continue
+        if annotation is typing.Final:
+            # Reject bare Final, which is_final_annotation does not recognize.
+            raise TypeError(
+                f"{dc_type.__name__}.{field.name}: bare ``typing.Final`` is not supported as a Quadrants "
+                f"compile-time template field. Write ``Final[T]`` with a concrete type, e.g. "
+                f"``{field.name}: Final[int]``."
+            )
+        if not is_final_annotation(annotation):
             # A ``Final``-like form that is not ``typing.Final`` would also silently become a runtime arg.
             origin = typing.get_origin(annotation)
             if origin is not None and "Final" in _describe_annotation(origin):
@@ -142,6 +167,7 @@ def _build_final_plan(dc_type: type) -> "frozenset[str]":
                     f"library."
                 )
             continue
+        _validate_final_inner_type(dc_type, field.name, annotation)
         final_names.append(field.name)
 
     if final_names and not _rebinding_is_prevented(dc_type):
