@@ -18,21 +18,14 @@ from quadrants.lang._final.final_class_identity import (
 )
 from quadrants.lang._final.final_enum_validation import _reject_stateful_enum_member
 
-# Type tags keeping the key spaces disjoint: Python treats distinct constants as ``==`` with equal hashes (a float's
-# bits vs an int; an ``IntEnum`` member vs its bare scalar; ``True`` vs ``1`` vs ``np.int64(1)``), so bare values
-# would collide.
+# Separate constants that Python considers equal, such as True, 1, and an IntEnum member.
 _FLOAT_KEY_TAG = "f64"
 _ENUM_KEY_TAG = "enum"
 _SCALAR_KEY_TAG = "scalar"
 
 
 def _reject_stateful_primitive_subclass(value: Any) -> None:
-    """Reject a subclass of a baked scalar (or NumPy scalar) that carries observable state the key cannot capture:
-    per-instance state (``__dict__`` or a populated slot), or class-level behavior/state (a method/property/class var
-    or overridden dunder, on the subclass chain or its metaclass). ``module``/``qualname`` does not identify a dynamic
-    class, so two same-named factory subclasses would collide. Exact primitives/NumPy scalars and behavior-free
-    subclasses (``class Meters(float): pass``) pass.
-    """
+    """Reject scalar subclasses with unsupported instance state or class behavior."""
     cls = type(value)
     if _is_exact_baked_type(cls):
         return
@@ -56,9 +49,7 @@ def _reject_stateful_primitive_subclass(value: Any) -> None:
             f"distinct specialization. Pass a plain ``bool`` / ``int`` / ``float`` / ``str`` (or an ``enum`` "
             f"member) instead."
         )
-    # Inspect every user class on the MRO, skipping trusted bases - not a scan-terminating break at the first one: a
-    # mixin *after* the primitive base (``class Unit(int, Labels)`` -> MRO ``(Unit, int, Labels, object)``) is
-    # observable too (``cfg.x.__class__.label``).
+    # Inspect all user bases, including mixins after the primitive base in the MRO.
     for klass in cls.__mro__:
         if _is_baked_base_type(klass):
             continue
@@ -73,8 +64,7 @@ def _reject_stateful_primitive_subclass(value: Any) -> None:
                     f"specialization. Pass a plain ``bool`` / ``int`` / ``float`` / ``str`` (or an ``enum`` "
                     f"member) instead."
                 )
-    # metaclass too: ``cfg.x.__class__.label`` -> ``type(cls).label``, off the MRO walk. ``: type`` keeps ``__mro__``
-    # an instance read.
+    # Metaclasses can expose additional behavior outside the class's own MRO.
     metacls: type = type(cls)
     for mcls in metacls.__mro__:
         if mcls in _FRAMEWORK_PRIMITIVE_METACLASSES:
@@ -92,9 +82,10 @@ def _reject_stateful_primitive_subclass(value: Any) -> None:
 
 
 def _enum_member_map_key(cls: type, live: bool) -> tuple:
-    """Hashable digest of ``cls``'s entire member map (each name + its value via ``final_scalar_key``). A baked
-    ``Final`` member keys on this, not only the selected member, because a sibling is observable
-    (``cfg.mode.__class__.OTHER.value``). ``()`` if there is no member map."""
+    """Build a key for every enum member's name and value.
+
+    Include siblings because compiled code can access them through the selected member's class.
+    """
     member_map = getattr(cls, "_member_map_", None)
     if not isinstance(member_map, dict):
         return ()
@@ -102,19 +93,12 @@ def _enum_member_map_key(cls: type, live: bool) -> tuple:
 
 
 def final_scalar_key(value: Any, live: bool = False) -> tuple[Any, ...]:
-    """Collision-free key component for a baked ``Final`` value. Each value is *type-tagged*, because Python treats
-    distinct compile-time constants as equal with equal hashes:
+    """Validate a Final value and build its specialization key.
 
-    - ``float`` (builtin/subclass/NumPy) -> exact IEEE-754 bits (so ``-0.0``/``0.0`` and NaN payloads stay distinct).
-    - ``enum`` member -> ``(_ENUM_KEY_TAG, *class-identity, name, value-key, member-map)``, keyed by identity (an
-      ``IntEnum`` member ``==`` its bare scalar); per-member-state members are rejected.
-    - other scalar (``bool``/``int``/``str`` + NumPy) -> ``(_SCALAR_KEY_TAG, module, qualname, canonical-value)``, the
-      value coerced via a base slot so the offline string is faithful under a nonstandard ``repr``.
+    Keep distinct constants separate even when Python considers them equal, such as True and 1 or an IntEnum member and
+    its integer value. Float keys preserve exact bits, including signed zero and NaN payloads.
 
-    A subclass/enum carries class identity via ``_subclass_identity`` (``live`` = ``_ClassRef``, offline =
-    process-stable), including the class kind (base + metaclass) so redefining the base or metaclass keys apart
-    offline. An unsupported/arbitrary value is *rejected*, not keyed by its own ``__eq__``. Re-runs per launch for
-    Final subtrees (not cached), catching a class turned behaviorful after launch one.
+    Revalidate on each launch so a later change to a constant's class cannot silently reuse compiled code.
     """
     if type(value) is float:
         return (_FLOAT_KEY_TAG, _unpack_u64(_pack_f64(value))[0])
@@ -141,12 +125,10 @@ def final_scalar_key(value: Any, live: bool = False) -> tuple[Any, ...]:
         _reject_stateful_primitive_subclass(value)
         cls = type(value)
         return (_FLOAT_KEY_TAG, *_subclass_identity(cls, live), _unpack_u64(_pack_f64(value))[0])
-    # ``bool``/``int``/``str`` + NumPy analogues; the exact type completes the tag so value-equal but distinct-typed
-    # constants (``True``/``1``/``np.int64(1)``) never share a specialization.
+    # Include the exact type so equal values of different types select different specializations.
     _reject_stateful_primitive_subclass(value)
     cls = type(value)
-    # Embed a *canonical* base value: the offline key ``str``-ifies this, so a subclass whose ``__repr__`` drops its
-    # value must not serialize two distinct values to one string.
+    # Use the base value so a custom representation cannot hide differences in offline keys.
     if _is_exact_baked_type(cls):
         canonical = value
     elif isinstance(value, int):  # a Python ``int`` subclass (``bool`` cannot be subclassed)
@@ -158,9 +140,7 @@ def final_scalar_key(value: Any, live: bool = False) -> tuple[Any, ...]:
     elif isinstance(value, np.bool_):  # NumPy boolean scalar -> plain ``bool``
         canonical = bool(value)
     else:
-        # An arbitrary object is not key-determined by value (two ``==`` instances with differing attributes would
-        # share a specialization) and may be mutable under the cached key, so reject rather than trust its
-        # ``__eq__`` / ``__hash__``.
+        # Reject arbitrary objects: equality and hashing need not capture their mutable state.
         raise TypeError(
             f"A ``Final`` field received {cls.__module__}.{cls.__qualname__}, which is not a supported "
             f"compile-time constant. A ``Final`` value - or an ``enum`` member's underlying value - must be a "

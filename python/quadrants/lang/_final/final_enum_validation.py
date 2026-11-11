@@ -12,15 +12,14 @@ from quadrants.lang._final.final_class_identity import (
 
 _MISSING = object()  # Distinguish missing enum attributes from attributes whose value is None.
 
-# Standard per-member bookkeeping (not user state). A strict allowlist, not "skip all dunders", since a user could
-# stash state under a dunder (``self.__unit__``). ``_inverted_`` is CPython's lazy inverted-Flag cache (>=3.11).
+# Allowed enum bookkeeping. Other attributes, including user-defined dunders, count as state.
 _ENUM_INTERNAL_MEMBER_ATTRS = frozenset(
     {"_name_", "_value_", "_sort_order_", "_inverted_", "__objclass__", "__dict__", "__weakref__"}
 )
 
 
 def _enum_member_state_attr(value: Any) -> "str | None":
-    """Name of a user-defined per-member state attribute on ``value`` (in ``__dict__`` or a populated slot), or None."""
+    """Return the first unsupported enum member attribute name, or None."""
     d = getattr(value, "__dict__", None)
     if d:
         for k in d:
@@ -47,9 +46,7 @@ _FRAMEWORK_ENUM_METACLASSES = frozenset(
     c for c in (type, object, getattr(enum, "EnumMeta", None), getattr(enum, "EnumType", None)) if isinstance(c, type)
 )
 
-# Dunders whose override is observable at compile time. One in an enum's own dict is a candidate override; on >=3.11
-# the machinery copies the mix-in's ``__str__`` / ``__format__`` / ``__repr__`` in, so ``_dunder_copied_from_base``
-# filters those out.
+# Potential behavior overrides; inherited methods copied by Python are filtered out.
 _OBSERVABLE_DUNDERS = frozenset(
     {
         "__eq__",
@@ -121,9 +118,7 @@ _OBSERVABLE_DUNDERS = frozenset(
 
 
 def _dunder_copied_from_base(klass: type, name: str, value: Any) -> bool:
-    """True if ``klass.__dict__[name]`` is the *same object* as a strict base's: on >=3.11 the machinery copies the
-    mix-in's ``__str__`` / ``__format__`` / ``__repr__`` in verbatim, whereas a real override is a fresh object.
-    """
+    """Check whether a class attribute is the same object as an attribute on a base class."""
     for base in klass.__mro__[1:]:
         if base.__dict__.get(name, _MISSING) is value:
             return True
@@ -131,10 +126,10 @@ def _dunder_copied_from_base(klass: type, name: str, value: Any) -> bool:
 
 
 def _enum_probe_classes() -> "list[type]":
-    """One fresh enum of each framework kind plus a *direct* ``int`` / ``str`` mix-in, to learn on the running Python
-    which sunder/dunder names the machinery injects and which track the bases/mix-in. The direct-mix-in probes matter:
-    a hook like ``_value_repr_`` holds the mix-in's value, so framework subclasses alone would misjudge a user
-    ``class M(int, enum.Enum)``."""
+    """Create sample enums that reveal which attributes Python generates.
+
+    Probe direct int/str mixins too: their generated hooks can differ from those on IntEnum or StrEnum.
+    """
 
     class _E(enum.Enum):
         A = 1
@@ -179,9 +174,10 @@ def _enum_probe_classes() -> "list[type]":
 
 
 def _dict_entry_is_inherited_default(klass: type, name: str, member: Any) -> bool:
-    """True if ``klass.__dict__[name]`` is the inherited default (machinery-copied), not user-authored. Compares
-    *unwrapped* callable identity: 3.12+ copies ``_generate_next_value_`` as a fresh wrapper, so a wrapper-identity
-    test would flag every plain enum."""
+    """Check whether an enum attribute matches an inherited default.
+
+    Compare unwrapped callables because Python can copy an inherited hook into a fresh wrapper.
+    """
     target = getattr(member, "__func__", member)
     for base in klass.__mro__[1:]:
         base_member = vars(base).get(name, _MISSING)
@@ -191,14 +187,11 @@ def _dict_entry_is_inherited_default(klass: type, name: str, member: Any) -> boo
 
 
 def _enum_machinery_class_dict(cls: type) -> "dict[str, Any] | None":
-    """The own ``__dict__`` the machinery produces for a *member-free* class with ``cls``'s exact bases/metaclass:
-    every injected hook at its value for this mix-in shape, no members. ``_observable_class_dict_attr`` compares
-    against it to tell a user override from bookkeeping, even for mix-in-dependent hooks a nearest-base check cannot
-    judge. Built via the metaclass's ``__prepare__`` (``EnumMeta`` rejects a plain ``dict``); None if unbuildable."""
+    """Rebuild an enum without members to obtain its generated attributes, or return None."""
+    # Generated hooks depend on the combination of bases, so inherited defaults alone are insufficient.
     mcls = type(cls)
     try:
-        # ``__prepare__`` returns the metaclass's own namespace (``_EnumDict``), which must be passed through verbatim.
-        # Pyright types it as ``MutableMapping``, hence the local ignore.
+        # Preserve the enum metaclass's namespace object; converting it to a plain dict would break construction.
         namespace = mcls.__prepare__("_qd_enum_probe", cls.__bases__)
         reference = mcls("_qd_enum_probe", cls.__bases__, namespace)  # pyright: ignore[reportArgumentType]
     except Exception:  # pylint: disable=broad-except  # any build failure -> conservative allowlist fallback
@@ -207,14 +200,17 @@ def _enum_machinery_class_dict(cls: type) -> "dict[str, Any] | None":
 
 
 def _compute_enum_generated_class_attrs() -> "frozenset[str]":
-    """Union across enum kinds of sunder/dunder names the machinery generates, learned by probing the running Python.
-    Used only as the fallback allowlist when the per-class reference cannot be built."""
+    """Collect attribute names generated for the sample enum classes.
+
+    Used as a fallback when a member-free reference enum cannot be constructed.
+    """
 
     class _Plain:
         pass
 
     def _generated(probe: type) -> "set[str]":
         # Keep enum-valued machinery sunders (``_boundary_``); exclude members/aliases (enum-valued, plain name).
+        """Collect generated enum attributes, excluding ordinary members and aliases."""
         return {
             n for n, v in vars(probe).items() if not isinstance(v, enum.Enum) or (n.startswith("_") and n.endswith("_"))
         }
@@ -226,11 +222,10 @@ def _compute_enum_generated_class_attrs() -> "frozenset[str]":
 
 
 def _compute_enum_reference_checked_attrs() -> "frozenset[str]":
-    """Machinery sunder/dunder names whose value is fixed by the bases/mix-in (``_value_repr_`` / ``__new__`` /
-    ``_generate_next_value_`` / copied operator dunders / ``_boundary_`` / ...): a clean enum's entry equals a
-    member-free rebuild, so ``_observable_class_dict_attr`` can flag an override by comparison. Member-*derived*
-    bookkeeping differs even for a clean enum (a distinct container) and is excluded; a name qualifies only if it
-    matches in every probe carrying it."""
+    """Find enum attributes whose values can be checked against a member-free reference.
+
+    Exclude member-derived bookkeeping: it can legitimately differ between an enum and its member-free reference.
+    """
     appears: "dict[str, int]" = {}
     matches: "dict[str, int]" = {}
     for probe in _enum_probe_classes():
@@ -253,15 +248,12 @@ _ENUM_GENERATED_CLASS_ATTRS = _compute_enum_generated_class_attrs()
 # Names fixed by the bases/mix-in, so an override is caught by comparing to a member-free reference.
 _ENUM_REFERENCE_CHECKED_ATTRS = _compute_enum_reference_checked_attrs()
 
-# Fallback allowlist used only when the member-free reference cannot be built: exempt only when the stored object *is*
-# the inherited default (``_dict_entry_is_inherited_default``); the reference path also catches mix-in-dependent hooks.
+# If a reference cannot be built, allow these hooks only when they match the inherited default.
 _ENUM_OVERRIDABLE_HOOK_NAMES = frozenset({"_generate_next_value_"})
 
 
 def _generated_attr_is_user_override(klass: type, name: str, member: Any, reference: "dict[str, Any] | None") -> bool:
-    """True if ``klass.__dict__[name]`` is a *user* override of a reference-checked hook (unwrapped-callable identity
-    vs the member-free ``reference``). Absent from the reference => not an override; ``reference is None`` =>
-    inherited-default allowlist fallback."""
+    """Check whether an enum attribute overrides its generated default."""
     if reference is None:
         return name in _ENUM_OVERRIDABLE_HOOK_NAMES and not _dict_entry_is_inherited_default(klass, name, member)
     default = reference.get(name, _MISSING)
@@ -271,18 +263,16 @@ def _generated_attr_is_user_override(klass: type, name: str, member: Any, refere
 
 
 def _is_official_enum_member(klass: type, name: str, member: Any) -> bool:
-    """True if ``klass.__dict__[name]`` is a real member/alias of ``klass`` (its own name in ``_member_map_``), not a
-    user-added enum-valued attribute (``Mode.X = Mode.A``) that is observable but absent from the key."""
+    """Check whether an attribute is a registered enum member or alias."""
     member_map = klass.__dict__.get("_member_map_")
     return isinstance(member_map, dict) and member_map.get(name, _MISSING) is member
 
 
 def _observable_class_dict_attr(klass: type) -> "str | None":
-    """Name of a user-authored observable attribute in ``klass.__dict__`` (method/property/class var, a real
-    operator-dunder override, a user sunder/dunder hook or override of a machinery hook, or a user-added enum-valued
-    attribute), or None. Whether a sunder/dunder is machinery bookkeeping is judged against *this* class's member-free
-    reference (not the global union across kinds), so a name generated only for another kind - ``_boundary_`` on
-    ``Flag`` - cannot exempt a user attribute of that name on an unrelated enum.
+    """Return the first unsupported enum class attribute name, or None.
+
+    Compare against this enum's reference. An attribute generated for another enum kind must not exempt a user attribute
+    here.
     """
     reference: Any = _MISSING  # member-free machinery reference; built lazily, at most once per call
     for name, member in vars(klass).items():
@@ -303,16 +293,13 @@ def _observable_class_dict_attr(klass: type) -> "str | None":
             if reference is not None:
                 if name not in reference:
                     return name  # a user-added sunder/dunder the machinery does not generate for this shape
-                # A bases/mix-in-fixed hook (incl. ``_boundary_``) is a user override iff it no longer holds the
-                # machinery's value.
+                # Check hooks against their generated defaults.
                 if name in _ENUM_REFERENCE_CHECKED_ATTRS and _generated_attr_is_user_override(
                     klass, name, member, reference
                 ):
                     return name
-                # Otherwise untouched machinery bookkeeping for this shape: member-derived data or a matched hook,
-                # exempt. Member-derived data is a function of the member map, already folded into the keys via
-                # ``_enum_member_map_key``. Directly reassigning these private enum internals (``Mode._member_names_ =
-                # [...]``) is unsupported - like the ``_qd_`` names reserved for Quadrants - so we do not guard it.
+                # Member-derived bookkeeping is already represented by the member-map key.
+                # Direct mutation of private enum internals is unsupported.
                 continue
             # Reference unbuildable: best-effort fallback to the global-union allowlist.
             if name in _ENUM_GENERATED_CLASS_ATTRS:
@@ -325,14 +312,9 @@ def _observable_class_dict_attr(klass: type) -> "str | None":
 
 
 def _enum_class_behavior_attr(enum_cls: type) -> "str | None":
-    """Name of a user-defined class-level attribute on ``enum_cls``, one of its user bases (*including a non-enum
-    mixin*), or its metaclass, or None. Two same-named factory enums whose ``label`` / ``__eq__`` differ key
-    identically otherwise, yet ``qd.static(cfg.mode.label == ...)`` differs; the metaclass is walked too
-    (``cfg.mode.__class__.label``).
-    """
+    """Find unsupported attributes on an enum, its bases, or its metaclass."""
     for klass in enum_cls.__mro__:
-        # Framework internals: the mixed-in primitive, ``object`` / a NumPy base, and library enum bases. Every user
-        # base is inspected, enum or not: a non-enum mixin can add observable behavior too.
+        # Skip library bases but inspect all user bases, including non-enum mixins.
         if _is_baked_base_type(klass) or klass in _FRAMEWORK_ENUM_CLASSES:
             continue
         attr = _observable_class_dict_attr(klass)
@@ -349,13 +331,10 @@ def _enum_class_behavior_attr(enum_cls: type) -> "str | None":
 
 
 def _reject_stateful_enum_member(value: Any) -> None:
-    """Reject an ``enum`` member with observable state the key cannot capture: per-member state, or class-level
-    behavior two factory enums could define differently. Plain enums (and unnamed ``IntFlag`` composites) pass.
-    """
+    """Reject enum members with unsupported instance state or class behavior."""
     cls = type(value)
-    # Check *every* member, not just the selected one: a sibling's per-member state (``Mode.B.unit``) is observable
-    # (``cfg.mode.__class__.B.unit``) yet the member-map key records only each member's value, so any member carrying
-    # state must be rejected. ``value`` is appended in case it is an ``IntFlag`` composite (absent from the map).
+    # Reject state on sibling members too: compiled code can access them through the selected member's class.
+    # Include the selected value separately for unnamed IntFlag composites.
     member_map = getattr(cls, "_member_map_", None)
     members = list(member_map.values()) if isinstance(member_map, dict) else []
     members.append(value)
