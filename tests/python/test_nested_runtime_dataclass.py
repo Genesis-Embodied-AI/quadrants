@@ -373,3 +373,31 @@ def test_unused_dataclass_property_is_not_evaluated() -> None:
         return owner.value
 
     assert read(Owner()) == 3
+
+
+@test_utils.test()
+def test_dataclass_discovery_guard_allows_data_oriented_dataclass_fields() -> None:
+    """A class with both decorators still exposes its declared dataclass fields."""
+
+    @dataclass
+    class Leaf:
+        value: int
+
+    @qd.data_oriented
+    @dataclass
+    class Middle:
+        child: Leaf
+
+    @qd.data_oriented
+    class Owner:
+        def __init__(self) -> None:
+            self.middle = Middle(Leaf(3))
+
+    @qd.kernel
+    def read(owner: qd.Template) -> qd.i32:
+        return owner.middle.child.value
+
+    owner = Owner()
+    assert read(owner) == 3
+    owner.middle.child.value = 7
+    assert read(owner) == 7
