@@ -230,7 +230,7 @@ def _canonical_attr_value(val: Any, live: bool) -> Any:
             _reject_structural_subclass(val)
         return (type(val).__qualname__, _unpack_u64(_pack_f64(val.real))[0], _unpack_u64(_pack_f64(val.imag))[0])
     if isinstance(val, (bool, int, str, bytes)):
-        # bool/int/str subclasses were handled above; reject any remaining bytes subclass.
+        # Reject subclasses; only exact built-in types are accepted here.
         if type(val) not in (bool, int, str, bytes):
             _reject_structural_subclass(val)
         # Tag the exact type because True and 1 compare equal.
