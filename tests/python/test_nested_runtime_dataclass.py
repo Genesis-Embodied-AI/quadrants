@@ -28,7 +28,9 @@ def test_nested_dataclass_hash_ignores_declared_child_type() -> None:
         def __init__(self) -> None:
             self.state = State(7)
 
-    result = args_hasher.hash_args(False, [Owner()], [ArgMetadata(qd.Template, "owner")])
+    result = args_hasher.hash_args(
+        False, [Owner()], [ArgMetadata(qd.Template, "owner")]
+    )
     assert isinstance(result, str)
 
 
@@ -152,3 +154,82 @@ def test_nested_dataclass_offline_cache(tmp_path: Path) -> None:
         output = qd.ndarray(qd.f32, shape=1)
         run(Owner(bias, value), output)
         assert output[0] == bias + value
+
+
+@test_utils.test()
+def test_nested_dataclass_final_keeps_mutable_ancestor_constraint() -> None:
+    """A frozen child's Final field remains invalid beneath a mutable dataclass."""
+
+    @dataclass(frozen=True)
+    class Child:
+        value: Final = 3
+
+    @dataclass
+    class Parent:
+        child: int
+
+    @qd.data_oriented
+    class Owner:
+        def __init__(self) -> None:
+            self.state = Parent(Child())
+
+    @qd.kernel
+    def read(owner: qd.Template) -> qd.i32:
+        return owner.state.child.value
+
+    with pytest.raises(Exception, match=r"owner\.state\.child\.value"):
+        read(Owner())
+
+
+@test_utils.test()
+def test_nested_dataclass_forwarded_to_func() -> None:
+    """An inlined function receives live members from a nested dataclass."""
+
+    @dataclass
+    class State:
+        value: str
+
+    @qd.data_oriented
+    class Owner:
+        def __init__(self) -> None:
+            self.state = State(3)
+
+    @qd.func
+    def get_value(state: qd.RuntimeTyped):
+        return state.value
+
+    @qd.kernel
+    def read(owner: qd.Template) -> qd.f32:
+        return get_value(owner.state)
+
+    owner = Owner()
+    assert read(owner) == 3
+    owner.state.value = 7
+    assert read(owner) == 7
+    owner.state.value = 2.5
+    assert read(owner) == 2.5
+
+
+@test_utils.test()
+def test_nested_dataclass_tensor_replacement() -> None:
+    """Replacing a nested tensor with a different dtype changes the specialization."""
+
+    @dataclass
+    class State:
+        value: str
+
+    @qd.data_oriented
+    class Owner:
+        def __init__(self) -> None:
+            self.state = State(qd.tensor(qd.i32, shape=1, backend=qd.Backend.NDARRAY))
+
+    @qd.kernel
+    def read(owner: qd.Template) -> qd.f32:
+        return owner.state.value[0]
+
+    owner = Owner()
+    owner.state.value[0] = 3
+    assert read(owner) == 3
+    owner.state.value = qd.tensor(qd.f32, shape=1, backend=qd.Backend.NDARRAY)
+    owner.state.value[0] = 2.5
+    assert read(owner) == 2.5

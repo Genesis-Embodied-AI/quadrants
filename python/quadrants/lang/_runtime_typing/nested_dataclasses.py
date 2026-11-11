@@ -4,6 +4,7 @@ from typing import Any, TypeAlias
 
 from quadrants.lang._runtime_typing.runtime_dataclass import infer_dataclass_type
 from quadrants.lang._weak_identity_cache import WeakIdentityCache
+from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import is_data_oriented
 
 DataclassPath: TypeAlias = tuple[str, ...]
@@ -28,7 +29,11 @@ def nested_dataclass_paths(obj: Any) -> tuple[DataclassPath, ...]:
             return
         active_ids.add(id(value))
         try:
-            members = value._asdict() if isinstance(value, tuple) and hasattr(value, "_asdict") else vars(value)
+            members = (
+                value._asdict()
+                if isinstance(value, tuple) and hasattr(value, "_asdict")
+                else vars(value)
+            )
             for name, child in members.items():
                 if not name.startswith("_qd_"):
                     walk(child, (*path, name))
@@ -48,16 +53,23 @@ def get_member_at_path(obj: Any, path: DataclassPath) -> Any:
     return obj
 
 
-def infer_nested_dataclass_schemas(args: tuple[Any, ...], names: list[str]) -> list[tuple[int, DataclassPath, type]]:
+def infer_nested_dataclass_schemas(
+    args: tuple[Any, ...], arg_metas: list[ArgMetadata], template_slots: list[int]
+) -> list[tuple[int, DataclassPath, type]]:
     """Infer current schemas for dataclasses reached through data-oriented arguments."""
     schemas = []
-    for index, obj in enumerate(args):
+    for index in template_slots:
+        obj = args[index]
         if not is_data_oriented(obj) or hasattr(type(obj), "__dataclass_fields__"):
             continue
         for path in nested_dataclass_paths(obj):
             child = get_member_at_path(obj, path)
             if not hasattr(type(child), "__dataclass_fields__"):
-                raise TypeError("A data-oriented dataclass member must remain a dataclass between kernel calls.")
-            schema = infer_dataclass_type(child, ".".join((names[index], *path)))
+                raise TypeError(
+                    "A data-oriented dataclass member must remain a dataclass between kernel calls."
+                )
+            schema = infer_dataclass_type(
+                child, ".".join((arg_metas[index].name, *path))
+            )
             schemas.append((index, path, schema))
     return schemas
