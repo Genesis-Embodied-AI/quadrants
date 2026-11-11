@@ -479,7 +479,7 @@
 </section>
 </section>
 <section id="the-qd-graph-namespace">
-<h2>The <code class="docutils literal notranslate"><span class="pre">qd.graph</span></code> namespace<a class="headerlink" href="#the-qd-graph-namespace" title="Link to this heading">#</a></h2>
+<span id="the-qdgraph-namespace"></span><h2>The <code class="docutils literal notranslate"><span class="pre">qd.graph</span></code> namespace<a class="headerlink" href="#the-qd-graph-namespace" title="Link to this heading">#</a></h2>
 <p>The graph-structuring constructs live under the <code class="docutils literal notranslate"><span class="pre">qd.graph</span></code> namespace:</p>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
@@ -503,7 +503,7 @@
 <p>Always use the <code class="docutils literal notranslate"><span class="pre">qd.graph.*</span></code> spellings (used throughout this guide). The flat <code class="docutils literal notranslate"><span class="pre">qd.graph_*</span></code> names still work but emit a <code class="docutils literal notranslate"><span class="pre">DeprecationWarning</span></code> when used inside a kernel and will be removed in a future release. Both spellings compile to the same construct.</p>
 </section>
 <section id="gpu-side-iteration-with-qd-graph-do-while">
-<h2>GPU-side iteration with <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code><a class="headerlink" href="#gpu-side-iteration-with-qd-graph-do-while" title="Link to this heading">#</a></h2>
+<span id="gpu-side-iteration-with-qdgraphdo_while"></span><h2>GPU-side iteration with <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code><a class="headerlink" href="#gpu-side-iteration-with-qd-graph-do-while" title="Link to this heading">#</a></h2>
 <p>For iterative algorithms (physics solvers, convergence loops), you often want to repeat the kernel body until a condition is met, without returning to the host each iteration. Use <code class="docutils literal notranslate"><span class="pre">while</span> <span class="pre">qd.graph.do_while(flag):</span></code> inside a <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> kernel:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span><span class="p">(</span><span class="n">graph</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">solve</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
@@ -587,7 +587,7 @@
 <p>Note that <code class="docutils literal notranslate"><span class="pre">qd.func</span></code>’s are inlined, so you can freely factorize these structures across <code class="docutils literal notranslate"><span class="pre">qd.func</span></code> boundaries.</p>
 </section>
 <section id="id1">
-<h3>Restrictions<a class="headerlink" href="#id1" title="Link to this heading">#</a></h3>
+<span id="restrictions-1"></span><h3>Restrictions<a class="headerlink" href="#id1" title="Link to this heading">#</a></h3>
 <ul class="simple">
 <li><p>The counter ndarray may be swapped between calls: passing a different ndarray (or alternating between several) does not trigger a recompile.</p></li>
 </ul>
@@ -611,7 +611,7 @@
 </section>
 </section>
 <section id="checkpoints-with-qd-checkpoint-experimental">
-<h2>Checkpoints with <code class="docutils literal notranslate"><span class="pre">qd.checkpoint</span></code> <em>(experimental)</em><a class="headerlink" href="#checkpoints-with-qd-checkpoint-experimental" title="Link to this heading">#</a></h2>
+<span id="checkpoints-with-qdcheckpoint-experimental"></span><h2>Checkpoints with <code class="docutils literal notranslate"><span class="pre">qd.checkpoint</span></code> <em>(experimental)</em><a class="headerlink" href="#checkpoints-with-qd-checkpoint-experimental" title="Link to this heading">#</a></h2>
 <blockquote>
 <div><p><strong>Experimental.</strong> <code class="docutils literal notranslate"><span class="pre">qd.checkpoint</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.GraphStatus</span></code>, and <code class="docutils literal notranslate"><span class="pre">kernel.resume(from_checkpoint=...)</span></code> are experimental APIs, and may change in the near future, or be removed, or replaced.</p>
 </div></blockquote>
@@ -660,7 +660,7 @@
 </ul>
 </section>
 <section id="host-side-yield-resume-loop">
-<h3>Host-side yield / resume loop<a class="headerlink" href="#host-side-yield-resume-loop" title="Link to this heading">#</a></h3>
+<span id="host-side-yield--resume-loop"></span><h3>Host-side yield / resume loop<a class="headerlink" href="#host-side-yield-resume-loop" title="Link to this heading">#</a></h3>
 <p>Kernels annotated with <code class="docutils literal notranslate"><span class="pre">checkpoints=True</span></code> return a <code class="docutils literal notranslate"><span class="pre">qd.GraphStatus</span></code> from every launch (including from <code class="docutils literal notranslate"><span class="pre">kernel.resume(...)</span></code>). The status carries two fields:</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">status.yielded</span></code> - <code class="docutils literal notranslate"><span class="pre">True</span></code> iff a checkpoint’s <code class="docutils literal notranslate"><span class="pre">yield_on=</span></code> flag was non-zero during this launch.</p></li>
@@ -686,7 +686,7 @@
 </ul>
 </section>
 <section id="id2">
-<h3>Restrictions<a class="headerlink" href="#id2" title="Link to this heading">#</a></h3>
+<span id="restrictions-2"></span><h3>Restrictions<a class="headerlink" href="#id2" title="Link to this heading">#</a></h3>
 <ul>
 <li><p>Must be used inside <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True,</span> <span class="pre">checkpoints=True)</span></code>. Without the flag, <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(...)</span></code> raises <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code> at compile time.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">cp_id</span></code> must be an int literal or an <code class="docutils literal notranslate"><span class="pre">IntEnum</span></code> value, and must be unique across the kernel.</p></li>
@@ -706,7 +706,7 @@
 </section>
 </section>
 <section id="qd-graph-parallel-sections-with-qd-graph-parallel-context-experimental">
-<h2><code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> sections with <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel_context</span></code> <em>(experimental)</em><a class="headerlink" href="#qd-graph-parallel-sections-with-qd-graph-parallel-context-experimental" title="Link to this heading">#</a></h2>
+<span id="qdgraphparallel-sections-with-qdgraphparallel_context-experimental"></span><h2><code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> sections with <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel_context</span></code> <em>(experimental)</em><a class="headerlink" href="#qd-graph-parallel-sections-with-qd-graph-parallel-context-experimental" title="Link to this heading">#</a></h2>
 <p>A <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph.parallel_context():</span></code> region lets you declare independent stages so the graph runs them concurrently.</p>
 <p><code class="docutils literal notranslate"><span class="pre">qd.graph.parallel_context</span></code> is honored by the graph builder so it composes with <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code>.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span><span class="p">(</span><span class="n">graph</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
@@ -734,7 +734,7 @@
 </ul>
 </section>
 <section id="generating-qd-graph-parallel-sections-from-a-compile-time-sequence">
-<h3>Generating <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> sections from a compile-time sequence<a class="headerlink" href="#generating-qd-graph-parallel-sections-from-a-compile-time-sequence" title="Link to this heading">#</a></h3>
+<span id="generating-qdgraphparallel-sections-from-a-compile-time-sequence"></span><h3>Generating <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> sections from a compile-time sequence<a class="headerlink" href="#generating-qd-graph-parallel-sections-from-a-compile-time-sequence" title="Link to this heading">#</a></h3>
 <p><code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> sections do not have to be written out one by one. A <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">...</span> <span class="pre">in</span> <span class="pre">qd.static(...)</span></code> loop is unrolled at compile time, so each iteration that contains a <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph.parallel():</span></code> becomes its own section - handy for forking one section per element of a static list (e.g. per contact type):</p>
 <p>(Note: See <a class="reference internal" href="compound_types.html"><span class="std std-doc">compound_types.md</span></a> for qd.data_oriented description)</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">data_oriented</span>
@@ -838,7 +838,7 @@
 <h2>Performance<a class="headerlink" href="#performance" title="Link to this heading">#</a></h2>
 <p>The hardware support for each feature (graph and graph do while) was documented in the table above. But what does this mean in practice? Let’s look through some representative examples.</p>
 <section id="qd-kernel">
-<h3>qd.kernel<a class="headerlink" href="#qd-kernel" title="Link to this heading">#</a></h3>
+<span id="qdkernel"></span><h3>qd.kernel<a class="headerlink" href="#qd-kernel" title="Link to this heading">#</a></h3>
 <p>Before migrating to graph, we have for example:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">k1</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">,</span> <span class="n">c</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">):</span>
@@ -1061,7 +1061,7 @@
 <h2>Advanced<a class="headerlink" href="#advanced" title="Link to this heading">#</a></h2>
 <p>For background on what a GPU kernel launch is, where kernel launch latency comes from, and when reducing it actually helps throughput, see <a class="reference internal" href="performance.html"><span class="std std-doc">Performance</span></a>. This section covers one graph-specific subtlety on top of that background.</p>
 <section id="why-using-qd-graph-do-while-is-relevant-even-without-hardware-support">
-<h3>Why using qd.graph.do_while is relevant even without hardware support<a class="headerlink" href="#why-using-qd-graph-do-while-is-relevant-even-without-hardware-support" title="Link to this heading">#</a></h3>
+<span id="why-using-qdgraphdo_while-is-relevant-even-without-hardware-support"></span><h3>Why using qd.graph.do_while is relevant even without hardware support<a class="headerlink" href="#why-using-qd-graph-do-while-is-relevant-even-without-hardware-support" title="Link to this heading">#</a></h3>
 <p>Recall the earlier example <strong>A while loop, conditional on a device-side scalar tensor</strong>. Written as a plain Python loop, every iteration pays the full Python-side launch latency: Python re-enters the kernel wrapper, and Python itself reads <code class="docutils literal notranslate"><span class="pre">cond[()]</span></code> and evaluates the <code class="docutils literal notranslate"><span class="pre">if</span></code> before deciding whether to loop again.</p>
 <p>On hardware with native device-side conditional graph nodes, <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code> removes the host from the loop entirely - the ideal case. But even on hardware <em>without</em> that support - where <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code> falls back to a host-side do-while loop (see <a class="reference internal" href="#backend-support">Backend support</a>) - the launch latency can be slightly reduced compared to the hand-written Python version, because the fallback loop is driven entirely in the C++ runtime rather than in Python. A single Python call enters the runtime, and the runtime then repeats internally: launch the loop body’s tasks, read back the condition flag, and decide whether to iterate again - all in C++, with no trip back through the Python interpreter between iterations.</p>
 </section>
