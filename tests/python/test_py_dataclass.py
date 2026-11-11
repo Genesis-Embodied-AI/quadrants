@@ -4147,9 +4147,7 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     import math
     import struct
 
-    from quadrants.lang._final.final_constant_values import (
-        final_scalar_key,
-    )
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     # Signed zero: Python conflates these; the bit encoding must not.
     assert 0.0 == -0.0 and hash(0.0) == hash(-0.0)
@@ -4391,9 +4389,7 @@ def test_final_scalar_key_live_preserves_class_identity_across_module_rebind():
     import sys
     import types
 
-    from quadrants.lang._final.final_constant_values import (
-        final_scalar_key,
-    )
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     mod_name = "qd_reload_identity_probe"
     mod = types.ModuleType(mod_name)
@@ -4432,9 +4428,7 @@ def test_final_scalar_key_live_uses_object_identity_not_class_equality():
     observable equality behavior, so ``final_scalar_key`` itself now *rejects* the value.
     """
     from quadrants.lang._final import final_class_identity as _fdf
-    from quadrants.lang._final.final_constant_values import (
-        final_scalar_key,
-    )
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class EqMeta(type):
         # Distinct classes with the same qualname compare equal with equal hashes (a pathological metaclass).
@@ -4486,9 +4480,7 @@ def test_final_scalar_key_offline_dynamic_class_is_process_unique():
     distinct class in another worker). The *in-process* (``live=True``) key is process-local anyway, so it stays
     nonce-free."""
     from quadrants.lang._final import final_class_identity as fdf
-    from quadrants.lang._final.final_constant_values import (
-        final_scalar_key,
-    )
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     def _make_local_enum():
         class Local(enum.IntEnum):
@@ -4553,9 +4545,7 @@ def test_final_scalar_key_live_hashable_under_unhashable_metaclass():
     carries observable behavior, so ``final_scalar_key`` itself rejects the value.
     """
     from quadrants.lang._final import final_class_identity as _fdf
-    from quadrants.lang._final.final_constant_values import (
-        final_scalar_key,
-    )
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class Unhashable(type):
         __hash__ = None  # the classes this metaclass produces are themselves unhashable
@@ -4658,9 +4648,7 @@ def test_final_enum_rejects_observable_metaclass_state():
     """
     import enum as en
 
-    from quadrants.lang._final.final_constant_values import (
-        final_scalar_key,
-    )
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class LabeledMeta(en.EnumMeta):
         label = "x"  # observable via ``Mode.label`` / ``cfg.mode.__class__.label``, absent from the key
@@ -4687,9 +4675,7 @@ def test_final_enum_rejects_observable_metaclass_state():
 @test_utils.test()
 def test_final_rejects_scalar_subclasses_with_spoofed_module():
     """Spoofing the NumPy module name does not make a custom scalar subclass supported."""
-    from quadrants.lang._final.final_constant_values import (
-        final_scalar_key,
-    )
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class BehaviorSubclass(int):
         def __eq__(self, other):  # observable class-level behavior a kernel could read (``cfg.x == 1``)
@@ -4902,9 +4888,7 @@ def test_final_exact_baked_type_membership_is_identity_not_equality():
     from quadrants.lang._final.final_class_identity import (
         _is_supported_builtin_scalar_type,
     )
-    from quadrants.lang._final.final_constant_values import (
-        final_scalar_key,
-    )
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class EqIntMeta(type):
         # Make the class compare (and hash) as the builtin ``int`` - a hostile spoof of exact-builtin-ness.
@@ -4985,9 +4969,7 @@ def test_final_enum_rejects_user_override_of_mixin_dependent_hook():
     """
     import enum
 
-    from quadrants.lang._final.final_constant_values import (
-        final_scalar_key,
-    )
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class DirectIntMixin(int, enum.Enum):  # a hand-written IntEnum: its _value_repr_/_new_member_ are int's, not Enum's
         A = 1
@@ -5017,9 +4999,7 @@ def test_final_enum_rejects_user_added_enum_valued_class_attribute():
     """
     import enum
 
-    from quadrants.lang._final.final_constant_values import (
-        final_scalar_key,
-    )
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class WithAlias(enum.Enum):
         A = 1
@@ -5058,9 +5038,7 @@ def test_final_enum_rejects_cross_kind_machinery_sunder():
     """
     import enum
 
-    from quadrants.lang._final.final_constant_values import (
-        final_scalar_key,
-    )
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class Mode(enum.Enum):
         A = 1
@@ -5116,9 +5094,7 @@ def test_final_enum_kind_in_offline_key():
     import sys
     import types
 
-    from quadrants.lang._final.final_constant_values import (
-        final_scalar_key,
-    )
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     def offline_key(base_name):
         mod = types.ModuleType("qd_enum_kind_probe")
@@ -5143,9 +5119,7 @@ def test_final_subclass_structural_identified_object_rejected():
     """
     import enum
 
-    from quadrants.lang._final.final_constant_values import (
-        final_scalar_key,
-    )
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class Unit(enum.IntEnum):
         VALUE = 1
@@ -5179,9 +5153,7 @@ def test_final_subclass_structural_float_bits_in_key():
     """
     import enum
 
-    from quadrants.lang._final.final_constant_values import (
-        final_scalar_key,
-    )
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class Unit(enum.IntEnum):
         VALUE = 1
@@ -5202,9 +5174,7 @@ def test_final_subclass_docstring_in_key():
     """
     import enum
 
-    from quadrants.lang._final.final_constant_values import (
-        final_scalar_key,
-    )
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class Unit(enum.IntEnum):
         VALUE = 1
@@ -5232,9 +5202,7 @@ def test_final_subclass_slots_in_key():
     reused."""
     import enum
 
-    from quadrants.lang._final.final_constant_values import (
-        final_scalar_key,
-    )
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class Unit(enum.IntEnum):
         VALUE = 1
@@ -5280,9 +5248,7 @@ def test_final_subclass_weakref_in_key():
     a user value like ``None`` is kept), not rejected."""
     import enum
 
-    from quadrants.lang._final.final_constant_values import (
-        final_scalar_key,
-    )
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class Unit(enum.IntEnum):
         VALUE = 1
@@ -5309,9 +5275,7 @@ def test_final_subclass_name_in_key():
     class between launches must change the key."""
     import enum
 
-    from quadrants.lang._final.final_constant_values import (
-        final_scalar_key,
-    )
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class Unit(enum.IntEnum):
         VALUE = 1
@@ -5330,9 +5294,7 @@ def test_final_subclass_structural_dict_value_is_lossless():
     silently collapsed."""
     import enum
 
-    from quadrants.lang._final.final_constant_values import (
-        final_scalar_key,
-    )
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class Unit(enum.IntEnum):
         VALUE = 1
@@ -5363,9 +5325,7 @@ def test_final_subclass_313_metadata_in_key():
 
     import enum
 
-    from quadrants.lang._final.final_constant_values import (
-        final_scalar_key,
-    )
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class Unit(enum.IntEnum):
         VALUE = 1
@@ -5391,9 +5351,7 @@ def test_final_subclass_structural_container_subclass_rejected():
     """
     import enum
 
-    from quadrants.lang._final.final_constant_values import (
-        final_scalar_key,
-    )
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class MyList(list):
         pass
@@ -5414,9 +5372,7 @@ def test_final_subclass_structural_foreign_descriptor_identity():
     would reuse the wrong specialization."""
     import enum
 
-    from quadrants.lang._final.final_constant_values import (
-        final_scalar_key,
-    )
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class OwnerA:
         pass
@@ -5572,9 +5528,7 @@ def test_final_rejects_custom_scalar_subclasses(base: type, live: bool) -> None:
     """Reject even empty scalar subclasses, including enum underlying values."""
     import enum
 
-    from quadrants.lang._final.final_constant_values import (
-        final_scalar_key,
-    )
+    from quadrants.lang._final.final_constant_values import final_scalar_key
 
     class Custom(base):
         pass
