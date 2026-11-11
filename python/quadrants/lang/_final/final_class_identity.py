@@ -233,7 +233,7 @@ def _canonical_attr_value(val: Any, live: bool) -> Any:
         # Reject subclasses; only exact built-in types are accepted here.
         if type(val) not in (bool, int, str, bytes):
             _reject_structural_subclass(val)
-        # Tag the exact type because True and 1 compare equal.
+        # Include the type name because implicit type coercion makes values such as True and 1 compare equal.
         return (type(val).__qualname__, val)
     if isinstance(val, (tuple, list)):
         if type(val) not in (tuple, list):  # a container subclass may add per-instance state / a distinct identity
