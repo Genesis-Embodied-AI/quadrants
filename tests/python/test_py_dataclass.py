@@ -4521,8 +4521,7 @@ def test_final_scalar_key_live_hashable_under_unhashable_metaclass():
 
 @test_utils.test()
 def test_final_plan_cache_keyed_by_type_identity():
-    """Distinct dataclasses must not share cached Final declarations, even if their metaclass makes them compare equal.
-    """
+    """Distinct dataclasses must not share cached Final declarations, even when their metaclass makes them equal."""
     import dataclasses as dcs
     from typing import Final
 
@@ -5027,8 +5026,7 @@ def test_final_enum_rejects_state_on_unselected_member():
 
 @test_utils.test()
 def test_final_enum_kind_in_offline_key():
-    """Disk-cache keys distinguish Enum from IntEnum even when names and values match; their equality behavior differs.
-    """
+    """Disk-cache keys distinguish Enum from IntEnum with matching names and values because their equality differs."""
     import sys
     import types
 
