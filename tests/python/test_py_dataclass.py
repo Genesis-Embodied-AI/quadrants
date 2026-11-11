@@ -3588,6 +3588,7 @@ def test_final_field_value_is_part_of_offline_fastcache_key(tmp_path: Path):
     """Include Final values in disk-cache keys so changing a constant cannot load code compiled for its old value.
 
     Previously, Final values entered the disk-cache key only when FIELD_METADATA_CACHE_VALUE was set.
+
     Two qd.init cycles share a cache directory to test persisted cache reuse.
     """
     from typing import Final
