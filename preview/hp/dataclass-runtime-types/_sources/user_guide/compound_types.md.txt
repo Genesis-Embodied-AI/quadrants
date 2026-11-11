@@ -459,11 +459,11 @@ This table summarizes which member types are allowed inside which container type
 
 ### Outer kernel-arg annotation
 
-The outermost annotation you put on the kernel parameter should match the parameter type as follows:
+Choose the kernel parameter annotation as follows:
 
 | Kernel parameter compound type | Annotation |
 |--------------------------------|------------------------------|
-| `@dataclasses.dataclass`       | `qd.RuntimeTyped` recommended; the arriving dataclass overrides the parameter annotation |
+| `@dataclasses.dataclass`       | Use the annotation appropriate for static checking, such as `State`. Quadrants ignores the parameter annotation when the arriving object is a dataclass. |
 | `@qd.data_oriented`            | `qd.Template` |
 
 ### Reassigning ndarray members

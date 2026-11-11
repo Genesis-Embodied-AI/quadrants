@@ -940,7 +940,7 @@ my_struct.b[37] 5
 </div>
 <section id="outer-kernel-arg-annotation">
 <h3>Outer kernel-arg annotation<a class="headerlink" href="#outer-kernel-arg-annotation" title="Link to this heading">#</a></h3>
-<p>The outermost annotation you put on the kernel parameter should match the parameter type as follows:</p>
+<p>Choose the kernel parameter annotation as follows:</p>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
 <tr class="row-odd"><th class="head"><p>Kernel parameter compound type</p></th>
@@ -949,7 +949,7 @@ my_struct.b[37] 5
 </thead>
 <tbody>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">&#64;dataclasses.dataclass</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">qd.RuntimeTyped</span></code> recommended; the arriving dataclass overrides the parameter annotation</p></td>
+<td><p>Use the annotation appropriate for static checking, such as <code class="docutils literal notranslate"><span class="pre">State</span></code>. Quadrants ignores the parameter annotation when the arriving object is a dataclass.</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">qd.Template</span></code></p></td>
