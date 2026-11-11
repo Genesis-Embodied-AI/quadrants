@@ -3935,39 +3935,6 @@ def test_final_float_field_honors_raise_on_templated_floats():
 
 
 @test_utils.test()
-def test_final_numpy_float_field_honors_raise_on_templated_floats():
-    """NumPy floating constants also obey raise_on_templated_floats."""
-    from typing import Final
-
-    import numpy as np
-
-    arch_name = qd.lang.impl.current_cfg().arch.name
-
-    @dataclass(frozen=True)
-    class Cfg:
-        dt: Final[float]
-        n: Final[int]
-
-    def run(cfg):
-        @qd.kernel
-        def k(config: Cfg, out: qd.types.NDArray[qd.i32, 1]):
-            v = qd.static(config.n)
-            for i in out:
-                out[i] = v
-
-        k(cfg, qd.ndarray(qd.i32, shape=(2,)))
-
-    qd.init(arch=getattr(qd, arch_name), raise_on_templated_floats=True)
-    for bad_value in (np.float32(0.5), np.float64(0.5)):
-        with pytest.raises(ValueError, match="Floats not allowed as templated types"):
-            run(Cfg(dt=bad_value, n=3))
-
-    # Default setting: the same config compiles fine, and the Final int still specialises.
-    qd.init(arch=getattr(qd, arch_name))
-    run(Cfg(dt=0.5, n=3))
-
-
-@test_utils.test()
 def test_final_float_cached_spec_key_revalidated_after_reinit():
     """A frozen config whose subtree bakes a ``Final`` value is never spec-key-cached on its instance (see
     ``subtree_has_final_fields``): it recomputes each launch so validation-sensitive guards re-run. Here the
@@ -4140,20 +4107,6 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     # must not collide with a bare int equal to those bits (both bake different constants).
     one_as_bits = struct.unpack("<Q", struct.pack("<d", 1.0))[0]  # == 4607182418800017408
     assert validate_value_for_final_field_and_get_key(1.0) != validate_value_for_final_field_and_get_key(one_as_bits)
-
-    # NumPy scalars hit the same conflations and may legally land in a ``Final[float]`` field, so they are encoded
-    # too: signed zero stays distinct and different float widths must not alias.
-    import numpy as np
-
-    assert validate_value_for_final_field_and_get_key(np.float32(0.0)) != validate_value_for_final_field_and_get_key(
-        np.float32(-0.0)
-    )
-    assert validate_value_for_final_field_and_get_key(np.float64(0.0)) != validate_value_for_final_field_and_get_key(
-        np.float64(-0.0)
-    )
-    assert validate_value_for_final_field_and_get_key(np.float32(1.0)) != validate_value_for_final_field_and_get_key(
-        np.float64(1.0)
-    )
 
     # ``IntEnum`` / ``StrEnum`` members are ``==`` (with equal hashes) to their bare scalar value and to same-valued
     # members of other enum classes; keying on class + member identity must keep all of these distinct.
@@ -4349,10 +4302,8 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
         first.A
     )  # stable for the same class
 
-    # Remaining scalars are type-tagged: Python conflates value-equal but distinct-typed constants (True == 1 ==
-    # np.int64(1), with equal hashes), and they bake observably different Python constants, so they must not alias.
+    # Equal constants with different Python types must select distinct specializations.
     assert validate_value_for_final_field_and_get_key(True) != validate_value_for_final_field_and_get_key(1)
-    assert validate_value_for_final_field_and_get_key(1) != validate_value_for_final_field_and_get_key(np.int64(1))
     assert validate_value_for_final_field_and_get_key(7) != validate_value_for_final_field_and_get_key("7")
     # ...but equal values of the same type stay equal, so legitimate kernel reuse is preserved.
     assert validate_value_for_final_field_and_get_key(7) == validate_value_for_final_field_and_get_key(7)

@@ -3,10 +3,7 @@
 import enum
 from typing import TYPE_CHECKING, Any
 
-import numpy as np
-
 from quadrants.lang._final.final_class_identity import (
-    _is_baked_base_type,
     _is_exact_baked_type,
     _pack_f64,
     _subclass_identity,
@@ -58,29 +55,13 @@ def validate_value_for_final_field_and_get_key(value: Any, live: bool = False) -
             _enum_member_map_key(cls, live),
         )
     cls = type(value)
-    if not _is_baked_base_type(cls):
+    if not _is_exact_baked_type(cls):
         raise TypeError(
             f"A ``Final`` field received {cls.__module__}.{cls.__qualname__}, which is not a supported "
-            "compile-time constant. Use an exact builtin bool, int, float or str, a NumPy scalar analogue, "
-            "or a supported enum member. Custom scalar subclasses are not supported."
+            "compile-time constant. Use an exact builtin bool, int, float or str, or a supported enum member. "
+            "Custom scalar subclasses and NumPy scalars are not supported."
         )
-    if isinstance(value, np.floating):
-        # Preserve the NumPy float's width, signed zero and NaN payload.
-        return (_FLOAT_KEY_TAG, value.dtype.str, value.tobytes())
-    if _is_exact_baked_type(cls):
-        canonical = value
-    elif isinstance(value, np.integer):
-        canonical = value.item()
-    elif isinstance(value, np.str_):
-        canonical = str(value)
-    elif isinstance(value, np.bool_):
-        canonical = bool(value)
-    else:
-        raise TypeError(
-            f"A ``Final`` field received {cls.__module__}.{cls.__qualname__}, which is not a supported "
-            "compile-time constant. Use a boolean, integer, floating-point or string scalar."
-        )
-    return (_SCALAR_KEY_TAG, cls.__module__, cls.__qualname__, canonical)
+    return (_SCALAR_KEY_TAG, cls.__module__, cls.__qualname__, value)
 
 
 def get_cached_or_validate_value_for_final_field_and_get_key(

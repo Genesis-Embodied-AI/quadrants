@@ -9,8 +9,6 @@ import types
 import uuid
 from typing import Any, NoReturn
 
-import numpy as np
-
 from quadrants.lang._weak_identity_cache import WeakIdentityCache
 
 _MISSING = object()  # Distinguish missing attributes from attributes whose value is None.
@@ -76,14 +74,8 @@ def _observable_metaclass_attr(mcls: type) -> "str | None":
 
 
 def _is_baked_base_type(klass: type) -> bool:
-    """Check whether a class is an allowed built-in or NumPy scalar base.
-
-    Static NumPy scalar types are allowed; a user subclass must not bypass validation by spoofing its module.
-    """
-    if _is_exact_baked_type(klass) or klass is object:
-        return True
-    is_heap_type = bool(klass.__flags__ & _HEAPTYPE_FLAG)
-    return issubclass(klass, np.generic) and not is_heap_type
+    """Check whether a class is a supported built-in scalar base or object."""
+    return _is_exact_baked_type(klass) or klass is object
 
 
 def _slot_names(klass: type) -> tuple[str, ...]:
