@@ -4862,7 +4862,9 @@ def test_final_exact_baked_type_membership_is_identity_not_equality():
     a builtin, collapsing two distinct same-qualified factory classes onto one live key while ``cfg.x.__class__ is
     First`` is observable. Such a metaclass carries observable equality behavior, so the value is rejected outright.
     """
-    from quadrants.lang._final.final_class_identity import _is_supported_builtin_scalar_type
+    from quadrants.lang._final.final_class_identity import (
+        _is_supported_builtin_scalar_type,
+    )
     from quadrants.lang._final.final_constant_values import (
         validate_value_for_final_field_and_get_key,
     )
