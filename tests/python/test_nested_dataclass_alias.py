@@ -1,0 +1,120 @@
+from dataclasses import dataclass
+
+import pytest
+
+import quadrants as qd
+
+from tests.helpers import test_utils
+
+
+@pytest.mark.parametrize("route", ["list", "method", "attributes", "nested_attributes"])
+@pytest.mark.parametrize("fastcache", [False, True])
+@test_utils.test()
+def test_nested_dataclass_alias_rejected(route: str, fastcache: bool) -> None:
+    """An alias must not silently bind a scalar through a different attribute path."""
+
+    @dataclass
+    class State:
+        value: int
+
+    @dataclass
+    class Pair:
+        first: State
+        second: State
+
+    @qd.data_oriented
+    class Owner:
+        def __init__(self) -> None:
+            """Create two access routes to one dataclass."""
+            state = State(3)
+            self.state = state
+            self.states = [state]
+            if route == "attributes":
+                self.second = state
+            elif route == "nested_attributes":
+                self.pair = Pair(state, state)
+
+        def get_alias(self) -> State:
+            """Return the dataclass through the stored list."""
+            return self.states[0]
+
+    @qd.kernel(fastcache=fastcache)
+    def read(owner: qd.Template, mode: qd.Template) -> qd.i32:
+        """Read through the route whose object identity hides its binding path."""
+        if qd.static(mode == "list"):
+            return owner.states[0].value
+        elif qd.static(mode == "method"):
+            return owner.get_alias().value
+        elif qd.static(mode == "attributes"):
+            return owner.second.value
+        else:
+            return owner.pair.second.value
+
+    owner = Owner()
+    with pytest.raises(Exception, match="dataclass.*alias|alias.*dataclass"):
+        read(owner, route)
+    owner.state = State(7)
+    if route == "nested_attributes":
+        owner.pair.first = State(9)
+    assert read(owner, route) == 3
+
+
+@test_utils.test(offline_cache=True)
+def test_unused_nested_dataclass_alias_is_harmless() -> None:
+    """Unaccessed aliased scalar members must not prevent compilation."""
+
+    @dataclass
+    class State:
+        value: int
+
+    @qd.data_oriented
+    class Owner:
+        def __init__(self) -> None:
+            """Store an unused alias beside an independent dataclass."""
+            self.first = State(3)
+            self.second = self.first
+            self.used = State(9)
+
+    @qd.kernel(fastcache=True)
+    def read(owner: qd.Template) -> qd.i32:
+        """Read only the independent dataclass."""
+        return owner.used.value
+
+    owner = Owner()
+    assert read(owner) == 9
+    new_owner = Owner()
+    new_owner.used.value = 15
+    assert read(new_owner) == 15
+    assert read._primal.src_ll_cache_observations.cache_loaded
+    owner.used.value = 11
+    assert read(owner) == 11
+
+
+@test_utils.test(offline_cache=True)
+def test_nested_dataclass_alias_cannot_bypass_guard_via_disk_cache() -> None:
+    """A cache entry compiled with distinct objects must not omit an aliased scalar argument."""
+
+    @dataclass
+    class State:
+        value: int
+
+    @qd.data_oriented
+    class Owner:
+        def __init__(self, aliased: bool) -> None:
+            """Choose distinct or shared dataclasses without changing their inferred types."""
+            self.first = State(3)
+            self.second = self.first if aliased else State(7)
+
+    @qd.kernel(fastcache=True)
+    def read(owner: qd.Template, output: qd.types.ndarray()) -> None:
+        """Read the path that an identity-only lookup can confuse with first."""
+        output[0] = owner.second.value
+
+    output = qd.ndarray(qd.i32, shape=1)
+    original = Owner(False)
+    read(original, output)
+    assert output[0] == 7
+    aliased = Owner(True)
+    with pytest.raises(Exception, match="dataclass.*alias|alias.*dataclass"):
+        read(aliased, output)
+    assert read._primal.src_ll_cache_observations.cache_loaded

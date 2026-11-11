@@ -20,6 +20,7 @@ from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._ndrange import _Ndrange
 from quadrants.lang._runtime_typing.deferred_errors import DeferredMemberError
 from quadrants.lang._runtime_typing.nested_dataclasses import (
+    reject_computed_dataclass_alias,
     reject_undiscovered_dataclass_member,
 )
 from quadrants.lang._runtime_typing.runtime_dataclass import is_runtime_member_name
@@ -367,6 +368,7 @@ class ASTTransformer(Builder):
             if len(node.slice.ptr) == len(layout):
                 node.slice.ptr = [node.slice.ptr[axis] for axis in layout]
         node.ptr = impl.subscript(ctx.ast_builder, node.value.ptr, *node.slice.ptr)
+        reject_computed_dataclass_alias(node.ptr, ctx.global_context.runtime_dataclass_binding_objects)
         node.violates_pure = node.value.violates_pure
         if node.violates_pure:
             node.violates_pure_reason = node.value.violates_pure_reason
@@ -532,7 +534,9 @@ class ASTTransformer(Builder):
 
     @staticmethod
     def build_Call(ctx: ASTTransformerFuncContext, node: ast.Call) -> Any | None:
-        return CallTransformer.build_Call(ctx, node, build_stmt, build_stmts)
+        value = CallTransformer.build_Call(ctx, node, build_stmt, build_stmts)
+        reject_computed_dataclass_alias(value, ctx.global_context.runtime_dataclass_binding_objects)
+        return value
 
     @staticmethod
     def build_FunctionDef(ctx: ASTTransformerFuncContext, node: ast.FunctionDef) -> None:

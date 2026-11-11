@@ -12,6 +12,7 @@ from quadrants.lang._runtime_typing.deferred_errors import DeferredMemberType
 from quadrants.lang._runtime_typing.nested_dataclasses import get_member_at_path
 from quadrants.lang._runtime_typing.runtime_dataclass import infer_dataclass_type
 from quadrants.lang.ast.ast_transformer_utils import ASTTransformerFuncContext
+from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.util import (
     is_data_oriented,
     is_dataclass_instance,
@@ -42,6 +43,9 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
             flagged.append((i, val))
     nested_schemas = getattr(ctx.func, "_runtime_nested_dataclass_schemas", ())
     for arg_idx, path, _schema in nested_schemas:
+        for length in range(len(path) + 1):
+            owner = get_member_at_path(ctx.py_args[arg_idx], path[:length])
+            ctx.global_context.runtime_dataclass_binding_objects.add(id(owner))
         parent = get_member_at_path(ctx.py_args[arg_idx], path[:-1])
         ctx.global_context.runtime_dataclass_members.add((id(parent), path[-1]))
     if not flagged and not nested_schemas:
@@ -74,7 +78,22 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
     ) -> None:
         """Declare a used scalar and remember how to read its value at launch."""
         key = (id(parent), attr_name)
+        flat_name = f"__qd_doprim_{arg_idx}__{'__'.join(attr_chain)}"
         if key in provenance:
+            if is_dataclass_instance(parent) and provenance[key][1:3] != (arg_idx, attr_chain):
+                errors = getattr(ctx.global_context, "nested_dataclass_errors", None)
+                if errors is None:
+                    errors = ctx.global_context.nested_dataclass_errors = {}
+                errors[key] = DeferredMemberType(
+                    QuadrantsRuntimeTypeError,
+                    "A runtime dataclass scalar alias has multiple attribute paths and is unsupported. "
+                    "Use distinct dataclass instances for independently rebound attributes.",
+                ).bind(".".join((ctx.func.arg_metas[arg_idx].name, *attr_chain)))
+                # A source-cache hit parses only argument declarations, so the body cannot raise this error.
+                if pruning.enforcing and (
+                    pruning.is_used(func_id, provenance[key][0]) or pruning.is_used(func_id, flat_name)
+                ):
+                    errors[key].reject()
             return
         value_type = type(value)
         if inferred_dtype is not None:
@@ -86,7 +105,6 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
             dtype, kind = default_fp, "f"
         else:
             return
-        flat_name = f"__qd_doprim_{arg_idx}__{'__'.join(attr_chain)}"
         provenance[key] = (flat_name, arg_idx, attr_chain, kind)
         # Declare a real kernel arg only in the enforcing pass, and only for primitives the body actually accessed
         # (recorded via ``mark_used`` in ``build_Attribute`` during the discovery pass). This keeps the kernel arg
@@ -118,6 +136,7 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
             return
         seen.add(obj_id)
         if is_dataclass_instance(obj):
+            ctx.global_context.runtime_dataclass_binding_objects.add(obj_id)
             schema = schema or infer_dataclass_type(obj, ".".join((ctx.func.arg_metas[arg_idx].name, *path)))
             for field in dataclasses.fields(schema):
                 value = getattr(obj, field.name)
@@ -135,10 +154,12 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
                 elif is_dataclass_instance(value) or is_data_oriented(value):
                     child_schema = field.type if is_dataclass_instance(value) else None
                     _walk(value, arg_idx, (*path, field.name), seen, child_schema, lift_plain)
+            seen.remove(obj_id)
             return
         if hasattr(obj, "__dict__"):
             items = list(vars(obj).items())
         else:
+            seen.remove(obj_id)
             return
         for attr_name, attr_val in items:
             if isinstance(attr_val, _TensorClass):
@@ -148,6 +169,7 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
                 _register_primitive(obj, attr_name, attr_val, arg_idx, (*path, attr_name))
             elif is_dataclass_instance(attr_val) or is_data_oriented(attr_val):
                 _walk(attr_val, arg_idx, (*path, attr_name), seen, lift_plain=lift_plain)
+        seen.remove(obj_id)
 
     for arg_idx, val in flagged:
         _walk(val, arg_idx, (), set(), lift_plain=True)
