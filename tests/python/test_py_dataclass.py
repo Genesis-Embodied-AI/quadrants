@@ -5040,16 +5040,12 @@ def test_final_subtree_has_final_fields_predicate():
 
 
 @test_utils.test()
-def test_final_offline_repr_not_cached_on_final_bearing_config():
-    """The offline fastcache repr is cached on a frozen instance as ``_qd_dc_repr`` - but never on a Final-bearing one.
-    A cached repr could not notice a ``Final`` value's class turning behaviorful between launches (e.g. an enum whose
-    ``__eq__`` is monkey-patched), so such a config recomputes each launch to re-run
-    ``validate_value_for_final_field_and_get_key`` validation. A Final-free frozen dataclass still caches, keeping the
-    offline hot path intact.
-    """
+def test_offline_dataclass_repr_does_not_modify_instance() -> None:
+    """Hashing inferred schemas must not attach repr caches to application objects."""
     from typing import Final
 
     from quadrants.lang._fast_caching.args_hasher import dataclass_to_repr
+    from quadrants.lang._runtime_typing.runtime_dataclass import infer_dataclass_type
 
     @dataclass(frozen=True)
     class PlainCfg:
@@ -5059,13 +5055,11 @@ def test_final_offline_repr_not_cached_on_final_bearing_config():
     class FinalCfg:
         x: Final[int]
 
-    plain = PlainCfg(a=1)
-    dataclass_to_repr(False, (), plain)
-    assert hasattr(plain, "_qd_dc_repr")  # Final-free frozen dataclass caches its repr (result or the NONE sentinel)
-
-    fcfg = FinalCfg(x=1)
-    dataclass_to_repr(False, (), fcfg)
-    assert not hasattr(fcfg, "_qd_dc_repr")  # Final-bearing config is never repr-cached; it recomputes+revalidates
+    for config in (PlainCfg(a=1), FinalCfg(x=1)):
+        original_members = vars(config).copy()
+        schema = infer_dataclass_type(config, "config")
+        assert isinstance(dataclass_to_repr(False, (), config, schema), str)
+        assert vars(config) == original_members
 
 
 @test_utils.test()
@@ -5080,56 +5074,62 @@ def test_final_str_field_does_not_disable_offline_fastcache():
     from typing import Final
 
     from quadrants.lang._fast_caching.args_hasher import dataclass_to_repr
+    from quadrants.lang._runtime_typing.runtime_dataclass import infer_dataclass_type
 
     @dataclass(frozen=True)
     class Cfg:
         name: Final[str]
         scale: int
 
-    r_a = dataclass_to_repr(False, (), Cfg(name="a", scale=1))
-    r_a2 = dataclass_to_repr(False, (), Cfg(name="a", scale=1))
-    r_b = dataclass_to_repr(False, (), Cfg(name="b", scale=1))
-    assert r_a is not None, "a Final[str] field must not disable the offline fastcache"
+    r_a, r_a2, r_b = [
+        dataclass_to_repr(False, (), config, infer_dataclass_type(config, "config"))
+        for config in (Cfg(name="a", scale=1), Cfg(name="a", scale=1), Cfg(name="b", scale=1))
+    ]
+    assert isinstance(r_a, str), "a Final[str] field must not disable the offline fastcache"
     assert r_a == r_a2, "equal Final[str] values must produce equal offline keys"
     assert r_a != r_b, "distinct Final[str] values must produce distinct offline keys"
 
 
 @test_utils.test()
-def test_subclass_extra_field_offline_fastcache_uses_annotated_field_set():
-    """A subclass passed where a *base* dataclass is annotated must fast-cache against the base's field set. Without an
-    ``annotated_type``, ``dataclass_to_repr`` hashes the runtime type, so a subclass adding a non-fastcacheable field
-    (``list``) fails and disables the offline cache. Passing the base restricts hashing to its fields: the subclass
-    then hashes identically to a plain base instance, and the extra field cannot affect the key."""
+def test_subclass_extra_field_offline_fastcache_uses_runtime_schema() -> None:
+    """Runtime subclass fields are hashed when used and pruned when unused, regardless of base annotations."""
     from typing import Final
 
-    from quadrants.lang._fast_caching.args_hasher import (
-        _FAIL_FASTCACHE,
-        dataclass_to_repr,
-    )
+    from quadrants.lang._fast_caching.args_hasher import _FAIL_FASTCACHE, dataclass_to_repr
+    from quadrants.lang._name_utils import create_flat_name
+    from quadrants.lang._runtime_typing.runtime_dataclass import infer_dataclass_type
 
     @dataclass(frozen=True)
     class Base:
-        scale: Final[int]  # baked -> its value drives the offline key
+        scale: Final[int]
 
     @dataclass(frozen=True)
     class Sub(Base):
-        name: list  # extra application-only field; not fastcacheable on its own and never seen by the kernel
+        name: list
 
-    base_repr = dataclass_to_repr(False, (), Base(scale=1))
-    assert base_repr is not None and "scale" in base_repr
+    base = Base(scale=1)
+    base_repr = dataclass_to_repr(False, (), base, infer_dataclass_type(base, "config"))
+    assert isinstance(base_repr, str) and "scale" in base_repr
 
-    # Runtime-type hashing (no annotation) trips on the ``list`` field and disables the offline cache.
-    assert dataclass_to_repr(False, (), Sub(scale=1, name=["a"])) is _FAIL_FASTCACHE
-
-    # Hashing against the annotated base drops the extra field, so the subclass hashes identically to its base.
-    assert dataclass_to_repr(False, (), Sub(scale=1, name=["a"]), Base) == base_repr
+    config = Sub(scale=1, name=["a"])
+    schema = infer_dataclass_type(config, "config")
+    assert "name" in schema.__dataclass_fields__
+    assert dataclass_to_repr(False, (), config, schema) is _FAIL_FASTCACHE
+    used_fields = {create_flat_name("config", "scale")}
+    pruned_repr = dataclass_to_repr(False, (), config, schema, pruning_paths=used_fields, parent_flat="config")
+    assert pruned_repr == base_repr
+    config2 = Sub(scale=2, name=["a"])
     assert (
-        dataclass_to_repr(False, (), Sub(scale=1, name=["b"]), Base) == base_repr
-    ), "the extra (non-annotated) field must not affect the offline key"
-    # The base's own field still drives the key: a different ``Final`` value splits it.
-    assert (
-        dataclass_to_repr(False, (), Sub(scale=2, name=["a"]), Base) != base_repr
-    ), "a baked base field must still split the offline key by value"
+        dataclass_to_repr(
+            False,
+            (),
+            config2,
+            infer_dataclass_type(config2, "config"),
+            pruning_paths=used_fields,
+            parent_flat="config",
+        )
+        != base_repr
+    ), "a Final field still distinguishes the offline key by value"
 
 
 @test_utils.test()
