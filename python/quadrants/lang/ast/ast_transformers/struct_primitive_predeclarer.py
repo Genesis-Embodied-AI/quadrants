@@ -102,7 +102,12 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
         launch_info.append((arg_id[0], arg_idx, attr_chain, kind))
 
     def _walk(
-        obj: Any, arg_idx: int, path: tuple[str, ...], seen: set[int], schema: type | None = None
+        obj: Any,
+        arg_idx: int,
+        path: tuple[str, ...],
+        seen: set[int],
+        schema: type | None = None,
+        lift_plain: bool = False,
     ) -> None:
         """Register scalar members while preserving inferred schemas and avoiding object cycles."""
         obj_id = id(obj)
@@ -126,7 +131,7 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
                     _register_primitive(obj, field.name, value, arg_idx, (*path, field.name), field.type)
                 elif is_dataclass_instance(value) or is_data_oriented(value):
                     child_schema = field.type if is_dataclass_instance(value) else None
-                    _walk(value, arg_idx, (*path, field.name), seen, child_schema)
+                    _walk(value, arg_idx, (*path, field.name), seen, child_schema, lift_plain)
             return
         if hasattr(obj, "__dict__"):
             items = list(vars(obj).items())
@@ -136,13 +141,13 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
             if isinstance(attr_val, _TensorClass):
                 attr_val = attr_val._unwrap()
             attr_type = type(attr_val)
-            if attr_type is bool or attr_type is int or attr_type is float:
+            if lift_plain and attr_type in (bool, int, float):
                 _register_primitive(obj, attr_name, attr_val, arg_idx, (*path, attr_name))
             elif is_dataclass_instance(attr_val) or is_data_oriented(attr_val):
-                _walk(attr_val, arg_idx, (*path, attr_name), seen)
+                _walk(attr_val, arg_idx, (*path, attr_name), seen, lift_plain=lift_plain)
 
     for arg_idx, val in flagged:
-        _walk(val, arg_idx, (), set())
+        _walk(val, arg_idx, (), set(), lift_plain=True)
 
     for arg_idx, path, schema in nested_schemas:
         _walk(get_member_at_path(ctx.py_args[arg_idx], path), arg_idx, path, set(), schema)

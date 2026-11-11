@@ -233,3 +233,28 @@ def test_nested_dataclass_tensor_replacement() -> None:
     owner.state.value = qd.tensor(qd.f32, shape=1, backend=qd.Backend.NDARRAY)
     owner.state.value[0] = 2.5
     assert read(owner) == 2.5
+
+
+@test_utils.test()
+def test_nested_dataclass_preserves_data_oriented_child_policy() -> None:
+    """A dataclass's data-oriented child keeps its own compile-time primitive policy."""
+
+    @qd.data_oriented
+    class Options:
+        def __init__(self) -> None:
+            self.count = 3
+
+    @dataclass
+    class State:
+        options: int
+
+    @qd.data_oriented
+    class Owner:
+        def __init__(self) -> None:
+            self.state = State(Options())
+
+    @qd.kernel
+    def read(owner: qd.Template) -> qd.i32:
+        return qd.static(owner.state.options.count)
+
+    assert read(Owner()) == 3

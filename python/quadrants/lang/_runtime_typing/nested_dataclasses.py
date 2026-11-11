@@ -5,7 +5,7 @@ from typing import Any, TypeAlias
 from quadrants.lang._runtime_typing.runtime_dataclass import infer_dataclass_type
 from quadrants.lang._weak_identity_cache import WeakIdentityCache
 from quadrants.lang.kernel_arguments import ArgMetadata
-from quadrants.lang.util import is_data_oriented
+from quadrants.lang.util import is_data_oriented, is_dataclass_instance
 
 DataclassPath: TypeAlias = tuple[str, ...]
 # Data-oriented attribute layouts are fixed after their first kernel call, like ndarray member paths.
@@ -22,7 +22,7 @@ def nested_dataclass_paths(obj: Any) -> tuple[DataclassPath, ...]:
 
     def walk(value: Any, path: DataclassPath) -> None:
         """Walk data-oriented members, stopping at a dataclass or an active cycle."""
-        if hasattr(type(value), "__dataclass_fields__"):
+        if is_dataclass_instance(value):
             paths.append(path)
             return
         if not is_data_oriented(value) or id(value) in active_ids:
