@@ -84,3 +84,33 @@ def test_unused_nested_dataclass_alias_is_harmless() -> None:
     assert read(owner) == 9
     owner.used.value = 11
     assert read(owner) == 11
+
+
+@test_utils.test(offline_cache=True)
+def test_nested_dataclass_alias_cannot_bypass_guard_via_disk_cache() -> None:
+    """A cache entry compiled with distinct objects must not omit an aliased scalar argument."""
+
+    @dataclass
+    class State:
+        value: int
+
+    @qd.data_oriented
+    class Owner:
+        def __init__(self, aliased: bool) -> None:
+            """Choose distinct or shared dataclasses without changing their inferred types."""
+            self.first = State(3)
+            self.second = self.first if aliased else State(7)
+
+    @qd.kernel(fastcache=True)
+    def read(owner: qd.Template, output: qd.types.ndarray()) -> None:
+        """Read the path that an identity-only lookup can confuse with first."""
+        output[0] = owner.second.value
+
+    output = qd.ndarray(qd.i32, shape=1)
+    original = Owner(False)
+    read(original, output)
+    assert output[0] == 7
+    aliased = Owner(True)
+    with pytest.raises(Exception, match="dataclass.*alias|alias.*dataclass"):
+        read(aliased, output)
+    assert read._primal.src_ll_cache_observations.cache_loaded
