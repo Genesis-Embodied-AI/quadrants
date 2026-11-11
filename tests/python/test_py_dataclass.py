@@ -3585,14 +3585,9 @@ def test_final_field_with_ndarray_sibling():
 
 @test_utils.test()
 def test_final_field_value_is_part_of_offline_fastcache_key(tmp_path: Path):
-    """A Final field's value must be part of the *offline* fastcache key, not just the in-process template mapper spec
-    key. Regression test for a soundness bug in the original implementation: because ``dataclass_to_repr`` only
-    appended a field's value to the cache key when that field carried ``FIELD_METADATA_CACHE_VALUE`` metadata, a kernel
-    compiled with ``offset=7`` baked in was loaded from the offline cache in a later process for a config carrying
-    ``offset=100``, silently returning 7.
+    """Include Final values in disk-cache keys so changing a constant cannot load code compiled for its old value.
 
-    Uses two separate ``qd.init`` cycles sharing one ``offline_cache_file_path`` so the second launch genuinely hits
-    the persisted cache - the same structure as ``test_prune_used_parameters_fastcache_dead_static_branch``.
+    Two qd.init cycles share a cache directory to test persisted cache reuse.
     """
     from typing import Final
 
@@ -3936,11 +3931,7 @@ def test_final_float_field_honors_raise_on_templated_floats():
 
 @test_utils.test()
 def test_final_float_cached_spec_key_revalidated_after_reinit():
-    """A frozen config whose subtree bakes a ``Final`` value is never spec-key-cached on its instance (see
-    ``subtree_has_final_fields``): it recomputes each launch so validation-sensitive guards re-run. Here the
-    ``Final[float]`` guard must fire when the same instance is reused after re-initialising with
-    ``raise_on_templated_floats`` on - a stale cached key would otherwise silently keep specialising on the float.
-    """
+    """Revalidate a reused config after qd.init enables raise_on_templated_floats."""
     from typing import Final
 
     arch_name = qd.lang.impl.current_cfg().arch.name
@@ -4455,13 +4446,9 @@ def test_final_scalar_key_offline_dynamic_class_is_process_unique():
 
 @test_utils.test()
 def test_final_offline_dynamic_class_serial_is_monotonic_not_recyclable():
-    """The *offline* key for a locally/dynamically created class must survive ``id(cls)`` recycling. Once ``qd.reset()``
-    drops the live ``_ClassRef`` that pinned such a class, the class can be collected while its on-disk fastcache
-    artifact remains, and CPython can hand its freed address to the next same-qualified factory class - an ``id``-based
-    offline key would then serialize identically and load the dead class's kernel, even though ``cfg.x.__class__ is
-    First`` is observable at compile time. The offline component uses a monotonic, never-reused serial instead: a
-    distinct class object always keys apart, the serial is stable for a class's lifetime, and a collected class frees
-    its (weak) registry slot without pinning it and without ever having its serial reissued.
+    """Dynamic class serials remain stable while alive and are never reused after collection.
+
+    Weak references allow collection; monotonic serials prevent recycled Python IDs from matching old disk-cache keys.
     """
     import gc
     import weakref as _weakref
@@ -4495,10 +4482,9 @@ def test_final_offline_dynamic_class_serial_is_monotonic_not_recyclable():
 
 @test_utils.test()
 def test_final_scalar_key_live_hashable_under_unhashable_metaclass():
-    """A metaclass may set ``__hash__ = None`` (making the *class* itself unhashable). The class-identity key component
-    retains the class via a ``_ClassRef`` token that hashes/compares by object identity, so the whole key stays hashable
-    - a mapper's ``self.mapping[key]`` would otherwise raise ``TypeError``. This is defense-in-depth: such a metaclass
-    carries observable behavior, so ``validate_value_for_final_field_and_get_key`` itself rejects the value.
+    """Class identity keys stay hashable even when the class itself is unhashable.
+
+    This tests the identity helper directly; the value validator rejects these custom scalar subclasses.
     """
     from quadrants.lang._final import final_class_identity as _fdf
     from quadrants.lang._final.final_constant_values import (
@@ -4535,10 +4521,7 @@ def test_final_scalar_key_live_hashable_under_unhashable_metaclass():
 
 @test_utils.test()
 def test_final_plan_cache_keyed_by_type_identity():
-    """The Final-field plan/path caches key on type *identity* (``id``), not the type object, so a metaclass that makes
-    two distinct dataclass types compare equal with equal hashes cannot make one reuse the other's Final schema. A plain
-    ``dict[type, ...]`` would return the first type's plan for the second - baking a runtime field, or lowering a real
-    ``Final`` field as an ordinary one and failing compilation, depending on lookup order.
+    """Distinct dataclasses must not share cached Final declarations, even if their metaclass makes them compare equal.
     """
     import dataclasses as dcs
     from typing import Final
@@ -4599,11 +4582,7 @@ def test_final_first_final_path_tracks_visited_by_identity():
 
 @test_utils.test()
 def test_final_enum_rejects_observable_metaclass_state():
-    """An enum whose *metaclass* (a custom ``EnumMeta`` subclass) carries observable class-level state/behavior is
-    rejected: a kernel can read ``cfg.mode.__class__.label`` (which resolves to ``type(Mode).label``), and the key -
-    keyed on the enum class's ``module``/``qualname``/member - does not capture it, so two same-named factory
-    metaclasses (or a mutated one) would select the same specialization. A plain enum (framework metaclass) is fine.
-    """
+    """Reject custom enum metaclass state that compiled code can observe but the constant key cannot capture."""
     import enum as en
 
     from quadrants.lang._final.final_constant_values import (
@@ -4659,10 +4638,7 @@ def test_final_rejects_scalar_subclasses_with_spoofed_module():
 
 @test_utils.test()
 def test_final_float_signed_zero_keys_distinct_kernels():
-    """``-0.0`` and ``0.0`` are equal under Python ``==``/``hash`` but name different baked constants (the sign bit is
-    observable). Encoding Final floats by their IEEE bits keeps them as distinct entries in the template mapper spec
-    key, so each value compiles its own kernel instead of the second launch reusing the first's.
-    """
+    """Compile distinct kernels for positive and negative zero, whose signs differ despite equal Python values."""
     from typing import Final
 
     @dataclass(frozen=True)
@@ -4684,11 +4660,7 @@ def test_final_float_signed_zero_keys_distinct_kernels():
 
 @test_utils.test()
 def test_final_key_field_name_does_not_shadow_internal_spec_key_cache():
-    """A frozen dataclass may legitimately declare a field named ``_key``. Any internal per-instance attribute lives in
-    the reserved ``_qd_`` namespace (here ``_qd_spec_key``) precisely so a user ``_key`` field can never be mistaken for
-    it. This config also bakes a ``Final`` value, so it recomputes its spec key each launch (never caching) - the
-    distinct ``Final`` values must therefore drive distinct kernels regardless of the equal user ``_key`` fields.
-    """
+    """A user field named _key must not hide changes to Final constants from kernel selection."""
     from typing import Final
 
     @dataclass(frozen=True)
@@ -4843,12 +4815,7 @@ def test_subclass_extra_field_offline_fastcache_uses_runtime_schema() -> None:
 
 @test_utils.test()
 def test_final_exact_baked_type_membership_is_identity_not_equality():
-    """A ``Final`` scalar recognises an *exact* builtin (``bool``/``int``/``float``/``str``) by class *identity*, never
-    ``==``. A subclass whose metaclass makes the class compare equal to a builtin (``X == int``) must not be mistaken
-    for an exact builtin: equality-based membership would skip subclass/metaclass validation and canonicalize ``X`` as a
-    builtin, collapsing two distinct same-qualified factory classes onto one live key while ``cfg.x.__class__ is First``
-    is observable. Such a metaclass carries observable equality behavior, so the value is rejected outright.
-    """
+    """Reject scalar subclasses even if their metaclass makes them compare equal to an accepted built-in type."""
     from quadrants.lang._final.final_class_identity import (
         _is_supported_builtin_scalar_type,
     )
@@ -4931,13 +4898,9 @@ def test_final_enum_rejects_user_override_of_generated_hook():
 
 @test_utils.test()
 def test_final_enum_rejects_user_override_of_mixin_dependent_hook():
-    """A user override of a machinery hook whose default is *mix-in dependent* must also be rejected - not just
-    ``_generate_next_value_`` (whose default is a verbatim base copy). ``_value_repr_`` is the example Codex flagged: a
-    plain ``enum.Enum`` sets it to ``None`` while an ``int`` mix-in sets it to ``int``'s repr, so a nearest-base
-    identity test cannot judge it (the mix-in value is a copy of no *enum* base). Overriding it is observable as
-    ``cfg.mode._value_repr_`` yet leaves the member's class/name/value key unchanged, so it must flip an accepted enum
-    to rejected. Acceptance is decided against a member-free rebuild of the enum's own bases, so a legitimate mix-in
-    default - including a direct ``class M(int, enum.Enum)`` - is *not* mistaken for a user override.
+    """Reject overridden enum hooks while accepting defaults generated for the same mixins.
+
+    For example, _value_repr_ differs between Enum and IntEnum; compare against a member-free rebuild of the same bases.
     """
     import enum
 
@@ -4965,13 +4928,9 @@ def test_final_enum_rejects_user_override_of_mixin_dependent_hook():
 
 @test_utils.test()
 def test_final_enum_rejects_user_added_enum_valued_class_attribute():
-    """Skipping every enum-valued class attribute would let a user-added one that is *not* a machinery member/alias
-    through - e.g. ``Mode.X = Mode.A``, later reassignable to ``Mode.B``. That is observable as ``cfg.mode.__class__.X``
-    yet absent from the member's class/name/value key, so relaunching a Final config after rebinding ``X`` would
-    silently reuse the stale specialization. Only names present under their own key in ``_member_map_`` (canonical
-    members and aliases, whose identity the key captures) are exempt; a user-added attribute - even one holding a real
-    member - is rejected. Machinery sunders that merely *hold* an enum value (``IntFlag._boundary_`` is a
-    ``FlagBoundary`` member) must stay exempt, so an ordinary ``IntFlag`` is unaffected.
+    """Reject user-added enum-valued attributes, which can be rebound without changing the member key.
+
+    Declared members, aliases and generated bookkeeping such as IntFlag._boundary_ remain supported.
     """
     import enum
 
@@ -5007,14 +4966,10 @@ def test_final_enum_rejects_user_added_enum_valued_class_attribute():
 
 @test_utils.test()
 def test_final_enum_rejects_cross_kind_machinery_sunder():
-    """Whether a sunder/dunder in an enum's own dict is machinery bookkeeping (exempt) or a user hook (rejected) is
-    judged against a member-free rebuild of *that enum's* bases/metaclass - not the union of names generated across
-    every enum kind. Otherwise a name the machinery emits only for one kind - ``_boundary_``, generated for
-    ``Flag``/``IntFlag`` - would wrongly exempt a user-added attribute of the same name on an unrelated enum:
-    ``Mode._boundary_ = 1`` on a plain ``enum.Enum`` is observable as ``cfg.mode.__class__._boundary_`` yet leaves the
-    member's class/name/value key unchanged, so rebinding it (``1`` -> ``2``) would silently reuse the stale
-    specialization. A plain ``IntFlag`` (whose ``_boundary_`` is genuine machinery) stays accepted; overriding that
-    ``_boundary_`` to a different value is itself observable and must flip it to rejected.
+    """Accept generated attributes only for the enum kind that generates them.
+
+    For example, _boundary_ is bookkeeping on IntFlag but user state on plain Enum. Overriding its generated value is
+    also rejected.
     """
     import enum
 
@@ -5072,10 +5027,7 @@ def test_final_enum_rejects_state_on_unselected_member():
 
 @test_utils.test()
 def test_final_enum_kind_in_offline_key():
-    """Redefining an enum's kind (``enum.Enum`` -> ``enum.IntEnum``) while keeping module/qualname/names/values flips
-    compile-time behavior like ``cfg.mode == 1`` (false vs true), so the *offline* fastcache key must differ. In-process
-    the class-identity token already separates the two class objects; this covers the cross-process key, where a
-    resolvable enum's identity is only its module/qualname. Same-kind definitions still key identically.
+    """Disk-cache keys distinguish Enum from IntEnum even when names and values match; their equality behavior differs.
     """
     import sys
     import types
@@ -5099,11 +5051,9 @@ def test_final_enum_kind_in_offline_key():
 
 @test_utils.test()
 def test_final_subclass_structural_identified_object_rejected():
-    """A Python class or callable bound into a keyed structural attr (here ``__doc__``) is *rejected*, not keyed: its
-    mutable behavior (``__code__``/``__defaults__``/a class dict) is readable at compile time
-    (``cfg.x.__class__.__doc__.__defaults__``) yet uncapturable by the key, and it is not among the sources the source
-    cache validates, so keying it by identity/qualname alone could reuse a stale specialization after its body changes.
-    Rejection also covers such an object nested in a container structural value.
+    """Reject classes and callables in enum metadata, including nested containers.
+
+    Their behavior can change without changing their identity, making cached compiled code stale.
     """
     import enum
 
@@ -5138,9 +5088,7 @@ def test_final_subclass_structural_identified_object_rejected():
 
 @test_utils.test()
 def test_final_subclass_structural_float_bits_in_key():
-    """A keyed structural attr holding a float is encoded by exact IEEE bits, so ``0.0`` and ``-0.0`` (equal with equal
-    hashes, yet distinguishable at compile time via ``float.hex()``/``math.copysign``) do not share a key.
-    """
+    """Float-valued enum metadata preserves signed zero in both live and offline keys."""
     import enum
 
     from quadrants.lang._final.final_constant_values import (
@@ -5160,10 +5108,7 @@ def test_final_subclass_structural_float_bits_in_key():
 
 @test_utils.test()
 def test_final_subclass_docstring_in_key():
-    """``__doc__`` is the one structural class attr that is user-writable and readable at compile time
-    (``cfg.x.__class__.__doc__``), so mutating it between launches must change both the in-process and offline keys
-    rather than reuse a stale specialization. It is *keyed*, not rejected - documented classes stay legal.
-    """
+    """Changing an enum docstring changes both live and offline keys because compiled code can read it."""
     import enum
 
     from quadrants.lang._final.final_constant_values import (
@@ -5322,10 +5267,7 @@ def test_final_subclass_structural_dict_value_is_lossless():
 
 @test_utils.test()
 def test_final_subclass_313_metadata_in_key():
-    """3.13 adds ``__firstlineno__`` / ``__static_attributes__`` to a class dict; both are writable and readable at
-    compile time (``cfg.x.__class__.__firstlineno__``), so mutating either - or redefining a class at a different source
-    line - must change the key. On older runtimes they are absent (``_ATTR_ABSENT``) and this is a no-op.
-    """
+    """On Python 3.13+, changes to __firstlineno__ or __static_attributes__ must change the class key."""
     import sys
 
     if sys.version_info < (3, 13):
@@ -5356,9 +5298,7 @@ def test_final_subclass_313_metadata_in_key():
 
 @test_utils.test()
 def test_final_subclass_structural_container_subclass_rejected():
-    """A container *subclass* in a keyed structural attr can add per-instance state / a distinct identity that keying by
-    its elements alone would drop, so it is rejected (exact ``tuple``/``list``/``set``/``dict`` stay legal).
-    """
+    """Reject container subclasses in enum metadata: their elements alone cannot capture extra state or identity."""
     import enum
 
     from quadrants.lang._final.final_constant_values import (
