@@ -4155,11 +4155,7 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
 
     # NaN sign/payload: ``str`` renders them all ``"nan"``; the bit encoding keeps them distinct.
     payload_nan = struct.unpack("<d", struct.pack("<Q", 0x7FF8000000000ABC))[0]
-    nan_keys = {
-        final_scalar_key(math.nan),
-        final_scalar_key(-math.nan),
-        final_scalar_key(payload_nan),
-    }
+    nan_keys = {final_scalar_key(math.nan), final_scalar_key(-math.nan), final_scalar_key(payload_nan)}
     assert len(nan_keys) == 3, "distinct NaN bit patterns must produce distinct keys"
 
     # Equal floats produce equal keys, so kernel reuse stays correct.
