@@ -182,7 +182,9 @@ def test_string_alias_to_subscripted_final() -> None:
 @test_utils.test()
 def test_numpy_final_scalar_is_rejected_when_used(value: object) -> None:
     """Reject NumPy Final scalars while allowing unused unsupported fields."""
-    from quadrants.lang._final.final_constant_values import validate_value_for_final_field_and_get_key
+    from quadrants.lang._final.final_constant_values import (
+        validate_value_for_final_field_and_get_key,
+    )
 
     @dataclasses.dataclass(frozen=True)
     class Config:
