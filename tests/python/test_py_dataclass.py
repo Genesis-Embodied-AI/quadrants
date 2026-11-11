@@ -1,4 +1,5 @@
 import dataclasses
+import enum
 import gc
 import warnings
 from dataclasses import dataclass, fields
@@ -61,11 +62,7 @@ def test_ndarray_struct_kwargs():
         b[2] += 999
 
     @qd.func
-    def s3(
-        z3: qd.types.NDArray[qd.i32, 1],
-        my_struct3: MyStruct,
-        bar3: qd.types.NDArray[qd.i32, 1],
-    ) -> None:
+    def s3(z3: qd.types.NDArray[qd.i32, 1], my_struct3: MyStruct, bar3: qd.types.NDArray[qd.i32, 1]) -> None:
         # used py dataclass variables:
         # __qd_my_struct3__qd_a
         # __qd_my_struct3__qd_b
@@ -78,11 +75,7 @@ def test_ndarray_struct_kwargs():
         s4(my_struct3.a, my_struct3.b)
 
     @qd.func
-    def s2(
-        z3: qd.types.NDArray[qd.i32, 1],
-        my_struct3: MyStruct,
-        bar3: qd.types.NDArray[qd.i32, 1],
-    ) -> None:
+    def s2(z3: qd.types.NDArray[qd.i32, 1], my_struct3: MyStruct, bar3: qd.types.NDArray[qd.i32, 1]) -> None:
         # used py dataclass variables:
         # __qd_my_struct3__qd_a
         # __qd_my_struct3__qd_b
@@ -95,11 +88,7 @@ def test_ndarray_struct_kwargs():
         s3(z3=z3, my_struct3=my_struct3, bar3=bar3)
 
     @qd.func
-    def s1(
-        z2: qd.types.NDArray[qd.i32, 1],
-        my_struct2: MyStruct,
-        bar2: qd.types.NDArray[qd.i32, 1],
-    ) -> None:
+    def s1(z2: qd.types.NDArray[qd.i32, 1], my_struct2: MyStruct, bar2: qd.types.NDArray[qd.i32, 1]) -> None:
         # used py dataclass variables:
         # __qd_my_struct2__qd_a
         # __qd_my_struct2__qd_b
@@ -112,11 +101,7 @@ def test_ndarray_struct_kwargs():
         s2(z3=z2, my_struct3=my_struct2, bar3=bar2)
 
     @qd.kernel
-    def k1(
-        z: qd.types.NDArray[qd.i32, 1],
-        my_struct: MyStruct,
-        bar: qd.types.NDArray[qd.i32, 1],
-    ) -> None:
+    def k1(z: qd.types.NDArray[qd.i32, 1], my_struct: MyStruct, bar: qd.types.NDArray[qd.i32, 1]) -> None:
         # used py dataclass variables:
         # __qd_my_struct__qd_a
         # __qd_my_struct__qd_b
@@ -175,11 +160,7 @@ def test_ndarray_struct(qd_type: Any, qd_annotation: Any) -> None:
         c: qd_annotation[qd.i32, 3]
 
     @qd.func
-    def s3(
-        z3: qd_annotation[qd.i32, 1],
-        my_struct3: MyStruct,
-        bar3: qd_annotation[qd.i32, 1],
-    ) -> None:
+    def s3(z3: qd_annotation[qd.i32, 1], my_struct3: MyStruct, bar3: qd_annotation[qd.i32, 1]) -> None:
         # stores
         z3[25] += 90
         my_struct3.a[47] += 42
@@ -195,11 +176,7 @@ def test_ndarray_struct(qd_type: Any, qd_annotation: Any) -> None:
         z3[20] = my_struct3.c[5, 0, 0]
 
     @qd.func
-    def s2(
-        z3: qd_annotation[qd.i32, 1],
-        my_struct3: MyStruct,
-        bar3: qd_annotation[qd.i32, 1],
-    ) -> None:
+    def s2(z3: qd_annotation[qd.i32, 1], my_struct3: MyStruct, bar3: qd_annotation[qd.i32, 1]) -> None:
         # stores
         z3[24] += 89
         my_struct3.a[46] += 32
@@ -209,11 +186,7 @@ def test_ndarray_struct(qd_type: Any, qd_annotation: Any) -> None:
         s3(z3, my_struct3, bar3)
 
     @qd.func
-    def s1(
-        z2: qd_annotation[qd.i32, 1],
-        my_struct2: MyStruct,
-        bar2: qd_annotation[qd.i32, 1],
-    ) -> None:
+    def s1(z2: qd_annotation[qd.i32, 1], my_struct2: MyStruct, bar2: qd_annotation[qd.i32, 1]) -> None:
         # stores
         z2[22] += 88
         my_struct2.a[45] += 22
@@ -437,10 +410,7 @@ def test_ndarray_struct_primitives(qd_type: Any, qd_annotation: Any) -> None:
 
     @qd.kernel
     def k1(
-        z: qd_annotation[qd.i32, 1],
-        my_struct_ab: MyStructAB,
-        bar: qd_annotation[qd.i32, 1],
-        my_struct_c: MyStructC,
+        z: qd_annotation[qd.i32, 1], my_struct_ab: MyStructAB, bar: qd_annotation[qd.i32, 1], my_struct_c: MyStructC
     ) -> None:
         my_struct_ab.a[36] += my_struct_ab.p1
         my_struct_ab.a[37] += my_struct_ab.p2
@@ -481,9 +451,7 @@ def test_ndarray_struct_nested_ndarray():
         struct_cd: MyStructCD
 
     @qd.func
-    def f3(
-        my_struct_ab3: MyStructAB,
-    ) -> None:
+    def f3(my_struct_ab3: MyStructAB) -> None:
         my_struct_ab3.a[47] += 23
         my_struct_ab3.b[42] += 25
         my_struct_ab3.struct_cd.c[51] += 33
@@ -496,9 +464,7 @@ def test_ndarray_struct_nested_ndarray():
         my_struct_ab3.a[52] = my_struct_ab3.struct_cd.struct_ef.e.shape[0]
 
     @qd.func
-    def f2(
-        my_struct_ab2: MyStructAB,
-    ) -> None:
+    def f2(my_struct_ab2: MyStructAB) -> None:
         my_struct_ab2.a[27] += 13
         my_struct_ab2.b[22] += 15
         my_struct_ab2.struct_cd.c[31] += 23
@@ -511,9 +477,7 @@ def test_ndarray_struct_nested_ndarray():
         my_struct_ab2.a[62] = my_struct_ab2.struct_cd.struct_ef.e.shape[0]
 
     @qd.kernel
-    def k1(
-        my_struct_ab: MyStructAB,
-    ) -> None:
+    def k1(my_struct_ab: MyStructAB) -> None:
         my_struct_ab.a[7] += 3
         my_struct_ab.b[2] += 5
         my_struct_ab.struct_cd.c[11] += 13
@@ -592,9 +556,7 @@ def test_field_struct_nested_field() -> None:
         struct_cd: MyStructCD
 
     @qd.func
-    def f3(
-        my_struct_ab3: MyStructAB,
-    ) -> None:
+    def f3(my_struct_ab3: MyStructAB) -> None:
         my_struct_ab3.a[47] += 23
         my_struct_ab3.b[42] += 25
         my_struct_ab3.struct_cd.c[51] += 33
@@ -606,9 +568,7 @@ def test_field_struct_nested_field() -> None:
         my_struct_ab3.a[52] = my_struct_ab3.struct_cd.struct_ef.e.shape[0]
 
     @qd.func
-    def f2(
-        my_struct_ab2: MyStructAB,
-    ) -> None:
+    def f2(my_struct_ab2: MyStructAB) -> None:
         my_struct_ab2.a[27] += 13
         my_struct_ab2.b[22] += 15
         my_struct_ab2.struct_cd.c[31] += 23
@@ -621,9 +581,7 @@ def test_field_struct_nested_field() -> None:
         my_struct_ab2.a[62] = my_struct_ab2.struct_cd.struct_ef.e.shape[0]
 
     @qd.kernel
-    def k1(
-        my_struct_ab: MyStructAB,
-    ) -> None:
+    def k1(my_struct_ab: MyStructAB) -> None:
         my_struct_ab.a[7] += 3
         my_struct_ab.b[2] += 5
         my_struct_ab.struct_cd.c[11] += 13
@@ -702,9 +660,7 @@ def test_field_struct_nested_field_kwargs() -> None:
         struct_cd: MyStructCD
 
     @qd.func
-    def f3(
-        my_struct_ab3: MyStructAB,
-    ) -> None:
+    def f3(my_struct_ab3: MyStructAB) -> None:
         my_struct_ab3.a[47] += 23
         my_struct_ab3.b[42] += 25
         my_struct_ab3.struct_cd.c[51] += 33
@@ -716,9 +672,7 @@ def test_field_struct_nested_field_kwargs() -> None:
         my_struct_ab3.a[52] = my_struct_ab3.struct_cd.struct_ef.e.shape[0]
 
     @qd.func
-    def f2(
-        my_struct_ab2: MyStructAB,
-    ) -> None:
+    def f2(my_struct_ab2: MyStructAB) -> None:
         my_struct_ab2.a[27] += 13
         my_struct_ab2.b[22] += 15
         my_struct_ab2.struct_cd.c[31] += 23
@@ -731,9 +685,7 @@ def test_field_struct_nested_field_kwargs() -> None:
         my_struct_ab2.a[62] = my_struct_ab2.struct_cd.struct_ef.e.shape[0]
 
     @qd.kernel
-    def k1(
-        my_struct_ab: MyStructAB,
-    ) -> None:
+    def k1(my_struct_ab: MyStructAB) -> None:
         my_struct_ab.a[7] += 3
         my_struct_ab.b[2] += 5
         my_struct_ab.struct_cd.c[11] += 13
@@ -935,9 +887,7 @@ _SUBSTRUCT_LEAF_KINDS = [
     pytest.param(qd.ndarray, qd.types.ndarray, id="ndarray"),
     pytest.param(qd.field, _TemplateBuilder(), id="field"),
     pytest.param(
-        lambda dtype, shape: qd.tensor(dtype, shape=shape, backend=qd.Backend.NDARRAY),
-        qd.types.ndarray,
-        id="tensor",
+        lambda dtype, shape: qd.tensor(dtype, shape=shape, backend=qd.Backend.NDARRAY), qd.types.ndarray, id="tensor"
     ),
 ]
 
@@ -1002,12 +952,7 @@ def test_substruct_passed_to_func(qd_make: Any, qd_anno: Any, request) -> None:
         a=a,
         b=b,
         extra=extra_ab,
-        struct_cd=MyStructCD(
-            c=c,
-            d=d,
-            extra=extra_cd,
-            struct_ef=MyStructEF(e=e, f=f, extra=extra_ef),
-        ),
+        struct_cd=MyStructCD(c=c, d=d, extra=extra_cd, struct_ef=MyStructEF(e=e, f=f, extra=extra_ef)),
     )
     k1(s)
 
@@ -1236,19 +1181,7 @@ def test_substruct_deep_nesting() -> None:
         touch_l1(s.inner)
         touch_l3(s.inner.inner.inner)
 
-    s = L0(
-        leaf=n0,
-        extra=x0,
-        inner=L1(
-            leaf=n1,
-            extra=x1,
-            inner=L2(
-                leaf=n2,
-                extra=x2,
-                inner=L3(leaf=n3, extra=x3),
-            ),
-        ),
-    )
+    s = L0(leaf=n0, extra=x0, inner=L1(leaf=n1, extra=x1, inner=L2(leaf=n2, extra=x2, inner=L3(leaf=n3, extra=x3))))
     k(s)
 
     assert n0[0] == 1000
@@ -1512,11 +1445,7 @@ def test_prune_used_parameters2():
 def test_prune_used_parameters_fastcache1(tmp_path: Path):
     arch_name = qd.lang.impl.current_cfg().arch.name
     for _it in range(3):
-        qd.init(
-            arch=getattr(qd, arch_name),
-            offline_cache_file_path=str(tmp_path),
-            offline_cache=True,
-        )
+        qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
 
         @dataclasses.dataclass
         class Nested1:
@@ -1618,11 +1547,7 @@ def test_prune_used_parameters_fastcache1(tmp_path: Path):
 def test_prune_used_parameters_fastcache2(tmp_path: Path):
     arch_name = qd.lang.impl.current_cfg().arch.name
     for _it in range(3):
-        qd.init(
-            arch=getattr(qd, arch_name),
-            offline_cache_file_path=str(tmp_path),
-            offline_cache=True,
-        )
+        qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
 
         @dataclasses.dataclass
         class MyDataclass1:
@@ -1693,11 +1618,7 @@ def test_prune_used_parameters_fastcache2(tmp_path: Path):
 def test_prune_used_parameters_fastcache_no_used(tmp_path: Path):
     arch_name = qd.lang.impl.current_cfg().arch.name
     for _it in range(3):
-        qd.init(
-            arch=getattr(qd, arch_name),
-            offline_cache_file_path=str(tmp_path),
-            offline_cache=True,
-        )
+        qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
 
         @dataclasses.dataclass
         class MyDataclass1:
@@ -1745,11 +1666,7 @@ def test_prune_used_parameters_fastcache_dead_static_branch(tmp_path: Path):
     # the enforcing pass still forwards md.deep from path_dead, which never bound it -> compile failure.
     arch_name = qd.lang.impl.current_cfg().arch.name
     for _it in range(3):
-        qd.init(
-            arch=getattr(qd, arch_name),
-            offline_cache_file_path=str(tmp_path),
-            offline_cache=True,
-        )
+        qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
 
         @dataclasses.dataclass
         class MyDataclass:
@@ -1789,20 +1706,14 @@ def test_prune_used_parameters_fastcache_dead_static_branch(tmp_path: Path):
 
 
 @test_utils.test()
-def test_prune_used_parameters_fastcache_dead_static_branch_reversed_order(
-    tmp_path: Path,
-):
+def test_prune_used_parameters_fastcache_dead_static_branch_reversed_order(tmp_path: Path):
     # Same setup as the flat dead-static-branch case, but the kernel walks path_live (qd.static(True)) before
     # path_dead (qd.static(False)). In this order inner's used-set already contains md.deep by the time
     # path_dead's call is recorded, so this case compiles even without the fix. It is included as a regression
     # guard: a correct fix must stay order-independent, so both walk orders must keep passing.
     arch_name = qd.lang.impl.current_cfg().arch.name
     for _it in range(3):
-        qd.init(
-            arch=getattr(qd, arch_name),
-            offline_cache_file_path=str(tmp_path),
-            offline_cache=True,
-        )
+        qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
 
         @dataclasses.dataclass
         class MyDataclass:
@@ -1850,11 +1761,7 @@ def test_prune_used_parameters_fastcache_dead_static_branch_kwargs(tmp_path: Pat
     # not passed by keyword (an unrelated concern).
     arch_name = qd.lang.impl.current_cfg().arch.name
     for _it in range(3):
-        qd.init(
-            arch=getattr(qd, arch_name),
-            offline_cache_file_path=str(tmp_path),
-            offline_cache=True,
-        )
+        qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
 
         @dataclasses.dataclass
         class MyDataclass:
@@ -1899,11 +1806,7 @@ def test_prune_used_parameters_fastcache_dead_static_branch_nested(tmp_path: Pat
     # levels deep (top.mid.leaf.deep), confirming the fix closes the used set across arbitrary nesting depth.
     arch_name = qd.lang.impl.current_cfg().arch.name
     for _it in range(3):
-        qd.init(
-            arch=getattr(qd, arch_name),
-            offline_cache_file_path=str(tmp_path),
-            offline_cache=True,
-        )
+        qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
 
         @dataclasses.dataclass
         class Leaf:
@@ -1943,10 +1846,7 @@ def test_prune_used_parameters_fastcache_dead_static_branch_nested(tmp_path: Pat
         deep = qd.ndarray(qd.i32, (4,))
         mid_not_used = qd.ndarray(qd.i32, (4,))
         leaf_not_used = qd.ndarray(qd.i32, (4,))
-        top = Top(
-            base=base,
-            mid=Mid(not_used=mid_not_used, leaf=Leaf(deep=deep, not_used=leaf_not_used)),
-        )
+        top = Top(base=base, mid=Mid(not_used=mid_not_used, leaf=Leaf(deep=deep, not_used=leaf_not_used)))
 
         k1(top)
         assert base[0] == 1
@@ -1956,9 +1856,7 @@ def test_prune_used_parameters_fastcache_dead_static_branch_nested(tmp_path: Pat
 
 
 @test_utils.test()
-def test_prune_used_parameters_fastcache_forward_same_name_swapped_slots(
-    tmp_path: Path,
-):
+def test_prune_used_parameters_fastcache_forward_same_name_swapped_slots(tmp_path: Path):
     # inner() reads only its first struct (a); b is entirely unused. caller1 and caller2 declare identically
     # named parameters and forward them into swapped inner slots, so the flat name __qd_md__qd_x binds inner's
     # used slot a in one caller and its unused slot b in the other. Keyed by callee alone, the mapping from a
@@ -1967,11 +1865,7 @@ def test_prune_used_parameters_fastcache_forward_same_name_swapped_slots(
     # Keying the mapping by (caller, callee) keeps the two call sites independent.
     arch_name = qd.lang.impl.current_cfg().arch.name
     for _it in range(3):
-        qd.init(
-            arch=getattr(qd, arch_name),
-            offline_cache_file_path=str(tmp_path),
-            offline_cache=True,
-        )
+        qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
 
         @dataclasses.dataclass
         class MyDataclass:
@@ -2004,20 +1898,14 @@ def test_prune_used_parameters_fastcache_forward_same_name_swapped_slots(
 
 
 @test_utils.test()
-def test_prune_used_parameters_fastcache_forward_same_name_swapped_slots_same_caller(
-    tmp_path: Path,
-):
+def test_prune_used_parameters_fastcache_forward_same_name_swapped_slots_same_caller(tmp_path: Path):
     # Same swapped-slot forwarding as the cross-caller case, but both call sites live in a single caller: md
     # binds inner's used slot a on the first line and its unused slot b on the second. The forwarding map is
     # keyed per call site (source position), so the two calls stay independent; a map shared for the whole
     # (caller, callee) pair would let the second line overwrite the first and prune the field the first needs.
     arch_name = qd.lang.impl.current_cfg().arch.name
     for _it in range(3):
-        qd.init(
-            arch=getattr(qd, arch_name),
-            offline_cache_file_path=str(tmp_path),
-            offline_cache=True,
-        )
+        qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
 
         @dataclasses.dataclass
         class MyDataclass:
@@ -2046,9 +1934,7 @@ def test_prune_used_parameters_fastcache_forward_same_name_swapped_slots_same_ca
 
 
 @test_utils.test()
-def test_prune_used_parameters_fastcache_forward_same_name_same_call_two_slots(
-    tmp_path: Path,
-):
+def test_prune_used_parameters_fastcache_forward_same_name_same_call_two_slots(tmp_path: Path):
     # A single call site forwards the SAME dataclass into two positional slots: inner(md, md). inner reads
     # only its first struct (a); b is entirely unused, so the expanded call carries the same flat name in both
     # slots. A positional map keyed by the caller flat name lets slot b overwrite slot a, so the enforcing pass
@@ -2056,11 +1942,7 @@ def test_prune_used_parameters_fastcache_forward_same_name_same_call_two_slots(
     # occurrences independent.
     arch_name = qd.lang.impl.current_cfg().arch.name
     for _it in range(3):
-        qd.init(
-            arch=getattr(qd, arch_name),
-            offline_cache_file_path=str(tmp_path),
-            offline_cache=True,
-        )
+        qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
 
         @dataclasses.dataclass
         class MyDataclass:
@@ -2094,8 +1976,7 @@ def test_pruning_with_keyword_rename() -> None:
 
     def create_struct():
         my_struct_outside = MyStruct(
-            used=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
-            not_used=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            used=qd.ndarray(dtype=qd.f32, shape=(1, 1)), not_used=qd.ndarray(dtype=qd.f32, shape=(1, 1))
         )
         return my_struct_outside
 
@@ -2124,10 +2005,7 @@ def test_pruning_with_arg_rename() -> None:
         not_used: qd.types.NDArray[qd.f32, 2]
 
     def create_struct():
-        return MyStruct(
-            used=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
-            not_used=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
-        )
+        return MyStruct(used=qd.ndarray(dtype=qd.f32, shape=(1, 1)), not_used=qd.ndarray(dtype=qd.f32, shape=(1, 1)))
 
     @qd.func
     def f1(new_struct_name: MyStruct):
@@ -2162,20 +2040,16 @@ def test_pruning_with_arg_kwargs_rename() -> None:
 
     def create_structs():
         my_struct1 = MyStruct(
-            used=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
-            not_used=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            used=qd.ndarray(dtype=qd.f32, shape=(1, 1)), not_used=qd.ndarray(dtype=qd.f32, shape=(1, 1))
         )
         my_struct2 = MyStruct(
-            used=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
-            not_used=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            used=qd.ndarray(dtype=qd.f32, shape=(1, 1)), not_used=qd.ndarray(dtype=qd.f32, shape=(1, 1))
         )
         my_struct3 = MyStruct(
-            used=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
-            not_used=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            used=qd.ndarray(dtype=qd.f32, shape=(1, 1)), not_used=qd.ndarray(dtype=qd.f32, shape=(1, 1))
         )
         my_struct4 = MyStruct(
-            used=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
-            not_used=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            used=qd.ndarray(dtype=qd.f32, shape=(1, 1)), not_used=qd.ndarray(dtype=qd.f32, shape=(1, 1))
         )
         return my_struct1, my_struct2, my_struct3, my_struct4
 
@@ -2186,14 +2060,7 @@ def test_pruning_with_arg_kwargs_rename() -> None:
         struc3_g1.used[0, 0] = 102
 
     @qd.func
-    def f2(
-        a3: qd.i32,
-        struct_f2: MyStruct,
-        b3: qd.i32,
-        d3: qd.i32,
-        struct2_f2: MyStruct,
-        c3: qd.i32,
-    ):
+    def f2(a3: qd.i32, struct_f2: MyStruct, b3: qd.i32, d3: qd.i32, struct2_f2: MyStruct, c3: qd.i32):
         # should be used:
         # struct_f2.used
         # struct2_f2.useds
@@ -2201,14 +2068,7 @@ def test_pruning_with_arg_kwargs_rename() -> None:
         struct2_f2.used[0, 0] = 101
 
     @qd.func
-    def f1(
-        a2: qd.i32,
-        struct_f1: MyStruct,
-        b2: qd.i32,
-        d2: qd.i32,
-        struct2_f1: MyStruct,
-        c2: qd.i32,
-    ):
+    def f1(a2: qd.i32, struct_f1: MyStruct, b2: qd.i32, d2: qd.i32, struct2_f1: MyStruct, c2: qd.i32):
         # should be used:
         # struct_f1.used
         # struct2_f1.used
@@ -3742,11 +3602,7 @@ def test_final_field_value_is_part_of_offline_fastcache_key(tmp_path: Path):
 
     arch_name = qd.lang.impl.current_cfg().arch.name
     for offset_value in (7, 100):
-        qd.init(
-            arch=getattr(qd, arch_name),
-            offline_cache_file_path=str(tmp_path),
-            offline_cache=True,
-        )
+        qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
 
         @qd.kernel(fastcache=True)
         def bump(config: Cfg, x: qd.types.NDArray[qd.i32, 1]):
@@ -3825,10 +3681,7 @@ def test_mutable_ancestor_of_nested_final_field_is_rejected():
 
     # The direct-carrier check cannot catch this: MutableOuter declares no Final field of its own.
     assert not any(f.name == "n" for f in dataclasses.fields(MutableOuter))
-    with pytest.raises(
-        TypeError,
-        match=r"is not frozen but reaches the ``Final`` field MutableOuter\.child\.n",
-    ):
+    with pytest.raises(TypeError, match=r"is not frozen but reaches the ``Final`` field MutableOuter\.child\.n"):
         final_field_names(MutableOuter)
 
     # Reported at launch rather than silently returning stale results.
@@ -3851,8 +3704,7 @@ def test_mutable_ancestor_of_nested_final_field_is_rejected():
         mid: MutableMid
 
     with pytest.raises(
-        TypeError,
-        match=r"MutableMid is not frozen but reaches the ``Final`` field MutableMid\.child\.n",
+        TypeError, match=r"MutableMid is not frozen but reaches the ``Final`` field MutableMid\.child\.n"
     ):
         final_field_names(MutableMid)
 
@@ -3921,11 +3773,7 @@ def test_nested_final_field_recompiles_per_frozen_carrier_instance():
     # temporary carrier is freed straight after its launch, so the next one can be allocated at the same address and
     # collide with the previous entry. That is orthogonal to Final (it applies to any dataclass carrying a runtime
     # scalar), but it would make the ``scale`` assertion below flaky.
-    configs = [
-        Outer(child=Inner(n=3), scale=2),
-        Outer(child=Inner(n=5), scale=2),
-        Outer(child=Inner(n=5), scale=4),
-    ]
+    configs = [Outer(child=Inner(n=3), scale=2), Outer(child=Inner(n=5), scale=2), Outer(child=Inner(n=5), scale=4)]
 
     k(configs[0], out)
     assert out[0] == 6
@@ -4252,10 +4100,7 @@ def test_final_aliased_string_detected_despite_unresolvable_sibling():
     try:
         # ``y``'s annotation names a type never defined in the module, so class-wide ``get_type_hints`` raises; the
         # aliased ``Final`` on ``x`` must still be seen.
-        exec(
-            "@dc.dataclass(frozen=True)\nclass Cfg:\n    x: 'F[int]'\n    y: 'OnlyUnderTypeChecking'\n",
-            mod.__dict__,
-        )
+        exec("@dc.dataclass(frozen=True)\nclass Cfg:\n    x: 'F[int]'\n    y: 'OnlyUnderTypeChecking'\n", mod.__dict__)
         assert final_field_names(mod.Cfg) == {"x"}
     finally:
         sys.modules.pop(mod.__name__, None)
@@ -4561,13 +4406,13 @@ def test_final_scalar_key_live_preserves_class_identity_across_module_rebind():
     sys.modules[mod_name] = mod
     try:
         # Bind a class so it is uniquely resolvable via ``module``/``qualname`` (offline id component is None).
-        old = type("Foo", (int,), {"__module__": mod_name, "__qualname__": "Foo"})
+        old = enum.IntEnum("Foo", {"VALUE": 1}, module=mod_name, qualname="Foo")
         mod.Foo = old
         old_offline = validate_value_for_final_field_and_get_key(old(1))
         old_live = validate_value_for_final_field_and_get_key(old(1), live=True)
 
         # "Reload": rebind the same name to a fresh, equally resolvable class object.
-        new = type("Foo", (int,), {"__module__": mod_name, "__qualname__": "Foo"})
+        new = enum.IntEnum("Foo", {"VALUE": 1}, module=mod_name, qualname="Foo")
         mod.Foo = new
         new_offline = validate_value_for_final_field_and_get_key(new(1))
         new_live = validate_value_for_final_field_and_get_key(new(1), live=True)
@@ -4634,7 +4479,7 @@ def test_final_scalar_key_live_uses_object_identity_not_class_equality():
 
     # But a metaclass ``__eq__``/``__hash__`` is observable (``qd.static(cfg.x.__class__ == Expected)``) and the key
     # cannot capture a later mutation of the state it consults, so the value itself is rejected.
-    with pytest.raises(TypeError, match="metaclass defines observable"):
+    with pytest.raises(TypeError, match="Custom scalar subclasses"):
         validate_value_for_final_field_and_get_key(first(1))
 
 
@@ -4651,13 +4496,13 @@ def test_final_scalar_key_offline_dynamic_class_is_process_unique():
         validate_value_for_final_field_and_get_key,
     )
 
-    def _make_local_int():
-        class Local(int):
-            pass
+    def _make_local_enum():
+        class Local(enum.IntEnum):
+            VALUE = 1
 
         return Local
 
-    loc = _make_local_int()
+    loc = _make_local_enum()
     assert fdf._PROCESS_NONCE in str(
         validate_value_for_final_field_and_get_key(loc(1))
     )  # dynamic-class offline key -> process-unique
@@ -4665,7 +4510,7 @@ def test_final_scalar_key_offline_dynamic_class_is_process_unique():
         validate_value_for_final_field_and_get_key(loc(1), live=True)
     )  # live key never carries the nonce
     # Distinct dynamic classes still separate within this process (same nonce, different serial); the class is stable.
-    other = _make_local_int()
+    other = _make_local_enum()
     assert validate_value_for_final_field_and_get_key(loc(1)) != validate_value_for_final_field_and_get_key(other(1))
     assert validate_value_for_final_field_and_get_key(loc(1)) == validate_value_for_final_field_and_get_key(loc(1))
 
@@ -4746,7 +4591,7 @@ def test_final_scalar_key_live_hashable_under_unhashable_metaclass():
     assert ka != _fdf._subclass_identity(b, live=True)
 
     # But the value itself is rejected: the metaclass carries observable ``__hash__``/``__eq__`` behavior.
-    with pytest.raises(TypeError, match="metaclass defines observable"):
+    with pytest.raises(TypeError, match="Custom scalar subclasses"):
         validate_value_for_final_field_and_get_key(a(1))
 
 
@@ -5014,11 +4859,7 @@ def test_final_str_field_does_not_disable_offline_fastcache():
 
     r_a, r_a2, r_b = [
         dataclass_to_repr(False, (), config, infer_dataclass_type(config, "config"))
-        for config in (
-            Cfg(name="a", scale=1),
-            Cfg(name="a", scale=1),
-            Cfg(name="b", scale=1),
-        )
+        for config in (Cfg(name="a", scale=1), Cfg(name="a", scale=1), Cfg(name="b", scale=1))
     ]
     assert isinstance(r_a, str), "a Final[str] field must not disable the offline fastcache"
     assert r_a == r_a2, "equal Final[str] values must produce equal offline keys"
@@ -5059,12 +4900,7 @@ def test_subclass_extra_field_offline_fastcache_uses_runtime_schema() -> None:
     config2 = Sub(scale=2, name=["a"])
     assert (
         dataclass_to_repr(
-            False,
-            (),
-            config2,
-            infer_dataclass_type(config2, "config"),
-            pruning_paths=used_fields,
-            parent_flat="config",
+            False, (), config2, infer_dataclass_type(config2, "config"), pruning_paths=used_fields, parent_flat="config"
         )
         != base_repr
     ), "a Final field still distinguishes the offline key by value"
@@ -5313,10 +5149,7 @@ def test_final_enum_kind_in_offline_key():
         mod = types.ModuleType("qd_enum_kind_probe")
         sys.modules[mod.__name__] = mod
         try:
-            exec(
-                f"import enum\nclass Mode(enum.{base_name}):\n    A = 1\n    B = 2\n",
-                mod.__dict__,
-            )
+            exec(f"import enum\nclass Mode(enum.{base_name}):\n    A = 1\n    B = 2\n", mod.__dict__)
             return str(validate_value_for_final_field_and_get_key(mod.Mode.A, live=False))
         finally:
             sys.modules.pop(mod.__name__, None)
@@ -5342,9 +5175,7 @@ def test_final_subclass_structural_identified_object_rejected():
     class Unit(enum.IntEnum):
         VALUE = 1
 
-    def helper(
-        a=1,
-    ):  # a callable whose __defaults__ a kernel could read at compile time
+    def helper(a=1):  # a callable whose __defaults__ a kernel could read at compile time
         return a
 
     Unit.__doc__ = helper
@@ -5721,10 +5552,7 @@ def test_final_enum_key_incorporates_full_member_map():
 
         class Bad(enum.Enum):
             A = 1
-            B = [
-                1,
-                2,
-            ]  # a mutable, unkeyable sibling - observable as cfg.mode.__class__.B.value
+            B = [1, 2]  # a mutable, unkeyable sibling - observable as cfg.mode.__class__.B.value
 
         with pytest.raises(TypeError, match="not a supported"):
             validate_value_for_final_field_and_get_key(Bad.A)
@@ -5818,5 +5646,5 @@ def test_final_custom_scalar_rejected_when_accessed() -> None:
     def read(config: qd.RuntimeTyped) -> qd.i32:
         return config.count
 
-    with pytest.raises(qd.QuadrantsError, match="Custom scalar subclasses"):
+    with pytest.raises(qd.QuadrantsTypeError, match="Custom scalar subclasses"):
         read(Config(Custom(1)))

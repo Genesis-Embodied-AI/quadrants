@@ -63,7 +63,6 @@ _STRUCTURAL_CLASS_ATTRS = frozenset(
     }
 )
 
-
 def _observable_metaclass_attr(mcls: type) -> "str | None":
     """Return the first unsupported metaclass attribute name, or None.
 
@@ -241,11 +240,7 @@ def _canonical_attr_value(val: Any, live: bool) -> Any:
     if isinstance(val, complex):
         if type(val) is not complex:  # a ``complex`` subclass may add state/identity the bare bits drop
             _reject_structural_subclass(val)
-        return (
-            type(val).__qualname__,
-            _unpack_u64(_pack_f64(val.real))[0],
-            _unpack_u64(_pack_f64(val.imag))[0],
-        )
+        return (type(val).__qualname__, _unpack_u64(_pack_f64(val.real))[0], _unpack_u64(_pack_f64(val.imag))[0])
     if isinstance(val, (bool, int, str, bytes)):  # exact only: bool/int/str subclasses routed above, so a subclass here
         if type(val) not in (
             bool,
@@ -254,27 +249,15 @@ def _canonical_attr_value(val: Any, live: bool) -> Any:
             bytes,
         ):  # is a ``bytes`` subclass, unkeyable by ``validate_value_for_final_field_and_get_key``
             _reject_structural_subclass(val)
-        return (
-            type(val).__qualname__,
-            val,
-        )  # tag the exact type: ``True``/``1`` compare equal but differ
+        return (type(val).__qualname__, val)  # tag the exact type: ``True``/``1`` compare equal but differ
     if isinstance(val, (tuple, list)):
-        if type(val) not in (
-            tuple,
-            list,
-        ):  # a container subclass may add per-instance state / a distinct identity
+        if type(val) not in (tuple, list):  # a container subclass may add per-instance state / a distinct identity
             _reject_structural_subclass(val)
-        return (
-            type(val).__qualname__,
-            tuple(_canonical_attr_value(v, live) for v in val),
-        )
+        return (type(val).__qualname__, tuple(_canonical_attr_value(v, live) for v in val))
     if isinstance(val, (set, frozenset)):
         if type(val) not in (set, frozenset):
             _reject_structural_subclass(val)
-        return (
-            type(val).__qualname__,
-            frozenset(_canonical_attr_value(v, live) for v in val),
-        )
+        return (type(val).__qualname__, frozenset(_canonical_attr_value(v, live) for v in val))
     if isinstance(val, dict):
         if type(val) is not dict:
             _reject_structural_subclass(val)
@@ -346,9 +329,4 @@ def _class_kind(cls: type, live: bool) -> tuple:
 
 def _subclass_identity(cls: type, live: bool) -> tuple:
     """Build a key that distinguishes scalar or enum classes and their observable structure."""
-    return (
-        cls.__module__,
-        cls.__qualname__,
-        _class_kind(cls, live),
-        _identity_component(cls, live),
-    )
+    return (cls.__module__, cls.__qualname__, _class_kind(cls, live), _identity_component(cls, live))
