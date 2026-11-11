@@ -20,7 +20,7 @@ from .._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
 from .._runtime_typing.deferred_errors import DeferredMemberType
 from .._runtime_typing.runtime_dataclass import (
     RuntimeDataclassSchema,
-    infer_dataclass_type,
+    cached_infer_dataclass_type,
 )
 from ..field import ScalarField
 from ..kernel_arguments import ArgMetadata
@@ -349,7 +349,7 @@ def stringify_obj_type(
                 # Argument metadata already carries an inferred schema at this boundary.
                 schema = ann  # type: ignore[assignment]
         if schema is None:
-            schema = infer_dataclass_type(obj, ".".join(path))
+            schema = cached_infer_dataclass_type(obj, ".".join(path))
         return dataclass_to_repr(
             raise_on_templated_floats, path, obj, schema, pruning_paths=pruning_paths, parent_flat=parent_flat
         )

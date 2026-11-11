@@ -10,7 +10,7 @@ from quadrants.lang import expr, impl
 from quadrants.lang._final.final_annotation import is_final_annotation
 from quadrants.lang._runtime_typing.deferred_errors import DeferredMemberType
 from quadrants.lang._runtime_typing.nested_dataclasses import get_member_at_path
-from quadrants.lang._runtime_typing.runtime_dataclass import infer_dataclass_type
+from quadrants.lang._runtime_typing.runtime_dataclass import cached_infer_dataclass_type
 from quadrants.lang.ast.ast_transformer_utils import ASTTransformerFuncContext
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.util import (
@@ -137,7 +137,7 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
         seen.add(obj_id)
         if is_dataclass_instance(obj):
             ctx.global_context.runtime_dataclass_binding_objects.add(obj_id)
-            schema = schema or infer_dataclass_type(obj, ".".join((ctx.func.arg_metas[arg_idx].name, *path)))
+            schema = schema or cached_infer_dataclass_type(obj, ".".join((ctx.func.arg_metas[arg_idx].name, *path)))
             for field in dataclasses.fields(schema):
                 value = getattr(obj, field.name)
                 if isinstance(field.type, DeferredMemberType):

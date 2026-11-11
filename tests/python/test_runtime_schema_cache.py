@@ -7,7 +7,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang._runtime_typing.runtime_dataclass import (
     _schema_by_context_by_instance,
-    infer_dataclass_type,
+    cached_infer_dataclass_type,
 )
 
 from tests.helpers import test_utils
@@ -22,8 +22,8 @@ def test_schema_cache_does_not_modify_instances(slots: bool) -> None:
 
     state = State(1)
     before = dict(vars(state)) if not slots else None
-    first = infer_dataclass_type(state, "state")
-    assert infer_dataclass_type(state, "state") is first
+    first = cached_infer_dataclass_type(state, "state")
+    assert cached_infer_dataclass_type(state, "state") is first
     if slots:
         assert _schema_by_context_by_instance.get(state) is None
     else:
@@ -47,8 +47,8 @@ def test_guard_cache_does_not_retain_parent_through_child() -> None:
     state = State(child)
     child.parent = state
     before = dict(vars(state))
-    schema = infer_dataclass_type(state, "state")
-    assert infer_dataclass_type(state, "state") is schema
+    schema = cached_infer_dataclass_type(state, "state")
+    assert cached_infer_dataclass_type(state, "state") is schema
     assert vars(state) == before
     assert _schema_by_context_by_instance.get(state) is not None
     key_id = id(state)

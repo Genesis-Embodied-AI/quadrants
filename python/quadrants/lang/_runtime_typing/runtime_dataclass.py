@@ -110,7 +110,9 @@ def infer_member_type(
     if isinstance(py_obj, Tensor):
         py_obj = py_obj._unwrap()
     if hasattr(type(py_obj), "__dataclass_fields__"):
-        return infer_dataclass_type(py_obj, path, ancestor_ids, non_frozen_ancestor_path, final_value_key_by_value_id)
+        return cached_infer_dataclass_type(
+            py_obj, path, ancestor_ids, non_frozen_ancestor_path, final_value_key_by_value_id
+        )
     if is_data_oriented(py_obj):
         return Template
     if py_obj is None:
@@ -157,14 +159,17 @@ def infer_member_type(
     )
 
 
-def infer_dataclass_type(
+def cached_infer_dataclass_type(
     dataclass_instance: DataclassInstance,
     path: str,
     ancestor_ids: frozenset[int] = frozenset(),
     non_frozen_ancestor_path: str | None = None,
     final_value_key_by_value_id: FinalValueKeyCache | None = None,
 ) -> type[RuntimeDataclassSchema]:
-    """Build or reuse a private schema class; the caller must verify that dataclass_instance is a dataclass instance."""
+    """Build or reuse a private schema class, validating mutable members before cache reuse when needed.
+
+    The caller must verify that dataclass_instance is a dataclass instance.
+    """
     if id(dataclass_instance) in ancestor_ids:
         raise QuadrantsRuntimeTypeError(f"Dataclass member {path!r} contains a cycle")
     ancestor_ids = ancestor_ids | {id(dataclass_instance)}
@@ -296,7 +301,9 @@ def infer_kernel_dataclass_arg_types(
     for arg_meta, py_obj in zip(arg_metas, py_objs):
         if hasattr(type(py_obj), "__dataclass_fields__"):
             arg_meta = ArgMetadata(
-                infer_dataclass_type(py_obj, arg_meta.name, final_value_key_by_value_id=final_value_key_by_value_id),
+                cached_infer_dataclass_type(
+                    py_obj, arg_meta.name, final_value_key_by_value_id=final_value_key_by_value_id
+                ),
                 arg_meta.name,
                 arg_meta.default,
                 optional=arg_meta.optional,
@@ -411,7 +418,7 @@ def dataclass_call_arguments(
         if isinstance(py_obj, type) and hasattr(py_obj, "_qd_runtime_origin"):
             schema = py_obj
         elif hasattr(type(py_obj), "__dataclass_fields__"):
-            schema = infer_dataclass_type(cast(DataclassInstance, py_obj), meta.name)
+            schema = cached_infer_dataclass_type(cast(DataclassInstance, py_obj), meta.name)
         elif is_dataclass_annotation(meta.annotation):
             raise QuadrantsRuntimeTypeError(
                 f"Argument {meta.name!r} requires a Python dataclass instance, got {type(py_obj).__name__}"

@@ -4,7 +4,7 @@ from typing import Any, TypeAlias
 
 from quadrants.lang._runtime_typing.runtime_dataclass import (
     RuntimeDataclassSchema,
-    infer_dataclass_type,
+    cached_infer_dataclass_type,
     runtime_template_members,
 )
 from quadrants.lang._weak_identity_cache import WeakIdentityCache
@@ -72,7 +72,7 @@ def infer_nested_dataclass_schemas(
                 child = get_member_at_path(owner, relative_path)
                 if not hasattr(type(child), "__dataclass_fields__"):
                     raise TypeError("A data-oriented dataclass member must remain a dataclass between kernel calls.")
-                schema = infer_dataclass_type(child, ".".join((arg_metas[index].name, *path)))
+                schema = cached_infer_dataclass_type(child, ".".join((arg_metas[index].name, *path)))
                 schemas.append((index, path, schema))
                 for member_path, member in runtime_template_members(schema, child):
                     visit_owner(index, member, (*path, *member_path))

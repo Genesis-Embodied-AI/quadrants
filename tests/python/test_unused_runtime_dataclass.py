@@ -316,7 +316,9 @@ def test_unused_member_in_captured_dataclass() -> None:
 def test_deferred_runtime_type_debug_cache_isolation(debug_settings: tuple[bool, ...], member_kind: str) -> None:
     from typing import Final
 
-    from quadrants.lang._runtime_typing.runtime_dataclass import infer_dataclass_type
+    from quadrants.lang._runtime_typing.runtime_dataclass import (
+        cached_infer_dataclass_type,
+    )
 
     @dataclass(frozen=member_kind != "final_container")
     class Inner:
@@ -333,7 +335,7 @@ def test_deferred_runtime_type_debug_cache_isolation(debug_settings: tuple[bool,
     for debug in debug_settings:
         qd.reset()
         qd.init(arch=qd.cpu, debug=debug, offline_cache=False)
-        schema = infer_dataclass_type(state, "state")
+        schema = cached_infer_dataclass_type(state, "state")
         if debug in schemas:
             assert schema is schemas[debug]
         elif schemas:
@@ -369,7 +371,9 @@ def test_deferred_debug_type_names_do_not_retain_application_class() -> None:
     import gc
     import weakref
 
-    from quadrants.lang._runtime_typing.runtime_dataclass import infer_dataclass_type
+    from quadrants.lang._runtime_typing.runtime_dataclass import (
+        cached_infer_dataclass_type,
+    )
 
     @dataclass(frozen=True)
     class State:
@@ -381,7 +385,7 @@ def test_deferred_debug_type_names_do_not_retain_application_class() -> None:
     value = Unsupported()
     class_ref = weakref.ref(Unsupported)
     value_ref = weakref.ref(value)
-    schema = infer_dataclass_type(State(value), "state")
+    schema = cached_infer_dataclass_type(State(value), "state")
     description = schema.__dataclass_fields__["value"].type
     expected_name = f"{Unsupported.__module__}.{Unsupported.__qualname__}"
     del value, Unsupported
