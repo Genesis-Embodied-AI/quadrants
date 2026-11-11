@@ -110,3 +110,12 @@ def reject_undiscovered_dataclass_member(
             "Dataclasses returned by properties or added after the first kernel call are unsupported. "
             "Store the dataclass in an ordinary instance attribute before the first kernel call."
         )
+
+
+def reject_computed_dataclass_alias(value: Any, bound_objects: set[int]) -> None:
+    """Reject computed routes that could borrow an unrelated runtime dataclass binding."""
+    if id(value) in bound_objects:
+        raise QuadrantsRuntimeTypeError(
+            "A runtime dataclass alias reached through a call or indexing is unsupported. "
+            "Access the dataclass through its ordinary stored attributes instead."
+        )
