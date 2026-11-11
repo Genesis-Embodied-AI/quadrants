@@ -134,12 +134,6 @@ class TemplateMapper:
         args_hash: ArgsHash = tuple([id(arg) for arg in args])
         if runtime_kernel is not None:
             final_value_key_by_value_id = prepare_kernel_dataclass_args_for_mapper(runtime_kernel, args, args_hash)
-        nested_schemas = infer_nested_dataclass_schemas(args, self.arguments, self.template_slot_locations)
-        if runtime_kernel is not None:
-            runtime_kernel._runtime_nested_dataclass_schemas = nested_schemas
-            runtime_kernel._runtime_has_deferred |= any(
-                schema._qd_runtime_has_deferred for _, _, schema in nested_schemas
-            )
         # A ``@qd.data_oriented`` container's member ndarrays can be reassigned between calls on the same instance
         # (``state.x = other_ndarray``), which ``id(arg)`` cannot see, so the spec-key cache would serve an entry
         # compiled for the old dtype/ndim. Fold the reachable ndarray ids in as well.
@@ -180,13 +174,23 @@ class TemplateMapper:
                 annotation_has_final_subtree(kernel_arg.annotation) for kernel_arg in self.arguments
             )
 
-        if not cache_disabled and not nested_schemas:
+        if not cache_disabled:
             try:
                 mapping_cache_tracker = self._mapping_cache_tracker[args_hash]
             except KeyError:
                 pass
             if mapping_cache_tracker:
+                if runtime_kernel is not None:
+                    runtime_kernel._runtime_nested_dataclass_schemas = ()
                 return self._mapping_cache[args_hash]
+
+        # Only calls without nested dataclasses enter the identity cache. Its hits can skip schema discovery.
+        nested_schemas = infer_nested_dataclass_schemas(args, self.arguments, self.template_slot_locations)
+        if runtime_kernel is not None:
+            runtime_kernel._runtime_nested_dataclass_schemas = nested_schemas
+            runtime_kernel._runtime_has_deferred |= any(
+                schema._qd_runtime_has_deferred for _, _, schema in nested_schemas
+            )
 
         key = self.extract(raise_on_templated_floats, args, final_value_key_by_value_id)
         if nested_schemas:
