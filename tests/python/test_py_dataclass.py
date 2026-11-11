@@ -4371,11 +4371,9 @@ def test_final_scalar_key_live_preserves_class_identity_across_module_rebind():
 
 @test_utils.test()
 def test_final_scalar_key_live_uses_object_identity_not_class_equality():
-    """The class-identity key component (``_subclass_identity``/``_ClassRef``) keys by *object identity*, not the class
-    object's ``==``, so a metaclass that makes two distinct classes ``==`` with equal hashes cannot collapse their keys
-    - ``cfg.x.__class__ is First`` is observable, so distinct classes must key apart, and the component also retains the
-    class as a strong ref (pinning its ``id``). This identity behavior is defense-in-depth: such a metaclass carries
-    observable equality behavior, so ``validate_value_for_final_field_and_get_key`` itself now *rejects* the value.
+    """Class keys use identity despite custom equality, and retain the class to prevent ID reuse.
+
+    This tests the identity helper directly; the value validator rejects these custom scalar subclasses.
     """
     from quadrants.lang._final import final_class_identity as _fdf
     from quadrants.lang._final.final_constant_values import (
