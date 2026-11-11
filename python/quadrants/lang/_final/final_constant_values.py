@@ -4,7 +4,7 @@ import enum
 from typing import Any
 
 from quadrants.lang._final.final_class_identity import (
-    _is_exact_baked_type,
+    _is_supported_builtin_scalar_type,
     _pack_f64,
     _subclass_identity,
     _unpack_u64,
@@ -50,7 +50,7 @@ def final_scalar_key(value: Any, live: bool = False) -> tuple[Any, ...]:
             _enum_member_map_key(cls, live),
         )
     cls = type(value)
-    if not _is_exact_baked_type(cls):
+    if not _is_supported_builtin_scalar_type(cls):
         raise TypeError(
             f"A ``Final`` field received {cls.__module__}.{cls.__qualname__}, which is not a supported "
             "compile-time constant. Use an exact builtin bool, int, float or str, or a supported enum member. "
