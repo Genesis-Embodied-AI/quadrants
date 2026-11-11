@@ -298,3 +298,78 @@ def test_alternating_dataclass_and_data_oriented_nesting(dataclass_root: bool) -
     assert read(argument) == 7
     owner.state.middle.leaf.value = 2.5
     assert read(argument) == 2.5
+
+
+@pytest.mark.parametrize("alias_stored_member", [False, True])
+@test_utils.test()
+def test_nested_dataclass_property_is_rejected(alias_stored_member: bool) -> None:
+    """A property is unsupported even when it aliases a discovered stored dataclass."""
+
+    @dataclass
+    class State:
+        value: int = 3
+
+    @qd.data_oriented
+    class Owner:
+        def __init__(self) -> None:
+            self.stored = State()
+
+        @property
+        def state(self) -> State:
+            return self.stored if alias_stored_member else State()
+
+    @qd.kernel
+    def read(owner: qd.Template) -> qd.i32:
+        return owner.state.value
+
+    with pytest.raises(Exception, match=r"Owner\.state.*not discovered"):
+        read(Owner())
+
+
+@pytest.mark.parametrize("template_primitives", [True, False])
+@test_utils.test()
+def test_dataclass_added_after_discovery_is_rejected(template_primitives: bool) -> None:
+    """Compiling a new kernel must not silently bake a dataclass absent from cached discovery paths."""
+
+    @dataclass
+    class State:
+        value: int = 3
+
+    @qd.data_oriented(template_primitives=template_primitives)
+    class Owner:
+        def __init__(self) -> None:
+            self.value = 1
+
+    @qd.kernel
+    def initial(owner: qd.Template) -> qd.i32:
+        return owner.value
+
+    @qd.kernel
+    def read(owner: qd.Template) -> qd.i32:
+        return owner.added.value
+
+    owner = Owner()
+    assert initial(owner) == 1
+    owner.added = State()
+    with pytest.raises(Exception, match=r"Owner\.added.*not discovered"):
+        read(owner)
+
+
+@test_utils.test()
+def test_unused_dataclass_property_is_not_evaluated() -> None:
+    """Property detection must not execute unused getters during discovery."""
+
+    @qd.data_oriented
+    class Owner:
+        def __init__(self) -> None:
+            self.value = 3
+
+        @property
+        def state(self) -> object:
+            raise AssertionError("Unused getter executed")
+
+    @qd.kernel
+    def read(owner: qd.Template) -> qd.i32:
+        return owner.value
+
+    assert read(Owner()) == 3

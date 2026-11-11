@@ -41,6 +41,9 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
         if wants_runtime_primitives(val):
             flagged.append((i, val))
     nested_schemas = getattr(ctx.func, "_runtime_nested_dataclass_schemas", ())
+    for arg_idx, path, _schema in nested_schemas:
+        parent = get_member_at_path(ctx.py_args[arg_idx], path[:-1])
+        ctx.global_context.runtime_dataclass_members.add((id(parent), path[-1]))
     if not flagged and not nested_schemas:
         return
 

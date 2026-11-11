@@ -7,6 +7,7 @@ from quadrants.lang._runtime_typing.runtime_dataclass import (
     runtime_template_members,
 )
 from quadrants.lang._weak_identity_cache import WeakIdentityCache
+from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import is_data_oriented, is_dataclass_instance
 
@@ -85,3 +86,27 @@ def infer_nested_dataclass_schemas(
             for path, member in runtime_template_members(meta.annotation, args[index]):
                 visit_owner(index, member, path)
     return schemas
+
+
+def reject_undiscovered_dataclass_member(
+    parent: Any, name: str, value: Any, discovered_members: set[tuple[int, str]]
+) -> None:
+    """Reject compilation-time access to dataclasses missing from argument member discovery.
+
+    Check the attribute, not the returned object's identity: a property can alias a stored dataclass yet require a
+    different launch-binding path. This check does not run on already-compiled kernel launches.
+    """
+    if not is_dataclass_instance(value):
+        return
+    if is_data_oriented(parent):
+        discovered = (id(parent), name) in discovered_members
+    elif is_dataclass_instance(parent):
+        discovered = name in type(parent).__dataclass_fields__
+    else:
+        return
+    if not discovered:
+        raise QuadrantsRuntimeTypeError(
+            f"Dataclass attribute {type(parent).__name__ + '.' + name!r} was not discovered as a runtime argument member. "
+            "Dataclasses returned by properties or added after the first kernel call are unsupported. "
+            "Store the dataclass in an ordinary instance attribute before the first kernel call."
+        )
