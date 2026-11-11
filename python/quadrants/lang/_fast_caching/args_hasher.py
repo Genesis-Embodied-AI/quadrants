@@ -370,7 +370,7 @@ def stringify_obj_type(
         annotated_type = None
         if arg_meta is not None:
             ann = arg_meta.annotation
-            if isinstance(ann, type) and dataclasses.is_dataclass(ann) and isinstance(obj, ann._qd_runtime_origin):
+            if isinstance(ann, type) and dataclasses.is_dataclass(ann):
                 annotated_type = ann
         return dataclass_to_repr(
             raise_on_templated_floats, path, obj, annotated_type, pruning_paths=pruning_paths, parent_flat=parent_flat
