@@ -229,15 +229,12 @@ def _canonical_attr_value(val: Any, live: bool) -> Any:
         if type(val) is not complex:  # a ``complex`` subclass may add state/identity the bare bits drop
             _reject_structural_subclass(val)
         return (type(val).__qualname__, _unpack_u64(_pack_f64(val.real))[0], _unpack_u64(_pack_f64(val.imag))[0])
-    if isinstance(val, (bool, int, str, bytes)):  # exact only: bool/int/str subclasses routed above, so a subclass here
-        if type(val) not in (
-            bool,
-            int,
-            str,
-            bytes,
-        ):  # is a ``bytes`` subclass, unkeyable by ``validate_value_for_final_field_and_get_key``
+    if isinstance(val, (bool, int, str, bytes)):
+        # bool/int/str subclasses were handled above; reject any remaining bytes subclass.
+        if type(val) not in (bool, int, str, bytes):
             _reject_structural_subclass(val)
-        return (type(val).__qualname__, val)  # tag the exact type: ``True``/``1`` compare equal but differ
+        # Tag the exact type because True and 1 compare equal.
+        return (type(val).__qualname__, val)
     if isinstance(val, (tuple, list)):
         if type(val) not in (tuple, list):  # a container subclass may add per-instance state / a distinct identity
             _reject_structural_subclass(val)
