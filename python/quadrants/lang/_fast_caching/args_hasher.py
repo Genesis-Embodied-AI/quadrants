@@ -365,16 +365,12 @@ def stringify_obj_type(
         _mark_warn_if_not_tensor_annotation(arg_meta)
         return _FAIL_FASTCACHE
     if is_dataclass_instance(obj):
-        # Pass the declared dataclass type so an annotated subclass hashes via the base's fields. Nested / data_oriented
-        # children have no dataclass annotation here (arg_meta is None or Template), so they fall back to runtime type.
+        # Dataclass annotations reaching this helper are inferred schemas. Data-oriented children can instead have
+        # no annotation or Template, in which case dataclass_to_repr uses the object's class.
         annotated_type = None
         if arg_meta is not None:
             ann = arg_meta.annotation
-            if (
-                isinstance(ann, type)
-                and dataclasses.is_dataclass(ann)
-                and isinstance(obj, getattr(ann, "_qd_runtime_origin", ann))
-            ):
+            if isinstance(ann, type) and dataclasses.is_dataclass(ann) and isinstance(obj, ann._qd_runtime_origin):
                 annotated_type = ann
         return dataclass_to_repr(
             raise_on_templated_floats, path, obj, annotated_type, pruning_paths=pruning_paths, parent_flat=parent_flat

@@ -7,6 +7,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang._fast_caching import FIELD_METADATA_CACHE_VALUE, args_hasher
 from quadrants.lang._fast_caching.args_hasher import FastcacheSkip
+from quadrants.lang._runtime_typing.runtime_dataclass import infer_dataclass_type
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import has_pytorch
 
@@ -470,7 +471,7 @@ def test_args_hasher_frozen_dataclass_failure_does_not_poison_narrower_walk() ->
         y: qd.types.NDArray[qd.i32, 1]  # cacheable ndarray
 
     state = State(x=qd.field(qd.i32, shape=(4,)), y=qd.ndarray(qd.i32, (4,)))
-    arg_meta = ArgMetadata(name="state", annotation=State)
+    arg_meta = ArgMetadata(name="state", annotation=infer_dataclass_type(state, "state"))
 
     # Kernel A: pruning set includes both fields; walking hits the qd.field and fails.
     paths_a = {"__qd_state__qd_x", "__qd_state__qd_y"}
