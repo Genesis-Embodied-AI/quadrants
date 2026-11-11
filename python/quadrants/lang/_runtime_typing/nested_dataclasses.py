@@ -2,7 +2,10 @@
 
 from typing import Any, TypeAlias
 
-from quadrants.lang._runtime_typing.runtime_dataclass import infer_dataclass_type, runtime_template_members
+from quadrants.lang._runtime_typing.runtime_dataclass import (
+    infer_dataclass_type,
+    runtime_template_members,
+)
 from quadrants.lang._weak_identity_cache import WeakIdentityCache
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import is_data_oriented, is_dataclass_instance
