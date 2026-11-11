@@ -38,8 +38,8 @@ def unwrap_and_parse_string_constants(ast_tree: ast.expr) -> ast.expr:
 
     ```text
     Subscript
-    ├── value: Name("Final")
-    └── slice: Name("int")
+    |-- value: Name("Final")
+    `-- slice: Name("int")
     ```
 
     It repeats while another string layer remains. No expression is evaluated.
