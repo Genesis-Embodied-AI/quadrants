@@ -48,7 +48,7 @@ def _is_supported_builtin_scalar_type(cls: type) -> bool:
 _HEAPTYPE_FLAG = 1 << 9
 
 # Structural attributes handled separately from custom enum behavior.
-_STRUCTURAL_CLASS_ATTRS = frozenset(
+_CLASS_METADATA_ATTRS = frozenset(
     {
         "__module__",
         "__qualname__",
@@ -68,7 +68,7 @@ def _observable_metaclass_attr(mcls: type) -> "str | None":
     Identity keys prevent equality collisions, but kernels can still observe custom __eq__ and __hash__ behavior.
     """
     for name in vars(mcls):
-        if name not in _STRUCTURAL_CLASS_ATTRS:
+        if name not in _CLASS_METADATA_ATTRS:
             return name
     return None
 
