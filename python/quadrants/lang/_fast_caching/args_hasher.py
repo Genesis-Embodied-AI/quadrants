@@ -18,7 +18,10 @@ from .._name_utils import create_flat_name
 from .._ndarray import ScalarNdarray
 from .._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
 from .._runtime_typing.deferred_errors import DeferredMemberType
-from .._runtime_typing.runtime_dataclass import infer_dataclass_type
+from .._runtime_typing.runtime_dataclass import (
+    RuntimeDataclassSchema,
+    infer_dataclass_type,
+)
 from ..field import ScalarField
 from ..kernel_arguments import ArgMetadata
 from ..matrix import MatrixField, MatrixNdarray, VectorNdarray
@@ -223,7 +226,7 @@ def dataclass_to_repr(
     raise_on_templated_floats: bool,
     path: tuple[str, ...],
     arg: Any,
-    schema: type,
+    schema: type[RuntimeDataclassSchema],
     pruning_paths: set[str] | None = None,
     parent_flat: str | None = None,
 ) -> str | _FailFastcache:
@@ -339,11 +342,12 @@ def stringify_obj_type(
         return _FAIL_FASTCACHE
     if is_dataclass_instance(obj):
         # Reuse inferred argument schemas, or infer one for a dataclass reached through a data-oriented member.
-        schema = None
+        schema: type[RuntimeDataclassSchema] | None = None
         if arg_meta is not None:
             ann = arg_meta.annotation
             if isinstance(ann, type) and dataclasses.is_dataclass(ann):
-                schema = ann
+                # Argument metadata already carries an inferred schema at this boundary.
+                schema = ann  # type: ignore[assignment]
         if schema is None:
             schema = infer_dataclass_type(obj, ".".join(path))
         return dataclass_to_repr(

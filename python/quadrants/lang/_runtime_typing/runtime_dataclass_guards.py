@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from quadrants.lang._runtime_typing.runtime_dataclass import (
         DataclassInstance,
         InferredMemberType,
+        RuntimeDataclassSchema,
     )
 
 
@@ -29,7 +30,7 @@ class FrozenSchemaEntry:
     def __init__(
         self,
         value: "DataclassInstance",
-        schema: type,
+        schema: "type[RuntimeDataclassSchema]",
         field_plan: Sequence[tuple[str, "dataclasses.Field[Any]", bool]],
         member_types: "Sequence[InferredMemberType | DeferredMemberType | _SpecialForm]",
     ) -> None:

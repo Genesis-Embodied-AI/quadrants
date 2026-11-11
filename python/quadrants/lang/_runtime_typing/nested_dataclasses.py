@@ -3,6 +3,7 @@
 from typing import Any, TypeAlias
 
 from quadrants.lang._runtime_typing.runtime_dataclass import (
+    RuntimeDataclassSchema,
     infer_dataclass_type,
     runtime_template_members,
 )
@@ -55,9 +56,9 @@ def get_member_at_path(obj: Any, path: DataclassPath) -> Any:
 
 def infer_nested_dataclass_schemas(
     args: tuple[Any, ...], arg_metas: list[ArgMetadata], template_slots: list[int]
-) -> list[tuple[int, DataclassPath, type]]:
+) -> list[tuple[int, DataclassPath, type[RuntimeDataclassSchema]]]:
     """Infer current schemas for dataclasses reached through data-oriented arguments."""
-    schemas: list[tuple[int, DataclassPath, type]] = []
+    schemas: list[tuple[int, DataclassPath, type[RuntimeDataclassSchema]]] = []
     active_ids: set[int] = set()
 
     def visit_owner(index: int, owner: Any, owner_path: DataclassPath) -> None:

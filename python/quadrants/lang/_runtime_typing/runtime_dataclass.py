@@ -56,6 +56,15 @@ class DataclassInstance(Protocol):
     __dataclass_fields__: ClassVar[dict[str, dataclasses.Field[Any]]]
 
 
+class RuntimeDataclassSchema(DataclassInstance, Protocol):
+    """Describe generated schema metadata inferred from an arriving dataclass instance."""
+
+    _qd_runtime_origin: ClassVar[type[DataclassInstance]]
+    _qd_runtime_stable: ClassVar[bool]
+    _qd_runtime_has_deferred: ClassVar[bool]
+    _qd_runtime_key: ClassVar[tuple[int, tuple[tuple[str, Any], ...]]]
+
+
 # Object identity maps to the retained object and its type-tagged Final specialization key.
 FinalValueKeyCache: TypeAlias = dict[int, tuple[Any, tuple[Any, ...]]]
 
@@ -65,14 +74,14 @@ InferredMemberType: TypeAlias = (
 
 # Per-instance schemas, separated by numeric defaults and ancestor validation context; keys are held weakly.
 InferenceContextKey: TypeAlias = tuple[int, int, int, str | None]
-_schema_by_context_by_instance: WeakIdentityCache[dict[InferenceContextKey, type | FrozenSchemaEntry]] = (
-    WeakIdentityCache()
-)
+_schema_by_context_by_instance: WeakIdentityCache[
+    dict[InferenceContextKey, type[RuntimeDataclassSchema] | FrozenSchemaEntry]
+] = WeakIdentityCache()
 
 # These caches retain dataclass classes, assuming applications define relatively few of them.
 # Repeatedly generating new dataclass classes will grow these caches for the lifetime of the process.
 # Generated schema classes, keyed by source class identity, stability, and ordered member names/type identities.
-_schemas: dict[tuple[int, bool, tuple[tuple[str, int], ...]], type] = {}
+_schemas: dict[tuple[int, bool, tuple[tuple[str, int], ...]], type[RuntimeDataclassSchema]] = {}
 # Source classes and their ordered field descriptions, reused across schema inference calls.
 _field_plans: dict[int, tuple[type, tuple[tuple[str, dataclasses.Field[Any], bool], ...]]] = {}
 # Matrix/vector type descriptions, keyed by rows, columns, dimensionality, and scalar dtype.
@@ -154,7 +163,7 @@ def infer_dataclass_type(
     ancestor_ids: frozenset[int] = frozenset(),
     non_frozen_ancestor_path: str | None = None,
     final_value_key_by_value_id: FinalValueKeyCache | None = None,
-) -> type:
+) -> type[RuntimeDataclassSchema]:
     """Build or reuse a private schema class; the caller must verify that dataclass_instance is a dataclass instance."""
     if id(dataclass_instance) in ancestor_ids:
         raise QuadrantsRuntimeTypeError(f"Dataclass member {path!r} contains a cycle")
@@ -236,27 +245,31 @@ def infer_dataclass_type(
             resolved = copy.copy(field)
             resolved.type = member_type
             fields[name] = resolved
-        schema = type(
-            dataclass_type.__name__,
-            (),
-            {
-                "__module__": dataclass_type.__module__,
-                "__qualname__": dataclass_type.__qualname__,
-                "__dataclass_fields__": fields,
-                "__dataclass_params__": params,
-                "__hash__": dataclass_type.__hash__,
-                "_qd_runtime_origin": dataclass_type,
-                "_qd_runtime_stable": stable,
-                "_qd_runtime_has_deferred": has_deferred,
-                # Cache eligibility is not part of the compiled interface: a Tensor wrapper and its bare ndarray
-                # must share a specialization.
-                "_qd_runtime_key": (
-                    id(dataclass_type),
-                    tuple(
-                        (name, getattr(field.type, "_qd_runtime_key", id(field.type))) for name, field in fields.items()
+        schema = cast(
+            type[RuntimeDataclassSchema],
+            type(
+                dataclass_type.__name__,
+                (),
+                {
+                    "__module__": dataclass_type.__module__,
+                    "__qualname__": dataclass_type.__qualname__,
+                    "__dataclass_fields__": fields,
+                    "__dataclass_params__": params,
+                    "__hash__": dataclass_type.__hash__,
+                    "_qd_runtime_origin": dataclass_type,
+                    "_qd_runtime_stable": stable,
+                    "_qd_runtime_has_deferred": has_deferred,
+                    # Cache eligibility is not part of the compiled interface: a Tensor wrapper and its bare ndarray
+                    # must share a specialization.
+                    "_qd_runtime_key": (
+                        id(dataclass_type),
+                        tuple(
+                            (name, getattr(field.type, "_qd_runtime_key", id(field.type)))
+                            for name, field in fields.items()
+                        ),
                     ),
-                ),
-            },
+                },
+            ),
         )
         # Validate Final-bearing paths against the inferred nesting, including children annotated as Any/object.
         final_field_names(schema)
@@ -343,7 +356,7 @@ def prepare_kernel_dataclass_args_for_mapper(
 
 
 def runtime_template_members(
-    schema: type, dataclass_instance: DataclassInstance, path: tuple[str, ...] = ()
+    schema: type[DataclassInstance], dataclass_instance: DataclassInstance, path: tuple[str, ...] = ()
 ) -> Iterator[tuple[tuple[str, ...], Any]]:
     """Yield template-valued subobjects with paths rooted at the original kernel argument."""
     if not hasattr(schema, "_qd_runtime_origin"):
@@ -354,7 +367,7 @@ def runtime_template_members(
         if field.type is Template:
             yield child_path, child
         elif hasattr(field.type, "_qd_runtime_origin"):
-            yield from runtime_template_members(cast(type, field.type), child, child_path)
+            yield from runtime_template_members(cast(type[RuntimeDataclassSchema], field.type), child, child_path)
 
 
 def is_runtime_member_name(arg_metas: list[ArgMetadata], name: str) -> bool:
