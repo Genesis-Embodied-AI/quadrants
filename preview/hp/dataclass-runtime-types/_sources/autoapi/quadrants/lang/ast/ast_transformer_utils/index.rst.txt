@@ -277,6 +277,10 @@ Module Contents
 
 
 
+   .. py:attribute:: runtime_dataclass_members
+      :type:  set[tuple[int, str]]
+
+
    .. py:attribute:: caller_loop_depth
       :type:  int
       :value: 0

@@ -331,23 +331,18 @@
                   
   <h1>Source code for quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer</h1><div class="highlight"><pre>
 <span></span><span class="c1"># type: ignore</span>
-<span class="sd">"""Lift primitive members of ``@qd.data_oriented(template_primitives=False)`` template args into runtime scalar kernel</span>
-<span class="sd">args at AST-build time.</span>
-
-<span class="sd">Lives alongside ``ndarray_arg_resolver.py`` / ``checkpoint_transformer.py`` so the central</span>
-<span class="sd">``function_def_transformer.py`` file doesn't have to grow per-feature (the same rationale the ndarray resolver</span>
-<span class="sd">documents). ``FunctionDefTransformer.transform`` delegates here right after ``_predeclare_struct_ndarrays``; this is</span>
-<span class="sd">the only entry point.</span>
-
-<span class="sd">See ``docs/source/user_guide/compound_types.md`` (section "Runtime primitives: ``template_primitives=False``") for the</span>
-<span class="sd">user-facing surface.</span>
-<span class="sd">"""</span>
+<span class="sd">"""Bind nested dataclass scalars and opted-in data-oriented primitives as runtime kernel arguments."""</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">dataclasses</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib.core.quadrants_python</span><span class="w"> </span><span class="kn">import</span> <span class="n">DataTypeCxx</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor_wrapper</span><span class="w"> </span><span class="kn">import</span> <span class="n">Tensor</span> <span class="k">as</span> <span class="n">_TensorClass</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">expr</span><span class="p">,</span> <span class="n">impl</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._final.final_annotation</span><span class="w"> </span><span class="kn">import</span> <span class="n">is_final_annotation</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._runtime_typing.deferred_errors</span><span class="w"> </span><span class="kn">import</span> <span class="n">DeferredMemberType</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._runtime_typing.nested_dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_member_at_path</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._runtime_typing.runtime_dataclass</span><span class="w"> </span><span class="kn">import</span> <span class="n">infer_dataclass_type</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">ASTTransformerFuncContext</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.util</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">is_data_oriented</span><span class="p">,</span>
@@ -360,25 +355,13 @@
 <div class="viewcode-block" id="predeclare_struct_primitives">
 <a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/struct_primitive_predeclarer/index.html#quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer.predeclare_struct_primitives">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">predeclare_struct_primitives</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">"""For each templated arg whose root class is decorated ``@qd.data_oriented(template_primitives=False)``, walk</span>
-<span class="sd">    the reachable attribute graph and declare every primitive (``int`` / ``float`` / ``bool``) member as a runtime</span>
-<span class="sd">    scalar kernel arg, instead of letting ``build_Attribute`` bake it as a compile-time constant. The arg-load</span>
-<span class="sd">    ``Expr`` is cached on the global context keyed by ``(id(parent_obj), attr_name)`` for ``build_Attribute`` to</span>
-<span class="sd">    substitute, and a ``(arg_id, template_arg_idx, attr_chain, kind)`` tuple is recorded for the launch path to</span>
-<span class="sd">    bind the live value.</span>
+<span class="w">    </span><span class="sd">"""Declare used scalar members and record their attribute paths for binding at each launch.</span>
 
-<span class="sd">    Mirrors ``_predeclare_struct_ndarrays``. Primitive leaves have no stable identity (``id(5)`` is interned), so</span>
-<span class="sd">    the cache is keyed on the parent container's identity plus the attribute name. Only plain Python ``int`` /</span>
-<span class="sd">    ``float`` / ``bool`` are lifted (matched by exact type so numpy scalars etc. keep their previous baked</span>
-<span class="sd">    behaviour). dtype follows the runtime defaults (``default_ip`` / ``default_fp``), matching how a baked Python</span>
-<span class="sd">    constant would be typed.</span>
-
-<span class="sd">    ``_seen`` guards against attribute-graph cycles (e.g. ``sim.solver.sim is sim``), same as the ndarray walker.</span>
+<span class="sd">    Dataclasses use their inferred schemas, preserving Final constants and deferred member errors. Other data-oriented</span>
+<span class="sd">    members are lifted only under template_primitives=False, using the default numeric types. Attribute accesses are</span>
+<span class="sd">    identified by their parent object and member name, since scalar identities can be shared.</span>
 <span class="sd">    """</span>
     <span class="k">assert</span> <span class="n">ctx</span><span class="o">.</span><span class="n">py_args</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
-    <span class="c1"># Cheap early-out for the common case (no flagged template arg): the default ``template_primitives=True`` path</span>
-    <span class="c1"># never builds a walk, so genesis-style data_oriented kernels pay only one ``wants_runtime_primitives`` check</span>
-    <span class="c1"># per template arg at compile time, and nothing at launch.</span>
     <span class="n">flagged</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">arg_meta</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">):</span>
         <span class="n">anno</span> <span class="o">=</span> <span class="n">arg_meta</span><span class="o">.</span><span class="n">annotation</span>
@@ -391,12 +374,16 @@
             <span class="n">val</span> <span class="o">=</span> <span class="n">val</span><span class="o">.</span><span class="n">_unwrap</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">wants_runtime_primitives</span><span class="p">(</span><span class="n">val</span><span class="p">):</span>
             <span class="n">flagged</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">i</span><span class="p">,</span> <span class="n">val</span><span class="p">))</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">flagged</span><span class="p">:</span>
+    <span class="n">nested_schemas</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="p">,</span> <span class="s2">"_runtime_nested_dataclass_schemas"</span><span class="p">,</span> <span class="p">())</span>
+    <span class="k">for</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">_schema</span> <span class="ow">in</span> <span class="n">nested_schemas</span><span class="p">:</span>
+        <span class="n">parent</span> <span class="o">=</span> <span class="n">get_member_at_path</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">py_args</span><span class="p">[</span><span class="n">arg_idx</span><span class="p">],</span> <span class="n">path</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">runtime_dataclass_members</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="nb">id</span><span class="p">(</span><span class="n">parent</span><span class="p">),</span> <span class="n">path</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]))</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">flagged</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">nested_schemas</span><span class="p">:</span>
         <span class="k">return</span>
 
     <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>  <span class="c1"># pylint: disable=C0415</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.util</span><span class="w"> </span><span class="kn">import</span> <span class="n">cook_dtype</span>  <span class="c1"># pylint: disable=C0415</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">is_signed</span>  <span class="c1"># pylint: disable=C0415</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">is_real</span><span class="p">,</span> <span class="n">is_signed</span>  <span class="c1"># pylint: disable=C0415</span>
 
     <span class="n">runtime</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span>
     <span class="n">default_ip</span> <span class="o">=</span> <span class="n">runtime</span><span class="o">.</span><span class="n">default_ip</span>
@@ -411,12 +398,23 @@
     <span class="c1"># collides with dataclass-field pruning.</span>
     <span class="n">func_id</span> <span class="o">=</span> <span class="n">pruning</span><span class="o">.</span><span class="n">KERNEL_FUNC_ID</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_register_primitive</span><span class="p">(</span><span class="n">parent</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="n">attr_chain</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_register_primitive</span><span class="p">(</span>
+        <span class="n">parent</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="n">attr_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="n">arg_idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">attr_chain</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
+        <span class="n">inferred_dtype</span><span class="p">:</span> <span class="n">DataTypeCxx</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Declare a used scalar and remember how to read its value at launch."""</span>
         <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="n">parent</span><span class="p">),</span> <span class="n">attr_name</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">provenance</span><span class="p">:</span>
             <span class="k">return</span>
         <span class="n">value_type</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">value_type</span> <span class="ow">is</span> <span class="nb">bool</span> <span class="ow">or</span> <span class="n">value_type</span> <span class="ow">is</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">inferred_dtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">dtype</span> <span class="o">=</span> <span class="n">inferred_dtype</span>
+            <span class="n">kind</span> <span class="o">=</span> <span class="s2">"f"</span> <span class="k">if</span> <span class="n">is_real</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span> <span class="k">else</span> <span class="p">(</span><span class="s2">"i"</span> <span class="k">if</span> <span class="n">is_signed</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span> <span class="k">else</span> <span class="s2">"u"</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">value_type</span> <span class="ow">is</span> <span class="nb">bool</span> <span class="ow">or</span> <span class="n">value_type</span> <span class="ow">is</span> <span class="nb">int</span><span class="p">:</span>
             <span class="n">dtype</span><span class="p">,</span> <span class="n">kind</span> <span class="o">=</span> <span class="n">default_ip</span><span class="p">,</span> <span class="p">(</span><span class="s2">"i"</span> <span class="k">if</span> <span class="n">is_signed</span><span class="p">(</span><span class="n">default_ip</span><span class="p">)</span> <span class="k">else</span> <span class="s2">"u"</span><span class="p">)</span>
         <span class="k">elif</span> <span class="n">value_type</span> <span class="ow">is</span> <span class="nb">float</span><span class="p">:</span>
             <span class="n">dtype</span><span class="p">,</span> <span class="n">kind</span> <span class="o">=</span> <span class="n">default_fp</span><span class="p">,</span> <span class="s2">"f"</span>
@@ -440,14 +438,39 @@
         <span class="p">)</span>
         <span class="n">launch_info</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">arg_id</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="n">attr_chain</span><span class="p">,</span> <span class="n">kind</span><span class="p">))</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_walk</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">seen</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_walk</span><span class="p">(</span>
+        <span class="n">obj</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="n">arg_idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">path</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
+        <span class="n">seen</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span>
+        <span class="n">schema</span><span class="p">:</span> <span class="nb">type</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">lift_plain</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Register scalar members while preserving inferred schemas and avoiding object cycles."""</span>
         <span class="n">obj_id</span> <span class="o">=</span> <span class="nb">id</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">obj_id</span> <span class="ow">in</span> <span class="n">seen</span><span class="p">:</span>
             <span class="k">return</span>
         <span class="n">seen</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">obj_id</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">is_dataclass_instance</span><span class="p">(</span><span class="n">obj</span><span class="p">):</span>
-            <span class="n">items</span> <span class="o">=</span> <span class="p">[(</span><span class="n">f</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">f</span><span class="o">.</span><span class="n">name</span><span class="p">))</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">fields</span><span class="p">(</span><span class="n">obj</span><span class="p">)]</span>
-        <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="s2">"__dict__"</span><span class="p">):</span>
+            <span class="n">schema</span> <span class="o">=</span> <span class="n">schema</span> <span class="ow">or</span> <span class="n">infer_dataclass_type</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="s2">"."</span><span class="o">.</span><span class="n">join</span><span class="p">((</span><span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">[</span><span class="n">arg_idx</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="o">*</span><span class="n">path</span><span class="p">)))</span>
+            <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">fields</span><span class="p">(</span><span class="n">schema</span><span class="p">):</span>
+                <span class="n">value</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">DeferredMemberType</span><span class="p">):</span>
+                    <span class="n">errors</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="p">,</span> <span class="s2">"nested_dataclass_errors"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">errors</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                        <span class="n">errors</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">nested_dataclass_errors</span> <span class="o">=</span> <span class="p">{}</span>
+                    <span class="n">errors</span><span class="p">[(</span><span class="nb">id</span><span class="p">(</span><span class="n">obj</span><span class="p">),</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">)]</span> <span class="o">=</span> <span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">bind</span><span class="p">(</span>
+                        <span class="s2">"."</span><span class="o">.</span><span class="n">join</span><span class="p">((</span><span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">[</span><span class="n">arg_idx</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="o">*</span><span class="n">path</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+                    <span class="p">)</span>
+                <span class="k">elif</span> <span class="n">is_final_annotation</span><span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">):</span>
+                    <span class="k">continue</span>
+                <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">DataTypeCxx</span><span class="p">):</span>
+                    <span class="n">_register_primitive</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="p">(</span><span class="o">*</span><span class="n">path</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">),</span> <span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">)</span>
+                <span class="k">elif</span> <span class="n">is_dataclass_instance</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="ow">or</span> <span class="n">is_data_oriented</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+                    <span class="n">child_schema</span> <span class="o">=</span> <span class="n">field</span><span class="o">.</span><span class="n">type</span> <span class="k">if</span> <span class="n">is_dataclass_instance</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">else</span> <span class="kc">None</span>
+                    <span class="n">_walk</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="p">(</span><span class="o">*</span><span class="n">path</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">),</span> <span class="n">seen</span><span class="p">,</span> <span class="n">child_schema</span><span class="p">,</span> <span class="n">lift_plain</span><span class="p">)</span>
+            <span class="k">return</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="s2">"__dict__"</span><span class="p">):</span>
             <span class="n">items</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">vars</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span><span class="o">.</span><span class="n">items</span><span class="p">())</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="k">return</span>
@@ -455,13 +478,16 @@
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">attr_val</span><span class="p">,</span> <span class="n">_TensorClass</span><span class="p">):</span>
                 <span class="n">attr_val</span> <span class="o">=</span> <span class="n">attr_val</span><span class="o">.</span><span class="n">_unwrap</span><span class="p">()</span>
             <span class="n">attr_type</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">attr_val</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">attr_type</span> <span class="ow">is</span> <span class="nb">bool</span> <span class="ow">or</span> <span class="n">attr_type</span> <span class="ow">is</span> <span class="nb">int</span> <span class="ow">or</span> <span class="n">attr_type</span> <span class="ow">is</span> <span class="nb">float</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">lift_plain</span> <span class="ow">and</span> <span class="n">attr_type</span> <span class="ow">in</span> <span class="p">(</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">):</span>
                 <span class="n">_register_primitive</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">,</span> <span class="n">attr_val</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="p">(</span><span class="o">*</span><span class="n">path</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">))</span>
             <span class="k">elif</span> <span class="n">is_dataclass_instance</span><span class="p">(</span><span class="n">attr_val</span><span class="p">)</span> <span class="ow">or</span> <span class="n">is_data_oriented</span><span class="p">(</span><span class="n">attr_val</span><span class="p">):</span>
-                <span class="n">_walk</span><span class="p">(</span><span class="n">attr_val</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="p">(</span><span class="o">*</span><span class="n">path</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">),</span> <span class="n">seen</span><span class="p">)</span>
+                <span class="n">_walk</span><span class="p">(</span><span class="n">attr_val</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="p">(</span><span class="o">*</span><span class="n">path</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">),</span> <span class="n">seen</span><span class="p">,</span> <span class="n">lift_plain</span><span class="o">=</span><span class="n">lift_plain</span><span class="p">)</span>
 
     <span class="k">for</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">flagged</span><span class="p">:</span>
-        <span class="n">_walk</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="p">(),</span> <span class="nb">set</span><span class="p">())</span></div>
+        <span class="n">_walk</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="p">(),</span> <span class="nb">set</span><span class="p">(),</span> <span class="n">lift_plain</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">schema</span> <span class="ow">in</span> <span class="n">nested_schemas</span><span class="p">:</span>
+        <span class="n">_walk</span><span class="p">(</span><span class="n">get_member_at_path</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">py_args</span><span class="p">[</span><span class="n">arg_idx</span><span class="p">],</span> <span class="n">path</span><span class="p">),</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="nb">set</span><span class="p">(),</span> <span class="n">schema</span><span class="p">)</span></div>
 
 </pre></div>
 
