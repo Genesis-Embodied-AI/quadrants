@@ -4039,10 +4039,7 @@ def test_final_float_cached_spec_key_revalidated_after_reinit():
 
 @test_utils.test()
 def test_final_unsafe_hash_ordinary_field_reread_each_launch():
-    """A ``Final``-bearing ``unsafe_hash=True`` config is re-read on every launch: its per-instance caches (spec key,
-    offline repr, mapper, *and* the frozen unwrapped-value cache ``_qd_dc_unwrapped``) are all disabled, so mutating an
-    ordinary (runtime) field between launches sends the new value rather than a stale first-launch snapshot.
-    """
+    """Reread mutable runtime fields on every launch of an unsafe_hash config containing Final fields."""
     from typing import Final
 
     @dataclass(unsafe_hash=True)
@@ -4146,11 +4143,7 @@ def test_final_aliased_string_detected_despite_unresolvable_sibling():
 
 @test_utils.test()
 def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
-    """``final_scalar_key`` encodes floats by their IEEE-754 bits so values that Python
-    conflates stay distinct in both the in-process spec key and the on-disk fastcache key: ``-0.0`` vs ``0.0`` (equal
-    under ``==`` with equal hashes) and NaNs differing only in sign/payload (all rendered ``"nan"`` by ``str``).
-    Non-float values pass through unchanged.
-    """
+    """Float keys preserve signed zero and NaN payloads in both live and offline caches."""
     import math
     import struct
 
@@ -4330,9 +4323,8 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     assert type(e1.A).__qualname__ == type(e2.A).__qualname__  # identical qualname across the two factory enums
     assert final_scalar_key(e1.A) != final_scalar_key(e2.A)  # but different values -> distinct keys
 
-    # The member value is itself routed through ``final_scalar_key``, so two factory members
-    # named ``A`` whose raw values are ``True`` vs ``1`` (``==`` with equal hashes) stay distinct rather than collapsing
-    # to one key.
+    # The member value is itself routed through ``final_scalar_key``, so two factory members named ``A`` whose raw
+    # values are ``True`` vs ``1`` (``==`` with equal hashes) stay distinct rather than collapsing to one key.
     def _make_enum(v):
         class Local(enum.Enum):
             A = v
@@ -4379,8 +4371,7 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
         final_scalar_key(Arbitrary("a"))
 
     # An enum whose member value is mutable/unsupported (e.g. a ``list``) is rejected too, since the value is routed
-    # through ``final_scalar_key`` and a mutable value could silently change under the cached
-    # spec key.
+    # through ``final_scalar_key`` and a mutable value could silently change under the cached spec key.
     class ListValued(enum.Enum):
         A = [1, 2, 3]
 
@@ -4391,12 +4382,11 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
 @test_utils.test()
 def test_final_scalar_key_live_preserves_class_identity_across_module_rebind():
     """The in-process spec key (``live=True``) must distinguish two *distinct* class objects even when they transiently
-    share ``module``/``qualname`` - e.g. a module-level enum redefined by a module reload, each
-    resolvable to its own definition while bound. In the offline (``live=False``) form
-    ``final_scalar_key`` keys a resolvable class by ``module``/``qualname`` alone
-    (process-stable, so it cannot tell the rebinding apart - a safe cross-process strategy, never a wrong reuse), but
-    the in-process key keys on ``id(cls)`` so a second launch with the fresh class does not reuse the kernel baked for
-    the first (``cfg.x.__class__ is SavedOldClass`` is observable at compile time).
+    share ``module``/``qualname`` - e.g. a module-level enum redefined by a module reload, each resolvable to its own
+    definition while bound. In the offline (``live=False``) form ``final_scalar_key`` keys a resolvable class by
+    ``module``/``qualname`` alone (process-stable, so it cannot tell the rebinding apart - a safe cross-process
+    strategy, never a wrong reuse), but the in-process key keys on ``id(cls)`` so a second launch with the fresh class
+    does not reuse the kernel baked for the first (``cfg.x.__class__ is SavedOldClass`` is observable at compile time).
     """
     import sys
     import types
@@ -4597,10 +4587,10 @@ def test_final_scalar_key_live_hashable_under_unhashable_metaclass():
 
 @test_utils.test()
 def test_final_plan_cache_keyed_by_type_identity():
-    """The Final-field plan/path caches key on type *identity* (``id``), not the type object, so a metaclass that
-    makes two distinct dataclass types compare equal with equal hashes cannot make one reuse the other's Final schema.
-    A plain ``dict[type, ...]`` would return the first type's plan for the second - baking a runtime field, or lowering
-    a real ``Final`` field as an ordinary one and failing compilation, depending on lookup order.
+    """The Final-field plan/path caches key on type *identity* (``id``), not the type object, so a metaclass that makes
+    two distinct dataclass types compare equal with equal hashes cannot make one reuse the other's Final schema. A plain
+    ``dict[type, ...]`` would return the first type's plan for the second - baking a runtime field, or lowering a real
+    ``Final`` field as an ordinary one and failing compilation, depending on lookup order.
     """
     import dataclasses as dcs
     from typing import Final
@@ -4721,9 +4711,9 @@ def test_final_rejects_scalar_subclasses_with_spoofed_module():
 
 @test_utils.test()
 def test_final_float_signed_zero_keys_distinct_kernels():
-    """``-0.0`` and ``0.0`` are equal under Python ``==``/``hash`` but name different baked constants (the sign
-    bit is observable). Encoding Final floats by their IEEE bits keeps them as distinct entries in the template
-    mapper spec key, so each value compiles its own kernel instead of the second launch reusing the first's.
+    """``-0.0`` and ``0.0`` are equal under Python ``==``/``hash`` but name different baked constants (the sign bit is
+    observable). Encoding Final floats by their IEEE bits keeps them as distinct entries in the template mapper spec
+    key, so each value compiles its own kernel instead of the second launch reusing the first's.
     """
     from typing import Final
 
@@ -4905,9 +4895,9 @@ def test_subclass_extra_field_offline_fastcache_uses_annotated_field_set():
 def test_final_exact_baked_type_membership_is_identity_not_equality():
     """A ``Final`` scalar recognises an *exact* builtin (``bool``/``int``/``float``/``str``) by class *identity*, never
     ``==``. A subclass whose metaclass makes the class compare equal to a builtin (``X == int``) must not be mistaken
-    for an exact builtin: equality-based membership would skip subclass/metaclass validation and canonicalize ``X`` as
-    a builtin, collapsing two distinct same-qualified factory classes onto one live key while ``cfg.x.__class__ is
-    First`` is observable. Such a metaclass carries observable equality behavior, so the value is rejected outright.
+    for an exact builtin: equality-based membership would skip subclass/metaclass validation and canonicalize ``X`` as a
+    builtin, collapsing two distinct same-qualified factory classes onto one live key while ``cfg.x.__class__ is First``
+    is observable. Such a metaclass carries observable equality behavior, so the value is rejected outright.
     """
     from quadrants.lang._final.final_class_identity import (
         _is_supported_builtin_scalar_type,
@@ -5018,12 +5008,12 @@ def test_final_enum_rejects_user_override_of_mixin_dependent_hook():
 @test_utils.test()
 def test_final_enum_rejects_user_added_enum_valued_class_attribute():
     """Skipping every enum-valued class attribute would let a user-added one that is *not* a machinery member/alias
-    through - e.g. ``Mode.X = Mode.A``, later reassignable to ``Mode.B``. That is observable as
-    ``cfg.mode.__class__.X`` yet absent from the member's class/name/value key, so relaunching a Final config after
-    rebinding ``X`` would silently reuse the stale specialization. Only names present under their own key in
-    ``_member_map_`` (canonical members and aliases, whose identity the key captures) are exempt; a user-added
-    attribute - even one holding a real member - is rejected. Machinery sunders that merely *hold* an enum value
-    (``IntFlag._boundary_`` is a ``FlagBoundary`` member) must stay exempt, so an ordinary ``IntFlag`` is unaffected.
+    through - e.g. ``Mode.X = Mode.A``, later reassignable to ``Mode.B``. That is observable as ``cfg.mode.__class__.X``
+    yet absent from the member's class/name/value key, so relaunching a Final config after rebinding ``X`` would
+    silently reuse the stale specialization. Only names present under their own key in ``_member_map_`` (canonical
+    members and aliases, whose identity the key captures) are exempt; a user-added attribute - even one holding a real
+    member - is rejected. Machinery sunders that merely *hold* an enum value (``IntFlag._boundary_`` is a
+    ``FlagBoundary`` member) must stay exempt, so an ordinary ``IntFlag`` is unaffected.
     """
     import enum
 
@@ -5119,9 +5109,9 @@ def test_final_enum_rejects_state_on_unselected_member():
 @test_utils.test()
 def test_final_enum_kind_in_offline_key():
     """Redefining an enum's kind (``enum.Enum`` -> ``enum.IntEnum``) while keeping module/qualname/names/values flips
-    compile-time behavior like ``cfg.mode == 1`` (false vs true), so the *offline* fastcache key must differ.
-    In-process the class-identity token already separates the two class objects; this covers the cross-process key,
-    where a resolvable enum's identity is only its module/qualname. Same-kind definitions still key identically.
+    compile-time behavior like ``cfg.mode == 1`` (false vs true), so the *offline* fastcache key must differ. In-process
+    the class-identity token already separates the two class objects; this covers the cross-process key, where a
+    resolvable enum's identity is only its module/qualname. Same-kind definitions still key identically.
     """
     import sys
     import types
@@ -5148,8 +5138,8 @@ def test_final_subclass_structural_identified_object_rejected():
     """A Python class or callable bound into a keyed structural attr (here ``__doc__``) is *rejected*, not keyed: its
     mutable behavior (``__code__``/``__defaults__``/a class dict) is readable at compile time
     (``cfg.x.__class__.__doc__.__defaults__``) yet uncapturable by the key, and it is not among the sources the source
-    cache validates, so keying it by identity/qualname alone could reuse a stale specialization after its body
-    changes. Rejection also covers such an object nested in a container structural value.
+    cache validates, so keying it by identity/qualname alone could reuse a stale specialization after its body changes.
+    Rejection also covers such an object nested in a container structural value.
     """
     import enum
 
