@@ -315,6 +315,7 @@ def prepare_kernel_dataclass_args_for_mapper(
     if kernel._runtime_metadata_defaults is not None and kernel._runtime_metadata_defaults != defaults:
         kernel.mapper._mapping_cache.clear()
         kernel.mapper._mapping_cache_tracker.clear()
+    kernel._runtime_nested_dataclass_schemas = ()
     # Per-call cache: id(value) -> (value, specialization key); retain the value to verify its identity.
     final_value_key_by_value_id: FinalValueKeyCache = {}
     kernel.arg_metas = infer_kernel_dataclass_arg_types(kernel.orig_arguments, py_objs, final_value_key_by_value_id)

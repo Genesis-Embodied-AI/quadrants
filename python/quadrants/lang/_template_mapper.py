@@ -180,8 +180,6 @@ class TemplateMapper:
             except KeyError:
                 pass
             if mapping_cache_tracker:
-                if runtime_kernel is not None:
-                    runtime_kernel._runtime_nested_dataclass_schemas = ()
                 return self._mapping_cache[args_hash]
 
         # Only calls without nested dataclasses enter the identity cache. Its hits can skip schema discovery.
