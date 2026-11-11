@@ -4387,7 +4387,7 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
 @test_utils.test()
 def test_final_scalar_key_live_preserves_class_identity_across_module_rebind():
     """The in-process spec key (``live=True``) must distinguish two *distinct* class objects even when they transiently
-    share ``module``/``qualname`` - e.g. a module-level enum or primitive subclass redefined by a module reload, each
+    share ``module``/``qualname`` - e.g. a module-level enum redefined by a module reload, each
     resolvable to its own definition while bound. In the offline (``live=False``) form
     ``validate_value_for_final_field_and_get_key`` keys a resolvable class by ``module``/``qualname`` alone
     (process-stable, so it cannot tell the rebinding apart - a safe cross-process strategy, never a wrong reuse), but
@@ -5646,5 +5646,5 @@ def test_final_custom_scalar_rejected_when_accessed() -> None:
     def read(config: qd.RuntimeTyped) -> qd.i32:
         return config.count
 
-    with pytest.raises(qd.QuadrantsTypeError, match="Custom scalar subclasses"):
+    with pytest.raises(TypeError, match="Custom scalar subclasses"):
         read(Config(Custom(1)))

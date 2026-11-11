@@ -63,6 +63,7 @@ _STRUCTURAL_CLASS_ATTRS = frozenset(
     }
 )
 
+
 def _observable_metaclass_attr(mcls: type) -> "str | None":
     """Return the first unsupported metaclass attribute name, or None.
 
