@@ -13,10 +13,12 @@ from quadrants._tensor_wrapper import Tensor as _TensorWrapper
 from quadrants.types.annotations import Template
 
 from .._final.final_constant_values import validate_value_for_final_field_and_get_key
-from .._final.final_dataclass_fields import final_field_names, subtree_has_final_fields
+from .._final.final_dataclass_fields import final_field_names
 from .._name_utils import create_flat_name
 from .._ndarray import ScalarNdarray
 from .._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
+from .._runtime_typing.deferred_errors import DeferredMemberType
+from .._runtime_typing.runtime_dataclass import infer_dataclass_type
 from ..field import ScalarField
 from ..kernel_arguments import ArgMetadata
 from ..matrix import MatrixField, MatrixNdarray, VectorNdarray
@@ -41,8 +43,6 @@ g_num_ignored_calls = 0
 
 
 FIELD_METADATA_CACHE_VALUE = "add_value_to_cache_key"
-
-_DC_REPR_NONE = object()
 
 # arg_meta used when walking the children of a ``@qd.data_oriented(template_primitives=False)`` object. Its annotation
 # is non-Template (so primitive members contribute their *type* only, not their value, since they are lifted to runtime
@@ -223,38 +223,22 @@ def dataclass_to_repr(
     raise_on_templated_floats: bool,
     path: tuple[str, ...],
     arg: Any,
-    annotated_type: type | None = None,
+    schema: type,
     pruning_paths: set[str] | None = None,
     parent_flat: str | None = None,
 ) -> str | _FailFastcache:
-    """Hash a dataclass instance, descending only into fields listed in ``pruning_paths`` (when given).
+    """Hash a dataclass using its inferred schema and the fields selected by ``pruning_paths`` (when given).
 
     Returns ``_FAIL_FASTCACHE`` if any visited subtree holds an unsupported tensor type.
     """
-    # PERF: a frozen dataclass's repr never changes, so cache it on the instance (``dataclasses.fields()`` is slow, see
-    # the _template_mapper_hotpath.py module docstring). ``_DC_REPR_NONE`` caches a failure verdict.
-    #
-    # Hash the *declared* type's fields (``annotated_type``, when given) rather than the runtime subclass's, so a
-    # subclass carrying extra app-only fields still fast-caches on the base's field set. Only the runtime type's own
-    # unpruned view is cacheable: the repr/verdict depend on the visited (pruning) set and the active field set, so a
-    # narrower pruning set - or a subclass passed under a different base - must not inherit another view's verdict.
-    # Final-bearing subtrees are excluded too (their repr recomputes each launch to re-run
-    # ``validate_value_for_final_field_and_get_key``).
-    field_source = annotated_type if annotated_type is not None else type(arg)
-    is_frozen = type(arg).__hash__ is not None
-    final_names = final_field_names(field_source)
-    cacheable = (
-        is_frozen and field_source is type(arg) and pruning_paths is None and not subtree_has_final_fields(field_source)
-    )
-    if cacheable:
-        cached = getattr(arg, "_qd_dc_repr", None)
-        if cached is _DC_REPR_NONE:
-            return _FAIL_FASTCACHE
-        if cached is not None:
-            return cached
+    final_names = final_field_names(schema)
     repr_l = []
-    for field in dataclasses.fields(field_source):
+    for field in dataclasses.fields(schema):
         child_value = getattr(arg, field.name)
+        if isinstance(field.type, DeferredMemberType):
+            if _is_path_used(pruning_paths, _child_flat(parent_flat, field.name)):
+                return _FAIL_FASTCACHE
+            continue
         if field.name in final_names:
             # ``validate_value_for_final_field_and_get_key`` rather than ``stringify_obj_type``: the latter has no
             # bare-``str`` case, so a ``Final[str]`` would disable fastcache for the whole arg. Included even when
@@ -269,30 +253,19 @@ def dataclass_to_repr(
             raise_on_templated_floats,
             path + (field.name,),
             child_value,
-            arg_meta=ArgMetadata(field.type, field.name) if hasattr(field_source, "_qd_runtime_origin") else None,
+            arg_meta=ArgMetadata(field.type, field.name),
             pruning_paths=pruning_paths,
             parent_flat=child_flat,
         )
         if _repr is _FAIL_FASTCACHE:
             if isinstance(child_value, _FIELD_TYPES) and field.type is not _TensorWrapper:
                 _mark_should_warn()
-            if cacheable:
-                try:
-                    object.__setattr__(arg, "_qd_dc_repr", _DC_REPR_NONE)
-                except AttributeError:
-                    pass
             return _FAIL_FASTCACHE
         full_repr = f"{field.name}: ({_repr})"
         if field.metadata.get(FIELD_METADATA_CACHE_VALUE, False):
             full_repr += f" = {child_value}"
         repr_l.append(full_repr)
-    result = "[" + ",".join(repr_l) + "]"
-    if cacheable:
-        try:
-            object.__setattr__(arg, "_qd_dc_repr", result)
-        except AttributeError:
-            pass
-    return result
+    return "[" + ",".join(repr_l) + "]"
 
 
 def _is_template(arg_meta: ArgMetadata | None) -> bool:
@@ -365,15 +338,16 @@ def stringify_obj_type(
         _mark_warn_if_not_tensor_annotation(arg_meta)
         return _FAIL_FASTCACHE
     if is_dataclass_instance(obj):
-        # Dataclass annotations reaching this helper are inferred schemas. Data-oriented children can instead have
-        # no annotation or Template, in which case dataclass_to_repr uses the object's class.
-        annotated_type = None
+        # Reuse inferred argument schemas, or infer one for a dataclass reached through a data-oriented member.
+        schema = None
         if arg_meta is not None:
             ann = arg_meta.annotation
             if isinstance(ann, type) and dataclasses.is_dataclass(ann):
-                annotated_type = ann
+                schema = ann
+        if schema is None:
+            schema = infer_dataclass_type(obj, ".".join(path))
         return dataclass_to_repr(
-            raise_on_templated_floats, path, obj, annotated_type, pruning_paths=pruning_paths, parent_flat=parent_flat
+            raise_on_templated_floats, path, obj, schema, pruning_paths=pruning_paths, parent_flat=parent_flat
         )
     if is_data_oriented(obj):
         # Narrowed by pruning info: a member the kernel cannot read cannot affect codegen, so it stays out of the key.

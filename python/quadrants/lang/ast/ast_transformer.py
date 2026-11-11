@@ -19,6 +19,9 @@ from quadrants.lang import ops as qd_ops
 from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._ndrange import _Ndrange
 from quadrants.lang._runtime_typing.deferred_errors import DeferredMemberError
+from quadrants.lang._runtime_typing.nested_dataclasses import (
+    reject_undiscovered_dataclass_member,
+)
 from quadrants.lang._runtime_typing.runtime_dataclass import is_runtime_member_name
 from quadrants.lang._unpacked import _UnpackedVectorRef
 from quadrants.lang.ast.ast_transformer_utils import (
@@ -791,11 +794,21 @@ class ASTTransformer(Builder):
                 node.ptr = getattr(tensor_ops, node.attr)
                 setattr(node, "caller", node.value.ptr)
         elif dataclasses.is_dataclass(node.value.ptr):
+            errors = getattr(ctx.global_context, "nested_dataclass_errors", None)
+            error = errors.get((id(node.value.ptr), node.attr)) if errors else None
+            if error is not None:
+                node.ptr = error
+                if not ctx.expanding_dataclass_call_parameters:
+                    error.reject()
+                return node.ptr
             lifted = maybe_lifted_primitive(ctx, node.value.ptr, node.attr)
             if lifted is not None:
                 node.ptr = lifted
                 return node.ptr
             node.ptr = getattr(node.value.ptr, node.attr)
+            reject_undiscovered_dataclass_member(
+                node.value.ptr, node.attr, node.ptr, ctx.global_context.runtime_dataclass_members
+            )
             from quadrants._tensor_wrapper import (  # pylint: disable=C0415
                 Tensor as _TensorClass,
             )
@@ -819,6 +832,9 @@ class ASTTransformer(Builder):
                 node.ptr = lifted
                 return node.ptr
             node.ptr = getattr(node.value.ptr, node.attr)
+            reject_undiscovered_dataclass_member(
+                node.value.ptr, node.attr, node.ptr, ctx.global_context.runtime_dataclass_members
+            )
             # ``qd.Tensor`` wrappers reached via attribute access on a ``@qd.data_oriented`` struct field at AST-build
             # time. The IR layer downstream (``build_Subscript`` -> ``impl.subscript``) only knows about ``Ndarray`` /
             # ``Field`` / ``Expr``; the wrapper is host-side. Unwrap here so ``state.a[i, j]`` inside a kernel body

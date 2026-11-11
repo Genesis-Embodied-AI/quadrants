@@ -3,6 +3,10 @@ from typing import Any, TypeAlias
 from weakref import ReferenceType, WeakKeyDictionary
 
 from quadrants.lang import impl
+from quadrants.lang._runtime_typing.nested_dataclasses import (
+    get_member_at_path,
+    infer_nested_dataclass_schemas,
+)
 from quadrants.lang._runtime_typing.runtime_dataclass import (
     prepare_kernel_dataclass_args_for_mapper,
 )
@@ -77,7 +81,12 @@ class TemplateMapper:
         # ``annotation_has_final_subtree``). Computed lazily on first ``lookup`` so its ``Final`` validation runs then.
         self._mapping_cache_disabled: bool | None = None
 
-    def extract(self, raise_on_templated_floats: bool, args: tuple[Any, ...], final_value_key_by_value_id=None) -> Key:
+    def extract(
+        self,
+        raise_on_templated_floats: bool,
+        args: tuple[Any, ...],
+        final_value_key_by_value_id=None,
+    ) -> Key:
         # Optional ndarray + None gets its own key: _extract_arg's NdarrayType branch reads .shape and raises on None.
         return tuple(
             [
@@ -173,14 +182,37 @@ class TemplateMapper:
             if mapping_cache_tracker:
                 return self._mapping_cache[args_hash]
 
+        # Only calls without nested dataclasses enter the identity cache. Its hits can skip schema discovery.
+        nested_schemas = infer_nested_dataclass_schemas(args, self.arguments, self.template_slot_locations)
+        if runtime_kernel is not None:
+            runtime_kernel._runtime_nested_dataclass_schemas = nested_schemas
+            runtime_kernel._runtime_has_deferred |= any(
+                schema._qd_runtime_has_deferred for _, _, schema in nested_schemas
+            )
+
         key = self.extract(raise_on_templated_floats, args, final_value_key_by_value_id)
+        if nested_schemas:
+            key += tuple(
+                (
+                    index,
+                    path,
+                    _extract_arg(
+                        raise_on_templated_floats,
+                        get_member_at_path(args[index], path),
+                        schema,
+                        ".".join((self.arguments[index].name, *path)),
+                        final_value_key_by_value_id,
+                    ),
+                )
+                for index, path, schema in nested_schemas
+            )
         try:
             count = self.mapping[key]
         except KeyError:
             count = self.mapping[key] = len(self.mapping)
 
         # Skip the store too when disabled, so the read above always misses and every launch revalidates.
-        if not cache_disabled:
+        if not cache_disabled and not nested_schemas:
             # Note that it is important to prepend the cache tracker with 'None' to avoid misclassifying no argument with
             # expired cache entry caused by deallocated argument.
             mapping_cache_tracker_: list[ReferenceType | None] = [None]

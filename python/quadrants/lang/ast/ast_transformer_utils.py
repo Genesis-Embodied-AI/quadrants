@@ -201,6 +201,8 @@ class ASTTransformerGlobalContext:
         self.struct_primitive_provenance: dict[tuple[int, str], tuple] = {}
         self.struct_primitive_to_expr: dict[tuple[int, str], Any] = {}
         self.struct_primitive_launch_info: list[tuple] = []
+        # Attribute edges discovered for runtime dataclass binding, excluding property aliases.
+        self.runtime_dataclass_members: set[tuple[int, str]] = set()
         # Caller-side `loop_depth` snapshot for the in-flight `@qd.func` invocation. Each func compile creates a fresh
         # `ASTTransformerFuncContext` with `loop_depth = 0`, so without this snapshot a non-static `range(...)` loop
         # inside a func body would not see any outer for-loops in the caller and would skip the backward-mode dynamic-
