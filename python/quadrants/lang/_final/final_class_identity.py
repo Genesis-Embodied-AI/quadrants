@@ -10,8 +10,6 @@ import uuid
 import weakref
 from typing import Any, NoReturn
 
-import numpy as np
-
 _MISSING = object()  # Distinguish missing attributes from attributes whose value is None.
 
 # Prevent dynamic class keys from being reused across processes. Refresh this token after fork.
@@ -33,11 +31,11 @@ _pack_f64 = struct.Struct("<d").pack
 _unpack_u64 = struct.Struct("<Q").unpack
 
 
-# Exact baked primitives; an exact instance is a pure literal and skips the stateful-subclass check.
+# Exact built-in scalar types accepted as Final constants.
 _EXACT_BAKED_TYPES = (bool, int, float, str)
 
 
-def _is_exact_baked_type(cls: type) -> bool:
+def _is_supported_builtin_scalar_type(cls: type) -> bool:
     """Check whether a class is exactly one of the supported built-in scalar types.
 
     Use identity because a metaclass can make distinct classes compare equal.
@@ -48,7 +46,7 @@ def _is_exact_baked_type(cls: type) -> bool:
 # CPython Py_TPFLAGS_HEAPTYPE distinguishes heap types from static library types without trusting __module__.
 _HEAPTYPE_FLAG = 1 << 9
 
-# Attributes allowed on an otherwise empty scalar subclass.
+# Structural attributes handled separately from custom enum behavior.
 _STRUCTURAL_CLASS_ATTRS = frozenset(
     {
         "__module__",
@@ -62,9 +60,6 @@ _STRUCTURAL_CLASS_ATTRS = frozenset(
     }
 )
 
-# Framework layers on a primitive subclass's metaclass MRO; only user ``type`` subclasses below them are inspected.
-_FRAMEWORK_PRIMITIVE_METACLASSES = frozenset({type, object})
-
 
 def _observable_metaclass_attr(mcls: type) -> "str | None":
     """Return the first unsupported metaclass attribute name, or None.
@@ -75,17 +70,6 @@ def _observable_metaclass_attr(mcls: type) -> "str | None":
         if name not in _STRUCTURAL_CLASS_ATTRS:
             return name
     return None
-
-
-def _is_baked_base_type(klass: type) -> bool:
-    """Check whether a class is an allowed built-in or NumPy scalar base.
-
-    Static NumPy scalar types are allowed; a user subclass must not bypass validation by spoofing its module.
-    """
-    if _is_exact_baked_type(klass) or klass is object:
-        return True
-    is_heap_type = bool(klass.__flags__ & _HEAPTYPE_FLAG)
-    return issubclass(klass, np.generic) and not is_heap_type
 
 
 def _slot_names(klass: type) -> tuple[str, ...]:
