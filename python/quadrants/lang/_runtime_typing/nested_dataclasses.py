@@ -2,7 +2,7 @@
 
 from typing import Any, TypeAlias
 
-from quadrants.lang._runtime_typing.runtime_dataclass import infer_dataclass_type
+from quadrants.lang._runtime_typing.runtime_dataclass import infer_dataclass_type, runtime_template_members
 from quadrants.lang._weak_identity_cache import WeakIdentityCache
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import is_data_oriented, is_dataclass_instance
@@ -53,15 +53,32 @@ def infer_nested_dataclass_schemas(
     args: tuple[Any, ...], arg_metas: list[ArgMetadata], template_slots: list[int]
 ) -> list[tuple[int, DataclassPath, type]]:
     """Infer current schemas for dataclasses reached through data-oriented arguments."""
-    schemas = []
+    schemas: list[tuple[int, DataclassPath, type]] = []
+    active_ids: set[int] = set()
+
+    def visit_owner(index: int, owner: Any, owner_path: DataclassPath) -> None:
+        """Infer descendants and continue through any data-oriented members inside their schemas."""
+        if id(owner) in active_ids or not is_data_oriented(owner):
+            return
+        active_ids.add(id(owner))
+        try:
+            for relative_path in nested_dataclass_paths(owner):
+                path = (*owner_path, *relative_path)
+                child = get_member_at_path(owner, relative_path)
+                if not hasattr(type(child), "__dataclass_fields__"):
+                    raise TypeError("A data-oriented dataclass member must remain a dataclass between kernel calls.")
+                schema = infer_dataclass_type(child, ".".join((arg_metas[index].name, *path)))
+                schemas.append((index, path, schema))
+                for member_path, member in runtime_template_members(schema, child):
+                    visit_owner(index, member, (*path, *member_path))
+        finally:
+            active_ids.remove(id(owner))
+
     for index in template_slots:
-        obj = args[index]
-        if not is_data_oriented(obj) or hasattr(type(obj), "__dataclass_fields__"):
-            continue
-        for path in nested_dataclass_paths(obj):
-            child = get_member_at_path(obj, path)
-            if not hasattr(type(child), "__dataclass_fields__"):
-                raise TypeError("A data-oriented dataclass member must remain a dataclass between kernel calls.")
-            schema = infer_dataclass_type(child, ".".join((arg_metas[index].name, *path)))
-            schemas.append((index, path, schema))
+        if not is_dataclass_instance(args[index]):
+            visit_owner(index, args[index], ())
+    for index, meta in enumerate(arg_metas):
+        if hasattr(meta.annotation, "_qd_runtime_origin"):
+            for path, member in runtime_template_members(meta.annotation, args[index]):
+                visit_owner(index, member, path)
     return schemas

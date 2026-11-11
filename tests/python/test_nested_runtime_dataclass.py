@@ -258,3 +258,43 @@ def test_nested_dataclass_preserves_data_oriented_child_policy() -> None:
         return qd.static(owner.state.options.count)
 
     assert read(Owner()) == 3
+
+
+@pytest.mark.parametrize("dataclass_root", [True, False])
+@test_utils.test()
+def test_alternating_dataclass_and_data_oriented_nesting(dataclass_root: bool) -> None:
+    """Dataclass inference continues through intervening data-oriented objects."""
+
+    @dataclass
+    class Leaf:
+        value: str
+
+    @qd.data_oriented
+    class Middle:
+        def __init__(self) -> None:
+            self.leaf = Leaf(3)
+
+    @dataclass
+    class State:
+        middle: str
+
+    @qd.data_oriented
+    class Owner:
+        def __init__(self) -> None:
+            self.state = State(Middle())
+
+    @qd.kernel
+    def read_owner(owner: qd.Template) -> qd.f32:
+        return owner.state.middle.leaf.value
+
+    @qd.kernel
+    def read_state(state: qd.RuntimeTyped) -> qd.f32:
+        return state.middle.leaf.value
+
+    owner = Owner()
+    read, argument = (read_state, owner.state) if dataclass_root else (read_owner, owner)
+    assert read(argument) == 3
+    owner.state.middle.leaf.value = 7
+    assert read(argument) == 7
+    owner.state.middle.leaf.value = 2.5
+    assert read(argument) == 2.5
