@@ -23,9 +23,9 @@ from quadrants.types import annotations
 def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
     """Declare used scalar members and record their attribute paths for binding at each launch.
 
-    Dataclasses use their inferred schemas, preserving Final constants and deferred member errors. Other
-    data-oriented members are lifted only under template_primitives=False, using the default numeric types.
-    Attribute accesses are identified by their parent object and member name, since scalar identities can be shared.
+    Dataclasses use their inferred schemas, preserving Final constants and deferred member errors. Other data-oriented
+    members are lifted only under template_primitives=False, using the default numeric types. Attribute accesses are
+    identified by their parent object and member name, since scalar identities can be shared.
     """
     assert ctx.py_args is not None
     flagged: list[tuple[int, Any]] = []

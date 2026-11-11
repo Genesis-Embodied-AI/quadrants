@@ -371,8 +371,7 @@ def stringify_obj_type(
         _mark_warn_if_not_tensor_annotation(arg_meta)
         return _FAIL_FASTCACHE
     if is_dataclass_instance(obj):
-        # Dataclass annotations reaching this helper are inferred schemas. Data-oriented children can instead have
-        # no annotation or Template, in which case dataclass_to_repr uses the object's class.
+        # Reuse inferred argument schemas, or infer one for a dataclass reached through a data-oriented member.
         annotated_type = None
         if arg_meta is not None:
             ann = arg_meta.annotation
