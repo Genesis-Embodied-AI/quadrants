@@ -38,19 +38,19 @@ def test_nested_dataclass_alias_rejected(route: str, fastcache: bool) -> None:
             return self.states[0]
 
     @qd.kernel(fastcache=fastcache)
-    def read(owner: qd.Template) -> qd.i32:
+    def read(owner: qd.Template, mode: qd.Template) -> qd.i32:
         """Read through the route whose object identity hides its binding path."""
-        if qd.static(route == "list"):
+        if qd.static(mode == "list"):
             return owner.states[0].value
-        elif qd.static(route == "method"):
+        elif qd.static(mode == "method"):
             return owner.get_alias().value
-        elif qd.static(route == "attributes"):
+        elif qd.static(mode == "attributes"):
             return owner.second.value
         else:
             return owner.pair.second.value
 
     with pytest.raises(Exception, match="dataclass.*alias|alias.*dataclass"):
-        read(Owner())
+        read(Owner(), route)
 
 
 @test_utils.test()
