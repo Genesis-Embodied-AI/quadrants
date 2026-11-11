@@ -59,7 +59,7 @@ def test_nested_dataclass_alias_rejected(route: str, fastcache: bool) -> None:
     assert read(owner, route) == 3
 
 
-@test_utils.test()
+@test_utils.test(offline_cache=True)
 def test_unused_nested_dataclass_alias_is_harmless() -> None:
     """Unaccessed aliased scalar members must not prevent compilation."""
 
@@ -75,13 +75,17 @@ def test_unused_nested_dataclass_alias_is_harmless() -> None:
             self.second = self.first
             self.used = State(9)
 
-    @qd.kernel
+    @qd.kernel(fastcache=True)
     def read(owner: qd.Template) -> qd.i32:
         """Read only the independent dataclass."""
         return owner.used.value
 
     owner = Owner()
     assert read(owner) == 9
+    new_owner = Owner()
+    new_owner.used.value = 15
+    assert read(new_owner) == 15
+    assert read._primal.src_ll_cache_observations.cache_loaded
     owner.used.value = 11
     assert read(owner) == 11
 
