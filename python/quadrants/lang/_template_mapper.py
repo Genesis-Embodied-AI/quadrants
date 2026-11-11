@@ -3,6 +3,10 @@ from typing import Any, TypeAlias
 from weakref import ReferenceType, WeakKeyDictionary
 
 from quadrants.lang import impl
+from quadrants.lang._runtime_typing.nested_dataclasses import (
+    get_member_at_path,
+    infer_nested_dataclass_schemas,
+)
 from quadrants.lang._runtime_typing.runtime_dataclass import (
     prepare_kernel_dataclass_args_for_mapper,
 )
@@ -125,6 +129,12 @@ class TemplateMapper:
         args_hash: ArgsHash = tuple([id(arg) for arg in args])
         if runtime_kernel is not None:
             final_value_key_by_value_id = prepare_kernel_dataclass_args_for_mapper(runtime_kernel, args, args_hash)
+        nested_schemas = infer_nested_dataclass_schemas(args, [meta.name for meta in self.arguments])
+        if runtime_kernel is not None:
+            runtime_kernel._runtime_nested_dataclass_schemas = nested_schemas
+            runtime_kernel._runtime_has_deferred |= any(
+                schema._qd_runtime_has_deferred for _, _, schema in nested_schemas
+            )
         # A ``@qd.data_oriented`` container's member ndarrays can be reassigned between calls on the same instance
         # (``state.x = other_ndarray``), which ``id(arg)`` cannot see, so the spec-key cache would serve an entry
         # compiled for the old dtype/ndim. Fold the reachable ndarray ids in as well.
@@ -165,7 +175,7 @@ class TemplateMapper:
                 annotation_has_final_subtree(kernel_arg.annotation) for kernel_arg in self.arguments
             )
 
-        if not cache_disabled:
+        if not cache_disabled and not nested_schemas:
             try:
                 mapping_cache_tracker = self._mapping_cache_tracker[args_hash]
             except KeyError:
@@ -174,6 +184,21 @@ class TemplateMapper:
                 return self._mapping_cache[args_hash]
 
         key = self.extract(raise_on_templated_floats, args, final_value_key_by_value_id)
+        if nested_schemas:
+            key += tuple(
+                (
+                    index,
+                    path,
+                    _extract_arg(
+                        raise_on_templated_floats,
+                        get_member_at_path(args[index], path),
+                        schema,
+                        ".".join((self.arguments[index].name, *path)),
+                        final_value_key_by_value_id,
+                    ),
+                )
+                for index, path, schema in nested_schemas
+            )
         try:
             count = self.mapping[key]
         except KeyError:

@@ -17,6 +17,8 @@ from .._final.final_dataclass_fields import final_field_names, subtree_has_final
 from .._name_utils import create_flat_name
 from .._ndarray import ScalarNdarray
 from .._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
+from .._runtime_typing.deferred_errors import DeferredMemberType
+from .._runtime_typing.runtime_dataclass import infer_dataclass_type
 from ..field import ScalarField
 from ..kernel_arguments import ArgMetadata
 from ..matrix import MatrixField, MatrixNdarray, VectorNdarray
@@ -255,6 +257,10 @@ def dataclass_to_repr(
     repr_l = []
     for field in dataclasses.fields(field_source):
         child_value = getattr(arg, field.name)
+        if isinstance(field.type, DeferredMemberType):
+            if _is_path_used(pruning_paths, _child_flat(parent_flat, field.name)):
+                return _FAIL_FASTCACHE
+            continue
         if field.name in final_names:
             # ``validate_value_for_final_field_and_get_key`` rather than ``stringify_obj_type``: the latter has no
             # bare-``str`` case, so a ``Final[str]`` would disable fastcache for the whole arg. Included even when
@@ -372,6 +378,8 @@ def stringify_obj_type(
             ann = arg_meta.annotation
             if isinstance(ann, type) and dataclasses.is_dataclass(ann):
                 annotated_type = ann
+        if annotated_type is None:
+            annotated_type = infer_dataclass_type(obj, ".".join(path))
         return dataclass_to_repr(
             raise_on_templated_floats, path, obj, annotated_type, pruning_paths=pruning_paths, parent_flat=parent_flat
         )

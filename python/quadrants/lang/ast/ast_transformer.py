@@ -791,6 +791,13 @@ class ASTTransformer(Builder):
                 node.ptr = getattr(tensor_ops, node.attr)
                 setattr(node, "caller", node.value.ptr)
         elif dataclasses.is_dataclass(node.value.ptr):
+            errors = getattr(ctx.global_context, "nested_dataclass_errors", None)
+            error = errors.get((id(node.value.ptr), node.attr)) if errors else None
+            if error is not None:
+                node.ptr = error
+                if not ctx.expanding_dataclass_call_parameters:
+                    error.reject()
+                return node.ptr
             lifted = maybe_lifted_primitive(ctx, node.value.ptr, node.attr)
             if lifted is not None:
                 node.ptr = lifted

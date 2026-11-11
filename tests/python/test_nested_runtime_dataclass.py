@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Final
 
 import pytest
@@ -13,6 +14,7 @@ from tests.helpers import test_utils
 @test_utils.test()
 def test_nested_dataclass_hash_ignores_declared_child_type() -> None:
     """An unused annotation must not invent a nested Final constraint in the disk-cache key."""
+
     @dataclass(frozen=True)
     class Declared:
         value: Final = 3
@@ -34,6 +36,7 @@ def test_nested_dataclass_hash_ignores_declared_child_type() -> None:
 @test_utils.test()
 def test_nested_dataclass_scalar_changes_are_runtime(template_primitives: bool) -> None:
     """Dataclass scalar values remain runtime inputs regardless of their containing object's policy."""
+
     @dataclass
     class State:
         value: str
@@ -61,6 +64,7 @@ def test_nested_dataclass_scalar_changes_are_runtime(template_primitives: bool) 
 @test_utils.test()
 def test_nested_dataclass_unused_invalid_final() -> None:
     """Unused invalid Final members are deferred even beneath a data-oriented object."""
+
     @dataclass
     class State:
         value: str
@@ -76,3 +80,75 @@ def test_nested_dataclass_unused_invalid_final() -> None:
         return owner.state.value
 
     assert read(Owner()) == 4
+
+
+@test_utils.test()
+def test_nested_dataclass_final_replacement_changes_specialization() -> None:
+    """Replacing a frozen dataclass updates baked Final values inside its data-oriented owner."""
+
+    @dataclass(frozen=True)
+    class State:
+        bias: Final[str]
+        value: str
+
+    @qd.data_oriented
+    class Owner:
+        def __init__(self) -> None:
+            self.state = State(2, 3)
+
+    @qd.kernel
+    def read(owner: qd.Template) -> qd.i32:
+        return qd.static(owner.state.bias) + owner.state.value
+
+    owner = Owner()
+    assert read(owner) == 5
+    owner.state = State(7, 4)
+    assert read(owner) == 11
+
+
+@test_utils.test()
+def test_nested_dataclass_used_invalid_member_reports_path() -> None:
+    """Used unsupported members fail with their kernel argument path."""
+
+    @dataclass(frozen=True)
+    class State:
+        value: int
+
+    @qd.data_oriented
+    class Owner:
+        def __init__(self) -> None:
+            self.state = State({1, 2})
+
+    @qd.kernel
+    def read(owner: qd.Template) -> qd.i32:
+        return len(owner.state.value)
+
+    with pytest.raises(Exception, match=r"owner\.state\.value"):
+        read(Owner())
+
+
+@test_utils.test()
+def test_nested_dataclass_offline_cache(tmp_path: Path) -> None:
+    """Disk-cache reuse must bind current nested scalar values and retain Final specialization."""
+
+    @dataclass(frozen=True)
+    class State:
+        bias: Final[str]
+        value: str
+
+    @qd.data_oriented
+    class Owner:
+        def __init__(self, bias: int, value: float) -> None:
+            self.state = State(bias, value)
+
+    arch = qd.lang.impl.current_cfg().arch
+    for bias, value in ((2, 1.5), (2, 4.5), (7, 4.5), (2, 8.5)):
+        qd.init(arch=arch, offline_cache=True, offline_cache_file_path=str(tmp_path))
+
+        @qd.kernel(fastcache=True)
+        def run(owner: qd.Template, output: qd.types.ndarray()):
+            output[0] = qd.static(owner.state.bias) + owner.state.value
+
+        output = qd.ndarray(qd.f32, shape=1)
+        run(Owner(bias, value), output)
+        assert output[0] == bias + value

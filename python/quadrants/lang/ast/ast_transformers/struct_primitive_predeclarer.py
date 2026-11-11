@@ -14,8 +14,13 @@ user-facing surface.
 import dataclasses
 from typing import Any
 
+from quadrants._lib.core.quadrants_python import DataTypeCxx
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import expr, impl
+from quadrants.lang._final.final_annotation import is_final_annotation
+from quadrants.lang._runtime_typing.deferred_errors import DeferredMemberType
+from quadrants.lang._runtime_typing.nested_dataclasses import get_member_at_path
+from quadrants.lang._runtime_typing.runtime_dataclass import infer_dataclass_type
 from quadrants.lang.ast.ast_transformer_utils import ASTTransformerFuncContext
 from quadrants.lang.util import (
     is_data_oriented,
@@ -57,12 +62,13 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
             val = val._unwrap()
         if wants_runtime_primitives(val):
             flagged.append((i, val))
-    if not flagged:
+    nested_schemas = getattr(ctx.func, "_runtime_nested_dataclass_schemas", ())
+    if not flagged and not nested_schemas:
         return
 
     from quadrants._lib import core as _qd_core  # pylint: disable=C0415
     from quadrants.lang.util import cook_dtype  # pylint: disable=C0415
-    from quadrants.types.utils import is_signed  # pylint: disable=C0415
+    from quadrants.types.utils import is_real, is_signed  # pylint: disable=C0415
 
     runtime = impl.get_runtime()
     default_ip = runtime.default_ip
@@ -77,12 +83,15 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
     # collides with dataclass-field pruning.
     func_id = pruning.KERNEL_FUNC_ID
 
-    def _register_primitive(parent, attr_name, value, arg_idx, attr_chain):
+    def _register_primitive(parent, attr_name, value, arg_idx, attr_chain, inferred_dtype=None):
         key = (id(parent), attr_name)
         if key in provenance:
             return
         value_type = type(value)
-        if value_type is bool or value_type is int:
+        if inferred_dtype is not None:
+            dtype = inferred_dtype
+            kind = "f" if is_real(dtype) else ("i" if is_signed(dtype) else "u")
+        elif value_type is bool or value_type is int:
             dtype, kind = default_ip, ("i" if is_signed(default_ip) else "u")
         elif value_type is float:
             dtype, kind = default_fp, "f"
@@ -112,7 +121,23 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
             return
         seen.add(obj_id)
         if is_dataclass_instance(obj):
-            items = [(f.name, getattr(obj, f.name)) for f in dataclasses.fields(obj)]
+            schema = infer_dataclass_type(obj, ".".join((ctx.func.arg_metas[arg_idx].name, *path)))
+            for field in dataclasses.fields(schema):
+                value = getattr(obj, field.name)
+                if isinstance(field.type, DeferredMemberType):
+                    errors = getattr(ctx.global_context, "nested_dataclass_errors", None)
+                    if errors is None:
+                        errors = ctx.global_context.nested_dataclass_errors = {}
+                    errors[(id(obj), field.name)] = field.type.bind(
+                        ".".join((ctx.func.arg_metas[arg_idx].name, *path, field.name))
+                    )
+                elif is_final_annotation(field.type):
+                    continue
+                elif isinstance(field.type, DataTypeCxx):
+                    _register_primitive(obj, field.name, value, arg_idx, (*path, field.name), field.type)
+                elif is_dataclass_instance(value) or is_data_oriented(value):
+                    _walk(value, arg_idx, (*path, field.name), seen)
+            return
         elif hasattr(obj, "__dict__"):
             items = list(vars(obj).items())
         else:
@@ -128,3 +153,6 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
 
     for arg_idx, val in flagged:
         _walk(val, arg_idx, (), set())
+
+    for arg_idx, path, _schema in nested_schemas:
+        _walk(get_member_at_path(ctx.py_args[arg_idx], path), arg_idx, path, set())
