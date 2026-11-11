@@ -152,6 +152,8 @@ def test_nested_dataclass_offline_cache(tmp_path: Path) -> None:
         output = qd.ndarray(qd.f32, shape=1)
         run(Owner(bias, value), output)
         assert output[0] == bias + value
+        if value in (4.5, 8.5) and bias == 2:
+            assert run._primal.src_ll_cache_observations.cache_loaded
 
 
 @test_utils.test()

@@ -1,15 +1,5 @@
 # type: ignore
-"""Lift primitive members of ``@qd.data_oriented(template_primitives=False)`` template args into runtime scalar kernel
-args at AST-build time.
-
-Lives alongside ``ndarray_arg_resolver.py`` / ``checkpoint_transformer.py`` so the central
-``function_def_transformer.py`` file doesn't have to grow per-feature (the same rationale the ndarray resolver
-documents). ``FunctionDefTransformer.transform`` delegates here right after ``_predeclare_struct_ndarrays``; this is
-the only entry point.
-
-See ``docs/source/user_guide/compound_types.md`` (section "Runtime primitives: ``template_primitives=False``") for the
-user-facing surface.
-"""
+"""Bind nested dataclass scalars and opted-in data-oriented primitives as runtime kernel arguments."""
 
 import dataclasses
 from typing import Any
@@ -31,25 +21,13 @@ from quadrants.types import annotations
 
 
 def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
-    """For each templated arg whose root class is decorated ``@qd.data_oriented(template_primitives=False)``, walk
-    the reachable attribute graph and declare every primitive (``int`` / ``float`` / ``bool``) member as a runtime
-    scalar kernel arg, instead of letting ``build_Attribute`` bake it as a compile-time constant. The arg-load
-    ``Expr`` is cached on the global context keyed by ``(id(parent_obj), attr_name)`` for ``build_Attribute`` to
-    substitute, and a ``(arg_id, template_arg_idx, attr_chain, kind)`` tuple is recorded for the launch path to
-    bind the live value.
+    """Declare used scalar members and record their attribute paths for binding at each launch.
 
-    Mirrors ``_predeclare_struct_ndarrays``. Primitive leaves have no stable identity (``id(5)`` is interned), so
-    the cache is keyed on the parent container's identity plus the attribute name. Only plain Python ``int`` /
-    ``float`` / ``bool`` are lifted (matched by exact type so numpy scalars etc. keep their previous baked
-    behaviour). dtype follows the runtime defaults (``default_ip`` / ``default_fp``), matching how a baked Python
-    constant would be typed.
-
-    ``_seen`` guards against attribute-graph cycles (e.g. ``sim.solver.sim is sim``), same as the ndarray walker.
+    Dataclasses use their inferred schemas, preserving Final constants and deferred member errors. Other
+    data-oriented members are lifted only under template_primitives=False, using the default numeric types.
+    Attribute accesses are identified by their parent object and member name, since scalar identities can be shared.
     """
     assert ctx.py_args is not None
-    # Cheap early-out for the common case (no flagged template arg): the default ``template_primitives=True`` path
-    # never builds a walk, so genesis-style data_oriented kernels pay only one ``wants_runtime_primitives`` check
-    # per template arg at compile time, and nothing at launch.
     flagged: list[tuple[int, Any]] = []
     for i, arg_meta in enumerate(ctx.func.arg_metas):
         anno = arg_meta.annotation
@@ -83,7 +61,15 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
     # collides with dataclass-field pruning.
     func_id = pruning.KERNEL_FUNC_ID
 
-    def _register_primitive(parent, attr_name, value, arg_idx, attr_chain, inferred_dtype=None):
+    def _register_primitive(
+        parent: Any,
+        attr_name: str,
+        value: Any,
+        arg_idx: int,
+        attr_chain: tuple[str, ...],
+        inferred_dtype: DataTypeCxx | None = None,
+    ) -> None:
+        """Declare a used scalar and remember how to read its value at launch."""
         key = (id(parent), attr_name)
         if key in provenance:
             return
@@ -115,7 +101,10 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
         )
         launch_info.append((arg_id[0], arg_idx, attr_chain, kind))
 
-    def _walk(obj, arg_idx, path, seen, schema=None):
+    def _walk(
+        obj: Any, arg_idx: int, path: tuple[str, ...], seen: set[int], schema: type | None = None
+    ) -> None:
+        """Register scalar members while preserving inferred schemas and avoiding object cycles."""
         obj_id = id(obj)
         if obj_id in seen:
             return
