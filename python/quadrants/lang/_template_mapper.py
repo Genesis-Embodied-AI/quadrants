@@ -49,9 +49,7 @@ def _classify_disposition(arg: Any) -> object:
 Key: TypeAlias = tuple[Any, ...]
 
 
-def _destroy_callback(
-    template_mapper_ref: ReferenceType["TemplateMapper"], ref: ReferenceType
-):
+def _destroy_callback(template_mapper_ref: ReferenceType["TemplateMapper"], ref: ReferenceType):
     maybe_template_mapper = template_mapper_ref()
     if maybe_template_mapper is not None:
         maybe_template_mapper._mapping_cache.clear()
@@ -71,9 +69,7 @@ class TemplateMapper:
     - these are returned as a heterogeneous tuple, whose contents depends on the type
     """
 
-    def __init__(
-        self, arguments: list[ArgMetadata], template_slot_locations: list[int]
-    ) -> None:
+    def __init__(self, arguments: list[ArgMetadata], template_slot_locations: list[int]) -> None:
         self.arguments: list[ArgMetadata] = arguments
         self.num_args: int = len(arguments)
         self.template_slot_locations: list[int] = template_slot_locations
@@ -96,9 +92,7 @@ class TemplateMapper:
             [
                 (
                     OPTIONAL_ABSENT
-                    if arg is None
-                    and kernel_arg.optional
-                    and type(kernel_arg.annotation) is ndarray_type.NdarrayType
+                    if arg is None and kernel_arg.optional and type(kernel_arg.annotation) is ndarray_type.NdarrayType
                     else _extract_arg(
                         raise_on_templated_floats,
                         arg,
@@ -119,17 +113,13 @@ class TemplateMapper:
         runtime_kernel=None,
     ) -> tuple[int, Key]:
         if len(args) != self.num_args:
-            raise TypeError(
-                f"{self.num_args} argument(s) needed but {len(args)} provided."
-            )
+            raise TypeError(f"{self.num_args} argument(s) needed but {len(args)} provided.")
 
         # Keep track of quadrants runtime to automatically clear cache if destroyed
         if self._prog_weakref is None:
             prog = impl.get_runtime().prog
             assert prog is not None
-            self._prog_weakref = ReferenceType(
-                prog, partial(_destroy_callback, ReferenceType(self))
-            )
+            self._prog_weakref = ReferenceType(prog, partial(_destroy_callback, ReferenceType(self)))
         else:
             # Since we already store a weak reference to quadrants program, it is much faster to use it rather than
             # paying the overhead of calling pybind11 functions (~200ns vs 5ns).
@@ -143,12 +133,8 @@ class TemplateMapper:
         mapping_cache_tracker: list[ReferenceType | None] | None = None
         args_hash: ArgsHash = tuple([id(arg) for arg in args])
         if runtime_kernel is not None:
-            final_value_key_by_value_id = prepare_kernel_dataclass_args_for_mapper(
-                runtime_kernel, args, args_hash
-            )
-        nested_schemas = infer_nested_dataclass_schemas(
-            args, self.arguments, self.template_slot_locations
-        )
+            final_value_key_by_value_id = prepare_kernel_dataclass_args_for_mapper(runtime_kernel, args, args_hash)
+        nested_schemas = infer_nested_dataclass_schemas(args, self.arguments, self.template_slot_locations)
         if runtime_kernel is not None:
             runtime_kernel._runtime_nested_dataclass_schemas = nested_schemas
             runtime_kernel._runtime_has_deferred |= any(
@@ -191,8 +177,7 @@ class TemplateMapper:
         cache_disabled = self._mapping_cache_disabled
         if cache_disabled is None:
             cache_disabled = self._mapping_cache_disabled = any(
-                annotation_has_final_subtree(kernel_arg.annotation)
-                for kernel_arg in self.arguments
+                annotation_has_final_subtree(kernel_arg.annotation) for kernel_arg in self.arguments
             )
 
         if not cache_disabled and not nested_schemas:
@@ -232,9 +217,7 @@ class TemplateMapper:
 
             # Clear the tracker (original invalidation) and also remove the stale
             # dict entries so they do not accumulate indefinitely.
-            def _evict_callback(
-                ref, _tracker=mapping_cache_tracker_, _self=self, _hash=args_hash
-            ):
+            def _evict_callback(ref, _tracker=mapping_cache_tracker_, _self=self, _hash=args_hash):
                 _tracker.clear()
                 _self._mapping_cache.pop(_hash, None)
                 _self._mapping_cache_tracker.pop(_hash, None)
@@ -244,9 +227,7 @@ class TemplateMapper:
                 # these arguments to track the lifetime of the corresponding cache entry and taking weakref of primitive
                 # types if forbidden anyway.
                 mapping_cache_tracker_ += [
-                    ReferenceType(arg, _evict_callback)
-                    for arg in args
-                    if type(arg) not in _primitive_types
+                    ReferenceType(arg, _evict_callback) for arg in args if type(arg) not in _primitive_types
                 ]
                 self._mapping_cache_tracker[args_hash] = mapping_cache_tracker_
                 self._mapping_cache[args_hash] = (count, key)

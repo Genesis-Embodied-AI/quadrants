@@ -53,9 +53,7 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
     flagged: list[tuple[int, Any]] = []
     for i, arg_meta in enumerate(ctx.func.arg_metas):
         anno = arg_meta.annotation
-        is_template = anno is annotations.template or isinstance(
-            anno, annotations.template
-        )
+        is_template = anno is annotations.template or isinstance(anno, annotations.template)
         is_tensor_anno = anno is _TensorClass
         if not (is_template or is_tensor_anno):
             continue
@@ -85,9 +83,7 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
     # collides with dataclass-field pruning.
     func_id = pruning.KERNEL_FUNC_ID
 
-    def _register_primitive(
-        parent, attr_name, value, arg_idx, attr_chain, inferred_dtype=None
-    ):
+    def _register_primitive(parent, attr_name, value, arg_idx, attr_chain, inferred_dtype=None):
         key = (id(parent), attr_name)
         if key in provenance:
             return
@@ -112,14 +108,10 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
         cooked = cook_dtype(dtype)
         # ``insert_scalar_param`` returns an arg-id vector (like ``insert_ndarray_param``); ``make_arg_load_expr``
         # consumes the vector, while the launch path needs the integer slot ``arg_id[0]``.
-        arg_id = impl.get_runtime().compiling_callable.insert_scalar_param(
-            cooked, flat_name
-        )
+        arg_id = impl.get_runtime().compiling_callable.insert_scalar_param(cooked, flat_name)
         argload_di = _qd_core.DebugInfo(impl.get_runtime().get_current_src_info())
         expr_cache[key] = expr.Expr(
-            _qd_core.make_arg_load_expr(
-                arg_id, cooked, False, create_load=True, dbg_info=argload_di
-            )
+            _qd_core.make_arg_load_expr(arg_id, cooked, False, create_load=True, dbg_info=argload_di)
         )
         launch_info.append((arg_id[0], arg_idx, attr_chain, kind))
 
@@ -129,15 +121,11 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
             return
         seen.add(obj_id)
         if is_dataclass_instance(obj):
-            schema = schema or infer_dataclass_type(
-                obj, ".".join((ctx.func.arg_metas[arg_idx].name, *path))
-            )
+            schema = schema or infer_dataclass_type(obj, ".".join((ctx.func.arg_metas[arg_idx].name, *path)))
             for field in dataclasses.fields(schema):
                 value = getattr(obj, field.name)
                 if isinstance(field.type, DeferredMemberType):
-                    errors = getattr(
-                        ctx.global_context, "nested_dataclass_errors", None
-                    )
+                    errors = getattr(ctx.global_context, "nested_dataclass_errors", None)
                     if errors is None:
                         errors = ctx.global_context.nested_dataclass_errors = {}
                     errors[(id(obj), field.name)] = field.type.bind(
@@ -146,9 +134,7 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
                 elif is_final_annotation(field.type):
                     continue
                 elif isinstance(field.type, DataTypeCxx):
-                    _register_primitive(
-                        obj, field.name, value, arg_idx, (*path, field.name), field.type
-                    )
+                    _register_primitive(obj, field.name, value, arg_idx, (*path, field.name), field.type)
                 elif is_dataclass_instance(value) or is_data_oriented(value):
                     child_schema = field.type if is_dataclass_instance(value) else None
                     _walk(value, arg_idx, (*path, field.name), seen, child_schema)
@@ -162,9 +148,7 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
                 attr_val = attr_val._unwrap()
             attr_type = type(attr_val)
             if attr_type is bool or attr_type is int or attr_type is float:
-                _register_primitive(
-                    obj, attr_name, attr_val, arg_idx, (*path, attr_name)
-                )
+                _register_primitive(obj, attr_name, attr_val, arg_idx, (*path, attr_name))
             elif is_dataclass_instance(attr_val) or is_data_oriented(attr_val):
                 _walk(attr_val, arg_idx, (*path, attr_name), seen)
 
@@ -172,6 +156,4 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
         _walk(val, arg_idx, (), set())
 
     for arg_idx, path, schema in nested_schemas:
-        _walk(
-            get_member_at_path(ctx.py_args[arg_idx], path), arg_idx, path, set(), schema
-        )
+        _walk(get_member_at_path(ctx.py_args[arg_idx], path), arg_idx, path, set(), schema)

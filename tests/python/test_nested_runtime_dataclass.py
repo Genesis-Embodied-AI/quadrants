@@ -28,9 +28,7 @@ def test_nested_dataclass_hash_ignores_declared_child_type() -> None:
         def __init__(self) -> None:
             self.state = State(7)
 
-    result = args_hasher.hash_args(
-        False, [Owner()], [ArgMetadata(qd.Template, "owner")]
-    )
+    result = args_hasher.hash_args(False, [Owner()], [ArgMetadata(qd.Template, "owner")])
     assert isinstance(result, str)
 
 

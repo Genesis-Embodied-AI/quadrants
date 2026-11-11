@@ -29,11 +29,7 @@ def nested_dataclass_paths(obj: Any) -> tuple[DataclassPath, ...]:
             return
         active_ids.add(id(value))
         try:
-            members = (
-                value._asdict()
-                if isinstance(value, tuple) and hasattr(value, "_asdict")
-                else vars(value)
-            )
+            members = value._asdict() if isinstance(value, tuple) and hasattr(value, "_asdict") else vars(value)
             for name, child in members.items():
                 if not name.startswith("_qd_"):
                     walk(child, (*path, name))
@@ -65,11 +61,7 @@ def infer_nested_dataclass_schemas(
         for path in nested_dataclass_paths(obj):
             child = get_member_at_path(obj, path)
             if not hasattr(type(child), "__dataclass_fields__"):
-                raise TypeError(
-                    "A data-oriented dataclass member must remain a dataclass between kernel calls."
-                )
-            schema = infer_dataclass_type(
-                child, ".".join((arg_metas[index].name, *path))
-            )
+                raise TypeError("A data-oriented dataclass member must remain a dataclass between kernel calls.")
+            schema = infer_dataclass_type(child, ".".join((arg_metas[index].name, *path)))
             schemas.append((index, path, schema))
     return schemas
