@@ -98,10 +98,10 @@ def reject_undiscovered_dataclass_member(
     """
     if not is_dataclass_instance(value):
         return
-    if is_data_oriented(parent):
-        discovered = (id(parent), name) in discovered_members
-    elif is_dataclass_instance(parent):
+    if is_dataclass_instance(parent):
         discovered = name in type(parent).__dataclass_fields__
+    elif is_data_oriented(parent):
+        discovered = (id(parent), name) in discovered_members
     else:
         return
     if not discovered:
