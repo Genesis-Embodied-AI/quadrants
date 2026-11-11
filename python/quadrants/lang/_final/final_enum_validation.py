@@ -5,7 +5,7 @@ from typing import Any
 
 from quadrants.lang._final.final_class_identity import (
     _STRUCTURAL_CLASS_ATTRS,
-    _is_baked_base_type,
+    _is_exact_baked_type,
     _observable_metaclass_attr,
     _slot_names,
 )
@@ -315,7 +315,7 @@ def _enum_class_behavior_attr(enum_cls: type) -> "str | None":
     """Find unsupported attributes on an enum, its bases, or its metaclass."""
     for klass in enum_cls.__mro__:
         # Skip library bases but inspect all user bases, including non-enum mixins.
-        if _is_baked_base_type(klass) or klass in _FRAMEWORK_ENUM_CLASSES:
+        if klass is object or _is_exact_baked_type(klass) or klass in _FRAMEWORK_ENUM_CLASSES:
             continue
         attr = _observable_class_dict_attr(klass)
         if attr is not None:
