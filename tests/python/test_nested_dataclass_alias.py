@@ -50,8 +50,13 @@ def test_nested_dataclass_alias_rejected(route: str, fastcache: bool) -> None:
         else:
             return owner.pair.second.value
 
+    owner = Owner()
     with pytest.raises(Exception, match="dataclass.*alias|alias.*dataclass"):
-        read(Owner(), route)
+        read(owner, route)
+    owner.state = State(7)
+    if route == "nested_attributes":
+        owner.pair.first = State(9)
+    assert read(owner, route) == 3
 
 
 @test_utils.test()
