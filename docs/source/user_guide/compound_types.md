@@ -455,7 +455,7 @@ This table summarizes which member types are allowed inside which container type
 
 | Container ↓ &nbsp;&nbsp;&nbsp; / &nbsp;&nbsp;&nbsp; Member → | `qd.ndarray` | `qd.field` | primitive | `dataclasses.dataclass` | `@qd.data_oriented` | `@qd.dataclass` |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|
-| `dataclasses.dataclass`         | yes | yes | yes | yes | deprecated | yes |
+| `dataclasses.dataclass`         | yes | yes | yes | yes | no | yes |
 | `@qd.data_oriented`             | yes | yes | yes | yes | yes      | yes |
 | `@qd.dataclass`                 | no  | yes | yes | no  | no       | yes |
 
@@ -477,7 +477,7 @@ This support is only available on `@qd.data_oriented` classes *without* the [`st
 ### Restrictions
 
 - **`@qd.dataclass` cannot contain `qd.ndarray` or `qd.field` members.** See the [`@qd.dataclass`](#qddataclass-qdtypesstruct) section above for the full list of allowed member types. (The function-form factory `qd.types.struct(...)` has the same restrictions.)
-- **A typed-dataclass kernel-arg annotation cannot have a `@qd.data_oriented` member type** — errors clearly at compile time
+- **A Python dataclass cannot expose a data-oriented member to kernel code.** Accessing that member raises an error, regardless of its annotation. Unused members remain allowed. The reverse arrangement, a dataclass stored on a data-oriented object, is supported.
 - **Declare all ndarray members on a `@qd.data_oriented` class in `__init__`.**
     - **Deleting an ndarray attribute** that was present on an `@qd.data_oriented` instance's first launch raises `AttributeError` on the next launch on that instance.
     - **Adding a new ndarray attribute after first launch** on a given `@qd.data_oriented` instance will cause incorrect undefined behavior.

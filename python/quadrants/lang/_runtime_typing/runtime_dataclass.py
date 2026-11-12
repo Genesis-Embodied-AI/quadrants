@@ -114,7 +114,12 @@ def infer_member_type(
             py_obj, path, ancestor_ids, non_frozen_ancestor_path, final_value_key_by_value_id
         )
     if is_data_oriented(py_obj):
-        return Template
+        return create_deferred_member_type_for_invalid_dataclass_member(
+            QuadrantsRuntimeTypeError,
+            "Data-oriented objects inside Python dataclass fields are unsupported. "
+            "Store the dataclass on the data-oriented object instead.",
+            py_obj,
+        )
     if py_obj is None:
         return Tensor
     if isinstance(py_obj, Field):

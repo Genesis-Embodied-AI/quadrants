@@ -236,8 +236,8 @@ def test_nested_dataclass_tensor_replacement() -> None:
 
 
 @test_utils.test()
-def test_nested_dataclass_preserves_data_oriented_child_policy() -> None:
-    """A dataclass's data-oriented child keeps its own compile-time primitive policy."""
+def test_nested_dataclass_rejects_data_oriented_child() -> None:
+    """Using a data-oriented child of a dataclass raises a member-specific error."""
 
     @qd.data_oriented
     class Options:
@@ -257,13 +257,14 @@ def test_nested_dataclass_preserves_data_oriented_child_policy() -> None:
     def read(owner: qd.Template) -> qd.i32:
         return qd.static(owner.state.options.count)
 
-    assert read(Owner()) == 3
+    with pytest.raises(Exception, match=r"owner\.state\.options.*Data-oriented objects inside Python dataclass"):
+        read(Owner())
 
 
 @pytest.mark.parametrize("dataclass_root", [True, False])
 @test_utils.test()
 def test_alternating_dataclass_and_data_oriented_nesting(dataclass_root: bool) -> None:
-    """Dataclass inference continues through intervening data-oriented objects."""
+    """Reject the first data-oriented member inside an alternating dataclass chain."""
 
     @dataclass
     class Leaf:
@@ -293,11 +294,8 @@ def test_alternating_dataclass_and_data_oriented_nesting(dataclass_root: bool) -
 
     owner = Owner()
     read, argument = (read_state, owner.state) if dataclass_root else (read_owner, owner)
-    assert read(argument) == 3
-    owner.state.middle.leaf.value = 7
-    assert read(argument) == 7
-    owner.state.middle.leaf.value = 2.5
-    assert read(argument) == 2.5
+    with pytest.raises(Exception, match=r"state\.middle.*Data-oriented objects inside Python dataclass"):
+        read(argument)
 
 
 @pytest.mark.parametrize("alias_stored_member", [False, True])
@@ -401,3 +399,46 @@ def test_dataclass_discovery_guard_allows_data_oriented_dataclass_fields() -> No
     assert read(owner) == 3
     owner.middle.child.value = 7
     assert read(owner) == 7
+
+
+@pytest.mark.parametrize("frozen", [False, True])
+@pytest.mark.parametrize("via_func", [False, True])
+@test_utils.test()
+def test_dataclass_data_oriented_member_rejected_before_fastcache(frozen: bool, via_func: bool) -> None:
+    """Reject an owner inside a dataclass before loading an artifact with missing nested Final dependencies."""
+
+    @dataclass(frozen=True)
+    class Config:
+        enabled: Final[bool]
+
+    @qd.data_oriented
+    class Owner:
+        def __init__(self, enabled: bool) -> None:
+            self.config = Config(enabled)
+
+    @dataclass(frozen=frozen)
+    class Envelope:
+        owner: object
+        count: int = 3
+
+    @qd.func
+    def get_value(arg: qd.RuntimeTyped) -> qd.i32:
+        return 100 if qd.static(arg.owner.config.enabled) else 200
+
+    @qd.kernel(fastcache=True)
+    def read(arg: qd.RuntimeTyped) -> qd.i32:
+        if qd.static(via_func):
+            return get_value(arg)
+        else:
+            return 100 if qd.static(arg.owner.config.enabled) else 200
+
+    @qd.kernel(fastcache=True)
+    def unused(arg: qd.RuntimeTyped) -> qd.i32:
+        return arg.count
+
+    for enabled in (True, False):
+        arg = Envelope(Owner(enabled))
+        assert unused(arg) == 3
+        with pytest.raises(Exception, match="Data-oriented objects inside Python dataclass"):
+            read(arg)
+        assert read._primal.fast_checksum is None
