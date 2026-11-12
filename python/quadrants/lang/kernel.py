@@ -437,7 +437,12 @@ class Kernel(FuncBase):
 
             # Phase 2: narrow args hash + L2 lookup.
             narrow_args_hash = src_hasher.compute_narrow_args_hash(
-                self.raise_on_templated_floats, kernel_source_info, args, self.arg_metas, pruning_paths
+                self.raise_on_templated_floats,
+                kernel_source_info,
+                args,
+                self.arg_metas,
+                pruning_paths,
+                nested_dataclass_schemas=getattr(self, "_runtime_nested_dataclass_schemas", ()),
             )
             if narrow_args_hash is None:
                 # Recognised-but-unsupported tensor-like (Field / MatrixField): leaving ``fast_checksum`` None keeps any
@@ -621,6 +626,7 @@ class Kernel(FuncBase):
             raise_on_templated_floats=self.raise_on_templated_floats,
             py_args=py_args,
             arg_metas=self.arg_metas,
+            nested_dataclass_schemas=getattr(self, "_runtime_nested_dataclass_schemas", ()),
         )
         # Assigned even when ``generated`` is False: that is also how a re-keyed L2 entry comes back.
         self.fast_checksum = new_fast_checksum

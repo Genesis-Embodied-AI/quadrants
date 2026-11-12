@@ -163,11 +163,18 @@ def compute_narrow_args_hash(
     args: Sequence[Any],
     arg_metas: Sequence[ArgMetadata],
     pruning_paths: set[str] | None,
+    nested_dataclass_schemas: args_hasher.NestedDataclassSchemas = (),
 ) -> str | None:
     """Compute the args hash narrowed by ``pruning_paths`` (or wide if ``pruning_paths is None``), or ``None`` if an
     unsupported type forces fastcache off for this call.
     """
-    args_hash = args_hasher.hash_args(raise_on_templated_floats, args, arg_metas, pruning_paths=pruning_paths)
+    args_hash = args_hasher.hash_args(
+        raise_on_templated_floats,
+        args,
+        arg_metas,
+        pruning_paths=pruning_paths,
+        nested_dataclass_schemas=nested_dataclass_schemas,
+    )
     if isinstance(args_hash, FastcacheSkip):
         if args_hash is FastcacheSkip.WARN:
             # the bit in caps at start should not be modified without modifying corresponding text
@@ -234,6 +241,7 @@ def persist_l1_and_set_l2_key(
     raise_on_templated_floats: bool,
     py_args: tuple[Any, ...],
     arg_metas: Sequence[ArgMetadata],
+    nested_dataclass_schemas: args_hasher.NestedDataclassSchemas = (),
 ) -> tuple[str | None, bool]:
     """After a successful materialize, persist L1 (if missing or incomplete) and derive the L2 key.
 
@@ -285,6 +293,7 @@ def persist_l1_and_set_l2_key(
             py_args,
             arg_metas,
             key_paths,
+            nested_dataclass_schemas=nested_dataclass_schemas,
         )
         if narrow_args_hash is not None:
             return make_full_cache_key(l1_key, narrow_args_hash), not had_checksum

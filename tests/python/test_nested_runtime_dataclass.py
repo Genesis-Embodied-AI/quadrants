@@ -128,8 +128,14 @@ def test_nested_dataclass_used_invalid_member_reports_path() -> None:
 
 
 @test_utils.test()
-def test_nested_dataclass_offline_cache(tmp_path: Path) -> None:
+def test_nested_dataclass_offline_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Disk-cache reuse must bind current nested scalar values and retain Final specialization."""
+
+    def reject_reinference(*args: object, **kwargs: object) -> None:
+        """Fail if either disk-cache lookup or persistence bypasses the supplied schemas."""
+        raise AssertionError("Argument hashing must reuse discovered schemas")
+
+    monkeypatch.setattr(args_hasher, "cached_infer_dataclass_type", reject_reinference)
 
     @dataclass(frozen=True)
     class State:
@@ -142,7 +148,7 @@ def test_nested_dataclass_offline_cache(tmp_path: Path) -> None:
             self.state = State(bias, value)
 
     arch = qd.lang.impl.current_cfg().arch
-    for bias, value in ((2, 1.5), (2, 4.5), (7, 4.5), (2, 8.5)):
+    for bias, value in ((2, 1.5), (2, 4.5), (7, 4.5), (2, 8.5), (2, 3), (2, 2.5)):
         qd.init(arch=arch, offline_cache=True, offline_cache_file_path=str(tmp_path))
 
         @qd.kernel(fastcache=True)
