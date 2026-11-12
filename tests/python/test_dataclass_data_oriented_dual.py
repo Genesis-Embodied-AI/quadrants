@@ -8,15 +8,21 @@ from tests.helpers import test_utils
 
 
 @test_utils.test(arch=qd.cpu)
-def test_data_oriented_decorator_rejects_dataclass() -> None:
-    """Applying data_oriented to a dataclass fails immediately."""
+def test_data_oriented_dataclass_rejected_at_compilation() -> None:
+    """Dataclass handling rejects data_oriented applied after dataclass."""
 
     @dataclasses.dataclass
     class State:
         count: int = 3
 
-    with pytest.raises(TypeError, match="both a Python dataclass and data-oriented"):
-        qd.data_oriented(State)
+    State = qd.data_oriented(State)
+
+    @qd.kernel
+    def read(state: State) -> qd.i32:
+        return state.count
+
+    with pytest.raises(Exception, match="both a Python dataclass and data-oriented"):
+        read(State())
 
 
 @pytest.mark.parametrize("inherited", [False, True])
