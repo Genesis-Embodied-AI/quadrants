@@ -426,8 +426,8 @@ def test_dataclass_data_oriented_member_rejected_before_fastcache(frozen: bool, 
         return 100 if qd.static(arg.owner.config.enabled) else 200
 
     @qd.kernel(fastcache=True)
-    def read(arg: qd.RuntimeTyped) -> qd.i32:
-        if qd.static(via_func):
+    def read(arg: qd.RuntimeTyped, use_func: qd.Template) -> qd.i32:
+        if qd.static(use_func):
             return get_value(arg)
         else:
             return 100 if qd.static(arg.owner.config.enabled) else 200
@@ -440,5 +440,5 @@ def test_dataclass_data_oriented_member_rejected_before_fastcache(frozen: bool, 
         arg = Envelope(Owner(enabled))
         assert unused(arg) == 3
         with pytest.raises(Exception, match="Data-oriented objects inside Python dataclass"):
-            read(arg)
+            read(arg, via_func)
         assert read._primal.fast_checksum is None

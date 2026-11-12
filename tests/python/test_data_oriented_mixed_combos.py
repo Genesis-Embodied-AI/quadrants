@@ -47,8 +47,8 @@ def test_data_oriented_with_ndarray_field_and_nested_data_oriented():
 
 
 @test_utils.test(arch=qd.cpu)
-def test_dataclass_with_data_oriented_via_template():
-    """A dataclass (frozen=True) holding a @qd.data_oriented holding an ndarray, passed via qd.Template."""
+def test_dataclass_with_data_oriented_via_template_rejected():
+    """A Template parameter annotation cannot bypass the dataclass member restriction."""
     N = 4
 
     @qd.data_oriented
@@ -67,8 +67,8 @@ def test_dataclass_with_data_oriented_via_template():
         for i in range(N):
             s.inner.y[i] = i + 11
 
-    run(outer)
-    np.testing.assert_array_equal(outer.inner.y.to_numpy(), np.arange(N) + 11)
+    with pytest.raises(Exception, match=r"s\.inner.*Data-oriented objects inside Python dataclass"):
+        run(outer)
 
 
 @test_utils.test(arch=qd.cpu)
