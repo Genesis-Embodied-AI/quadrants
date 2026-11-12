@@ -183,15 +183,15 @@ class TemplateMapper:
                 return self._mapping_cache[args_hash]
 
         # Only calls without nested dataclasses enter the identity cache. Its hits can skip schema discovery.
-        nested_schemas = infer_nested_dataclass_schemas(args, self.arguments, self.template_slot_locations)
+        launch_arg_schemas = infer_nested_dataclass_schemas(args, self.arguments, self.template_slot_locations)
         if runtime_kernel is not None:
-            runtime_kernel._runtime_nested_dataclass_schemas = nested_schemas
+            runtime_kernel._launch_arg_schemas = launch_arg_schemas
             runtime_kernel._runtime_has_deferred |= any(
-                schema._qd_runtime_has_deferred for _, _, schema in nested_schemas
+                schema._qd_runtime_has_deferred for _, _, schema in launch_arg_schemas
             )
 
         key = self.extract(raise_on_templated_floats, args, final_value_key_by_value_id)
-        if nested_schemas:
+        if launch_arg_schemas:
             key += tuple(
                 (
                     index,
@@ -204,7 +204,7 @@ class TemplateMapper:
                         final_value_key_by_value_id,
                     ),
                 )
-                for index, path, schema in nested_schemas
+                for index, path, schema in launch_arg_schemas
             )
         try:
             count = self.mapping[key]
@@ -212,7 +212,7 @@ class TemplateMapper:
             count = self.mapping[key] = len(self.mapping)
 
         # Skip the store too when disabled, so the read above always misses and every launch revalidates.
-        if not cache_disabled and not nested_schemas:
+        if not cache_disabled and not launch_arg_schemas:
             # Note that it is important to prepend the cache tracker with 'None' to avoid misclassifying no argument with
             # expired cache entry caused by deallocated argument.
             mapping_cache_tracker_: list[ReferenceType | None] = [None]

@@ -58,7 +58,8 @@ def infer_nested_dataclass_schemas(
     args: tuple[Any, ...], arg_metas: list[ArgMetadata], template_slots: list[int]
 ) -> list[tuple[int, DataclassPath, type[RuntimeDataclassSchema]]]:
     """Infer current schemas for dataclasses reached through data-oriented arguments."""
-    schemas: list[tuple[int, DataclassPath, type[RuntimeDataclassSchema]]] = []
+    # Schemas for this launch, paired with argument indices and member paths.
+    launch_arg_schemas: list[tuple[int, DataclassPath, type[RuntimeDataclassSchema]]] = []
     active_ids: set[int] = set()
 
     def visit_owner(index: int, owner: Any, owner_path: DataclassPath) -> None:
@@ -73,7 +74,7 @@ def infer_nested_dataclass_schemas(
                 if not hasattr(type(child), "__dataclass_fields__"):
                     raise TypeError("A data-oriented dataclass member must remain a dataclass between kernel calls.")
                 schema = cached_infer_dataclass_type(child, ".".join((arg_metas[index].name, *path)))
-                schemas.append((index, path, schema))
+                launch_arg_schemas.append((index, path, schema))
                 for member_path, member in runtime_template_members(schema, child):
                     visit_owner(index, member, (*path, *member_path))
         finally:
@@ -86,7 +87,7 @@ def infer_nested_dataclass_schemas(
         if hasattr(meta.annotation, "_qd_runtime_origin"):
             for path, member in runtime_template_members(meta.annotation, args[index]):
                 visit_owner(index, member, path)
-    return schemas
+    return launch_arg_schemas
 
 
 def reject_undiscovered_dataclass_member(
