@@ -110,7 +110,7 @@ class ASTTransformer(Builder):
         node.violates_pure, node.ptr, node.violates_pure_reason = ctx.get_var_by_name(node.id)
         # Dataclass fields can arrive as flattened names instead of attribute accesses.
         if (
-            node.id.startswith("__qd_")
+            node.id in ctx.struct_locals
             and not ctx.expanding_dataclass_call_parameters
             and is_data_oriented(node.ptr)
             and not dataclasses.is_dataclass(node.ptr)
