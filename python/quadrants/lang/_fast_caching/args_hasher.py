@@ -232,6 +232,8 @@ def dataclass_to_repr(
 
     Returns ``_FAIL_FASTCACHE`` if any visited subtree holds an unsupported tensor type.
     """
+    if is_data_oriented(arg):
+        raise TypeError("A class cannot be both a Python dataclass and data-oriented.")
     # PERF: a frozen dataclass's repr never changes, so cache it on the instance (``dataclasses.fields()`` is slow, see
     # the _template_mapper_hotpath.py module docstring). ``_DC_REPR_NONE`` caches a failure verdict.
     #
@@ -265,6 +267,10 @@ def dataclass_to_repr(
         child_flat = _child_flat(parent_flat, field.name)
         if not _is_path_used(pruning_paths, child_flat):
             continue
+        # Compile unsupported nesting so the attribute check reports it instead of loading an old artifact.
+        if is_data_oriented(child_value):
+            return _FAIL_FASTCACHE
+
         _repr = stringify_obj_type(
             raise_on_templated_floats,
             index_and_path + (field.name,),
