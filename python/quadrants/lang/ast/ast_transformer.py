@@ -120,7 +120,7 @@ class ASTTransformer(Builder):
         if (
             # Restrict this check to known dataclass members, not ordinary variables.
             node.id in ctx.struct_locals
-            # Forwarding a dataclass to a function does not mean the function uses this member.
+            # Check the member when the function uses it, after argument expansion.
             and not ctx.expanding_dataclass_call_parameters
             # Reject a data-oriented object stored in the member.
             and is_data_oriented(node.ptr)
