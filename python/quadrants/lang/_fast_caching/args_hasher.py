@@ -3,7 +3,7 @@ import enum
 import functools
 import numbers
 import time
-from typing import Any, Mapping, Sequence, TypeAlias
+from typing import Any, Mapping, Sequence, TypeAlias, cast
 
 import numpy as np
 
@@ -358,7 +358,7 @@ def stringify_obj_type(
             ann = arg_meta.annotation
             if isinstance(ann, type) and dataclasses.is_dataclass(ann):
                 # Argument metadata already carries an inferred schema at this boundary.
-                schema = ann  # type: ignore[assignment]
+                schema = cast(type[RuntimeDataclassSchema], ann)
         if schema is None:
             return _FAIL_FASTCACHE
         return dataclass_to_repr(
