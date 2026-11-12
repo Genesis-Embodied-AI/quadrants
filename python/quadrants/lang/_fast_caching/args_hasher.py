@@ -367,9 +367,9 @@ def stringify_obj_type(
             index_and_path,
             obj,
             schema,
-            pruning_paths=pruning_paths,
-            parent_flat=parent_flat,
-            launch_arg_schema_by_index_and_path=launch_arg_schema_by_index_and_path,
+            pruning_paths,
+            parent_flat,
+            launch_arg_schema_by_index_and_path,
         )
     if is_data_oriented(obj):
         # Narrowed by pruning info: a member the kernel cannot read cannot affect codegen, so it stays out of the key.
