@@ -172,8 +172,8 @@ def compute_narrow_args_hash(
         raise_on_templated_floats,
         args,
         arg_metas,
-        pruning_paths=pruning_paths,
-        launch_arg_schemas=launch_arg_schemas,
+        pruning_paths,
+        launch_arg_schemas,
     )
     if isinstance(args_hash, FastcacheSkip):
         if args_hash is FastcacheSkip.WARN:
@@ -293,7 +293,7 @@ def persist_l1_and_set_l2_key(
             py_args,
             arg_metas,
             key_paths,
-            launch_arg_schemas=launch_arg_schemas,
+            launch_arg_schemas,
         )
         if narrow_args_hash is not None:
             return make_full_cache_key(l1_key, narrow_args_hash), not had_checksum

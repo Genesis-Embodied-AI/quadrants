@@ -217,9 +217,9 @@ def _stringify_used_properties(
             child_index_and_path,
             value,
             ArgMetadata(Template, ""),
-            pruning_paths=pruning_paths,
-            parent_flat=_child_flat(parent_flat, name),
-            launch_arg_schema_by_index_and_path=launch_arg_schema_by_index_and_path,
+            pruning_paths,
+            _child_flat(parent_flat, name),
+            launch_arg_schema_by_index_and_path,
         )
         if _repr is _FAIL_FASTCACHE:
             return _FAIL_FASTCACHE
@@ -262,10 +262,10 @@ def dataclass_to_repr(
             raise_on_templated_floats,
             index_and_path + (field.name,),
             child_value,
-            arg_meta=ArgMetadata(field.type, field.name),
-            pruning_paths=pruning_paths,
-            parent_flat=child_flat,
-            launch_arg_schema_by_index_and_path=launch_arg_schema_by_index_and_path,
+            ArgMetadata(field.type, field.name),
+            pruning_paths,
+            child_flat,
+            launch_arg_schema_by_index_and_path,
         )
         if _repr is _FAIL_FASTCACHE:
             if isinstance(child_value, _FIELD_TYPES) and field.type is not _TensorWrapper:
@@ -396,9 +396,9 @@ def stringify_obj_type(
                 (*index_and_path, k),
                 v,
                 child_meta,
-                pruning_paths=pruning_paths,
-                parent_flat=child_flat,
-                launch_arg_schema_by_index_and_path=launch_arg_schema_by_index_and_path,
+                pruning_paths,
+                child_flat,
+                launch_arg_schema_by_index_and_path,
             )
             if _child_repr is _FAIL_FASTCACHE:
                 return _FAIL_FASTCACHE
@@ -469,9 +469,9 @@ def hash_args(
             (str(i_arg),),
             arg,
             arg_meta,
-            pruning_paths=pruning_paths,
-            parent_flat=top_flat,
-            launch_arg_schema_by_index_and_path=launch_arg_schema_by_index_and_path,
+            pruning_paths,
+            top_flat,
+            launch_arg_schema_by_index_and_path,
         )
         g_repr_time += time.time() - start
         if _hash is _FAIL_FASTCACHE:
