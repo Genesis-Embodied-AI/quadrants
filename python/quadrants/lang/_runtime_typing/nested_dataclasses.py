@@ -13,12 +13,12 @@ from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import is_data_oriented, is_dataclass_instance
 
 # Data-oriented attribute layouts are fixed after their first kernel call, like ndarray member paths.
-_paths_by_instance: WeakIdentityCache[tuple[tuple[str, ...], ...]] = WeakIdentityCache()
+_dataclass_paths_by_data_oriented_instance: WeakIdentityCache[tuple[tuple[str, ...], ...]] = WeakIdentityCache()
 
 
 def nested_dataclass_paths(obj: Any) -> tuple[tuple[str, ...], ...]:
     """Find outermost dataclass members without retaining their owning objects."""
-    cached = _paths_by_instance.get(obj)
+    cached = _dataclass_paths_by_data_oriented_instance.get(obj)
     if cached is not None:
         return cached
     paths: list[tuple[str, ...]] = []
@@ -42,7 +42,7 @@ def nested_dataclass_paths(obj: Any) -> tuple[tuple[str, ...], ...]:
 
     walk(obj, ())
     result = tuple(paths)
-    _paths_by_instance.set(obj, result)
+    _dataclass_paths_by_data_oriented_instance.set(obj, result)
     return result
 
 
