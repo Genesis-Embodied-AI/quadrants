@@ -16,9 +16,9 @@ from quadrants.lang.util import is_data_oriented, is_dataclass_instance
 _dataclass_paths_by_data_oriented_instance: WeakIdentityCache[tuple[tuple[str, ...], ...]] = WeakIdentityCache()
 
 
-def nested_dataclass_paths(obj: Any) -> tuple[tuple[str, ...], ...]:
+def _cached_get_dataclass_paths(data_oriented_obj: Any) -> tuple[tuple[str, ...], ...]:
     """Find outermost dataclass members without retaining their owning objects."""
-    cached = _dataclass_paths_by_data_oriented_instance.get(obj)
+    cached = _dataclass_paths_by_data_oriented_instance.get(data_oriented_obj)
     if cached is not None:
         return cached
     paths: list[tuple[str, ...]] = []
@@ -40,9 +40,9 @@ def nested_dataclass_paths(obj: Any) -> tuple[tuple[str, ...], ...]:
         finally:
             active_ids.remove(id(value))
 
-    walk(obj, ())
+    walk(data_oriented_obj, ())
     result = tuple(paths)
-    _dataclass_paths_by_data_oriented_instance.set(obj, result)
+    _dataclass_paths_by_data_oriented_instance.set(data_oriented_obj, result)
     return result
 
 
@@ -67,7 +67,7 @@ def infer_nested_dataclass_schemas(
             return
         active_ids.add(id(owner))
         try:
-            for relative_path in nested_dataclass_paths(owner):
+            for relative_path in _cached_get_dataclass_paths(owner):
                 path = (*owner_path, *relative_path)
                 child = get_member_at_path(owner, relative_path)
                 if not hasattr(type(child), "__dataclass_fields__"):
