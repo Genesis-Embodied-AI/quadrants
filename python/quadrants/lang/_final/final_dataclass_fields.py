@@ -85,8 +85,8 @@ def infer_final_field_annotation(
             "No dataclass on the path to a used Final value may be reassignable.",
             py_obj,
         )
-    # Exact Python primitives cannot fail validation. Recheck other values each launch: enum members can acquire
-    # mutable state even inside a frozen dataclass.
+    # Exact Python bool, int, float, and str values are always valid Final values.
+    # Recheck other values each launch: enum members can acquire mutable state even inside a frozen dataclass.
     value_type = type(py_obj)
     if value_type is not bool and value_type is not int and value_type is not float and value_type is not str:
         try:
