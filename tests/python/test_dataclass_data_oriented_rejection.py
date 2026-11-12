@@ -58,8 +58,8 @@ def test_data_oriented_dataclass_member_disables_artifact_lookup() -> None:
 
 
 @test_utils.test(arch=qd.cpu)
-def test_forwarded_dataclass_allows_unsupported_member_in_inactive_static_branch() -> None:
-    """An unsupported member in an inactive static branch remains allowed when forwarding a dataclass."""
+def test_function_accepts_unused_unsupported_dataclass_member() -> None:
+    """A function may receive a dataclass whose unsupported member appears only in an inactive static branch."""
 
     @qd.data_oriented
     class Inner:
