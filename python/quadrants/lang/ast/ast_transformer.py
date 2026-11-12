@@ -116,6 +116,17 @@ class ASTTransformer(Builder):
         node.violates_pure, node.ptr, node.violates_pure_reason = ctx.get_var_by_name(node.id)
         if isinstance(node.ptr, DeferredMemberError) and not ctx.expanding_dataclass_call_parameters:
             node.ptr.reject()
+        # Dataclass fields can arrive as flattened names instead of attribute accesses.
+        if (
+            node.id.startswith("__qd_")
+            and not ctx.expanding_dataclass_call_parameters
+            and is_data_oriented(node.ptr)
+            and not dataclasses.is_dataclass(node.ptr)
+        ):
+            raise exception.QuadrantsRuntimeTypeError(
+                "Data-oriented objects inside Python dataclass fields are unsupported. "
+                "Store the dataclass on the data-oriented object instead."
+            )
         # Flattened struct fields (``__qd_foo__qd_bar``) injected by ``populate_global_vars_from_dataclass`` are raw
         # ``Ndarray`` instances.  ``build_Attribute`` already promotes these via ``_promote_ndarray_if_declared`` but
         # the flattened-name path bypasses ``build_Attribute`` entirely, so we must promote here too.

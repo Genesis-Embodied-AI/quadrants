@@ -21,7 +21,7 @@ def test_data_oriented_dataclass_member_rejected(frozen: bool, inside_owner: boo
         def __init__(self) -> None:
             self.count = 3
 
-    @dataclasses.dataclass(frozen=frozen)
+    @dataclasses.dataclass(frozen=frozen, unsafe_hash=True)
     class State:
         inner: Inner
 

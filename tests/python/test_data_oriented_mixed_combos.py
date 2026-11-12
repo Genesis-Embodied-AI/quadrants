@@ -48,8 +48,8 @@ def test_data_oriented_with_ndarray_field_and_nested_data_oriented():
 
 
 @test_utils.test(arch=qd.cpu)
-def test_dataclass_with_data_oriented_via_template_rejected():
-    """A Template parameter annotation cannot bypass the dataclass member restriction."""
+def test_dataclass_data_oriented_member_rejected_via_template():
+    """Reject a data-oriented member even when the dataclass arrives through qd.Template."""
     N = 4
 
     @qd.data_oriented
