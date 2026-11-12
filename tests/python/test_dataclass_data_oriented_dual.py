@@ -7,32 +7,20 @@ import quadrants as qd
 from tests.helpers import test_utils
 
 
+@pytest.mark.parametrize(
+    "dataclass_first", [True, False], ids=["dataclass_then_data_oriented", "data_oriented_then_dataclass"]
+)
 @test_utils.test(arch=qd.cpu)
-def test_data_oriented_dataclass_rejected_at_compilation() -> None:
-    """Dataclass handling rejects data_oriented applied after dataclass."""
+def test_dual_dataclass_data_oriented_member_rejected(dataclass_first: bool) -> None:
+    """Reject a dual dataclass/data-oriented object accessed through a data-oriented owner, in either decorator order."""
 
-    @dataclasses.dataclass
     class State:
         count: int = 3
 
-    State = qd.data_oriented(State)
-
-    @qd.kernel
-    def read(state: State) -> qd.i32:
-        return state.count
-
-    with pytest.raises(Exception, match="both a Python dataclass and data-oriented"):
-        read(State())
-
-
-@test_utils.test(arch=qd.cpu)
-def test_dataclass_on_data_oriented_rejected() -> None:
-    """Detect the reverse decorator order when the dataclass is stored on an owner."""
-
-    @dataclasses.dataclass(frozen=True)
-    @qd.data_oriented
-    class State:
-        count: int = 3
+    if dataclass_first:
+        State = qd.data_oriented(dataclasses.dataclass(frozen=True)(State))
+    else:
+        State = dataclasses.dataclass(frozen=True)(qd.data_oriented(State))
 
     @qd.data_oriented
     class Owner:
