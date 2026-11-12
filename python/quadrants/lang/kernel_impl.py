@@ -372,9 +372,6 @@ def data_oriented(cls=None, *, stable_members: bool = False, template_primitives
     if cls is None:
         return lambda c: data_oriented(c, stable_members=stable_members, template_primitives=template_primitives)
 
-    if hasattr(cls, "__dataclass_fields__"):
-        raise TypeError("A class cannot be both a Python dataclass and data-oriented.")
-
     def make_kernel_indirect(fun, is_property, attr_name):
         # Capture the primal at decoration time so a call skips ``fun``'s ``wrapped_classkernel`` -> ``wrapped_func``
         # pair. That pair is also where the owner check lives, hence the copy of it below - an unbound
