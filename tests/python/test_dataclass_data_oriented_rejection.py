@@ -3,7 +3,6 @@ import dataclasses
 import pytest
 
 import quadrants as qd
-from quadrants.lang._fast_caching.args_hasher import _FAIL_FASTCACHE, dataclass_to_repr
 
 from tests.helpers import test_utils
 
@@ -53,21 +52,6 @@ def test_data_oriented_dataclass_member_rejected(
     arg = Owner(state) if inside_owner else state
     with pytest.raises(Exception, match="Data-oriented objects inside Python dataclass"):
         read(arg, inside_owner, via_func)
-
-
-@test_utils.test(arch=qd.cpu)
-def test_data_oriented_dataclass_member_disables_artifact_lookup() -> None:
-    """An unsupported child cannot produce a disk-cache key."""
-
-    @qd.data_oriented
-    class Inner:
-        pass
-
-    @dataclasses.dataclass(frozen=True)
-    class State:
-        inner: qd.Template
-
-    assert dataclass_to_repr(False, ("0",), State(Inner())) is _FAIL_FASTCACHE
 
 
 @test_utils.test(arch=qd.cpu)

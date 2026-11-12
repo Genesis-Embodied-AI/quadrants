@@ -62,7 +62,7 @@ _L1_MARKER = "l1"
 _L2_MARKER = "l2"
 
 # Bumped whenever the persisted L1CacheValue / CacheValue schema changes.
-_CACHE_VALUE_SCHEMA_VERSION = "cachevalue-v6-property-values"
+_CACHE_VALUE_SCHEMA_VERSION = "cachevalue-v7-dataclass-restrictions"
 
 
 def _intenum_member_qualname(value: Any) -> str | None:
