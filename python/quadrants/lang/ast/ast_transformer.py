@@ -118,8 +118,10 @@ class ASTTransformer(Builder):
             node.ptr.reject()
         # Dataclass fields can arrive as flattened names instead of attribute accesses.
         if (
+            # Check after discovery has determined which members are used.
+            pruning.enforcing
             # Restrict this check to known dataclass members, not ordinary variables.
-            node.id in ctx.struct_locals
+            and node.id in ctx.struct_locals
             # Check the member when the function uses it, after argument expansion.
             and not ctx.expanding_dataclass_call_parameters
             # Reject a data-oriented object stored in the member.
@@ -826,7 +828,11 @@ class ASTTransformer(Builder):
                 node.ptr = lifted
                 return node.ptr
             node.ptr = getattr(node.value.ptr, node.attr)
-            if is_data_oriented(node.ptr) and not dataclasses.is_dataclass(node.ptr):
+            if (
+                ctx.global_context.pruning.enforcing
+                and is_data_oriented(node.ptr)
+                and not dataclasses.is_dataclass(node.ptr)
+            ):
                 raise exception.QuadrantsRuntimeTypeError(
                     "Data-oriented objects inside Python dataclass fields are unsupported. "
                     "Store the dataclass on the data-oriented object instead."
