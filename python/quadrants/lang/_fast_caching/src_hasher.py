@@ -168,13 +168,7 @@ def compute_narrow_args_hash(
     """Compute the args hash narrowed by ``pruning_paths`` (or wide if ``pruning_paths is None``), or ``None`` if an
     unsupported type forces fastcache off for this call.
     """
-    args_hash = args_hasher.hash_args(
-        raise_on_templated_floats,
-        args,
-        arg_metas,
-        pruning_paths,
-        launch_arg_schemas,
-    )
+    args_hash = args_hasher.hash_args(raise_on_templated_floats, args, arg_metas, pruning_paths, launch_arg_schemas)
     if isinstance(args_hash, FastcacheSkip):
         if args_hash is FastcacheSkip.WARN:
             # the bit in caps at start should not be modified without modifying corresponding text
