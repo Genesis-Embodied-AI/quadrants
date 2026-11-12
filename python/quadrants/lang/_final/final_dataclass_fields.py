@@ -72,9 +72,10 @@ def infer_final_field_annotation(
             such as "State.config". None means no reassignable dataclass was found on the path.
         name: The field's name as a string, such as "count", used in error messages.
         final_value_key_by_value_id: Optional cache shared within the current kernel call, mapping id(py_obj) to
-            (py_obj, specialization_key). Stores successful validation results for reuse later in the call.
-            Passing the cache lets validation and compiled-kernel selection share results within one call. A fresh
-            cache is needed for each call because objects can change between calls.
+            (py_obj, specialization_key). Stores computed specialization keys for reuse later in the call.
+            Only successfully validated objects are cached. Passing the cache lets validation and compiled-kernel
+            selection share these keys within one call. A fresh cache is needed for each call because objects can
+            change between calls.
     """
     if non_frozen_ancestor_path is not None:
         parent_name = non_frozen_ancestor_path.split(".", 1)[0]
