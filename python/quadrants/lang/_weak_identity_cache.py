@@ -20,8 +20,8 @@ class WeakIdentityCache(Generic[_T]):
             return entry[1]
         return None
 
-    def set(self, obj: object, value: _T) -> bool:
-        """Store a value until its key dies; return False if the key cannot be weakly referenced."""
+    def __setitem__(self, obj: object, value: _T) -> None:
+        """Store a value until its key dies; raise TypeError if the key cannot be weakly referenced."""
         key = id(obj)
 
         def drop(ref: weakref.ReferenceType) -> None:
@@ -30,9 +30,5 @@ class WeakIdentityCache(Generic[_T]):
             if current is not None and current[0] is ref:
                 del self._entries[key]
 
-        try:
-            ref = weakref.ref(obj, drop)
-        except TypeError:
-            return False
+        ref = weakref.ref(obj, drop)
         self._entries[key] = (ref, value)
-        return True

@@ -147,7 +147,11 @@ def _dynamic_class_serial(obj: Any) -> int:
     serial = _dynamic_object_serials.get(obj)
     if serial is None:
         serial = next(_dynamic_class_serial_counter)
-        _dynamic_object_serials.set(obj, serial)
+        try:
+            _dynamic_object_serials[obj] = serial
+        except TypeError:
+            # An uncacheable object receives a fresh serial instead of risking identity reuse.
+            pass
     return serial
 
 

@@ -44,7 +44,11 @@ def _cached_get_dataclass_paths(data_oriented_obj: Any) -> tuple[tuple[str, ...]
 
     walk(data_oriented_obj, ())
     result = tuple(paths)
-    _dataclass_paths_by_data_oriented_instance.set(data_oriented_obj, result)
+    try:
+        _dataclass_paths_by_data_oriented_instance[data_oriented_obj] = result
+    except TypeError:
+        # Named tuples can be data-oriented but cannot be weakly referenced.
+        pass
     return result
 
 

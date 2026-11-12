@@ -288,7 +288,10 @@ def cached_infer_dataclass_type(
     if stable or (params.frozen and not has_deferred and not finals and non_frozen_ancestor_path is None):
         if schema_by_context is None:
             schema_by_context = {}
-            if not _schema_by_context_by_instance.set(dataclass_instance, schema_by_context):
+            try:
+                _schema_by_context_by_instance[dataclass_instance] = schema_by_context
+            except TypeError:
+                # Slotted dataclasses may lack weak-reference support; infer without an instance cache.
                 return schema
         schema_by_context[inference_context_key] = (
             schema if stable else FrozenSchemaEntry(dataclass_instance, schema, field_plan, member_types)
