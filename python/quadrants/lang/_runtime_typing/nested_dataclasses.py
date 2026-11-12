@@ -1,6 +1,6 @@
 """Find runtime dataclasses below data-oriented kernel arguments."""
 
-from typing import Any, TypeAlias
+from typing import Any
 
 from quadrants.lang._runtime_typing.runtime_dataclass import (
     RuntimeDataclassSchema,
@@ -12,20 +12,19 @@ from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import is_data_oriented, is_dataclass_instance
 
-DataclassPath: TypeAlias = tuple[str, ...]
 # Data-oriented attribute layouts are fixed after their first kernel call, like ndarray member paths.
-_paths_by_instance: WeakIdentityCache[tuple[DataclassPath, ...]] = WeakIdentityCache()
+_paths_by_instance: WeakIdentityCache[tuple[tuple[str, ...], ...]] = WeakIdentityCache()
 
 
-def nested_dataclass_paths(obj: Any) -> tuple[DataclassPath, ...]:
+def nested_dataclass_paths(obj: Any) -> tuple[tuple[str, ...], ...]:
     """Find outermost dataclass members without retaining their owning objects."""
     cached = _paths_by_instance.get(obj)
     if cached is not None:
         return cached
-    paths: list[DataclassPath] = []
+    paths: list[tuple[str, ...]] = []
     active_ids: set[int] = set()
 
-    def walk(value: Any, path: DataclassPath) -> None:
+    def walk(value: Any, path: tuple[str, ...]) -> None:
         """Walk data-oriented members, stopping at a dataclass or an active cycle."""
         if is_dataclass_instance(value):
             paths.append(path)
@@ -47,7 +46,7 @@ def nested_dataclass_paths(obj: Any) -> tuple[DataclassPath, ...]:
     return result
 
 
-def get_member_at_path(obj: Any, path: DataclassPath) -> Any:
+def get_member_at_path(obj: Any, path: tuple[str, ...]) -> Any:
     """Read an attribute chain from the current kernel argument."""
     for name in path:
         obj = getattr(obj, name)
@@ -56,13 +55,13 @@ def get_member_at_path(obj: Any, path: DataclassPath) -> Any:
 
 def infer_nested_dataclass_schemas(
     args: tuple[Any, ...], arg_metas: list[ArgMetadata], template_slots: list[int]
-) -> list[tuple[int, DataclassPath, type[RuntimeDataclassSchema]]]:
+) -> list[tuple[int, tuple[str, ...], type[RuntimeDataclassSchema]]]:
     """Infer current schemas for dataclasses reached through data-oriented arguments."""
     # Schemas for this launch, paired with argument indices and member paths.
-    launch_arg_schemas: list[tuple[int, DataclassPath, type[RuntimeDataclassSchema]]] = []
+    launch_arg_schemas: list[tuple[int, tuple[str, ...], type[RuntimeDataclassSchema]]] = []
     active_ids: set[int] = set()
 
-    def visit_owner(index: int, owner: Any, owner_path: DataclassPath) -> None:
+    def visit_owner(index: int, owner: Any, owner_path: tuple[str, ...]) -> None:
         """Infer descendants and continue through any data-oriented members inside their schemas."""
         if id(owner) in active_ids or not is_data_oriented(owner):
             return
