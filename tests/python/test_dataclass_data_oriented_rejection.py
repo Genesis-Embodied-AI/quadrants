@@ -13,8 +13,8 @@ from tests.helpers import test_utils
 def test_data_oriented_dataclass_member_rejected(via_func: bool) -> None:
     """Reject access to a data-oriented object stored inside a dataclass, from either a kernel or qd.func.
 
-    owner.state is allowed: a dataclass inside a data-oriented object. Accessing owner.state.inner is forbidden:
-    inner is data-oriented inside a dataclass, a nesting that can cause incorrect cached-kernel reuse.
+    owner.state is allowed: a dataclass inside a data-oriented object. Accessing owner.state.inner is forbidden: inner
+    is data-oriented inside a dataclass, a nesting that can cause incorrect cached-kernel reuse.
     """
 
     @qd.data_oriented
