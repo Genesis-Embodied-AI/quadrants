@@ -12,7 +12,7 @@ from tests.helpers import test_utils
 )
 @test_utils.test(arch=qd.cpu)
 def test_dual_dataclass_data_oriented_member_rejected(dataclass_first: bool) -> None:
-    """Reject a dual dataclass/data-oriented object accessed through a data-oriented owner, in either decorator order."""
+    """Reject dual dataclass/data-oriented objects through a data-oriented owner, in either decorator order."""
 
     class State:
         count: int = 3
