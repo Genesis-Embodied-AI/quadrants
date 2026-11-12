@@ -25,7 +25,7 @@ def test_data_oriented_dataclass_member_rejected(
 
     @dataclasses.dataclass(frozen=frozen, unsafe_hash=True)
     class State:
-        inner: Inner
+        inner: qd.Template
 
     @qd.data_oriented
     class Owner:
@@ -33,7 +33,7 @@ def test_data_oriented_dataclass_member_rejected(
             self.state = state
 
     @qd.func
-    def read_member(state: qd.Template) -> qd.i32:
+    def read_member(state: State) -> qd.i32:
         return qd.static(state.inner.count)
 
     @qd.kernel(fastcache=fastcache)
@@ -65,7 +65,7 @@ def test_data_oriented_dataclass_member_disables_artifact_lookup() -> None:
 
     @dataclasses.dataclass(frozen=True)
     class State:
-        inner: Inner
+        inner: qd.Template
 
     assert dataclass_to_repr(False, ("0",), State(Inner())) is _FAIL_FASTCACHE
 
@@ -80,7 +80,7 @@ def test_unused_data_oriented_dataclass_member() -> None:
 
     @dataclasses.dataclass(frozen=True)
     class State:
-        inner: Inner
+        inner: qd.Template
 
     @qd.kernel(fastcache=True)
     def unused(state: qd.Template) -> qd.i32:
@@ -102,7 +102,7 @@ def test_forwarded_unused_data_oriented_dataclass_member(fastcache: bool, inside
 
     @dataclasses.dataclass(frozen=True)
     class State:
-        inner: Inner
+        inner: qd.Template
 
     @qd.data_oriented
     class Owner:
@@ -110,7 +110,7 @@ def test_forwarded_unused_data_oriented_dataclass_member(fastcache: bool, inside
             self.state = state
 
     @qd.func
-    def unused(state: qd.Template) -> qd.i32:
+    def unused(state: State) -> qd.i32:
         if qd.static(False):
             return state.inner.count
         return 3
