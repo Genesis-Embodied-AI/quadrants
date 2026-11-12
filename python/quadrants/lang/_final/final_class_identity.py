@@ -7,8 +7,9 @@ import struct
 import sys
 import types
 import uuid
-import weakref
 from typing import Any, NoReturn
+
+from quadrants.lang._weak_identity_cache import WeakIdentityCache
 
 _MISSING = object()  # Distinguish missing attributes from attributes whose value is None.
 
@@ -26,13 +27,13 @@ if hasattr(os, "register_at_fork"):  # POSIX only; ``spawn``/Windows re-import a
     os.register_at_fork(after_in_child=_reseed_process_nonce)
 
 
-# Pack/unpack a ``float`` as its exact IEEE-754 bits (see ``final_scalar_key``).
+# Pack/unpack a ``float`` as its exact IEEE-754 bits (see ``validate_value_for_final_field_and_get_key``).
 _pack_f64 = struct.Struct("<d").pack
 _unpack_u64 = struct.Struct("<Q").unpack
 
 
 # Exact built-in scalar types accepted as Final constants.
-_EXACT_BAKED_TYPES = (bool, int, float, str)
+_SUPPORTED_BUILTIN_SCALAR_TYPES = (bool, int, float, str)
 
 
 def _is_supported_builtin_scalar_type(cls: type) -> bool:
@@ -40,7 +41,7 @@ def _is_supported_builtin_scalar_type(cls: type) -> bool:
 
     Use identity because a metaclass can make distinct classes compare equal.
     """
-    return any(cls is t for t in _EXACT_BAKED_TYPES)
+    return any(cls is t for t in _SUPPORTED_BUILTIN_SCALAR_TYPES)
 
 
 # CPython Py_TPFLAGS_HEAPTYPE distinguishes heap types from static library types without trusting __module__.
@@ -133,7 +134,7 @@ class _ClassRef:
 # Assign unique serials to dynamic objects for offline cache keys.
 # Weak references and identity checks prevent reuse after collection or confusion between objects that compare equal.
 # WeakKeyDictionary uses equality, so distinct classes that compare equal could incorrectly share an entry.
-_dynamic_object_serials: "dict[int, tuple[weakref.ref, int]]" = {}
+_dynamic_object_serials: WeakIdentityCache[int] = WeakIdentityCache()
 _dynamic_class_serial_counter = itertools.count()
 
 
@@ -143,23 +144,14 @@ def _dynamic_class_serial(obj: Any) -> int:
     Objects that cannot be weakly referenced receive a fresh serial on each call. This causes extra cache misses rather
     than unsafe reuse.
     """
-    key = id(obj)
-    entry = _dynamic_object_serials.get(key)
-    if entry is not None and entry[0]() is obj:  # identity guard: same live object, ``id`` not recycled
-        return entry[1]
-    serial = next(_dynamic_class_serial_counter)
-
-    def _drop(ref: "weakref.ref", k: int = key) -> None:
-        """Remove this object's serial entry when its weak reference expires."""
-        cur = _dynamic_object_serials.get(k)
-        if cur is not None and cur[0] is ref:  # only our own entry, never one that recycled the ``id``
-            del _dynamic_object_serials[k]
-
-    try:
-        ref = weakref.ref(obj, _drop)
-    except TypeError:
-        return serial
-    _dynamic_object_serials[key] = (ref, serial)
+    serial = _dynamic_object_serials.get(obj)
+    if serial is None:
+        serial = next(_dynamic_class_serial_counter)
+        try:
+            _dynamic_object_serials[obj] = serial
+        except TypeError:
+            # An uncacheable object receives a fresh serial instead of risking identity reuse.
+            pass
     return serial
 
 
@@ -230,19 +222,23 @@ def _canonical_attr_value(val: Any, live: bool) -> Any:
     ):
         # Scalar keys include class identity too. Import only for this recursive case, after both modules are loaded.
         # pylint: disable-next=import-outside-toplevel
-        from quadrants.lang._final.final_constant_values import final_scalar_key
+        from quadrants.lang._final.final_constant_values import (
+            validate_value_for_final_field_and_get_key,
+        )
 
-        return ("scalarsub", final_scalar_key(val, live))
+        return ("scalarsub", validate_value_for_final_field_and_get_key(val, live))
     if isinstance(val, float):  # exact float (subclasses routed above); IEEE bits so ``0.0``/``-0.0`` never collapse
         return (type(val).__qualname__, _unpack_u64(_pack_f64(val))[0])
     if isinstance(val, complex):
         if type(val) is not complex:  # a ``complex`` subclass may add state/identity the bare bits drop
             _reject_structural_subclass(val)
         return (type(val).__qualname__, _unpack_u64(_pack_f64(val.real))[0], _unpack_u64(_pack_f64(val.imag))[0])
-    if isinstance(val, (bool, int, str, bytes)):  # exact only: bool/int/str subclasses routed above, so a subclass here
-        if type(val) not in (bool, int, str, bytes):  # is a ``bytes`` subclass, unkeyable by ``final_scalar_key``
+    if isinstance(val, (bool, int, str, bytes)):
+        # Reject subclasses; only exact built-in types are accepted here.
+        if type(val) not in (bool, int, str, bytes):
             _reject_structural_subclass(val)
-        return (type(val).__qualname__, val)  # tag the exact type: ``True``/``1`` compare equal but differ
+        # Include the type name because implicit type coercion makes values such as True and 1 compare equal.
+        return (type(val).__qualname__, val)
     if isinstance(val, (tuple, list)):
         if type(val) not in (tuple, list):  # a container subclass may add per-instance state / a distinct identity
             _reject_structural_subclass(val)

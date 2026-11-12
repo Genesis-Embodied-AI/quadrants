@@ -3,9 +3,15 @@ from typing import Any, TypeAlias
 from weakref import ReferenceType, WeakKeyDictionary
 
 from quadrants.lang import impl
+from quadrants.lang._runtime_typing.dataclass_in_data_oriented import (
+    infer_nested_dataclass_schemas,
+)
+from quadrants.lang._runtime_typing.runtime_dataclass import (
+    prepare_kernel_dataclass_args_for_mapper,
+)
 from quadrants.lang.impl import Program
 from quadrants.lang.kernel_arguments import ArgMetadata
-from quadrants.lang.util import is_data_oriented
+from quadrants.lang.util import get_member_at_path, is_data_oriented
 from quadrants.types import ndarray_type
 
 from .. import _warnings
@@ -74,20 +80,32 @@ class TemplateMapper:
         # ``annotation_has_final_subtree``). Computed lazily on first ``lookup`` so its ``Final`` validation runs then.
         self._mapping_cache_disabled: bool | None = None
 
-    def extract(self, raise_on_templated_floats: bool, args: tuple[Any, ...]) -> Key:
+    def extract(self, raise_on_templated_floats: bool, args: tuple[Any, ...], final_value_key_by_value_id=None) -> Key:
         # Optional ndarray + None gets its own key: _extract_arg's NdarrayType branch reads .shape and raises on None.
         return tuple(
             [
                 (
                     OPTIONAL_ABSENT
                     if arg is None and kernel_arg.optional and type(kernel_arg.annotation) is ndarray_type.NdarrayType
-                    else _extract_arg(raise_on_templated_floats, arg, kernel_arg.annotation, kernel_arg.name)
+                    else _extract_arg(
+                        raise_on_templated_floats,
+                        arg,
+                        kernel_arg.annotation,
+                        kernel_arg.name,
+                        final_value_key_by_value_id,
+                    )
                 )
                 for arg, kernel_arg in zip(args, self.arguments)
             ]
         )
 
-    def lookup(self, raise_on_templated_floats: bool, args: tuple[Any, ...]) -> tuple[int, Key]:
+    def lookup(
+        self,
+        raise_on_templated_floats: bool,
+        args: tuple[Any, ...],
+        final_value_key_by_value_id=None,
+        runtime_kernel=None,
+    ) -> tuple[int, Key]:
         if len(args) != self.num_args:
             raise TypeError(f"{self.num_args} argument(s) needed but {len(args)} provided.")
 
@@ -108,6 +126,8 @@ class TemplateMapper:
         # branching for primitive types dramatically improve performance of hash computation.
         mapping_cache_tracker: list[ReferenceType | None] | None = None
         args_hash: ArgsHash = tuple([id(arg) for arg in args])
+        if runtime_kernel is not None:
+            final_value_key_by_value_id = prepare_kernel_dataclass_args_for_mapper(runtime_kernel, args, args_hash)
         # A ``@qd.data_oriented`` container's member ndarrays can be reassigned between calls on the same instance
         # (``state.x = other_ndarray``), which ``id(arg)`` cannot see, so the spec-key cache would serve an entry
         # compiled for the old dtype/ndim. Fold the reachable ndarray ids in as well.
@@ -141,7 +161,7 @@ class TemplateMapper:
         if nd_ids:
             args_hash = args_hash + tuple(nd_ids)
         # A Final-bearing argument disables this cache: serving a prior ``(count, key)`` would skip ``extract()`` and
-        # its per-launch ``final_scalar_key`` revalidation. Final-free mappers are unaffected.
+        # its per-launch ``validate_value_for_final_field_and_get_key`` revalidation. Final-free mappers are unaffected.
         cache_disabled = self._mapping_cache_disabled
         if cache_disabled is None:
             cache_disabled = self._mapping_cache_disabled = any(
@@ -156,14 +176,37 @@ class TemplateMapper:
             if mapping_cache_tracker:
                 return self._mapping_cache[args_hash]
 
-        key = self.extract(raise_on_templated_floats, args)
+        # Only calls without nested dataclasses enter the identity cache. Its hits can skip schema discovery.
+        launch_arg_schemas = infer_nested_dataclass_schemas(args, self.arguments, self.template_slot_locations)
+        if runtime_kernel is not None:
+            runtime_kernel._launch_arg_schemas = launch_arg_schemas
+            runtime_kernel._runtime_has_deferred |= any(
+                schema._qd_runtime_has_deferred for _, _, schema in launch_arg_schemas
+            )
+
+        key = self.extract(raise_on_templated_floats, args, final_value_key_by_value_id)
+        if launch_arg_schemas:
+            key += tuple(
+                (
+                    index,
+                    path,
+                    _extract_arg(
+                        raise_on_templated_floats,
+                        get_member_at_path(args[index], path),
+                        schema,
+                        ".".join((self.arguments[index].name, *path)),
+                        final_value_key_by_value_id,
+                    ),
+                )
+                for index, path, schema in launch_arg_schemas
+            )
         try:
             count = self.mapping[key]
         except KeyError:
             count = self.mapping[key] = len(self.mapping)
 
         # Skip the store too when disabled, so the read above always misses and every launch revalidates.
-        if not cache_disabled:
+        if not cache_disabled and not launch_arg_schemas:
             # Note that it is important to prepend the cache tracker with 'None' to avoid misclassifying no argument with
             # expired cache entry caused by deallocated argument.
             mapping_cache_tracker_: list[ReferenceType | None] = [None]

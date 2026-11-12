@@ -4,7 +4,6 @@ import json
 import os
 import pathlib
 import time
-import warnings
 from collections import defaultdict
 from dataclasses import _FIELDS  # type: ignore[reportAttributeAccessIssue]
 
@@ -42,6 +41,7 @@ from quadrants.lang import _kernel_impl_dataclass, impl, runtime_ops
 # construction to those free functions so this hot file doesn't accrete checkpoint-feature-specific blocks.
 from quadrants.lang import kernel_checkpoint as _checkpoint_helpers
 from quadrants.lang._fast_caching import src_hasher
+from quadrants.lang._fast_caching.args_hasher import LaunchArgSchemas
 from quadrants.lang._template_mapper_hotpath import chain_has_mutable_container
 from quadrants.lang._wrap_inspect import FunctionSourceInfo, get_source_info_and_src
 from quadrants.lang.ast import (
@@ -59,7 +59,7 @@ from quadrants.lang.exception import (
 )
 from quadrants.lang.impl import Program
 from quadrants.lang.shell import _shell_pop_print
-from quadrants.lang.util import cook_dtype, is_data_oriented
+from quadrants.lang.util import cook_dtype
 from quadrants.types import (
     ndarray_type,
     primitive_types,
@@ -329,6 +329,10 @@ class Kernel(FuncBase):
         # converted at least as far as AST and front-end IR, but not necessarily any further.
         self.materialized_kernels: dict[CompiledKernelKeyType, KernelCxx] = {}
         self.has_print = False
+        self._runtime_has_deferred = False
+        self._launch_arg_schemas: LaunchArgSchemas = ()
+        self._runtime_metadata_args_hash: tuple[int, ...] | None = None
+        self._runtime_metadata_defaults: tuple[int, int] | None = None
         self.use_graph: bool = False
         # Opt-in flag set by `@qd.kernel(graph=True, checkpoints=True)`. When True, the AST transformer enables
         # `qd.checkpoint(...)` recognition AND auto-wraps every top-level for-loop that isn't already inside a `with
@@ -419,6 +423,8 @@ class Kernel(FuncBase):
         self._l1_key = None  # type: ignore[attr-defined]
         self._pruning_paths_from_l1 = None  # type: ignore[attr-defined]
         self.fast_checksum = None
+        if self._runtime_has_deferred:
+            return None
         if self.runtime.src_ll_cache and self.quadrants_callable and self.quadrants_callable.is_pure:
             kernel_source_info, _src = get_source_info_and_src(self.func)
             self._kernel_source_info_cached = kernel_source_info  # reused by materialize / launch_kernel
@@ -434,7 +440,12 @@ class Kernel(FuncBase):
 
             # Phase 2: narrow args hash + L2 lookup.
             narrow_args_hash = src_hasher.compute_narrow_args_hash(
-                self.raise_on_templated_floats, kernel_source_info, args, self.arg_metas, pruning_paths
+                self.raise_on_templated_floats,
+                kernel_source_info,
+                args,
+                self.arg_metas,
+                pruning_paths,
+                launch_arg_schemas=self._launch_arg_schemas,
             )
             if narrow_args_hash is None:
                 # Recognised-but-unsupported tensor-like (Field / MatrixField): leaving ``fast_checksum`` None keeps any
@@ -512,28 +523,6 @@ class Kernel(FuncBase):
             key = (self.func, 0, self.autodiff_mode)
         if key in self.materialized_kernels:
             return
-
-        # Deprecation warning: passing a ``@dataclasses.dataclass`` instance through a ``qd.Template``-annotated kernel
-        # parameter was never an intentional Quadrants pattern. It works inadvertently because the template walker
-        # happens to handle dataclass-shaped objects, but the supported annotation for a ``@dataclasses.dataclass`` is
-        # the dataclass type itself (flat-by-fields path). We fire the warning here, after the ``materialized_kernels``
-        # cache-hit early return above, so it only runs on the first compile for each unique spec-key — zero cost on the
-        # steady-state launch hot path. Doubly-decorated objects (``@qd.data_oriented`` over ``@dataclasses.dataclass``)
-        # are excluded because that combination is a legitimate pattern routed through the data-oriented path.
-        for arg_meta, val in zip(self.arg_metas, py_args):
-            ann = arg_meta.annotation
-            if ann is not template and type(ann) is not template:
-                continue
-            if dataclasses.is_dataclass(val) and not isinstance(val, type) and not is_data_oriented(val):
-                warnings.warn(
-                    f"Kernel {self.func.__qualname__!r} parameter {arg_meta.name!r}: passing a "
-                    "@dataclasses.dataclass instance into a qd.Template-annotated kernel parameter was "
-                    "never intended to be supported, and only works inadvertently. Use the dataclass type "
-                    f"itself as the annotation instead (e.g. `def {self.func.__name__}({arg_meta.name}: "
-                    f"{type(val).__name__}, ...)`). In a future release this will become an error.",
-                    DeprecationWarning,
-                    stacklevel=4,
-                )
 
         if _kernel_coverage_enabled():
             from . import _kernel_coverage  # pylint: disable=import-outside-toplevel
@@ -640,6 +629,7 @@ class Kernel(FuncBase):
             raise_on_templated_floats=self.raise_on_templated_floats,
             py_args=py_args,
             arg_metas=self.arg_metas,
+            launch_arg_schemas=self._launch_arg_schemas,
         )
         # Assigned even when ``generated`` is False: that is also how a re-keyed L2 entry comes back.
         self.fast_checksum = new_fast_checksum
@@ -802,7 +792,7 @@ class Kernel(FuncBase):
                 compiled_kernel_data = compile_result.compiled_kernel_data
                 if compile_result.cache_hit:
                     self.fe_ll_cache_observations.cache_hit = True
-                if self.fast_checksum:
+                if self.fast_checksum and not self._runtime_has_deferred:
                     src_hasher.store(
                         compile_result.cache_key,
                         self.fast_checksum,
@@ -949,7 +939,7 @@ class Kernel(FuncBase):
 
     def ensure_compiled(self, *py_args: tuple[Any, ...]) -> tuple[Callable, int, AutodiffMode]:
         try:
-            instance_id, arg_features = self.mapper.lookup(self.raise_on_templated_floats, py_args)
+            instance_id, arg_features = self.mapper.lookup(self.raise_on_templated_floats, py_args, runtime_kernel=self)
         except Exception as e:
             raise type(e)(f"exception while trying to ensure compiled {self.func}:\n{e}") from e
         key = (self.func, instance_id, self.autodiff_mode)

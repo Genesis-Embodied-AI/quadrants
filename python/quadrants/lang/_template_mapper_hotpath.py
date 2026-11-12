@@ -41,13 +41,16 @@ from quadrants._tensor import (
 )
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorClass
-from quadrants.lang._final.final_constant_values import final_scalar_key
+from quadrants.lang._final.final_constant_values import (
+    get_cached_or_validate_value_for_final_field_and_get_key,
+)
 from quadrants.lang._final.final_dataclass_fields import (
     final_field_names,
     subtree_has_final_fields,
 )
 from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._ndarray import Ndarray
+from quadrants.lang._runtime_typing.deferred_errors import DeferredMemberType
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.buffer_view import BufferView as BufferViewInstance
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
@@ -222,7 +225,13 @@ def _collect_struct_nd_descriptors(arg: Any, out: list) -> None:
         out.append((".".join(chain), element_type, len(shape), v.grad is not None, v._qd_layout))
 
 
-def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: AnnotationType, arg_name: str) -> Any:
+def _extract_arg(
+    raise_on_templated_floats: bool,
+    arg: Any,
+    annotation: AnnotationType,
+    arg_name: str,
+    final_value_key_by_value_id=None,
+) -> Any:
     # ``qd.Tensor`` wrappers passed as struct fields. Top-level kernel-arg unwrap in ``Kernel.__call__`` covers direct
     # args, but the dataclass-field recursion at the bottom of this function walks struct attributes via raw
     # ``getattr``, so a wrapper stored as a struct field arrives here un-stripped with its declared annotation (e.g.
@@ -239,6 +248,8 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
     ):  # pyright: ignore[reportOptionalMemberAccess]
         arg = arg._unwrap()
     annotation_type = type(annotation)
+    if annotation_type is DeferredMemberType:
+        return annotation
     # qd.Tensor: value-dispatch. Ndarray-shaped values flow through the ndarray feature path; everything else falls
     # through to the template path (Field, SNode, primitives). Both branches are salted with a marker so cache keys
     # disambiguate. The annotation is the wrapper *class* (``qd.Tensor``); ``arg`` is always a bare impl by the time
@@ -397,7 +408,8 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         # Instead of strictly requiring being frozen, we only require the dataclass to be hashable. Any frozen dataclass
         # is hashable, but a user can enforce a dataclass to be consider frozen for a user perspective without being
         # truly frozen by specifying 'unsafe_hash=True'. If a user is doing this on purpose, it makes sense to honor it.
-        is_frozen = annotation.__hash__ is not None
+        is_runtime_schema = hasattr(annotation, "_qd_runtime_origin")
+        is_frozen = annotation.__hash__ is not None and (not is_runtime_schema or annotation._qd_runtime_stable)
         # Serve the ``_qd_spec_key`` cache only in the default (non-strict) mode: the cached key is
         # setting-independent, but the ``Final[float]`` guard below is not, and an early return would also skip the
         # recursion that runs it on nested frozen dataclasses. A Final-bearing subtree is never served either - the
@@ -425,20 +437,25 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
                     continue
                 field_value = getattr(arg, field.name)
                 if field.name in final_names:
-                    # A ``Final[float]`` drives specialisation, so honour ``raise_on_templated_floats`` like a
+                    # A floating-point Final value drives specialisation, so honour ``raise_on_templated_floats`` like a
                     # ``qd.template()`` float. The ``isinstance`` runs only in strict mode; ``bool`` is not a ``float``.
                     if raise_on_templated_floats and (
                         type(field_value) is float or isinstance(field_value, (float, np.floating))
                     ):
                         raise ValueError(
                             f"Floats not allowed as templated types: {annotation.__name__}.{field.name} is "
-                            f"``Final[float]``, so its value is baked into the compiled kernel and each distinct "
+                            f"a floating-point ``Final`` value baked into the compiled kernel, and each distinct "
                             f"value compiles a separate kernel. Drop the ``Final`` to make it an ordinary runtime "
                             f"field, or unset ``raise_on_templated_floats``."
                         )
                     # ``live=True``: in-process key, so a subclass/enum is keyed by class identity. The offline
-                    # fastcache passes ``live=False`` (see ``final_scalar_key`` / ``args_hasher``).
-                    key_parts.append(final_scalar_key(field_value, live=True))
+                    # fastcache passes ``live=False`` (see ``validate_value_for_final_field_and_get_key`` /
+                    # ``args_hasher``).
+                    key_parts.append(
+                        get_cached_or_validate_value_for_final_field_and_get_key(
+                            field_value, final_value_key_by_value_id
+                        )
+                    )
                 else:
                     key_parts.append(
                         _extract_arg(
@@ -446,6 +463,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
                             field_value,
                             field.type,
                             create_flat_name(arg_name, field.name),
+                            final_value_key_by_value_id,
                         )
                     )
             key = tuple(key_parts)
@@ -457,11 +475,14 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
                         getattr(arg, field.name),
                         field.type,
                         create_flat_name(arg_name, field.name),
+                        final_value_key_by_value_id,
                     )
                     for field in annotation_fields.values()
                     if field._field_type is _FIELD
                 ]
             )
+        if is_runtime_schema:
+            key = RuntimeDataclassFeatures(key, annotation)
         # Store the cache only for a ``Final``-free subtree; a Final-bearing one must revalidate every launch, so we
         # never store one (making the read above fall through).
         if is_frozen and not subtree_has_final_fields(annotation):
@@ -482,3 +503,29 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         return arg.dtype
     # Use '#' as a placeholder because other kinds of arguments are not involved in template instantiation
     return "#"
+
+
+class RuntimeDataclassFeatures(tuple):
+    """Tuple-compatible field features whose dispatch identity also includes the inferred scalar types."""
+
+    def __new__(cls, features: tuple[Any, ...], schema: AnnotationType) -> "RuntimeDataclassFeatures":
+        """Attach the inferred schema to tuple-compatible dispatch features."""
+        result = super().__new__(cls, features)
+        result.schema = schema
+        return result
+
+    def __hash__(self) -> int:
+        """Hash the inferred schema key together with the field features."""
+        return hash((self.schema._qd_runtime_key, tuple(self)))
+
+    def __eq__(self, other: object) -> bool:
+        """Compare both inferred schema keys and field features."""
+        return (
+            type(other) is type(self)
+            and self.schema._qd_runtime_key == other.schema._qd_runtime_key
+            and tuple.__eq__(self, other)
+        )
+
+    def __ne__(self, other: object) -> bool:
+        """Return whether the schema keys or field features differ."""
+        return not self == other

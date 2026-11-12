@@ -68,7 +68,7 @@ def test_dataclass_data_oriented_member_rejected_via_template():
         for i in range(N):
             s.inner.y[i] = i + 11
 
-    with pytest.raises(Exception, match="Data-oriented objects inside Python dataclass"):
+    with pytest.raises(Exception, match=r"s\.inner.*Data-oriented objects inside Python dataclass"):
         run(outer)
 
 

@@ -182,9 +182,10 @@ def test_frozen_dc_unwrapped_cache_populated():
     noop(state)
     assert hasattr(state, "_qd_dc_unwrapped")
     cache = state._qd_dc_unwrapped
-    assert id(State) in cache
-    retained_ty, cached = cache[id(State)]
-    assert retained_ty is State
+    schema = noop._primal.arg_metas[0].annotation
+    assert id(schema) in cache
+    retained_ty, cached = cache[id(schema)]
+    assert retained_ty is schema
     assert "a" in cached
     assert cached["a"] is a
 
@@ -196,7 +197,7 @@ def test_frozen_dc_unwrapped_cache_populated():
 
 @test_utils.test(arch=qd.cpu)
 def test_frozen_dc_template_key_cache_populated():
-    """The template key should depend on the way we use it"""
+    """The arriving subclass shares a runtime schema regardless of the annotated base."""
 
     @dataclasses.dataclass(frozen=True)
     class Base1:
@@ -224,13 +225,16 @@ def test_frozen_dc_template_key_cache_populated():
 
     assert not hasattr(sub, "_qd_spec_key")
     use1(sub)
-    assert id(Base1) in sub._qd_spec_key
+    schema1 = use1._primal.arg_metas[0].annotation
+    assert id(schema1) in sub._qd_spec_key
     use2(sub)
-    assert id(Base1) in sub._qd_spec_key and id(Base2) in sub._qd_spec_key
-    assert sub._qd_spec_key[id(Base1)][0] is Base1 and sub._qd_spec_key[id(Base2)][0] is Base2
+    schema2 = use2._primal.arg_metas[0].annotation
+    assert id(schema1) in sub._qd_spec_key and id(schema2) in sub._qd_spec_key
+    assert sub._qd_spec_key[id(schema1)][0] is schema1 and sub._qd_spec_key[id(schema2)][0] is schema2
 
-    # Distinct field sets (i32/1D vs f32/2D) must yield distinct keys, i.e. neither annotation reused the other's.
-    assert sub._qd_spec_key[id(Base1)][1] != sub._qd_spec_key[id(Base2)][1]
+    # Both kernels infer the complete subclass, rather than selecting fields from the annotated base.
+    assert schema1 is schema2
+    assert sub._qd_spec_key[id(schema1)][1] == sub._qd_spec_key[id(schema2)][1]
 
 
 # ---------------------------------------------------------------------------
@@ -269,10 +273,12 @@ def test_frozen_dc_all_field_cache_per_annotated_type():
     sub = Sub(a=a, b=b)
 
     use1(sub)
-    assert sub._qd_all_field == {id(Base1): (Base1, True)}
+    schema1 = use1._primal.arg_metas[0].annotation
+    assert sub._qd_all_field == {id(schema1): (schema1, True)}
     use2(sub)
+    schema2 = use2._primal.arg_metas[0].annotation
     # Second annotation gets its own entry rather than reusing Base1's shortcut verdict.
-    assert sub._qd_all_field == {id(Base1): (Base1, True), id(Base2): (Base2, True)}
+    assert sub._qd_all_field == {id(schema1): (schema1, True), id(schema2): (schema2, True)}
 
     np.testing.assert_array_equal(a.to_numpy(), [1, 1, 1, 1])
     np.testing.assert_array_equal(b.to_numpy(), [2, 2, 2, 2])
