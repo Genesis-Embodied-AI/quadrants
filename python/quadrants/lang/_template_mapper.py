@@ -4,7 +4,6 @@ from weakref import ReferenceType, WeakKeyDictionary
 
 from quadrants.lang import impl
 from quadrants.lang._runtime_typing.dataclass_in_data_oriented import (
-    get_member_at_path,
     infer_nested_dataclass_schemas,
 )
 from quadrants.lang._runtime_typing.runtime_dataclass import (
@@ -12,7 +11,7 @@ from quadrants.lang._runtime_typing.runtime_dataclass import (
 )
 from quadrants.lang.impl import Program
 from quadrants.lang.kernel_arguments import ArgMetadata
-from quadrants.lang.util import is_data_oriented
+from quadrants.lang.util import get_member_at_path, is_data_oriented
 from quadrants.types import ndarray_type
 
 from .. import _warnings

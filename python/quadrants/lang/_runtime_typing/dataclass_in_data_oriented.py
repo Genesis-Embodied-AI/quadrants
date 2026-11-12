@@ -10,7 +10,11 @@ from quadrants.lang._runtime_typing.runtime_dataclass import (
 from quadrants.lang._weak_identity_cache import WeakIdentityCache
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.kernel_arguments import ArgMetadata
-from quadrants.lang.util import is_data_oriented, is_dataclass_instance
+from quadrants.lang.util import (
+    get_member_at_path,
+    is_data_oriented,
+    is_dataclass_instance,
+)
 
 # Data-oriented attribute layouts are fixed after their first kernel call, like ndarray member paths.
 _dataclass_paths_by_data_oriented_instance: WeakIdentityCache[tuple[tuple[str, ...], ...]] = WeakIdentityCache()
@@ -62,13 +66,6 @@ def _cached_collect_dataclass_paths_in_data_oriented(data_oriented_obj: Any) -> 
         # Named tuples can be data-oriented but cannot be weakly referenced.
         pass
     return dataclass_paths
-
-
-def get_member_at_path(obj: Any, path: tuple[str, ...]) -> Any:
-    """Read an attribute chain from the current kernel argument."""
-    for name in path:
-        obj = getattr(obj, name)
-    return obj
 
 
 def infer_nested_dataclass_schemas(
