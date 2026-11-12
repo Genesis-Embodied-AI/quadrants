@@ -6,6 +6,7 @@ These exist to empirically verify the table claims in the user-facing doc; not p
 import dataclasses
 
 import numpy as np
+import pytest
 
 import quadrants as qd
 
@@ -67,8 +68,8 @@ def test_dataclass_with_data_oriented_via_template():
         for i in range(N):
             s.inner.y[i] = i + 11
 
-    run(outer)
-    np.testing.assert_array_equal(outer.inner.y.to_numpy(), np.arange(N) + 11)
+    with pytest.raises(Exception, match="Data-oriented objects inside Python dataclass"):
+        run(outer)
 
 
 @test_utils.test(arch=qd.cpu)
