@@ -335,6 +335,10 @@ Module Contents
       :type:  dict[str, Any]
 
 
+   .. py:attribute:: struct_locals
+      :type:  set[str]
+
+
    .. py:attribute:: is_pure
       :type:  bool
 
