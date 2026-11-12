@@ -517,8 +517,8 @@ def test_discovered_schemas_follow_argument_indices_and_member_paths(monkeypatch
         raise AssertionError("Unexpected schema inference in hashing")
 
     monkeypatch.setattr(args_hasher, "cached_infer_dataclass_type", reject_reinference)
-    assert args_hasher.hash_args(False, owners, metas, nested_dataclass_schemas=schemas) == expected
+    assert args_hasher.hash_args(False, owners, metas, launch_arg_schemas=schemas) == expected
 
     owners[0].child.child = State(1.5)
     replacement_schemas = infer_nested_dataclass_schemas(owners, metas, [0, 1])
-    assert args_hasher.hash_args(False, owners, metas, nested_dataclass_schemas=replacement_schemas) != expected
+    assert args_hasher.hash_args(False, owners, metas, launch_arg_schemas=replacement_schemas) != expected

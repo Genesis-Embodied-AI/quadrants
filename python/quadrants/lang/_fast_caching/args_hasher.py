@@ -48,7 +48,7 @@ g_num_ignored_calls = 0
 FIELD_METADATA_CACHE_VALUE = "add_value_to_cache_key"
 
 # Discovery records argument indices; hashing uses string indices at the start of each attribute path.
-NestedDataclassSchemas: TypeAlias = Sequence[tuple[int, tuple[str, ...], type[RuntimeDataclassSchema]]]
+LaunchArgSchemas: TypeAlias = Sequence[tuple[int, tuple[str, ...], type[RuntimeDataclassSchema]]]
 SchemasByPath: TypeAlias = Mapping[tuple[str, ...], type[RuntimeDataclassSchema]]
 
 
@@ -434,7 +434,7 @@ def hash_args(
     args: Sequence[Any],
     arg_metas: Sequence[ArgMetadata | None],
     pruning_paths: set[str] | None = None,
-    nested_dataclass_schemas: NestedDataclassSchemas = (),
+    launch_arg_schemas: LaunchArgSchemas = (),
 ) -> str | FastcacheSkip:
     """Return the args hash string, or a ``FastcacheSkip`` explaining why hashing failed.
 
@@ -446,7 +446,7 @@ def hash_args(
     _should_warn = False
     g_num_calls += 1
     g_num_args += len(args)
-    schemas_by_path = {(str(index), *path): schema for index, path, schema in nested_dataclass_schemas}
+    schemas_by_path = {(str(index), *path): schema for index, path, schema in launch_arg_schemas}
     hash_l = []
     if len(args) != len(arg_metas):
         raise RuntimeError(
