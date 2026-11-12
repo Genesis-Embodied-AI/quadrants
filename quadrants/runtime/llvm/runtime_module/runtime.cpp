@@ -1229,24 +1229,26 @@ f64 amdgpu_shuffle_down_f64(i32 offset, f64 value) {
 // lane 0 of a tile still depends on reads from its own row (larger tiles fold their other rows in at offsets 32 and 16
 // first), so the tile result is unchanged. Offset 16 crosses a row and offset >= 32 crosses the wave half, so both use
 // the generic helper. Inline asm rather than ``__builtin_amdgcn_update_dpp`` because this file is compiled
-// to host bitcode and retargeted to amdgcn only at JIT time; ``offset`` folds to a constant after inlining.
+// to host bitcode and retargeted to amdgcn only at JIT time; ``offset`` folds to a constant after inlining. The
+// backend's hazard recognizer cannot see a DPP read inside inline asm, so ``s_nop 1`` supplies the 2 wait states GFX9
+// requires between a VALU write of ``value`` (usually the previous tree step's ``op``) and the DPP read of it.
 i32 amdgpu_reduce_shuffle_down_i32(i32 offset, i32 value) {
 #if defined(ARCH_amdgpu) && (defined(__x86_64__) || defined(__i386__) || defined(__amdgcn__))
   i32 r = value;
   if (offset == 1) {
-    __asm__ volatile("v_mov_b32_dpp %0, %1 row_shl:1 row_mask:0xf bank_mask:0xf" : "+v"(r) : "v"(value));
+    __asm__ volatile("s_nop 1\n\tv_mov_b32_dpp %0, %1 row_shl:1 row_mask:0xf bank_mask:0xf" : "+v"(r) : "v"(value));
     return r;
   }
   if (offset == 2) {
-    __asm__ volatile("v_mov_b32_dpp %0, %1 row_shl:2 row_mask:0xf bank_mask:0xf" : "+v"(r) : "v"(value));
+    __asm__ volatile("s_nop 1\n\tv_mov_b32_dpp %0, %1 row_shl:2 row_mask:0xf bank_mask:0xf" : "+v"(r) : "v"(value));
     return r;
   }
   if (offset == 4) {
-    __asm__ volatile("v_mov_b32_dpp %0, %1 row_shl:4 row_mask:0xf bank_mask:0xf" : "+v"(r) : "v"(value));
+    __asm__ volatile("s_nop 1\n\tv_mov_b32_dpp %0, %1 row_shl:4 row_mask:0xf bank_mask:0xf" : "+v"(r) : "v"(value));
     return r;
   }
   if (offset == 8) {
-    __asm__ volatile("v_mov_b32_dpp %0, %1 row_shl:8 row_mask:0xf bank_mask:0xf" : "+v"(r) : "v"(value));
+    __asm__ volatile("s_nop 1\n\tv_mov_b32_dpp %0, %1 row_shl:8 row_mask:0xf bank_mask:0xf" : "+v"(r) : "v"(value));
     return r;
   }
 #endif
