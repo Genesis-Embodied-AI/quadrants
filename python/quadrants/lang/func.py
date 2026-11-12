@@ -84,6 +84,7 @@ class Func(FuncBase):
 
         struct_locals = _kernel_impl_dataclass.extract_struct_locals_from_context(ctx)
 
+        ctx.struct_locals = struct_locals
         tree = _kernel_impl_dataclass.unpack_ast_struct_expressions(tree, struct_locals=struct_locals)
         ret = transform_tree(tree, ctx)
         if not self.is_real_function:
