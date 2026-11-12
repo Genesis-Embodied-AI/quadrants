@@ -116,8 +116,6 @@ class ASTTransformer(Builder):
             and node.id in ctx.struct_locals
             # Reject a data-oriented object stored in the member.
             and is_data_oriented(node.ptr)
-            # Objects with both decorators are treated as dataclasses, so nesting them remains allowed.
-            and not dataclasses.is_dataclass(node.ptr)
         ):
             raise exception.QuadrantsRuntimeTypeError(
                 "Data-oriented objects inside Python dataclass fields are unsupported. "
@@ -803,16 +801,16 @@ class ASTTransformer(Builder):
                 node.ptr = getattr(tensor_ops, node.attr)
                 setattr(node, "caller", node.value.ptr)
         elif dataclasses.is_dataclass(node.value.ptr):
+            if is_data_oriented(node.value.ptr):
+                raise exception.QuadrantsRuntimeTypeError(
+                    "A class cannot be both a Python dataclass and data-oriented."
+                )
             lifted = maybe_lifted_primitive(ctx, node.value.ptr, node.attr)
             if lifted is not None:
                 node.ptr = lifted
                 return node.ptr
             node.ptr = getattr(node.value.ptr, node.attr)
-            if (
-                ctx.global_context.pruning.enforcing
-                and is_data_oriented(node.ptr)
-                and not dataclasses.is_dataclass(node.ptr)
-            ):
+            if ctx.global_context.pruning.enforcing and is_data_oriented(node.ptr):
                 raise exception.QuadrantsRuntimeTypeError(
                     "Data-oriented objects inside Python dataclass fields are unsupported. "
                     "Store the dataclass on the data-oriented object instead."
