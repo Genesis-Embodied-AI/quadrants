@@ -18,10 +18,7 @@ from .._name_utils import create_flat_name
 from .._ndarray import ScalarNdarray
 from .._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
 from .._runtime_typing.deferred_errors import DeferredMemberType
-from .._runtime_typing.runtime_dataclass import (
-    RuntimeDataclassSchema,
-    cached_infer_dataclass_type,
-)
+from .._runtime_typing.runtime_dataclass import RuntimeDataclassSchema
 from ..field import ScalarField
 from ..kernel_arguments import ArgMetadata
 from ..matrix import MatrixField, MatrixNdarray, VectorNdarray
@@ -352,7 +349,7 @@ def stringify_obj_type(
         _mark_warn_if_not_tensor_annotation(arg_meta)
         return _FAIL_FASTCACHE
     if is_dataclass_instance(obj):
-        # Reuse discovery or argument schemas; standalone hasher callers can still request inference.
+        # Hash only with schemas supplied by discovery or argument metadata.
         schema = (
             launch_arg_schema_by_index_and_path.get(index_and_path)
             if launch_arg_schema_by_index_and_path is not None
@@ -364,7 +361,7 @@ def stringify_obj_type(
                 # Argument metadata already carries an inferred schema at this boundary.
                 schema = ann  # type: ignore[assignment]
         if schema is None:
-            schema = cached_infer_dataclass_type(obj, ".".join(index_and_path))
+            return _FAIL_FASTCACHE
         return dataclass_to_repr(
             raise_on_templated_floats,
             index_and_path,

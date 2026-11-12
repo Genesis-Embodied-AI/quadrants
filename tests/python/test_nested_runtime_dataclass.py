@@ -6,6 +6,9 @@ import pytest
 
 import quadrants as qd
 from quadrants.lang._fast_caching import args_hasher
+from quadrants.lang._runtime_typing.nested_dataclasses import (
+    infer_nested_dataclass_schemas,
+)
 from quadrants.lang.kernel_arguments import ArgMetadata
 
 from tests.helpers import test_utils
@@ -28,7 +31,10 @@ def test_nested_dataclass_hash_ignores_declared_child_type() -> None:
         def __init__(self) -> None:
             self.state = State(7)
 
-    result = args_hasher.hash_args(False, [Owner()], [ArgMetadata(qd.Template, "owner")])
+    owners = (Owner(),)
+    metas = [ArgMetadata(qd.Template, "owner")]
+    launch_arg_schemas = infer_nested_dataclass_schemas(owners, metas, [0])
+    result = args_hasher.hash_args(False, owners, metas, launch_arg_schemas=launch_arg_schemas)
     assert isinstance(result, str)
 
 
@@ -128,14 +134,8 @@ def test_nested_dataclass_used_invalid_member_reports_path() -> None:
 
 
 @test_utils.test()
-def test_nested_dataclass_offline_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_nested_dataclass_offline_cache(tmp_path: Path) -> None:
     """Disk-cache reuse must bind current nested scalar values and retain Final specialization."""
-
-    def reject_reinference(*args: object, **kwargs: object) -> None:
-        """Fail if either disk-cache lookup or persistence bypasses the supplied schemas."""
-        raise AssertionError("Argument hashing must reuse discovered schemas")
-
-    monkeypatch.setattr(args_hasher, "cached_infer_dataclass_type", reject_reinference)
 
     @dataclass(frozen=True)
     class State:
