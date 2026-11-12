@@ -114,8 +114,6 @@ class ASTTransformer(Builder):
             pruning.enforcing
             # Restrict this check to known dataclass members, not ordinary variables.
             and node.id in ctx.struct_locals
-            # Check the member when the function uses it, after argument expansion.
-            and not ctx.expanding_dataclass_call_parameters
             # Reject a data-oriented object stored in the member.
             and is_data_oriented(node.ptr)
             # Objects with both decorators are treated as dataclasses, so nesting them remains allowed.
