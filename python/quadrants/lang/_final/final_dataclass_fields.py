@@ -46,7 +46,7 @@ def get_final_field_names(dataclass_type: type) -> frozenset[str]:
 
 
 def infer_final_field_annotation(
-    value: object,
+    py_obj: object,
     non_frozen_ancestor_path: str | None,
     name: str,
     final_value_key_by_value_id: "FinalValueKeyCache | None" = None,
@@ -54,12 +54,12 @@ def infer_final_field_annotation(
     """Infer a Final field's schema annotation from its runtime value and ancestor constraints.
 
     Args:
-        value: The actual Python object stored in the Final field, such as 7.
+        py_obj: The actual Python object stored in the Final field, such as 7.
         non_frozen_ancestor_path: Dotted path from a reassignable dataclass to the dataclass containing this field,
             such as "State.config". None means no reassignable dataclass was found on the path.
         name: The field's name as a string, such as "count", used in error messages.
-        final_value_key_by_value_id: Optional cache shared within the current kernel call, mapping id(value) to
-            (value, specialization_key). Stores successful validation results for reuse later in the call.
+        final_value_key_by_value_id: Optional cache shared within the current kernel call, mapping id(py_obj) to
+            (py_obj, specialization_key). Stores successful validation results for reuse later in the call.
             Passing the cache lets validation and compiled-kernel selection share results within one call. A fresh
             cache is needed for each call because objects can change between calls.
     """
@@ -69,18 +69,18 @@ def infer_final_field_annotation(
             TypeError,
             f"{parent_name} is not frozen but reaches the ``Final`` field {non_frozen_ancestor_path}.{name}. "
             "No dataclass on the path to a used Final value may be reassignable.",
-            value,
+            py_obj,
         )
     # Exact Python primitives cannot fail validation. Recheck other values each launch: enum members can acquire
     # mutable state even inside a frozen dataclass.
-    value_type = type(value)
+    value_type = type(py_obj)
     if value_type is not bool and value_type is not int and value_type is not float and value_type is not str:
         try:
-            key = validate_value_for_final_field_and_get_key(value, live=True)
+            key = validate_value_for_final_field_and_get_key(py_obj, live=True)
             if final_value_key_by_value_id is not None:
-                final_value_key_by_value_id[id(value)] = (value, key)
+                final_value_key_by_value_id[id(py_obj)] = (py_obj, key)
         except TypeError as error:
-            return create_deferred_member_type_for_invalid_dataclass_member(TypeError, str(error), value)
+            return create_deferred_member_type_for_invalid_dataclass_member(TypeError, str(error), py_obj)
     # A schema needs only the marker; the specialization key and compiler retain the actual value and its type.
     return _FINAL_MARKER
 
