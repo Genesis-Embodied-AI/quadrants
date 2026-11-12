@@ -56,8 +56,6 @@ When migrating existing containers, array annotation options such as `boundary="
 
 A member may be `None`. You can test whether the member is present with [`qd.static(state.member is not None)`](static.md). Dataclasses may contain unsupported Python values, provided kernel code does not access those members.
 
-An unused `Final` member may hold an unsupported constant. A used Final member requires a supported actual value and a non-reassignable path through its containers. Inner annotations never constrain values: `Final[list]` holding an integer is supported, while `Final[int]` holding a list is unsupported when used. Valid Final values remain part of specialization keys, including the `raise_on_templated_floats` check. Containers with deferred unsupported members bypass offline fast caching and instance-based dispatch shortcuts; valid in-process compiled versions can still be reused.
-
 Dataclass arguments to `@qd.func` must be passed explicitly. If a parameter has a dataclass instance as its default, omitting that argument raises an error, regardless of its annotation. Passing the dataclass explicitly, by position or keyword, is supported. Ordinary scalar defaults remain supported.
 
 `dataclasses.dataclass` allows you to create structs containing:
