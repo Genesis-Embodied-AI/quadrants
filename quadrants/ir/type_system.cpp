@@ -366,6 +366,7 @@ void Operations::init_internals() {
   POLY_OP(subgroupShuffle, false, Signature({}, {ValueT, !u32}, ValueT));
   POLY_OP(subgroupShuffleDown, false, Signature({}, {ValueT, !u32}, ValueT));
   POLY_OP(subgroupShuffleUp, false, Signature({}, {ValueT, !u32}, ValueT));
+  POLY_OP(amdgpu_reduce_shuffle_down, false, Signature({}, {ValueT, !u32}, ValueT));
   PLAIN_OP(subgroupBallotU32, u32, false, i32);
   PLAIN_OP(subgroupBallotU64, u64, false, i32);
   // ``subgroupSize`` is no longer an internal op; ``qd.simt.subgroup.group_size()`` resolves at compile time via
