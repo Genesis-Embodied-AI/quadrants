@@ -21,15 +21,20 @@ if TYPE_CHECKING:
     from quadrants.lang._runtime_typing.deferred_errors import DeferredMemberType
     from quadrants.lang._runtime_typing.runtime_dataclass import FinalValueKeyCache
 
-# typing.Final is a marker object, not an ordinary Python class like int. Its runtime implementation is _SpecialForm.
-# Static type checkers give Final special meaning: they interpret it as part of an annotation, not an ordinary value.
+# typing.Final is a marker object, not an ordinary Python class like int.
+# Its runtime implementation is called _SpecialForm.
 #
-# This cast tells the checker: "Here, treat typing.Final as a marker object that we can store and return."
-# _FINAL_MARKER therefore has the ordinary value type _SpecialForm for type checking. At runtime, cast returns
-# typing.Final unchanged; it does not convert or copy the object.
+# Static type checkers give Final special meaning: they interpret it as part of an annotation,
+# rather than an ordinary value.
 #
-# Quoting "_SpecialForm" passes a string instead of looking up the name at runtime. cast ignores that argument and
-# never resolves the string, so _SpecialForm only needs to be imported for type checking.
+# This cast tells the checker:
+# "Here, treat typing.Final as a marker object that we can store and return."
+#
+# _FINAL_MARKER therefore has type _SpecialForm for type checking.
+# At runtime, cast returns typing.Final unchanged. It does not convert or copy the object.
+#
+# Quoting "_SpecialForm" passes a string instead of looking up the name at runtime.
+# cast ignores that argument and never resolves the string, so the import is only needed for type checking.
 _FINAL_MARKER = typing.cast("_SpecialForm", typing.Final)
 
 # Class identity maps to the retained class and its Final field names.
