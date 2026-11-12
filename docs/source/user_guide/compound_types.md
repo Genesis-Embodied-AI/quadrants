@@ -48,7 +48,9 @@ def advance(state: qd.RuntimeTyped):
     state.positions[0] += state.increment
 ```
 
-Quadrants infers ordinary member types from the arriving values, including nested dataclasses. Member annotations do not constrain array dtypes or dimensionality and do not cast scalar values. An arriving dataclass instance always takes precedence over its parameter annotation, including a concrete dataclass class, `qd.Template`, or a scalar/array annotation. Quadrants uses the actual instance's class and fields, including subclass fields, without checking compatibility with the annotated class. `qd.RuntimeTyped` makes that intent explicit. `typing.Final` and `typing.Final[T]` mark compile-time constants; any inner annotation is ignored. The actual value determines the constant type, as described below.
+Quadrants infers ordinary member types from the arriving values, including nested dataclasses. Member annotations do not constrain array dtypes or dimensionality and do not cast scalar values. An arriving dataclass instance always takes precedence over its parameter annotation, including a concrete dataclass class, `qd.Template`, or a scalar/array annotation. Quadrants uses the actual instance's class and fields, including subclass fields, without checking compatibility with the annotated class. `qd.RuntimeTyped` makes that intent explicit.
+
+`typing.Final` and `typing.Final[T]` mark compile-time constants; any inner annotation is ignored. The actual value determines the constant type, as described below.
 
 Python `int` and `float` members use `qd.init`'s default integer precision (`default_ip`) and floating-point precision (`default_fp`); NumPy scalars retain their dtype. Arrays retain their runtime dtype and dimensions. External NumPy and PyTorch arrays are interpreted as arrays of scalars, since their values do not distinguish vector/matrix element axes from array axes. Changing a member's runtime type selects a new kernel specialization; changing an ordinary scalar's value supplies a fresh runtime argument.
 
