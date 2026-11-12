@@ -29,8 +29,10 @@ def _cached_get_dataclass_paths(data_oriented_obj: Any) -> tuple[tuple[str, ...]
         if is_dataclass_instance(value):
             paths.append(path)
             return
+
         if not is_data_oriented(value) or id(value) in active_ids:
             return
+
         active_ids.add(id(value))
         try:
             members = value._asdict() if isinstance(value, tuple) and hasattr(value, "_asdict") else vars(value)
@@ -65,6 +67,7 @@ def infer_nested_dataclass_schemas(
         """Infer descendants and continue through any data-oriented members inside their schemas."""
         if id(owner) in active_ids or not is_data_oriented(owner):
             return
+
         active_ids.add(id(owner))
         try:
             for relative_path in _cached_get_dataclass_paths(owner):
@@ -99,12 +102,14 @@ def reject_undiscovered_dataclass_member(
     """
     if not is_dataclass_instance(value):
         return
+
     if is_dataclass_instance(parent):
         discovered = name in type(parent).__dataclass_fields__
     elif is_data_oriented(parent):
         discovered = (id(parent), name) in discovered_members
     else:
         return
+
     if not discovered:
         raise QuadrantsRuntimeTypeError(
             f"Dataclass attribute {type(parent).__name__ + '.' + name!r} was not discovered as a runtime argument member. "
