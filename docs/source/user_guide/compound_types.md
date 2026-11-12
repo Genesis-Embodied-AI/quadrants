@@ -193,6 +193,9 @@ Do not bypass a frozen dataclass's assignment restrictions with `object.__setatt
 
 ### Compile-time constant fields: `typing.Final`
 
+Final field values must be exact Python `bool`, `int`, `float`, or `str` objects, or supported enum members. NumPy scalars and custom non-enum scalar subclasses are rejected, including as enum underlying values. Convert NumPy scalars to the corresponding built-in Python type explicitly.
+
+
 By default a primitive dataclass field becomes a **runtime** kernel argument: you can change its value between launches without recompiling, and the kernel reads the fresh value each launch. That also means the value is not known at compile time, so it cannot be used inside [`qd.static(...)`](static.md), as a static loop bound, or to eliminate a branch at compile time.
 
 Annotate the field with `typing.Final` or `typing.Final[T]` to make it a **compile-time constant** instead. Quadrants ignores `T` when present and uses the arriving value and its actual Python type. The value is baked into the compiled kernel:
