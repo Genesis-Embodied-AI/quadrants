@@ -24,23 +24,23 @@ def _cached_get_dataclass_paths(data_oriented_obj: Any) -> tuple[tuple[str, ...]
 
     paths: list[tuple[str, ...]] = []
     active_ids: set[int] = set()
-    def walk(value: Any, path: tuple[str, ...]) -> None:
+    def walk(py_obj: Any, path: tuple[str, ...]) -> None:
         """Walk data-oriented members, stopping at a dataclass or an active cycle."""
-        if is_dataclass_instance(value):
+        if is_dataclass_instance(py_obj):
             paths.append(path)
             return
 
-        if not is_data_oriented(value) or id(value) in active_ids:
+        if not is_data_oriented(py_obj) or id(py_obj) in active_ids:
             return
 
-        active_ids.add(id(value))
+        active_ids.add(id(py_obj))
         try:
-            members = value._asdict() if isinstance(value, tuple) and hasattr(value, "_asdict") else vars(value)
+            members = py_obj._asdict() if isinstance(py_obj, tuple) and hasattr(py_obj, "_asdict") else vars(py_obj)
             for name, child in members.items():
                 if not name.startswith("_qd_"):
                     walk(child, (*path, name))
         finally:
-            active_ids.remove(id(value))
+            active_ids.remove(id(py_obj))
 
     walk(data_oriented_obj, ())
     result = tuple(paths)
@@ -93,14 +93,14 @@ def infer_nested_dataclass_schemas(
 
 
 def reject_undiscovered_dataclass_member(
-    parent: Any, name: str, value: Any, discovered_members: set[tuple[int, str]]
+    parent: Any, name: str, py_obj: Any, discovered_members: set[tuple[int, str]]
 ) -> None:
     """Reject compilation-time access to dataclasses missing from argument member discovery.
 
     Check the attribute, not the returned object's identity: a property can alias a stored dataclass yet require a
     different launch-binding path. This check does not run on already-compiled kernel launches.
     """
-    if not is_dataclass_instance(value):
+    if not is_dataclass_instance(py_obj):
         return
 
     if is_dataclass_instance(parent):
@@ -118,9 +118,9 @@ def reject_undiscovered_dataclass_member(
         )
 
 
-def reject_computed_dataclass_alias(value: Any, bound_objects: set[int]) -> None:
+def reject_computed_dataclass_alias(py_obj: Any, bound_objects: set[int]) -> None:
     """Reject computed routes that could borrow an unrelated runtime dataclass binding."""
-    if id(value) in bound_objects:
+    if id(py_obj) in bound_objects:
         raise QuadrantsRuntimeTypeError(
             "A runtime dataclass alias reached through a call or indexing is unsupported. "
             "Access the dataclass through its ordinary stored attributes instead."
