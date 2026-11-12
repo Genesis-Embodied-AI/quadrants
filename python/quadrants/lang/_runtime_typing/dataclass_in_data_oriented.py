@@ -30,7 +30,10 @@ def _cached_get_dataclass_paths(data_oriented_obj: Any) -> tuple[tuple[str, ...]
             paths.append(path)
             return
 
-        if not is_data_oriented(py_obj) or id(py_obj) in active_ids:
+        if not is_data_oriented(py_obj):
+            return
+
+        if id(py_obj) in active_ids:
             return
 
         active_ids.add(id(py_obj))
