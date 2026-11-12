@@ -46,7 +46,7 @@ def _collect_dataclass_paths_in_data_oriented(
         active_ids.remove(id(py_obj))
 
 
-def _cached_get_dataclass_paths(data_oriented_obj: Any) -> tuple[tuple[str, ...], ...]:
+def _cached_collect_dataclass_paths_in_data_oriented(data_oriented_obj: Any) -> tuple[tuple[str, ...], ...]:
     """Find outermost dataclass members."""
     cached = _dataclass_paths_by_data_oriented_instance.get(data_oriented_obj)
     if cached is not None:
@@ -86,7 +86,7 @@ def infer_nested_dataclass_schemas(
 
         active_ids.add(id(owner))
         try:
-            for relative_path in _cached_get_dataclass_paths(owner):
+            for relative_path in _cached_collect_dataclass_paths_in_data_oriented(owner):
                 path = (*owner_path, *relative_path)
                 child = get_member_at_path(owner, relative_path)
                 if not hasattr(type(child), "__dataclass_fields__"):
