@@ -44,7 +44,6 @@ g_num_ignored_calls = 0
 
 FIELD_METADATA_CACHE_VALUE = "add_value_to_cache_key"
 
-# Discovery records argument indices; hashing uses string indices at the start of each attribute path.
 LaunchArgSchemas: TypeAlias = Sequence[tuple[int, tuple[str, ...], type[RuntimeDataclassSchema]]]
 LaunchArgSchemaByIndexAndPath: TypeAlias = Mapping[tuple[str, ...], type[RuntimeDataclassSchema]]
 
