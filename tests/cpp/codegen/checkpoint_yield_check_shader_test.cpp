@@ -21,7 +21,7 @@ namespace quadrants::lang::spirv {
 
 TEST(CheckpointYieldCheckShader, DumpBinary) {
   DeviceCapabilityConfig caps;
-  caps.set(DeviceCapability::spirv_version, 0x10400);
+  caps.set(DeviceCapability::spirv_version, 0x10500);
 
   auto binary = build_checkpoint_yield_check_spirv(Arch::vulkan, &caps);
   ASSERT_FALSE(binary.empty());
@@ -39,7 +39,7 @@ TEST(CheckpointYieldCheckShader, DumpBinary) {
 // non-empty binary on a minimum-cap caller, matching the header doc-comment guarantee.
 TEST(CheckpointYieldCheckShader, NoExtraCapabilityRequired) {
   DeviceCapabilityConfig caps;
-  caps.set(DeviceCapability::spirv_version, 0x10400);
+  caps.set(DeviceCapability::spirv_version, 0x10500);
   EXPECT_FALSE(build_checkpoint_yield_check_spirv(Arch::vulkan, &caps).empty());
 }
 

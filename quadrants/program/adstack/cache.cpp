@@ -575,7 +575,7 @@ void AdStackCache::ensure_runtime_registry_ids_for_max_reducer(std::vector<Offlo
     // recycled `&ad_stack` address (cache-loaded kernel B reuses the address last held by evicted kernel A) silently
     // short-circuits the registration, and B's `(kernel_name, task_id_in_kernel)` never lands in the `Program`
     // registry. On overflow, B's codegen-baked cmpxchg id then resolves to A's stale entry via the diagnose path.
-    // Same recycled-pointer bug class fixed in-process by `register_adstack_sizing_info` (this PR); cache-reload
+    // Same recycled-pointer bug class fixed in-process by `register_adstack_sizing_info`; cache-reload
     // path remains exposed. Fix: introduce a content-validating `is_adstack_sizing_info_registered_with_content(
     // identity_key, kernel_name, task_id_in_kernel)` variant and call it here, so the gate only short-circuits when
     // the live entry's `(kernel_name, task_id_in_kernel)` matches. Cheap (string compare + int compare) and

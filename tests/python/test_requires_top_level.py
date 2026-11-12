@@ -1,7 +1,7 @@
 """Tests for ``@qd.func(requires_top_level=True)``.
 
 A func marked ``requires_top_level=True`` may only be called at the **top level** of a kernel (or
-directly inside a ``while qd.graph_do_while(...)`` body, which the compiler also treats as top level).
+directly inside a ``while qd.graph.do_while(...)`` body, which the compiler also treats as top level).
 Calling it nested inside ordinary runtime ``for`` / ``if`` / ``while`` control flow is rejected at
 compile time with a :class:`QuadrantsSyntaxError`, because nesting demotes the func's per-phase
 top-level loops out of top-level position (collapsing the inter-phase grid-wide barriers) and would
@@ -17,9 +17,9 @@ import pytest
 
 import quadrants as qd
 from quadrants.lang.exception import QuadrantsSyntaxError
-from quadrants.types.annotations import template
+from quadrants.types.annotations import Template
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test(arch=qd.cpu)
@@ -27,7 +27,7 @@ def test_top_level_call_is_allowed():
     """Calling a requires_top_level func directly at the kernel top level compiles and runs."""
 
     @qd.func(requires_top_level=True)
-    def bump(x: template(), n):
+    def bump(x: Template, n):
         for i in range(n):
             x[i] = x[i] + 1
 
@@ -46,7 +46,7 @@ def test_static_loop_is_allowed():
     """A ``qd.static`` loop is compile-time unrolled, so the call stays top level and is allowed."""
 
     @qd.func(requires_top_level=True)
-    def bump(x: template(), n):
+    def bump(x: Template, n):
         for i in range(n):
             x[i] = x[i] + 1
 
@@ -64,7 +64,7 @@ def test_static_loop_is_allowed():
 @test_utils.test(arch=qd.cpu)
 def test_nested_in_runtime_for_is_rejected():
     @qd.func(requires_top_level=True)
-    def bump(x: template(), n):
+    def bump(x: Template, n):
         for i in range(n):
             x[i] = x[i] + 1
 
@@ -81,7 +81,7 @@ def test_nested_in_runtime_for_is_rejected():
 @test_utils.test(arch=qd.cpu)
 def test_nested_in_runtime_if_is_rejected():
     @qd.func(requires_top_level=True)
-    def bump(x: template(), n):
+    def bump(x: Template, n):
         for i in range(n):
             x[i] = x[i] + 1
 
@@ -98,7 +98,7 @@ def test_nested_in_runtime_if_is_rejected():
 @test_utils.test(arch=qd.cpu)
 def test_nested_in_runtime_while_is_rejected():
     @qd.func(requires_top_level=True)
-    def bump(x: template(), n):
+    def bump(x: Template, n):
         for i in range(n):
             x[i] = x[i] + 1
 
@@ -119,7 +119,7 @@ def test_unmarked_func_is_unaffected():
     """A plain ``@qd.func`` (the default) may still be nested in runtime control flow."""
 
     @qd.func
-    def bump(x: template(), n):
+    def bump(x: Template, n):
         for i in range(n):
             x[i] = x[i] + 1
 
@@ -139,12 +139,12 @@ def test_indirect_nested_in_runtime_for_is_rejected():
     must still be rejected: the helper is inlined, so the marked func's phase loops still end up nested."""
 
     @qd.func(requires_top_level=True)
-    def bump(x: template(), n):
+    def bump(x: Template, n):
         for i in range(n):
             x[i] = x[i] + 1
 
     @qd.func
-    def helper(x: template(), n):
+    def helper(x: Template, n):
         bump(x, n)
 
     @qd.kernel
@@ -160,12 +160,12 @@ def test_indirect_nested_in_runtime_for_is_rejected():
 @test_utils.test(arch=qd.cpu)
 def test_indirect_nested_in_runtime_if_is_rejected():
     @qd.func(requires_top_level=True)
-    def bump(x: template(), n):
+    def bump(x: Template, n):
         for i in range(n):
             x[i] = x[i] + 1
 
     @qd.func
-    def helper(x: template(), n):
+    def helper(x: Template, n):
         bump(x, n)
 
     @qd.kernel
@@ -181,12 +181,12 @@ def test_indirect_nested_in_runtime_if_is_rejected():
 @test_utils.test(arch=qd.cpu)
 def test_indirect_nested_in_runtime_while_is_rejected():
     @qd.func(requires_top_level=True)
-    def bump(x: template(), n):
+    def bump(x: Template, n):
         for i in range(n):
             x[i] = x[i] + 1
 
     @qd.func
-    def helper(x: template(), n):
+    def helper(x: Template, n):
         bump(x, n)
 
     @qd.kernel
@@ -206,16 +206,16 @@ def test_deeply_indirect_nesting_is_rejected():
     """The inherited non-static-control-flow context must accumulate through multiple helper levels."""
 
     @qd.func(requires_top_level=True)
-    def bump(x: template(), n):
+    def bump(x: Template, n):
         for i in range(n):
             x[i] = x[i] + 1
 
     @qd.func
-    def inner(x: template(), n):
+    def inner(x: Template, n):
         bump(x, n)
 
     @qd.func
-    def outer(x: template(), n):
+    def outer(x: Template, n):
         inner(x, n)
 
     @qd.kernel
@@ -234,12 +234,12 @@ def test_top_level_call_via_helper_is_allowed():
     the helper inlines at top level, so the marked func's phase loops stay top level."""
 
     @qd.func(requires_top_level=True)
-    def bump(x: template(), n):
+    def bump(x: Template, n):
         for i in range(n):
             x[i] = x[i] + 1
 
     @qd.func
-    def helper(x: template(), n):
+    def helper(x: Template, n):
         bump(x, n)
 
     @qd.kernel
@@ -319,7 +319,7 @@ def test_graph_do_while_body_counts_as_top_level():
     directly inside it."""
 
     @qd.func(requires_top_level=True)
-    def bump(x: template(), n):
+    def bump(x: Template, n):
         for i in range(n):
             x[i] = x[i] + 1
 
@@ -329,7 +329,7 @@ def test_graph_do_while_body_counts_as_top_level():
         n: qd.i32,
         counter: qd.types.ndarray(qd.i32, ndim=0),
     ):
-        while qd.graph_do_while(counter):
+        while qd.graph.do_while(counter):
             bump(x, n)
             for _ in range(1):
                 counter[()] = counter[()] - 1

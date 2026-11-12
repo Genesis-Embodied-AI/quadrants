@@ -2,7 +2,7 @@ import quadrants as qd
 from quadrants.lang._template_mapper import TemplateMapper
 from quadrants.lang.kernel_arguments import ArgMetadata
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test()
@@ -14,9 +14,9 @@ def test_callable_template_mapper():
 
     mapper = TemplateMapper(
         (
-            ArgMetadata(qd.template(), qd.template()),
-            ArgMetadata(qd.template(), qd.template()),
-            ArgMetadata(qd.template(), qd.template()),
+            ArgMetadata(qd.Template, qd.Template),
+            ArgMetadata(qd.Template, qd.Template),
+            ArgMetadata(qd.Template, qd.Template),
         ),
         template_slot_locations=(0, 1, 2),
     )
@@ -43,7 +43,7 @@ def test_callable_template_mapper():
     mapper = TemplateMapper(
         (
             ArgMetadata(qd.i32, qd.i32),
-            ArgMetadata(qd.template(), qd.template()),
+            ArgMetadata(qd.Template, qd.Template),
             ArgMetadata(qd.i32, qd.i32),
         ),
         (1,),
@@ -61,8 +61,8 @@ def test_callable_template_mapper_numpy():
     qd.root.place(x, y)
 
     annotations = (
-        ArgMetadata(qd.template(), qd.template()),
-        ArgMetadata(qd.template(), qd.template()),
+        ArgMetadata(qd.Template, qd.Template),
+        ArgMetadata(qd.Template, qd.Template),
         ArgMetadata(qd.types.ndarray(), qd.types.ndarray()),
     )
 

@@ -6,7 +6,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang.stream import Event, Stream
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test(arch=[qd.cuda, qd.amdgpu])
@@ -311,7 +311,7 @@ def test_stream_with_tape_raises():
 
     @qd.kernel
     def compute():
-        loss[None] = x[None] ** 2
+        loss[()] = x[()] ** 2
 
     s = qd.create_stream()
     with pytest.raises(RuntimeError, match="not compatible with autograd Tape"):
@@ -327,7 +327,7 @@ def test_stream_with_autodiff_kernel_raises():
 
     @qd.kernel
     def compute():
-        loss[None] = x[None] ** 2
+        loss[()] = x[()] ** 2
 
     s = qd.create_stream()
     with pytest.raises(RuntimeError, match="not compatible with autodiff"):
@@ -491,6 +491,29 @@ def test_stream_parallel_rejects_mixed_top_level():
                     a[i] = 1.0
             for i in range(N):
                 a[i] = 2.0
+
+        bad_kernel()
+
+
+@test_utils.test()
+def test_stream_parallel_rejects_graph():
+    """qd.stream_parallel() is incompatible with graph=True kernels."""
+    from quadrants.lang.exception import QuadrantsSyntaxError
+
+    N = 64
+    a = qd.field(qd.f32, shape=(N,))
+    b = qd.field(qd.f32, shape=(N,))
+
+    with pytest.raises(QuadrantsSyntaxError, match="not compatible with graph=True"):
+
+        @qd.kernel(graph=True)
+        def bad_kernel():
+            with qd.stream_parallel():
+                for i in range(N):
+                    a[i] = 1.0
+            with qd.stream_parallel():
+                for j in range(N):
+                    b[j] = 2.0
 
         bad_kernel()
 

@@ -99,6 +99,14 @@ class NdarrayType:
             args = (args,)
         return cls(*args)
 
+    def __or__(self, other):
+        # ``NDArray[...]`` is an instance, not a class, so ``|`` cannot build a ``types.UnionType`` the way it does
+        # for class-style annotations; hand back a marker the annotation validator understands instead.
+        # TODO(quadrants#831): drop this once ``NDArray[...]`` evaluates to a type.
+        if other is None or other is type(None):
+            return _OptionalNdarray(self)
+        return NotImplemented
+
     def check_matched(self, ndarray_type: NdarrayTypeMetadata, arg_name: str):
         # FIXME(Haidong) Cannot use Vector/MatrixType due to circular import
         # Use the CompuoundType instead to determine the specific typs.
@@ -153,6 +161,16 @@ class NdarrayType:
     def to_dlpack(self) -> object:
         # needed for pyright
         raise NotImplementedError()
+
+
+class _OptionalNdarray:
+    """Marks ``NDArray[...] | None``; the validator unwraps ``.inner`` and records the slot as optional."""
+
+    def __init__(self, inner: "NdarrayType"):
+        self.inner = inner
+
+    def __repr__(self):
+        return f"_OptionalNdarray(inner={self.inner!r})"
 
 
 ndarray = NdarrayType

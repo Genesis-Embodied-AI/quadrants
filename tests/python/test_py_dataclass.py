@@ -1,17 +1,20 @@
 import dataclasses
+import enum
 import gc
 import warnings
 from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pytest
 
 import quadrants as qd
 from quadrants.lang._kernel_types import KernelBatchedArgType
+from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.impl import Kernel, QuadrantsSyntaxError
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @pytest.fixture
@@ -1695,6 +1698,316 @@ def test_prune_used_parameters_fastcache_no_used(tmp_path: Path):
 
 
 @test_utils.test()
+def test_prune_used_parameters_fastcache_dead_static_branch(tmp_path: Path):
+    # inner() reads md.deep only inside a dead qd.static branch, so md.deep is marked used under inner's
+    # (instantiation-shared) func id via the qd.static(True) instantiation alone. Two separate caller paths
+    # forward md to inner: path_dead (qd.static(False)) is walked before path_live (qd.static(True)), so the
+    # single-shot used-set copy at path_dead's call misses md.deep. Without cross-call fixpoint propagation
+    # the enforcing pass still forwards md.deep from path_dead, which never bound it -> compile failure.
+    arch_name = qd.lang.impl.current_cfg().arch.name
+    for _it in range(3):
+        qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
+
+        @dataclasses.dataclass
+        class MyDataclass:
+            base: qd.types.NDArray[qd.i32, 1]
+            deep: qd.types.NDArray[qd.i32, 1]
+            not_used: qd.types.NDArray[qd.i32, 1]
+
+        @qd.func
+        def inner(md: MyDataclass, use_deep: qd.Template) -> None:
+            md.base[0] = 1
+            if qd.static(use_deep):
+                md.deep[0] = 99
+
+        @qd.func
+        def path_dead(md: MyDataclass) -> None:
+            inner(md, False)
+
+        @qd.func
+        def path_live(md: MyDataclass) -> None:
+            inner(md, True)
+
+        @qd.kernel(fastcache=True)
+        def k1(md: MyDataclass) -> None:
+            path_dead(md)
+            path_live(md)
+
+        base = qd.ndarray(qd.i32, (4,))
+        deep = qd.ndarray(qd.i32, (4,))
+        not_used = qd.ndarray(qd.i32, (4,))
+        md = MyDataclass(base=base, deep=deep, not_used=not_used)
+
+        k1(md)
+        assert base[0] == 1
+        assert deep[0] == 99
+        kernel_args_count_by_type = k1._primal.launch_stats.kernel_args_count_by_type
+        assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 2
+
+
+@test_utils.test()
+def test_prune_used_parameters_fastcache_dead_static_branch_reversed_order(tmp_path: Path):
+    # Same setup as the flat dead-static-branch case, but the kernel walks path_live (qd.static(True)) before
+    # path_dead (qd.static(False)). In this order inner's used-set already contains md.deep by the time
+    # path_dead's call is recorded, so this case compiles even without the fix. It is included as a regression
+    # guard: a correct fix must stay order-independent, so both walk orders must keep passing.
+    arch_name = qd.lang.impl.current_cfg().arch.name
+    for _it in range(3):
+        qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
+
+        @dataclasses.dataclass
+        class MyDataclass:
+            base: qd.types.NDArray[qd.i32, 1]
+            deep: qd.types.NDArray[qd.i32, 1]
+            not_used: qd.types.NDArray[qd.i32, 1]
+
+        @qd.func
+        def inner(md: MyDataclass, use_deep: qd.Template) -> None:
+            md.base[0] = 1
+            if qd.static(use_deep):
+                md.deep[0] = 99
+
+        @qd.func
+        def path_dead(md: MyDataclass) -> None:
+            inner(md, False)
+
+        @qd.func
+        def path_live(md: MyDataclass) -> None:
+            inner(md, True)
+
+        @qd.kernel(fastcache=True)
+        def k1(md: MyDataclass) -> None:
+            path_live(md)
+            path_dead(md)
+
+        base = qd.ndarray(qd.i32, (4,))
+        deep = qd.ndarray(qd.i32, (4,))
+        not_used = qd.ndarray(qd.i32, (4,))
+        md = MyDataclass(base=base, deep=deep, not_used=not_used)
+
+        k1(md)
+        assert base[0] == 1
+        assert deep[0] == 99
+        kernel_args_count_by_type = k1._primal.launch_stats.kernel_args_count_by_type
+        assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 2
+
+
+@test_utils.test()
+def test_prune_used_parameters_fastcache_dead_static_branch_kwargs(tmp_path: Path):
+    # Same dead-static-branch bug as the flat case, but md is forwarded by keyword (md=md) at every call site
+    # instead of positionally. Keyword-forwarded dataclasses are pruned in _expand_Call_dataclass_kwargs (gated
+    # on the callee used-set), a different path from the positional filter_call_args, so this confirms the used-
+    # set fixpoint also closes over keyword-forwarded edges. use_deep stays positional so the template value is
+    # not passed by keyword (an unrelated concern).
+    arch_name = qd.lang.impl.current_cfg().arch.name
+    for _it in range(3):
+        qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
+
+        @dataclasses.dataclass
+        class MyDataclass:
+            base: qd.types.NDArray[qd.i32, 1]
+            deep: qd.types.NDArray[qd.i32, 1]
+            not_used: qd.types.NDArray[qd.i32, 1]
+
+        @qd.func
+        def inner(use_deep: qd.Template, md: MyDataclass) -> None:
+            md.base[0] = 1
+            if qd.static(use_deep):
+                md.deep[0] = 99
+
+        @qd.func
+        def path_dead(md: MyDataclass) -> None:
+            inner(False, md=md)
+
+        @qd.func
+        def path_live(md: MyDataclass) -> None:
+            inner(True, md=md)
+
+        @qd.kernel(fastcache=True)
+        def k1(md: MyDataclass) -> None:
+            path_dead(md=md)
+            path_live(md=md)
+
+        base = qd.ndarray(qd.i32, (4,))
+        deep = qd.ndarray(qd.i32, (4,))
+        not_used = qd.ndarray(qd.i32, (4,))
+        md = MyDataclass(base=base, deep=deep, not_used=not_used)
+
+        k1(md)
+        assert base[0] == 1
+        assert deep[0] == 99
+        kernel_args_count_by_type = k1._primal.launch_stats.kernel_args_count_by_type
+        assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 2
+
+
+@test_utils.test()
+def test_prune_used_parameters_fastcache_dead_static_branch_nested(tmp_path: Path):
+    # Same dead-static-branch forwarding bug as the flat case, but the forwarded field lives three dataclass
+    # levels deep (top.mid.leaf.deep), confirming the fix closes the used set across arbitrary nesting depth.
+    arch_name = qd.lang.impl.current_cfg().arch.name
+    for _it in range(3):
+        qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
+
+        @dataclasses.dataclass
+        class Leaf:
+            deep: qd.types.NDArray[qd.i32, 1]
+            not_used: qd.types.NDArray[qd.i32, 1]
+
+        @dataclasses.dataclass
+        class Mid:
+            not_used: qd.types.NDArray[qd.i32, 1]
+            leaf: Leaf
+
+        @dataclasses.dataclass
+        class Top:
+            base: qd.types.NDArray[qd.i32, 1]
+            mid: Mid
+
+        @qd.func
+        def inner(top: Top, use_deep: qd.Template) -> None:
+            top.base[0] = 1
+            if qd.static(use_deep):
+                top.mid.leaf.deep[0] = 99
+
+        @qd.func
+        def path_dead(top: Top) -> None:
+            inner(top, False)
+
+        @qd.func
+        def path_live(top: Top) -> None:
+            inner(top, True)
+
+        @qd.kernel(fastcache=True)
+        def k1(top: Top) -> None:
+            path_dead(top)
+            path_live(top)
+
+        base = qd.ndarray(qd.i32, (4,))
+        deep = qd.ndarray(qd.i32, (4,))
+        mid_not_used = qd.ndarray(qd.i32, (4,))
+        leaf_not_used = qd.ndarray(qd.i32, (4,))
+        top = Top(base=base, mid=Mid(not_used=mid_not_used, leaf=Leaf(deep=deep, not_used=leaf_not_used)))
+
+        k1(top)
+        assert base[0] == 1
+        assert deep[0] == 99
+        kernel_args_count_by_type = k1._primal.launch_stats.kernel_args_count_by_type
+        assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 2
+
+
+@test_utils.test()
+def test_prune_used_parameters_fastcache_forward_same_name_swapped_slots(tmp_path: Path):
+    # inner() reads only its first struct (a); b is entirely unused. caller1 and caller2 declare identically
+    # named parameters and forward them into swapped inner slots, so the flat name __qd_md__qd_x binds inner's
+    # used slot a in one caller and its unused slot b in the other. Keyed by callee alone, the mapping from a
+    # caller argument name to its callee parameter lets the second caller overwrite the first, so the enforcing
+    # pass prunes the field the first caller needs -> a Missing argument failure and a write to the wrong struct.
+    # Keying the mapping by (caller, callee) keeps the two call sites independent.
+    arch_name = qd.lang.impl.current_cfg().arch.name
+    for _it in range(3):
+        qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
+
+        @dataclasses.dataclass
+        class MyDataclass:
+            x: qd.types.NDArray[qd.i32, 1]
+
+        @qd.func
+        def inner(a: MyDataclass, b: MyDataclass) -> None:
+            a.x[0] = 42
+
+        @qd.func
+        def caller1(md: MyDataclass, other: MyDataclass) -> None:
+            inner(md, other)
+
+        @qd.func
+        def caller2(md: MyDataclass, other: MyDataclass) -> None:
+            inner(other, md)
+
+        @qd.kernel(fastcache=True)
+        def k1(p: MyDataclass, q: MyDataclass) -> None:
+            caller1(p, q)
+            caller2(p, q)
+
+        p_x = qd.ndarray(qd.i32, (4,))
+        q_x = qd.ndarray(qd.i32, (4,))
+        k1(MyDataclass(x=p_x), MyDataclass(x=q_x))
+        assert p_x[0] == 42
+        assert q_x[0] == 42
+        kernel_args_count_by_type = k1._primal.launch_stats.kernel_args_count_by_type
+        assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 2
+
+
+@test_utils.test()
+def test_prune_used_parameters_fastcache_forward_same_name_swapped_slots_same_caller(tmp_path: Path):
+    # Same swapped-slot forwarding as the cross-caller case, but both call sites live in a single caller: md
+    # binds inner's used slot a on the first line and its unused slot b on the second. The forwarding map is
+    # keyed per call site (source position), so the two calls stay independent; a map shared for the whole
+    # (caller, callee) pair would let the second line overwrite the first and prune the field the first needs.
+    arch_name = qd.lang.impl.current_cfg().arch.name
+    for _it in range(3):
+        qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
+
+        @dataclasses.dataclass
+        class MyDataclass:
+            x: qd.types.NDArray[qd.i32, 1]
+
+        @qd.func
+        def inner(a: MyDataclass, b: MyDataclass) -> None:
+            a.x[0] = 42
+
+        @qd.func
+        def caller(md: MyDataclass, other: MyDataclass) -> None:
+            inner(md, other)
+            inner(other, md)
+
+        @qd.kernel(fastcache=True)
+        def k1(p: MyDataclass, q: MyDataclass) -> None:
+            caller(p, q)
+
+        p_x = qd.ndarray(qd.i32, (4,))
+        q_x = qd.ndarray(qd.i32, (4,))
+        k1(MyDataclass(x=p_x), MyDataclass(x=q_x))
+        assert p_x[0] == 42
+        assert q_x[0] == 42
+        kernel_args_count_by_type = k1._primal.launch_stats.kernel_args_count_by_type
+        assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 2
+
+
+@test_utils.test()
+def test_prune_used_parameters_fastcache_forward_same_name_same_call_two_slots(tmp_path: Path):
+    # A single call site forwards the SAME dataclass into two positional slots: inner(md, md). inner reads
+    # only its first struct (a); b is entirely unused, so the expanded call carries the same flat name in both
+    # slots. A positional map keyed by the caller flat name lets slot b overwrite slot a, so the enforcing pass
+    # prunes the field slot a needs -> a Missing argument failure. Keying the map by slot index keeps the two
+    # occurrences independent.
+    arch_name = qd.lang.impl.current_cfg().arch.name
+    for _it in range(3):
+        qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
+
+        @dataclasses.dataclass
+        class MyDataclass:
+            x: qd.types.NDArray[qd.i32, 1]
+
+        @qd.func
+        def inner(a: MyDataclass, b: MyDataclass) -> None:
+            a.x[0] = 42
+
+        @qd.func
+        def caller(md: MyDataclass) -> None:
+            inner(md, md)
+
+        @qd.kernel(fastcache=True)
+        def k1(p: MyDataclass) -> None:
+            caller(p)
+
+        p_x = qd.ndarray(qd.i32, (4,))
+        k1(MyDataclass(x=p_x))
+        assert p_x[0] == 42
+        kernel_args_count_by_type = k1._primal.launch_stats.kernel_args_count_by_type
+        assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 1
+
+
+@test_utils.test()
 def test_pruning_with_keyword_rename() -> None:
     @dataclasses.dataclass
     class MyStruct:
@@ -1880,7 +2193,7 @@ def test_pruning_with_recursive_func() -> None:
         return my_struct
 
     @qd.func
-    def f1(depth: qd.template(), struc_f1: MyStruct):
+    def f1(depth: qd.Template, struc_f1: MyStruct):
         if qd.static(depth) == 0:
             struc_f1.a[0, 0] = 100
             f1(1, struc_f1)
@@ -2011,7 +2324,7 @@ def test_pruning_reuse_func_same_kernel_call_l1() -> None:
         return my_struct
 
     @qd.func
-    def f1(flag: qd.template(), struc_f1: MyStruct):
+    def f1(flag: qd.Template, struc_f1: MyStruct):
         if qd.static(flag):
             struc_f1._f1a[0, 0] = 101
         else:
@@ -2062,7 +2375,7 @@ def test_pruning_reuse_func_same_kernel_call_l2() -> None:
         return my_struct
 
     @qd.func
-    def f2(flag: qd.template(), struc_f2: MyStruct):
+    def f2(flag: qd.Template, struc_f2: MyStruct):
         if qd.static(flag):
             struc_f2._f2a[0, 0] = 102
         else:
@@ -2125,7 +2438,7 @@ def test_pruning_reuse_func_across_kernels() -> None:
         return my_struct
 
     @qd.func
-    def f1(flag: qd.template(), struct_f1: MyStruct):
+    def f1(flag: qd.Template, struct_f1: MyStruct):
         if qd.static(flag):
             struct_f1._f1_with_flag[0, 0] = 102
         else:
@@ -2184,7 +2497,7 @@ def test_pruning_reuse_func_same_kernel_diff_call() -> None:
         return my_struct
 
     @qd.func
-    def f1(flag: qd.template(), struct_f1: MyStruct):
+    def f1(flag: qd.Template, struct_f1: MyStruct):
         if qd.static(flag):
             struct_f1._f1_with_flag[0, 0] = 101
         else:
@@ -2929,3 +3242,2287 @@ def test_typed_dataclass_does_not_emit_deprecation_warning():
         run(f)
     matching = [w for w in caught if issubclass(w.category, DeprecationWarning) and "qd.Template" in str(w.message)]
     assert matching == [], f"unexpected DeprecationWarning(s): {[str(w.message) for w in matching]}"
+
+
+@test_utils.test()
+def test_kernel_accepts_subclass_of_annotated_dataclass_param():
+    @dataclass
+    class QdSafe:
+        x: qd.types.NDArray[qd.i32, 1]
+
+    @dataclass
+    class SubDataclass(QdSafe):
+        y: str
+
+    class SubPyClass(QdSafe):
+        y: str | None
+
+    x_desired = 100
+
+    @qd.kernel
+    def mykernel(dat: QdSafe) -> None:
+        for i in range(dat.x.shape[0]):
+            dat.x[i] = x_desired
+
+    y_desired = "i love quadrants"
+
+    dat = SubDataclass(x=qd.ndarray(qd.i32, (8,)), y=y_desired)
+    mykernel(dat)
+    assert dat.x[0] == x_desired
+    assert dat.x[4] == x_desired
+    assert dat.x[7] == x_desired
+    assert dat.y == y_desired
+
+    pydat = SubPyClass(x=qd.ndarray(qd.i32, (8,)))
+    pydat.y = y_desired
+    mykernel(pydat)
+    assert pydat.x[1] == x_desired
+    assert pydat.x[5] == x_desired
+    assert pydat.x[6] == x_desired
+    assert pydat.y == y_desired
+
+
+@test_utils.test()
+def test_kernel_accepts_subclass_of_annotated_frozen_dataclass_param():
+    @dataclass(frozen=True)
+    class QdSafe:
+        x: int
+
+    @dataclass(frozen=True)
+    class SubDataclass(QdSafe):
+        y: set[int]
+
+    class SubPyClass(QdSafe):
+        y: set[int] | None
+
+    @qd.func
+    def read_x(dat: QdSafe) -> int:
+        return dat.x
+
+    @qd.kernel
+    def mykernel(dat: QdSafe) -> int:
+        return read_x(dat)
+
+    y_desired = {1, 2, 3, 4, 5, 6, 7, 8}
+    x_desired = 12345678
+
+    dat = SubDataclass(x=x_desired, y=y_desired)
+    assert mykernel(dat) == x_desired
+    assert dat.y is y_desired
+
+    pydat = SubPyClass(x=x_desired)
+    object.__setattr__(pydat, "y", y_desired)
+    assert mykernel(pydat) == x_desired
+    assert pydat.y is y_desired
+
+
+@test_utils.test()
+def test_kernel_accepts_subclass_with_unsupported_final_app_field():
+    """A subclass may carry an application-only ``Final`` field of a type Quadrants cannot bake (e.g. ``Final[list]``).
+    Only the annotated base's fields reach the kernel, so the extra ``Final`` field must be ignored, not validated
+    (validating it would reject the supported subclass pattern)."""
+    from typing import Final
+
+    import numpy as np
+
+    @dataclass(frozen=True)
+    class Base:
+        x: qd.types.NDArray[qd.i32, 1]
+
+    @dataclass(frozen=True)
+    class Sub(Base):
+        extra: Final[list]  # unbakeable as a Quadrants Final field, but the kernel (annotated Base) never sees it
+
+    @qd.kernel
+    def fill(dat: Base):
+        for i in range(4):
+            dat.x[i] = 7
+
+    x = qd.ndarray(qd.i32, shape=(4,))
+    sub = Sub(x=x, extra=[1, 2, 3])
+    fill(sub)  # must not raise while validating the ignored ``extra`` field
+    np.testing.assert_array_equal(x.to_numpy(), [7, 7, 7, 7])
+
+
+@test_utils.test()
+def test_kernel_accepts_data_oriented_subclass_of_dataclass_param():
+    # A @qd.data_oriented class subclassing a dataclasses.dataclass is still a subclass of the annotated type, so it
+    # should dispatch through the dataclass path: the kernel reads only the base's declared fields via getattr.
+    @dataclass
+    class QdSafe:
+        x: qd.types.NDArray[qd.i32, 1]
+
+    @qd.data_oriented
+    class DataOrientedSub(QdSafe):
+        pass
+
+    @qd.kernel
+    def mykernel(dat: QdSafe) -> None:
+        for i in range(4):
+            dat.x[i] = 7
+
+    sub = DataOrientedSub(x=qd.ndarray(qd.i32, shape=(4,)))
+    mykernel(sub)
+    assert sub.x[0] == 7
+    assert sub.x[3] == 7
+
+
+@test_utils.test()
+def test_kernel_disallows_unassignable_dataclass():
+    @dataclass
+    class Expected:
+        x: int
+
+    @dataclass
+    class Unrelated:
+        x: int
+
+    @qd.kernel
+    def mykernel(_: Expected) -> None: ...
+
+    other = Unrelated(x=0)
+    with pytest.raises(QuadrantsRuntimeTypeError):
+        mykernel(other)
+
+
+@test_utils.test()
+def test_frozen_dataclass_passed_to_multiple_ancestor_annotations():
+    @dataclass(frozen=True)
+    class QdSafe1:
+        x1: qd.types.NDArray[qd.i32, 1]
+
+    @dataclass(frozen=True)
+    class QdSafe2:
+        x2: qd.types.NDArray[qd.i32, 1]
+
+    @dataclass(frozen=True)
+    class Sub(QdSafe1, QdSafe2): ...
+
+    @qd.kernel
+    def mykernel1(dat: QdSafe1) -> None:
+        dat.x1[0] = 1
+
+    @qd.kernel
+    def mykernel2(dat: QdSafe2) -> None:
+        dat.x2[0] = 2
+
+    sub = Sub(x1=qd.ndarray(qd.i32, shape=(4,)), x2=qd.ndarray(qd.i32, shape=(4,)))
+    # mykernel1 and mykernel2 might use different caching mechanisms! Well, we hope that this is fine and still works.
+    mykernel1(sub)
+    mykernel2(sub)
+    assert sub.x1[0] == 1
+    assert sub.x2[0] == 2
+
+
+# ---------------------------------------------------------------------------
+# POC: ``typing.Final[T]`` fields on frozen dataclasses => compile-time templates.
+#
+# Design goal: let users mark selected fields of a plain frozen
+# ``@dataclasses.dataclass`` config as ``typing.Final[T]`` to signal that the field's value must be baked as a
+# compile-time constant. Unlike ``@qd.data_oriented`` + ``qd.Template`` for static configs, this does not require
+# opting the whole class into the data_oriented machinery or paying the associated per-launch overhead in
+# ``_class_needs_ndarray_member_walk`` in ``TemplateMapper.lookup``.
+#
+# Semantics:
+# - ``config.field`` accessed inside a kernel body resolves at AST-build time to the actual Python value baked into
+#   ``config``. ``qd.static(config.field)`` therefore works, as does ``if qd.static(config.flag): ...`` dead-branch
+#   elimination.
+# - The value of every ``Final[T]`` field is folded into the template mapper's spec key; two configs that differ on
+#   any Final field compile distinct kernels.
+# - Final fields are NOT declared as runtime scalar kernel args and are NOT pushed into the launch context.
+# - Fields without ``Final`` retain the current typed-dataclass behavior (declared as runtime scalar / ndarray kernel
+#   args and passed at launch time). Mixing Final and non-Final fields in the same dataclass is supported.
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test()
+def test_final_field_bakes_as_compile_time_constant_via_qd_static():
+    """Baseline POC: ``qd.static(config.dt)`` on a frozen dataclass with ``dt: Final[float]`` compiles and produces
+    the expected numeric result. The important part is that the kernel compiles at all - ``qd.static`` fails today
+    on a non-Final dataclass field because the field lowers to a runtime scalar ``Expr``.
+
+    ``qd.static(config.dt)`` is materialised into a named local ``dt_const`` before the kernel's inner-loop assign to
+    avoid ``build_Assign``'s ``is_static_assign`` check, which rejects ``out[i] = qd.static(...)`` with "Static assign
+    cannot be used on elements in arrays". Reading the same Python value from a bound local is unaffected - it is
+    still the baked constant."""
+    from typing import Final
+
+    @dataclass(frozen=True)
+    class SimConfig:
+        dt: Final[float]
+        enable_gravity: Final[bool]
+
+    @qd.kernel
+    def integrate(config: SimConfig, positions: qd.types.NDArray[qd.f32, 1]):
+        dt_const = qd.static(config.dt)
+        for i in positions:
+            positions[i] += dt_const
+            if qd.static(config.enable_gravity):
+                positions[i] -= 9.8 * dt_const
+
+    cfg = SimConfig(dt=0.5, enable_gravity=True)
+    x = qd.ndarray(qd.f32, shape=(4,))
+    integrate(cfg, x)
+    # 0.5 - 9.8 * 0.5 = -4.4
+    for i in range(4):
+        assert abs(x[i] - (-4.4)) < 1e-4
+
+
+@test_utils.test()
+def test_final_field_value_change_triggers_recompilation():
+    """Two ``SimConfig`` instances with different Final-field values must compile as distinct kernels - the Final
+    field's value has to be part of the template mapper spec key, otherwise the second launch would reuse the
+    first's baked-in constant and produce the wrong output."""
+    from typing import Final
+
+    @dataclass(frozen=True)
+    class SimConfig:
+        offset: Final[int]
+
+    @qd.kernel
+    def bump(config: SimConfig, x: qd.types.NDArray[qd.i32, 1]):
+        v = qd.static(config.offset)
+        for i in x:
+            x[i] += v
+
+    x = qd.ndarray(qd.i32, shape=(3,))
+    bump(SimConfig(offset=7), x)
+    bump(SimConfig(offset=100), x)
+    for i in range(3):
+        assert x[i] == 107
+
+
+@test_utils.test()
+def test_final_and_non_final_fields_mix():
+    """Non-Final fields retain the current runtime-scalar-arg behavior; Final fields flow through the template path.
+    Both must coexist in the same dataclass."""
+    from typing import Final
+
+    @dataclass(frozen=True)
+    class Params:
+        scale: Final[float]  # compile-time constant
+        bias: float  # runtime scalar kernel arg
+
+    @qd.kernel
+    def apply(p: Params, x: qd.types.NDArray[qd.f32, 1]):
+        s = qd.static(p.scale)
+        for i in x:
+            x[i] = x[i] * s + p.bias
+
+    x = qd.ndarray(qd.f32, shape=(3,))
+    for i in range(3):
+        x[i] = float(i)
+    apply(Params(scale=2.0, bias=1.0), x)
+    # scale=2.0 baked; bias=1.0 passed at launch.
+    for i in range(3):
+        assert abs(x[i] - (float(i) * 2.0 + 1.0)) < 1e-5
+
+
+@test_utils.test()
+def test_final_field_identical_values_share_compiled_kernel():
+    """Kernel caching correctness: two ``SimConfig`` instances with the same Final-field value must reuse the same
+    compiled kernel. Two consecutive launches with equal Final values keep ``template_mapper.mapping`` size at 1;
+    a third launch with a different value grows it to 2. Guards against accidentally hashing the *instance* rather
+    than the *value* in the spec key."""
+    from typing import Final
+
+    @dataclass(frozen=True)
+    class SimConfig:
+        offset: Final[int]
+
+    @qd.kernel
+    def bump(config: SimConfig, x: qd.types.NDArray[qd.i32, 1]):
+        v = qd.static(config.offset)
+        for i in x:
+            x[i] += v
+
+    x = qd.ndarray(qd.i32, shape=(3,))
+    bump(SimConfig(offset=5), x)
+    assert len(bump._primal.mapper.mapping) == 1
+    bump(SimConfig(offset=5), x)  # same value, different instance
+    assert len(bump._primal.mapper.mapping) == 1, "identical Final values must share a compiled kernel"
+    bump(SimConfig(offset=100), x)  # different value
+    assert len(bump._primal.mapper.mapping) == 2, "distinct Final values must recompile"
+
+
+@test_utils.test()
+def test_final_field_propagates_through_qd_func_call():
+    """``@qd.func`` invoked from a kernel with a dataclass argument containing a ``Final[T]`` field must see the
+    baked value on its side too. The caller's flat name resolves to a Python value via ``build_Name``, then
+    ``_transform_func_arg`` sees ``annotation=Final[T]`` and binds the value directly - if the func body used
+    ``impl.expr_init_func(data)`` instead, ``cfg.scale`` would arrive as an ``Expr`` and ``qd.static`` would fail
+    with ``Input to qd.static must be compile-time constants``."""
+    from typing import Final
+
+    @dataclass(frozen=True)
+    class Cfg:
+        scale: Final[float]
+
+    @qd.func
+    def scale_by(cfg: Cfg, x: qd.types.NDArray[qd.f32, 1], i: qd.i32):
+        x[i] = x[i] * qd.static(cfg.scale)
+
+    @qd.kernel
+    def apply(cfg: Cfg, x: qd.types.NDArray[qd.f32, 1]):
+        for i in x:
+            scale_by(cfg, x, i)
+
+    x = qd.ndarray(qd.f32, shape=(4,))
+    for i in range(4):
+        x[i] = float(i)
+    apply(Cfg(scale=3.0), x)
+    for i in range(4):
+        assert abs(x[i] - float(i) * 3.0) < 1e-5
+
+
+@test_utils.test()
+def test_final_field_on_nested_dataclass():
+    """Final fields work at any depth: the top-level kernel arg is a dataclass whose field is another dataclass,
+    whose field is ``Final[T]``. The recursive ``_transform_kernel_arg`` walker threads the sub-instance's runtime
+    value through so ``getattr(sub, final_field_name)`` reads the baked value."""
+    from typing import Final
+
+    @dataclass(frozen=True)
+    class Inner:
+        scale: Final[float]
+
+    @dataclass(frozen=True)
+    class Outer:
+        inner: Inner
+        bias: Final[float]
+
+    @qd.kernel
+    def apply(outer: Outer, x: qd.types.NDArray[qd.f32, 1]):
+        s = qd.static(outer.inner.scale)
+        b = qd.static(outer.bias)
+        for i in x:
+            x[i] = x[i] * s + b
+
+    x = qd.ndarray(qd.f32, shape=(3,))
+    for i in range(3):
+        x[i] = float(i)
+    apply(Outer(inner=Inner(scale=2.0), bias=1.0), x)
+    for i in range(3):
+        assert abs(x[i] - (float(i) * 2.0 + 1.0)) < 1e-5
+
+
+@test_utils.test()
+def test_final_field_with_ndarray_sibling():
+    """Final scalar fields alongside ``ndarray`` fields in the same frozen dataclass. The ndarray field still flows
+    as an ndarray kernel arg (runtime); the Final scalar bakes as compile-time."""
+    from typing import Final
+
+    @dataclass(frozen=True)
+    class State:
+        n: Final[int]
+        buf: qd.types.NDArray[qd.i32, 1]
+
+    @qd.kernel
+    def fill(state: State):
+        n_const = qd.static(state.n)
+        for i in range(n_const):
+            state.buf[i] = n_const - i
+
+    buf = qd.ndarray(qd.i32, shape=(5,))
+    fill(State(n=5, buf=buf))
+    for i in range(5):
+        assert buf[i] == 5 - i
+
+
+@test_utils.test()
+def test_final_field_value_is_part_of_offline_fastcache_key(tmp_path: Path):
+    """Include Final values in disk-cache keys so changing a constant cannot load code compiled for its old value.
+
+    Previously, Final values entered the disk-cache key only when FIELD_METADATA_CACHE_VALUE was set.
+
+    Two qd.init cycles share a cache directory to test persisted cache reuse.
+    """
+    from typing import Final
+
+    @dataclass(frozen=True)
+    class Cfg:
+        offset: Final[int]
+
+    arch_name = qd.lang.impl.current_cfg().arch.name
+    for offset_value in (7, 100):
+        qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
+
+        @qd.kernel(fastcache=True)
+        def bump(config: Cfg, x: qd.types.NDArray[qd.i32, 1]):
+            v = qd.static(config.offset)
+            for i in x:
+                x[i] = v
+
+        x = qd.ndarray(qd.i32, shape=(3,))
+        bump(Cfg(offset=offset_value), x)
+        assert x[0] == offset_value, (
+            f"expected {offset_value}, got {x[0]} - a kernel with a different Final value was reused from the "
+            f"offline fastcache"
+        )
+
+
+@test_utils.test()
+def test_final_field_on_non_frozen_dataclass_is_rejected():
+    """A ``Final`` field's value is baked into compiled code, so its carrier must not be reassignable. A plain
+    ``@dataclasses.dataclass`` (``eq=True``, non-frozen) sets ``__hash__ = None`` and is rejected with an actionable
+    message. ``frozen=True`` and ``unsafe_hash=True`` are both accepted."""
+    from typing import Final
+
+    from quadrants.lang._final.final_dataclass_fields import final_field_names
+
+    @dataclass  # not frozen
+    class Mutable:
+        x: Final[int]
+
+    with pytest.raises(TypeError, match="but is not frozen"):
+        final_field_names(Mutable)
+
+    # ``eq=False`` inherits ``object.__hash__``, so the codebase-wide ``__hash__ is not None`` frozen proxy reads this
+    # plain mutable class as frozen. It must still be rejected: ``config.x = 9`` on such a class raises nothing, and
+    # the ``id(arg)``-keyed lookup cache would then keep using the kernel baked with the old value.
+    @dataclass(eq=False)
+    class EqFalse:
+        x: Final[int]
+
+    assert EqFalse.__hash__ is not None
+    with pytest.raises(TypeError, match="but is not frozen"):
+        final_field_names(EqFalse)
+
+    @dataclass(frozen=True)
+    class Frozen:
+        x: Final[int]
+
+    assert final_field_names(Frozen) == {"x"}
+
+    @dataclass(unsafe_hash=True)
+    class UnsafeHash:
+        x: Final[int]
+
+    assert final_field_names(UnsafeHash) == {"x"}
+
+
+@test_utils.test()
+def test_mutable_ancestor_of_nested_final_field_is_rejected():
+    """Every dataclass on the path down to a ``Final`` leaf must be non-reassignable, not just its direct carrier.
+
+    A frozen ``Inner`` holding ``n: Final[int]`` protects ``inner.n``, but a mutable ``Outer`` holding ``child: Inner``
+    still allows ``outer.child = Inner(n=9)``. ``TemplateMapper.lookup`` memoises the specialisation on the top-level
+    ``id(arg)``, so re-launching with that same ``outer`` would silently reuse the kernel compiled with the previous
+    child's baked constant and produce results for the old value. Reject the mutable ancestor instead."""
+    from typing import Final
+
+    from quadrants.lang._final.final_dataclass_fields import final_field_names
+
+    @dataclass(frozen=True)
+    class Inner:
+        n: Final[int]
+
+    @dataclass  # mutable ancestor: `outer.child` can be rebound
+    class MutableOuter:
+        child: Inner
+
+    # The direct-carrier check cannot catch this: MutableOuter declares no Final field of its own.
+    assert not any(f.name == "n" for f in dataclasses.fields(MutableOuter))
+    with pytest.raises(TypeError, match=r"is not frozen but reaches the ``Final`` field MutableOuter\.child\.n"):
+        final_field_names(MutableOuter)
+
+    # Reported at launch rather than silently returning stale results.
+    @qd.kernel
+    def k(o: MutableOuter, out: qd.types.NDArray[qd.i32, 1]):
+        v = qd.static(o.child.n)
+        for i in out:
+            out[i] = v
+
+    with pytest.raises(Exception, match="is not frozen but reaches"):
+        k(MutableOuter(child=Inner(n=1)), qd.ndarray(qd.i32, shape=(2,)))
+
+    # Deeper nesting names the innermost mutable carrier, which is the one that needs changing.
+    @dataclass
+    class MutableMid:
+        child: Inner
+
+    @dataclass(frozen=True)
+    class FrozenTop:
+        mid: MutableMid
+
+    with pytest.raises(
+        TypeError, match=r"MutableMid is not frozen but reaches the ``Final`` field MutableMid\.child\.n"
+    ):
+        final_field_names(MutableMid)
+
+    # A frozen top level does not launder a mutable class further down: the spec-key walk validates each nested
+    # dataclass type it descends into, so the error still surfaces on the first launch rather than silently baking a
+    # value that ``top.mid.child = Inner(n=9)`` could change.
+    @qd.kernel
+    def k_deep(t: FrozenTop, out: qd.types.NDArray[qd.i32, 1]):
+        v = qd.static(t.mid.child.n)
+        for i in out:
+            out[i] = v
+
+    with pytest.raises(Exception, match="MutableMid is not frozen but reaches"):
+        k_deep(FrozenTop(mid=MutableMid(child=Inner(n=1))), qd.ndarray(qd.i32, shape=(2,)))
+
+    # Frozen all the way down is fine, and so is the explicit ``unsafe_hash`` opt-out.
+    @dataclass(frozen=True)
+    class FrozenOuter:
+        child: Inner
+
+    assert final_field_names(FrozenOuter) == frozenset()
+
+    @dataclass(unsafe_hash=True)
+    class UnsafeHashOuter:
+        child: Inner
+
+    assert final_field_names(UnsafeHashOuter) == frozenset()
+
+    # A mutable dataclass that reaches no Final field at all keeps its pre-existing behaviour: not our business.
+    @dataclass
+    class NoFinalInner:
+        n: int
+
+    @dataclass
+    class MutableNoFinalOuter:
+        child: NoFinalInner
+
+    assert final_field_names(MutableNoFinalOuter) == frozenset()
+
+
+@test_utils.test()
+def test_nested_final_field_recompiles_per_frozen_carrier_instance():
+    """The nested-Final path must specialise per value, not just per top-level object identity.
+
+    Complements the rejection test above: with every carrier frozen, distinct nested ``Final`` values must produce
+    distinct kernels rather than reusing the first one compiled."""
+    from typing import Final
+
+    @dataclass(frozen=True)
+    class Inner:
+        n: Final[int]
+
+    @dataclass(frozen=True)
+    class Outer:
+        child: Inner
+        scale: int
+
+    @qd.kernel
+    def k(o: Outer, out: qd.types.NDArray[qd.i32, 1]):
+        v = qd.static(o.child.n)
+        for i in out:
+            out[i] = v * o.scale
+
+    out = qd.ndarray(qd.i32, shape=(2,))
+    # Held in a list rather than passed as temporaries: the launch-context cache is keyed on the argument ids, and a
+    # temporary carrier is freed straight after its launch, so the next one can be allocated at the same address and
+    # collide with the previous entry. That is orthogonal to Final (it applies to any dataclass carrying a runtime
+    # scalar), but it would make the ``scale`` assertion below flaky.
+    configs = [Outer(child=Inner(n=3), scale=2), Outer(child=Inner(n=5), scale=2), Outer(child=Inner(n=5), scale=4)]
+
+    k(configs[0], out)
+    assert out[0] == 6
+    k(configs[1], out)
+    assert out[0] == 10, f"nested Final value change did not recompile: got {out[0]}, expected 10"
+    # ``scale`` is an ordinary runtime field, so it must not add a specialisation.
+    k(configs[2], out)
+    assert out[0] == 20
+
+
+@test_utils.test()
+def test_final_field_rejects_non_bakeable_inner_types():
+    """``Final[T]`` only accepts a ``T`` that is meaningful as a compile-time literal and hashes / reprs by value
+    stably across processes: ``bool`` / ``int`` / ``float`` / ``str`` and ``enum.Enum`` subclasses. Arrays, structs,
+    nested dataclasses and arbitrary objects are rejected with a tailored remediation hint rather than silently
+    miscompiling."""
+    import enum
+    from typing import Final
+
+    from quadrants.lang._final.final_dataclass_fields import final_field_names
+
+    @dataclass(frozen=True)
+    class Leaf:
+        a: Final[int]
+
+    @dataclass(frozen=True)
+    class FinalNestedDataclass:
+        inner: Final[Leaf]
+
+    with pytest.raises(TypeError, match="nested dataclasses are walked structurally"):
+        final_field_names(FinalNestedDataclass)
+
+    @dataclass(frozen=True)
+    class FinalNdarrayType:
+        buf: Final[qd.types.ndarray_type.NdarrayType]
+
+    with pytest.raises(TypeError, match="arrays are runtime data"):
+        final_field_names(FinalNdarrayType)
+
+    @dataclass(frozen=True)
+    class FinalTemplate:
+        x: Final[qd.Template]
+
+    with pytest.raises(TypeError, match="is redundant"):
+        final_field_names(FinalTemplate)
+
+    @dataclass(frozen=True)
+    class FinalObject:
+        x: Final[object]
+
+    with pytest.raises(TypeError, match="supports T in"):
+        final_field_names(FinalObject)
+
+    # Accepted: the scalar set plus any Enum subclass.
+    class Mode(enum.IntEnum):
+        A = 0
+        B = 1
+
+    @dataclass(frozen=True)
+    class AllGood:
+        a: Final[int]
+        b: Final[float]
+        c: Final[bool]
+        d: Final[str]
+        e: Final[Mode]
+        f: int  # ordinary runtime field
+
+    assert final_field_names(AllGood) == {"a", "b", "c", "d", "e"}
+
+
+@test_utils.test()
+def test_final_field_int_annotation_holding_intenum_value():
+    """Genesis's static-config classes declare ``ccd_algorithm: int`` / ``integrator: int`` etc. but store ``IntEnum``
+    members in them. Baking such a value must work: an ``IntEnum`` member is a valid literal, compares and does
+    arithmetic as an ``int``, and ``repr``s stably for the cache key. Validation is on the declared annotation, so
+    ``Final[int]`` holding an ``IntEnum`` is accepted without an ``isinstance`` check on the hot path."""
+    import enum
+    from typing import Final
+
+    class CcdAlgorithm(enum.IntEnum):
+        MPR = 0
+        MJ_MPR = 1
+        GJK = 2
+
+    @dataclass(frozen=True)
+    class StaticConfig:
+        ccd_algorithm: Final[int]
+        enable_collision: Final[bool]
+
+    @qd.kernel
+    def run(cfg: StaticConfig, out: qd.types.NDArray[qd.i32, 1]):
+        algo = qd.static(cfg.ccd_algorithm)
+        for i in out:
+            if qd.static(cfg.enable_collision):
+                out[i] = algo
+            else:
+                out[i] = -1
+
+    out = qd.ndarray(qd.i32, shape=(2,))
+    run(StaticConfig(ccd_algorithm=CcdAlgorithm.GJK, enable_collision=True), out)
+    assert out[0] == 2 and out[1] == 2
+    run(StaticConfig(ccd_algorithm=CcdAlgorithm.MPR, enable_collision=False), out)
+    assert out[0] == -1 and out[1] == -1
+
+
+@test_utils.test()
+def test_bare_final_annotation_is_rejected():
+    """A bare ``Final`` (no ``[T]``) must be rejected up front with a message naming the fix.
+
+    ``typing.get_origin(typing.Final)`` is ``None``, so the bare spelling does not look like a Final annotation and
+    would otherwise be treated as an ordinary runtime field - reaching ``decl_scalar_arg`` and dying in ``cook_dtype``
+    with ``ValueError: Invalid data type typing.Final``. That is precisely the confusing failure this feature removes
+    for ``Final[T]``, so it must not be how the unsupported spelling behaves."""
+    import typing
+
+    from quadrants.lang._final.final_dataclass_fields import (
+        final_field_names,
+        is_final_annotation,
+    )
+
+    # The bare form genuinely is not a subscripted Final...
+    assert is_final_annotation(typing.Final) is False
+    assert is_final_annotation(typing.Final[int]) is True
+
+    # ...but it is still rejected rather than silently lowered to a runtime arg.
+    @dataclass(frozen=True)
+    class BareFinal:
+        x: typing.Final
+
+    with pytest.raises(TypeError, match="bare ``typing.Final`` is not supported"):
+        final_field_names(BareFinal)
+
+    # And end-to-end, so the user sees that error instead of a cook_dtype failure.
+    @qd.kernel
+    def k(cfg: BareFinal, out: qd.types.NDArray[qd.i32, 1]):
+        for i in out:
+            out[i] = 1
+
+    with pytest.raises(Exception, match="bare ``typing.Final`` is not supported"):
+        k(BareFinal(x=5), qd.ndarray(qd.i32, shape=(2,)))
+
+
+@test_utils.test()
+def test_final_float_field_honors_raise_on_templated_floats():
+    """``raise_on_templated_floats`` exists to stop float values from driving kernel specialisation, since each
+    distinct value compiles another kernel. A ``Final[float]`` field does exactly that, so it must honour the setting
+    the same way a ``qd.Template`` float does.
+
+    Note this is deliberately *stricter* than the ``@qd.data_oriented`` pattern ``Final`` replaces: a float member of
+    a data_oriented template arg currently bypasses the guard, because ``_extract_arg``'s data_oriented branch returns
+    ``weakref.ref(arg)`` before reaching the float check. That gap is pre-existing and out of scope here; the point of
+    this test is that the new annotation does not inherit it."""
+    from typing import Final
+
+    arch_name = qd.lang.impl.current_cfg().arch.name
+
+    @dataclass(frozen=True)
+    class Cfg:
+        dt: Final[float]
+        n: Final[int]
+
+    def run(cfg):
+        @qd.kernel
+        def k(config: Cfg, out: qd.types.NDArray[qd.i32, 1]):
+            v = qd.static(config.n)
+            for i in out:
+                out[i] = v
+
+        k(cfg, qd.ndarray(qd.i32, shape=(2,)))
+
+    qd.init(arch=getattr(qd, arch_name), raise_on_templated_floats=True)
+    with pytest.raises(ValueError, match="Floats not allowed as templated types"):
+        run(Cfg(dt=0.5, n=3))
+
+
+@test_utils.test()
+def test_final_float_cached_spec_key_revalidated_after_reinit():
+    """Revalidate a reused config after qd.init enables raise_on_templated_floats."""
+    from typing import Final
+
+    arch_name = qd.lang.impl.current_cfg().arch.name
+
+    @dataclass(frozen=True)
+    class Cfg:
+        dt: Final[float]
+        n: Final[int]
+
+    def run(cfg):
+        @qd.kernel
+        def k(config: Cfg, out: qd.types.NDArray[qd.i32, 1]):
+            v = qd.static(config.n)
+            for i in out:
+                out[i] = v
+
+        k(cfg, qd.ndarray(qd.i32, shape=(2,)))
+
+    cfg = Cfg(dt=0.5, n=3)
+
+    # First launch with the option OFF: compiles fine. A Final-bearing config is deliberately never cached, so the
+    # instance carries no ``_qd_spec_key`` to short-circuit (and thus bypass a guard) on later launches.
+    qd.init(arch=getattr(qd, arch_name))
+    run(cfg)
+    assert not hasattr(cfg, "_qd_spec_key")  # Final-bearing config is never cached; every launch recomputes+revalidates
+
+    # Re-initialise with the option ON and reuse the SAME instance: the recompute must re-run the guard.
+    qd.init(arch=getattr(qd, arch_name), raise_on_templated_floats=True)
+    with pytest.raises(ValueError, match="Floats not allowed as templated types"):
+        run(cfg)
+
+    # Turning the option back off serves the still-valid cached key again (the key value was never setting-dependent).
+    qd.init(arch=getattr(qd, arch_name))
+    run(cfg)
+
+
+@test_utils.test()
+def test_final_unsafe_hash_ordinary_field_reread_each_launch():
+    """Reread mutable runtime fields on every launch of an unsafe_hash config containing Final fields."""
+    from typing import Final
+
+    @dataclass(unsafe_hash=True)
+    class Cfg:
+        scale: Final[int]  # baked compile-time constant
+        n: int  # ordinary runtime field, mutable via unsafe_hash
+
+    @qd.kernel
+    def k(config: Cfg, out: qd.types.NDArray[qd.i32, 1]):
+        s = qd.static(config.scale)
+        for i in out:
+            out[i] = config.n * s
+
+    cfg = Cfg(scale=10, n=3)
+    out = qd.ndarray(qd.i32, shape=(2,))
+    k(cfg, out)
+    assert out.to_numpy()[0] == 30  # 3 * 10
+
+    cfg.n = 7  # mutate an ordinary field on the same instance (same Final -> same specialization)
+    k(cfg, out)
+    assert out.to_numpy()[0] == 70  # 7 * 10 - the new value, not a stale 30 from a cached unwrap
+    assert not hasattr(cfg, "_qd_dc_unwrapped")  # Final-bearing configs never cache unwrapped field values
+
+
+@test_utils.test()
+def test_final_field_string_annotation_is_rejected():
+    """``from __future__ import annotations`` (or any explicit string annotation) leaves ``field.type`` as an
+    unresolved string, so Quadrants cannot see the ``Final`` and would silently lower the field as a *runtime* kernel
+    argument - a field the user believes is a compile-time constant. Rather than half-support it, raise."""
+    from quadrants.lang._final.final_dataclass_fields import final_field_names
+
+    @dataclass(frozen=True)
+    class StringAnnotated:
+        x: "Final[int]"
+
+    with pytest.raises(TypeError, match="unresolved string"):
+        final_field_names(StringAnnotated)
+
+    # A non-Final string annotation stays on the pre-existing path (unchanged behavior, no error from us).
+    @dataclass(frozen=True)
+    class PlainStringAnnotated:
+        x: "int"
+
+    assert final_field_names(PlainStringAnnotated) == frozenset()
+
+
+@test_utils.test()
+def test_final_field_aliased_string_annotation_is_rejected():
+    """A substring test for the literal name ``Final`` misses an *aliased* spelling: with
+    ``from __future__ import annotations`` and ``from typing import Final as F``, ``x: F[int]`` is stored as the string
+    ``"F[int]"``. ``final_field_names`` resolves the class's hints (which sees the alias in the module globals) so the
+    field is recognised as ``Final`` and rejected, rather than silently lowered as an ordinary runtime argument."""
+    import sys
+    import types
+    from typing import Final
+
+    from quadrants.lang._final.final_dataclass_fields import final_field_names
+
+    # A real module whose globals carry the ``Final as F`` alias, so ``typing.get_type_hints`` can resolve ``"F[int]"``
+    # (a function-local class would not expose the alias to the resolver).
+    mod = types.ModuleType("_qd_final_alias_test_mod")
+    mod.F = Final
+    mod.dc = dataclasses
+    sys.modules[mod.__name__] = mod
+    try:
+        exec("@dc.dataclass(frozen=True)\nclass Cfg:\n    x: 'F[int]'\n", mod.__dict__)
+        with pytest.raises(TypeError, match="unresolved string"):
+            final_field_names(mod.Cfg)
+    finally:
+        sys.modules.pop(mod.__name__, None)
+
+
+@test_utils.test()
+def test_final_aliased_string_detected_despite_unresolvable_sibling():
+    """Whole-class ``typing.get_type_hints`` is all-or-nothing: an unrelated field whose annotation cannot be resolved
+    (e.g. a ``TYPE_CHECKING``-only import) makes it fail for the *entire* class, so the fallback substring test would
+    then miss an aliased ``Final`` on a sibling and silently lower it as a runtime arg. Per-field resolution must still
+    catch it."""
+    import sys
+    import types
+    from typing import Final
+
+    from quadrants.lang._final.final_dataclass_fields import final_field_names
+
+    mod = types.ModuleType("_qd_final_alias_unresolvable_mod")
+    mod.F = Final
+    mod.dc = dataclasses
+    sys.modules[mod.__name__] = mod
+    try:
+        # ``y``'s annotation names a type never defined in the module, so class-wide ``get_type_hints`` raises; the
+        # aliased ``Final`` on ``x`` must still be seen.
+        exec(
+            "@dc.dataclass(frozen=True)\nclass Cfg:\n    x: 'F[int]'\n    y: 'OnlyUnderTypeChecking'\n",
+            mod.__dict__,
+        )
+        with pytest.raises(TypeError, match="unresolved string"):
+            final_field_names(mod.Cfg)
+    finally:
+        sys.modules.pop(mod.__name__, None)
+
+
+@test_utils.test()
+def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
+    """Float keys preserve signed zero and NaN payloads in both live and offline caches."""
+    import math
+    import struct
+
+    from quadrants.lang._final.final_constant_values import final_scalar_key
+
+    # Signed zero: Python conflates these; the bit encoding must not.
+    assert 0.0 == -0.0 and hash(0.0) == hash(-0.0)
+    assert final_scalar_key(0.0) != final_scalar_key(-0.0)
+
+    # NaN sign/payload: ``str`` renders them all ``"nan"``; the bit encoding keeps them distinct.
+    payload_nan = struct.unpack("<d", struct.pack("<Q", 0x7FF8000000000ABC))[0]
+    nan_keys = {final_scalar_key(math.nan), final_scalar_key(-math.nan), final_scalar_key(payload_nan)}
+    assert len(nan_keys) == 3, "distinct NaN bit patterns must produce distinct keys"
+
+    # Equal floats produce equal keys, so kernel reuse stays correct.
+    assert final_scalar_key(1.5) == final_scalar_key(1.5)
+
+    # A ``Final[float]`` field may legally receive an ``int`` at runtime, so the encoded float is tagged: its bits
+    # must not collide with a bare int equal to those bits (both bake different constants).
+    one_as_bits = struct.unpack("<Q", struct.pack("<d", 1.0))[0]  # == 4607182418800017408
+    assert final_scalar_key(1.0) != final_scalar_key(one_as_bits)
+
+    # ``IntEnum`` / ``StrEnum`` members are ``==`` (with equal hashes) to their bare scalar value and to same-valued
+    # members of other enum classes; keying on class + member identity must keep all of these distinct.
+    import enum
+
+    class ModeA(enum.IntEnum):
+        X = 0
+
+    class ModeB(enum.IntEnum):
+        Y = 0
+
+    assert final_scalar_key(ModeA.X) != final_scalar_key(0)  # enum vs bare int
+    assert final_scalar_key(ModeA.X) != final_scalar_key(ModeB.Y)  # same value, different enum class
+    assert final_scalar_key(ModeA.X) == final_scalar_key(ModeA.X)  # same member is stable
+
+    # Unnamed ``IntFlag`` composites have ``name is None``, so distinct bitmasks must be kept apart by their value.
+    class Perm(enum.IntFlag):
+        R = 1
+        W = 2
+        X = 4
+
+    assert final_scalar_key(Perm.R | Perm.W) != final_scalar_key(Perm.R | Perm.X)  # values 3 vs 5 (name may be None)
+    assert final_scalar_key(Perm.R | Perm.W) == final_scalar_key(Perm.R | Perm.W)  # stable
+
+    # Inverting a flag member caches the value-derived ``_inverted_`` on the member (CPython >=3.11). That is enum
+    # bookkeeping, not user state, so a member that has been inverted anywhere must still be accepted and key the
+    # same as before the inversion.
+    key_before = final_scalar_key(Perm.R)
+    _ = ~Perm.R  # populates ``Perm.R._inverted_`` on 3.11+
+    assert final_scalar_key(Perm.R) == key_before  # not rejected, and the cache does not perturb the key
+
+    # Enum members follow the same rule: user-defined per-member state (attributes set in ``__init__``) is rejected,
+    # while plain members and unnamed ``IntFlag`` composites (name/value bookkeeping only) are accepted above.
+    class StatefulMode(enum.Enum):
+        A = (1, "m")
+
+        def __init__(self, code, unit):
+            self.code = code
+            self.unit = unit
+
+    with pytest.raises(TypeError, match="user-defined per-member state"):
+        final_scalar_key(StatefulMode.A)
+
+    # Per-member state stored in a ``__slots__`` slot never appears in ``__dict__``, so the rejection must inspect
+    # populated slots too (otherwise the slot stays observable by kernel code while the Final key ignores it).
+    class SlottedMode(enum.Enum):
+        __slots__ = ("unit",)
+        A = 1
+
+        def __init__(self, _v):
+            self.unit = "m"
+
+    assert not {k for k in vars(SlottedMode.A) if not (k.startswith("__") and k.endswith("__"))} - {
+        "_name_",
+        "_value_",
+        "_sort_order_",
+    }  # __dict__ carries only enum bookkeeping; the state lives in the ``unit`` slot
+    assert SlottedMode.A.unit == "m"
+    with pytest.raises(TypeError, match="user-defined per-member state"):
+        final_scalar_key(SlottedMode.A)
+
+    # State stashed under a *dunder-looking* name is still observable (``cfg.mode.__unit__``), so the allowlist is
+    # exact rather than "skip every dunder" - only the known enum bookkeeping dunders (e.g. ``__objclass__``) pass.
+    class DunderStateMode(enum.Enum):
+        A = 1
+
+        def __init__(self, _v):
+            self.__unit__ = "m"
+
+    assert DunderStateMode.A.__unit__ == "m"  # a genuine dunder-named per-member attribute
+    with pytest.raises(TypeError, match="user-defined per-member state"):
+        final_scalar_key(DunderStateMode.A)
+
+    # Class-level behavior on the enum class is unkeyable, like for primitive subclasses: a factory can build
+    # same-named enum classes whose ``label`` property closes over different strings, colliding while
+    # ``qd.static(cfg.mode.label == "x")`` differs. A plain member is accepted; one on a class with a user
+    # property/method/class var is rejected.
+    def _labeled_enum(label):
+        class Local(enum.IntEnum):
+            A = 1
+
+            @property
+            def label(self):
+                return label
+
+        return Local
+
+    lab_x, lab_y = _labeled_enum("x"), _labeled_enum("y")
+    assert type(lab_x.A).__qualname__ == type(lab_y.A).__qualname__  # same qualname, distinct classes/behavior
+    with pytest.raises(TypeError, match="observable class-level behavior"):
+        final_scalar_key(lab_x.A)
+
+    # An overridden operator dunder on the enum class is observable behavior too (``qd.static(cfg.mode == 1)``),
+    # and the enum machinery never injects e.g. ``__eq__`` into a user enum's own class dict, so it is rejected -
+    # unlike the structural ``__new__`` / ``__doc__`` the machinery does inject (which must stay accepted).
+    class EqEnum(enum.IntEnum):
+        A = 1
+
+        def __eq__(self, other):
+            return True
+
+        def __hash__(self):
+            return 0
+
+    with pytest.raises(TypeError, match="observable class-level behavior"):
+        final_scalar_key(EqEnum.A)
+
+    # An enum can also inherit observable behavior/state from a *non-enum* mixin (``class Mode(Labels, enum.Enum)``).
+    # ``cfg.mode.label`` is then observable at compile time but absent from the key (which records only
+    # class/name/value), so mutating ``Labels.label`` after compilation would reuse a stale kernel - and two
+    # same-named factory mixins could define ``label`` differently. The class-behavior scan must inspect user mixins,
+    # not only ``Enum`` bases, so such an enum is rejected while a plain enum (with only a builtin data-type mixin like
+    # ``int``) is still accepted.
+    class Labels:
+        label = "x"
+
+    class MixinMode(Labels, enum.Enum):
+        A = 1
+        B = 2
+
+    assert MixinMode.A.label == "x"  # observable via cfg.mode.label, not captured by the key
+    with pytest.raises(TypeError, match="observable class-level behavior"):
+        final_scalar_key(MixinMode.A)
+
+    # A user-defined enum *sunder hook* (``_missing_`` on any version; ``_repr_html_`` on 3.13+) is observable
+    # behavior on the baked member, but a blanket "skip every ``_x_`` name" would mistake it for enum bookkeeping.
+    # Only machinery-generated names are exempt (``_ENUM_GENERATED_CLASS_ATTRS``, computed from the running Python),
+    # so a user hook is rejected while a plain enum - whose only ``_x_`` names are machinery bookkeeping - is accepted.
+    class MissingHook(enum.Enum):
+        A = 1
+        B = 2
+
+        @classmethod
+        def _missing_(cls, value):
+            return cls.A
+
+    assert "_missing_" in vars(MissingHook)  # the user hook lands in the class's own dict, not merely inherited
+    with pytest.raises(TypeError, match="observable class-level behavior"):
+        final_scalar_key(MissingHook.A)
+
+    # Enum classes rebuilt by a local factory share module+qualname and can have same-named members with different
+    # values; the key includes the value so those stay distinct.
+    def _make_int_enum(v):
+        class Local(enum.IntEnum):
+            A = v
+
+        return Local
+
+    e1, e2 = _make_int_enum(1), _make_int_enum(2)
+    assert type(e1.A).__qualname__ == type(e2.A).__qualname__  # identical qualname across the two factory enums
+    assert final_scalar_key(e1.A) != final_scalar_key(e2.A)  # but different values -> distinct keys
+
+    # The member value is itself routed through ``final_scalar_key``, so two factory members named ``A`` whose raw
+    # values are ``True`` vs ``1`` (``==`` with equal hashes) stay distinct rather than collapsing to one key.
+    def _make_enum(v):
+        class Local(enum.Enum):
+            A = v
+
+        return Local
+
+    et, eo = _make_enum(True), _make_enum(1)
+    assert type(et.A).__qualname__ == type(eo.A).__qualname__
+    assert et.A.value == eo.A.value and hash(et.A.value) == hash(eo.A.value)  # True == 1, equal hashes
+    assert final_scalar_key(et.A) != final_scalar_key(eo.A)
+
+    # Even with identical name AND value, two dynamically recreated (behavior-free) classes have genuinely distinct
+    # members - for a plain ``Enum``, ``First.A != Second.A`` - so a kernel branching on ``cfg.mode == First.A``
+    # needs distinct specializations. ``module``/``qualname``/name/value are all identical, so the key adds a per-class
+    # identity token (a ``_ClassRef`` in-process, a non-recyclable ``_dynamic_class_serial`` offline) for such
+    # non-uniquely-identifiable classes to keep them apart.
+    first, second = _make_enum(1), _make_enum(1)
+    assert type(first.A).__qualname__ == type(second.A).__qualname__ and first.A.value == second.A.value
+    assert first.A != second.A  # plain Enum uses identity equality: distinct class objects -> distinct members
+    assert final_scalar_key(first.A) != final_scalar_key(second.A)  # ...kept distinct via the per-class identity token
+    assert final_scalar_key(first.A) == final_scalar_key(first.A)  # stable for the same class
+
+    # Equal constants with different Python types must select distinct specializations.
+    assert final_scalar_key(True) != final_scalar_key(1)
+    assert final_scalar_key(7) != final_scalar_key("7")
+    # ...but equal values of the same type stay equal, so legitimate kernel reuse is preserved.
+    assert final_scalar_key(7) == final_scalar_key(7)
+    assert final_scalar_key("abc") == final_scalar_key("abc")
+    assert final_scalar_key(True) == final_scalar_key(True)
+
+    # Annotations are not enforced at runtime: an arbitrary object (whose ``__eq__``/``__hash__`` we cannot trust to
+    # capture all observable state) is rejected rather than keyed by identity/value.
+    class Arbitrary:
+        def __init__(self, tag):
+            self.tag = tag
+
+        def __eq__(self, other):
+            return isinstance(other, Arbitrary)
+
+        def __hash__(self):
+            return 0
+
+    with pytest.raises(TypeError, match="not a supported compile-time constant"):
+        final_scalar_key(Arbitrary("a"))
+
+    # An enum whose member value is mutable/unsupported (e.g. a ``list``) is rejected too, since the value is routed
+    # through ``final_scalar_key`` and a mutable value could silently change under the cached spec key.
+    class ListValued(enum.Enum):
+        A = [1, 2, 3]
+
+    with pytest.raises(TypeError, match="not a supported compile-time constant"):
+        final_scalar_key(ListValued.A)
+
+
+@test_utils.test()
+def test_final_scalar_key_live_preserves_class_identity_across_module_rebind():
+    """Live keys distinguish redefined enum classes; offline keys stay equal for equivalent importable definitions.
+
+    Class identity matters because compiled code can compare the enum class with a saved class object.
+    """
+    import sys
+    import types
+
+    from quadrants.lang._final.final_constant_values import final_scalar_key
+
+    mod_name = "qd_reload_identity_probe"
+    mod = types.ModuleType(mod_name)
+    sys.modules[mod_name] = mod
+    try:
+        # Bind a class so it is uniquely resolvable via ``module``/``qualname`` (offline id component is None).
+        old = enum.IntEnum("Foo", {"VALUE": 1}, module=mod_name, qualname="Foo")
+        mod.Foo = old
+        old_offline = final_scalar_key(old(1))
+        old_live = final_scalar_key(old(1), live=True)
+
+        # "Reload": rebind the same name to a fresh, equally resolvable class object.
+        new = enum.IntEnum("Foo", {"VALUE": 1}, module=mod_name, qualname="Foo")
+        mod.Foo = new
+        new_offline = final_scalar_key(new(1))
+        new_live = final_scalar_key(new(1), live=True)
+
+        assert old is not new
+        # Offline: both resolvable while bound, so both carry a None id component and collide. That is the safe,
+        # process-stable strategy - it only fails to distinguish a (rare) reload, and never causes a wrong reuse.
+        assert old_offline == new_offline
+        # In-process: ``id(cls)`` keeps the two distinct classes apart.
+        assert old_live != new_live
+        # Same class -> stable in-process key across launches, so legitimate kernel reuse is preserved.
+        assert final_scalar_key(old(1), live=True) == old_live
+    finally:
+        del sys.modules[mod_name]
+
+
+@test_utils.test()
+def test_final_scalar_key_live_uses_object_identity_not_class_equality():
+    """Class keys use identity despite custom equality, and retain the class to prevent ID reuse.
+
+    This tests the identity helper directly; the value validator rejects these custom scalar subclasses.
+    """
+    from quadrants.lang._final import final_class_identity as _fdf
+    from quadrants.lang._final.final_constant_values import final_scalar_key
+
+    class EqMeta(type):
+        # Distinct classes with the same qualname compare equal with equal hashes (a pathological metaclass).
+        def __eq__(cls, other):
+            return isinstance(other, EqMeta) and cls.__qualname__ == other.__qualname__
+
+        def __hash__(cls):
+            return hash(cls.__qualname__)
+
+    def _make():
+        class Local(int, metaclass=EqMeta):
+            pass
+
+        return Local
+
+    first, second = _make(), _make()
+    assert first is not second and first == second and hash(first) == hash(second)  # metaclass forces class ==
+
+    # The identity component keys the two distinct classes apart (by ``id``/``is``), is stable/hashable for one class,
+    # and retains the class object as a strong ref - all immune to the metaclass's ``==``/``hash``.
+    id_first = _fdf._subclass_identity(first, live=True)
+    assert id_first != _fdf._subclass_identity(second, live=True)  # not collapsed by the metaclass ``==``
+    assert id_first == _fdf._subclass_identity(first, live=True)
+    assert hash(id_first) == hash(_fdf._subclass_identity(first, live=True))
+
+    def _flat(x):
+        if isinstance(x, tuple):
+            for e in x:
+                yield from _flat(e)
+        elif isinstance(x, _fdf._ClassRef):
+            yield x.cls
+        else:
+            yield x
+
+    assert any(e is first for e in _flat(id_first))  # class object retained (strong ref) in the identity component
+
+    # But a metaclass ``__eq__``/``__hash__`` is observable (``qd.static(cfg.x.__class__ == Expected)``) and the key
+    # cannot capture a later mutation of the state it consults, so the value itself is rejected.
+    with pytest.raises(TypeError, match="Custom scalar subclasses"):
+        final_scalar_key(first(1))
+
+
+@test_utils.test()
+def test_final_scalar_key_offline_dynamic_class_is_process_unique():
+    """The per-class serial that distinguishes dynamic classes offline (``_dynamic_class_serial``) is only
+    process-local and restarts from zero in every process. So the *offline* (cross-process) key for a non-resolvable
+    (locally/dynamically created) class also embeds a per-process nonce: its serialized string is unique to this
+    process, guaranteeing a dynamic class is a cross-process cache miss (never a wrong reuse of a kernel baked for a
+    distinct class in another worker). The *in-process* (``live=True``) key is process-local anyway, so it stays
+    nonce-free."""
+    from quadrants.lang._final import final_class_identity as fdf
+    from quadrants.lang._final.final_constant_values import final_scalar_key
+
+    def _make_local_enum():
+        class Local(enum.IntEnum):
+            VALUE = 1
+
+        return Local
+
+    loc = _make_local_enum()
+    assert fdf._PROCESS_NONCE in str(final_scalar_key(loc(1)))  # dynamic-class offline key -> process-unique
+    assert fdf._PROCESS_NONCE not in str(final_scalar_key(loc(1), live=True))  # live key never carries the nonce
+    # Distinct dynamic classes still separate within this process (same nonce, different serial); the class is stable.
+    other = _make_local_enum()
+    assert final_scalar_key(loc(1)) != final_scalar_key(other(1))
+    assert final_scalar_key(loc(1)) == final_scalar_key(loc(1))
+
+
+@test_utils.test()
+def test_final_offline_dynamic_class_serial_is_monotonic_not_recyclable():
+    """Dynamic class serials remain stable while alive and are never reused after collection.
+
+    Weak references allow collection; monotonic serials prevent recycled Python IDs from matching old disk-cache keys.
+    """
+    import gc
+    import weakref as _weakref
+
+    from quadrants.lang._final import final_class_identity as fdf
+
+    def _make():
+        class Local(int):
+            pass
+
+        return Local
+
+    a = _make()
+    sa = fdf._dynamic_class_serial(a)
+    assert fdf._dynamic_class_serial(a) == sa  # stable for the class's lifetime
+
+    b = _make()
+    sb = fdf._dynamic_class_serial(b)
+    assert sb > sa  # a distinct class object never reuses an earlier serial (monotonic counter)
+
+    # A collected class frees its weak registry slot (the offline key pins nothing, unlike the live ``_ClassRef``),
+    # and the counter only advances - so the next class, even were it allocated at ``a``'s recycled address, draws a
+    # fresh, higher serial rather than colliding.
+    ref = _weakref.ref(a)
+    del a
+    gc.collect()
+    assert ref() is None  # the serial registry did not pin the collected class
+    c = _make()
+    assert fdf._dynamic_class_serial(c) > sb  # still monotonic after a collection; never a recycled serial
+
+
+@test_utils.test()
+def test_final_scalar_key_live_hashable_under_unhashable_metaclass():
+    """Class identity keys stay hashable even when the class itself is unhashable.
+
+    This tests the identity helper directly; the value validator rejects these custom scalar subclasses.
+    """
+    from quadrants.lang._final import final_class_identity as _fdf
+    from quadrants.lang._final.final_constant_values import final_scalar_key
+
+    class Unhashable(type):
+        __hash__ = None  # the classes this metaclass produces are themselves unhashable
+
+        def __eq__(cls, other):
+            return cls is other
+
+    def _make():
+        class Local(int, metaclass=Unhashable):
+            pass
+
+        return Local
+
+    a, b = _make(), _make()
+    with pytest.raises(TypeError):
+        hash(a)  # the class object is itself unhashable...
+
+    # ...yet the identity component (via ``_ClassRef.object.__hash__``) stays hashable, stable, and usable as a dict
+    # key, and keeps distinct classes apart.
+    ka = _fdf._subclass_identity(a, live=True)
+    assert hash(ka) == hash(_fdf._subclass_identity(a, live=True))
+    assert {ka: 1}[_fdf._subclass_identity(a, live=True)] == 1
+    assert ka != _fdf._subclass_identity(b, live=True)
+
+    # But the value itself is rejected: the metaclass carries observable ``__hash__``/``__eq__`` behavior.
+    with pytest.raises(TypeError, match="Custom scalar subclasses"):
+        final_scalar_key(a(1))
+
+
+@test_utils.test()
+def test_final_plan_cache_keyed_by_type_identity():
+    """Distinct dataclasses must not share cached Final declarations, even when their metaclass makes them equal."""
+    import dataclasses as dcs
+    from typing import Final
+
+    from quadrants.lang._final.final_dataclass_fields import final_field_names
+
+    class DcMeta(type):
+        def __eq__(cls, other):
+            return isinstance(other, DcMeta)  # any two such classes compare equal...
+
+        def __hash__(cls):
+            return 0  # ...with equal hashes, so a plain dict would merge them
+
+    @dcs.dataclass(frozen=True)
+    class HasFinal(metaclass=DcMeta):
+        x: Final[int]
+
+    @dcs.dataclass(frozen=True)
+    class NoFinal(metaclass=DcMeta):
+        x: int
+
+    assert HasFinal == NoFinal and hash(HasFinal) == hash(NoFinal)  # metaclass forces type-level equality
+    # Each type must resolve to its OWN plan, regardless of caching order (identity keys keep them separate).
+    assert final_field_names(HasFinal) == frozenset({"x"})
+    assert final_field_names(NoFinal) == frozenset()
+
+
+@test_utils.test()
+def test_final_first_final_path_tracks_visited_by_identity():
+    """The recursive mutable-ancestor walk tracks visited dataclass types by ``id``, not by equality. A metaclass that
+    makes a nested inner type compare equal to its mutable outer type must not make the inner look "already visited"
+    (which would return ``None`` early and let the mutable outer - which could be rebound, changing a baked value -
+    slip past the rejection)."""
+    import dataclasses as dcs
+    from typing import Final
+
+    from quadrants.lang._final.final_dataclass_fields import final_field_names
+
+    class DcMeta(type):
+        def __eq__(cls, other):
+            return isinstance(other, DcMeta)  # any two such types compare equal (incl. inner == outer)...
+
+        def __hash__(cls):
+            return 0  # ...with equal hashes
+
+    @dcs.dataclass(frozen=True)
+    class Inner(metaclass=DcMeta):
+        x: Final[int]
+
+    @dcs.dataclass  # NOT frozen: a mutable ancestor of the Final leaf ``Inner.x``
+    class Outer(metaclass=DcMeta):
+        inner: Inner
+
+    assert Inner == Outer and hash(Inner) == hash(Outer)  # metaclass makes the inner "equal" to the outer
+    with pytest.raises(TypeError, match="not frozen"):
+        final_field_names(Outer)  # mutable ancestor of a Final leaf must still be rejected
+
+
+@test_utils.test()
+def test_final_enum_rejects_observable_metaclass_state():
+    """Reject custom enum metaclass state that compiled code can observe but the constant key cannot capture."""
+    import enum as en
+
+    from quadrants.lang._final.final_constant_values import final_scalar_key
+
+    class LabeledMeta(en.EnumMeta):
+        label = "x"  # observable via ``Mode.label`` / ``cfg.mode.__class__.label``, absent from the key
+
+    class Mode(en.Enum, metaclass=LabeledMeta):
+        A = 1
+        B = 2
+
+    with pytest.raises(TypeError, match="observable class-level behavior"):
+        final_scalar_key(Mode.A)
+
+    class Plain(en.Enum):  # metaclass is the framework ``EnumMeta`` -> not inspected -> accepted
+        A = 1
+        B = 2
+
+    final_scalar_key(Plain.A)  # does not raise
+
+    class Weekday(en.IntEnum):  # IntEnum still uses the framework metaclass -> accepted
+        MON = 0
+
+    final_scalar_key(Weekday.MON)  # does not raise
+
+
+@test_utils.test()
+def test_final_rejects_scalar_subclasses_with_spoofed_module():
+    """Spoofing the NumPy module name does not make a custom scalar subclass supported."""
+    from quadrants.lang._final.final_constant_values import final_scalar_key
+
+    class BehaviorSubclass(int):
+        def __eq__(self, other):  # observable class-level behavior a kernel could read (``cfg.x == 1``)
+            return True
+
+        __hash__ = int.__hash__
+
+    BehaviorSubclass.__module__ = "numpy"  # spoof - must not buy trusted-base treatment
+    with pytest.raises(TypeError, match="Custom scalar subclasses"):
+        final_scalar_key(BehaviorSubclass(1))
+
+    class FreeSubclass(int):  # behavior-free, also spoofing the module
+        pass
+
+    FreeSubclass.__module__ = "numpy"
+    with pytest.raises(TypeError, match="Custom scalar subclasses"):
+        final_scalar_key(FreeSubclass(1))
+
+
+@test_utils.test()
+def test_final_float_signed_zero_keys_distinct_kernels():
+    """Compile distinct kernels for positive and negative zero, whose signs differ despite equal Python values."""
+    from typing import Final
+
+    @dataclass(frozen=True)
+    class Cfg:
+        z: Final[float]
+
+    @qd.kernel
+    def write_z(config: Cfg, out: qd.types.NDArray[qd.f32, 1]):
+        v = qd.static(config.z)
+        for i in out:
+            out[i] = v
+
+    out = qd.ndarray(qd.f32, shape=(1,))
+    write_z(Cfg(z=0.0), out)
+    assert len(write_z._primal.mapper.mapping) == 1
+    write_z(Cfg(z=-0.0), out)  # equal to 0.0 under ==/hash, but a distinct baked constant
+    assert len(write_z._primal.mapper.mapping) == 2, "-0.0 and 0.0 must not share a compiled kernel"
+
+
+@test_utils.test()
+def test_final_key_field_name_does_not_shadow_internal_spec_key_cache():
+    """A user field named _key must not hide changes to Final constants from kernel selection.
+
+    Internal instance caches use the _qd_ prefix to avoid collisions with user fields.
+    """
+    from typing import Final
+
+    @dataclass(frozen=True)
+    class Config:
+        _key: int  # user field whose name used to collide with the internal cache attribute
+        value: Final[int]
+
+    @qd.kernel
+    def bump(config: Config, out: qd.types.NDArray[qd.i32, 1]):
+        v = qd.static(config.value)
+        for i in out:
+            out[i] = v
+
+    out = qd.ndarray(qd.i32, shape=(1,))
+    bump(Config(_key=0, value=1), out)
+    assert out[0] == 1
+    assert len(bump._primal.mapper.mapping) == 1
+    bump(Config(_key=0, value=2), out)  # same user _key, different Final value
+    assert out[0] == 2, "distinct Final values must not share a compiled kernel despite equal user ``_key`` fields"
+    assert len(bump._primal.mapper.mapping) == 2
+
+
+@test_utils.test()
+def test_final_subtree_has_final_fields_predicate():
+    """``subtree_has_final_fields`` gates the per-instance spec-key / offline-repr caches. It must report a ``Final``
+    field anywhere in the *transitive* dataclass subtree, so a Final-free dataclass keeps caching (untouched hot path)
+    while any Final-bearing one - even one reaching a ``Final`` leaf only through a nested dataclass - is forced to
+    recompute and revalidate each launch."""
+    from typing import Final
+
+    from quadrants.lang._final.final_dataclass_fields import (
+        subtree_has_final_fields as shf,
+    )
+
+    @dataclass(frozen=True)
+    class PlainLeaf:
+        a: int
+
+    @dataclass(frozen=True)
+    class DirectFinal:
+        x: Final[int]
+
+    @dataclass(frozen=True)
+    class Inner:
+        n: Final[int]
+
+    @dataclass(frozen=True)
+    class OuterViaInner:  # no own Final field; reaches one only through the nested ``Inner``
+        child: Inner
+
+    @dataclass(frozen=True)
+    class OuterPlain:  # no Final anywhere in the subtree
+        leaf: PlainLeaf
+
+    assert not shf(PlainLeaf)
+    assert shf(DirectFinal)
+    assert shf(Inner)
+    assert shf(OuterViaInner), "a Final leaf nested under a Final-free ancestor must still disable the ancestor's cache"
+    assert not shf(OuterPlain)
+
+
+@test_utils.test()
+def test_final_offline_repr_not_cached_on_final_bearing_config():
+    """The offline fastcache repr is cached on a frozen instance as ``_qd_dc_repr`` - but never on a Final-bearing one.
+    A cached repr could not notice a ``Final`` value's class turning behaviorful between launches (e.g. an enum whose
+    ``__eq__`` is monkey-patched), so such a config recomputes each launch to re-run ``final_scalar_key`` validation.
+    A Final-free frozen dataclass still caches, keeping the offline hot path intact."""
+    from typing import Final
+
+    from quadrants.lang._fast_caching.args_hasher import dataclass_to_repr
+
+    @dataclass(frozen=True)
+    class PlainCfg:
+        a: int
+
+    @dataclass(frozen=True)
+    class FinalCfg:
+        x: Final[int]
+
+    plain = PlainCfg(a=1)
+    dataclass_to_repr(False, (), plain)
+    assert hasattr(plain, "_qd_dc_repr")  # Final-free frozen dataclass caches its repr (result or the NONE sentinel)
+
+    fcfg = FinalCfg(x=1)
+    dataclass_to_repr(False, (), fcfg)
+    assert not hasattr(fcfg, "_qd_dc_repr")  # Final-bearing config is never repr-cached; it recomputes+revalidates
+
+
+@test_utils.test()
+def test_final_str_field_does_not_disable_offline_fastcache():
+    """A ``Final[str]`` field must not disable the *offline* fastcache. ``stringify_obj_type`` has no case for a bare
+    ``str`` (it fails and logs an UNKNOWN_TYPE warning), so routing the Final field's value through it would make
+    ``dataclass_to_repr`` fail and force a recompile in every process for an explicitly supported field type. Final
+    fields are serialized directly via ``final_scalar_key``, which yields a non-None, value-distinguishing repr; the
+    neighbouring non-Final field confirms the ordinary type-only path still works alongside it."""
+    from typing import Final
+
+    from quadrants.lang._fast_caching.args_hasher import dataclass_to_repr
+
+    @dataclass(frozen=True)
+    class Cfg:
+        name: Final[str]
+        scale: int
+
+    r_a = dataclass_to_repr(False, (), Cfg(name="a", scale=1))
+    r_a2 = dataclass_to_repr(False, (), Cfg(name="a", scale=1))
+    r_b = dataclass_to_repr(False, (), Cfg(name="b", scale=1))
+    assert r_a is not None, "a Final[str] field must not disable the offline fastcache"
+    assert r_a == r_a2, "equal Final[str] values must produce equal offline keys"
+    assert r_a != r_b, "distinct Final[str] values must produce distinct offline keys"
+
+
+@test_utils.test()
+def test_subclass_extra_field_offline_fastcache_uses_annotated_field_set():
+    """A subclass passed where a *base* dataclass is annotated must fast-cache against the base's field set. Without an
+    ``annotated_type``, ``dataclass_to_repr`` hashes the runtime type, so a subclass adding a non-fastcacheable field
+    (``list``) fails and disables the offline cache. Passing the base restricts hashing to its fields: the subclass
+    then hashes identically to a plain base instance, and the extra field cannot affect the key."""
+    from typing import Final
+
+    from quadrants.lang._fast_caching.args_hasher import (
+        _FAIL_FASTCACHE,
+        dataclass_to_repr,
+    )
+
+    @dataclass(frozen=True)
+    class Base:
+        scale: Final[int]  # baked -> its value drives the offline key
+
+    @dataclass(frozen=True)
+    class Sub(Base):
+        name: list  # extra application-only field; not fastcacheable on its own and never seen by the kernel
+
+    base_repr = dataclass_to_repr(False, (), Base(scale=1))
+    assert base_repr is not None and "scale" in base_repr
+
+    # Runtime-type hashing (no annotation) trips on the ``list`` field and disables the offline cache.
+    assert dataclass_to_repr(False, (), Sub(scale=1, name=["a"])) is _FAIL_FASTCACHE
+
+    # Hashing against the annotated base drops the extra field, so the subclass hashes identically to its base.
+    assert dataclass_to_repr(False, (), Sub(scale=1, name=["a"]), Base) == base_repr
+    assert (
+        dataclass_to_repr(False, (), Sub(scale=1, name=["b"]), Base) == base_repr
+    ), "the extra (non-annotated) field must not affect the offline key"
+    # The base's own field still drives the key: a different ``Final`` value splits it.
+    assert (
+        dataclass_to_repr(False, (), Sub(scale=2, name=["a"]), Base) != base_repr
+    ), "a baked base field must still split the offline key by value"
+
+
+@test_utils.test()
+def test_final_exact_baked_type_membership_is_identity_not_equality():
+    """Reject scalar subclasses even if their metaclass makes them compare equal to an accepted built-in type."""
+    from quadrants.lang._final.final_class_identity import (
+        _is_supported_builtin_scalar_type,
+    )
+    from quadrants.lang._final.final_constant_values import final_scalar_key
+
+    class EqIntMeta(type):
+        # Make the class compare (and hash) as the builtin ``int`` - a hostile spoof of exact-builtin-ness.
+        def __eq__(cls, other):
+            return other is int or cls is other
+
+        def __hash__(cls):
+            return hash(int)
+
+    class Spoof(int, metaclass=EqIntMeta):
+        pass
+
+    assert Spoof == int  # equality is spoofed...
+    assert not _is_supported_builtin_scalar_type(Spoof)  # ...but identity membership is not fooled
+    assert _is_supported_builtin_scalar_type(int) and _is_supported_builtin_scalar_type(
+        bool
+    )  # exact builtins still recognised
+    # A metaclass ``__eq__``/``__hash__`` is observable, so the value is rejected rather than keyed as an exact int.
+    with pytest.raises(TypeError, match="Custom scalar subclasses"):
+        final_scalar_key(Spoof(1))
+
+
+@test_utils.test()
+def test_final_enum_rejects_user_override_of_generated_hook():
+    """The enum machinery *copies* ``enum.Enum._generate_next_value_`` into every subclass's own dict, so the name
+    alone appears even on a plain enum. A user override (defined or monkey-patched later) is a distinct object a kernel
+    could observe through the baked member, and mutating it would leave the member's class/name/value key unchanged -
+    so it must be rejected. A clean enum (still the inherited default) is accepted - across every enum kind and Python
+    version: CPython 3.12+ copies the inherited hook as a *fresh* ``staticmethod`` wrapper, so acceptance must compare
+    the unwrapped function identity rather than the wrapper's."""
+    import enum
+
+    from quadrants.lang._final.final_constant_values import final_scalar_key
+
+    class Clean(enum.Enum):
+        A = 1
+        B = 2
+
+    class CleanInt(enum.IntEnum):
+        A = 1
+
+    class CleanFlag(enum.IntFlag):
+        A = 1
+
+    final_scalar_key(Clean.A)  # inherited ``_generate_next_value_`` default -> accepted (plain Enum)
+    final_scalar_key(CleanInt.A)  # ... IntEnum
+    final_scalar_key(CleanFlag.A)  # ... IntFlag (all three would fail on 3.12+ under a wrapper-identity check)
+
+    class Overridden(enum.Enum):
+        def _generate_next_value_(name, start, count, last_values):  # observable custom auto-value policy
+            return name
+
+        A = enum.auto()
+        B = enum.auto()
+
+    with pytest.raises(TypeError, match="observable class-level behavior"):
+        final_scalar_key(Overridden.A)
+
+    # Monkey-patching the hook onto a previously-clean enum must flip it from accepted to rejected on the next key.
+    class Patched(enum.Enum):
+        A = 1
+
+    final_scalar_key(Patched.A)  # accepted while it holds the inherited default
+    Patched._generate_next_value_ = staticmethod(lambda name, start, count, last_values: name)
+    with pytest.raises(TypeError, match="observable class-level behavior"):
+        final_scalar_key(Patched.A)
+
+
+@test_utils.test()
+def test_final_enum_rejects_user_override_of_mixin_dependent_hook():
+    """Reject overridden enum hooks while accepting defaults generated for the same mixins.
+
+    For example, _value_repr_ differs between Enum and IntEnum; compare against a member-free rebuild of the same bases.
+    """
+    import enum
+
+    from quadrants.lang._final.final_constant_values import final_scalar_key
+
+    class DirectIntMixin(int, enum.Enum):  # a hand-written IntEnum: its _value_repr_/_new_member_ are int's, not Enum's
+        A = 1
+        B = 2
+
+    final_scalar_key(DirectIntMixin.A)  # a legitimate mix-in default must not be flagged as a user override
+
+    class Patched(enum.Enum):
+        A = 1
+        B = 2
+
+    final_scalar_key(Patched.A)  # accepted while it holds the machinery default
+    Patched._value_repr_ = staticmethod(lambda value: "custom")  # observable as cfg.mode._value_repr_
+    with pytest.raises(TypeError, match="observable class-level behavior"):
+        final_scalar_key(Patched.A)
+
+
+@test_utils.test()
+def test_final_enum_rejects_user_added_enum_valued_class_attribute():
+    """Reject user-added enum-valued attributes, which can be rebound without changing the member key.
+
+    Declared members, aliases and generated bookkeeping such as IntFlag._boundary_ remain supported.
+    """
+    import enum
+
+    from quadrants.lang._final.final_constant_values import final_scalar_key
+
+    class WithAlias(enum.Enum):
+        A = 1
+        B = 2
+        ALIAS = 1  # a machinery-defined alias for A - keyed by member identity, must stay accepted
+
+    final_scalar_key(WithAlias.A)  # a plain enum carrying a canonical alias is accepted
+    final_scalar_key(WithAlias.ALIAS)  # the alias resolves to A and is likewise accepted
+
+    class Flags(enum.IntFlag):  # carries the enum-valued machinery sunder ``_boundary_`` (a FlagBoundary member)
+        A = 1
+        B = 2
+
+    final_scalar_key(Flags.A)  # a plain IntFlag must not be rejected for its ``_boundary_`` bookkeeping
+
+    class Mode(enum.Enum):
+        A = 1
+        B = 2
+
+    final_scalar_key(Mode.A)  # clean, accepted
+    Mode.X = Mode.A  # a user-added enum-valued class attribute (not an official member), observable and unkeyed
+    with pytest.raises(TypeError, match="observable class-level behavior"):
+        final_scalar_key(Mode.A)
+
+
+@test_utils.test()
+def test_final_enum_rejects_cross_kind_machinery_sunder():
+    """Accept generated attributes only for the enum kind that generates them.
+
+    For example, _boundary_ is bookkeeping on IntFlag but user state on plain Enum. Overriding its generated value is
+    also rejected.
+    """
+    import enum
+
+    from quadrants.lang._final.final_constant_values import final_scalar_key
+
+    class Mode(enum.Enum):
+        A = 1
+        B = 2
+
+    final_scalar_key(Mode.A)  # clean, accepted
+    Mode._boundary_ = 1  # a name generated only for Flag/IntFlag, added by a user to a plain Enum (not this shape)
+    with pytest.raises(TypeError, match="observable class-level behavior"):
+        final_scalar_key(Mode.A)
+
+    if hasattr(enum, "IntFlag") and hasattr(enum, "FlagBoundary"):
+
+        class Flags(enum.IntFlag):
+            A = 1
+            B = 2
+
+        final_scalar_key(Flags.A)  # ``_boundary_`` here is genuine machinery for this kind -> accepted
+        default_boundary = Flags._boundary_
+        other = next(b for b in enum.FlagBoundary if b is not default_boundary)
+        Flags._boundary_ = other  # override the machinery value -> observable as cfg.mode.__class__._boundary_
+        with pytest.raises(TypeError, match="observable class-level behavior"):
+            final_scalar_key(Flags.A)
+
+
+@test_utils.test()
+def test_final_enum_rejects_state_on_unselected_member():
+    """Per-member state is rejected for *any* member, not only the selected one. With ``cfg.mode = Mode.A``
+    (state-free) but a sibling carrying imperatively-assigned state (``Mode.B.unit = "m"``), the state is still
+    observable as ``cfg.mode.__class__.B.unit`` while the member-map key records only each member's value - so it must
+    be rejected."""
+    import enum
+
+    from quadrants.lang._final.final_constant_values import final_scalar_key
+
+    class Mode(enum.Enum):
+        A = 1
+        B = 2
+
+    final_scalar_key(Mode.A)  # clean, accepted
+    Mode.B.unit = "m"  # state on a *sibling* of the selected member
+    assert not Mode.A.__dict__.get("unit")  # the selected member itself stays state-free
+    with pytest.raises(TypeError, match="per-member state"):
+        final_scalar_key(Mode.A)
+
+
+@test_utils.test()
+def test_final_enum_kind_in_offline_key():
+    """Disk-cache keys distinguish Enum from IntEnum with matching names and values because their equality differs."""
+    import sys
+    import types
+
+    from quadrants.lang._final.final_constant_values import final_scalar_key
+
+    def offline_key(base_name):
+        mod = types.ModuleType("qd_enum_kind_probe")
+        sys.modules[mod.__name__] = mod
+        try:
+            exec(f"import enum\nclass Mode(enum.{base_name}):\n    A = 1\n    B = 2\n", mod.__dict__)
+            return str(final_scalar_key(mod.Mode.A, live=False))
+        finally:
+            sys.modules.pop(mod.__name__, None)
+
+    assert offline_key("Enum") != offline_key("IntEnum")
+    assert offline_key("Enum") == offline_key("Enum")  # same kind, same module/qualname -> stable reuse
+
+
+@test_utils.test()
+def test_final_subclass_structural_identified_object_rejected():
+    """Reject classes and callables in enum metadata, including nested containers.
+
+    Their behavior can change without changing their identity, making cached compiled code stale.
+    """
+    import enum
+
+    from quadrants.lang._final.final_constant_values import final_scalar_key
+
+    class Unit(enum.IntEnum):
+        VALUE = 1
+
+    def helper(a=1):  # a callable whose __defaults__ a kernel could read at compile time
+        return a
+
+    Unit.__doc__ = helper
+    with pytest.raises(TypeError, match="mutable behavior"):
+        final_scalar_key(Unit(1), live=True)
+    with pytest.raises(TypeError, match="mutable behavior"):
+        final_scalar_key(Unit(1), live=False)
+
+    class Payload:  # a class bound as a structural value
+        pass
+
+    Unit.__doc__ = Payload
+    with pytest.raises(TypeError, match="mutable behavior"):
+        final_scalar_key(Unit(1), live=False)
+
+    Unit.__doc__ = "plain"  # reset so the next rejection is attributable to the nested value, not this attr
+    Unit.__slots__ = (helper,)  # nested inside a container value -> rejected recursively
+    with pytest.raises(TypeError, match="mutable behavior"):
+        final_scalar_key(Unit(1), live=True)
+
+
+@test_utils.test()
+def test_final_subclass_structural_float_bits_in_key():
+    """Float-valued enum metadata preserves signed zero in both live and offline keys."""
+    import enum
+
+    from quadrants.lang._final.final_constant_values import final_scalar_key
+
+    class Unit(enum.IntEnum):
+        VALUE = 1
+
+    Unit.__doc__ = 0.0
+    live_before = final_scalar_key(Unit(1), live=True)
+    offline_before = str(final_scalar_key(Unit(1), live=False))
+    Unit.__doc__ = -0.0  # == 0.0 with an equal hash, but a distinct bit pattern
+    assert final_scalar_key(Unit(1), live=True) != live_before
+    assert str(final_scalar_key(Unit(1), live=False)) != offline_before
+
+
+@test_utils.test()
+def test_final_subclass_docstring_in_key():
+    """Changing an enum docstring changes both live and offline keys because compiled code can read it."""
+    import enum
+
+    from quadrants.lang._final.final_constant_values import final_scalar_key
+
+    class Unit(enum.IntEnum):
+        VALUE = 1
+
+    live_before = final_scalar_key(Unit(1), live=True)
+    offline_before = str(final_scalar_key(Unit(1), live=False))
+    Unit.__doc__ = "mutated between launches"
+    assert final_scalar_key(Unit(1), live=True) != live_before  # in-process key flips (same class object)
+    assert str(final_scalar_key(Unit(1), live=False)) != offline_before  # offline string flips too
+
+    class Mode(enum.Enum):
+        A = 1
+        B = 2
+
+    enum_before = final_scalar_key(Mode.A, live=True)
+    Mode.__doc__ = "changed"
+    assert final_scalar_key(Mode.A, live=True) != enum_before
+
+
+@test_utils.test()
+def test_final_subclass_slots_in_key():
+    """``__slots__`` is likewise structural yet readable at compile time (``cfg.x.__class__.__slots__ == ()``).
+    Reassigning it after class creation only rebinds the attribute (no new descriptors -> no state to reject), so the
+    observed value changes with the state-scan none the wiser; the key must fold it in so a stale specialization is not
+    reused."""
+    import enum
+
+    from quadrants.lang._final.final_constant_values import final_scalar_key
+
+    class Unit(enum.IntEnum):
+        VALUE = 1
+        __slots__ = ()
+
+    live_before = final_scalar_key(Unit(1), live=True)
+    offline_before = str(final_scalar_key(Unit(1), live=False))
+    Unit.__slots__ = ("relabeled",)  # rebinds the observable value without adding a real slot descriptor
+    assert final_scalar_key(Unit(1), live=True) != live_before
+    assert str(final_scalar_key(Unit(1), live=False)) != offline_before
+
+    # Container type is retained: () and [] compare unequal, so they must not collapse to the same key.
+    class Empty(enum.IntEnum):
+        VALUE = 1
+        __slots__ = ()
+
+    empty_tuple = final_scalar_key(Empty(1), live=True)
+    Empty.__slots__ = []
+    assert final_scalar_key(Empty(1), live=True) != empty_tuple
+
+    # Absent __slots__ must stay distinct from an explicit ``__slots__ = None`` ('__slots__' in cls.__dict__ differs).
+    class Absent(enum.IntEnum):
+        VALUE = 1
+
+    absent_key = final_scalar_key(Absent(1), live=True)
+    Absent.__slots__ = None
+    assert final_scalar_key(Absent(1), live=True) != absent_key
+
+    class Mode(enum.Enum):
+        A = 1
+        B = 2
+
+    enum_before = final_scalar_key(Mode.A, live=True)
+    Mode.__slots__ = ("relabeled",)
+    assert final_scalar_key(Mode.A, live=True) != enum_before
+
+
+@test_utils.test()
+def test_final_subclass_weakref_in_key():
+    """``__weakref__`` is structural-exempt yet user-rebindable and observable (``cfg.x.__class__.__weakref__``); the
+    baked scalar/enum subclasses do not carry it in their own dict, so binding it is observable class state the scan
+    ignores. It is keyed (auto-generated slot descriptors reduce to an address-free token so offline keys stay stable;
+    a user value like ``None`` is kept), not rejected."""
+    import enum
+
+    from quadrants.lang._final.final_constant_values import final_scalar_key
+
+    class Unit(enum.IntEnum):
+        VALUE = 1
+
+    live_before = final_scalar_key(Unit(1), live=True)
+    offline_before = str(final_scalar_key(Unit(1), live=False))
+    Unit.__weakref__ = None  # rebinding an exempt machinery attr to an observable value
+    assert final_scalar_key(Unit(1), live=True) != live_before
+    assert str(final_scalar_key(Unit(1), live=False)) != offline_before
+
+    class Mode(enum.Enum):
+        A = 1
+        B = 2
+
+    enum_before = final_scalar_key(Mode.A, live=True)
+    Mode.__weakref__ = None
+    assert final_scalar_key(Mode.A, live=True) != enum_before
+
+
+@test_utils.test()
+def test_final_subclass_name_in_key():
+    """``__name__`` is a mutable ``type`` getset (not in ``vars(cls)``, so the behavior scan misses it) that is
+    independently reassignable from ``__qualname__`` and observable as ``cfg.x.__class__.__name__``, so renaming a
+    class between launches must change the key."""
+    import enum
+
+    from quadrants.lang._final.final_constant_values import final_scalar_key
+
+    class Unit(enum.IntEnum):
+        VALUE = 1
+
+    live_before = final_scalar_key(Unit(1), live=True)
+    offline_before = str(final_scalar_key(Unit(1), live=False))
+    Unit.__name__ = "Renamed"  # __qualname__ still ends in ".Unit", so only a __name__-aware key separates them
+    assert final_scalar_key(Unit(1), live=True) != live_before
+    assert str(final_scalar_key(Unit(1), live=False)) != offline_before
+
+
+@test_utils.test()
+def test_final_subclass_structural_dict_value_is_lossless():
+    """A structural attr rebound to a ``dict`` must be serialized faithfully: two distinct mappings cannot collapse to
+    one token (a compile-time branch can tell them apart). A value we cannot represent faithfully is rejected, not
+    silently collapsed."""
+    import enum
+
+    from quadrants.lang._final.final_constant_values import final_scalar_key
+
+    class Unit(enum.IntEnum):
+        VALUE = 1
+
+    Unit.__slots__ = {"a": 1}
+    key_a = final_scalar_key(Unit(1), live=True)
+    Unit.__slots__ = {"b": 2}
+    assert final_scalar_key(Unit(1), live=True) != key_a  # distinct dicts -> distinct keys, no lossy collapse
+
+    class Opaque(enum.IntEnum):
+        VALUE = 1
+
+    Opaque.__slots__ = object()  # not plain data and not a descriptor/callable -> unrepresentable
+    with pytest.raises(TypeError, match="cannot be keyed faithfully"):
+        final_scalar_key(Opaque(1), live=True)
+
+
+@test_utils.test()
+def test_final_subclass_313_metadata_in_key():
+    """On Python 3.13+, changes to __firstlineno__ or __static_attributes__ must change the class key."""
+    import sys
+
+    if sys.version_info < (3, 13):
+        return
+
+    import enum
+
+    from quadrants.lang._final.final_constant_values import final_scalar_key
+
+    class Unit(enum.IntEnum):
+        VALUE = 1
+
+    live_before = final_scalar_key(Unit(1), live=True)
+    offline_before = str(final_scalar_key(Unit(1), live=False))
+    Unit.__firstlineno__ = 424242
+    assert final_scalar_key(Unit(1), live=True) != live_before
+    assert str(final_scalar_key(Unit(1), live=False)) != offline_before
+
+    class Other(enum.IntEnum):
+        VALUE = 1
+
+    static_before = final_scalar_key(Other(1), live=True)
+    Other.__static_attributes__ = ("zzz",)
+    assert final_scalar_key(Other(1), live=True) != static_before
+
+
+@test_utils.test()
+def test_final_subclass_structural_container_subclass_rejected():
+    """Reject container subclasses in enum metadata: their elements alone cannot capture extra state or identity."""
+    import enum
+
+    from quadrants.lang._final.final_constant_values import final_scalar_key
+
+    class MyList(list):
+        pass
+
+    class Unit(enum.IntEnum):
+        VALUE = 1
+
+    Unit.__slots__ = MyList()
+    with pytest.raises(TypeError, match="builtin subclass"):
+        final_scalar_key(Unit(1), live=True)
+
+
+@test_utils.test()
+def test_final_subclass_structural_foreign_descriptor_identity():
+    """A *foreign* descriptor bound in a keyed structural attr (``Unit.__weakref__ = A.__weakref__``) must carry its
+    owner's identity: its address-based ``repr`` is unkeyable and its own ``__qualname__`` is just the slot name, so
+    without the owner two distinct descriptors collapse to one token and a compile-time ``... is A.__weakref__`` branch
+    would reuse the wrong specialization."""
+    import enum
+
+    from quadrants.lang._final.final_constant_values import final_scalar_key
+
+    class OwnerA:
+        pass
+
+    class OwnerB:
+        pass
+
+    class Unit(enum.IntEnum):
+        VALUE = 1
+
+    Unit.__weakref__ = OwnerA.__dict__["__weakref__"]
+    live_a = final_scalar_key(Unit(1), live=True)
+    offline_a = str(final_scalar_key(Unit(1), live=False))
+    Unit.__weakref__ = OwnerB.__dict__["__weakref__"]  # distinct owner -> distinct qualname
+    assert final_scalar_key(Unit(1), live=True) != live_a
+    assert str(final_scalar_key(Unit(1), live=False)) != offline_a
+
+    def make_owner():  # two owners sharing a qualname but distinct identity
+        class Owner:
+            pass
+
+        return Owner
+
+    Unit.__weakref__ = make_owner().__dict__["__weakref__"]
+    live_c = final_scalar_key(Unit(1), live=True)
+    Unit.__weakref__ = make_owner().__dict__["__weakref__"]
+    assert final_scalar_key(Unit(1), live=True) != live_c  # separated by the owner's identity component
+
+
+@test_utils.test()
+def test_final_subclass_dynamic_serial_keyed_by_identity():
+    """The offline serial registry (backing every dynamic object's identity token - a subclass, its metaclass, or a
+    descriptor owner) keys by object *identity*, not ``__eq__``: a metaclass that makes distinct ``<locals>`` classes
+    compare equal with equal hashes must not alias them to one serial (a ``WeakKeyDictionary`` would), or a
+    ``fastcache`` offline key could load code baked for a different object. Each serial is stable per object and
+    distinct across objects."""
+    from quadrants.lang._final.final_class_identity import _dynamic_class_serial
+
+    class Meta(type):
+        def __eq__(cls, other):
+            return isinstance(other, Meta)
+
+        def __hash__(cls):
+            return 0
+
+    def make():
+        class Local(metaclass=Meta):
+            pass
+
+        return Local
+
+    first, second = make(), make()
+    assert first == second and hash(first) == hash(second) and first is not second  # equality-aliased, distinct id
+    serial_first = _dynamic_class_serial(first)
+    assert _dynamic_class_serial(first) == serial_first  # stable for the same object
+    assert _dynamic_class_serial(second) != serial_first  # distinct object -> distinct serial despite == aliasing
+
+
+@test_utils.test()
+def test_final_enum_key_incorporates_full_member_map():
+    """A baked ``Final`` enum member keys on the *entire* member map, not only the selected member: a kernel can read a
+    sibling at compile time (``cfg.mode.__class__.OTHER.value``), so changing another member's value must invalidate
+    the key. This matters most for a *resolvable* (module-level) enum, whose class-identity component is ``None`` (keyed
+    by ``module``/``qualname``): without the member map, redefining the module's enum with a different sibling value -
+    in-process, or in a separate ``fastcache`` process that otherwise only hashes kernel source - would reuse the stale
+    specialization. Identical definitions still key identically (legitimate reuse preserved), and an unsupported/mutable
+    sibling value is rejected even when the selected member is a plain scalar."""
+    import enum
+    import sys
+    import types
+
+    from quadrants.lang._final.final_constant_values import final_scalar_key
+
+    mod_name = "qd_member_map_probe"
+    mod = types.ModuleType(mod_name)
+    sys.modules[mod_name] = mod
+    try:
+
+        def define(b_value):
+            class Mode(enum.Enum):
+                A = 1
+                B = b_value
+
+            Mode.__module__ = mod_name
+            Mode.__qualname__ = "Mode"
+            mod.Mode = Mode  # resolvable via module+qualname -> None class-identity component (member map is the guard)
+            return Mode
+
+        key_b2 = final_scalar_key(define(2).A)
+        assert final_scalar_key(define(2).A) == key_b2  # identical resolvable definition -> identical key (reuse kept)
+        changed = define(3)  # a changed *sibling* value, selected member A and class name unchanged
+        assert final_scalar_key(changed.A) != key_b2  # in-process key flips
+        assert str(final_scalar_key(changed.A)) != str(key_b2)  # and the offline (fastcache) string flips too
+
+        class Bad(enum.Enum):
+            A = 1
+            B = [1, 2]  # a mutable, unkeyable sibling - observable as cfg.mode.__class__.B.value
+
+        with pytest.raises(TypeError, match="not a supported"):
+            final_scalar_key(Bad.A)
+    finally:
+        del sys.modules[mod_name]
+
+
+@test_utils.test()
+def test_final_outer_mapping_cache_disabled_for_final_bearing_arg():
+    """``TemplateMapper.lookup`` keeps an instance-keyed ``(count, key)`` cache that returns the prior result for the
+    same live argument *before* calling ``extract()``. For a Final-bearing argument that would bypass
+    ``final_scalar_key``'s per-launch revalidation - so a launch could reuse the specialization compiled before a
+    ``Final`` value's class was monkey-patched behaviorful. This cache is therefore disabled for any mapper carrying a
+    Final-bearing argument: it stores nothing and revalidates every launch. A Final-free mapper still caches, so the
+    common hot path is untouched."""
+    import enum
+    from typing import Final
+
+    from quadrants.lang._template_mapper import TemplateMapper
+    from quadrants.lang.kernel_arguments import ArgMetadata
+
+    @dataclass(frozen=True)
+    class Plain:
+        a: int
+
+    plain_mapper = TemplateMapper([ArgMetadata(Plain, "p")], [])
+    p = Plain(a=1)
+    plain_mapper.lookup(False, (p,))
+    plain_mapper.lookup(False, (p,))
+    assert plain_mapper._mapping_cache, "a Final-free mapper must keep its instance-keyed (count, key) cache"
+
+    class Mode(enum.Enum):
+        A = 0
+        B = 1
+
+    @dataclass(frozen=True)
+    class Cfg:
+        mode: Final[Mode]
+
+    final_mapper = TemplateMapper([ArgMetadata(Cfg, "cfg")], [])
+    cfg = Cfg(mode=Mode.A)
+    final_mapper.lookup(False, (cfg,))  # clean enum accepted on the first launch
+    assert not final_mapper._mapping_cache, "a Final-bearing mapper must not populate the instance-keyed cache"
+
+    # Monkey-patch the enum class behaviorful; the SAME live instance must now be re-rejected, proving the second
+    # lookup re-ran extract()+validation rather than returning a cached key.
+    Mode._generate_next_value_ = staticmethod(lambda name, start, count, last_values: name)
+    with pytest.raises(TypeError, match="observable class-level behavior"):
+        final_mapper.lookup(False, (cfg,))
+
+
+@pytest.mark.parametrize("base", [int, float, str, np.int64, np.float64, np.str_])
+@pytest.mark.parametrize("live", [False, True])
+@test_utils.test()
+def test_final_rejects_custom_scalar_subclasses(base: type, live: bool) -> None:
+    """Reject even empty scalar subclasses, including enum underlying values."""
+    import enum
+
+    from quadrants.lang._final.final_constant_values import final_scalar_key
+
+    class Custom(base):
+        pass
+
+    value = Custom(1)
+    with pytest.raises(TypeError, match="Custom scalar subclasses"):
+        final_scalar_key(value, live=live)
+
+    class Mode(enum.Enum):
+        VALUE = value
+
+    with pytest.raises(TypeError, match="Custom scalar subclasses"):
+        final_scalar_key(Mode.VALUE, live=live)
+
+
+@test_utils.test()
+def test_final_custom_scalar_rejected_when_accessed() -> None:
+    """Report an unsupported Final scalar when a kernel receives its containing dataclass."""
+    from typing import Final
+
+    class Custom(int):
+        pass
+
+    @dataclass(frozen=True)
+    class Config:
+        count: Final[int]
+
+    @qd.kernel
+    def read(config: Config) -> qd.i32:
+        return config.count
+
+    with pytest.raises(TypeError, match="Custom scalar subclasses"):
+        read(Config(Custom(1)))
+
+
+@pytest.mark.parametrize(
+    "value", [np.bool_(True), np.int64(3), np.uint64(3), np.float32(0.5), np.float64(0.5), np.str_("x")]
+)
+@test_utils.test()
+def test_final_rejects_numpy_scalars(value: object) -> None:
+    """Reject NumPy scalars directly, in enum values, and as dataclass Final arguments."""
+    from typing import Final
+
+    from quadrants.lang._final.final_constant_values import final_scalar_key
+
+    class Mode(enum.Enum):
+        VALUE = value
+
+    for live in (False, True):
+        for invalid in (value, Mode.VALUE):
+            with pytest.raises(TypeError, match="NumPy scalars are not supported"):
+                final_scalar_key(invalid, live=live)
+
+    @dataclass(frozen=True)
+    class Config:
+        count: Final[int]
+
+    @qd.kernel
+    def read(config: Config) -> qd.i32:
+        return qd.static(int(config.count))
+
+    with pytest.raises(TypeError, match="NumPy scalars are not supported"):
+        read(Config(value))

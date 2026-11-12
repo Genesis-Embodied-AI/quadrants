@@ -94,7 +94,7 @@ void make_thread_local_offload(OffloadedStmt *offload) {
   {
     auto valid_global_ptrs = find_global_reduction_destinations<GlobalPtrStmt>(offload, [](GlobalPtrStmt *dest) {
       // We can only optimized reductions to global ptrs with form like
-      // loss[None] (0-D fields) for now.
+      // loss[()] (0-D fields) for now.
       // No TLS on quant types.
       return (dest->snode->type == SNodeType::place) && dest->indices.empty() &&
              (dest->ret_type.ptr_removed()->is<PrimitiveType>() || dest->ret_type.ptr_removed()->is<TensorType>());

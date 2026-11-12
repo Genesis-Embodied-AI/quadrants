@@ -9,9 +9,9 @@ namespace {
 // range-for. `MakeAdjoint` treats each iteration of an offload-level loop as independent and only chases loop-carried
 // dependencies through `AdStackAllocaJudger`, which inspects local `AllocaStmt`s - cross-iteration dependencies through
 // `GlobalStoreStmt` / `GlobalLoadStmt` on a `has_adjoint()` SNode are silently dropped. A kernel like `out[i] =
-// out[i-1] + x[None]` therefore returns wrong gradients with no diagnostic, even with `ad_stack_experimental_enabled`.
+// out[i-1] + x[()]` therefore returns wrong gradients with no diagnostic, even with `ad_stack_experimental_enabled`.
 // Pair every same-SNode (store, load) and raise when the index Stmt*s differ. Same-Stmt indices (`out[i] = out[i] +
-// x[None]`) are in-place accumulation and the per-iteration backward pass handles those correctly; pointer equality on
+// x[()]`) are in-place accumulation and the per-iteration backward pass handles those correctly; pointer equality on
 // the SSA index Stmts after the `pre_autodiff` simplify (`compile_to_offloads.cpp:121`) is enough to distinguish the
 // two cases. Walks the body of every direct-child `RangeForStmt` of `root`; nested for-loops' bodies are skipped via
 // `inside_nested_` because their cross-iter behavior is governed by the existing IB / adstack machinery, not by this

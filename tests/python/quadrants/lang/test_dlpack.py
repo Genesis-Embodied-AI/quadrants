@@ -7,7 +7,7 @@ torch = pytest.importorskip("torch")
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 pytestmark = pytest.mark.needs_torch
 
@@ -253,7 +253,7 @@ def test_dlpack_mixed_types_memory_alignment_field(dtype, shape: tuple[int]) -> 
     pos = qd.field(qd.types.vector(3, vtype), shape=(1,))
 
     @qd.kernel
-    def kernel_update_render_fields(pos: qd.template()):
+    def kernel_update_render_fields(pos: qd.Template):
         pos[0] = qd.Vector([1, 2, 3], dt=vtype)
 
     kernel_update_render_fields(pos)
@@ -278,7 +278,7 @@ def test_dlpack_multiple_mixed_types_memory_alignment_field() -> None:
     pos = qd.field(qd.types.vector(3, vtype), shape=(1,))
 
     @qd.kernel
-    def kernel_update_render_fields(pos: qd.template()):
+    def kernel_update_render_fields(pos: qd.Template):
         pos[0] = qd.Vector([1, 2, 3], dt=vtype)
 
     kernel_update_render_fields(pos)
@@ -299,7 +299,7 @@ def test_dlpack_joints_case_memory_alignment_field() -> None:
     def kernel_init_joint_fields(
         joints_dof_start: qd.types.ndarray(),
         joints_dof_end: qd.types.ndarray(),
-        joints_n_dofs: qd.template(),
+        joints_n_dofs: qd.Template,
     ):
         for I_j in qd.grouped(joints_n_dofs):
             joints_n_dofs[I_j] = joints_dof_end[I_j] - joints_dof_start[I_j]
@@ -334,3 +334,25 @@ def test_dlpack_field_memory_allocation_before_to_dlpack():
     assert (
         second_time_tc == second_time.to_torch(device=second_time_tc.device)
     ).all(), f"{second_time_tc} != {second_time.to_torch(device=second_time_tc.device)}"
+
+
+@test_utils.test(arch=[qd.cpu])
+@pytest.mark.run_in_serial
+@pytest.mark.slow
+def test_dlpack_field_offset_past_2gib():
+    # Fields share one SNode tree, so the second field's in-tree byte offset exceeds 2^31; the DLPack export must carry
+    # it without truncation instead of aliasing the tree base.
+    pad = qd.field(dtype=qd.f32, shape=(560_000_000,))
+    victim = qd.field(dtype=qd.f32, shape=(1000,))
+
+    @qd.kernel
+    def fill():
+        for i in pad:
+            pad[i] = 1.0
+        for i in victim:
+            victim[i] = qd.cast(i, qd.f32)
+
+    fill()
+    qd.sync()
+    victim_tc = torch.utils.dlpack.from_dlpack(victim.to_dlpack())
+    np.testing.assert_array_equal(victim_tc.cpu().numpy(), np.arange(1000, dtype=np.float32))

@@ -1,6 +1,6 @@
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test()
@@ -139,7 +139,7 @@ def test_grouped_ndrange_0d():
 
     test()
 
-    assert val[None] == 42
+    assert val[()] == 42
 
 
 @test_utils.test()
@@ -153,7 +153,7 @@ def test_static_grouped_ndrange_0d():
 
     test()
 
-    assert val[None] == 42
+    assert val[()] == 42
 
 
 @test_utils.test()

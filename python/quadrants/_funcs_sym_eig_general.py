@@ -21,9 +21,7 @@ The outer sweep loop is dispatched by size:
 * ``N > 4`` — runtime ``range``: a static unroll of ``MAX_SWEEPS`` × O(N²) Givens steps makes compile time grow
   quickly with N, so the sweep count is kept as a runtime loop to bound it. This branch is tagged
   ``loop_config(serialize=True)`` so a calling ``@qd.kernel`` without its own outermost ``for ... in range(...)``
-  still executes the sweeps sequentially on a single thread instead of parallelizing them — see
-  ``perso_hugh/doc/quadrants_runtime_range_in_func_parallelized_gotcha_20260510.md`` for the underlying gotcha that
-  this directive sidesteps.
+  still executes the sweeps sequentially on a single thread instead of parallelizing them.
 
 The inner ``(p, q)`` and per-row ``static(range)`` updates are always unrolled, so each Givens step is straight-line
 code regardless of the sweep-loop form. The sweep body is mutated in place on ``A_work`` / ``eigvecs``; it is inlined

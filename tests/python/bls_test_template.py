@@ -48,7 +48,7 @@ def bls_test_template(dim, N, bs, stencil, block_dim=None, scatter=False, benchm
             x[I] = s
 
     @qd.kernel
-    def apply(use_bls: qd.template(), y: qd.template()):
+    def apply(use_bls: qd.Template, y: qd.Template):
         if qd.static(use_bls and not scatter):
             qd.block_local(x)
         if qd.static(use_bls and scatter):
@@ -85,13 +85,13 @@ def bls_test_template(dim, N, bs, stencil, block_dim=None, scatter=False, benchm
         for I in qd.grouped(y2):
             if y[I] != y2[I]:
                 print("check failed", I, y[I], y2[I])
-                mismatch[None] = 1
+                mismatch[()] = 1
 
     check()
 
     qd.profiler.print_kernel_profiler_info()
 
-    assert mismatch[None] == 0
+    assert mismatch[()] == 0
 
 
 def bls_particle_grid(
@@ -181,7 +181,7 @@ def bls_particle_grid(
     scatter_weight = (N * N / M) * 0.01
 
     @qd.kernel
-    def p2g(use_shared: qd.template(), m: qd.template()):
+    def p2g(use_shared: qd.Template, m: qd.Template):
         qd.loop_config(block_dim=256)
         if qd.static(use_shared):
             qd.block_local(m)
@@ -213,7 +213,7 @@ def bls_particle_grid(
             m1[i, j] = qd.random()
 
     @qd.kernel
-    def g2p(use_shared: qd.template(), s: qd.template()):
+    def g2p(use_shared: qd.Template, s: qd.Template):
         qd.loop_config(block_dim=256)
         if qd.static(use_shared):
             qd.block_local(m1)
@@ -236,7 +236,7 @@ def bls_particle_grid(
             s[p] = tot
 
     @qd.kernel
-    def g2p_naive(s: qd.template()):
+    def g2p_naive(s: qd.Template):
         qd.loop_config(block_dim=256)
         for p in x:
             u = qd.floor(x[p] * N).cast(qd.i32)
@@ -257,17 +257,17 @@ def bls_particle_grid(
         for i in range(grid_offset[0], grid_offset[0] + N):
             for j in range(grid_offset[1], grid_offset[1] + N):
                 if abs(m1[i, j] - m3[i, j]) > 1e-4:
-                    err[None] = 1
+                    err[()] = 1
                 if abs(m2[i, j] - m3[i, j]) > 1e-4:
-                    err[None] = 1
+                    err[()] = 1
 
     @qd.kernel
     def check_s():
         for i in range(M):
             if abs(s1[i] - s2[i]) > 1e-4:
-                err[None] = 1
+                err[()] = 1
             if abs(s1[i] - s3[i]) > 1e-4:
-                err[None] = 1
+                err[()] = 1
 
     if scatter:
         for i in range(max(benchmark, 1)):
@@ -282,4 +282,4 @@ def bls_particle_grid(
             g2p_naive(s3)
         check_s()
 
-    assert not err[None]
+    assert not err[()]

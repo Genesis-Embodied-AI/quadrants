@@ -5,7 +5,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 _ALL_DTYPES = [qd.f16, qd.f32, qd.f64, qd.i8, qd.i16, qd.i32, qd.i64, qd.u1, qd.u8, qd.u16, qd.u32, qd.u64]
 _64BIT_DTYPES = {qd.f64, qd.i64, qd.u64}
@@ -123,9 +123,3 @@ def test_pickle_all_dtypes(dtype):
     np.testing.assert_array_equal(b.to_numpy(), a.to_numpy())
     assert b.shape == a.shape
     assert b.dtype == a.dtype
-
-
-# Note: the legacy ``Ndarray.layout = Layout.SOA`` SOA-pickle-rejection test was removed in stork-17.
-# ``Ndarray.layout`` is now a read-only property reporting the canonical-axis permutation tuple (or ``None``); the old
-# enum-based ``Layout.SOA`` was replaced by stork-13/14's per-tensor layout API and the SOA-rejection branch in
-# ``_ndarray_pickle.serialize`` became unreachable.

@@ -7,7 +7,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 RET_SUCCESS = 42
 

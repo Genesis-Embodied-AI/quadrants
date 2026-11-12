@@ -19,7 +19,7 @@ namespace quadrants::lang::spirv {
 
 TEST(AdStackSizerShader, DumpBinary) {
   DeviceCapabilityConfig caps;
-  caps.set(DeviceCapability::spirv_version, 0x10400);
+  caps.set(DeviceCapability::spirv_version, 0x10500);
   caps.set(DeviceCapability::spirv_has_int8, 1);
   caps.set(DeviceCapability::spirv_has_int16, 1);
   caps.set(DeviceCapability::spirv_has_int64, 1);
@@ -45,7 +45,7 @@ TEST(AdStackSizerShader, DumpBinary) {
 TEST(AdStackSizerShader, GateReturnsEmptyWhenRequiredCapIsMissing) {
   auto make_caps = []() {
     DeviceCapabilityConfig caps;
-    caps.set(DeviceCapability::spirv_version, 0x10400);
+    caps.set(DeviceCapability::spirv_version, 0x10500);
     caps.set(DeviceCapability::spirv_has_int8, 1);
     caps.set(DeviceCapability::spirv_has_int16, 1);
     caps.set(DeviceCapability::spirv_has_int64, 1);

@@ -47,7 +47,7 @@ FrontendAssignStmt::FrontendAssignStmt(const Expr &lhs, const Expr &rhs, const D
 }
 
 FrontendIfStmt::FrontendIfStmt(const FrontendIfStmt &o)
-    : Stmt(o.dbg_info),
+    : Stmt(o),
       condition(o.condition),
       true_statements(o.true_statements->clone()),
       false_statements(o.false_statements->clone()) {
@@ -96,7 +96,7 @@ FrontendForStmt::FrontendForStmt(const Expr &loop_var,
 }
 
 FrontendForStmt::FrontendForStmt(const FrontendForStmt &o)
-    : Stmt(o.dbg_info),
+    : Stmt(o),
       snode(o.snode),
       external_tensor(o.external_tensor),
       mesh(o.mesh),
@@ -111,6 +111,7 @@ FrontendForStmt::FrontendForStmt(const FrontendForStmt &o)
       mem_access_opt(o.mem_access_opt),
       block_dim(o.block_dim),
       stream_parallel_group_id(o.stream_parallel_group_id),
+      graph_parallel_region_id(o.graph_parallel_region_id),
       graph_do_while_level_id(o.graph_do_while_level_id),
       checkpoint_id(o.checkpoint_id),
       loop_name(o.loop_name) {
@@ -122,6 +123,7 @@ void FrontendForStmt::init_config(Arch arch, const ForLoopConfig &config) {
   mem_access_opt = config.mem_access_opt;
   block_dim = config.block_dim;
   stream_parallel_group_id = config.stream_parallel_group_id;
+  graph_parallel_region_id = config.graph_parallel_region_id;
   graph_do_while_level_id = config.graph_do_while_level_id;
   checkpoint_id = config.checkpoint_id;
   loop_name = config.loop_name;
@@ -152,8 +154,7 @@ void FrontendForStmt::add_loop_var(const Expr &loop_var) {
 FrontendFuncDefStmt::FrontendFuncDefStmt(const FrontendFuncDefStmt &o) : funcid(o.funcid), body(o.body->clone()) {
 }
 
-FrontendWhileStmt::FrontendWhileStmt(const FrontendWhileStmt &o)
-    : Stmt(o.dbg_info), cond(o.cond), body(o.body->clone()) {
+FrontendWhileStmt::FrontendWhileStmt(const FrontendWhileStmt &o) : Stmt(o), cond(o.cond), body(o.body->clone()) {
 }
 
 void ArgLoadExpression::type_check(const CompileConfig *) {
@@ -1032,7 +1033,7 @@ void AtomicOpExpression::type_check(const CompileConfig *config) {
     }
     // Cast `expected` to the destination element type so it matches what the codegen will load from memory.
     // LLVM `CreateAtomicCmpXchg` and SPIR-V `OpAtomicCompareExchange` both require the comparator to have the
-    // same width as the in-memory value; without this, a common call like `qd.atomic_cas(i64_field[None], 0, 1)`
+    // same width as the in-memory value; without this, a common call like `qd.atomic_cas(i64_field[()], 0, 1)`
     // would leave `expected` at the i32 default and produce invalid IR. Mirrors how `val` gets widened later in
     // `irpass::type_check::type_check_store`, which doesn't see `expected`.
     if (expected_dtype != ret_element_type) {
@@ -1278,6 +1279,11 @@ void ASTBuilder::insert(std::unique_ptr<Stmt> &&stmt, int location) {
   // for-loop body are also stamped, but harmlessly: they live inside the for-loop's task body and never reach the
   // offloader's root-level pending-serial bucket.
   stmt->region_tag = {current_graph_do_while_level_id_, current_stream_parallel_group_id_, current_checkpoint_id_};
+  // Also stamp the enclosing `qd.graph_parallel_context()` region id. For-loops get this from ForLoopConfig, but a bare
+  // side-effecting store written directly in a `qd.graph_parallel()` section has no ForLoopConfig -- without this stamp
+  // its offloaded serial task lands in region 0, so two back-to-back serial-only regions would merge into one fork/join
+  // and the second could race the first.
+  stmt->region_tag.graph_parallel_region_id = current_graph_parallel_region_id_;
   stack_.back()->insert(std::move(stmt), location);
 }
 
@@ -1510,6 +1516,7 @@ void ASTBuilder::warn_if_named_nested_loop() {
 void ASTBuilder::begin_frontend_range_for(const Expr &i, const Expr &s, const Expr &e, const DebugInfo &dbg_info) {
   warn_if_named_nested_loop();
   for_loop_dec_.config.stream_parallel_group_id = current_stream_parallel_group_id_;
+  for_loop_dec_.config.graph_parallel_region_id = current_graph_parallel_region_id_;
   for_loop_dec_.config.graph_do_while_level_id = current_graph_do_while_level_id_;
   for_loop_dec_.config.checkpoint_id = current_checkpoint_id_;
   auto stmt_unique = std::make_unique<FrontendForStmt>(i, s, e, arch_, for_loop_dec_.config, dbg_info);
@@ -1527,6 +1534,7 @@ void ASTBuilder::begin_frontend_struct_for_on_snode(const ExprGroup &loop_vars,
              "qd.loop_config(serialize=True) does not have effect on the struct for. "
              "The execution order is not guaranteed.");
   for_loop_dec_.config.stream_parallel_group_id = current_stream_parallel_group_id_;
+  for_loop_dec_.config.graph_parallel_region_id = current_graph_parallel_region_id_;
   for_loop_dec_.config.graph_do_while_level_id = current_graph_do_while_level_id_;
   for_loop_dec_.config.checkpoint_id = current_checkpoint_id_;
   auto stmt_unique = std::make_unique<FrontendForStmt>(loop_vars, snode, arch_, for_loop_dec_.config, dbg_info);
@@ -1544,6 +1552,7 @@ void ASTBuilder::begin_frontend_struct_for_on_external_tensor(const ExprGroup &l
              "qd.loop_config(serialize=True) does not have effect on the struct for. "
              "The execution order is not guaranteed.");
   for_loop_dec_.config.stream_parallel_group_id = current_stream_parallel_group_id_;
+  for_loop_dec_.config.graph_parallel_region_id = current_graph_parallel_region_id_;
   for_loop_dec_.config.graph_do_while_level_id = current_graph_do_while_level_id_;
   for_loop_dec_.config.checkpoint_id = current_checkpoint_id_;
   auto stmt_unique =
@@ -1563,6 +1572,7 @@ void ASTBuilder::begin_frontend_mesh_for(const Expr &i,
              "qd.loop_config(serialize=True) does not have effect on the mesh for. "
              "The execution order is not guaranteed.");
   for_loop_dec_.config.stream_parallel_group_id = current_stream_parallel_group_id_;
+  for_loop_dec_.config.graph_parallel_region_id = current_graph_parallel_region_id_;
   for_loop_dec_.config.graph_do_while_level_id = current_graph_do_while_level_id_;
   for_loop_dec_.config.checkpoint_id = current_checkpoint_id_;
   auto stmt_unique =

@@ -14,6 +14,7 @@
 #endif
 #include "quadrants/system/timer.h"
 #include "quadrants/ir/analysis.h"
+#include "quadrants/ir/statements.h"
 #include "quadrants/ir/transforms.h"
 #include "quadrants/analysis/offline_cache_util.h"
 
@@ -63,6 +64,10 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
   auto &offloads = block->statements;
   std::vector<std::unique_ptr<LLVMCompiledTask>> data(offloads.size());
   for (int i = 0; i < offloads.size(); i++) {
+    // Record each task's kernel-wide index (clone() carries it onto the per-task copy below). Each task is then
+    // lowered in isolation, where its one-task block's local index is always 0, so QD_DUMP_CFG reads this to give
+    // per-task CFG dumps a collision-free `_task<i>` name. Unconditional and inert -- never affects codegen.
+    offloads[i]->as<OffloadedStmt>()->task_index = i;
     auto compile_func = [&, i] {
       tlctx_.fetch_this_thread_struct_module();
       auto offload = irpass::analysis::clone(offloads[i].get());

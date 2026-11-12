@@ -2,6 +2,7 @@
 #include "quadrants/ir/analysis.h"
 #include "quadrants/ir/statements.h"
 #include "quadrants/ir/transforms.h"
+#include "quadrants/ir/type_utils.h"
 #include "quadrants/ir/visitors.h"
 #include "quadrants/system/profiler.h"
 
@@ -78,12 +79,36 @@ class WholeKernelCSE : public BasicStmtVisitor {
   std::vector<std::vector<std::pair<std::size_t, Stmt *>>> scope_inserts_;
   DelayedIRModifier modifier_;
 
+  // When true, only address-computation statements (Global/External/MatrixPtr) are eliminated; all other statements
+  // are left untouched. Used pre-offload to merge same-address read/write pointers (the cheap, load-bearing part of
+  // whole-kernel CSE) without doing the expensive whole-kernel compute dedup, which is deferred to per-task CSE.
+  bool ptrs_only_ = false;
+
  public:
   using BasicStmtVisitor::visit;
 
-  WholeKernelCSE() {
+  explicit WholeKernelCSE(bool ptrs_only = false) : ptrs_only_(ptrs_only) {
     allow_undefined_visitor = true;
     invoke_default_visitor = true;
+  }
+
+  static bool is_ptr_stmt(Stmt *stmt) {
+    return stmt->is<GlobalPtrStmt>() || stmt->is<ExternalPtrStmt>() || stmt->is<MatrixPtrStmt>();
+  }
+
+  // What ptrs_only mode is allowed to eliminate: address-computation statements PLUS pure integer (addressing)
+  // arithmetic. The latter is required because two same-address pointers only prove equal (value_diff_ptr_index ->
+  // FindDirectValueBaseAndOffset) once their index arithmetic is itself merged to a common base statement. Global
+  // loads/stores are never eliminable (common_statement_eliminable()==false), so this stays sound; float solver
+  // compute is left untouched and deferred to per-task CSE.
+  static bool eligible_in_ptrs_only(Stmt *stmt) {
+    if (is_ptr_stmt(stmt)) {
+      return true;
+    }
+    if ((Type *)stmt->ret_type == nullptr) {
+      return false;
+    }
+    return is_integral(stmt->ret_type.get_element_type());
   }
 
   bool is_done(Stmt *stmt) {
@@ -99,8 +124,12 @@ class WholeKernelCSE : public BasicStmtVisitor {
     // Use the dynamic type via `typeid(*stmt)` - `typeid(stmt)` operates on the pointer expression and returns the
     // `Stmt*` static type for every input, collapsing every statement class into the same hash component.
     auto hash_type = std::hash<std::type_index>{}(std::type_index(typeid(*stmt)));
-    if (stmt->is<GlobalPtrStmt>() || stmt->is<LoopUniqueStmt>()) {
-      // special cases in common_statement_eliminable()
+    if (stmt->is<GlobalPtrStmt>() || stmt->is<ExternalPtrStmt>() || stmt->is<LoopUniqueStmt>()) {
+      // special cases in common_statement_eliminable(): these bucket by type alone so every same-typed candidate is
+      // compared via the value-based check below (definitely_same_address / same_value), rather than by operand-pointer
+      // identity. ExternalPtr needs this too: two accesses to the same ndarray address can have distinct index-compute
+      // statements (not yet merged), so operand-address hashing would split them into separate buckets and miss the
+      // merge -- leaving the read/write pointers split for cache_loop_invariant_global_vars (the ndarray break-flag).
       return hash_type;
     }
     auto op = stmt->get_operands();
@@ -160,6 +189,10 @@ class WholeKernelCSE : public BasicStmtVisitor {
     // container_statement does not need to be CSE-ed
     if (stmt->is_container_statement())
       return;
+    // Pointers-only mode: skip every non-address / non-integer-addressing statement (leave float compute CSE to
+    // per-task CSE).
+    if (ptrs_only_ && !eligible_in_ptrs_only(stmt))
+      return;
     // Generic visitor for all CSE-able statements.
     std::size_t hash_value = operand_hash(stmt);
     if (is_done(stmt)) {
@@ -218,8 +251,8 @@ class WholeKernelCSE : public BasicStmtVisitor {
     }
 
     // Move common statements at the beginning or the end of both branches
-    // outside.
-    if (if_stmt->true_statements && if_stmt->false_statements) {
+    // outside. Skipped in pointers-only mode: we do not want to relocate arbitrary compute.
+    if (!ptrs_only_ && if_stmt->true_statements && if_stmt->false_statements) {
       auto &true_clause = if_stmt->true_statements;
       auto &false_clause = if_stmt->false_statements;
       if (irpass::analysis::same_statements(true_clause->statements[0].get(), false_clause->statements[0].get())) {
@@ -246,8 +279,8 @@ class WholeKernelCSE : public BasicStmtVisitor {
       if_stmt->false_statements->accept(this);
   }
 
-  static bool run(IRNode *node) {
-    WholeKernelCSE eliminator;
+  static bool run(IRNode *node, bool ptrs_only = false) {
+    WholeKernelCSE eliminator(ptrs_only);
     bool modified = false;
     while (true) {
       node->accept(&eliminator);
@@ -260,10 +293,110 @@ class WholeKernelCSE : public BasicStmtVisitor {
   }
 };
 
+namespace {
+
+// Collect the top-level offloaded tasks of |root| iff |root| is an already-offloaded kernel body (a Block whose
+// statements are all OffloadedStmt). Empty otherwise.
+std::vector<OffloadedStmt *> collect_offloaded_tasks(IRNode *root) {
+  std::vector<OffloadedStmt *> tasks;
+  auto *block = root->cast<Block>();
+  if (block == nullptr || block->statements.empty()) {
+    return tasks;
+  }
+  for (auto &stmt : block->statements) {
+    if (!stmt->is<OffloadedStmt>()) {
+      return {};
+    }
+  }
+  for (auto &stmt : block->statements) {
+    tasks.push_back(stmt->as<OffloadedStmt>());
+  }
+  return tasks;
+}
+
+// Run CSE on a single offloaded task, scoped to that task alone via a throwaway wrapper block.
+bool cse_one_task(Block *parent, OffloadedStmt *off, bool ptrs_only = false) {
+  const int location = parent->locate(off);
+  QD_ASSERT(location != -1);
+  Block wrapper;
+  wrapper.insert(parent->extract(off));
+  const bool modified = WholeKernelCSE::run(&wrapper, ptrs_only);
+  parent->insert(wrapper.extract(off), location);
+  return modified;
+}
+
+}  // namespace
+
 namespace irpass {
 bool whole_kernel_cse(IRNode *root) {
   QD_AUTO_PROF;
   return WholeKernelCSE::run(root);
+}
+
+// Cheap whole-kernel merge of same-address pointer statements only (Global/External/MatrixPtr), leaving all compute
+// alone. Run pre-offload (before the first flag_access) so a global's read and write pointers become one shared,
+// activate=true pointer -- the precondition cache_loop_invariant_global_vars relies on to cache conditional/in-if
+// stores. This is the load-bearing part of whole-kernel CSE; the expensive compute dedup stays per-task.
+bool merge_global_ptrs(IRNode *root) {
+  QD_AUTO_PROF;
+  // Defensive: this is intended to run exactly once PRE-offload (single call in compile_to_offloads, before the first
+  // flag_access). It must never run post-offload -- per_task_cse handles pointers within each task there, and a
+  // whole-kernel pointer CSE over an offloaded kernel is both pointless and expensive. Skip if any top-level
+  // OffloadedStmt is present.
+  if (auto *block = root->cast<Block>()) {
+    for (auto &stmt : block->statements) {
+      if (stmt->is<OffloadedStmt>()) {
+        return false;
+      }
+    }
+  }
+  return WholeKernelCSE::run(root, /*ptrs_only=*/true);
+}
+
+// Full per-task CSE run POST-offload, on the pre-split monolith, right after offload (before flag_access #2 and
+// simplify_III's LICM). This is the post-offload analog of the pre-offload merge_global_ptrs: main runs
+// whole_kernel_cse inside every full_simplify -- including the post-offload simplify_III that precedes
+// cache_loop_invariant_global_vars -- which unifies each global's read and write pointers so the caching pass sees
+// one shared, loop-invariant pointer and caches soundly. Per-task CSE (per_task_cse) skips the monolith and runs in
+// the codegen workers, which is AFTER cache_loop, so without this pass cache_loop sees split read/write pointers and
+// either caches a stale local (miscompile: the solver break flag never updates -> non-terminating loop / iteration
+// cap) or must decline to cache (lost optimization, ~12% on contact-heavy GJK scenes). Fields are already unified by
+// the pre-offload merge_global_ptrs, but ndarray accesses only become ExternalPtrStmts during offload, so they can
+// only be unified here. Full CSE (not pointers-only) is required: an ExternalPtr merges with another only once their
+// index-compute statements are themselves merged. Scoped per task (independent tasks are never cross-merged); still
+// cheaper than main's cross-task whole_kernel_cse because each task's CSE buckets are smaller.
+bool cse_offloaded_tasks(IRNode *root) {
+  QD_AUTO_PROF;
+  auto tasks = collect_offloaded_tasks(root);
+  if (tasks.empty()) {
+    return false;
+  }
+  auto *block = root->as<Block>();
+  bool modified = false;
+  for (auto *off : tasks) {
+    if (cse_one_task(block, off)) {
+      modified = true;
+    }
+  }
+  return modified;
+}
+
+// Per-offloaded-task CSE, parallelized across the codegen worker pool. The post-offload full_simplify passes
+// (offload_to_executable: before_lower_access / simplify_IV / scalarize) run inside compile_task, which is enqueued
+// per task to the codegen worker pool. At that point each worker's block holds exactly ONE offloaded task, so CSE
+// runs here -> per task, in parallel, inside the simplify fixpoint (full quality). On the pre-split monolith
+// (full_simplify in compile_to_offloads, where the block still holds every task) CSE is skipped: it is deferred to
+// the parallel per-task pass above. Tasks are optimized independently, so doing all CSE in the workers is
+// value-identical to doing it on the monolith -- just parallel. Before offload there are no offloaded tasks, so CSE
+// is deferred likewise.
+bool per_task_cse(IRNode *root) {
+  QD_AUTO_PROF;
+  auto tasks = collect_offloaded_tasks(root);
+  if (tasks.size() != 1) {
+    return false;
+  }
+  auto *block = root->as<Block>();
+  return cse_one_task(block, tasks[0]);
 }
 }  // namespace irpass
 

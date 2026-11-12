@@ -42,13 +42,14 @@ While the repository still resembles upstream in structure, major changes includ
 
 ### Removed components
 
-To focus the compiler and reduce maintenance burden, we removed: GUI/GGUI, C-API, AOT, DX11/DX12, iOS/Android, OpenGL/GLES, argpack, CLI.
+To focus the compiler and reduce maintenance burden, we removed: GUI/GGUI, C-API, AOT, DX11/DX12, iOS/Android,
+OpenGL/GLES, argpack, CLI, SourceBuilder.
 
 ### Performance
 
 * **Reduced launch latency** — ndarray CPU performance improved **4.5×**; ndarray GPU performance went from 11× slower than fields to ~30% slower (5090 GPU, Genesis benchmark)
 * **[Fastcache](https://genesis-embodied-ai.github.io/quadrants/user_guide/fastcache.html)** — opt-in source-level cache (`@qd.kernel(fastcache=True)`) that bypasses front-end AST parsing; reduces warm-cache kernel load from **7.2 s → 0.3 s** on Genesis benchmarks
-* **[GPU Graphs](https://genesis-embodied-ai.github.io/quadrants/user_guide/graph.html)** — `@qd.kernel(graph=True)` captures kernel sequences into a graph; `qd.graph_do_while` runs GPU-side iteration loops (hardware conditional nodes on CUDA SM 9.0+)
+* **[GPU Graphs](https://genesis-embodied-ai.github.io/quadrants/user_guide/graph.html)** - `@qd.kernel(graph=True)` captures kernel sequences into a graph; `qd.graph.do_while` runs GPU-side iteration loops (hardware conditional nodes on CUDA SM 9.0+)
 * **[perf_dispatch](https://genesis-embodied-ai.github.io/quadrants/user_guide/perf_dispatch.html)** — auto-benchmarks multiple kernel implementations and selects the fastest at runtime
 * **[Zero-copy interop](https://genesis-embodied-ai.github.io/quadrants/user_guide/interop.html)** — `to_torch(copy=False)` / `to_numpy(copy=False)` via DLPack on CUDA, CPU, AMDGPU, and Metal; direct torch tensor pass-through into kernels
 
@@ -65,13 +66,12 @@ To focus the compiler and reduce maintenance burden, we removed: GUI/GGUI, C-API
 
 ### Debugging & development
 
-* **[Python backend](https://genesis-embodied-ai.github.io/quadrants/user_guide/python_backend.html)** — `qd.init(qd.python)` interprets kernels as plain Python so they can be stepped through in a standard Python debugger
 
 ---
 
 # Installation
 ## Prerequisites
-- Python 3.10-3.13
+- Python 3.12-3.14
 - Mac OS 14, 15, Windows, or Ubuntu 22.04-24.04 or compatible
 - ROCm 5.2 or newer for AMD GPU support
 

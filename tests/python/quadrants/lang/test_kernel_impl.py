@@ -4,9 +4,9 @@ import pathlib
 import pytest
 
 import quadrants as qd
-from quadrants._test_tools import qd_init_same_arch
 
-from tests import test_utils
+from tests.helpers import test_utils
+from tests.helpers.runtime import qd_init_same_arch
 
 _KERNEL_COVERAGE = os.environ.get("QD_KERNEL_COVERAGE") == "1"
 
@@ -143,6 +143,35 @@ def test_pure_kernel_parameter() -> None:
     some_class.da5(a)
     assert not some_class.da5._primal.src_ll_cache_observations.cache_key_generated
     assert a[0] == 15
+
+
+@test_utils.test()
+def test_member_kernel_rejects_foreign_owner() -> None:
+    """Pin the "you forgot @qd.data_oriented" diagnostic for both routes into a member kernel: the per-class closure
+    ``data_oriented`` installs, reached by an unbound ``SomeClass.member(other)``, and the generic class-kernel
+    wrapper, reached by a class that was never decorated.
+    """
+    a = qd.ndarray(qd.i32, (10,))
+
+    @qd.data_oriented
+    class Decorated:
+        @qd.kernel
+        def write(self, arr: qd.types.NDArray) -> None:
+            arr[0] = 7
+
+    class Undecorated:
+        @qd.kernel
+        def write(self, arr: qd.types.NDArray) -> None:
+            arr[0] = 8
+
+    Decorated().write(a)
+    assert a[0] == 7
+
+    with pytest.raises(qd.QuadrantsSyntaxError, match="Undecorated.*qd.data_oriented"):
+        Decorated.write(Undecorated(), a)
+
+    with pytest.raises(qd.QuadrantsSyntaxError, match="Undecorated.*qd.data_oriented"):
+        Undecorated().write(a)
 
 
 @test_utils.test()

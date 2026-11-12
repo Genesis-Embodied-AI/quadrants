@@ -4,25 +4,40 @@ import pathlib
 import shutil
 import subprocess
 import sys
+from enum import IntEnum
 from typing import Callable
 
 import pydantic
 import pytest
 
 import quadrants as qd
-from quadrants._test_tools import qd_init_same_arch
 from quadrants.lang import _wrap_inspect
 from quadrants.lang._fast_caching import function_hasher, src_hasher
 from quadrants.lang._wrap_inspect import get_source_info_and_src
 
-from tests import test_utils
+from tests.helpers import test_utils
+from tests.helpers.runtime import qd_init_same_arch
 
 TEST_RAN = "test ran"
 RET_SUCCESS = 42
 
 
+@pytest.mark.parametrize(
+    "key,value",
+    [
+        ("random_seed", 123),
+        ("cpu_per_worker_min_block_dim", 1),
+        ("cpu_fixed_block_dim", 16),
+        ("cpu_work_scheduling", qd.CPUWorkScheduling.FIXED_SIZE),
+    ],
+)
 @test_utils.test()
-def test_src_hasher_create_cache_key_vary_config() -> None:
+def test_src_hasher_create_cache_key_vary_config(key, value) -> None:
+    """Source+config key (L1) is stable across re-init with identical config, changes when the config changes.
+
+    L1 is the level to test: config feeds only into it, and L2 just adds the args-narrow hash on top.
+    """
+
     @qd.kernel
     def f1() -> None:
         pass
@@ -31,18 +46,49 @@ def test_src_hasher_create_cache_key_vary_config() -> None:
     # so we are forcing it to false each initialization for now
     qd_init_same_arch(print_ir_dbg_info=False)
     kernel_info, _src = get_source_info_and_src(f1.fn)
-    cache_key_base = src_hasher.create_cache_key(False, kernel_info, [], [])
+    cache_key_base = src_hasher.make_source_config_key(kernel_info)
 
     qd_init_same_arch(print_ir_dbg_info=False)
     kernel_info, _src = get_source_info_and_src(f1.fn)
-    cache_key_same = src_hasher.create_cache_key(False, kernel_info, [], [])
+    cache_key_same = src_hasher.make_source_config_key(kernel_info)
 
-    qd_init_same_arch(print_ir_dbg_info=False, random_seed=123)
+    qd_init_same_arch(print_ir_dbg_info=False, **{key: value})
     kernel_info, _src = get_source_info_and_src(f1.fn)
-    cache_key_diff = src_hasher.create_cache_key(False, kernel_info, [], [])
+    cache_key_diff = src_hasher.make_source_config_key(kernel_info)
 
     assert cache_key_base == cache_key_same
     assert cache_key_same != cache_key_diff
+
+    # Restoring the original configuration must restore its cache key, with no stale state from the changed setting.
+    qd_init_same_arch(print_ir_dbg_info=False)
+    assert src_hasher.make_source_config_key(kernel_info) == cache_key_base
+
+
+@test_utils.test()
+def test_src_hasher_create_cache_key_varies_with_device_caps(monkeypatch) -> None:
+    # The device-caps fingerprint is plumbed in from config_hasher; stub it so we can exercise the keying without a
+    # second physical device. Same source / args / config but different caps must yield a different cache key, so a
+    # cache dir shared across devices (or machines) cannot serve an artifact compiled for the wrong capabilities.
+    #
+    # Caps belong to L1, not the args-narrow L2 key: they change codegen without changing argument identity.
+    from quadrants.lang._fast_caching import config_hasher
+
+    @qd.kernel
+    def f1() -> None:
+        pass
+
+    qd_init_same_arch(print_ir_dbg_info=False)
+    kernel_info, _src = get_source_info_and_src(f1.fn)
+
+    monkeypatch.setattr(config_hasher, "hash_device_caps", lambda: "caps-A")
+    key_caps_a = src_hasher.make_source_config_key(kernel_info)
+    key_caps_a_again = src_hasher.make_source_config_key(kernel_info)
+
+    monkeypatch.setattr(config_hasher, "hash_device_caps", lambda: "caps-B")
+    key_caps_b = src_hasher.make_source_config_key(kernel_info)
+
+    assert key_caps_a == key_caps_a_again
+    assert key_caps_a != key_caps_b
 
 
 @test_utils.test()
@@ -103,25 +149,25 @@ def test_src_hasher_store_validate(monkeypatch: pytest.MonkeyPatch, tmp_path: pa
     mod = temporary_module("child_diff_test_src_hasher_store_validate")
     kernel_info = get_fileinfos([mod.f1.fn])[0]
     fileinfos = get_fileinfos([mod.f1.fn, mod.f2.fn])
-    fast_cache_key = src_hasher.create_cache_key(False, kernel_info, [], [])
+    # L2 key: source+config (L1) + narrow-args-hash. Use an empty narrow-args-hash since the test isn't exercising args
+    # at all - it tests the helper-source-change invalidation logic, which lives in L2.
+    fast_cache_key = src_hasher.make_full_cache_key(src_hasher.make_source_config_key(kernel_info), narrow_args_hash="")
 
     assert fast_cache_key is not None
 
     kernel_cache_key = "I'm a kernel cache key"
 
-    load_res = src_hasher.load(fast_cache_key)
-    assert load_res[0] is None and load_res[1] is None
+    assert src_hasher.load(fast_cache_key) is None
 
     some_used_vars = {"fee", "fi", "fo"}
     src_hasher.store(kernel_cache_key, fast_cache_key, fileinfos, some_used_vars)
 
     def assert_loaded(cache_key: str) -> None:
         res = src_hasher.load(cache_key)
-        assert res[0] is not None and res[1] is not None
+        assert res is not None and res.frontend_cache_key == kernel_cache_key
 
     def assert_not_loaded(cache_key: str) -> None:
-        res = src_hasher.load(cache_key)
-        assert res[0] is None and res[1] is None
+        assert src_hasher.load(cache_key) is None
 
     assert_loaded(fast_cache_key)
 
@@ -136,7 +182,143 @@ def test_src_hasher_store_validate(monkeypatch: pytest.MonkeyPatch, tmp_path: pa
 
     assert_not_loaded("abcdefg")
 
-    assert src_hasher.load(fast_cache_key)[0] == some_used_vars
+    loaded = src_hasher.load(fast_cache_key)
+    assert loaded is not None
+    assert loaded.used_py_dataclass_parameters == some_used_vars
+    # The new schema-v3+v4 AST-resolved fields default to empty for kernels with no graph_do_while / checkpoint
+    # metadata, exercising the BaseModel default path on round-trip.
+    assert loaded.graph_do_while_levels is None
+    assert loaded.checkpoint_yield_on_args == []
+    assert loaded.checkpoint_yield_on_cpp_arg_ids == []
+    assert loaded.checkpoint_user_labels_by_cp_id == []
+    assert loaded.checkpoint_user_label_enum_qualnames == []
+
+
+@test_utils.test()
+def test_src_hasher_store_validate_round_trips_schema_v3_metadata(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, temporary_module
+) -> None:
+    """Schema v3 (`cachevalue-v3-ast-resolved-ids`) added AST-resolved arg-id fields to the persisted ``CacheValue`` so
+    the launch path can forward them after a fast-cache restore (which skips AST transformation). This test pins the
+    round-trip for the new fields -- ``graph_do_while_levels`` as 3-tuples carrying ``cond_cpp_arg_id``, plus
+    ``checkpoint_yield_on_args`` / ``checkpoint_yield_on_cpp_arg_ids`` / ``checkpoint_user_labels_by_cp_id``. Without
+    this, a schema bug (wrong tuple arity, dropped field, mis-typed BaseModel default) would only surface via a hard-to-
+    debug functional regression in a fast-cached checkpoint / graph_do_while kernel."""
+    test_files_path = pathlib.Path("tests/python/quadrants/lang/fast_caching/test_files")
+
+    offline_cache_path = tmp_path / "cache"
+    temp_import_path = tmp_path / "temp_import"
+    temp_import_path.mkdir(exist_ok=True)
+
+    qd_init_same_arch(offline_cache_file_path=str(offline_cache_path))
+
+    monkeypatch.syspath_prepend(temp_import_path)
+    shutil.copy2(test_files_path / "child_diff_base.py", temp_import_path / "child_diff_schema_v3.py")
+    mod = temporary_module("child_diff_schema_v3")
+    info, _src = _wrap_inspect.get_source_info_and_src(mod.f1.fn)
+    fileinfos = [info]
+    # L2 key (source+config, then the args-narrow tail) - the layer ``store`` / ``load`` operate on.
+    l1_key = src_hasher.make_source_config_key(info)
+    narrow_args_hash = src_hasher.compute_narrow_args_hash(False, info, [], [], None)
+    assert narrow_args_hash is not None
+    fast_cache_key = src_hasher.make_full_cache_key(l1_key, narrow_args_hash)
+    assert fast_cache_key is not None
+
+    gdw_levels = [("self.outer", -1, 4), ("self.inner", 0, 5)]
+    cp_yield_args = ["self.flag", None, "params.flag"]
+    cp_yield_cpp_ids = [3, -1, 7]
+    cp_user_labels = [10, None, 20]
+
+    src_hasher.store(
+        "kernel_cache_key_v3",
+        fast_cache_key,
+        fileinfos,
+        {"used_var"},
+        graph_do_while_levels=gdw_levels,
+        checkpoint_yield_on_args=cp_yield_args,
+        checkpoint_yield_on_cpp_arg_ids=cp_yield_cpp_ids,
+        checkpoint_user_labels_by_cp_id=cp_user_labels,
+    )
+
+    loaded = src_hasher.load(fast_cache_key)
+    assert loaded is not None
+    assert loaded.frontend_cache_key == "kernel_cache_key_v3"
+    assert loaded.graph_do_while_levels == [("self.outer", -1, 4), ("self.inner", 0, 5)]
+    assert loaded.checkpoint_yield_on_args == cp_yield_args
+    assert loaded.checkpoint_yield_on_cpp_arg_ids == cp_yield_cpp_ids
+    assert loaded.checkpoint_user_labels_by_cp_id == cp_user_labels
+    # Plain-int labels record `None` in the parallel qualname column (no IntEnum identity to preserve).
+    assert loaded.checkpoint_user_label_enum_qualnames == [None, None, None]
+
+
+@test_utils.test()
+def test_src_hasher_intenum_qualname_round_trip(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, temporary_module
+) -> None:
+    """Schema v4 (`cachevalue-v4-intenum-qualnames`) added a parallel `checkpoint_user_label_enum_qualnames` column so
+    an ``IntEnum`` cp_id round-trips through fast-cache restore as the original enum member rather than the underlying
+    int. ``src_hasher.store`` derives the qualname column from the live label list (which still holds the original
+    ``IntEnum`` instances) before pydantic int-coerces them; ``_resolve_intenum_member`` re-imports the enum class on
+    load. This test covers both the store-side derivation (mixed IntEnum / plain int / None) and the load-side
+    resolution (verifies identity is preserved, not just int equality)."""
+    test_files_path = pathlib.Path("tests/python/quadrants/lang/fast_caching/test_files")
+    offline_cache_path = tmp_path / "cache"
+    temp_import_path = tmp_path / "temp_import"
+    temp_import_path.mkdir(exist_ok=True)
+    qd_init_same_arch(offline_cache_file_path=str(offline_cache_path))
+    monkeypatch.syspath_prepend(temp_import_path)
+    shutil.copy2(test_files_path / "child_diff_base.py", temp_import_path / "child_diff_v4_intenum.py")
+    mod = temporary_module("child_diff_v4_intenum")
+    info, _src = _wrap_inspect.get_source_info_and_src(mod.f1.fn)
+    # L2 key (source+config, then the args-narrow tail) - the layer ``store`` / ``load`` operate on.
+    l1_key = src_hasher.make_source_config_key(info)
+    narrow_args_hash = src_hasher.compute_narrow_args_hash(False, info, [], [], None)
+    assert narrow_args_hash is not None
+    fast_cache_key = src_hasher.make_full_cache_key(l1_key, narrow_args_hash)
+    assert fast_cache_key is not None
+
+    # Reference the module-level enum below so it has a real importable qualname.
+    src_hasher.store(
+        "kernel_cache_key_v4",
+        fast_cache_key,
+        [info],
+        {"used_var"},
+        checkpoint_yield_on_args=["flag", None, "flag"],
+        checkpoint_yield_on_cpp_arg_ids=[1, -1, 1],
+        checkpoint_user_labels_by_cp_id=[_HasherTestStage.LOAD, None, _HasherTestStage.REDUCE],
+    )
+
+    loaded = src_hasher.load(fast_cache_key)
+    assert loaded is not None
+    # Persisted raw labels are plain ints (pydantic coerced them); the qualname column is what carries identity.
+    assert loaded.checkpoint_user_labels_by_cp_id == [5, None, 9]
+    assert loaded.checkpoint_user_label_enum_qualnames == [
+        f"{_HasherTestStage.__module__}.{_HasherTestStage.__qualname__}.LOAD",
+        None,
+        f"{_HasherTestStage.__module__}.{_HasherTestStage.__qualname__}.REDUCE",
+    ]
+
+    # Resolver round-trip: rebuild each slot through `_resolve_intenum_member` and confirm enum identity (not just int-
+    # equality) is preserved.
+    resolved = [
+        src_hasher._resolve_intenum_member(qn, lbl)
+        for qn, lbl in zip(loaded.checkpoint_user_label_enum_qualnames, loaded.checkpoint_user_labels_by_cp_id)
+    ]
+    assert resolved == [_HasherTestStage.LOAD, None, _HasherTestStage.REDUCE]
+    assert isinstance(resolved[0], _HasherTestStage)
+    assert isinstance(resolved[2], _HasherTestStage)
+
+    # Resolver fallback: an unresolvable qualname (e.g. enum class moved/renamed since cache write) must drop back to
+    # the persisted int rather than raising, so a stale cache entry degrades gracefully.
+    assert src_hasher._resolve_intenum_member("nonexistent.Module.Stage.LOAD", 5) == 5
+
+
+# Top-level IntEnum used by `test_src_hasher_intenum_qualname_round_trip` so the resolver can re-import it via
+# `importlib.import_module("tests.python.quadrants.lang.fast_caching.test_src_hasher")`. Lives at module scope (not
+# inside the test) for the same reason `_FastcacheStage` / `_Stage` do in `test_checkpoint.py`.
+class _HasherTestStage(IntEnum):
+    LOAD = 5
+    REDUCE = 9
 
 
 # Should be enough to run these on cpu I think, and anything involving
@@ -202,7 +384,7 @@ def src_hasher_vary_kernel_func_child(args: list[str]) -> None:
     sys.path.append(args_obj.module_file_path)
     mod = importlib.import_module(args_obj.module_name)
     info, _src = _wrap_inspect.get_source_info_and_src(mod.f1.fn)
-    cache_key = src_hasher.create_cache_key(False, info, [], [])
+    cache_key = src_hasher.make_source_config_key(info)
     print(f"CACHE_KEY={cache_key}")
 
     print(TEST_RAN)

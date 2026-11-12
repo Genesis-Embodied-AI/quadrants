@@ -6,6 +6,7 @@
 #ifdef __APPLE__
 // For `runtime_lib_dir()`
 #include "quadrants/util/lang_util.h"
+#include <stdlib.h>
 #endif
 
 namespace quadrants::lang {
@@ -28,7 +29,7 @@ bool VulkanLoader::check_vulkan_device() {
   app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
   app_info.pEngineName = "No Engine";
   app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-  app_info.apiVersion = VK_API_VERSION_1_0;
+  app_info.apiVersion = VK_API_VERSION_1_2;
 
   VkInstanceCreateInfo create_info{};
   create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -58,6 +59,11 @@ bool VulkanLoader::check_vulkan_device() {
 
     for (int i = 0; i < devices.size(); i++) {
       const auto &physical_device = devices[i];
+      VkPhysicalDeviceProperties properties{};
+      vkGetPhysicalDeviceProperties(physical_device, &properties);
+      if (properties.apiVersion < VK_API_VERSION_1_2) {
+        continue;
+      }
 
       uint32_t queue_family_count = 0;
       vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, nullptr);
@@ -87,6 +93,15 @@ bool VulkanLoader::init(PFN_vkGetInstanceProcAddr get_proc_addr) {
     if (initialized_) {
       return;
     }
+#if defined(__APPLE__)
+    // Disable placement heaps by default. An explicit MVK_CONFIG_USE_MTLHEAP is still honored.
+    // MoltenVK reads MVK_CONFIG_USE_MTLHEAP when the dylib initializes. Placement heaps are its default on Apple
+    // GPUs, and repeated creation and destruction of those heaps leaves CPU memory reads slow for the rest of the
+    // process. An explicit environment value still wins.
+    if (std::getenv("MVK_CONFIG_USE_MTLHEAP") == nullptr) {
+      ::setenv("MVK_CONFIG_USE_MTLHEAP", "0", 0);
+    }
+#endif
     // (penguinliong) So that MoltenVK instances can be imported.
     if (get_proc_addr != nullptr) {
       volkInitializeCustom(get_proc_addr);

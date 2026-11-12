@@ -7,7 +7,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang.misc import get_host_arch_list
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @pytest.mark.run_in_serial
@@ -48,6 +48,25 @@ def test_sparse_field_with_device_memory_pool():
     write()
     assert x[0] == 42
     assert x[255] == 7
+
+
+@pytest.mark.run_in_serial
+@test_utils.test(arch=qd.amdgpu)
+def test_amdgpu_dense_field_alloc_survives_broken_hip_malloc_async():
+    # Regression: gfx90c APUs advertise MEMORY_POOLS_SUPPORTED but hang forever in hipMallocAsync. Dense field
+    # allocation is the first site that takes the mem-pool path after qd.init; AMDGPUContext must disable pools on
+    # that mcpu (or via QD_ENABLE_HIP_MEMPOOL=0) so this returns. Keep the body tiny for healthy AMDGPU CI.
+    n = 64
+    x = qd.field(qd.f32, shape=(n,))
+
+    @qd.kernel
+    def fill():
+        for i in range(n):
+            x[i] = 1.0
+
+    fill()
+    assert x[0] == 1.0
+    assert x[n - 1] == 1.0
 
 
 @test_utils.test(arch=get_host_arch_list())

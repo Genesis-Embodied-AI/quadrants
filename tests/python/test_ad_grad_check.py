@@ -3,7 +3,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test(default_fp=qd.f64, exclude=[qd.vulkan, qd.metal])
@@ -16,7 +16,7 @@ def test_general():
     @qd.kernel
     def compute_y1():
         for i, j in qd.ndrange(2, 2):
-            y1[None] += qd.cos(x1[i, j])
+            y1[()] += qd.cos(x1[i, j])
 
     x2 = qd.Vector.field(n=3, dtype=float, shape=(2, 2), needs_grad=True)
     y2 = qd.field(dtype=float, shape=(), needs_grad=True)
@@ -27,7 +27,7 @@ def test_general():
 
     @qd.kernel
     def compute_y2():
-        y2[None] += x2[0, 0][0] + x2[1, 0][1] + x2[1, 1][2]
+        y2[()] += x2[0, 0][0] + x2[1, 0][1] + x2[1, 1][2]
 
     with qd.ad.Tape(y1, grad_check=[x1]):
         compute_y1()
@@ -48,7 +48,7 @@ def grad_test(tifunc):
         for i in qd.grouped(x):
             y[i] = tifunc(x[i])
 
-    x[None] = 0.234
+    x[()] = 0.234
 
     with qd.ad.Tape(loss=y, grad_check=[x]):
         func()

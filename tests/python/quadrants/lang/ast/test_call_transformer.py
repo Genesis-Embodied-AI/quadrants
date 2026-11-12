@@ -12,7 +12,7 @@ from quadrants.lang.ast.ast_transformer_utils import (
 )
 from quadrants.lang.ast.ast_transformers.call_transformer import CallTransformer
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @dataclasses.dataclass

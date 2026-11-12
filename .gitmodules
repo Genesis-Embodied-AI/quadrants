@@ -29,8 +29,7 @@
 	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator
 [submodule "external/eigen"]
 	path = external/eigen
-	url = https://gitlab.com/libeigen/eigen.git
-	branch = 3.3
+	url = https://github.com/Genesis-Embodied-AI/eigen.git
 [submodule "external/SPIRV-Reflect"]
 	path = external/SPIRV-Reflect
 	url = https://github.com/KhronosGroup/SPIRV-Reflect

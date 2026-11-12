@@ -2,6 +2,7 @@
 
 #include "quadrants/codegen/spirv/checkpoint_gate_shader.h"
 #include "quadrants/codegen/spirv/spirv_ir_builder.h"
+#include "quadrants/codegen/spirv/spirv_operations.h"
 
 namespace quadrants::lang::spirv {
 
@@ -16,6 +17,7 @@ Value load_buf_u32(IRBuilder &ir, Value buffer, Value word_idx) {
 
 std::vector<uint32_t> build_checkpoint_yield_check_spirv(Arch arch, const DeviceCapabilityConfig *caps) {
   IRBuilder ir(arch, caps);
+  SpirvOperations ops_(ir);
   ir.init_header();
 
   // Bindings: see header doc.
@@ -25,14 +27,14 @@ std::vector<uint32_t> build_checkpoint_yield_check_spirv(Arch arch, const Device
 
   Value main_func = ir.new_function();
   ir.start_function(main_func);
-  ir.set_work_group_size({1, 1, 1});
+  ops_.set_work_group_size({1, 1, 1});
 
   // Read flag once. The CUDA-native yield-check uses a non-atomic `*yield_on` load because the checkpoint body's writes
   // were already serialised by the graph node dependency; on Vulkan / Metal the cmdlist's between-dispatch
   // `memory_barrier()` call provides the same ordering, so a plain load is also sufficient here.
   Value flag = load_buf_u32(ir, yield_on_buf, ir.uint_immediate_number(ir.u32_type(), 0u));
   Value zero_u32 = ir.uint_immediate_number(ir.u32_type(), 0u);
-  Value flag_set = ir.ne(flag, zero_u32);
+  Value flag_set = ops_.ne(flag, zero_u32);
 
   Label body_lbl = ir.new_label();
   Label merge_lbl = ir.new_label();

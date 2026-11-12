@@ -2,7 +2,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 def _get_matrix_swizzle_apis():
@@ -59,6 +59,7 @@ user_api[qd] = [
     "Backend",
     "BitpackedFields",
     "BufferView",
+    "CPUWorkScheduling",
     "CRITICAL",
     "DEBUG",
     "DeviceCapability",
@@ -122,6 +123,7 @@ user_api[qd] = [
     "axes",
     "bit_cast",
     "bit_shr",
+    "block_idx",
     "block_local",
     "cache_read_only",
     "cast",
@@ -156,7 +158,10 @@ user_api[qd] = [
     "get_addr",
     "global_thread_idx",
     "gpu",
+    "graph",
     "graph_do_while",
+    "graph_parallel",
+    "graph_parallel_context",
     "grouped",
     "i",
     "i16",
@@ -209,7 +214,6 @@ user_api[qd] = [
     "profiler",
     "pure",
     "pyfunc",
-    "python",
     "randn",
     "random",
     "raw_div",
@@ -258,6 +262,11 @@ user_api[qd] = [
     "x64",
     "x86_64",
     "zero",
+]
+user_api[qd.graph] = [
+    "do_while",
+    "parallel",
+    "parallel_context",
 ]
 user_api[qd.ad] = [
     "FwdMode",

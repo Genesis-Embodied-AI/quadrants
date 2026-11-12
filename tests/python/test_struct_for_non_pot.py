@@ -1,6 +1,6 @@
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test()
@@ -16,12 +16,12 @@ def test_1d():
     @qd.kernel
     def accumulate():
         for i in x:
-            qd.atomic_add(sum[None], i)
+            qd.atomic_add(sum[()], i)
 
     accumulate()
 
     for i in range(n):
-        assert sum[None] == 4950
+        assert sum[()] == 4950
 
 
 @test_utils.test()
@@ -38,7 +38,7 @@ def test_2d():
     @qd.kernel
     def accumulate():
         for i, k in x:
-            qd.atomic_add(sum[None], i + k * 2)
+            qd.atomic_add(sum[()], i + k * 2)
 
     gt = 0
     for k in range(n):
@@ -48,7 +48,7 @@ def test_2d():
     accumulate()
 
     for i in range(n):
-        assert sum[None] == gt
+        assert sum[()] == gt
 
 
 @test_utils.test(require=qd.extension.sparse)

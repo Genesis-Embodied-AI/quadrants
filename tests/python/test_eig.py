@@ -3,7 +3,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 def _eigen_vector_equal(v1, v2, tol):
@@ -27,11 +27,11 @@ def _test_eig2x2_real(dt):
     v = qd.Matrix.field(2, 2, dtype=dt, shape=())
     w = qd.Matrix.field(4, 2, dtype=dt, shape=())
 
-    A[None] = [[1, 1], [2, 3]]
+    A[()] = [[1, 1], [2, 3]]
 
     @qd.kernel
     def eigen_solve():
-        v[None], w[None] = qd.eig(A[None])
+        v[()], w[()] = qd.eig(A[()])
 
     tol = 1e-5 if dt == qd.f32 else 1e-12
     dtype = np.float32 if dt == qd.f32 else np.float64
@@ -55,11 +55,11 @@ def _test_eig2x2_complex(dt):
     v = qd.Matrix.field(2, 2, dtype=dt, shape=())
     w = qd.Matrix.field(4, 2, dtype=dt, shape=())
 
-    A[None] = [[1, -1], [1, 1]]
+    A[()] = [[1, -1], [1, 1]]
 
     @qd.kernel
     def eigen_solve():
-        v[None], w[None] = qd.eig(A[None])
+        v[()], w[()] = qd.eig(A[()])
 
     tol = 1e-5 if dt == qd.f32 else 1e-12
     dtype = np.float32 if dt == qd.f32 else np.float64
@@ -85,11 +85,11 @@ def _test_sym_eig2x2(dt):
     v = qd.Vector.field(2, dtype=dt, shape=())
     w = qd.Matrix.field(2, 2, dtype=dt, shape=())
 
-    A[None] = [[5, 3], [3, 2]]
+    A[()] = [[5, 3], [3, 2]]
 
     @qd.kernel
     def eigen_solve():
-        v[None], w[None] = qd.sym_eig(A[None])
+        v[()], w[()] = qd.sym_eig(A[()])
 
     tol = 1e-5 if dt == qd.f32 else 1e-12
     dtype = np.float32 if dt == qd.f32 else np.float64
@@ -113,11 +113,11 @@ def _test_sym_eig3x3(dt, a00):
     v = qd.Vector.field(3, dtype=dt, shape=())
     w = qd.Matrix.field(3, 3, dtype=dt, shape=())
 
-    A[None] = [[a00, 1.0, 1.0], [1.0, 2.0, 2.0], [1.0, 2.0, 2.0]]
+    A[()] = [[a00, 1.0, 1.0], [1.0, 2.0, 2.0], [1.0, 2.0, 2.0]]
 
     @qd.kernel
     def eigen_solve():
-        v[None], w[None] = qd.sym_eig(A[None])
+        v[()], w[()] = qd.sym_eig(A[()])
 
     tol = 1e-5 if dt == qd.f32 else 1e-12
     dtype = np.float32 if dt == qd.f32 else np.float64
@@ -142,12 +142,12 @@ def _test_sym_eig3x3_identity(dt):
     v = qd.Vector.field(3, dtype=dt, shape=())
     w = qd.Matrix.field(3, 3, dtype=dt, shape=())
 
-    A[None] = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+    A[()] = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
 
     @qd.kernel
     def eigen_solve():
         X = qd.Matrix.identity(dt, 3)
-        v[None], w[None] = qd.sym_eig(X)
+        v[()], w[()] = qd.sym_eig(X)
 
     tol = 1e-5 if dt == qd.f32 else 1e-12
     dtype = np.float32 if dt == qd.f32 else np.float64
@@ -290,7 +290,7 @@ def _test_sym_eig_general(n, dt, factory):
 
     @qd.kernel
     def run():
-        eigvals[None], eigvecs[None] = qd.sym_eig(A[None], dt)
+        eigvals[()], eigvecs[()] = qd.sym_eig(A[()], dt)
 
     run()
     eigvals_qd = eigvals.to_numpy().astype(np_dt)
@@ -350,7 +350,7 @@ def _test_make_spd(n, dt, factory):
 
     @qd.kernel
     def run():
-        A_spd[None] = qd.make_spd(A[None], dt)
+        A_spd[()] = qd.make_spd(A[()], dt)
 
     run()
     A_spd_qd = A_spd.to_numpy().astype(np_dt)
@@ -406,7 +406,7 @@ def _test_sym_eig_trivial(n, dt, A_np, expected_eigvals):
 
     @qd.kernel
     def run():
-        eigvals[None], eigvecs[None] = qd.sym_eig(A[None], dt)
+        eigvals[()], eigvecs[()] = qd.sym_eig(A[()], dt)
 
     run()
     tol = 5e-3 if dt == qd.f32 else 1e-9
@@ -480,7 +480,7 @@ def test_make_spd_negative_definite_zero_f64(n):
 
     @qd.kernel
     def run():
-        A_spd[None] = qd.make_spd(A[None], qd.f64)
+        A_spd[()] = qd.make_spd(A[()], qd.f64)
 
     run()
     tol = 1e-9
@@ -497,7 +497,7 @@ def test_sym_eig_above_cap_raises():
 
         @qd.kernel
         def run():
-            _ = qd.sym_eig(A[None], qd.f64)
+            _ = qd.sym_eig(A[()], qd.f64)
 
         run()
 
@@ -512,7 +512,7 @@ def test_make_spd_above_cap_raises():
 
         @qd.kernel
         def run():
-            _ = qd.make_spd(A[None], qd.f64)
+            _ = qd.make_spd(A[()], qd.f64)
 
         run()
 
@@ -564,7 +564,7 @@ def _test_sym_eig_sort_order(n, dt):
 
     @qd.kernel
     def run():
-        eigvals[None], eigvecs[None] = qd.sym_eig(A[None], dt)
+        eigvals[()], eigvecs[()] = qd.sym_eig(A[()], dt)
 
     run()
     eigvals_qd = eigvals.to_numpy().astype(np_dt)

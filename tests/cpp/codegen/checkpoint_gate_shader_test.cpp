@@ -22,7 +22,7 @@ namespace quadrants::lang::spirv {
 
 TEST(CheckpointGateShader, DumpBinary) {
   DeviceCapabilityConfig caps;
-  caps.set(DeviceCapability::spirv_version, 0x10400);
+  caps.set(DeviceCapability::spirv_version, 0x10500);
 
   auto binary = build_checkpoint_gate_spirv(Arch::vulkan, &caps);
   ASSERT_FALSE(binary.empty());
@@ -41,7 +41,7 @@ TEST(CheckpointGateShader, DumpBinary) {
 // refactor adds a cap gate without updating that doc, this test catches it.
 TEST(CheckpointGateShader, NoExtraCapabilityRequired) {
   DeviceCapabilityConfig caps;
-  caps.set(DeviceCapability::spirv_version, 0x10400);
+  caps.set(DeviceCapability::spirv_version, 0x10500);
   EXPECT_FALSE(build_checkpoint_gate_spirv(Arch::vulkan, &caps).empty());
 }
 

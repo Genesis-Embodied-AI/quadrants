@@ -21,7 +21,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 # ----------------------------------------------------------------------------
 # Identity / no-layout: behaviour is unchanged from an earlier change.

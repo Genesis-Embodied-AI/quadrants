@@ -6,7 +6,7 @@ import quadrants as qd
 from quadrants.lang import impl
 from quadrants.lang.ast import transform_tree as _original_transform_tree
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 _kernel_module = sys.modules["quadrants.lang.kernel"]
 

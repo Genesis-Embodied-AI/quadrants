@@ -6,26 +6,23 @@ when consumed by an assignment. Works for any registered tile size (currently 16
 """
 
 from quadrants.lang.exception import QuadrantsSyntaxError
-from quadrants.lang.simt._tile16 import (
-    _tile16_cache,
+from quadrants.lang.simt._tile import (
+    _tile_cache,
     _TileRefProxy,
     _TileSliceProxy,
     _VecSliceProxy,
 )
-from quadrants.lang.simt._tile32 import _tile32_cache
 from quadrants.lang.struct import Struct
 
 
 def _is_tile(value):
     """Return True if ``value`` is an instance of any registered tile dataclass."""
-    return any(isinstance(value, t) for t in _tile16_cache.values()) or any(
-        isinstance(value, t) for t in _tile32_cache.values()
-    )
+    return any(isinstance(value, t) for t in _tile_cache.values())
 
 
 def _any_tile_built():
     """Return True if any tile dataclass has been built (i.e. at least one tile is in use)."""
-    return bool(_tile16_cache) or bool(_tile32_cache)
+    return bool(_tile_cache)
 
 
 def try_tile_ref(value, _indices):

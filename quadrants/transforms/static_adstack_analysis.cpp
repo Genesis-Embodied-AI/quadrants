@@ -236,7 +236,7 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
   //   * the task's loop is runtime-bounded (`task_ir->end_stmt != nullptr` or non-const begin / end - the analyzer
   //     cannot resolve the trip count from IR alone), or
   //   * `task_range_is_original_loop` is false (the caller signals that the task's `[begin_value, end_value)` is a
-  //     post-chunking subrange, e.g. CPU LLVM after `make_cpu_multithreaded_range_for` rewrote a 256-iteration
+  //     post-chunking subrange, e.g. CPU LLVM after `make_cpu_per_worker_range_for` rewrote a 256-iteration
   //     range-for into 16 parallel chunks of 16; the chunked subrange would massively undersize the heap clip
   //     because the atomic row counter is shared across all chunks of the same task).
   // In both cases the runtime falls back to the unclipped reducer count.
@@ -249,7 +249,7 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
           ? static_cast<uint32_t>(task_loop_iter)
           : 0;
   // Snapshot the task's pre-chunking loop trip-count `SizeExpr` (populated by `determine_ad_stack_size` in
-  // `compile_to_offloads`, before `make_cpu_multithreaded_range_for` rewrites the loop on CPU). Empty when
+  // `compile_to_offloads`, before `make_cpu_per_worker_range_for` rewrites the loop on CPU). Empty when
   // the task is not a range-for, the SizeExpr grammar could not bound the trip count, or the trip count is
   // already a `Const` (in which case `loop_iter_static` carries the same value at zero per-launch cost).
   // Runtime-bounded shapes like `for j in range(field[i])` are the actual reason this exists; encoding

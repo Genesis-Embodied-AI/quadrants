@@ -6,7 +6,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang.misc import get_host_arch_list
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test()
@@ -16,17 +16,17 @@ def test_const_init():
 
     @qd.kernel
     def init():
-        a[None] = qd.Matrix([[0, 1, 2], [3, 4, 5]])
-        b[None] = qd.Vector([0, 1, 2])
+        a[()] = qd.Matrix([[0, 1, 2], [3, 4, 5]])
+        b[()] = qd.Vector([0, 1, 2])
 
     init()
 
     for i in range(2):
         for j in range(3):
-            assert a[None][i, j] == i * 3 + j
+            assert a[()][i, j] == i * 3 + j
 
     for j in range(3):
-        assert b[None][j] == j
+        assert b[()][j] == j
 
 
 @test_utils.test()
@@ -44,30 +44,30 @@ def test_basic_utils():
 
     @qd.kernel
     def init():
-        a[None] = qd.Vector([1.0, 2.0, -3.0])
-        b[None] = qd.Vector([4.0, 5.0])
-        abT[None] = a[None].outer_product(b[None])
+        a[()] = qd.Vector([1.0, 2.0, -3.0])
+        b[()] = qd.Vector([4.0, 5.0])
+        abT[()] = a[()].outer_product(b[()])
 
-        normA[None] = a[None].norm()
-        normSqrA[None] = a[None].norm_sqr()
-        normInvA[None] = a[None].norm_inv()
+        normA[()] = a[()].norm()
+        normSqrA[()] = a[()].norm_sqr()
+        normInvA[()] = a[()].norm_inv()
 
-        aNormalized[None] = a[None].normalized()
+        aNormalized[()] = a[()].normalized()
 
     init()
 
     for i in range(3):
         for j in range(2):
-            assert abT[None][i, j] == a[None][i] * b[None][j]
+            assert abT[()][i, j] == a[()][i] * b[()][j]
 
     sqrt14 = np.sqrt(14.0)
     invSqrt14 = 1.0 / sqrt14
-    assert normSqrA[None] == test_utils.approx(14.0)
-    assert normInvA[None] == test_utils.approx(invSqrt14)
-    assert normA[None] == test_utils.approx(sqrt14)
-    assert aNormalized[None][0] == test_utils.approx(1.0 * invSqrt14)
-    assert aNormalized[None][1] == test_utils.approx(2.0 * invSqrt14)
-    assert aNormalized[None][2] == test_utils.approx(-3.0 * invSqrt14)
+    assert normSqrA[()] == test_utils.approx(14.0)
+    assert normInvA[()] == test_utils.approx(invSqrt14)
+    assert normA[()] == test_utils.approx(sqrt14)
+    assert aNormalized[()][0] == test_utils.approx(1.0 * invSqrt14)
+    assert aNormalized[()][1] == test_utils.approx(2.0 * invSqrt14)
+    assert aNormalized[()][2] == test_utils.approx(-3.0 * invSqrt14)
 
 
 @test_utils.test()
@@ -84,19 +84,19 @@ def test_cross():
 
     @qd.kernel
     def init():
-        a[None] = qd.Vector([1.0, 2.0, 3.0])
-        b[None] = qd.Vector([4.0, 5.0, 6.0])
-        c[None] = a[None].cross(b[None])
+        a[()] = qd.Vector([1.0, 2.0, 3.0])
+        b[()] = qd.Vector([4.0, 5.0, 6.0])
+        c[()] = a[()].cross(b[()])
 
-        a2[None] = qd.Vector([1.0, 2.0])
-        b2[None] = qd.Vector([4.0, 5.0])
-        c2[None] = a2[None].cross(b2[None])
+        a2[()] = qd.Vector([1.0, 2.0])
+        b2[()] = qd.Vector([4.0, 5.0])
+        c2[()] = a2[()].cross(b2[()])
 
     init()
-    assert c[None][0] == -3.0
-    assert c[None][1] == 6.0
-    assert c[None][2] == -3.0
-    assert c2[None] == -3.0
+    assert c[()][0] == -3.0
+    assert c[()][1] == 6.0
+    assert c[()][2] == -3.0
+    assert c2[()] == -3.0
 
 
 @test_utils.test()
@@ -113,17 +113,17 @@ def test_dot():
 
     @qd.kernel
     def init():
-        a[None] = qd.Vector([1.0, 2.0, 3.0])
-        b[None] = qd.Vector([4.0, 5.0, 6.0])
-        c[None] = a[None].dot(b[None])
+        a[()] = qd.Vector([1.0, 2.0, 3.0])
+        b[()] = qd.Vector([4.0, 5.0, 6.0])
+        c[()] = a[()].dot(b[()])
 
-        a2[None] = qd.Vector([1.0, 2.0])
-        b2[None] = qd.Vector([4.0, 5.0])
-        c2[None] = a2[None].dot(b2[None])
+        a2[()] = qd.Vector([1.0, 2.0])
+        b2[()] = qd.Vector([4.0, 5.0])
+        c2[()] = a2[()].dot(b2[()])
 
     init()
-    assert c[None] == 32.0
-    assert c2[None] == 14.0
+    assert c[()] == 32.0
+    assert c2[()] == 14.0
 
 
 def _test_frobenius_inner(n, dt):
@@ -141,17 +141,17 @@ def _test_frobenius_inner(n, dt):
 
     @qd.kernel
     def run():
-        out_method[None] = A[None].frobenius_inner(B[None])
-        out_self[None] = A[None].frobenius_inner(A[None])
+        out_method[()] = A[()].frobenius_inner(B[()])
+        out_self[()] = A[()].frobenius_inner(A[()])
 
     run()
 
     expected_AB = float(np.sum(A_np * B_np))
     expected_AA = float(np.sum(A_np * A_np))
     tol = 1e-4 if dt == qd.f32 else 1e-10
-    assert out_method[None] == test_utils.approx(expected_AB, rel=tol, abs=tol)
-    assert out_self[None] == test_utils.approx(expected_AA, rel=tol, abs=tol)
-    assert out_self[None] == test_utils.approx(A.to_numpy().__pow__(2).sum(), rel=tol, abs=tol)
+    assert out_method[()] == test_utils.approx(expected_AB, rel=tol, abs=tol)
+    assert out_self[()] == test_utils.approx(expected_AA, rel=tol, abs=tol)
+    assert out_self[()] == test_utils.approx(A.to_numpy().__pow__(2).sum(), rel=tol, abs=tol)
 
 
 @pytest.mark.parametrize("n", [3, pytest.param(12, marks=pytest.mark.slow)])
@@ -180,13 +180,13 @@ def _test_frobenius_inner_rectangular(rows, cols, dt):
 
     @qd.kernel
     def run():
-        out[None] = A[None].frobenius_inner(B[None])
+        out[()] = A[()].frobenius_inner(B[()])
 
     run()
 
     expected = float(np.sum(A_np * B_np))
     tol = 1e-4 if dt == qd.f32 else 1e-10
-    assert out[None] == test_utils.approx(expected, rel=tol, abs=tol)
+    assert out[()] == test_utils.approx(expected, rel=tol, abs=tol)
 
 
 @pytest.mark.parametrize(
@@ -242,9 +242,9 @@ def _test_matmul_chain(rows_a, cols_a, cols_b, cols_c, dt):
 
     @qd.kernel
     def run():
-        ABC_chained[None] = A[None] @ B[None] @ C[None]
-        AB[None] = A[None] @ B[None]
-        ABC_staged[None] = AB[None] @ C[None]
+        ABC_chained[()] = A[()] @ B[()] @ C[()]
+        AB[()] = A[()] @ B[()]
+        ABC_staged[()] = AB[()] @ C[()]
 
     run()
 
@@ -287,18 +287,18 @@ def test_transpose():
 
     @qd.kernel
     def transpose():
-        mat = m[None].transpose()
-        m[None] = mat
+        mat = m[()].transpose()
+        m[()] = mat
 
     for i in range(dim):
         for j in range(dim):
-            m[None][i, j] = i * 2 + j * 7
+            m[()][i, j] = i * 2 + j * 7
 
     transpose()
 
     for i in range(dim):
         for j in range(dim):
-            assert m[None][j, i] == test_utils.approx(i * 2 + j * 7)
+            assert m[()][j, i] == test_utils.approx(i * 2 + j * 7)
 
 
 def _test_polar_decomp(dim, dt):
@@ -312,19 +312,19 @@ def _test_polar_decomp(dim, dt):
 
     @qd.kernel
     def polar():
-        R, S = qd.polar_decompose(m[None], dt)
-        r[None] = R
-        s[None] = S
-        m[None] = R @ S
-        I[None] = R @ R.transpose()
-        D[None] = S - S.transpose()
+        R, S = qd.polar_decompose(m[()], dt)
+        r[()] = R
+        s[()] = S
+        m[()] = R @ S
+        I[()] = R @ R.transpose()
+        D[()] = S - S.transpose()
 
     def V(i, j):
         return i * 2 + j * 7 + int(i == j) * 3
 
     for i in range(dim):
         for j in range(dim):
-            m[None][i, j] = V(i, j)
+            m[()][i, j] = V(i, j)
 
     polar()
 
@@ -332,9 +332,9 @@ def _test_polar_decomp(dim, dt):
 
     for i in range(dim):
         for j in range(dim):
-            assert m[None][i, j] == test_utils.approx(V(i, j), abs=tol)
-            assert I[None][i, j] == test_utils.approx(int(i == j), abs=tol)
-            assert D[None][i, j] == test_utils.approx(0, abs=tol)
+            assert m[()][i, j] == test_utils.approx(V(i, j), abs=tol)
+            assert I[()][i, j] == test_utils.approx(int(i == j), abs=tol)
+            assert D[()][i, j] == test_utils.approx(0, abs=tol)
 
 
 @pytest.mark.parametrize("dim", [2, 3])
@@ -387,7 +387,7 @@ def test_mat_inverse_size(n):
 
     @qd.kernel
     def invert():
-        m[None] = m[None].inverse()
+        m[()] = m[()].inverse()
 
     invert()
 
@@ -440,7 +440,7 @@ def _test_inverse_at_size(n_, dt_, factory):
 
     @qd.kernel
     def run():
-        inv[None] = m[None].inverse()
+        inv[()] = m[()].inverse()
 
     run()
 
@@ -545,26 +545,26 @@ def test_any_all():
 
     @qd.kernel
     def func():
-        b[None] = any(a[None])
-        c[None] = all(a[None])
+        b[()] = any(a[()])
+        c[()] = all(a[()])
 
     for i in range(2):
         for j in range(2):
-            a[None][0, 0] = i
-            a[None][1, 0] = j
-            a[None][1, 1] = i
-            a[None][0, 1] = j
+            a[()][0, 0] = i
+            a[()][1, 0] = j
+            a[()][1, 1] = i
+            a[()][0, 1] = j
 
             func()
             if i == 1 or j == 1:
-                assert b[None] == 1
+                assert b[()] == 1
             else:
-                assert b[None] == 0
+                assert b[()] == 0
 
             if i == 1 and j == 1:
-                assert c[None] == 1
+                assert c[()] == 1
             else:
-                assert c[None] == 0
+                assert c[()] == 0
 
 
 @test_utils.test()
@@ -575,19 +575,19 @@ def test_min_max():
 
     @qd.kernel
     def func():
-        b[None] = a[None].max()
-        c[None] = a[None].min()
+        b[()] = a[()].max()
+        c[()] = a[()].min()
 
     for i in range(2):
         for j in range(2):
-            a[None][0, 0] = i
-            a[None][1, 0] = j
-            a[None][1, 1] = i
-            a[None][0, 1] = j
+            a[()][0, 0] = i
+            a[()][1, 0] = j
+            a[()][1, 1] = i
+            a[()][0, 1] = j
 
             func()
-            assert b[None] == max(i, j)
-            assert c[None] == min(i, j)
+            assert b[()] == max(i, j)
+            assert c[()] == min(i, j)
 
 
 # must not throw any error:
@@ -643,13 +643,13 @@ def test_diag():
 
     @qd.kernel
     def fill():
-        m1[None] = qd.Matrix.diag(dim=3, val=1.4)
+        m1[()] = qd.Matrix.diag(dim=3, val=1.4)
 
     fill()
 
     for i in range(3):
         for j in range(3):
             if i == j:
-                assert m1[None][i, j] == test_utils.approx(1.4)
+                assert m1[()][i, j] == test_utils.approx(1.4)
             else:
-                assert m1[None][i, j] == 0.0
+                assert m1[()][i, j] == 0.0

@@ -1,3 +1,6 @@
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -1442,7 +1445,9 @@ VulkanDevice::VulkanDevice()
     : compute_streams_(std::make_unique<ThreadLocalStreams>()),
       graphics_streams_(std::make_unique<ThreadLocalStreams>()) {
   DeviceCapabilityConfig caps{};
-  caps.set(DeviceCapability::spirv_version, 0x10000);
+  // Keep the initial target at the compiler's minimum supported SPIR-V version.
+  // VulkanDeviceCreator replaces these defaults when it configures the physical device.
+  caps.set(DeviceCapability::spirv_version, 0x10500);
   set_caps(std::move(caps));
 }
 
@@ -1544,6 +1549,13 @@ RhiResult VulkanDevice::create_pipeline(Pipeline **out_pipeline,
 }
 
 RhiResult VulkanDevice::allocate_memory(const AllocParams &params, DeviceAllocation *out_devalloc) {
+  static const bool poison_allocations = [] {
+    const char *poison_env = std::getenv("QD_TEST_VULKAN_POISON_ALLOCATIONS");
+    return poison_env && std::strcmp(poison_env, "1") == 0;
+  }();
+  if (poison_allocations && params.size > std::numeric_limits<size_t>::max() - 3) {
+    return RhiResult::out_of_memory;
+  }
   AllocationInternal &alloc = allocations_.acquire();
 
   RHI_ASSERT(params.size > 0);
@@ -1551,7 +1563,8 @@ RhiResult VulkanDevice::allocate_memory(const AllocParams &params, DeviceAllocat
   VkBufferCreateInfo buffer_info{};
   buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
   buffer_info.pNext = nullptr;
-  buffer_info.size = params.size;
+  // GPU fills use whole 32-bit words; pad test allocations so their final bytes are poisoned too.
+  buffer_info.size = poison_allocations ? (params.size + 3) & ~size_t(3) : params.size;
   // FIXME: How to express this in a backend-neutral way?
   buffer_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
   if (params.usage && AllocUsage::Storage) {
@@ -1641,13 +1654,23 @@ RhiResult VulkanDevice::allocate_memory(const AllocParams &params, DeviceAllocat
     buffer_info.usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT_KHR;
   }
 
-  alloc.buffer =
-      vkapi::create_buffer(device_, export_sharing ? allocator_export_ : allocator_, &buffer_info, &alloc_info);
-  if (alloc.buffer == nullptr) {
-    return RhiResult::out_of_memory;
-  }
+  if (params.bypass_pooled_allocator) {
+    // Dedicated vkAllocateMemory path (no VMA). Used on Darwin for gtmp/listgen: the standalone MoltenVK repro hangs
+    // when those two DEVICE_LOCAL sizes go through VMA, but not when the same sizes use plain vkAllocateMemory.
+    alloc.buffer = vkapi::create_buffer_unpooled(device_, physical_device_, &buffer_info, alloc_info.requiredFlags,
+                                                 alloc_info.preferredFlags, &alloc.alloc_info);
+    if (alloc.buffer == nullptr) {
+      return RhiResult::out_of_memory;
+    }
+  } else {
+    alloc.buffer =
+        vkapi::create_buffer(device_, export_sharing ? allocator_export_ : allocator_, &buffer_info, &alloc_info);
+    if (alloc.buffer == nullptr) {
+      return RhiResult::out_of_memory;
+    }
 
-  vmaGetAllocationInfo(alloc.buffer->allocator, alloc.buffer->allocation, &alloc.alloc_info);
+    vmaGetAllocationInfo(alloc.buffer->allocator, alloc.buffer->allocation, &alloc.alloc_info);
+  }
 
   if (get_caps().get(DeviceCapability::spirv_has_physical_storage_buffer) &&
       (buffer_info.usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT_KHR)) {
@@ -1664,6 +1687,20 @@ RhiResult VulkanDevice::allocate_memory(const AllocParams &params, DeviceAllocat
   }
 
   *out_devalloc = DeviceAllocation{this, (uint64_t)&alloc};
+  if (poison_allocations) {
+    auto *stream = get_compute_stream();
+    auto [cmdlist, res] = stream->new_command_list_unique();
+    if (res != RhiResult::success) {
+      dealloc_memory(*out_devalloc);
+      *out_devalloc = DeviceAllocation{};
+      return res;
+    }
+    cmdlist->buffer_fill(out_devalloc->get_ptr(0), buffer_info.size, 0xA5A5A5A5u);
+    cmdlist->buffer_barrier(*out_devalloc);
+    stream->submit_synced(cmdlist.get());
+    std::call_once(poison_allocation_log_once_,
+                   [] { std::fprintf(stderr, "[vulkan_allocator] poisoned allocation\n"); });
+  }
   return RhiResult::success;
 }
 

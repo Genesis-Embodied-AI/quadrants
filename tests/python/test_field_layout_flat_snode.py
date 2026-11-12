@@ -11,7 +11,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -86,7 +86,7 @@ def test_host_kernel_roundtrip_rank2(layout):
             f[i, j] = i * 100 + j
 
     @qd.kernel
-    def read_back(f: qd.template(), i: qd.i32, j: qd.i32) -> qd.i32:
+    def read_back(f: qd.Template, i: qd.i32, j: qd.i32) -> qd.i32:
         return f[i, j]
 
     for i in range(X):
@@ -107,7 +107,7 @@ def test_kernel_host_roundtrip_rank2(layout):
     f = qd.field(qd.i32, shape=(X, Y), order=order)
 
     @qd.kernel
-    def fill(f: qd.template()):
+    def fill(f: qd.Template):
         for i, j in qd.ndrange(X, Y):
             f[i, j] = i * 100 + j
 
@@ -134,12 +134,12 @@ def test_get_addr_matches_default_layout(layout):
     f_default = qd.field(qd.i32, shape=(Y, X))
 
     @qd.kernel
-    def fill_layout(f: qd.template()):
+    def fill_layout(f: qd.Template):
         for i, j in qd.ndrange(X, Y):
             f[i, j] = i * 100 + j
 
     @qd.kernel
-    def fill_default(f: qd.template()):
+    def fill_default(f: qd.Template):
         for j, i in qd.ndrange(Y, X):
             f[j, i] = i * 100 + j
 
@@ -147,7 +147,7 @@ def test_get_addr_matches_default_layout(layout):
     fill_default(f_default)
 
     @qd.kernel
-    def addr(f: qd.template(), a: qd.i32, b: qd.i32) -> qd.u64:
+    def addr(f: qd.Template, a: qd.i32, b: qd.i32) -> qd.u64:
         return qd.get_addr(f, [a, b])
 
     base_l = addr(f_layout, 0, 0)
@@ -175,7 +175,7 @@ def test_to_dlpack_canonical_shape(layout):
     f = qd.field(qd.f32, shape=(X, Y), order=order)
 
     @qd.kernel
-    def fill(f: qd.template()):
+    def fill(f: qd.Template):
         for i, j in qd.ndrange(X, Y):
             f[i, j] = float(i * 100 + j)
 
@@ -236,7 +236,7 @@ def test_vector_field_layout_roundtrip():
     v = qd.Vector.field(2, dtype=qd.f32, shape=(X, Y), order="ji")
 
     @qd.kernel
-    def fill(v: qd.template()):
+    def fill(v: qd.Template):
         for i, j in qd.ndrange(X, Y):
             v[i, j] = [float(i), float(j)]
 

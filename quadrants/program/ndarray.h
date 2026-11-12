@@ -71,15 +71,15 @@ class QD_DLL_EXPORT Ndarray {
   void write_int(const std::vector<int> &i, int64 val);
   void write_float(const std::vector<int> &i, float64 val);
 
-  const std::vector<int> &total_shape() const {
-    return total_shape_;
+  const std::vector<int> &total_physical_shape() const {
+    return total_physical_shape_;
   }
   ~Ndarray();
 
  private:
   std::size_t nelement_{1};
   std::size_t element_size_{1};
-  std::vector<int> total_shape_;
+  std::vector<int> total_physical_shape_;
 
   Program *prog_{nullptr};
 };

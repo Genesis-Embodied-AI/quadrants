@@ -1,10 +1,14 @@
 // Potentially supported backends
 
 // CPU archs
-PER_ARCH(x64)     // a.k.a. AMD64/x86_64
-PER_ARCH(arm64)   // a.k.a. Aarch64, WIP
-PER_ARCH(js)      // Javascript, N/A
-PER_ARCH(python)  // Python
+PER_ARCH(x64)    // a.k.a. AMD64/x86_64
+PER_ARCH(arm64)  // a.k.a. Aarch64, WIP
+PER_ARCH(js)     // Javascript, N/A
+
+// Reserve the serialized Python architecture ID without exposing it as a supported backend.
+#ifdef PER_ARCH_REMOVED
+PER_ARCH_REMOVED(python_removed)
+#endif
 
 // GPU archs
 PER_ARCH(cuda)    // NVIDIA CUDA

@@ -71,7 +71,7 @@ def _vulkan_debug_warmup():
     if sys.platform == "darwin":
         return
 
-    from tests import test_utils
+    from tests.helpers import test_utils
 
     if qd.vulkan not in test_utils.expected_archs():
         return

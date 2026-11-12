@@ -4,7 +4,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang.util import has_pytorch
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test(arch=qd.cpu)
@@ -86,7 +86,7 @@ def test_assign():
 
     @qd.kernel
     def floor():
-        f[None] = qd.Vector([1, 2, 3])
+        f[()] = qd.Vector([1, 2, 3])
 
     with pytest.raises(
         qd.QuadrantsTypeError,

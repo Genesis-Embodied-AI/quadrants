@@ -6,7 +6,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang.util import has_pytorch
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @pytest.mark.sm70
@@ -14,9 +14,9 @@ from tests import test_utils
 def test_snode_read_write():
     dtype = qd.f16
     x = qd.field(dtype, shape=())
-    x[None] = 0.3
-    print(x[None])
-    assert x[None] == test_utils.approx(0.3, rel=1e-3)
+    x[()] = 0.3
+    print(x[()])
+    assert x[()] == test_utils.approx(0.3, rel=1e-3)
 
 
 @pytest.mark.sm70
@@ -24,9 +24,9 @@ def test_snode_read_write():
 def test_float16():
     dtype = qd.float16
     x = qd.field(dtype, shape=())
-    x[None] = 0.3
-    print(x[None])
-    assert x[None] == test_utils.approx(0.3, rel=1e-3)
+    x[()] = 0.3
+    print(x[()])
+    assert x[()] == test_utils.approx(0.3, rel=1e-3)
 
 
 @pytest.mark.sm70
@@ -119,14 +119,14 @@ def test_binary_op():
 
     @qd.kernel
     def add():
-        x[None] = y[None] + z[None]
-        x[None] = x[None] * z[None]
+        x[()] = y[()] + z[()]
+        x[()] = x[()] * z[()]
 
-    y[None] = 0.2
-    z[None] = 0.72
+    y[()] = 0.2
+    z[()] = 0.72
     add()
     u = x.to_numpy()
-    assert u[None] == test_utils.approx(0.6624, rel=1e-3)
+    assert u[()] == test_utils.approx(0.6624, rel=1e-3)
 
 
 @pytest.mark.sm70
@@ -153,14 +153,14 @@ def test_unary_op():
 
     @qd.kernel
     def foo():
-        x[None] = -y[None]
-        x[None] = qd.floor(x[None])
-        y[None] = qd.ceil(y[None])
+        x[()] = -y[()]
+        x[()] = qd.floor(x[()])
+        y[()] = qd.ceil(y[()])
 
-    y[None] = -1.4
+    y[()] = -1.4
     foo()
-    assert x[None] == test_utils.approx(1, rel=1e-3)
-    assert y[None] == test_utils.approx(-1, rel=1e-3)
+    assert x[()] == test_utils.approx(1, rel=1e-3)
+    assert y[()] == test_utils.approx(-1, rel=1e-3)
 
 
 @pytest.mark.sm70
@@ -175,11 +175,11 @@ def test_extra_unary_promote():
 
     @qd.kernel
     def foo():
-        x[None] = abs(y[None])
+        x[()] = abs(y[()])
 
-    y[None] = -0.3
+    y[()] = -0.3
     foo()
-    assert x[None] == test_utils.approx(0.3, rel=1e-3)
+    assert x[()] == test_utils.approx(0.3, rel=1e-3)
 
 
 @pytest.mark.sm70
@@ -191,12 +191,12 @@ def test_binary_extra_promote():
 
     @qd.kernel
     def foo():
-        y[None] = x[None] ** 2
-        z[None] = qd.atan2(y[None], 0.3)
+        y[()] = x[()] ** 2
+        z[()] = qd.atan2(y[()], 0.3)
 
-    x[None] = 0.1
+    x[()] = 0.1
     foo()
-    assert z[None] == test_utils.approx(math.atan2(0.1**2, 0.3), rel=1e-3)
+    assert z[()] == test_utils.approx(math.atan2(0.1**2, 0.3), rel=1e-3)
 
 
 @pytest.mark.sm70
@@ -208,11 +208,11 @@ def test_arg_f16():
 
     @qd.kernel
     def foo(a: qd.f16, b: qd.f32, c: qd.f16):
-        x[None] = y[None] + a + b + c
+        x[()] = y[()] + a + b + c
 
-    y[None] = -0.3
+    y[()] = -0.3
     foo(0.3, 0.4, 0.5)
-    assert x[None] == test_utils.approx(0.9, rel=1e-3)
+    assert x[()] == test_utils.approx(0.9, rel=1e-3)
 
 
 @pytest.mark.sm70

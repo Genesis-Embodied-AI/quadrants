@@ -32,6 +32,7 @@ PER_CUDA_FUNCTION(malloc, cuMemAlloc_v2, void **, std::size_t);
 PER_CUDA_FUNCTION(malloc_async_impl, cuMemAllocAsync, void **, std::size_t, void *);
 PER_CUDA_FUNCTION(malloc_managed, cuMemAllocManaged, void **, std::size_t, uint32);
 PER_CUDA_FUNCTION(memset, cuMemsetD8_v2, void *, uint8, std::size_t);
+PER_CUDA_FUNCTION(memset_async, cuMemsetD8Async, void *, uint8, std::size_t, void *);
 PER_CUDA_FUNCTION(memsetd32, cuMemsetD32_v2, void *, uint32, std::size_t);
 PER_CUDA_FUNCTION(mem_free, cuMemFree_v2, void *);
 PER_CUDA_FUNCTION(mem_free_async_impl, cuMemFreeAsync, void *, void *);
@@ -81,6 +82,7 @@ PER_CUDA_FUNCTION(import_external_semaphore, cuImportExternalSemaphore,CUexterna
 // Graph management
 PER_CUDA_FUNCTION(graph_create, cuGraphCreate, void **, uint32);
 PER_CUDA_FUNCTION(graph_add_kernel_node, cuGraphAddKernelNode, void **, void *, const void *, std::size_t, const void *);
+PER_CUDA_FUNCTION(graph_add_empty_node, cuGraphAddEmptyNode, void **, void *, const void *, std::size_t);
 PER_CUDA_FUNCTION(graph_add_node, cuGraphAddNode, void **, void *, const void *, std::size_t, void *);
 PER_CUDA_FUNCTION(graph_instantiate, cuGraphInstantiate, void **, void *, void *, char *, std::size_t);
 PER_CUDA_FUNCTION(graph_launch, cuGraphLaunch, void *, void *);

@@ -183,6 +183,10 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
 
   llvm::Value *get_args_ptr(const Callable *callable, llvm::Value *context);
 
+  // Tag a device pointer as addrspace(1) so InferAddressSpaces can promote its
+  // flat_* accesses to global_*. AMDGPU only; no-op elsewhere.
+  llvm::Value *maybe_tag_amdgpu_global_ptr(llvm::Value *ptr);
+
   void set_args_ptr(Callable *callable, llvm::Value *context, llvm::Value *ptr);
 
   llvm::Value *get_context();

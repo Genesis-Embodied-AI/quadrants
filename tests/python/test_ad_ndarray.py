@@ -3,12 +3,12 @@ import pytest
 import quadrants as qd
 from quadrants.lang.exception import QuadrantsRuntimeError
 
-from tests import test_utils
+from tests.helpers import test_utils
 
-archs_support_ndarray_ad = [qd.cpu, qd.cuda, qd.amdgpu]
+archs_support_ndarray_ad = [qd.cpu, qd.cuda, qd.amdgpu, qd.metal]
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.adstack)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_ad_sum():
 
     N = 10
@@ -40,7 +40,7 @@ def test_ad_sum():
         assert a.grad[i] == b[i]
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.adstack)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_ad_sum_local_atomic():
 
     N = 10
@@ -72,7 +72,7 @@ def test_ad_sum_local_atomic():
         assert a.grad[i] == b[i]
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.adstack)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_ad_power():
     N = 10
     a = qd.ndarray(qd.f32, shape=N, needs_grad=True)
@@ -103,7 +103,7 @@ def test_ad_power():
         assert a.grad[i] == b[i] * 3 ** (b[i] - 1)
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.adstack)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_ad_fibonacci():
     N = 15
     a = qd.ndarray(qd.f32, shape=N, needs_grad=True)
@@ -159,9 +159,9 @@ def test_ad_fibonacci_index():
                 b[q] += a[q]
 
         for i in range(M):
-            f[None] += b[i]
+            f[()] += b[i]
 
-    f.grad[None] = 1
+    f.grad[()] = 1
     a.fill(1)
 
     fib(a, b, f)
@@ -173,7 +173,7 @@ def test_ad_fibonacci_index():
         assert b[i] == is_fib * N
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.adstack)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_integer_stack():
     N = 5
     a = qd.ndarray(qd.f32, shape=N, needs_grad=True)
@@ -212,7 +212,7 @@ def test_integer_stack():
         t = t * 10 + 1
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.adstack)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_double_for_loops():
     N = 5
     a = qd.ndarray(qd.f32, shape=N, needs_grad=True)
@@ -250,7 +250,7 @@ def test_double_for_loops():
         assert b.grad[i] == 2 * i
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.adstack)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_double_for_loops_more_nests():
     N = 6
     a = qd.ndarray(qd.f32, shape=N, needs_grad=True)
@@ -296,7 +296,7 @@ def test_double_for_loops_more_nests():
         assert b.grad[i] == total_grad_b
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.adstack)
+@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=[qd.extension.adstack, qd.extension.data64])
 def test_complex_body():
     N = 5
     a = qd.ndarray(qd.f32, shape=N, needs_grad=True)
@@ -335,7 +335,7 @@ def test_complex_body():
         # assert a.grad[i] == g[i]
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.adstack)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_mixed_inner_loops():
     x = qd.ndarray(dtype=qd.f32, shape=(1,), needs_grad=True)
     arr = qd.ndarray(dtype=qd.f32, shape=(5))
@@ -357,7 +357,7 @@ def test_mixed_inner_loops():
     assert x.grad[0] == 15.0
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.adstack)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_mixed_inner_loops_tape():
     x = qd.ndarray(dtype=qd.f32, shape=(1,), needs_grad=True)
     arr = qd.ndarray(dtype=qd.f32, shape=(5))
@@ -493,25 +493,25 @@ def test_stacked_inner_loops_local_variable_fixed_stack_size_kernel_grad():
         x: qd.types.ndarray(), arr: qd.types.ndarray(), loss: qd.types.ndarray()
     ):
         for i in arr:
-            loss[None] += qd.sin(x[None])
+            loss[()] += qd.sin(x[()])
             for j in range(3):
                 s = 0.0
                 for k in range(3):
-                    s += qd.sin(x[None]) + 1.0
-                loss[None] += s
+                    s += qd.sin(x[()]) + 1.0
+                loss[()] += s
             for j in range(3):
                 s = 0.0
                 for k in range(3):
-                    s += qd.sin(x[None]) + 1.0
-                loss[None] += s
+                    s += qd.sin(x[()]) + 1.0
+                loss[()] += s
 
-    loss.grad[None] = 1.0
-    x[None] = 0.0
+    loss.grad[()] = 1.0
+    x[()] = 0.0
     test_stacked_inner_loops_local_variable(x, arr, loss)
     test_stacked_inner_loops_local_variable.grad(x, arr, loss)
 
-    assert loss[None] == 36.0
-    assert x.grad[None] == 38.0
+    assert loss[()] == 36.0
+    assert x.grad[()] == 38.0
 
 
 @test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack, ad_stack_size=32)
@@ -525,26 +525,26 @@ def test_stacked_mixed_ib_and_non_ib_inner_loops_local_variable_fixed_stack_size
         x: qd.types.ndarray(), arr: qd.types.ndarray(), loss: qd.types.ndarray()
     ):
         for i in arr:
-            loss[None] += qd.sin(x[None])
+            loss[()] += qd.sin(x[()])
             for j in range(3):
                 for k in range(3):
-                    loss[None] += qd.sin(x[None]) + 1.0
+                    loss[()] += qd.sin(x[()]) + 1.0
             for j in range(3):
                 s = 0.0
                 for k in range(3):
-                    s += qd.sin(x[None]) + 1.0
-                loss[None] += s
+                    s += qd.sin(x[()]) + 1.0
+                loss[()] += s
             for j in range(3):
                 for k in range(3):
-                    loss[None] += qd.sin(x[None]) + 1.0
+                    loss[()] += qd.sin(x[()]) + 1.0
 
-    loss.grad[None] = 1.0
-    x[None] = 0.0
+    loss.grad[()] = 1.0
+    x[()] = 0.0
     test_stacked_mixed_ib_and_non_ib_inner_loops_local_variable(x, arr, loss)
     test_stacked_mixed_ib_and_non_ib_inner_loops_local_variable.grad(x, arr, loss)
 
-    assert loss[None] == 54.0
-    assert x.grad[None] == 56.0
+    assert loss[()] == 54.0
+    assert x.grad[()] == 56.0
 
 
 @test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack, ad_stack_size=0)
@@ -558,25 +558,25 @@ def test_stacked_inner_loops_local_variable_adaptive_stack_size_kernel_grad():
         x: qd.types.ndarray(), arr: qd.types.ndarray(), loss: qd.types.ndarray()
     ):
         for i in arr:
-            loss[None] += qd.sin(x[None])
+            loss[()] += qd.sin(x[()])
             for j in range(3):
                 s = 0.0
                 for k in range(3):
-                    s += qd.sin(x[None]) + 1.0
-                loss[None] += s
+                    s += qd.sin(x[()]) + 1.0
+                loss[()] += s
             for j in range(3):
                 s = 0.0
                 for k in range(3):
-                    s += qd.sin(x[None]) + 1.0
-                loss[None] += s
+                    s += qd.sin(x[()]) + 1.0
+                loss[()] += s
 
-    loss.grad[None] = 1.0
-    x[None] = 0.0
+    loss.grad[()] = 1.0
+    x[()] = 0.0
     test_stacked_inner_loops_local_variable(x, arr, loss)
     test_stacked_inner_loops_local_variable.grad(x, arr, loss)
 
-    assert loss[None] == 36.0
-    assert x.grad[None] == 38.0
+    assert loss[()] == 36.0
+    assert x.grad[()] == 38.0
 
 
 @pytest.mark.flaky(reruns=5)
@@ -591,26 +591,26 @@ def test_stacked_mixed_ib_and_non_ib_inner_loops_local_variable_adaptive_stack_s
         x: qd.types.ndarray(), arr: qd.types.ndarray(), loss: qd.types.ndarray()
     ):
         for i in arr:
-            loss[None] += qd.sin(x[None])
+            loss[()] += qd.sin(x[()])
             for j in range(3):
                 for k in range(3):
-                    loss[None] += qd.sin(x[None]) + 1.0
+                    loss[()] += qd.sin(x[()]) + 1.0
             for j in range(3):
                 s = 0.0
                 for k in range(3):
-                    s += qd.sin(x[None]) + 1.0
-                loss[None] += s
+                    s += qd.sin(x[()]) + 1.0
+                loss[()] += s
             for j in range(3):
                 for k in range(3):
-                    loss[None] += qd.sin(x[None]) + 1.0
+                    loss[()] += qd.sin(x[()]) + 1.0
 
-    loss.grad[None] = 1.0
-    x[None] = 0.0
+    loss.grad[()] = 1.0
+    x[()] = 0.0
     test_stacked_mixed_ib_and_non_ib_inner_loops_local_variable(x, arr, loss)
     test_stacked_mixed_ib_and_non_ib_inner_loops_local_variable.grad(x, arr, loss)
 
-    assert loss[None] == 54.0
-    assert x.grad[None] == 56.0
+    assert loss[()] == 54.0
+    assert x.grad[()] == 56.0
 
 
 @test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack, ad_stack_size=0)
@@ -624,13 +624,13 @@ def test_large_for_loops_adaptive_stack_size():
         for i in range(5):
             for j in range(2000):
                 for k in range(1000):
-                    loss[None] += qd.sin(x[None]) + 1.0
+                    loss[()] += qd.sin(x[()]) + 1.0
 
     with qd.ad.Tape(loss=loss):
         test_large_loop(x, arr, loss)
 
-    assert loss[None] == 1e7
-    assert x.grad[None] == 1e7
+    assert loss[()] == 1e7
+    assert x.grad[()] == 1e7
 
 
 @test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack, ad_stack_size=1)
@@ -644,13 +644,13 @@ def test_large_for_loops_fixed_stack_size():
         for i in range(5):
             for j in range(2000):
                 for k in range(1000):
-                    loss[None] += qd.sin(x[None]) + 1.0
+                    loss[()] += qd.sin(x[()]) + 1.0
 
     with qd.ad.Tape(loss=loss):
         test_large_loop(x, arr, loss)
 
-    assert loss[None] == 1e7
-    assert x.grad[None] == 1e7
+    assert loss[()] == 1e7
+    assert x.grad[()] == 1e7
 
 
 @test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
@@ -662,16 +662,16 @@ def test_multiple_ib():
     def compute_y(x: qd.types.ndarray(), y: qd.types.ndarray()):
         for j in range(2):
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
 
-    x[None] = 1.0
+    x[()] = 1.0
     with qd.ad.Tape(y):
         compute_y(x, y)
 
-    assert y[None] == 12.0
-    assert x.grad[None] == 12.0
+    assert y[()] == 12.0
+    assert x.grad[()] == 12.0
 
 
 @test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
@@ -683,21 +683,21 @@ def test_multiple_ib_multiple_outermost():
     def compute_y(x: qd.types.ndarray(), y: qd.types.ndarray()):
         for j in range(2):
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
         for j in range(2):
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
 
-    x[None] = 1.0
+    x[()] = 1.0
     with qd.ad.Tape(y):
         compute_y(x, y)
 
-    assert y[None] == 24.0
-    assert x.grad[None] == 24.0
+    assert y[()] == 24.0
+    assert x.grad[()] == 24.0
 
 
 @test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
@@ -709,23 +709,23 @@ def test_multiple_ib_multiple_outermost_mixed():
     def compute_y(x: qd.types.ndarray(), y: qd.types.ndarray()):
         for j in range(2):
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
         for j in range(2):
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
                 for ii in range(3):
-                    y[None] += x[None]
+                    y[()] += x[()]
 
-    x[None] = 1.0
+    x[()] = 1.0
     with qd.ad.Tape(y):
         compute_y(x, y)
 
-    assert y[None] == 42.0
-    assert x.grad[None] == 42.0
+    assert y[()] == 42.0
+    assert x.grad[()] == 42.0
 
 
 @test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
@@ -737,20 +737,20 @@ def test_multiple_ib_mixed():
     def compute_y(x: qd.types.ndarray(), y: qd.types.ndarray()):
         for j in range(2):
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
                 for k in range(2):
-                    y[None] += x[None]
+                    y[()] += x[()]
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
 
-    x[None] = 1.0
+    x[()] = 1.0
     with qd.ad.Tape(y):
         compute_y(x, y)
 
-    assert y[None] == 30.0
-    assert x.grad[None] == 30.0
+    assert y[()] == 30.0
+    assert x.grad[()] == 30.0
 
 
 @test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
@@ -762,21 +762,21 @@ def test_multiple_ib_deeper():
     def compute_y(x: qd.types.ndarray(), y: qd.types.ndarray()):
         for j in range(2):
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
             for i in range(3):
                 for ii in range(2):
-                    y[None] += x[None]
+                    y[()] += x[()]
             for i in range(3):
                 for ii in range(2):
                     for iii in range(2):
-                        y[None] += x[None]
+                        y[()] += x[()]
 
-    x[None] = 1.0
+    x[()] = 1.0
     with qd.ad.Tape(y):
         compute_y(x, y)
 
-    assert y[None] == 42.0
-    assert x.grad[None] == 42.0
+    assert y[()] == 42.0
+    assert x.grad[()] == 42.0
 
 
 @test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
@@ -817,25 +817,25 @@ def test_multiple_ib_inner_mixed():
     def compute_y(x: qd.types.ndarray(), y: qd.types.ndarray()):
         for j in range(2):
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
             for i in range(3):
                 for ii in range(2):
-                    y[None] += x[None]
+                    y[()] += x[()]
                 for iii in range(2):
-                    y[None] += x[None]
+                    y[()] += x[()]
                     for iiii in range(2):
-                        y[None] += x[None]
+                        y[()] += x[()]
             for i in range(3):
                 for ii in range(2):
                     for iii in range(2):
-                        y[None] += x[None]
+                        y[()] += x[()]
 
-    x[None] = 1.0
+    x[()] = 1.0
     with qd.ad.Tape(y):
         compute_y(x, y)
 
-    assert y[None] == 78.0
-    assert x.grad[None] == 78.0
+    assert y[()] == 78.0
+    assert x.grad[()] == 78.0
 
 
 @test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
@@ -875,16 +875,16 @@ def test_ad_if_simple():
 
     @qd.kernel
     def func(x: qd.types.ndarray(), y: qd.types.ndarray()):
-        if x[None] > 0.0:
-            y[None] = x[None]
+        if x[()] > 0.0:
+            y[()] = x[()]
 
-    x[None] = 1
-    y.grad[None] = 1
+    x[()] = 1
+    y.grad[()] = 1
 
     func(x, y)
     func.grad(x, y)
 
-    assert x.grad[None] == 1
+    assert x.grad[()] == 1
 
 
 @test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
@@ -1002,7 +1002,7 @@ def test_ad_if_parallel():
     assert x.grad[1] == 1
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
+@test_utils.test(arch=archs_support_ndarray_ad, require=[qd.extension.adstack, qd.extension.data64])
 def test_ad_if_parallel_f64():
     x = qd.ndarray(qd.f64, shape=2, needs_grad=True)
     y = qd.ndarray(qd.f64, shape=2, needs_grad=True)
@@ -1096,7 +1096,7 @@ def test_ad_multiple_tapes():
     @qd.kernel
     def compute_sum(a: qd.types.ndarray(), p: qd.types.ndarray()):
         for i in a:
-            p[None] += a[i][0] * 2 + a[i][1] * 3
+            p[()] += a[i][0] * 2 + a[i][1] * 3
 
     a = qd.ndarray(qd.math.vec2, shape=N, needs_grad=True)
     p = qd.ndarray(qd.f32, shape=(), needs_grad=True)
@@ -1108,7 +1108,7 @@ def test_ad_multiple_tapes():
     with qd.ad.Tape(loss=p):
         compute_sum(a, p)
 
-    assert p[None] == N * (2 + 3) * init_val
+    assert p[()] == N * (2 + 3) * init_val
 
     for i in range(N):
         assert a.grad[i][0] == 2
@@ -1119,7 +1119,7 @@ def test_ad_multiple_tapes():
     with qd.ad.Tape(loss=p):
         compute_sum(a, p)
 
-    assert p[None] == N * (2 + 3) * init_val
+    assert p[()] == N * (2 + 3) * init_val
 
     for i in range(N):
         assert a.grad[i][0] == 2
@@ -1133,19 +1133,19 @@ def test_ad_set_loss_grad():
 
     @qd.kernel
     def eval_x(x: qd.types.ndarray()):
-        x[None] = 1.0
+        x[()] = 1.0
 
     @qd.kernel
     def compute_1(x: qd.types.ndarray(), loss: qd.types.ndarray()):
-        loss[None] = x[None]
+        loss[()] = x[()]
 
     @qd.kernel
     def compute_2(x: qd.types.ndarray(), loss: qd.types.ndarray()):
-        loss[None] = 2 * x[None]
+        loss[()] = 2 * x[()]
 
     @qd.kernel
     def compute_3(x: qd.types.ndarray(), loss: qd.types.ndarray()):
-        loss[None] = 4 * x[None]
+        loss[()] = 4 * x[()]
 
     eval_x(x)
     with qd.ad.Tape(loss=loss):
@@ -1153,8 +1153,8 @@ def test_ad_set_loss_grad():
         compute_2(x, loss)
         compute_3(x, loss)
 
-    assert loss[None] == 4
-    assert x.grad[None] == 4
+    assert loss[()] == 4
+    assert x.grad[()] == 4
 
 
 @test_utils.test(arch=archs_support_ndarray_ad)
@@ -1167,11 +1167,11 @@ def test_grad_tensor_in_kernel():
     @qd.kernel
     def test(x: qd.types.ndarray(), b: qd.types.ndarray()):
         for i in x:
-            b[None] += x.grad[i]
+            b[()] += x.grad[i]
 
     a.grad.fill(2.0)
     test(a, b)
-    assert b[None] == N * 2.0
+    assert b[()] == N * 2.0
 
     with pytest.raises(RuntimeError, match=r"Cannot automatically differentiate through a grad tensor"):
         test.grad(a, b)

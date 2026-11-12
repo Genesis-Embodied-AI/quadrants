@@ -3,7 +3,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 def _solve_vector_equal(v1, v2, tol):
@@ -22,16 +22,16 @@ def _test_solve_2x2(dt, a00):
 
     @qd.kernel
     def solve_2x2():
-        A[None] = qd.Matrix([[a00, 1.0], [1.0, 1.001]])
-        b[None] = qd.Vector([3.0, 15.0])
-        x[None] = qd.solve(A[None], b[None])
+        A[()] = qd.Matrix([[a00, 1.0], [1.0, 1.001]])
+        b[()] = qd.Vector([3.0, 15.0])
+        x[()] = qd.solve(A[()], b[()])
 
     solve_2x2()
 
     tol = 1e-5 if dt == qd.f32 else 1e-12
     dtype = np.float32 if dt == qd.f32 else np.float64
-    x_np = np.linalg.solve(A[None].to_numpy().astype(dtype), b[None].to_numpy().astype(dtype))
-    x_ti = x[None].to_numpy().astype(dtype)
+    x_np = np.linalg.solve(A[()].to_numpy().astype(dtype), b[()].to_numpy().astype(dtype))
+    x_ti = x[()].to_numpy().astype(dtype)
 
     idx_np = np.argsort(x_np)
     idx_ti = np.argsort(x_ti)
@@ -46,16 +46,16 @@ def _test_solve_3x3(dt, a00):
 
     @qd.kernel
     def solve_3x3():
-        A[None] = qd.Matrix([[a00, 2.0, -4.0], [2.0, 3.0, 3.0], [5.0, -3, 1.0]])
-        b[None] = qd.Vector([3.0, 15.0, 14.0])
-        x[None] = qd.solve(A[None], b[None])
+        A[()] = qd.Matrix([[a00, 2.0, -4.0], [2.0, 3.0, 3.0], [5.0, -3, 1.0]])
+        b[()] = qd.Vector([3.0, 15.0, 14.0])
+        x[()] = qd.solve(A[()], b[()])
 
     solve_3x3()
 
     tol = 1e-5 if dt == qd.f32 else 1e-12
     dtype = np.float32 if dt == qd.f32 else np.float64
-    x_np = np.linalg.solve(A[None].to_numpy().astype(dtype), b[None].to_numpy().astype(dtype))
-    x_ti = x[None].to_numpy().astype(dtype)
+    x_np = np.linalg.solve(A[()].to_numpy().astype(dtype), b[()].to_numpy().astype(dtype))
+    x_ti = x[()].to_numpy().astype(dtype)
 
     idx_np = np.argsort(x_np)
     idx_ti = np.argsort(x_ti)

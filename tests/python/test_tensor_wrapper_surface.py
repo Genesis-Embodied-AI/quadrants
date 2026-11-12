@@ -11,7 +11,7 @@ Pins the wrapper behavior the user-facing factory relies on:
 - ``VectorTensor`` / ``MatrixTensor`` carry ``element_shape`` and round-trip via pickle on both backends.
 - ``qd.wrap`` picks the right subclass for a bare impl.
 
-Stork-19 flipped ``qd.tensor()`` (and the Vector/Matrix variants) to return wrappers, so most tests below can use the
+``qd.tensor()`` (and the Vector/Matrix variants) returns wrappers, so most tests below can use the
 factory result directly. The ``qd.wrap`` tests still allocate bare impls (via ``qd.field`` / ``qd.ndarray`` /
 ``qd.Vector.field`` / ``qd.Matrix.field``) and exercise the explicit wrap path.
 """
@@ -24,7 +24,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 BACKENDS = [qd.Backend.FIELD, qd.Backend.NDARRAY]
 BACKEND_IDS = ["field", "ndarray"]
@@ -205,7 +205,7 @@ def test_wrapper_grad_none_when_no_grad_int_dtype(backend):
     # Pre-existing Quadrants asymmetry: a ``Field`` with a real dtype always has a zombie ``.grad`` stub created by
     # ``create_field_member`` regardless of ``needs_grad=``, while an ``Ndarray`` correctly reports ``grad = None``.
     # Int dtypes skip the stub path on both backends, so this test uses ``qd.i32`` to get symmetric ``grad is None``
-    # behaviour. Cleaning up the real-dtype asymmetry is tracked in the design doc and deferred to a follow-up branch.
+    # behaviour.
     t = qd.tensor(qd.i32, shape=(4,), backend=backend)
     assert t.grad is None
 
@@ -512,3 +512,18 @@ def test_vector_to_numpy_copy_none_dtype_fallback(backend):
     arr = t.to_numpy(dtype=np.float64, copy=None)
     assert arr.dtype == np.float64
     np.testing.assert_array_equal(arr, src.astype(np.float64))
+
+
+@test_utils.test(arch=qd.cpu)
+def test_vector_tensor_to_numpy_dtype_ndarray_backend():
+    """Tensor wrapper around VectorNdarray must forward dtype= correctly."""
+    v = qd.Vector.tensor(3, qd.f32, shape=(2,), backend=qd.Backend.NDARRAY)
+    arr = v.to_numpy(dtype=np.float64)
+    assert arr.dtype == np.float64
+
+
+@test_utils.test(arch=qd.cpu)
+def test_matrix_tensor_to_numpy_dtype_ndarray_backend():
+    m = qd.Matrix.tensor(2, 2, qd.f32, shape=(3,), backend=qd.Backend.NDARRAY)
+    arr = m.to_numpy(dtype=np.float64)
+    assert arr.dtype == np.float64

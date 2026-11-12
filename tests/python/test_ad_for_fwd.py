@@ -1,6 +1,6 @@
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test()
@@ -360,16 +360,16 @@ def test_mixed_inner_loops():
     @qd.kernel
     def mixed_inner_loops():
         for i in arr:
-            loss[None] += qd.sin(x[None])
+            loss[()] += qd.sin(x[()])
             for j in range(2):
-                loss[None] += qd.sin(x[None]) + 1.0
+                loss[()] += qd.sin(x[()]) + 1.0
 
-    x[None] = 0.0
+    x[()] = 0.0
     with qd.ad.FwdMode(loss=loss, param=x):
         mixed_inner_loops()
 
-    assert loss[None] == 10.0
-    assert loss.dual[None] == 15.0
+    assert loss[()] == 10.0
+    assert loss.dual[()] == 15.0
 
 
 @test_utils.test()
@@ -385,16 +385,16 @@ def test_inner_loops_local_variable():
                 s = 0.0
                 t = 0.0
                 for k in range(3):
-                    s += qd.sin(x[None]) + 1.0
-                    t += qd.sin(x[None])
-                loss[None] += s + t
+                    s += qd.sin(x[()]) + 1.0
+                    t += qd.sin(x[()])
+                loss[()] += s + t
 
-    x[None] = 0.0
+    x[()] = 0.0
     with qd.ad.FwdMode(loss=loss, param=x):
         inner_loops_local_variable()
 
-    assert loss[None] == 18.0
-    assert loss.dual[None] == 36.0
+    assert loss[()] == 18.0
+    assert loss.dual[()] == 36.0
 
 
 @test_utils.test()
@@ -410,18 +410,18 @@ def test_more_inner_loops_local_variable():
                 s = 0.0
                 for k in range(3):
                     u = 0.0
-                    s += qd.sin(x[None]) + 1.0
+                    s += qd.sin(x[()]) + 1.0
                     for l in range(2):
-                        u += qd.sin(x[None])
-                    loss[None] += u
-                loss[None] += s
+                        u += qd.sin(x[()])
+                    loss[()] += u
+                loss[()] += s
 
-    x[None] = 0.0
+    x[()] = 0.0
     with qd.ad.FwdMode(loss=loss, param=x):
         more_inner_loops_local_variable()
 
-    assert loss[None] == 12.0
-    assert loss.dual[None] == 36.0
+    assert loss[()] == 12.0
+    assert loss.dual[()] == 36.0
 
 
 @test_utils.test()
@@ -433,24 +433,24 @@ def test_stacked_inner_loops_local_variable():
     @qd.kernel
     def stacked_inner_loops_local_variable():
         for i in arr:
-            loss[None] += qd.sin(x[None])
+            loss[()] += qd.sin(x[()])
             for j in range(3):
                 s = 0.0
                 for k in range(3):
-                    s += qd.sin(x[None]) + 1.0
-                loss[None] += s
+                    s += qd.sin(x[()]) + 1.0
+                loss[()] += s
             for j in range(3):
                 s = 0.0
                 for k in range(3):
-                    s += qd.sin(x[None]) + 1.0
-                loss[None] += s
+                    s += qd.sin(x[()]) + 1.0
+                loss[()] += s
 
-    x[None] = 0.0
+    x[()] = 0.0
     with qd.ad.FwdMode(loss=loss, param=x):
         stacked_inner_loops_local_variable()
 
-    assert loss[None] == 36.0
-    assert loss.dual[None] == 38.0
+    assert loss[()] == 36.0
+    assert loss.dual[()] == 38.0
 
 
 @test_utils.test()
@@ -462,25 +462,25 @@ def test_stacked_mixed_ib_and_non_ib_inner_loops_local_variable():
     @qd.kernel
     def stacked_mixed_ib_and_non_ib_inner_loops_local_variable():
         for i in arr:
-            loss[None] += qd.sin(x[None])
+            loss[()] += qd.sin(x[()])
             for j in range(3):
                 for k in range(3):
-                    loss[None] += qd.sin(x[None]) + 1.0
+                    loss[()] += qd.sin(x[()]) + 1.0
             for j in range(3):
                 s = 0.0
                 for k in range(3):
-                    s += qd.sin(x[None]) + 1.0
-                loss[None] += s
+                    s += qd.sin(x[()]) + 1.0
+                loss[()] += s
             for j in range(3):
                 for k in range(3):
-                    loss[None] += qd.sin(x[None]) + 1.0
+                    loss[()] += qd.sin(x[()]) + 1.0
 
-    x[None] = 0.0
+    x[()] = 0.0
     with qd.ad.FwdMode(loss=loss, param=x):
         stacked_mixed_ib_and_non_ib_inner_loops_local_variable()
 
-    assert loss[None] == 54.0
-    assert loss.dual[None] == 56.0
+    assert loss[()] == 54.0
+    assert loss.dual[()] == 56.0
 
 
 @test_utils.test()
@@ -494,13 +494,13 @@ def test_large_for_loops():
         for i in range(2000):
             for j in range(100):
                 for k in range(5):
-                    loss[None] += qd.sin(x[None]) + 1.0
+                    loss[()] += qd.sin(x[()]) + 1.0
 
     with qd.ad.FwdMode(loss=loss, param=x):
         large_for_loop()
 
-    assert loss[None] == 1e6
-    assert loss.dual[None] == 1e6
+    assert loss[()] == 1e6
+    assert loss.dual[()] == 1e6
 
 
 @test_utils.test()
@@ -512,16 +512,16 @@ def test_multiple_ib():
     def compute_y():
         for j in range(2):
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
 
-    x[None] = 1.0
+    x[()] = 1.0
     with qd.ad.FwdMode(loss=y, param=x):
         compute_y()
 
-    assert y[None] == 12.0
-    assert y.dual[None] == 12.0
+    assert y[()] == 12.0
+    assert y.dual[()] == 12.0
 
 
 @test_utils.test()
@@ -533,21 +533,21 @@ def test_multiple_ib_multiple_outermost():
     def compute_y():
         for j in range(2):
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
         for j in range(2):
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
 
-    x[None] = 1.0
+    x[()] = 1.0
     with qd.ad.FwdMode(loss=y, param=x):
         compute_y()
 
-    assert y[None] == 24.0
-    assert y.dual[None] == 24.0
+    assert y[()] == 24.0
+    assert y.dual[()] == 24.0
 
 
 @test_utils.test()
@@ -559,23 +559,23 @@ def test_multiple_ib_multiple_outermost_mixed():
     def compute_y():
         for j in range(2):
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
         for j in range(2):
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
                 for ii in range(3):
-                    y[None] += x[None]
+                    y[()] += x[()]
 
-    x[None] = 1.0
+    x[()] = 1.0
     with qd.ad.FwdMode(loss=y, param=x):
         compute_y()
 
-    assert y[None] == 42.0
-    assert y.dual[None] == 42.0
+    assert y[()] == 42.0
+    assert y.dual[()] == 42.0
 
 
 @test_utils.test()
@@ -587,20 +587,20 @@ def test_multiple_ib_mixed():
     def compute_y():
         for j in range(2):
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
                 for k in range(2):
-                    y[None] += x[None]
+                    y[()] += x[()]
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
 
-    x[None] = 1.0
+    x[()] = 1.0
     with qd.ad.FwdMode(loss=y, param=x):
         compute_y()
 
-    assert y[None] == 30.0
-    assert y.dual[None] == 30.0
+    assert y[()] == 30.0
+    assert y.dual[()] == 30.0
 
 
 @test_utils.test()
@@ -612,21 +612,21 @@ def test_multiple_ib_deeper():
     def compute_y():
         for j in range(2):
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
             for i in range(3):
                 for ii in range(2):
-                    y[None] += x[None]
+                    y[()] += x[()]
             for i in range(3):
                 for ii in range(2):
                     for iii in range(2):
-                        y[None] += x[None]
+                        y[()] += x[()]
 
-    x[None] = 1.0
+    x[()] = 1.0
     with qd.ad.FwdMode(loss=y, param=x):
         compute_y()
 
-    assert y[None] == 42.0
-    assert y.dual[None] == 42.0
+    assert y[()] == 42.0
+    assert y.dual[()] == 42.0
 
 
 @test_utils.test()
@@ -665,22 +665,22 @@ def test_multiple_ib_inner_mixed():
     def compute_y():
         for j in range(2):
             for i in range(3):
-                y[None] += x[None]
+                y[()] += x[()]
             for i in range(3):
                 for ii in range(2):
-                    y[None] += x[None]
+                    y[()] += x[()]
                 for iii in range(2):
-                    y[None] += x[None]
+                    y[()] += x[()]
                     for iiii in range(2):
-                        y[None] += x[None]
+                        y[()] += x[()]
             for i in range(3):
                 for ii in range(2):
                     for iii in range(2):
-                        y[None] += x[None]
+                        y[()] += x[()]
 
-    x[None] = 1.0
+    x[()] = 1.0
     with qd.ad.FwdMode(loss=y, param=x):
         compute_y()
 
-    assert y[None] == 78.0
-    assert y.dual[None] == 78.0
+    assert y[()] == 78.0
+    assert y.dual[()] == 78.0

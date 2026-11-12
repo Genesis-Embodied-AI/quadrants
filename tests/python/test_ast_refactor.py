@@ -7,7 +7,7 @@ import quadrants as qd
 from quadrants.lang import impl
 from quadrants.lang.util import has_pytorch
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 u = platform.uname()
 
@@ -26,7 +26,7 @@ def test_namedexpr():
 @test_utils.test()
 def test_binop():
     @qd.kernel
-    def foo(x: qd.i32, y: qd.i32, a: qd.template()):
+    def foo(x: qd.i32, y: qd.i32, a: qd.Template):
         a[0] = x + y
         a[1] = x - y
         a[2] = x * y
@@ -67,7 +67,7 @@ def test_binop():
 @test_utils.test()
 def test_augassign():
     @qd.kernel
-    def foo(x: qd.i32, y: qd.i32, a: qd.template(), b: qd.template()):
+    def foo(x: qd.i32, y: qd.i32, a: qd.Template, b: qd.Template):
         for i in a:
             a[i] = x
         a[0] += y
@@ -114,7 +114,7 @@ def test_augassign():
 @test_utils.test()
 def test_unaryop():
     @qd.kernel
-    def foo(x: qd.i32, a: qd.template()):
+    def foo(x: qd.i32, a: qd.Template):
         a[0] = +x
         a[1] = -x
         a[2] = not x
@@ -138,7 +138,7 @@ def test_unaryop():
 @test_utils.test()
 def test_boolop():
     @qd.kernel
-    def foo(a: qd.template()):
+    def foo(a: qd.Template):
         a[0] = 0 and 0
         a[1] = 0 and 1
         a[2] = 1 and 0
@@ -177,7 +177,7 @@ def test_boolop():
 @test_utils.test()
 def test_single_compare():
     @qd.kernel
-    def foo(a: qd.template(), b: qd.template(), c: qd.template()):
+    def foo(a: qd.Template, b: qd.Template, c: qd.Template):
         for i in qd.static(range(3)):
             c[i * 6] = a[i] == b[i]
             c[i * 6 + 1] = a[i] != b[i]
@@ -207,7 +207,7 @@ def test_single_compare():
 @test_utils.test()
 def test_chain_compare():
     @qd.kernel
-    def foo(a: qd.i32, b: qd.i32, c: qd.template()):
+    def foo(a: qd.i32, b: qd.i32, c: qd.Template):
         c[0] = a == b == a
         c[1] = a == b != a
         c[2] = a != b == a
@@ -282,7 +282,7 @@ def test_if():
 @test_utils.test(print_preprocessed_ir=True)
 def test_static_if():
     @qd.kernel
-    def foo(x: qd.template()) -> qd.i32:
+    def foo(x: qd.Template) -> qd.i32:
         ret = 0
         if qd.static(x):
             ret = 1
@@ -458,7 +458,7 @@ def test_static_for_break():
     n = 10
 
     @qd.kernel
-    def foo(a: qd.template()):
+    def foo(a: qd.Template):
         for i in qd.static(range(n)):
             a[i] = 3
             if qd.static(i >= 5):
@@ -482,7 +482,7 @@ def test_static_grouped_for_break():
     n = 4
 
     @qd.kernel
-    def foo(a: qd.template()):
+    def foo(a: qd.Template):
         for I in qd.static(qd.grouped(qd.ndrange(n, n))):
             a[I] = 3
             if qd.static(I[0] >= 3):
@@ -507,7 +507,7 @@ def test_static_for_continue():
     n = 10
 
     @qd.kernel
-    def foo(a: qd.template()):
+    def foo(a: qd.Template):
         for i in qd.static(range(n)):
             a[i] = 3
             if qd.static(i >= 5):
@@ -529,7 +529,7 @@ def test_static_grouped_for_continue():
     n = 4
 
     @qd.kernel
-    def foo(a: qd.template()):
+    def foo(a: qd.Template):
         for I in qd.static(qd.grouped(qd.ndrange(n, n))):
             a[I] = 3
             if qd.static(I[0] >= 3):
@@ -552,7 +552,7 @@ def test_for_break():
     n = 4
 
     @qd.kernel
-    def foo(a: qd.template()):
+    def foo(a: qd.Template):
         for i in range(n):
             for j in range(n):
                 a[i, j] = 3
@@ -578,7 +578,7 @@ def test_for_continue():
     n = 4
 
     @qd.kernel
-    def foo(a: qd.template()):
+    def foo(a: qd.Template):
         for i in range(n):
             for j in range(n):
                 a[i, j] = 3
@@ -631,10 +631,10 @@ def test_while_break():
             i += 1
             if i > 10:
                 break
-        ret[None] = s
+        ret[()] = s
 
     func()
-    assert ret[None] == 55
+    assert ret[()] == 55
 
 
 @test_utils.test()
@@ -650,10 +650,10 @@ def test_while_continue():
             if i % 2 == 0:
                 continue
             s += i
-        ret[None] = s
+        ret[()] = s
 
     func()
-    assert ret[None] == 25
+    assert ret[()] == 25
 
 
 @test_utils.test(print_preprocessed_ir=True)
@@ -679,7 +679,7 @@ def test_func():
 @test_utils.test(print_preprocessed_ir=True)
 def test_func_in_python_func():
     @qd.func
-    def bar(x: qd.template()):
+    def bar(x: qd.Template):
         if qd.static(x):
             mat = bar(x // 2)
             mat = mat @ mat
@@ -694,7 +694,7 @@ def test_func_in_python_func():
         return impl.subscript(ast_builder, bar(x), 1, 0)
 
     @qd.kernel
-    def foo(x: qd.template()) -> qd.i32:
+    def foo(x: qd.Template) -> qd.i32:
         return fibonacci(x)
 
     fib = [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]
@@ -716,7 +716,7 @@ def test_ifexp():
 @test_utils.test(print_preprocessed_ir=True)
 def test_static_ifexp():
     @qd.kernel
-    def foo(x: qd.template()) -> qd.i32:
+    def foo(x: qd.Template) -> qd.i32:
         return 1 if qd.static(x) else 0
 
     assert foo(1) == 1
@@ -729,7 +729,7 @@ def test_static_assign():
     b = qd.field(qd.i32, shape=(1,))
 
     @qd.kernel
-    def foo(xx: qd.template(), yy: qd.template()) -> qd.i32:
+    def foo(xx: qd.Template, yy: qd.Template) -> qd.i32:
         x, y = qd.static(xx, yy)
         x[0] -= 1
         y[0] -= 1
@@ -772,7 +772,7 @@ def test_quadrants_other_than_ti():
     import quadrants as tc
 
     @tc.func
-    def bar(x: tc.template()):
+    def bar(x: tc.Template):
         if tc.static(x):
             mat = bar(x // 2)
             mat = mat @ mat
@@ -787,7 +787,7 @@ def test_quadrants_other_than_ti():
         return impl.subscript(ast_builder, bar(x), 1, 0)
 
     @tc.kernel
-    def foo(x: tc.template()) -> tc.i32:
+    def foo(x: tc.Template) -> tc.i32:
         return fibonacci(x)
 
     fib = [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]
@@ -845,7 +845,7 @@ def test_assert_message_formatted():
 @test_utils.test(print_full_traceback=False)
 def test_dict():
     @qd.kernel
-    def foo(x: qd.template()) -> qd.i32:
+    def foo(x: qd.Template) -> qd.i32:
         a = {1: 2, 3: 4}
         b = {5: 6, **a}
         return b[x]
@@ -858,11 +858,11 @@ def test_dict():
 @test_utils.test()
 def test_single_listcomp():
     @qd.func
-    def identity(dt, n: qd.template()):
+    def identity(dt, n: qd.Template):
         return qd.Matrix([[qd.cast(int(i == j), dt) for j in range(n)] for i in range(n)])
 
     @qd.kernel
-    def foo(n: qd.template()) -> qd.i32:
+    def foo(n: qd.Template) -> qd.i32:
         a = identity(qd.i32, n)
         b = [i[0] for i in a]
         ret = 0
@@ -876,11 +876,11 @@ def test_single_listcomp():
 @test_utils.test()
 def test_listcomp():
     @qd.func
-    def identity(dt, n: qd.template()):
+    def identity(dt, n: qd.Template):
         return qd.Matrix([[qd.cast(int(i == j), dt) for j in range(n)] for i in range(n)])
 
     @qd.kernel
-    def foo(n: qd.template()) -> qd.i32:
+    def foo(n: qd.Template) -> qd.i32:
         a = identity(qd.i32, n)
         b = [j for i in a for j in i]
         ret = 0
@@ -895,7 +895,7 @@ def test_listcomp():
 @test_utils.test()
 def test_dictcomp():
     @qd.kernel
-    def foo(n: qd.template()) -> qd.i32:
+    def foo(n: qd.Template) -> qd.i32:
         a = {i: i * i for i in range(n) if i % 3 if i % 2}
         ret = 0
         for i in qd.static(range(n)):
@@ -910,7 +910,7 @@ def test_dictcomp():
 @test_utils.test(print_full_traceback=False)
 def test_dictcomp_fail():
     @qd.kernel
-    def foo(n: qd.template(), m: qd.template()) -> qd.i32:
+    def foo(n: qd.Template, m: qd.Template) -> qd.i32:
         a = {i: i * i for i in range(n) if i % 3 if i % 2}
         return a[m]
 
@@ -1011,7 +1011,7 @@ def test_raise():
 @test_utils.test()
 def test_default_template_args_on_func():
     @qd.func
-    def bar(a: qd.template() = 123):
+    def bar(a: qd.Template = 123):
         return a
 
     @qd.kernel

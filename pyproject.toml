@@ -9,24 +9,26 @@ classifiers = [
     "Topic :: Games/Entertainment :: Simulation",
     "Intended Audience :: Science/Research",
     "Intended Audience :: Developers",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 license = "Apache-2.0"
 keywords = ["graphics", "simulation"]
 dynamic = ["version"]
 readme = "README.md"
-requires-python = ">=3.10,<3.14"
+requires-python = ">=3.12,<3.15"
 dependencies = [
-    "numpy>=1.26.0",
+    "numpy>=1.26.0; python_version < '3.14'",
+    "numpy>=2.3.4; python_version >= '3.14'",
     "colorama",
     "dill",
-    "pydantic>=2.0.0",  # rewrite of 1.10 from scratch
+    "pydantic>=2.0.0; python_version < '3.14'",  # rewrite of 1.10 from scratch
+    "pydantic>=2.12.0; python_version >= '3.14'",
     "rich>=1.0.0",  # first non-beta version; 2020
     "setuptools>=77.0.0",  # Gives project.license-files
-    "cffi>=1.16.0",
+    "cffi>=1.16.0; python_version < '3.14'",
+    "cffi>=2.0.0; python_version >= '3.14'",
 ]
 
 [tool.setuptools_scm]
@@ -51,8 +53,12 @@ dev = [
     "colorama",
     "coverage",
     "Pillow",
-    "nanobind>=2.0.0",  # C++ <-> Python bindings (replaced pybind11); ships its own stubgen
+    # C++ <-> Python bindings (replaced pybind11); ships its own stubgen. 2.14.0 requires __index__ for implicit
+    # conversion to int arguments, which numpy.bool no longer provides, so `field[i] = np_bool` stops working.
+    # FIXME: coerce numpy scalars to int in lang/field.py before handing them to write_uint, then drop this bound.
+    "nanobind>=2.12.0,<2.14.0",
     "pydantic",
+    "pydantic>=2.12.0; python_version >= '3.14'",
     "GitPython",
     "yapf",
     "distro",
@@ -67,6 +73,7 @@ dev = [
     "scikit-build-core>=0.10",  # build backend (was scikit-build classic)
     "build",                    # `python -m build` / pip wheel frontend
     "setuptools_scm>=6.0",
+    "numpy>=2.3.4; python_version >= '3.14'",
     "numpy>=2.0.0",
     "ninja; platform_system != 'Windows'",
 ]
@@ -80,11 +87,13 @@ test = [
     "pytest-retry",
     "pytest-xdist>=3.7.0",
 
+    "numpy>=2.3.4; python_version >= '3.14'",
     "numpy>=2.0.0",  # otherwise, on windows, tries to install 1.26.4, which has no wheel for python 3.13
     "psutil",
     "autograd",
     "requests",
     "cffi",
+    "cffi>=2.0.0; python_version >= '3.14'",
     "scipy",
     "setproctitle",
     "nbmake",
@@ -95,7 +104,7 @@ test = [
 ]
 
 [project.entry-points.pytest11]
-quadrants = "quadrants.pytest_plugin"
+quadrants = "quadrants_pytest"
 
 [project.urls]
 Homepage = "https://github.com/Genesis-Embodied-AI/quadrants"
@@ -103,7 +112,9 @@ Homepage = "https://github.com/Genesis-Embodied-AI/quadrants"
 [build-system]
 requires = [
     "scikit-build-core>=0.10",
-    "nanobind>=2.0.0",     # nanobind bindings (headers + CMake config + nanobind_add_stub)
+    # FIXME: drop this bound together with the one in the dev extra above.
+    "nanobind>=2.12.0,<2.14.0",
+    "numpy>=2.3.4; python_version >= '3.14'",
     "numpy>=2.0.0",        # NumPy headers for the extension
     "setuptools_scm>=6.0", # version from git tags (metadata provider below)
 ]
@@ -115,10 +126,10 @@ build-backend = "scikit_build_core.build"
 minimum-version = "build-system.requires"
 # Persistent build dir keyed by wheel tag -> fast incremental rebuilds (esp. editable).
 build-dir = "build/{wheel_tag}"
-# Pure-Python sources live under python/quadrants; the final path element (quadrants)
-# is the importable package. The compiled core, runtime .bc and assets are added by
+# Pure-Python packages live under python/; each final path element is the importable
+# package name. The compiled core, runtime .bc and assets are added by
 # CMake install() rules under the same quadrants/ tree, so wheel + editable co-locate.
-wheel.packages = ["python/quadrants"]
+wheel.packages = ["python/quadrants", "python/quadrants_pytest"]
 # redirect editable: compiled artifacts installed to site-packages, Python served live
 # from the source tree.
 editable.mode = "redirect"

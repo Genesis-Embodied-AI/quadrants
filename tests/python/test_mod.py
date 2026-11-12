@@ -2,7 +2,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @pytest.mark.parametrize(
@@ -20,10 +20,10 @@ def test_py_style_mod(a, b):
 
     @qd.kernel
     def func(x: qd.i32, y: qd.i32):
-        z[None] = x % y
+        z[()] = x % y
 
     func(a, b)
-    assert z[None] == a % b
+    assert z[()] == a % b
 
 
 @pytest.mark.parametrize(
@@ -41,10 +41,10 @@ def test_c_style_mod(a, b):
 
     @qd.kernel
     def func(x: qd.i32, y: qd.i32):
-        z[None] = qd.raw_mod(x, y)
+        z[()] = qd.raw_mod(x, y)
 
     func(a, b)
-    assert z[None] == _c_mod(a, b)
+    assert z[()] == _c_mod(a, b)
 
 
 def _c_mod(a, b):
@@ -58,15 +58,15 @@ def test_mod_scan():
 
     @qd.kernel
     def func(x: qd.i32, y: qd.i32):
-        z[None] = x % y
-        w[None] = qd.raw_mod(x, y)
+        z[()] = x % y
+        w[()] = qd.raw_mod(x, y)
 
     for i in range(-10, 11):
         for j in range(-10, 11):
             if j != 0:
                 func(i, j)
-                assert z[None] == i % j
-                assert w[None] == _c_mod(i, j)
+                assert z[()] == i % j
+                assert w[()] == _c_mod(i, j)
 
 
 @test_utils.test()
@@ -86,3 +86,32 @@ def test_py_style_unsigned_mod():
         return qd.u32(3583196299) % qd.u32(524288)
 
     assert func() == 212107
+
+
+@pytest.mark.parametrize(
+    "x,m",
+    [
+        (180.0, 180),
+        (360.0, 180),
+        (540.0, 180),
+        (181.0, 180),
+        (90.0, 180),
+    ],
+)
+@test_utils.test()
+def test_py_style_float_mod_field_int(x, m):
+    # Regression test for quadrants#749. Under fast_math the global IRBuilder carries the afn (ApproxFunc) flag, which
+    # on AMDGPU lowers `fdiv` to an approximate v_rcp_f32 reciprocal (~2.5 ULP). Exactly-divisible cases such as
+    # 180.0/180 then return 0.99999994, so the `a - floor(a/b)*b` float-modulo expansion yields the unreduced dividend
+    # (e.g. 180.0 instead of 0.0). The divisor is read from a field, so it is a runtime value that is not folded to a
+    # constant at compile time (a literal divisor would hide the bug). No-op on CPU/CUDA, where fdiv ignores afn.
+    divisor = qd.field(qd.i32, shape=())
+    result = qd.field(qd.f32, shape=())
+
+    @qd.kernel
+    def func(a: qd.f32):
+        result[()] = a % divisor[()]
+
+    divisor[()] = m
+    func(x)
+    assert result[()] == x % m

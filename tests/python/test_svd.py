@@ -3,7 +3,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test(require=qd.extension.data64, fast_math=False)
@@ -14,12 +14,12 @@ def test_precision():
 
     @qd.kernel
     def forward():
-        v[None] = qd.sqrt(qd.cast(u[None] + 3.25, qd.f64))
-        w[None] = qd.cast(u[None] + 7, qd.f64) / qd.cast(u[None] + 3, qd.f64)
+        v[()] = qd.sqrt(qd.cast(u[()] + 3.25, qd.f64))
+        w[()] = qd.cast(u[()] + 7, qd.f64) / qd.cast(u[()] + 3, qd.f64)
 
     forward()
-    assert v[None] ** 2 == test_utils.approx(3.25, abs=1e-12)
-    assert w[None] * 3 == test_utils.approx(7, abs=1e-12)
+    assert v[()] ** 2 == test_utils.approx(3.25, abs=1e-12)
+    assert w[()] * 3 == test_utils.approx(7, abs=1e-12)
 
 
 def mat_equal(A, B, tol=1e-6):
@@ -40,15 +40,15 @@ def _test_svd(dt, n):
 
     @qd.kernel
     def run():
-        U[None], sigma[None], V[None] = qd.svd(A[None], dt)
-        UtU[None] = U[None].transpose() @ U[None]
-        VtV[None] = V[None].transpose() @ V[None]
-        A_reconstructed[None] = U[None] @ sigma[None] @ V[None].transpose()
+        U[()], sigma[()], V[()] = qd.svd(A[()], dt)
+        UtU[()] = U[()].transpose() @ U[()]
+        VtV[()] = V[()].transpose() @ V[()]
+        A_reconstructed[()] = U[()] @ sigma[()] @ V[()].transpose()
 
     if n == 3:
-        A[None] = [[1, 1, 3], [9, -3, 2], [-3, 4, 2]]
+        A[()] = [[1, 1, 3], [9, -3, 2], [-3, 4, 2]]
     else:
-        A[None] = [[1, 1], [2, 3]]
+        A[()] = [[1, 1], [2, 3]]
 
     run()
 
@@ -60,7 +60,7 @@ def _test_svd(dt, n):
     for i in range(n):
         for j in range(n):
             if i != j:
-                assert sigma[None][i, j] == test_utils.approx(0)
+                assert sigma[()][i, j] == test_utils.approx(0)
 
 
 @pytest.mark.parametrize("dim", [2, 3])
@@ -84,7 +84,7 @@ def test_transpose_no_loop():
 
     @qd.kernel
     def run():
-        U[None], sigma[None], V[None] = qd.svd(A[None])
+        U[()], sigma[()], V[()] = qd.svd(A[()])
 
     run()
     # As long as it passes compilation we are good
@@ -156,11 +156,11 @@ def _test_svd3_sign_convention(dt):
 
     @qd.kernel
     def run():
-        U[None], sigma[None], V[None] = qd.svd(A[None], dt)
-        R[None] = U[None] @ V[None].transpose()
-        detU[None] = U[None].determinant()
-        detV[None] = V[None].determinant()
-        detR[None] = R[None].determinant()
+        U[()], sigma[()], V[()] = qd.svd(A[()], dt)
+        R[()] = U[()] @ V[()].transpose()
+        detU[()] = U[()].determinant()
+        detV[()] = V[()].determinant()
+        detR[()] = R[()].determinant()
 
     tol = 5e-5 if dt == qd.f32 else 1e-10
 
@@ -168,10 +168,10 @@ def _test_svd3_sign_convention(dt):
         A.from_numpy(A_np.astype(np_dt))
         run()
         det_A = float(np.linalg.det(A_np))
-        det_U = float(detU[None])
-        det_V = float(detV[None])
-        det_R = float(detR[None])
-        sigma_diag = np.array([sigma[None][i, i] for i in range(3)])
+        det_U = float(detU[()])
+        det_V = float(detV[()])
+        det_R = float(detR[()])
+        sigma_diag = np.array([sigma[()][i, i] for i in range(3)])
 
         # The libuipc / qipc convention: det(U) = det(V) = +1 for every input. The sign of det(A) is absorbed into σ
         # (so σ may have a negative entry when det(A) < 0).
@@ -231,13 +231,13 @@ def _test_svd_sort_order(n, dt):
 
     @qd.kernel
     def run():
-        U[None], sigma[None], V[None] = qd.svd(A[None], dt)
+        U[()], sigma[()], V[()] = qd.svd(A[()], dt)
 
     tol = 5e-5 if dt == qd.f32 else 1e-10
     for label, A_np in _svd_sort_order_test_inputs(n, np_dt):
         A.from_numpy(A_np)
         run()
-        S_diag = np.array([sigma[None][i, i] for i in range(n)])
+        S_diag = np.array([sigma[()][i, i] for i in range(n)])
         diffs = np.diff(S_diag)
         assert np.all(diffs <= tol), f"[{label}] qd.svd n={n} S not descending: S = {S_diag.tolist()}"
         # Reconstruction must still hold after the sort + sign fix-up.

@@ -3,7 +3,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @pytest.mark.parametrize("static_value", [False, True])
@@ -102,7 +102,7 @@ def test_for_static_if_forwards_backwards(use_field: bool) -> None:
     field_target = V(qd.i32, (BATCH_SIZE, MAX_LINKs))
 
     @qd.kernel
-    def k1(is_backward: qd.template(), field_a: V_ANNOT, field_target: V_ANNOT2):
+    def k1(is_backward: qd.Template, field_a: V_ANNOT, field_target: V_ANNOT2):
         for i_b in range(BATCH_SIZE):
             for j in qd.static(range(MAX_LINKs)) if qd.static(is_backward) else range(field_a[i_b]):
                 print("is_backward", is_backward, j)
@@ -140,7 +140,7 @@ def test_for_static_if_no_ad2():
     y[0, 0].fill(2.0)
 
     @qd.kernel
-    def k1(use_static: qd.template()):
+    def k1(use_static: qd.Template):
         for i_b in qd.ndrange(B):
             z = qd.Vector.zero(qd.f32, 3)
 
@@ -148,14 +148,14 @@ def test_for_static_if_no_ad2():
             for i_3 in qd.static(range(3)) if qd.static(use_static) else range(3):
                 z += x[i_3, i_b] * y[i_3, i_b]
 
-            loss[None] += z.x + z.y + z.z
+            loss[()] += z.x + z.y + z.z
 
     use_static = False
 
     loss.fill(0.0)
     k1(use_static)
 
-    loss.grad[None] = 1.0
+    loss.grad[()] = 1.0
     x.grad.fill(0.0)
     y.grad.fill(0.0)
 

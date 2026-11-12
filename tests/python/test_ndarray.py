@@ -6,7 +6,6 @@ import numpy as np
 import pytest
 
 import quadrants as qd
-from quadrants._test_tools.load_kernel_string import load_kernel_from_string
 from quadrants.lang import impl
 from quadrants.lang.exception import (
     QuadrantsIndexError,
@@ -17,7 +16,8 @@ from quadrants.lang.misc import get_host_arch_list
 from quadrants.lang.util import has_pytorch
 from quadrants.math import ivec3, vec3
 
-from tests import test_utils
+from tests.helpers import test_utils
+from tests.helpers.kernel_loading import load_kernel_from_string
 
 if has_pytorch():
     import torch  # noqa: F401
@@ -306,13 +306,13 @@ def test_ndarray_fill():
     assert (a.to_numpy() == anp).all()
 
     b = qd.Vector.ndarray(4, qd.f32, shape=(n))
-    bnp = np.ones(shape=b.arr.total_shape(), dtype=np.float32)
+    bnp = np.ones(shape=b.arr.total_physical_shape(), dtype=np.float32)
     b.fill(2.5)
     bnp.fill(2.5)
     assert (b.to_numpy() == bnp).all()
 
     c = qd.Matrix.ndarray(4, 4, qd.f32, shape=(n))
-    cnp = np.ones(shape=c.arr.total_shape(), dtype=np.float32)
+    cnp = np.ones(shape=c.arr.total_physical_shape(), dtype=np.float32)
     c.fill(1.5)
     cnp.fill(1.5)
     assert (c.to_numpy() == cnp).all()
@@ -327,7 +327,7 @@ def test_ndarray_rw_cache():
     for i in range(n):
         c_a = copy.deepcopy(a)
         c_b = copy.deepcopy(b)
-        c_a[None] = c_b[10]
+        c_a[()] = c_b[10]
 
 
 def _test_ndarray_numpy_io():
@@ -883,35 +883,6 @@ def test_mismatched_index_python_scope():
         x[0, 0, 0]
 
 
-@test_utils.test(arch=supported_archs_quadrants_ndarray)
-def test_0dim_ndarray_read_write_python_scope():
-    x = qd.ndarray(dtype=qd.f32, shape=())
-
-    x[()] = 1.0
-    assert x[None] == 1.0
-
-    y = qd.ndarray(dtype=qd.math.vec2, shape=())
-    y[()] = [1.0, 2.0]
-    assert y[None] == [1.0, 2.0]
-
-
-@test_utils.test(arch=supported_archs_quadrants_ndarray)
-def test_0dim_ndarray_read_write_quadrants_scope():
-    x = qd.ndarray(dtype=qd.f32, shape=())
-
-    @qd.kernel
-    def write(x: qd.types.NDArray):
-        a = x[()] + 1
-        x[None] = 2 * a
-
-    write(x)
-    assert x[None] == 2.0
-
-    y = qd.ndarray(dtype=qd.math.vec2, shape=())
-    write(y)
-    assert y[None] == [2.0, 2.0]
-
-
 @test_utils.test(arch=supported_archs_quadrants_ndarray, require=qd.extension.data64)
 def test_read_write_f64_python_scope():
     x = qd.ndarray(dtype=qd.f64, shape=2)
@@ -1132,10 +1103,10 @@ def test_ndarray_clamp_verify():
 def test_ndarray_arg_builtin_float_type():
     @qd.kernel
     def foo(x: qd.types.NDArray[float, 0]) -> qd.f32:
-        return x[None]
+        return x[()]
 
     x = qd.ndarray(qd.f32, shape=())
-    x[None] = 42
+    x[()] = 42
     assert foo(x) == 42
 
 
@@ -1212,3 +1183,34 @@ def test_ndarray_del(dtype) -> None:
 
     foo()
     assert qd.lang.impl.get_runtime().prog._get_num_ndarrays() == 0
+
+
+@test_utils.test(arch=qd.cpu)
+def test_vector_ndarray_to_numpy_dtype():
+    v = qd.Vector.ndarray(3, qd.f32, shape=(2,))
+    arr = v.to_numpy(dtype=np.float64)
+    assert arr.dtype == np.float64
+    assert arr.shape == (2, 3)
+
+
+@test_utils.test(arch=qd.cpu)
+def test_matrix_ndarray_to_numpy_dtype():
+    m = qd.Matrix.ndarray(2, 2, qd.f32, shape=(3,))
+    arr = m.to_numpy(dtype=np.float64)
+    assert arr.dtype == np.float64
+    assert arr.shape == (3, 2, 2)
+
+
+@test_utils.test(arch=qd.cpu)
+def test_vector_ndarray_to_numpy_no_dtype_unchanged():
+    """to_numpy() without dtype should return native dtype."""
+    v = qd.Vector.ndarray(3, qd.f32, shape=(2,))
+    arr = v.to_numpy()
+    assert arr.dtype == np.float32
+
+
+@test_utils.test(arch=qd.cpu)
+def test_matrix_ndarray_to_numpy_no_dtype_unchanged():
+    m = qd.Matrix.ndarray(2, 2, qd.f32, shape=(3,))
+    arr = m.to_numpy()
+    assert arr.dtype == np.float32
