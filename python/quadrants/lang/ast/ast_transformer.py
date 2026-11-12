@@ -110,9 +110,13 @@ class ASTTransformer(Builder):
         node.violates_pure, node.ptr, node.violates_pure_reason = ctx.get_var_by_name(node.id)
         # Dataclass fields can arrive as flattened names instead of attribute accesses.
         if (
+            # Restrict this check to known dataclass members, not ordinary variables.
             node.id in ctx.struct_locals
+            # Forwarding a dataclass to a function does not mean the function uses this member.
             and not ctx.expanding_dataclass_call_parameters
+            # Reject a data-oriented object stored in the member.
             and is_data_oriented(node.ptr)
+            # Objects with both decorators are treated as dataclasses, so nesting them remains allowed.
             and not dataclasses.is_dataclass(node.ptr)
         ):
             raise exception.QuadrantsRuntimeTypeError(
