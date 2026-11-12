@@ -3,7 +3,7 @@ import enum
 import functools
 import numbers
 import time
-from typing import Any, Sequence
+from typing import Any, Sequence, TypeAlias
 
 import numpy as np
 
@@ -46,6 +46,11 @@ g_num_ignored_calls = 0
 
 
 FIELD_METADATA_CACHE_VALUE = "add_value_to_cache_key"
+
+# Schemas for this launch, paired with argument indices and member paths.
+LaunchArgSchemas: TypeAlias = Sequence[tuple[int, tuple[str, ...], type[RuntimeDataclassSchema]]]
+DescendantSchemas: TypeAlias = Sequence[tuple[tuple[str, ...], type[RuntimeDataclassSchema]]]
+
 
 # arg_meta used when walking the children of a ``@qd.data_oriented(template_primitives=False)`` object. Its annotation
 # is non-Template (so primitive members contribute their *type* only, not their value, since they are lifted to runtime
@@ -183,12 +188,29 @@ def _get_used_properties(
     return sorted(used)
 
 
+def _select_child_schemas(
+    name: str, descendant_schemas: DescendantSchemas
+) -> tuple[type[RuntimeDataclassSchema] | None, DescendantSchemas]:
+    """Select a child's schema and pass its descendants with paths relative to that child."""
+    child_schema = None
+    child_descendants = []
+    for path, schema in descendant_schemas:
+        if path[0] != name:
+            continue
+        if len(path) == 1:
+            child_schema = schema
+        else:
+            child_descendants.append((path[1:], schema))
+    return child_schema, child_descendants
+
+
 def _stringify_used_properties(
     raise_on_templated_floats: bool,
     path: tuple[str, ...],
     obj: object,
     pruning_paths: set[str] | None,
     parent_flat: str | None,
+    descendant_schemas: DescendantSchemas = (),
 ) -> list[str] | _FailFastcache:
     """Represents names and values of used properties as a string."""
     names = _get_used_properties(path, obj, parent_flat, pruning_paths)
@@ -208,6 +230,7 @@ def _stringify_used_properties(
             return _FAIL_FASTCACHE
         # Properties are always baked into the kernel, even with ``template_primitives=False``, so their value is in the
         # key.
+        child_schema, child_descendants = _select_child_schemas(name, descendant_schemas)
         _repr = stringify_obj_type(
             raise_on_templated_floats,
             child_path,
@@ -215,6 +238,8 @@ def _stringify_used_properties(
             ArgMetadata(Template, ""),
             pruning_paths=pruning_paths,
             parent_flat=_child_flat(parent_flat, name),
+            schema=child_schema,
+            descendant_schemas=child_descendants,
         )
         if _repr is _FAIL_FASTCACHE:
             return _FAIL_FASTCACHE
@@ -285,6 +310,8 @@ def stringify_obj_type(
     arg_meta: ArgMetadata | None,
     pruning_paths: set[str] | None = None,
     parent_flat: str | None = None,
+    schema: type[RuntimeDataclassSchema] | None = None,
+    descendant_schemas: DescendantSchemas = (),
 ) -> str | _FailFastcache:
     """Convert ``obj`` into a deterministic string that contributes to the fastcache key.
 
@@ -298,6 +325,8 @@ def stringify_obj_type(
       - ``pruning_paths``: kernel-accessed flat names from the L1 cache. When provided, the container walkers descend
         only into children whose flat name is in the set - a path the kernel cannot read cannot affect codegen. See
         ``docs/source/user_guide/fastcache.md`` "Pruning-driven argument hashing".
+      - ``schema``: inferred schema for this object, when supplied by its parent.
+      - ``descendant_schemas``: schemas below this object, with paths relative to it.
       - ``parent_flat``: flat-name prefix for ``obj``'s children (e.g. ``__qd_self``), used to build those names.
     """
     # ``Kernel.__call__`` unwraps ``qd.Tensor`` for positional / keyword args, but the walkers below reach struct fields
@@ -341,9 +370,8 @@ def stringify_obj_type(
         _mark_warn_if_not_tensor_annotation(arg_meta)
         return _FAIL_FASTCACHE
     if is_dataclass_instance(obj):
-        # Reuse inferred argument schemas, or infer one for a dataclass reached through a data-oriented member.
-        schema: type[RuntimeDataclassSchema] | None = None
-        if arg_meta is not None:
+        # Reuse discovery or argument schemas; standalone hasher callers can still request inference.
+        if schema is None and arg_meta is not None:
             ann = arg_meta.annotation
             if isinstance(ann, type) and dataclasses.is_dataclass(ann):
                 # Argument metadata already carries an inferred schema at this boundary.
@@ -373,6 +401,7 @@ def stringify_obj_type(
             child_flat = _child_flat(parent_flat, k)
             if not _is_path_used(pruning_paths, child_flat):
                 continue
+            child_schema, child_descendants = _select_child_schemas(k, descendant_schemas)
             _child_repr = stringify_obj_type(
                 raise_on_templated_floats,
                 (*path, k),
@@ -380,11 +409,15 @@ def stringify_obj_type(
                 child_meta,
                 pruning_paths=pruning_paths,
                 parent_flat=child_flat,
+                schema=child_schema,
+                descendant_schemas=child_descendants,
             )
             if _child_repr is _FAIL_FASTCACHE:
                 return _FAIL_FASTCACHE
             child_repr_l.append(f"{k}: {_child_repr}")
-        property_repr_l = _stringify_used_properties(raise_on_templated_floats, path, obj, pruning_paths, parent_flat)
+        property_repr_l = _stringify_used_properties(
+            raise_on_templated_floats, path, obj, pruning_paths, parent_flat, descendant_schemas
+        )
         if isinstance(property_repr_l, _FailFastcache):
             return _FAIL_FASTCACHE
         child_repr_l.extend(property_repr_l)
@@ -415,6 +448,7 @@ def hash_args(
     args: Sequence[Any],
     arg_metas: Sequence[ArgMetadata | None],
     pruning_paths: set[str] | None = None,
+    launch_arg_schemas: LaunchArgSchemas = (),
 ) -> str | FastcacheSkip:
     """Return the args hash string, or a ``FastcacheSkip`` explaining why hashing failed.
 
@@ -436,6 +470,7 @@ def hash_args(
         arg_meta = arg_metas[i_arg]
         # Root flat name carries no ``__qd_`` prefix, matching ``pruning.used_vars_by_func_id``.
         top_flat = arg_meta.name if arg_meta is not None else None
+        descendant_schemas = [(path, schema) for index, path, schema in launch_arg_schemas if index == i_arg]
         _hash = stringify_obj_type(
             raise_on_templated_floats,
             (str(i_arg),),
@@ -443,6 +478,7 @@ def hash_args(
             arg_meta,
             pruning_paths=pruning_paths,
             parent_flat=top_flat,
+            descendant_schemas=descendant_schemas,
         )
         g_repr_time += time.time() - start
         if _hash is _FAIL_FASTCACHE:

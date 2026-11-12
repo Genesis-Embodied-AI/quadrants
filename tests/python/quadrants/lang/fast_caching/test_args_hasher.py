@@ -489,3 +489,41 @@ def test_args_hasher_frozen_dataclass_failure_does_not_poison_narrower_walk() ->
     # And unpruned walks are unaffected: no ``pruning_paths`` -> walk everything -> fail (same as A).
     h_none = args_hasher.hash_args(False, [state], [arg_meta])
     assert isinstance(h_none, FastcacheSkip), f"unpruned walk should fail fastcache; got {h_none!r}"
+
+
+@test_utils.test()
+def test_discovered_schemas_follow_argument_indices_and_member_paths(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Forward each schema through owner recursion without confusing equal paths in different arguments."""
+    from quadrants.lang._runtime_typing.nested_dataclasses import (
+        infer_nested_dataclass_schemas,
+    )
+
+    @dataclasses.dataclass
+    class Leaf:
+        value: object
+
+    @dataclasses.dataclass
+    class State:
+        value: object
+        leaf: object
+
+    @qd.data_oriented
+    class Owner:
+        def __init__(self, state: object) -> None:
+            self.child = state
+
+    owners = (Owner(Owner(State(3, Leaf(4)))), Owner(Owner(State(2.5, Leaf(6.5)))))
+    metas = [ArgMetadata(qd.Template, "first"), ArgMetadata(qd.Template, "second")]
+    schemas = infer_nested_dataclass_schemas(owners, metas, [0, 1])
+    expected = args_hasher.hash_args(False, owners, metas)
+
+    def reject_reinference(*args: object, **kwargs: object) -> None:
+        """Ensure the full recursive walk consumes the supplied schemas."""
+        raise AssertionError("Unexpected schema inference in hashing")
+
+    monkeypatch.setattr(args_hasher, "cached_infer_dataclass_type", reject_reinference)
+    assert args_hasher.hash_args(False, owners, metas, launch_arg_schemas=schemas) == expected
+
+    owners[0].child.child = State(1.5, Leaf(4))
+    replacement_schemas = infer_nested_dataclass_schemas(owners, metas, [0, 1])
+    assert args_hasher.hash_args(False, owners, metas, launch_arg_schemas=replacement_schemas) != expected
