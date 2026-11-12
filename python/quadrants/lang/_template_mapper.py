@@ -81,12 +81,7 @@ class TemplateMapper:
         # ``annotation_has_final_subtree``). Computed lazily on first ``lookup`` so its ``Final`` validation runs then.
         self._mapping_cache_disabled: bool | None = None
 
-    def extract(
-        self,
-        raise_on_templated_floats: bool,
-        args: tuple[Any, ...],
-        final_value_key_by_value_id=None,
-    ) -> Key:
+    def extract(self, raise_on_templated_floats: bool, args: tuple[Any, ...], final_value_key_by_value_id=None) -> Key:
         # Optional ndarray + None gets its own key: _extract_arg's NdarrayType branch reads .shape and raises on None.
         return tuple(
             [
