@@ -380,14 +380,13 @@ def test_unused_dataclass_property_is_not_evaluated() -> None:
 
 
 @test_utils.test()
-def test_dataclass_discovery_guard_allows_data_oriented_dataclass_fields() -> None:
-    """A class with both decorators still exposes its declared dataclass fields."""
+def test_dataclass_discovery_guard_allows_nested_dataclass_fields() -> None:
+    """Nested dataclasses expose their declared fields through a data-oriented owner."""
 
     @dataclass
     class Leaf:
         value: int
 
-    @qd.data_oriented
     @dataclass
     class Middle:
         child: Leaf
