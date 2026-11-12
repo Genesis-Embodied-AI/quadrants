@@ -3345,26 +3345,18 @@ def test_kernel_accepts_subclass_with_unsupported_final_app_field():
 
 
 @test_utils.test()
-def test_kernel_accepts_data_oriented_subclass_of_dataclass_param():
-    # A @qd.data_oriented class subclassing a dataclasses.dataclass is still a subclass of the annotated type, so it
-    # should dispatch through the dataclass path: the kernel reads only the base's declared fields via getattr.
+def test_data_oriented_rejects_dataclass_subclass():
+    """Inherited dataclass membership also prevents applying data_oriented."""
+
     @dataclass
-    class QdSafe:
+    class State:
         x: qd.types.NDArray[qd.i32, 1]
 
-    @qd.data_oriented
-    class DataOrientedSub(QdSafe):
+    class Child(State):
         pass
 
-    @qd.kernel
-    def mykernel(dat: QdSafe) -> None:
-        for i in range(4):
-            dat.x[i] = 7
-
-    sub = DataOrientedSub(x=qd.ndarray(qd.i32, shape=(4,)))
-    mykernel(sub)
-    assert sub.x[0] == 7
-    assert sub.x[3] == 7
+    with pytest.raises(TypeError, match="both a Python dataclass and data-oriented"):
+        qd.data_oriented(Child)
 
 
 @test_utils.test()
