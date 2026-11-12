@@ -56,6 +56,7 @@ from quadrants.lang.field import Field
 from quadrants.lang.matrix import Matrix, MatrixType
 from quadrants.lang.snode import append, deactivate, length
 from quadrants.lang.struct import Struct, StructType
+from quadrants.lang.util import is_data_oriented
 from quadrants.lang.util import (
     is_from_quadrants_module as _is_from_quadrants_module,
 )
@@ -810,6 +811,11 @@ class ASTTransformer(Builder):
                 node.ptr = lifted
                 return node.ptr
             node.ptr = getattr(node.value.ptr, node.attr)
+            if is_data_oriented(node.ptr) and not dataclasses.is_dataclass(node.ptr):
+                raise exception.QuadrantsRuntimeTypeError(
+                    "Data-oriented objects inside Python dataclass fields are unsupported. "
+                    "Store the dataclass on the data-oriented object instead."
+                )
             reject_undiscovered_dataclass_member(
                 node.value.ptr, node.attr, node.ptr, ctx.global_context.runtime_dataclass_members
             )

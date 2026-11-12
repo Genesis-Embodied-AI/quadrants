@@ -257,6 +257,10 @@ def dataclass_to_repr(
         child_flat = _child_flat(parent_flat, field.name)
         if not _is_path_used(pruning_paths, child_flat):
             continue
+        # Compile unsupported nesting so the attribute check reports it instead of loading an old artifact.
+        if is_data_oriented(child_value) and not is_dataclass_instance(child_value):
+            return _FAIL_FASTCACHE
+
         _repr = stringify_obj_type(
             raise_on_templated_floats,
             index_and_path + (field.name,),
