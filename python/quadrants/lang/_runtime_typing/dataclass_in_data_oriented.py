@@ -47,7 +47,7 @@ def _collect_dataclass_paths_in_data_oriented(
 
 
 def _cached_get_dataclass_paths(data_oriented_obj: Any) -> tuple[tuple[str, ...], ...]:
-    """Find outermost dataclass members without retaining their owning objects."""
+    """Find outermost dataclass members."""
     cached = _dataclass_paths_by_data_oriented_instance.get(data_oriented_obj)
     if cached is not None:
         return cached
