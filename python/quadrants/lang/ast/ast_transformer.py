@@ -118,7 +118,7 @@ class ASTTransformer(Builder):
             node.ptr.reject()
         # Dataclass fields can arrive as flattened names instead of attribute accesses.
         if (
-            node.id.startswith("__qd_")
+            node.id in ctx.struct_locals
             and not ctx.expanding_dataclass_call_parameters
             and is_data_oriented(node.ptr)
             and not dataclasses.is_dataclass(node.ptr)

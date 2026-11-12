@@ -237,6 +237,7 @@ class ASTGenerator:
                 struct_locals = pruning.used_vars_by_func_id[ctx.func.func_id]
             # struct locals are the expanded py dataclass fields that we will write to local variables, and will then
             # be available to use in build_Call, later.
+            ctx.struct_locals = struct_locals
             tree = _kernel_impl_dataclass.unpack_ast_struct_expressions(self.tree, struct_locals=struct_locals)
             ctx.only_parse_function_def = self.only_parse_function_def
             # Rebuild the graph_do_while level table from scratch each compilation pass (build_While appends to it as it
