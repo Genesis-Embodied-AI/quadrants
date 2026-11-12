@@ -61,8 +61,8 @@ from .python_side_cache import PythonSideCache
 _L1_MARKER = "l1"
 _L2_MARKER = "l2"
 
-# Bumped whenever the persisted L1CacheValue / CacheValue schema changes.
-_CACHE_VALUE_SCHEMA_VERSION = "cachevalue-v6-property-values"
+# Bump when persisted schemas or compilation rules make older cache artifacts incompatible.
+_CACHE_VALUE_SCHEMA_VERSION = "cachevalue-v7-dataclass-restrictions"
 
 
 def _intenum_member_qualname(value: Any) -> str | None:
