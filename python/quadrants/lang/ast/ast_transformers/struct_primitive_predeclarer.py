@@ -41,14 +41,14 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
             val = val._unwrap()
         if wants_runtime_primitives(val):
             flagged.append((i, val))
-    nested_schemas = getattr(ctx.func, "_runtime_nested_dataclass_schemas", ())
-    for arg_idx, path, _schema in nested_schemas:
+    launch_arg_schemas = getattr(ctx.func, "_launch_arg_schemas", ())
+    for arg_idx, path, _schema in launch_arg_schemas:
         for length in range(len(path) + 1):
             owner = get_member_at_path(ctx.py_args[arg_idx], path[:length])
             ctx.global_context.runtime_dataclass_binding_objects.add(id(owner))
         parent = get_member_at_path(ctx.py_args[arg_idx], path[:-1])
         ctx.global_context.runtime_dataclass_members.add((id(parent), path[-1]))
-    if not flagged and not nested_schemas:
+    if not flagged and not launch_arg_schemas:
         return
 
     from quadrants._lib import core as _qd_core  # pylint: disable=C0415
@@ -174,5 +174,5 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
     for arg_idx, val in flagged:
         _walk(val, arg_idx, (), set(), lift_plain=True)
 
-    for arg_idx, path, schema in nested_schemas:
+    for arg_idx, path, schema in launch_arg_schemas:
         _walk(get_member_at_path(ctx.py_args[arg_idx], path), arg_idx, path, set(), schema)
