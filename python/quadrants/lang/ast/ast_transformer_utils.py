@@ -187,37 +187,19 @@ class ASTTransformerGlobalContext:
         self.pass_idx: int = pass_idx
         self.ndarray_to_any_array: dict[int, Any] = {}
         self.struct_ndarray_launch_info: list[tuple] = []
-        # Lifted-primitive support for ``@qd.data_oriented(template_primitives=False)``. Mirrors the two ndarray
-        # structures above, plus a provenance map driving the two-pass pruning.
-        # * ``struct_primitive_provenance`` maps ``(id(parent_obj), attr_name)`` to ``(flat_name, arg_idx, attr_chain,
-        #   kind)`` for every reachable primitive member of a flagged template arg. Built (cheaply, no kernel-arg
-        #   declaration) on every compilation pass. ``build_Attribute`` uses it to ``mark_used`` the accessed
-        #   primitives during the non-enforcing discovery pass.
-        # * ``struct_primitive_to_expr`` maps the same key to the arg-load ``Expr``. Populated only in the enforcing
-        #   pass, and only for primitives actually accessed by the body (pruning), so ``build_Attribute`` can return
-        #   the runtime scalar arg instead of baking the value.
-        # * ``struct_primitive_launch_info`` records ``(arg_id, template_arg_idx, attr_chain, kind)`` tuples (``kind``
-        #   in ``{'f', 'i', 'u'}``) so the launch path can read the live value and bind it.
+        # For template_primitives=False, map (id(parent), attr_name) to (flat_name, arg_idx, attr_chain, kind). Rebuilt
+        # each pass without declaring arguments; discovery uses it to record which primitive members are read.
         self.struct_primitive_provenance: dict[tuple[int, str], tuple] = {}
+        # Map the same member keys to runtime argument expressions, only for used members in the enforcing pass.
         self.struct_primitive_to_expr: dict[tuple[int, str], Any] = {}
+        # (arg_id, template_arg_idx, attr_chain, kind) entries locate live values at launch; kind is 'f', 'i', or 'u'.
         self.struct_primitive_launch_info: list[tuple] = []
-        # Caller-side `loop_depth` snapshot for the in-flight `@qd.func` invocation. Each func compile creates a fresh
-        # `ASTTransformerFuncContext` with `loop_depth = 0`, so without this snapshot a non-static `range(...)` loop
-        # inside a func body would not see any outer for-loops in the caller and would skip the backward-mode dynamic-
-        # range diagnostic, silently emitting a wrong adjoint. `CallTransformer.build_Call` writes the caller
-        # `ctx.loop_depth` here before invoking the func and restores the previous value after, so the new func ctx
-        # can seed its `loop_depth` from this field via `_func_base.py`.
+        # Carry caller loop depth into fresh qd.func contexts so backward-mode dynamic-range checks see outer loops.
+        # Saved and restored around each call.
         self.caller_loop_depth: int = 0
-        # Caller-side "am I (transitively) inside non-static control flow?" snapshot for the in-flight `@qd.func`
-        # invocation. Each func compile creates a fresh `ASTTransformerFuncContext` whose own
-        # `non_static_control_flow_status` starts False, so a `@qd.func(requires_top_level=True)` reached *through* an
-        # unmarked helper called from a runtime for / if / while would not observe the caller's control-flow context
-        # and would escape the top-level check. `CallTransformer.build_Call` writes
-        # `ctx.is_in_non_static_control_flow() or <inherited>` here before invoking the func (so it accumulates down a
-        # multi-level call chain) and restores the previous value after; the new func ctx seeds
-        # `inherited_non_static_control_flow` from this field via `_func_base.py`. Kept separate from the live
-        # `non_static_control_flow_status` flag on purpose: that flag also gates the "return inside non-static if/for"
-        # diagnostic in `build_Return`, and seeding it True would spuriously reject a top-level `return` in a helper.
+        # Carry runtime control flow through nested calls so requires_top_level checks cannot be bypassed by helpers.
+        # Saved and restored around each call. Separate from the callee's local control-flow flag so ordinary helper
+        # returns remain valid.
         self.caller_in_non_static_control_flow: bool = False
 
 
