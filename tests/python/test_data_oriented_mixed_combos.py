@@ -6,6 +6,7 @@ These exist to empirically verify the table claims in the user-facing doc; not p
 import dataclasses
 
 import numpy as np
+import pytest
 
 import quadrants as qd
 
