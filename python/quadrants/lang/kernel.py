@@ -41,6 +41,7 @@ from quadrants.lang import _kernel_impl_dataclass, impl, runtime_ops
 # construction to those free functions so this hot file doesn't accrete checkpoint-feature-specific blocks.
 from quadrants.lang import kernel_checkpoint as _checkpoint_helpers
 from quadrants.lang._fast_caching import src_hasher
+from quadrants.lang._fast_caching.args_hasher import LaunchArgSchemas
 from quadrants.lang._template_mapper_hotpath import chain_has_mutable_container
 from quadrants.lang._wrap_inspect import FunctionSourceInfo, get_source_info_and_src
 from quadrants.lang.ast import (
@@ -328,6 +329,7 @@ class Kernel(FuncBase):
         self.materialized_kernels: dict[CompiledKernelKeyType, KernelCxx] = {}
         self.has_print = False
         self._runtime_has_deferred = False
+        self._launch_arg_schemas: LaunchArgSchemas = ()
         self._runtime_metadata_args_hash: tuple[int, ...] | None = None
         self._runtime_metadata_defaults: tuple[int, int] | None = None
         self.use_graph: bool = False
@@ -437,7 +439,12 @@ class Kernel(FuncBase):
 
             # Phase 2: narrow args hash + L2 lookup.
             narrow_args_hash = src_hasher.compute_narrow_args_hash(
-                self.raise_on_templated_floats, kernel_source_info, args, self.arg_metas, pruning_paths
+                self.raise_on_templated_floats,
+                kernel_source_info,
+                args,
+                self.arg_metas,
+                pruning_paths,
+                launch_arg_schemas=self._launch_arg_schemas,
             )
             if narrow_args_hash is None:
                 # Recognised-but-unsupported tensor-like (Field / MatrixField): leaving ``fast_checksum`` None keeps any
@@ -621,6 +628,7 @@ class Kernel(FuncBase):
             raise_on_templated_floats=self.raise_on_templated_floats,
             py_args=py_args,
             arg_metas=self.arg_metas,
+            launch_arg_schemas=self._launch_arg_schemas,
         )
         # Assigned even when ``generated`` is False: that is also how a re-keyed L2 entry comes back.
         self.fast_checksum = new_fast_checksum

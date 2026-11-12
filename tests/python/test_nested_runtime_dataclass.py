@@ -6,6 +6,9 @@ import pytest
 
 import quadrants as qd
 from quadrants.lang._fast_caching import args_hasher
+from quadrants.lang._runtime_typing.nested_dataclasses import (
+    infer_nested_dataclass_schemas,
+)
 from quadrants.lang.kernel_arguments import ArgMetadata
 
 from tests.helpers import test_utils
@@ -28,7 +31,10 @@ def test_nested_dataclass_hash_ignores_declared_child_type() -> None:
         def __init__(self) -> None:
             self.state = State(7)
 
-    result = args_hasher.hash_args(False, [Owner()], [ArgMetadata(qd.Template, "owner")])
+    owners = (Owner(),)
+    metas = [ArgMetadata(qd.Template, "owner")]
+    launch_arg_schemas = infer_nested_dataclass_schemas(owners, metas, [0])
+    result = args_hasher.hash_args(False, owners, metas, launch_arg_schemas=launch_arg_schemas)
     assert isinstance(result, str)
 
 
@@ -142,7 +148,7 @@ def test_nested_dataclass_offline_cache(tmp_path: Path) -> None:
             self.state = State(bias, value)
 
     arch = qd.lang.impl.current_cfg().arch
-    for bias, value in ((2, 1.5), (2, 4.5), (7, 4.5), (2, 8.5)):
+    for bias, value in ((2, 1.5), (2, 4.5), (7, 4.5), (2, 8.5), (2, 3), (2, 2.5)):
         qd.init(arch=arch, offline_cache=True, offline_cache_file_path=str(tmp_path))
 
         @qd.kernel(fastcache=True)
