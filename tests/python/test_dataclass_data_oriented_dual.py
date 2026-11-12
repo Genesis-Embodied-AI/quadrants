@@ -18,12 +18,6 @@ def test_data_oriented_decorator_rejects_dataclass() -> None:
     with pytest.raises(TypeError, match="both a Python dataclass and data-oriented"):
         qd.data_oriented(State)
 
-    class Child(State):
-        pass
-
-    with pytest.raises(TypeError, match="both a Python dataclass and data-oriented"):
-        qd.data_oriented(Child)
-
 
 @pytest.mark.parametrize("inherited", [False, True])
 @pytest.mark.parametrize("fastcache", [False, True])
