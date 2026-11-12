@@ -3,7 +3,7 @@ from typing import Any, TypeAlias
 from weakref import ReferenceType, WeakKeyDictionary
 
 from quadrants.lang import impl
-from quadrants.lang._runtime_typing.nested_dataclasses import (
+from quadrants.lang._runtime_typing.dataclass_in_data_oriented import (
     get_member_at_path,
     infer_nested_dataclass_schemas,
 )

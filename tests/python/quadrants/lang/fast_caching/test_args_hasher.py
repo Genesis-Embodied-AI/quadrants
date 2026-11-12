@@ -498,7 +498,7 @@ def test_args_hasher_frozen_dataclass_failure_does_not_poison_narrower_walk() ->
 @test_utils.test()
 def test_discovered_schemas_follow_argument_indices_and_member_paths() -> None:
     """Forward each schema through owner recursion without confusing equal paths in different arguments."""
-    from quadrants.lang._runtime_typing.nested_dataclasses import (
+    from quadrants.lang._runtime_typing.dataclass_in_data_oriented import (
         infer_nested_dataclass_schemas,
     )
 

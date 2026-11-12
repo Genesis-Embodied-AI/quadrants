@@ -6,7 +6,7 @@ import pytest
 
 import quadrants as qd
 from quadrants.lang._fast_caching import args_hasher
-from quadrants.lang._runtime_typing.nested_dataclasses import (
+from quadrants.lang._runtime_typing.dataclass_in_data_oriented import (
     infer_nested_dataclass_schemas,
 )
 from quadrants.lang.kernel_arguments import ArgMetadata

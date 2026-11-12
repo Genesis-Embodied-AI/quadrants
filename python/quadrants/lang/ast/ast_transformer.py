@@ -18,11 +18,11 @@ from quadrants.lang import exception, expr, impl, matrix, mesh
 from quadrants.lang import ops as qd_ops
 from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._ndrange import _Ndrange
-from quadrants.lang._runtime_typing.deferred_errors import DeferredMemberError
-from quadrants.lang._runtime_typing.nested_dataclasses import (
+from quadrants.lang._runtime_typing.dataclass_in_data_oriented import (
     reject_computed_dataclass_alias,
     reject_undiscovered_dataclass_member,
 )
+from quadrants.lang._runtime_typing.deferred_errors import DeferredMemberError
 from quadrants.lang._runtime_typing.runtime_dataclass import is_runtime_member_name
 from quadrants.lang._unpacked import _UnpackedVectorRef
 from quadrants.lang.ast.ast_transformer_utils import (

@@ -8,8 +8,8 @@ from quadrants._lib.core.quadrants_python import DataTypeCxx
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import expr, impl
 from quadrants.lang._final.final_annotation import is_final_annotation
+from quadrants.lang._runtime_typing.dataclass_in_data_oriented import get_member_at_path
 from quadrants.lang._runtime_typing.deferred_errors import DeferredMemberType
-from quadrants.lang._runtime_typing.nested_dataclasses import get_member_at_path
 from quadrants.lang._runtime_typing.runtime_dataclass import cached_infer_dataclass_type
 from quadrants.lang.ast.ast_transformer_utils import ASTTransformerFuncContext
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
