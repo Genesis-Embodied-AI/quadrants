@@ -21,9 +21,9 @@ def _cached_get_dataclass_paths(data_oriented_obj: Any) -> tuple[tuple[str, ...]
     cached = _dataclass_paths_by_data_oriented_instance.get(data_oriented_obj)
     if cached is not None:
         return cached
+
     paths: list[tuple[str, ...]] = []
     active_ids: set[int] = set()
-
     def walk(value: Any, path: tuple[str, ...]) -> None:
         """Walk data-oriented members, stopping at a dataclass or an active cycle."""
         if is_dataclass_instance(value):
