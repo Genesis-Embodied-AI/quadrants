@@ -16,6 +16,33 @@ from quadrants.lang.util import is_data_oriented, is_dataclass_instance
 _dataclass_paths_by_data_oriented_instance: WeakIdentityCache[tuple[tuple[str, ...], ...]] = WeakIdentityCache()
 
 
+def _collect_dataclass_paths(
+    py_obj: Any,
+    path: tuple[str, ...],
+    dataclass_paths: list[tuple[str, ...]],
+    active_ids: set[int],
+) -> None:
+    """Append outermost dataclass paths, traversing data-oriented members and stopping at active cycles."""
+    if is_dataclass_instance(py_obj):
+        dataclass_paths.append(path)
+        return
+
+    if not is_data_oriented(py_obj):
+        return
+
+    if id(py_obj) in active_ids:
+        return
+
+    active_ids.add(id(py_obj))
+    try:
+        members = py_obj._asdict() if isinstance(py_obj, tuple) and hasattr(py_obj, "_asdict") else vars(py_obj)
+        for name, child in members.items():
+            if not name.startswith("_qd_"):
+                _collect_dataclass_paths(child, (*path, name), dataclass_paths, active_ids)
+    finally:
+        active_ids.remove(id(py_obj))
+
+
 def _cached_get_dataclass_paths(data_oriented_obj: Any) -> tuple[tuple[str, ...], ...]:
     """Find outermost dataclass members without retaining their owning objects."""
     cached = _dataclass_paths_by_data_oriented_instance.get(data_oriented_obj)
@@ -24,35 +51,14 @@ def _cached_get_dataclass_paths(data_oriented_obj: Any) -> tuple[tuple[str, ...]
 
     paths: list[tuple[str, ...]] = []
     active_ids: set[int] = set()
-    def walk(py_obj: Any, path: tuple[str, ...]) -> None:
-        """Walk data-oriented members, stopping at a dataclass or an active cycle."""
-        if is_dataclass_instance(py_obj):
-            paths.append(path)
-            return
-
-        if not is_data_oriented(py_obj):
-            return
-
-        if id(py_obj) in active_ids:
-            return
-
-        active_ids.add(id(py_obj))
-        try:
-            members = py_obj._asdict() if isinstance(py_obj, tuple) and hasattr(py_obj, "_asdict") else vars(py_obj)
-            for name, child in members.items():
-                if not name.startswith("_qd_"):
-                    walk(child, (*path, name))
-        finally:
-            active_ids.remove(id(py_obj))
-
-    walk(data_oriented_obj, ())
-    result = tuple(paths)
+    _collect_dataclass_paths(data_oriented_obj, (), paths, active_ids)
+    dataclass_paths = tuple(paths)
     try:
-        _dataclass_paths_by_data_oriented_instance[data_oriented_obj] = result
+        _dataclass_paths_by_data_oriented_instance[data_oriented_obj] = dataclass_paths
     except TypeError:
         # Named tuples can be data-oriented but cannot be weakly referenced.
         pass
-    return result
+    return dataclass_paths
 
 
 def get_member_at_path(obj: Any, path: tuple[str, ...]) -> Any:
