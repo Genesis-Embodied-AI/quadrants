@@ -48,8 +48,8 @@ def test_data_oriented_with_ndarray_field_and_nested_data_oriented():
 
 
 @test_utils.test(arch=qd.cpu)
-def test_dataclass_with_data_oriented_via_template():
-    """A dataclass (frozen=True) holding a @qd.data_oriented holding an ndarray, passed via qd.Template."""
+def test_dataclass_data_oriented_member_rejected_via_template():
+    """Reject a data-oriented member even when the dataclass arrives through qd.Template."""
     N = 4
 
     @qd.data_oriented
