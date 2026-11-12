@@ -195,15 +195,12 @@ class FunctionDefTransformer:
                         getattr(arg_value, field.name) if arg_value is not None else None,
                     )
                 elif isinstance(field.type, type) and getattr(field.type, "_data_oriented", False):
-                    # The two patterns don't compose here: dataclass flattening is annotation-driven, while a
-                    # data_oriented container has no per-attribute annotations and needs the value-driven walk that only
-                    # ``qd.template()`` / ``qd.Tensor`` annotations trigger.
+                    # Typed dataclass fields are validated before unused members are pruned.
                     raise QuadrantsSyntaxError(
                         f"Kernel arg {argument_name!r}: field {field.name!r} has @qd.data_oriented type "
                         f"{field.type.__name__!r}, which cannot be flattened into a typed-dataclass kernel arg. "
-                        f"Use ``{argument_name}: qd.template()`` for the outer kernel arg annotation instead; "
-                        f"data_oriented contents (including nested ndarrays) are walked at kernel-compile time via "
-                        f"the template path."
+                        "This annotation is rejected even if the field is unused. "
+                        "Store the dataclass on the data-oriented object instead."
                     )
                 else:
                     result, obj = FunctionDefTransformer._decl_and_create_variable(
