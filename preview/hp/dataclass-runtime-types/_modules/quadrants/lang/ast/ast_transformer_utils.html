@@ -666,6 +666,10 @@
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerGlobalContext.runtime_dataclass_members">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">runtime_dataclass_members</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span></div>
 
+<div class="viewcode-block" id="ASTTransformerGlobalContext.runtime_dataclass_binding_objects">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerGlobalContext.runtime_dataclass_binding_objects">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">runtime_dataclass_binding_objects</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span></div>
+
         <span class="c1"># Caller-side `loop_depth` snapshot for the in-flight `@qd.func` invocation. Each func compile creates a fresh</span>
         <span class="c1"># `ASTTransformerFuncContext` with `loop_depth = 0`, so without this snapshot a non-static `range(...)` loop</span>
         <span class="c1"># inside a func body would not see any outer for-loops in the caller and would skip the backward-mode dynamic-</span>

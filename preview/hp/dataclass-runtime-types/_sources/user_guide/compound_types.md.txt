@@ -193,6 +193,9 @@ Do not bypass a frozen dataclass's assignment restrictions with `object.__setatt
 
 ### Compile-time constant fields: `typing.Final`
 
+Final field values must be exact Python `bool`, `int`, `float`, or `str` objects, or supported enum members. NumPy scalars and custom non-enum scalar subclasses are rejected, including as enum underlying values. Convert NumPy scalars to the corresponding built-in Python type explicitly.
+
+
 By default a primitive dataclass field becomes a **runtime** kernel argument: you can change its value between launches without recompiling, and the kernel reads the fresh value each launch. That also means the value is not known at compile time, so it cannot be used inside [`qd.static(...)`](static.md), as a static loop bound, or to eliminate a branch at compile time.
 
 Annotate the field with `typing.Final` or `typing.Final[T]` to make it a **compile-time constant** instead. Quadrants ignores `T` when present and uses the arriving value and its actual Python type. The value is baked into the compiled kernel:
@@ -316,6 +319,8 @@ Simulation(200).step()   # compiles kernel #2 with n=200 baked in
 ```
 
 #### Runtime primitives: `template_primitives=False`
+
+Dataclasses stored below a data-oriented argument must be accessed through ordinary stored attributes. A call or indexing operation that returns an alias of a runtime-bound dataclass (or its containing object) raises during compilation. A used dataclass scalar reachable through multiple stored attribute paths also raises, because the compiler cannot distinguish those paths by object identity. Unused aliased scalar members do not raise. Use separate dataclass instances for attributes that can be rebound independently. These checks run during compilation, not as a mutation scan on cached launches.
 
 If you want to change a primitive member's value **from Python between launches without triggering a recompile**, decorate the class with `@qd.data_oriented(template_primitives=False)`. Every primitive member the kernel actually accesses (`int`, `float`, `bool`, including those reached through nested `dataclasses.dataclass` / `@qd.data_oriented` members) is then lifted into a runtime scalar kernel argument and read fresh on every launch, instead of being compiled into the kernel as a constant. The member stays read-only inside the kernel (it is a kernel argument, not a writable variable): you mutate it in Python, and the kernel sees the new value on the next launch.
 
@@ -453,7 +458,7 @@ This table summarizes which member types are allowed inside which container type
 
 | Container ↓ &nbsp;&nbsp;&nbsp; / &nbsp;&nbsp;&nbsp; Member → | `qd.ndarray` | `qd.field` | primitive | `dataclasses.dataclass` | `@qd.data_oriented` | `@qd.dataclass` |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|
-| `dataclasses.dataclass`         | yes | yes | yes | yes | deprecated | yes |
+| `dataclasses.dataclass`         | yes | yes | yes | yes | no | yes |
 | `@qd.data_oriented`             | yes | yes | yes | yes | yes      | yes |
 | `@qd.dataclass`                 | no  | yes | yes | no  | no       | yes |
 
@@ -475,7 +480,7 @@ This support is only available on `@qd.data_oriented` classes *without* the [`st
 ### Restrictions
 
 - **`@qd.dataclass` cannot contain `qd.ndarray` or `qd.field` members.** See the [`@qd.dataclass`](#qddataclass-qdtypesstruct) section above for the full list of allowed member types. (The function-form factory `qd.types.struct(...)` has the same restrictions.)
-- **A typed-dataclass kernel-arg annotation cannot have a `@qd.data_oriented` member type** — errors clearly at compile time
+- **A Python dataclass cannot expose a data-oriented member to kernel code.** Accessing that member raises an error, regardless of its annotation. Unused members remain allowed. The reverse arrangement, a dataclass stored on a data-oriented object, is supported.
 - **Declare all ndarray members on a `@qd.data_oriented` class in `__init__`.**
     - **Deleting an ndarray attribute** that was present on an `@qd.data_oriented` instance's first launch raises `AttributeError` on the next launch on that instance.
     - **Adding a new ndarray attribute after first launch** on a given `@qd.data_oriented` instance will cause incorrect undefined behavior.
