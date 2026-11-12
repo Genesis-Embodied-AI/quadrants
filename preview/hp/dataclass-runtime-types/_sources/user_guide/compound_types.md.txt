@@ -479,8 +479,10 @@ This support is only available on `@qd.data_oriented` classes *without* the [`st
 
 ### Restrictions
 
+- **A class cannot be both a Python dataclass and data-oriented**, including through inheritance.
+
 - **`@qd.dataclass` cannot contain `qd.ndarray` or `qd.field` members.** See the [`@qd.dataclass`](#qddataclass-qdtypesstruct) section above for the full list of allowed member types. (The function-form factory `qd.types.struct(...)` has the same restrictions.)
-- **A Python dataclass cannot expose a data-oriented member to kernel code.** Accessing that member raises an error, regardless of its annotation. Unused members remain allowed. The reverse arrangement, a dataclass stored on a data-oriented object, is supported.
+- **Kernel code cannot access a `@qd.data_oriented` object stored inside a Python dataclass.** Store the dataclass on the data-oriented object instead.
 - **Declare all ndarray members on a `@qd.data_oriented` class in `__init__`.**
     - **Deleting an ndarray attribute** that was present on an `@qd.data_oriented` instance's first launch raises `AttributeError` on the next launch on that instance.
     - **Adding a new ndarray attribute after first launch** on a given `@qd.data_oriented` instance will cause incorrect undefined behavior.

@@ -529,15 +529,12 @@
                         <span class="nb">getattr</span><span class="p">(</span><span class="n">arg_value</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">)</span> <span class="k">if</span> <span class="n">arg_value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
                     <span class="p">)</span>
                 <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="nb">type</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="s2">"_data_oriented"</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
-                    <span class="c1"># The two patterns don't compose here: dataclass flattening is annotation-driven, while a</span>
-                    <span class="c1"># data_oriented container has no per-attribute annotations and needs the value-driven walk that only</span>
-                    <span class="c1"># ``qd.template()`` / ``qd.Tensor`` annotations trigger.</span>
+                    <span class="c1"># Typed dataclass fields are validated before unused members are pruned.</span>
                     <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
                         <span class="sa">f</span><span class="s2">"Kernel arg </span><span class="si">{</span><span class="n">argument_name</span><span class="si">!r}</span><span class="s2">: field </span><span class="si">{</span><span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="si">!r}</span><span class="s2"> has @qd.data_oriented type "</span>
                         <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="vm">__name__</span><span class="si">!r}</span><span class="s2">, which cannot be flattened into a typed-dataclass kernel arg. "</span>
-                        <span class="sa">f</span><span class="s2">"Use ``</span><span class="si">{</span><span class="n">argument_name</span><span class="si">}</span><span class="s2">: qd.template()`` for the outer kernel arg annotation instead; "</span>
-                        <span class="sa">f</span><span class="s2">"data_oriented contents (including nested ndarrays) are walked at kernel-compile time via "</span>
-                        <span class="sa">f</span><span class="s2">"the template path."</span>
+                        <span class="s2">"This annotation is rejected even if the field is unused. "</span>
+                        <span class="s2">"Store the dataclass on the data-oriented object instead."</span>
                     <span class="p">)</span>
                 <span class="k">else</span><span class="p">:</span>
                     <span class="n">result</span><span class="p">,</span> <span class="n">obj</span> <span class="o">=</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_decl_and_create_variable</span><span class="p">(</span>

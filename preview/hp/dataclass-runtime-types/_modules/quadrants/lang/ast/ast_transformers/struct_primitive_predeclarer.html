@@ -340,12 +340,12 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor_wrapper</span><span class="w"> </span><span class="kn">import</span> <span class="n">Tensor</span> <span class="k">as</span> <span class="n">_TensorClass</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">expr</span><span class="p">,</span> <span class="n">impl</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._final.final_annotation</span><span class="w"> </span><span class="kn">import</span> <span class="n">is_final_annotation</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._runtime_typing.dataclass_in_data_oriented</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_member_at_path</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._runtime_typing.deferred_errors</span><span class="w"> </span><span class="kn">import</span> <span class="n">DeferredMemberType</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._runtime_typing.runtime_dataclass</span><span class="w"> </span><span class="kn">import</span> <span class="n">cached_infer_dataclass_type</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">ASTTransformerFuncContext</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.exception</span><span class="w"> </span><span class="kn">import</span> <span class="n">QuadrantsRuntimeTypeError</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.util</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">get_member_at_path</span><span class="p">,</span>
     <span class="n">is_data_oriented</span><span class="p">,</span>
     <span class="n">is_dataclass_instance</span><span class="p">,</span>
     <span class="n">wants_runtime_primitives</span><span class="p">,</span>
