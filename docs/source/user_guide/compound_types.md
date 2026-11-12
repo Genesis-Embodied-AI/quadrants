@@ -54,7 +54,7 @@ Python `int` and `float` members use `qd.init`'s default integer precision (`def
 
 When migrating existing containers, array annotation options such as `boundary="clamp"` and explicit `needs_grad` overrides no longer apply: inferred arrays use the default unsafe boundary mode and the arriving array's gradient metadata. A primitive member previously annotated `qd.Template` becomes a runtime scalar; use `Final[T]` when it must remain compile-time.
 
-A member may be `None`. Test its presence with [`qd.static(state.member is not None)`](static.md), which evaluates the condition at compile time; replacing it with an array selects a different specialization. Dataclasses may contain unsupported Python values, provided kernel code does not access those members.
+A member may be `None`. You can test whether the member is present with [`qd.static(state.member is not None)`](static.md). Dataclasses may contain unsupported Python values, provided kernel code does not access those members.
 
 An unused `Final` member may hold an unsupported constant. A used Final member requires a supported actual value and a non-reassignable path through its containers. Inner annotations never constrain values: `Final[list]` holding an integer is supported, while `Final[int]` holding a list is unsupported when used. Valid Final values remain part of specialization keys, including the `raise_on_templated_floats` check. Containers with deferred unsupported members bypass offline fast caching and instance-based dispatch shortcuts; valid in-process compiled versions can still be reused.
 
