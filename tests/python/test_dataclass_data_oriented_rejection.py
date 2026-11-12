@@ -95,8 +95,10 @@ def test_unused_data_oriented_dataclass_member() -> None:
 @pytest.mark.parametrize("fastcache", [False, True])
 @pytest.mark.parametrize("inside_owner", [False, True])
 @test_utils.test(arch=qd.cpu)
-def test_forwarded_unused_data_oriented_dataclass_member(fastcache: bool, inside_owner: bool) -> None:
-    """Forwarding a dataclass and skipping a static branch leaves its unsupported member unused."""
+def test_forwarded_dataclass_allows_unsupported_member_in_inactive_static_branch(
+    fastcache: bool, inside_owner: bool
+) -> None:
+    """An unsupported member in an inactive static branch remains allowed when forwarding a dataclass."""
 
     @qd.data_oriented
     class Inner:
