@@ -16,13 +16,16 @@ from quadrants.lang.util import is_data_oriented, is_dataclass_instance
 _dataclass_paths_by_data_oriented_instance: WeakIdentityCache[tuple[tuple[str, ...], ...]] = WeakIdentityCache()
 
 
-def _collect_dataclass_paths(
+def _collect_dataclass_paths_in_data_oriented(
     py_obj: Any,
     path: tuple[str, ...],
     dataclass_paths: list[tuple[str, ...]],
     active_ids: set[int],
 ) -> None:
-    """Append outermost dataclass paths, traversing data-oriented members and stopping at active cycles."""
+    """Starting from a data-oriented root, walk only data-oriented objects and append dataclass paths to dataclass_paths.
+
+    Stop each branch at a dataclass (recording its path), any other non-data-oriented object, or an active cycle.
+    """
     if is_dataclass_instance(py_obj):
         dataclass_paths.append(path)
         return
@@ -38,7 +41,7 @@ def _collect_dataclass_paths(
         members = py_obj._asdict() if isinstance(py_obj, tuple) and hasattr(py_obj, "_asdict") else vars(py_obj)
         for name, child in members.items():
             if not name.startswith("_qd_"):
-                _collect_dataclass_paths(child, (*path, name), dataclass_paths, active_ids)
+                _collect_dataclass_paths_in_data_oriented(child, (*path, name), dataclass_paths, active_ids)
     finally:
         active_ids.remove(id(py_obj))
 
@@ -51,7 +54,7 @@ def _cached_get_dataclass_paths(data_oriented_obj: Any) -> tuple[tuple[str, ...]
 
     paths: list[tuple[str, ...]] = []
     active_ids: set[int] = set()
-    _collect_dataclass_paths(data_oriented_obj, (), paths, active_ids)
+    _collect_dataclass_paths_in_data_oriented(data_oriented_obj, (), paths, active_ids)
     dataclass_paths = tuple(paths)
     try:
         _dataclass_paths_by_data_oriented_instance[data_oriented_obj] = dataclass_paths
