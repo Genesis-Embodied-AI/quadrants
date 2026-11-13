@@ -7,68 +7,6 @@
 #include "llvm/Support/ErrorHandling.h"
 
 namespace quadrants::lang {
-namespace {
-
-void emulate_half_swap(llvm::Module &module, llvm::Function *permlane64_func) {
-  auto *ctx = &module.getContext();
-  // gfx10.x RDNA1/2: LDS-based software emulation. Layout: ``[1024 x i32] addrspace(3)`` indexed by ``wave_base +
-  // lane``.
-  auto i32_ty = llvm::Type::getInt32Ty(*ctx);
-  auto buf_ty = llvm::ArrayType::get(i32_ty, 1024);
-  auto lds_global = llvm::cast_or_null<llvm::GlobalVariable>(module.getNamedValue("__amdgpu_permlane64_lds"));
-  if (!lds_global) {
-    lds_global =
-        new llvm::GlobalVariable(module, buf_ty, /*isConstant=*/false, llvm::GlobalValue::InternalLinkage,
-                                 llvm::UndefValue::get(buf_ty), "__amdgpu_permlane64_lds",
-                                 /*InsertBefore=*/nullptr, llvm::GlobalValue::NotThreadLocal, /*AddressSpace=*/3);
-    lds_global->setAlignment(llvm::Align(4));
-  }
-
-  permlane64_func->deleteBody();
-  auto bb = llvm::BasicBlock::Create(*ctx, "entry", permlane64_func);
-  llvm::IRBuilder<> builder(*ctx);
-  builder.SetInsertPoint(bb);
-
-  // lane = mbcnt_hi(-1, mbcnt_lo(-1, 0))
-  auto neg_one = llvm::ConstantInt::get(i32_ty, -1, /*IsSigned=*/true);
-  auto zero32 = llvm::ConstantInt::get(i32_ty, 0);
-  auto mbcnt_lo_fn = llvm::Intrinsic::getOrInsertDeclaration(&module, llvm::Intrinsic::amdgcn_mbcnt_lo);
-  auto mbcnt_hi_fn = llvm::Intrinsic::getOrInsertDeclaration(&module, llvm::Intrinsic::amdgcn_mbcnt_hi);
-  llvm::Value *mbcnt_lo_args[] = {neg_one, zero32};
-  auto lane_lo = builder.CreateCall(mbcnt_lo_fn, llvm::ArrayRef<llvm::Value *>(mbcnt_lo_args));
-  llvm::Value *mbcnt_hi_args[] = {neg_one, lane_lo};
-  auto lane = builder.CreateCall(mbcnt_hi_fn, llvm::ArrayRef<llvm::Value *>(mbcnt_hi_args));
-
-  // wave_base = (workitem.id.x >> 6) << 6 (wave64-scoped slot offset within the workgroup LDS buffer).
-  auto tid_fn = llvm::Intrinsic::getOrInsertDeclaration(&module, llvm::Intrinsic::amdgcn_workitem_id_x);
-  auto tid = builder.CreateCall(tid_fn);
-  auto wave_id = builder.CreateLShr(tid, llvm::ConstantInt::get(i32_ty, 6));
-  auto wave_base = builder.CreateShl(wave_id, llvm::ConstantInt::get(i32_ty, 6));
-  auto slot = builder.CreateAdd(wave_base, lane);
-
-  // lds[slot] = value
-  auto value_arg = &*permlane64_func->arg_begin();
-  llvm::Value *store_idxs[] = {zero32, slot};
-  auto store_ptr = builder.CreateInBoundsGEP(buf_ty, lds_global, llvm::ArrayRef<llvm::Value *>(store_idxs));
-  builder.CreateStore(value_arg, store_ptr);
-
-  // Wavefront-scope acquire-release fence -> ``s_waitcnt lgkmcnt(0)`` on AMDGPU; orders LDS writes against
-  // subsequent LDS reads within the wave without touching cross-wave state (avoids the ``s_barrier`` that a
-  // workgroup-scope fence would emit, which deadlocks if only some waves in the workgroup reach this point).
-  llvm::SyncScope::ID wave_scope = ctx->getOrInsertSyncScopeID("wavefront");
-  builder.CreateFence(llvm::AtomicOrdering::AcquireRelease, wave_scope);
-
-  // partner_lane = lane ^ 32; result = lds[wave_base + partner_lane]
-  auto partner_lane = builder.CreateXor(lane, llvm::ConstantInt::get(i32_ty, 32));
-  auto partner_slot = builder.CreateAdd(wave_base, partner_lane);
-  llvm::Value *load_idxs[] = {zero32, partner_slot};
-  auto load_ptr = builder.CreateInBoundsGEP(buf_ty, lds_global, llvm::ArrayRef<llvm::Value *>(load_idxs));
-  auto result = builder.CreateAlignedLoad(i32_ty, load_ptr, llvm::Align(4));
-  builder.CreateRet(result);
-  mark_runtime_function_inline(permlane64_func);
-}
-
-}  // namespace
 
 void prepare_amdgpu_shuffle(llvm::Module &module, llvm::StringRef mcpu) {
   auto *ctx = &module.getContext();
@@ -132,7 +70,61 @@ void prepare_amdgpu_shuffle(llvm::Module &module, llvm::StringRef mcpu) {
       mark_runtime_function_inline(permlane64_func);
     }
   } else if (auto permlane64_func = module.getFunction("amdgpu_permlane64")) {
-    emulate_half_swap(module, permlane64_func);
+    // gfx10.x RDNA1/2: LDS-based software emulation. Layout: ``[1024 x i32] addrspace(3)`` indexed by ``wave_base +
+    // lane``.
+    auto i32_ty = llvm::Type::getInt32Ty(*ctx);
+    auto buf_ty = llvm::ArrayType::get(i32_ty, 1024);
+    auto lds_global = llvm::cast_or_null<llvm::GlobalVariable>(module.getNamedValue("__amdgpu_permlane64_lds"));
+    if (!lds_global) {
+      lds_global =
+          new llvm::GlobalVariable(module, buf_ty, /*isConstant=*/false, llvm::GlobalValue::InternalLinkage,
+                                   llvm::UndefValue::get(buf_ty), "__amdgpu_permlane64_lds",
+                                   /*InsertBefore=*/nullptr, llvm::GlobalValue::NotThreadLocal, /*AddressSpace=*/3);
+      lds_global->setAlignment(llvm::Align(4));
+    }
+
+    permlane64_func->deleteBody();
+    auto bb = llvm::BasicBlock::Create(*ctx, "entry", permlane64_func);
+    llvm::IRBuilder<> builder(*ctx);
+    builder.SetInsertPoint(bb);
+
+    // lane = mbcnt_hi(-1, mbcnt_lo(-1, 0))
+    auto neg_one = llvm::ConstantInt::get(i32_ty, -1, /*IsSigned=*/true);
+    auto zero32 = llvm::ConstantInt::get(i32_ty, 0);
+    auto mbcnt_lo_fn = llvm::Intrinsic::getOrInsertDeclaration(&module, llvm::Intrinsic::amdgcn_mbcnt_lo);
+    auto mbcnt_hi_fn = llvm::Intrinsic::getOrInsertDeclaration(&module, llvm::Intrinsic::amdgcn_mbcnt_hi);
+    llvm::Value *mbcnt_lo_args[] = {neg_one, zero32};
+    auto lane_lo = builder.CreateCall(mbcnt_lo_fn, llvm::ArrayRef<llvm::Value *>(mbcnt_lo_args));
+    llvm::Value *mbcnt_hi_args[] = {neg_one, lane_lo};
+    auto lane = builder.CreateCall(mbcnt_hi_fn, llvm::ArrayRef<llvm::Value *>(mbcnt_hi_args));
+
+    // wave_base = (workitem.id.x >> 6) << 6 (wave64-scoped slot offset within the workgroup LDS buffer).
+    auto tid_fn = llvm::Intrinsic::getOrInsertDeclaration(&module, llvm::Intrinsic::amdgcn_workitem_id_x);
+    auto tid = builder.CreateCall(tid_fn);
+    auto wave_id = builder.CreateLShr(tid, llvm::ConstantInt::get(i32_ty, 6));
+    auto wave_base = builder.CreateShl(wave_id, llvm::ConstantInt::get(i32_ty, 6));
+    auto slot = builder.CreateAdd(wave_base, lane);
+
+    // lds[slot] = value
+    auto value_arg = &*permlane64_func->arg_begin();
+    llvm::Value *store_idxs[] = {zero32, slot};
+    auto store_ptr = builder.CreateInBoundsGEP(buf_ty, lds_global, llvm::ArrayRef<llvm::Value *>(store_idxs));
+    builder.CreateStore(value_arg, store_ptr);
+
+    // Wavefront-scope acquire-release fence -> ``s_waitcnt lgkmcnt(0)`` on AMDGPU; orders LDS writes against
+    // subsequent LDS reads within the wave without touching cross-wave state (avoids the ``s_barrier`` that a
+    // workgroup-scope fence would emit, which deadlocks if only some waves in the workgroup reach this point).
+    llvm::SyncScope::ID wave_scope = ctx->getOrInsertSyncScopeID("wavefront");
+    builder.CreateFence(llvm::AtomicOrdering::AcquireRelease, wave_scope);
+
+    // partner_lane = lane ^ 32; result = lds[wave_base + partner_lane]
+    auto partner_lane = builder.CreateXor(lane, llvm::ConstantInt::get(i32_ty, 32));
+    auto partner_slot = builder.CreateAdd(wave_base, partner_lane);
+    llvm::Value *load_idxs[] = {zero32, partner_slot};
+    auto load_ptr = builder.CreateInBoundsGEP(buf_ty, lds_global, llvm::ArrayRef<llvm::Value *>(load_idxs));
+    auto result = builder.CreateAlignedLoad(i32_ty, load_ptr, llvm::Align(4));
+    builder.CreateRet(result);
+    mark_runtime_function_inline(permlane64_func);
   }
 }
 
