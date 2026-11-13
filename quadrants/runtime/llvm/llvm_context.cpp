@@ -550,9 +550,9 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       }
       patch_intrinsic("amdgpu_clock_i64", llvm::Intrinsic::amdgcn_s_memtime);
       patch_intrinsic("amdgpu_ds_bpermute", llvm::Intrinsic::amdgcn_ds_bpermute);
-      // The wave64 cross-half subgroup shuffle (``amdgpu_shuffle_i32`` in runtime.cpp) is built from
-      // ``ds_bpermute`` plus, on some targets, ``permlane64``. How those behave -- and therefore how we patch them --
-      // depends on the architecture family:
+      // The wave64 cross-half subgroup shuffle (``amdgpu_shuffle_i32`` in runtime.cpp) is built from ``ds_bpermute``
+      // plus, on some targets, ``permlane64``. How those behave -- and therefore how we patch them -- depends on the
+      // architecture family:
       //
       //   * GCN / CDNA (gfx9xx: gfx900/906 Vega, gfx908/gfx90a CDNA1/2, gfx940/gfx941/gfx942 CDNA3, gfx950 CDNA4):
       //     ``ds_bpermute`` addresses the full wave64 directly, so the cross-half shuffle is a single wide
@@ -582,8 +582,8 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       bool is_gcn_cdna = (mcpu_str.substr(0, 4) == "gfx9");
       bool has_native_permlane64 = (mcpu_str.substr(0, 5) == "gfx11" || mcpu_str.substr(0, 5) == "gfx12");
 
-      // Patch the ds_bpermute lane mask used by ``amdgpu_shuffle_i32``: 63 where ``ds_bpermute`` is
-      // wave64-wide (GCN/CDNA), 31 where it is SIMD32-scoped (RDNA, paired with the permlane64 swap above).
+      // Patch the ds_bpermute lane mask used by ``amdgpu_shuffle_i32``: 63 where ``ds_bpermute`` is wave64-wide
+      // (GCN/CDNA), 31 where it is SIMD32-scoped (RDNA, paired with the permlane64 swap above).
       if (auto mask_func = module->getFunction("amdgpu_ds_bpermute_lane_mask")) {
         mask_func->deleteBody();
         auto bb = llvm::BasicBlock::Create(*ctx, "entry", mask_func);

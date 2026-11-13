@@ -1037,8 +1037,8 @@ i32 amdgpu_ds_bpermute(i32 byte_index, i32 value) {
 // time and patches this stub to either the ``llvm.amdgcn.permlane64`` intrinsic (on gfx11+/gfx12 only) or an
 // LDS-roundtrip software emulation (on every CDNA part and on gfx10.x RDNA1/2). The emulation has higher latency (LDS
 // store + ``s_waitcnt`` + LDS load -- roughly tens of cycles per call vs. a few for the native swap), but produces
-// correct cross-half results on wave64 hardware. Used by ``amdgpu_shuffle_i32`` below to repair the
-// cross-half story for ``ds_bpermute``, which is SIMD32-scoped on RDNA.
+// correct cross-half results on wave64 hardware. Used by ``amdgpu_shuffle_i32`` below to repair the cross-half story
+// for ``ds_bpermute``, which is SIMD32-scoped on RDNA.
 i32 amdgpu_permlane64(i32 value) {
   __builtin_trap();
   return 0;
@@ -1076,11 +1076,11 @@ i32 amdgpu_lane_id() {
   return amdgpu_mbcnt_hi(-1, amdgpu_mbcnt_lo(-1, 0));
 }
 
-// Lane-index mask applied to ``ds_bpermute``'s target in ``amdgpu_shuffle_i32``. ``ds_bpermute``'s reach
-// differs by ISA, so ``llvm_context.cpp`` patches this at JIT load time: 63 on GCN/CDNA (gfx9xx), where
-// ``ds_bpermute`` addresses the full wave64 directly, and 31 on RDNA (gfx10/11/12), where it is SIMD32-scoped and the
-// top half is reached via the ``permlane64`` swap instead. Defaults to 31 so an unpatched build stays correct on
-// RDNA. (runtime.cpp is compiled at -O0 to bitcode, so this stays a real call until the JIT patches + inlines it.)
+// Lane-index mask applied to ``ds_bpermute``'s target in ``amdgpu_shuffle_i32``. ``ds_bpermute``'s reach differs by
+// ISA, so ``llvm_context.cpp`` patches this at JIT load time: 63 on GCN/CDNA (gfx9xx), where ``ds_bpermute`` addresses
+// the full wave64 directly, and 31 on RDNA (gfx10/11/12), where it is SIMD32-scoped and the top half is reached via the
+// ``permlane64`` swap instead. Defaults to 31 so an unpatched build stays correct on RDNA. (runtime.cpp is compiled at
+// -O0 to bitcode, so this stays a real call until the JIT patches + inlines it.)
 i32 amdgpu_ds_bpermute_lane_mask() {
   return 31;
 }
