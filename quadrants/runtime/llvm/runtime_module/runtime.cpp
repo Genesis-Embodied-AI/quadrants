@@ -1032,7 +1032,7 @@ i32 amdgpu_ds_bpermute(i32 byte_index, i32 value) {
 }
 
 // Exchanges values between lanes i and i ^ 32 for the two-half shuffle implementation. The module loader supplies
-// the native instruction on gfx11/12 or the LDS emulation on gfx10. Full-wave shuffles never call this function;
+// the native instruction on gfx11 or the LDS emulation on gfx10. Full-wave shuffles never call this function;
 // their unused two-half implementation and this stub are removed before compiling GPU instructions.
 i32 amdgpu_permlane64(i32 value) {
   __builtin_trap();

@@ -3839,10 +3839,10 @@ def test_subgroup_exclusive_add_tiled_log2_size_6():
 
 
 # --------------------------------------------------------------------------------------------------------------------
-# Direct cross-half shuffle coverage. All five tests require a wave64 subgroup. They exercise both algorithms
-# selected for the shared helper: the native full-wave read on gfx9 and the two-half swap/read/select implementation
-# on gfx10/11. On wave32 backends, the cross-half source lane is out of range, so these tests skip rather than assert
-# an implementation-defined result. The separate gfx12 correctness fix changes that target's algorithm selection.
+# Direct cross-half shuffle coverage. All five tests require a wave64 subgroup. They exercise both algorithms selected
+# for the shared helper: the native full-wave read on gfx9/gfx12 and the two-half swap/read/select implementation on
+# gfx10/11. On wave32 backends, the cross-half source lane is out of range, so these tests skip rather than assert an
+# implementation-defined result.
 # --------------------------------------------------------------------------------------------------------------------
 
 

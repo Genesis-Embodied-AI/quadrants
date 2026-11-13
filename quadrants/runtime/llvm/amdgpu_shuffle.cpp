@@ -33,8 +33,8 @@ llvm::Function *select_amdgpu_shuffle(llvm::Module &module, AMDGPUShuffleMode mo
 void prepare_amdgpu_shuffle(llvm::Module &module, llvm::StringRef mcpu) {
   auto *ctx = &module.getContext();
   patch_runtime_intrinsic(module, "amdgpu_ds_bpermute", llvm::Intrinsic::amdgcn_ds_bpermute);
-  bool has_wave64_bpermute = mcpu.substr(0, 4) == "gfx9";
-  bool has_native_permlane64 = mcpu.substr(0, 5) == "gfx11" || mcpu.substr(0, 5) == "gfx12";
+  bool has_wave64_bpermute = mcpu.substr(0, 4) == "gfx9" || mcpu.substr(0, 5) == "gfx12";
+  bool has_native_permlane64 = mcpu.substr(0, 5) == "gfx11";
   auto mode = has_wave64_bpermute ? AMDGPUShuffleMode::Wave64 : AMDGPUShuffleMode::TwoHalves;
   mark_runtime_function_inline(select_amdgpu_shuffle(module, mode));
   if (has_native_permlane64) {

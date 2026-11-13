@@ -103,9 +103,9 @@ TEST(AMDGPUShuffle, PrepareNativeHalfSwapTarget) {
   check_shuffle_selection(AMDGPUShuffleMode::TwoHalves, "gfx1100");
 }
 
-// This refactor must preserve the existing gfx12 two-half routing and native swap, without a shared-memory buffer.
-TEST(AMDGPUShuffle, PreserveGfx12RoutingUntilSeparateFix) {
-  check_shuffle_selection(AMDGPUShuffleMode::TwoHalves, "gfx1200");
+// gfx12 preparation must select the full-wave algorithm without a half-swap intrinsic or shared-memory buffer.
+TEST(AMDGPUShuffle, PrepareGfx12FullWaveTarget) {
+  check_shuffle_selection(AMDGPUShuffleMode::Wave64, "gfx1200");
 }
 
 }  // namespace
