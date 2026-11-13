@@ -7,8 +7,15 @@
 namespace quadrants::lang {
 namespace {
 
-// Check the module-loader transformation without an AMD GPU. The two implementations have distinct callees so a
-// stale forwarding stub or a caller left attached to the discarded implementation is visible in the resulting IR.
+// Check that the selected algorithm becomes amdgpu_shuffle_i32 and that existing up/down and f32 callers use it.
+// The unused algorithm must be removed, and the half-swap helper must remain only for the two-half algorithm.
+// The resulting LLVM module must be valid.
+//
+// When a target is supplied, also check that target-specific preparation selects the expected algorithm, enables
+// inlining, and supplies the lane-read intrinsic. Only gfx10 should allocate the shared-memory swap buffer;
+// targets using a native half swap must have its intrinsic instead.
+//
+// These checks cover compiler-side module preparation, not shuffle results or execution on an AMD GPU.
 void check_shuffle_selection(AMDGPUShuffleMode mode, const char *target = nullptr) {
   llvm::LLVMContext context;
   llvm::Module module("shuffle", context);
