@@ -8,9 +8,8 @@
 namespace quadrants::lang {
 namespace {
 
-// Replace a dummy function body with the 32-bit trailing-zero-count intrinsic. Check that the original argument is
-// forwarded, the extra false flag is appended, and the intrinsic result is returned. Also check that the wrapper
-// permits inlining and that the resulting LLVM module is valid.
+// Intrinsic wrappers must forward their input arguments, append any extra arguments, and return the intrinsic's
+// result using the requested type overload. The generated wrapper must be valid and eligible for inlining.
 TEST(RuntimeModuleUtils, ForwardsArgumentsAndAppendsOverloadedIntrinsicArguments) {
   llvm::LLVMContext context;
   llvm::Module module("runtime", context);
