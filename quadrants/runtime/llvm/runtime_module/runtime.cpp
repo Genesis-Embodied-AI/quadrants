@@ -1077,8 +1077,10 @@ i32 amdgpu_shuffle_byte_index(i32 target_lane, i32 lane_mask) {
   // The empty assembly does nothing at runtime, so byte keeps its value.
   // But "+v" tells LLVM that it reads and writes byte in a vector register. LLVM cannot see through that write.
   //
-  // This prevents LLVM from replacing a constant-index ds_bpermute with readlane. On gfx10/11 in wave64 mode,
-  // ds_bpermute reads within each lane's own half, while readlane selects one lane across the whole wave.
+  // readlane reads one absolute lane into a scalar register shared by the wave. On gfx10/11 in wave64 mode,
+  // ds_bpermute instead reads within the caller's 32-lane half: position 8 reads lane 8 or lane 40, depending on
+  // that half. readlane at index 8 always reads lane 8. The opaque write prevents LLVM from replacing a
+  // constant-index ds_bpermute with readlane and changing which lane is read.
   //
   // AArch64 host compilers reject the "v" constraint, so builds on those hosts omit this workaround.
 #if defined(ARCH_amdgpu) && (defined(__x86_64__) || defined(__i386__) || defined(__amdgcn__))
