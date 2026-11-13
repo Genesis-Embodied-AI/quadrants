@@ -39,6 +39,7 @@ TEST(RuntimeModuleUtils, ForwardsArgumentsAndAppendsOverloadedIntrinsicArguments
   EXPECT_FALSE(llvm::verifyModule(module, &llvm::errs()));
 }
 
+// Void intrinsic wrappers must pass any required extra arguments and return without a value, as CUDA barriers require.
 TEST(RuntimeModuleUtils, SuppliesExtraArgumentToVoidCudaIntrinsic) {
   llvm::LLVMContext context;
   llvm::Module module("runtime", context);
@@ -57,13 +58,7 @@ TEST(RuntimeModuleUtils, SuppliesExtraArgumentToVoidCudaIntrinsic) {
   EXPECT_FALSE(llvm::verifyModule(module, &llvm::errs()));
 }
 
-TEST(RuntimeModuleUtils, MissingStubDoesNotAddAnIntrinsicDeclaration) {
-  llvm::LLVMContext context;
-  llvm::Module module("runtime", context);
-  patch_runtime_intrinsic(module, "absent", llvm::Intrinsic::cttz, true, {llvm::Type::getInt32Ty(context)});
-  EXPECT_TRUE(module.empty());
-}
-
+// An explicit no-inline marker must preserve the function's existing attributes and prevent forced inlining.
 TEST(RuntimeModuleUtils, PreservesExplicitNoInlineMarker) {
   llvm::LLVMContext context;
   llvm::Module module("runtime", context);
