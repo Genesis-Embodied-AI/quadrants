@@ -1,4 +1,5 @@
 #include "quadrants/runtime/llvm/amdgpu_shuffle.h"
+#include "quadrants/runtime/llvm/runtime_module_utils.h"
 
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/IntrinsicsAMDGPU.h"
@@ -7,34 +8,6 @@
 
 namespace quadrants::lang {
 namespace {
-
-// These shuffle implementations must be expanded into the GPU kernel, not called out of line.
-void inline_shuffle(llvm::Function *function) {
-  function->removeFnAttr(llvm::Attribute::OptimizeNone);
-  function->removeFnAttr(llvm::Attribute::NoInline);
-  function->addFnAttr(llvm::Attribute::AlwaysInline);
-}
-
-void patch_shuffle_intrinsic(llvm::Module &module,
-                             const char *name,
-                             llvm::Intrinsic::ID intrinsic,
-                             bool overloaded = false) {
-  auto *function = module.getFunction(name);
-  if (!function) {
-    return;
-  }
-  auto &context = module.getContext();
-  function->deleteBody();
-  llvm::IRBuilder<> builder(llvm::BasicBlock::Create(context, "entry", function));
-  llvm::SmallVector<llvm::Value *> args;
-  for (auto &arg : function->args()) {
-    args.push_back(&arg);
-  }
-  auto *callee = overloaded ? llvm::Intrinsic::getOrInsertDeclaration(&module, intrinsic, {builder.getInt32Ty()})
-                            : llvm::Intrinsic::getOrInsertDeclaration(&module, intrinsic);
-  builder.CreateRet(builder.CreateCall(callee, args));
-  inline_shuffle(function);
-}
 
 void emulate_half_swap(llvm::Module &module, llvm::Function *permlane64_func) {
   auto *ctx = &module.getContext();
@@ -92,7 +65,7 @@ void emulate_half_swap(llvm::Module &module, llvm::Function *permlane64_func) {
   auto load_ptr = builder.CreateInBoundsGEP(buf_ty, lds_global, llvm::ArrayRef<llvm::Value *>(load_idxs));
   auto result = builder.CreateAlignedLoad(i32_ty, load_ptr, llvm::Align(4));
   builder.CreateRet(result);
-  inline_shuffle(permlane64_func);
+  mark_runtime_function_inline(permlane64_func);
 }
 
 }  // namespace
@@ -120,14 +93,15 @@ llvm::Function *select_amdgpu_shuffle(llvm::Module &module, AMDGPUShuffleMode mo
 }
 
 void prepare_amdgpu_shuffle(llvm::Module &module, llvm::StringRef mcpu) {
-  patch_shuffle_intrinsic(module, "amdgpu_ds_bpermute", llvm::Intrinsic::amdgcn_ds_bpermute);
+  patch_runtime_intrinsic(module, "amdgpu_ds_bpermute", llvm::Intrinsic::amdgcn_ds_bpermute);
   // Preserve the current routing. The gfx12 full-wave correction is separate (PR #769).
   bool has_wave64_bpermute = mcpu.substr(0, 4) == "gfx9";
   bool has_native_permlane64 = mcpu.substr(0, 5) == "gfx11" || mcpu.substr(0, 5) == "gfx12";
   auto mode = has_wave64_bpermute ? AMDGPUShuffleMode::Wave64 : AMDGPUShuffleMode::TwoHalves;
-  inline_shuffle(select_amdgpu_shuffle(module, mode));
+  mark_runtime_function_inline(select_amdgpu_shuffle(module, mode));
   if (has_native_permlane64) {
-    patch_shuffle_intrinsic(module, "amdgpu_permlane64", llvm::Intrinsic::amdgcn_permlane64, true);
+    patch_runtime_intrinsic(module, "amdgpu_permlane64", llvm::Intrinsic::amdgcn_permlane64, true,
+                            {llvm::Type::getInt32Ty(module.getContext())});
   } else if (auto *swap = module.getFunction("amdgpu_permlane64")) {
     emulate_half_swap(module, swap);
   }
