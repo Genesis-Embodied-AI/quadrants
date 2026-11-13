@@ -14,7 +14,7 @@ TEST(RuntimeModuleUtils, ForwardsArgumentsAndAppendsOverloadedIntrinsicArguments
   llvm::IRBuilder<> builder(context);
   auto *i32 = builder.getInt32Ty();
   auto *function = llvm::Function::Create(llvm::FunctionType::get(i32, {i32}, false),
-                                        llvm::GlobalValue::ExternalLinkage, "count_zeros", module);
+                                          llvm::GlobalValue::ExternalLinkage, "count_zeros", module);
   builder.SetInsertPoint(llvm::BasicBlock::Create(context, "old", function));
   builder.CreateRet(builder.getInt32(99));
   function->addFnAttr(llvm::Attribute::OptimizeNone);
@@ -42,10 +42,10 @@ TEST(RuntimeModuleUtils, SuppliesExtraArgumentToVoidCudaIntrinsic) {
   llvm::Module module("runtime", context);
   llvm::IRBuilder<> builder(context);
   auto *function = llvm::Function::Create(llvm::FunctionType::get(builder.getVoidTy(), false),
-                                        llvm::GlobalValue::ExternalLinkage, "block_barrier", module);
+                                          llvm::GlobalValue::ExternalLinkage, "block_barrier", module);
 
-  patch_runtime_intrinsic(module, "block_barrier", llvm::Intrinsic::nvvm_barrier_cta_sync_aligned_all,
-                          false, {}, {builder.getInt32(0)});
+  patch_runtime_intrinsic(module, "block_barrier", llvm::Intrinsic::nvvm_barrier_cta_sync_aligned_all, false, {},
+                          {builder.getInt32(0)});
 
   auto *call = llvm::cast<llvm::CallInst>(&function->front().front());
   ASSERT_EQ(call->arg_size(), 1);

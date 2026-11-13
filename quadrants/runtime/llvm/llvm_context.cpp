@@ -297,7 +297,6 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
   auto ctx = get_this_thread_context();
   std::unique_ptr<llvm::Module> module = module_from_bitcode_file(fmt::format("{}/{}", runtime_lib_dir(), file), ctx);
   if (arch_ == Arch::cuda || arch_ == Arch::amdgpu) {
-
     // The runtime bitcode ships with C++ CAS-loop bodies for these (see `runtime_module/atomic.h`); we replace them
     // with single `atomicrmw` instructions here so the GPU backend can lower them to native hardware atomics. The
     // syncscope must match the JIT-time codegen path in `codegen_llvm.cpp`, otherwise on AMDGPU the backend falls back
@@ -353,7 +352,8 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       patch_runtime_intrinsic(*module, "block_idx", Intrinsic::nvvm_read_ptx_sreg_ctaid_x);
       patch_runtime_intrinsic(*module, "block_dim", Intrinsic::nvvm_read_ptx_sreg_ntid_x);
       patch_runtime_intrinsic(*module, "grid_dim", Intrinsic::nvvm_read_ptx_sreg_nctaid_x);
-      patch_runtime_intrinsic(*module, "block_barrier", Intrinsic::nvvm_barrier_cta_sync_aligned_all, false, {}, {get_constant(0)});
+      patch_runtime_intrinsic(*module, "block_barrier", Intrinsic::nvvm_barrier_cta_sync_aligned_all, false, {},
+                              {get_constant(0)});
 
       // barrier0_and/or/popc were replaced with barrier_cta_red variants that
       // take (i32 barrier_id, i1 pred) instead of (i32 pred) and return
@@ -436,8 +436,10 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       // in node_pointer.h::is_representative() on compute capability >= 70.
       patch_runtime_intrinsic(*module, "cuda_match_any_sync_i64", Intrinsic::nvvm_match_any_sync_i64);
 
-      patch_runtime_intrinsic(*module, "ctlz_i32", Intrinsic::ctlz, true, {llvm::Type::getInt32Ty(*ctx)}, {get_constant(false)});
-      patch_runtime_intrinsic(*module, "cttz_i32", Intrinsic::cttz, true, {llvm::Type::getInt32Ty(*ctx)}, {get_constant(false)});
+      patch_runtime_intrinsic(*module, "ctlz_i32", Intrinsic::ctlz, true, {llvm::Type::getInt32Ty(*ctx)},
+                              {get_constant(false)});
+      patch_runtime_intrinsic(*module, "cttz_i32", Intrinsic::cttz, true, {llvm::Type::getInt32Ty(*ctx)},
+                              {get_constant(false)});
 
       link_module_with_cuda_libdevice(module);
 
@@ -527,8 +529,10 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       prepare_amdgpu_shuffle(*module, AMDGPUContext::get_instance().get_mcpu());
       patch_runtime_intrinsic(*module, "amdgpu_mbcnt_lo", llvm::Intrinsic::amdgcn_mbcnt_lo);
       patch_runtime_intrinsic(*module, "amdgpu_mbcnt_hi", llvm::Intrinsic::amdgcn_mbcnt_hi);
-      patch_runtime_intrinsic(*module, "amdgpu_ballot_w32", llvm::Intrinsic::amdgcn_ballot, true, {llvm::Type::getInt32Ty(*ctx)});
-      patch_runtime_intrinsic(*module, "amdgpu_ballot_w64", llvm::Intrinsic::amdgcn_ballot, true, {llvm::Type::getInt64Ty(*ctx)});
+      patch_runtime_intrinsic(*module, "amdgpu_ballot_w32", llvm::Intrinsic::amdgcn_ballot, true,
+                              {llvm::Type::getInt32Ty(*ctx)});
+      patch_runtime_intrinsic(*module, "amdgpu_ballot_w64", llvm::Intrinsic::amdgcn_ballot, true,
+                              {llvm::Type::getInt64Ty(*ctx)});
 
       // Patch warp_size() for AMDGPU. The shared `cuda_kernel_utils.inc.h` stub returns 32, which is baked into the
       // runtime bitcode by the host clang front-end. Without this patch, AMDGPU code that uses `warp_size()` (e.g. the
