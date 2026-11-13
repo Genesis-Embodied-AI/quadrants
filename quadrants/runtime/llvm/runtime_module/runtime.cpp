@@ -1086,6 +1086,8 @@ i32 amdgpu_shuffle_byte_index(i32 target_lane, i32 lane_mask) {
   // which hides the constant index from it, and prevents the optimization.
   //
   // AArch64 host compilers reject the "v" constraint, so builds on those hosts omit this workaround.
+  // FIXME: Provide equivalent protection on AArch64 hosts. Without it, LLVM's replacement can produce incorrect
+  // reads on gfx10/11 in wave64 mode.
 #if defined(ARCH_amdgpu) && (defined(__x86_64__) || defined(__i386__) || defined(__amdgcn__))
   __asm__ volatile("" : "+v"(byte));
 #endif
