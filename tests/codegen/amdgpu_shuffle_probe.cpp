@@ -2,7 +2,7 @@
 // runtime.cpp, applies the shuffle selection/intrinsic patches, and emits two small kernels for inspection with
 // clang --target=amdgcn-amd-amdhsa -mcpu=<target> -mwavefrontsize64 -nogpulib -O2 -S <output.bc>.
 // Usage: amdgpu_shuffle_probe <runtime.bc> <output.bc> <gfx942|gfx1100> <before|after>
-// The before mode reproduces main's mask/identity patches; after uses the production selection helper. This probe
+// The before mode reproduces the old mask/identity patches; after uses the production selection helper. This probe
 // intentionally covers one full-wave and one native-swap target, not gfx10's LDS emulation or GPU execution.
 #include "quadrants/runtime/llvm/amdgpu_shuffle.h"
 

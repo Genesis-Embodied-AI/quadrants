@@ -555,7 +555,7 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       // routing: gfx9 uses a native full-wave read; other targets use the two-half algorithm. The gfx12 routing
       // correction is separate from this refactor (PR #769).
       //
-      // The selected C++ implementation becomes amdgpu_cross_half_shuffle_i32; the unused implementation is removed.
+      // The selected C++ implementation becomes amdgpu_shuffle_i32; the unused implementation is removed.
       // The full-wave path has no half swap or per-lane selection. In particular, it must never emit permlane64 on
       // CDNA, where the instruction is unavailable and crashes LLVM during branch relaxation (genesis-world #2962).
       // The two-half path uses native permlane64 on gfx11/12 and the LDS emulation below on gfx10.
