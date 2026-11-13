@@ -1101,8 +1101,7 @@ i32 amdgpu_shuffle_byte_index(i32 target_lane, i32 lane_mask) {
   return byte;
 }
 
-// Native full-wave gather: the instruction directly addresses any lane in the wave64. Out-of-range lane numbers
-// wrap through the explicit mask; callers must not rely on the value returned for an out-of-range request.
+// Shuffle directly across all 64 lanes. Do not rely on results for out-of-range indices.
 i32 amdgpu_shuffle_wave64_i32(i32 target_lane, i32 value) {
   i32 byte = amdgpu_shuffle_byte_index(target_lane, 63);
   return amdgpu_ds_bpermute(byte, value);
