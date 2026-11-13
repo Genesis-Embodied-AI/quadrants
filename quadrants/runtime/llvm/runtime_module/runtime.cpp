@@ -1078,8 +1078,8 @@ i32 amdgpu_shuffle_byte_index(i32 target_lane, i32 lane_mask) {
   // readlane reads one absolute lane into a scalar register shared by the wave.
   //
   // On gfx10/11 in wave64 mode, ds_bpermute reads within the caller's 32-lane half: position 8 reads lane 8 in
-  // the lower half and lane 40 in the upper half. readlane at index 8 reads lane 8 for the whole wave, so this
-  // replacement can read the wrong half.
+  // the lower half and lane 40 in the upper half. readlane at index 8 reads lane 8 for the whole wave64 wave,
+  // so this replacement can read the wrong half.
   //
   // The empty assembly below prevents that replacement. It does nothing at runtime, so byte keeps its value.
   // But "+v" tells LLVM that it reads and writes byte in a vector register. LLVM cannot see through that write,
