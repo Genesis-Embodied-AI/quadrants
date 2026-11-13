@@ -64,11 +64,10 @@ int main(int argc, char **argv) {
   };
   if (revision == "after") {
     quadrants::lang::select_amdgpu_shuffle(*module, full_wave ? quadrants::lang::AMDGPUShuffleMode::Wave64
-                                                           : quadrants::lang::AMDGPUShuffleMode::TwoHalves);
+                                                              : quadrants::lang::AMDGPUShuffleMode::TwoHalves);
   } else {
-    patch("amdgpu_ds_bpermute_lane_mask", [&](llvm::IRBuilder<> &builder, llvm::Function *) {
-      return builder.getInt32(full_wave ? 63 : 31);
-    });
+    patch("amdgpu_ds_bpermute_lane_mask",
+          [&](llvm::IRBuilder<> &builder, llvm::Function *) { return builder.getInt32(full_wave ? 63 : 31); });
   }
   intrinsic("amdgpu_ds_bpermute", llvm::Intrinsic::amdgcn_ds_bpermute);
   intrinsic("amdgpu_mbcnt_lo", llvm::Intrinsic::amdgcn_mbcnt_lo);
@@ -95,10 +94,10 @@ int main(int argc, char **argv) {
     }
   }
   for (bool constant_target : {false, true}) {
-    auto *kernel_type = llvm::FunctionType::get(llvm::Type::getVoidTy(context),
-                                              {llvm::PointerType::get(context, 1)}, false);
+    auto *kernel_type =
+        llvm::FunctionType::get(llvm::Type::getVoidTy(context), {llvm::PointerType::get(context, 1)}, false);
     auto *kernel = llvm::Function::Create(kernel_type, llvm::GlobalValue::ExternalLinkage,
-                                         constant_target ? "shuffle_constant" : "shuffle_dynamic", *module);
+                                          constant_target ? "shuffle_constant" : "shuffle_dynamic", *module);
     kernel->setCallingConv(llvm::CallingConv::AMDGPU_KERNEL);
     llvm::IRBuilder<> builder(llvm::BasicBlock::Create(context, "entry", kernel));
     auto *lane = builder.CreateIntrinsic(llvm::Intrinsic::amdgcn_workitem_id_x, {}, {});

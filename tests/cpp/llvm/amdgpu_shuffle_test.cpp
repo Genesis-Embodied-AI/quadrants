@@ -17,8 +17,8 @@ void check_shuffle_selection(AMDGPUShuffleMode mode) {
     return llvm::Function::Create(type, llvm::GlobalValue::ExternalLinkage, name, module);
   };
   auto *read = make_function("amdgpu_ds_bpermute");
-  auto *swap = llvm::Function::Create(llvm::FunctionType::get(i32, {i32}, false),
-                                      llvm::GlobalValue::ExternalLinkage, "amdgpu_permlane64", module);
+  auto *swap = llvm::Function::Create(llvm::FunctionType::get(i32, {i32}, false), llvm::GlobalValue::ExternalLinkage,
+                                      "amdgpu_permlane64", module);
   auto *entry = make_function("amdgpu_shuffle_i32");
   auto *wave64 = make_function("amdgpu_shuffle_wave64_i32");
   auto *two_halves = make_function("amdgpu_shuffle_two_halves_i32");
