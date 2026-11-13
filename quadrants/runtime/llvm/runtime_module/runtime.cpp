@@ -1109,7 +1109,7 @@ i32 amdgpu_shuffle_wave64_i32(i32 target_lane, i32 value) {
 }
 
 // Support wave64 shuffles when ds_bpermute only reaches the caller's 32-lane half.
-// Keep the half swap and both reads unconditional so participating lanes execute them together.
+// All participating lanes must execute the half swap and both reads.
 i32 amdgpu_shuffle_two_halves_i32(i32 target_lane, i32 value) {
   i32 self_lane = amdgpu_lane_id();
   i32 swapped = amdgpu_permlane64(value);
