@@ -59,6 +59,7 @@ CompileConfig::CompileConfig() {
 }
 
 void CompileConfig::fit() {
+  QD_ERROR_IF(cpu_worker_spin_us < 0, "cpu_worker_spin_us must be >= 0, but got {}.", cpu_worker_spin_us);
   QD_ERROR_IF(cpu_fixed_block_dim < 1, "cpu_fixed_block_dim must be >= 1, but got {}.", cpu_fixed_block_dim);
   QD_ERROR_IF(cpu_per_worker_min_block_dim < 1, "cpu_per_worker_min_block_dim must be >= 1, but got {}.",
               cpu_per_worker_min_block_dim);

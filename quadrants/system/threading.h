@@ -9,6 +9,7 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <cstdint>
 #include <functional>
 #include <thread>
 
@@ -38,7 +39,7 @@ class ThreadPool {
   void *task_context;
   int thread_counter;
 
-  explicit ThreadPool(int max_num_threads);
+  explicit ThreadPool(int max_num_threads, int worker_spin_us = 0);
 
   void run(int splits, int desired_num_threads, void *task_context, TaskFn *task_fn);
 
@@ -49,6 +50,10 @@ class ThreadPool {
   void target();
 
   ~ThreadPool();
+
+ private:
+  const int worker_spin_us_;
+  std::atomic<std::uint64_t> wakeup_generation_{0};
 };
 
 }  // namespace quadrants

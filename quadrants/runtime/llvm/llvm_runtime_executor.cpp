@@ -89,7 +89,7 @@ LlvmRuntimeExecutor::LlvmRuntimeExecutor(CompileConfig &config, KernelProfilerBa
   }
 
   snode_tree_buffer_manager_ = std::make_unique<SNodeTreeBufferManager>(this);
-  thread_pool_ = std::make_unique<ThreadPool>(config.cpu_max_num_threads);
+  thread_pool_ = std::make_unique<ThreadPool>(config.cpu_max_num_threads, config.cpu_worker_spin_us);
 
   llvm_runtime_ = nullptr;
 

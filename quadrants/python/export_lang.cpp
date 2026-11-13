@@ -239,6 +239,9 @@ void export_lang(nb::module_ &m) {
       .def_rw("cpu_max_num_threads", &CompileConfig::cpu_max_num_threads,
               "Number of worker threads in the shared CPU thread pool. "
               "Compilation threads are governed separately by num_compile_threads.")
+      .def_rw("cpu_worker_spin_us", &CompileConfig::cpu_worker_spin_us,
+              "Microseconds for eligible CPU workers to poll for another launch before sleeping on a condition "
+              "variable. Must be >= 0; 0 disables polling. Does not change task assignment or caller waiting.")
       .def_rw("cpu_per_worker_min_block_dim", &CompileConfig::cpu_per_worker_min_block_dim,
               "Minimum iterations per CPU range-for block (must be >= 1, default 512). Block size is "
               "max(ceil((end - begin) / cpu_max_num_threads), cpu_per_worker_min_block_dim). Only used with "

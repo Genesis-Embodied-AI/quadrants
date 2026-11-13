@@ -62,6 +62,7 @@ struct CompileConfig {
   int saturating_grid_dim;
   int max_block_dim;
   int cpu_max_num_threads;
+  int cpu_worker_spin_us{0};
   int cpu_per_worker_min_block_dim;
   int random_seed;
 
