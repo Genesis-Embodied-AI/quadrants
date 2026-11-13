@@ -1121,11 +1121,15 @@ i32 amdgpu_shuffle_two_halves_i32(i32 target_lane, i32 value) {
   return ((target_lane ^ self_lane) & 32) ? from_other_half : from_self_half;
 }
 
-// Public runtime entry point for every shuffle type and direction. The module loader replaces this stub with the
-// selected C++ implementation above. No architecture check or forwarding call remains in the generated kernel.
-i32 amdgpu_shuffle_i32(i32 target_lane, i32 value) {
+// Shared helper for every shuffle type and direction. The module loader replaces this stub with the selected C++
+// implementation above. The choice is made once at module load, with no architecture check inside the GPU function.
+i32 amdgpu_cross_half_shuffle_i32(i32 target_lane, i32 value) {
   __builtin_trap();
   return 0;
+}
+
+i32 amdgpu_shuffle_i32(i32 index, i32 value) {
+  return amdgpu_cross_half_shuffle_i32(index, value);
 }
 
 f32 amdgpu_shuffle_f32(i32 index, f32 value) {
@@ -1160,7 +1164,7 @@ f64 amdgpu_shuffle_f64(i32 index, f64 value) {
 // latency). Should be upgraded to use DPP ROW_SHR instructions (~4-12 cycles) for reduction-pattern offsets (1, 2, 4,
 // 8, 16); the cross-half case (offset >= 32) still needs the helper.
 i32 amdgpu_shuffle_down_i32(i32 offset, i32 value) {
-  return amdgpu_shuffle_i32(amdgpu_lane_id() + offset, value);
+  return amdgpu_cross_half_shuffle_i32(amdgpu_lane_id() + offset, value);
 }
 
 f32 amdgpu_shuffle_down_f32(i32 offset, f32 value) {
@@ -1194,7 +1198,7 @@ f64 amdgpu_shuffle_down_f64(i32 offset, f64 value) {
 // Mirrors `amdgpu_shuffle_down`: the cross-half helper is a generic gather, so `shuffle_up` is just `shuffle_down`
 // with the source lane index decremented instead of incremented. The same DPP fast-path FIXME applies here too.
 i32 amdgpu_shuffle_up_i32(i32 offset, i32 value) {
-  return amdgpu_shuffle_i32(amdgpu_lane_id() - offset, value);
+  return amdgpu_cross_half_shuffle_i32(amdgpu_lane_id() - offset, value);
 }
 
 f32 amdgpu_shuffle_up_f32(i32 offset, f32 value) {

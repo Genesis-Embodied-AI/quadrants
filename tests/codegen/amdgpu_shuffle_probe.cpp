@@ -100,7 +100,8 @@ int main(int argc, char **argv) {
                                           constant_target ? "shuffle_constant" : "shuffle_dynamic", *module);
     kernel->setCallingConv(llvm::CallingConv::AMDGPU_KERNEL);
     llvm::IRBuilder<> builder(llvm::BasicBlock::Create(context, "entry", kernel));
-    auto *lane = builder.CreateIntrinsic(llvm::Intrinsic::amdgcn_workitem_id_x, {}, {});
+    auto *lane = builder.CreateCall(
+        llvm::Intrinsic::getOrInsertDeclaration(module.get(), llvm::Intrinsic::amdgcn_workitem_id_x));
     auto *value = builder.CreateAdd(builder.CreateMul(lane, builder.getInt32(3)), builder.getInt32(1));
     llvm::Value *source = constant_target ? builder.getInt32(40) : builder.CreateXor(lane, builder.getInt32(32));
     auto *result = builder.CreateCall(module->getFunction("amdgpu_shuffle_i32"), {source, value});

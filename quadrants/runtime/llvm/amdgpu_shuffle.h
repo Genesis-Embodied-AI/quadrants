@@ -8,11 +8,10 @@ namespace quadrants::lang {
 
 enum class AMDGPUShuffleMode { Wave64, TwoHalves };
 
-// Bind the public runtime entry point to one complete C++ implementation. Replacing all uses also updates the
-// up/down and type-conversion helpers. Renaming the selected function preserves the name used by the code generator
-// without introducing a forwarding call. Remove the unused algorithm before any unsupported intrinsic is patched.
+// Bind the existing shared helper to one complete C++ implementation. Keep the ordinary and relative shuffle
+// wrappers unchanged. Remove the unused algorithm before any unsupported intrinsic is patched.
 inline llvm::Function *select_amdgpu_shuffle(llvm::Module &module, AMDGPUShuffleMode mode) {
-  auto *entry = module.getFunction("amdgpu_shuffle_i32");
+  auto *entry = module.getFunction("amdgpu_cross_half_shuffle_i32");
   auto *wave64 = module.getFunction("amdgpu_shuffle_wave64_i32");
   auto *two_halves = module.getFunction("amdgpu_shuffle_two_halves_i32");
   if (!entry || !wave64 || !two_halves) {
@@ -22,7 +21,7 @@ inline llvm::Function *select_amdgpu_shuffle(llvm::Module &module, AMDGPUShuffle
   auto *unused = mode == AMDGPUShuffleMode::Wave64 ? two_halves : wave64;
   entry->replaceAllUsesWith(selected);
   entry->eraseFromParent();
-  selected->setName("amdgpu_shuffle_i32");
+  selected->setName("amdgpu_cross_half_shuffle_i32");
   unused->eraseFromParent();
 
   if (auto *swap = module.getFunction("amdgpu_permlane64"); swap && swap->use_empty()) {
