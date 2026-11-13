@@ -108,8 +108,6 @@ int main(int argc, char **argv) {
     builder.CreateStore(result, builder.CreateGEP(i32, kernel->getArg(0), lane));
     builder.CreateRetVoid();
   }
-  module->setTargetTriple(llvm::Triple("amdgcn-amd-amdhsa"));
-  module->setDataLayout("");
   if (llvm::verifyModule(*module, &llvm::errs())) {
     return 1;
   }
@@ -128,6 +126,10 @@ int main(int argc, char **argv) {
   pipeline.addPass(passes.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O2));
   pipeline.addPass(llvm::GlobalDCEPass());
   pipeline.run(*module, modules);
+  // The input runtime was compiled for the host. Optimize away the isolated kernels' scalar stack slots before
+  // retargeting; AMDGPU requires any remaining alloca to use private address space 5. The verifier checks this.
+  module->setTargetTriple(llvm::Triple("amdgcn-amd-amdhsa"));
+  module->setDataLayout("");
   if (llvm::verifyModule(*module, &llvm::errs())) {
     return 1;
   }
