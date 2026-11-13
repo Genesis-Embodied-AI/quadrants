@@ -71,26 +71,32 @@ void check_shuffle_selection(AMDGPUShuffleMode mode, const char *target = nullpt
   EXPECT_FALSE(llvm::verifyModule(module, &llvm::errs()));
 }
 
+// Full-wave selection must redirect existing shuffle callers and remove the unused two-half algorithm and swap.
 TEST(AMDGPUShuffle, FullWaveSelectionRemovesTheHalfSwapAndRetargetsCallers) {
   check_shuffle_selection(AMDGPUShuffleMode::Wave64);
 }
 
+// Two-half selection must redirect existing shuffle callers, retain the swap, and remove the full-wave algorithm.
 TEST(AMDGPUShuffle, TwoHalfSelectionKeepsTheSwapAndRetargetsCallers) {
   check_shuffle_selection(AMDGPUShuffleMode::TwoHalves);
 }
 
+// gfx9 preparation must select the full-wave algorithm without a half-swap intrinsic or shared-memory buffer.
 TEST(AMDGPUShuffle, PrepareFullWaveTarget) {
   check_shuffle_selection(AMDGPUShuffleMode::Wave64, "gfx942");
 }
 
+// gfx10 preparation must select the two-half algorithm with a shared-memory swap buffer and no native swap.
 TEST(AMDGPUShuffle, PrepareEmulatedHalfSwapTarget) {
   check_shuffle_selection(AMDGPUShuffleMode::TwoHalves, "gfx1030");
 }
 
+// gfx11 preparation must select the two-half algorithm with a native swap and no shared-memory buffer.
 TEST(AMDGPUShuffle, PrepareNativeHalfSwapTarget) {
   check_shuffle_selection(AMDGPUShuffleMode::TwoHalves, "gfx1100");
 }
 
+// This refactor must preserve the existing gfx12 two-half routing and native swap, without a shared-memory buffer.
 TEST(AMDGPUShuffle, PreserveGfx12RoutingUntilSeparateFix) {
   check_shuffle_selection(AMDGPUShuffleMode::TwoHalves, "gfx1200");
 }
