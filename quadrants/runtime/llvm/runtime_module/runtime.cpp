@@ -1146,9 +1146,9 @@ f64 amdgpu_shuffle_f64(i32 index, f64 value) {
   return u.d;
 }
 
-// ``shuffle_down`` keeps lane ``i + offset`` semantics for every in-range lane, so it always uses the cross-half
-// ``ds_bpermute`` + ``permlane64`` helper (~50-60 cycle latency). The DPP fast path lives in
-// ``amdgpu_reduce_shuffle_down_*`` below, which only the reduction trees call.
+// `shuffle_down` reads lane `i + offset` for every in-range source lane, so it uses the general shuffle
+// implementation selected for the target. The DPP optimization is restricted to the reduction-tree helpers
+// `amdgpu_reduce_shuffle_down_*` below.
 i32 amdgpu_shuffle_down_i32(i32 offset, i32 value) {
   return amdgpu_shuffle_i32(amdgpu_lane_id() + offset, value);
 }
