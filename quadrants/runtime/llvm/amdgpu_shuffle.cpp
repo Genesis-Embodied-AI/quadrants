@@ -1,4 +1,5 @@
 #include "quadrants/runtime/llvm/amdgpu_shuffle.h"
+#include "quadrants/runtime/llvm/runtime_module_utils.h"
 
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/IntrinsicsAMDGPU.h"
@@ -7,34 +8,6 @@
 
 namespace quadrants::lang {
 namespace {
-
-// These shuffle implementations must be expanded into the GPU kernel, not called out of line.
-void inline_shuffle(llvm::Function *function) {
-  function->removeFnAttr(llvm::Attribute::OptimizeNone);
-  function->removeFnAttr(llvm::Attribute::NoInline);
-  function->addFnAttr(llvm::Attribute::AlwaysInline);
-}
-
-void patch_shuffle_intrinsic(llvm::Module &module,
-                             const char *name,
-                             llvm::Intrinsic::ID intrinsic,
-                             bool overloaded = false) {
-  auto *function = module.getFunction(name);
-  if (!function) {
-    return;
-  }
-  auto &context = module.getContext();
-  function->deleteBody();
-  llvm::IRBuilder<> builder(llvm::BasicBlock::Create(context, "entry", function));
-  llvm::SmallVector<llvm::Value *> args;
-  for (auto &arg : function->args()) {
-    args.push_back(&arg);
-  }
-  auto *callee = overloaded ? llvm::Intrinsic::getOrInsertDeclaration(&module, intrinsic, {builder.getInt32Ty()})
-                            : llvm::Intrinsic::getOrInsertDeclaration(&module, intrinsic);
-  builder.CreateRet(builder.CreateCall(callee, args));
-  inline_shuffle(function);
-}
 
 void emulate_half_swap(llvm::Module &module, llvm::Function *permlane64_func) {
   auto *ctx = &module.getContext();
@@ -92,14 +65,14 @@ void emulate_half_swap(llvm::Module &module, llvm::Function *permlane64_func) {
   auto load_ptr = builder.CreateInBoundsGEP(buf_ty, lds_global, llvm::ArrayRef<llvm::Value *>(load_idxs));
   auto result = builder.CreateAlignedLoad(i32_ty, load_ptr, llvm::Align(4));
   builder.CreateRet(result);
-  inline_shuffle(permlane64_func);
+  mark_runtime_function_inline(permlane64_func);
 }
 
 }  // namespace
 
 void prepare_amdgpu_shuffle(llvm::Module &module, llvm::StringRef mcpu) {
   auto *ctx = &module.getContext();
-  patch_shuffle_intrinsic(module, "amdgpu_ds_bpermute", llvm::Intrinsic::amdgcn_ds_bpermute);
+  patch_runtime_intrinsic(module, "amdgpu_ds_bpermute", llvm::Intrinsic::amdgcn_ds_bpermute);
   // The wave64 cross-half subgroup shuffle (``amdgpu_shuffle_i32`` in runtime.cpp) is built from ``ds_bpermute``
   // plus, on some targets, ``permlane64``. How those behave -- and therefore how we patch them -- depends on the
   // architecture family:
@@ -140,11 +113,12 @@ void prepare_amdgpu_shuffle(llvm::Module &module, llvm::StringRef mcpu) {
     llvm::IRBuilder<> builder(*ctx);
     builder.SetInsertPoint(bb);
     builder.CreateRet(llvm::ConstantInt::get(llvm::Type::getInt32Ty(*ctx), is_gcn_cdna ? 63 : 31));
-    inline_shuffle(mask_func);
+    mark_runtime_function_inline(mask_func);
   }
 
   if (has_native_permlane64) {
-    patch_shuffle_intrinsic(module, "amdgpu_permlane64", llvm::Intrinsic::amdgcn_permlane64, true);
+    patch_runtime_intrinsic(module, "amdgpu_permlane64", llvm::Intrinsic::amdgcn_permlane64, true,
+                            {llvm::Type::getInt32Ty(module.getContext())});
   } else if (is_gcn_cdna) {
     // CDNA: the wide ds_bpermute already reaches all 64 lanes, so permlane64 is unnecessary -- and emitting it
     // crashes the backend. Patch it to the identity so the helper's cross-SIMD branch returns the same value as
@@ -155,7 +129,7 @@ void prepare_amdgpu_shuffle(llvm::Module &module, llvm::StringRef mcpu) {
       llvm::IRBuilder<> builder(*ctx);
       builder.SetInsertPoint(bb);
       builder.CreateRet(&*permlane64_func->arg_begin());
-      inline_shuffle(permlane64_func);
+      mark_runtime_function_inline(permlane64_func);
     }
   } else if (auto permlane64_func = module.getFunction("amdgpu_permlane64")) {
     emulate_half_swap(module, permlane64_func);

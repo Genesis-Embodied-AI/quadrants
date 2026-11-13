@@ -3,6 +3,7 @@
 #include "quadrants/runtime/llvm/llvm_context.h"
 #include "quadrants/runtime/llvm/amdgpu_libdevice_files.h"
 #include "quadrants/runtime/llvm/amdgpu_shuffle.h"
+#include "quadrants/runtime/llvm/runtime_module_utils.h"
 #include <iterator>
 
 #include "llvm/Transforms/Utils/Cloning.h"
@@ -296,33 +297,6 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
   auto ctx = get_this_thread_context();
   std::unique_ptr<llvm::Module> module = module_from_bitcode_file(fmt::format("{}/{}", runtime_lib_dir(), file), ctx);
   if (arch_ == Arch::cuda || arch_ == Arch::amdgpu) {
-    // Replace stub functions in the runtime bitcode with inline wrappers
-    // around LLVM intrinsics. The runtime module is compiled from C++ with
-    // placeholder functions (e.g. thread_idx(), block_dim()) that can't map
-    // to GPU intrinsics in C++. This rewires them at IR level and marks them
-    // always_inline so they disappear after inlining.
-    auto patch_intrinsic = [&](std::string name, Intrinsic::ID intrin, bool ret = true,
-                               std::vector<llvm::Type *> types = {}, std::vector<llvm::Value *> extra_args = {}) {
-      auto func = module->getFunction(name);
-      if (!func) {
-        return;
-      }
-      func->deleteBody();
-      auto bb = llvm::BasicBlock::Create(*ctx, "entry", func);
-      IRBuilder<> builder(*ctx);
-      builder.SetInsertPoint(bb);
-      std::vector<llvm::Value *> args;
-      for (auto &arg : func->args())
-        args.push_back(&arg);
-      args.insert(args.end(), extra_args.begin(), extra_args.end());
-      if (ret) {
-        builder.CreateRet(builder.CreateIntrinsic(intrin, types, args));
-      } else {
-        builder.CreateIntrinsic(intrin, types, args);
-        builder.CreateRetVoid();
-      }
-      QuadrantsLLVMContext::mark_inline(func);
-    };
 
     // The runtime bitcode ships with C++ CAS-loop bodies for these (see `runtime_module/atomic.h`); we replace them
     // with single `atomicrmw` instructions here so the GPU backend can lower them to native hardware atomics. The
@@ -373,13 +347,13 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       }
 #endif
 
-      patch_intrinsic("thread_idx", Intrinsic::nvvm_read_ptx_sreg_tid_x);
-      patch_intrinsic("block_thread_idx", Intrinsic::nvvm_read_ptx_sreg_tid_x);
-      patch_intrinsic("cuda_clock_i64", Intrinsic::nvvm_read_ptx_sreg_clock64);
-      patch_intrinsic("block_idx", Intrinsic::nvvm_read_ptx_sreg_ctaid_x);
-      patch_intrinsic("block_dim", Intrinsic::nvvm_read_ptx_sreg_ntid_x);
-      patch_intrinsic("grid_dim", Intrinsic::nvvm_read_ptx_sreg_nctaid_x);
-      patch_intrinsic("block_barrier", Intrinsic::nvvm_barrier_cta_sync_aligned_all, false, {}, {get_constant(0)});
+      patch_runtime_intrinsic(*module, "thread_idx", Intrinsic::nvvm_read_ptx_sreg_tid_x);
+      patch_runtime_intrinsic(*module, "block_thread_idx", Intrinsic::nvvm_read_ptx_sreg_tid_x);
+      patch_runtime_intrinsic(*module, "cuda_clock_i64", Intrinsic::nvvm_read_ptx_sreg_clock64);
+      patch_runtime_intrinsic(*module, "block_idx", Intrinsic::nvvm_read_ptx_sreg_ctaid_x);
+      patch_runtime_intrinsic(*module, "block_dim", Intrinsic::nvvm_read_ptx_sreg_ntid_x);
+      patch_runtime_intrinsic(*module, "grid_dim", Intrinsic::nvvm_read_ptx_sreg_nctaid_x);
+      patch_runtime_intrinsic(*module, "block_barrier", Intrinsic::nvvm_barrier_cta_sync_aligned_all, false, {}, {get_constant(0)});
 
       // barrier0_and/or/popc were replaced with barrier_cta_red variants that
       // take (i32 barrier_id, i1 pred) instead of (i32 pred) and return
@@ -405,39 +379,39 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       patch_barrier_red("block_barrier_and_i32", Intrinsic::nvvm_barrier_cta_red_and_aligned_all, true);
       patch_barrier_red("block_barrier_or_i32", Intrinsic::nvvm_barrier_cta_red_or_aligned_all, true);
       patch_barrier_red("block_barrier_count_i32", Intrinsic::nvvm_barrier_cta_red_popc_aligned_all, false);
-      patch_intrinsic("warp_barrier", Intrinsic::nvvm_bar_warp_sync, false);
-      patch_intrinsic("block_mem_fence", Intrinsic::nvvm_membar_cta, false);
-      patch_intrinsic("grid_mem_fence", Intrinsic::nvvm_membar_gl, false);
-      patch_intrinsic("system_mem_fence", Intrinsic::nvvm_membar_sys, false);
+      patch_runtime_intrinsic(*module, "warp_barrier", Intrinsic::nvvm_bar_warp_sync, false);
+      patch_runtime_intrinsic(*module, "block_mem_fence", Intrinsic::nvvm_membar_cta, false);
+      patch_runtime_intrinsic(*module, "grid_mem_fence", Intrinsic::nvvm_membar_gl, false);
+      patch_runtime_intrinsic(*module, "system_mem_fence", Intrinsic::nvvm_membar_sys, false);
 
-      patch_intrinsic("cuda_all", Intrinsic::nvvm_vote_all);
-      patch_intrinsic("cuda_all_sync", Intrinsic::nvvm_vote_all_sync);
+      patch_runtime_intrinsic(*module, "cuda_all", Intrinsic::nvvm_vote_all);
+      patch_runtime_intrinsic(*module, "cuda_all_sync", Intrinsic::nvvm_vote_all_sync);
 
-      patch_intrinsic("cuda_any", Intrinsic::nvvm_vote_any);
-      patch_intrinsic("cuda_any_sync", Intrinsic::nvvm_vote_any_sync);
+      patch_runtime_intrinsic(*module, "cuda_any", Intrinsic::nvvm_vote_any);
+      patch_runtime_intrinsic(*module, "cuda_any_sync", Intrinsic::nvvm_vote_any_sync);
 
-      patch_intrinsic("cuda_uni", Intrinsic::nvvm_vote_uni);
-      patch_intrinsic("cuda_uni_sync", Intrinsic::nvvm_vote_uni_sync);
+      patch_runtime_intrinsic(*module, "cuda_uni", Intrinsic::nvvm_vote_uni);
+      patch_runtime_intrinsic(*module, "cuda_uni_sync", Intrinsic::nvvm_vote_uni_sync);
 
-      patch_intrinsic("cuda_ballot", Intrinsic::nvvm_vote_ballot);
-      patch_intrinsic("cuda_ballot_sync", Intrinsic::nvvm_vote_ballot_sync);
+      patch_runtime_intrinsic(*module, "cuda_ballot", Intrinsic::nvvm_vote_ballot);
+      patch_runtime_intrinsic(*module, "cuda_ballot_sync", Intrinsic::nvvm_vote_ballot_sync);
 
-      patch_intrinsic("cuda_shfl_down_sync_i32", Intrinsic::nvvm_shfl_sync_down_i32);
-      patch_intrinsic("cuda_shfl_down_sync_f32", Intrinsic::nvvm_shfl_sync_down_f32);
+      patch_runtime_intrinsic(*module, "cuda_shfl_down_sync_i32", Intrinsic::nvvm_shfl_sync_down_i32);
+      patch_runtime_intrinsic(*module, "cuda_shfl_down_sync_f32", Intrinsic::nvvm_shfl_sync_down_f32);
 
-      patch_intrinsic("cuda_shfl_up_sync_i32", Intrinsic::nvvm_shfl_sync_up_i32);
-      patch_intrinsic("cuda_shfl_up_sync_f32", Intrinsic::nvvm_shfl_sync_up_f32);
+      patch_runtime_intrinsic(*module, "cuda_shfl_up_sync_i32", Intrinsic::nvvm_shfl_sync_up_i32);
+      patch_runtime_intrinsic(*module, "cuda_shfl_up_sync_f32", Intrinsic::nvvm_shfl_sync_up_f32);
 
-      patch_intrinsic("cuda_shfl_sync_i32", Intrinsic::nvvm_shfl_sync_idx_i32);
+      patch_runtime_intrinsic(*module, "cuda_shfl_sync_i32", Intrinsic::nvvm_shfl_sync_idx_i32);
 
-      patch_intrinsic("cuda_shfl_sync_f32", Intrinsic::nvvm_shfl_sync_idx_f32);
+      patch_runtime_intrinsic(*module, "cuda_shfl_sync_f32", Intrinsic::nvvm_shfl_sync_idx_f32);
 
-      patch_intrinsic("cuda_shfl_xor_sync_i32", Intrinsic::nvvm_shfl_sync_bfly_i32);
+      patch_runtime_intrinsic(*module, "cuda_shfl_xor_sync_i32", Intrinsic::nvvm_shfl_sync_bfly_i32);
 
-      patch_intrinsic("cuda_match_any_sync_i32", Intrinsic::nvvm_match_any_sync_i32);
+      patch_runtime_intrinsic(*module, "cuda_match_any_sync_i32", Intrinsic::nvvm_match_any_sync_i32);
 
       // Replace the runtime.cpp stubs with intrinsics to avoid host-specific inline-assembly constraints.
-      patch_intrinsic("cuda_active_mask", Intrinsic::nvvm_activemask);
+      patch_runtime_intrinsic(*module, "cuda_active_mask", Intrinsic::nvvm_activemask);
 
       // nvvm_match_all_sync_i32p returns {i32, i1}; extract only the i32.
       // Discard the predicate.
@@ -460,10 +434,10 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       // cuda_match_any_sync_i64 is not registered in internal_ops.inc.h (no
       // kernel IR emits calls to it), but it IS called from C++ runtime code
       // in node_pointer.h::is_representative() on compute capability >= 70.
-      patch_intrinsic("cuda_match_any_sync_i64", Intrinsic::nvvm_match_any_sync_i64);
+      patch_runtime_intrinsic(*module, "cuda_match_any_sync_i64", Intrinsic::nvvm_match_any_sync_i64);
 
-      patch_intrinsic("ctlz_i32", Intrinsic::ctlz, true, {llvm::Type::getInt32Ty(*ctx)}, {get_constant(false)});
-      patch_intrinsic("cttz_i32", Intrinsic::cttz, true, {llvm::Type::getInt32Ty(*ctx)}, {get_constant(false)});
+      patch_runtime_intrinsic(*module, "ctlz_i32", Intrinsic::ctlz, true, {llvm::Type::getInt32Ty(*ctx)}, {get_constant(false)});
+      patch_runtime_intrinsic(*module, "cttz_i32", Intrinsic::cttz, true, {llvm::Type::getInt32Ty(*ctx)}, {get_constant(false)});
 
       link_module_with_cuda_libdevice(module);
 
@@ -520,9 +494,9 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
         function_pass_manager.run(*func);
       }
       function_pass_manager.doFinalization();
-      patch_intrinsic("thread_idx", llvm::Intrinsic::amdgcn_workitem_id_x);
-      patch_intrinsic("block_thread_idx", llvm::Intrinsic::amdgcn_workitem_id_x);
-      patch_intrinsic("block_idx", llvm::Intrinsic::amdgcn_workgroup_id_x);
+      patch_runtime_intrinsic(*module, "thread_idx", llvm::Intrinsic::amdgcn_workitem_id_x);
+      patch_runtime_intrinsic(*module, "block_thread_idx", llvm::Intrinsic::amdgcn_workitem_id_x);
+      patch_runtime_intrinsic(*module, "block_idx", llvm::Intrinsic::amdgcn_workgroup_id_x);
 
       // Synthesize ``block_barrier`` as ``fence release "workgroup" -> s_barrier -> fence acquire "workgroup"`` (the
       // same sequence HIP's ``__syncthreads()`` emits via ``__work_group_barrier`` in
@@ -549,12 +523,12 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
           QuadrantsLLVMContext::mark_inline(func);
         }
       }
-      patch_intrinsic("amdgpu_clock_i64", llvm::Intrinsic::amdgcn_s_memtime);
+      patch_runtime_intrinsic(*module, "amdgpu_clock_i64", llvm::Intrinsic::amdgcn_s_memtime);
       prepare_amdgpu_shuffle(*module, AMDGPUContext::get_instance().get_mcpu());
-      patch_intrinsic("amdgpu_mbcnt_lo", llvm::Intrinsic::amdgcn_mbcnt_lo);
-      patch_intrinsic("amdgpu_mbcnt_hi", llvm::Intrinsic::amdgcn_mbcnt_hi);
-      patch_intrinsic("amdgpu_ballot_w32", llvm::Intrinsic::amdgcn_ballot, true, {llvm::Type::getInt32Ty(*ctx)});
-      patch_intrinsic("amdgpu_ballot_w64", llvm::Intrinsic::amdgcn_ballot, true, {llvm::Type::getInt64Ty(*ctx)});
+      patch_runtime_intrinsic(*module, "amdgpu_mbcnt_lo", llvm::Intrinsic::amdgcn_mbcnt_lo);
+      patch_runtime_intrinsic(*module, "amdgpu_mbcnt_hi", llvm::Intrinsic::amdgcn_mbcnt_hi);
+      patch_runtime_intrinsic(*module, "amdgpu_ballot_w32", llvm::Intrinsic::amdgcn_ballot, true, {llvm::Type::getInt32Ty(*ctx)});
+      patch_runtime_intrinsic(*module, "amdgpu_ballot_w64", llvm::Intrinsic::amdgcn_ballot, true, {llvm::Type::getInt64Ty(*ctx)});
 
       // Patch warp_size() for AMDGPU. The shared `cuda_kernel_utils.inc.h` stub returns 32, which is baked into the
       // runtime bitcode by the host clang front-end. Without this patch, AMDGPU code that uses `warp_size()` (e.g. the
@@ -834,18 +808,7 @@ void QuadrantsLLVMContext::strip_nvvmir_version(llvm::Module *module) {
 }
 
 void QuadrantsLLVMContext::mark_inline(llvm::Function *f) {
-  for (auto &B : *f)
-    for (auto &I : B) {
-      if (auto *call = llvm::dyn_cast<llvm::CallInst>(&I)) {
-        if (auto func = call->getCalledFunction(); func && func->getName() == "mark_force_no_inline") {
-          // Found "mark_force_no_inline". Do not inline.
-          return;
-        }
-      }
-    }
-  f->removeFnAttr(llvm::Attribute::OptimizeNone);
-  f->removeFnAttr(llvm::Attribute::NoInline);
-  f->addFnAttr(llvm::Attribute::AlwaysInline);
+  mark_runtime_function_inline(f);
 }
 
 int QuadrantsLLVMContext::num_instructions(llvm::Function *func) {
