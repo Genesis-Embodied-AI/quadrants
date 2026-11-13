@@ -1074,8 +1074,13 @@ i32 amdgpu_lane_id() {
 // Convert a lane index to a byte index for ds_bpermute.
 i32 amdgpu_shuffle_byte_index(i32 target_lane, i32 lane_mask) {
   i32 byte = (target_lane & lane_mask) * 4;
-  // Prevent LLVM from replacing constant-index reads with a lane-read instruction whose scope differs on gfx10/11.
-  // The "+v" constraint requires a vector register. AArch64 host compilers reject it, so exclude them here.
+  // The empty assembly does nothing at runtime, so byte keeps its value.
+  // But "+v" tells LLVM that it reads and writes byte in a vector register. LLVM cannot see through that write.
+  //
+  // This prevents LLVM from replacing a constant-index ds_bpermute with readlane. On gfx10/11 in wave64 mode,
+  // ds_bpermute reads within each lane's own half, while readlane selects one lane across the whole wave.
+  //
+  // AArch64 host compilers reject the "v" constraint, so builds on those hosts omit this workaround.
 #if defined(ARCH_amdgpu) && (defined(__x86_64__) || defined(__i386__) || defined(__amdgcn__))
   __asm__ volatile("" : "+v"(byte));
 #endif
