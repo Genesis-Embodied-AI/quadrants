@@ -14,10 +14,10 @@ Genesis uses two different struct shapes depending on the global ``gs.use_ndarra
 - ``gs.use_ndarray=True``:  ``@dataclass(frozen=True)`` struct, kernel takes the struct as a single arg and the
   per-field annotation ``qd.types.NDArray[...]`` makes Quadrants recurse and bind each field as a separate kernel arg.
   Tests that mirror this shape are parametrised over the **ndarray** backend only.
-- ``gs.use_ndarray=False``: ``@qd.data_oriented`` struct, kernel takes the struct as ``qd.template()`` and accesses
+- ``gs.use_ndarray=False``: ``@qd.data_oriented`` struct, kernel takes the struct as ``qd.Template`` and accesses
   fields via attribute lookup at AST-build time. Tests that mirror this shape are parametrised over the **field**
   backend only. (The other direction is forbidden by the check: "Ndarray shouldn't be passed in
-  via ``qd.template()``".)
+  via ``qd.Template``".)
 
 """
 
@@ -80,7 +80,7 @@ def test_dataclass_struct_with_wrapper_field_kernel_runs(layout):
 # Repro 2: @qd.data_oriented struct holding a qd.Tensor wrapper field.
 #
 # Mirrors the Genesis field-backend struct shape (``DATA_ORIENTED = qd.data_oriented`` with kernel arg
-# ``state: qd.template()``). The kernel body resolves ``state.a`` at AST-build time via ``build_Attribute``; without
+# ``state: qd.Template``). The kernel body resolves ``state.a`` at AST-build time via ``build_Attribute``; without
 # the wrapper-unwrap there ``state.a[i, j]`` would land in ``impl.subscript`` with a Python wrapper that the IR layer
 # doesn't understand (``__getitem__ cannot be called in Quadrants-scope``). Field-backend only — see module docstring.
 # ----------------------------------------------------------------------------
@@ -95,7 +95,7 @@ def test_data_oriented_struct_with_wrapper_field_kernel_runs(layout):
             self.a = a
 
     @qd.kernel
-    def fill(state: qd.template()):
+    def fill(state: qd.Template):
         for i, j in qd.ndrange(_M, _N):
             state.a[i, j] = i * 100 + j
 

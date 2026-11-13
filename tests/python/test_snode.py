@@ -4,7 +4,7 @@ from tests.helpers import test_utils
 
 
 @qd.kernel
-def some_kernel(_: qd.template()): ...
+def some_kernel(_: qd.Template): ...
 
 
 @test_utils.test(cpu_max_num_threads=1)

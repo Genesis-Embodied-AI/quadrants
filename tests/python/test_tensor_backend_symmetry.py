@@ -63,7 +63,7 @@ def test_to_torch_canonical_view_round_trips(backend, layout):
     if backend is qd.Backend.FIELD:
 
         @qd.kernel
-        def fill(x: qd.template()):
+        def fill(x: qd.Template):
             for i, j in qd.ndrange(*canonical):
                 x[i, j] = i * 100 + j
 

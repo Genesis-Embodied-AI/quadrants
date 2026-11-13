@@ -74,14 +74,14 @@ def test_offset_load():
             x[i, j] = qd.random(dtype=qd.i32) % 2
 
     @qd.kernel
-    def assign_vectorized(dx: qd.template(), dy: qd.template()):
+    def assign_vectorized(dx: qd.Template, dy: qd.Template):
         qd.loop_config(bit_vectorize=True)
         for i, j in x:
             y[i, j] = x[i + dx, j + dy]
             z[i, j] = x[i + dx, j + dy]
 
     @qd.kernel
-    def verify(dx: qd.template(), dy: qd.template()):
+    def verify(dx: qd.Template, dy: qd.Template):
         for i, j in qd.ndrange(
             (boundary_offset, N - boundary_offset),
             (boundary_offset, N - boundary_offset),
@@ -150,7 +150,7 @@ def test_offset_load():
 #             x[i, j] = qd.random(dtype=qd.i32) % 2
 #
 #     @qd.kernel
-#     def evolve_vectorized(x: qd.template(), y: qd.template()):
+#     def evolve_vectorized(x: qd.Template, y: qd.Template):
 #         qd.loop_config(bit_vectorize=True)
 #         for i, j in x:
 #             num_active_neighbors = 0
@@ -165,7 +165,7 @@ def test_offset_load():
 #             y[i, j] = (num_active_neighbors == 3) | ((num_active_neighbors == 2) & (x[i, j] == 1))
 #
 #     @qd.kernel
-#     def evolve_naive(x: qd.template(), y: qd.template()):
+#     def evolve_naive(x: qd.Template, y: qd.Template):
 #         for i, j in qd.ndrange(
 #             (boundary_offset, N - boundary_offset),
 #             (boundary_offset, N - boundary_offset),

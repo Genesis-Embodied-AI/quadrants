@@ -35,7 +35,6 @@ def test_args_hasher_numeric() -> None:
     [
         (None, False),
         (qd.i32, False),
-        (qd.template(), True),
         (qd.Template, True),
     ],
 )
@@ -66,7 +65,7 @@ def test_args_hasher_none_is_cacheable() -> None:
     fast cache for the whole call. ``None`` is a singleton, so it is tagged with a constant instead: it hashes, the
     hash is stable across calls, and it does not poison the other arguments in the same call.
     """
-    for annotation in (None, qd.Tensor, qd.template(), qd.Template):
+    for annotation in (None, qd.Tensor, qd.Template):
         arg_meta = ArgMetadata(name="", annotation=annotation)
         hash1 = args_hasher.hash_args(False, [None], [arg_meta])
         assert not isinstance(hash1, FastcacheSkip)
@@ -100,7 +99,6 @@ def test_args_hasher_bool() -> None:
     [
         (None, False),
         (qd.i32, False),
-        (qd.template(), True),
         (qd.Template, True),
     ],
 )

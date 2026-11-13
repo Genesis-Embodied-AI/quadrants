@@ -22,11 +22,11 @@ from quadrants.lang import (
     matrix,
 )
 from quadrants.lang import ops as qd_ops
-from quadrants.lang._dataclass_util import create_flat_name
-from quadrants.lang._final_dataclass_fields import (
+from quadrants.lang._final.final_dataclass_fields import (
     final_field_names,
     is_final_annotation,
 )
+from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._optional_annotation import OPTIONAL_ABSENT
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
@@ -390,7 +390,7 @@ class FunctionDefTransformer:
             ctx.create_variable(argument_name, data)
             return None
         # Template arguments are passed by reference.
-        if isinstance(argument_type, annotations.template):
+        if argument_type is annotations.Template or type(argument_type) is annotations.template:
             ctx.create_variable(argument_name, data)
             return None
 
@@ -778,7 +778,7 @@ class FunctionDefTransformer:
 
     @staticmethod
     def _is_docstring(stmt: ast.stmt, index: int) -> bool:
-        return index == 0 and isinstance(stmt, ast.Expr) and isinstance(stmt.value, (ast.Constant, ast.Str))
+        return index == 0 and isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant)
 
     @staticmethod
     def _is_coverage_probe(stmt: ast.stmt) -> bool:

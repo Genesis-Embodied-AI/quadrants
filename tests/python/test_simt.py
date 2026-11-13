@@ -3263,7 +3263,7 @@ def test_vulkan_subgroup_id_survives_reinit():
 
 
 # --------------------------------------------------------------------------------------------------------------------
-# `subgroup.group_size()` / `subgroup.log2_group_size()` returning Python `int` and feeding into `qd.template()`
+# `subgroup.group_size()` / `subgroup.log2_group_size()` returning Python `int` and feeding into `qd.Template`
 # --------------------------------------------------------------------------------------------------------------------
 
 
@@ -3335,7 +3335,7 @@ def test_subgroup_group_size_stable_across_reinit(req_arch, req_options):
 
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_log2_group_size_feeds_into_template():
-    """``log2_group_size()`` can be passed directly into ``qd.template()`` arguments — e.g. ``reduce_add_tiled(v,
+    """``log2_group_size()`` can be passed directly into ``qd.Template`` arguments - e.g. ``reduce_add_tiled(v,
     log2_group_size())`` matches what hand-written ``log2_size=5/6`` would produce."""
     N = 64
     src = qd.field(dtype=qd.i32, shape=N)
@@ -3841,16 +3841,15 @@ def test_subgroup_exclusive_add_tiled_log2_size_6():
 # --------------------------------------------------------------------------------------------------------------------
 # Direct cross-half shuffle coverage.  These tests target the lane <-> lane >= 32 traffic that on AMD RDNA wave64
 # hardware (gfx10+) used to silently wrap inside the 32-lane SIMD cluster: ``ds_bpermute`` is SIMD32-scoped, and prior
-# to the ``permlane64``-based cross-half helper a lane in the bottom half could not read the top half (and vice
-# versa).  All five tests are gated to ``log2_group_size() == 6`` so they only assert anything on real wave64
-# hardware -- CUDA and SPIR-V backends with wave32 skip the absolute-correctness check (the cross-half partner is
-# out of range there, which is implementation-defined).  Both CDNA and RDNA wave64 run these, via different lowerings
-# of ``amdgpu_cross_half_shuffle_i32``: on CDNA (gfx9xx, incl. gfx942 MI300X) and RDNA4 (gfx12) ``ds_bpermute`` is
-# wave64-wide, so the cross-half read is a single wide ``ds_bpermute`` (lane mask 63) and ``permlane64`` is unused; on
-# gfx10/11 ``ds_bpermute`` is SIMD32-scoped (lane mask 31) and the top half comes from ``amdgpu_permlane64`` -- the
-# native ``v_permlane64_b32`` on gfx11, or an LDS-roundtrip emulation on gfx10.x.  ``v_permlane64_b32`` does not
-# exist on CDNA and emitting it there crashes the AMDGPU backend (genesis-world issue #2962), so the JIT must never
-# emit it on gfx9xx.
+# to the ``permlane64``-based cross-half helper a lane in the bottom half could not read the top half (and vice versa).
+# All five tests are gated to ``log2_group_size() == 6`` so they only assert anything on real wave64 hardware -- CUDA
+# and SPIR-V backends with wave32 skip the absolute-correctness check (the cross-half partner is out of range there,
+# which is implementation-defined).  Both CDNA and RDNA wave64 run these, via different lowerings of
+# ``amdgpu_shuffle_i32``: on CDNA (gfx9xx, incl. gfx942 MI300X) and RDNA4 (gfx12) ``ds_bpermute`` is wave64-wide, so the
+# cross-half read is a single wide ``ds_bpermute`` (lane mask 63) and ``permlane64`` is unused; on gfx10/11
+# ``ds_bpermute`` is SIMD32-scoped (lane mask 31) and the top half comes from ``amdgpu_permlane64`` -- the native
+# ``v_permlane64_b32`` on gfx11, or an LDS-roundtrip emulation on gfx10.x.  ``v_permlane64_b32`` does not exist on CDNA
+# and emitting it there crashes the AMDGPU backend (genesis-world issue #2962), so the JIT must never emit it on gfx9xx.
 # --------------------------------------------------------------------------------------------------------------------
 
 

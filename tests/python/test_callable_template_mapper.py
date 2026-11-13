@@ -14,9 +14,9 @@ def test_callable_template_mapper():
 
     mapper = TemplateMapper(
         (
-            ArgMetadata(qd.template(), qd.template()),
-            ArgMetadata(qd.template(), qd.template()),
-            ArgMetadata(qd.template(), qd.template()),
+            ArgMetadata(qd.Template, qd.Template),
+            ArgMetadata(qd.Template, qd.Template),
+            ArgMetadata(qd.Template, qd.Template),
         ),
         template_slot_locations=(0, 1, 2),
     )
@@ -43,7 +43,7 @@ def test_callable_template_mapper():
     mapper = TemplateMapper(
         (
             ArgMetadata(qd.i32, qd.i32),
-            ArgMetadata(qd.template(), qd.template()),
+            ArgMetadata(qd.Template, qd.Template),
             ArgMetadata(qd.i32, qd.i32),
         ),
         (1,),
@@ -61,8 +61,8 @@ def test_callable_template_mapper_numpy():
     qd.root.place(x, y)
 
     annotations = (
-        ArgMetadata(qd.template(), qd.template()),
-        ArgMetadata(qd.template(), qd.template()),
+        ArgMetadata(qd.Template, qd.Template),
+        ArgMetadata(qd.Template, qd.Template),
         ArgMetadata(qd.types.ndarray(), qd.types.ndarray()),
     )
 

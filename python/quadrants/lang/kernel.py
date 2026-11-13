@@ -1021,6 +1021,30 @@ class Kernel(FuncBase):
                 if py_args_l is not None:
                     py_args = tuple(py_args_l)
 
+        # Reject calls using graph=True with unsupported autodiff modes before FwdMode / Tape record the call.
+        # When called inside a `with Tape(...)` block, this check runs inside that context, but before the tape records
+        # the kernel call. This check also runs for kernel calls outside a tape.
+        if self.use_graph and (
+            # Reject a kernel already in an autodiff mode. grad_replaced skips recording this call, but does not
+            # reset an autodiff mode already set on the kernel.
+            self.autodiff_mode != _NONE
+            or (
+                # A gradient-handling wrapper skips automatic recording of inner calls. Check the active autodiff
+                # contexts only when no such wrapper is handling this call.
+                not self.runtime.grad_replaced
+                and (
+                    # Reject an active FwdMode context or a tape with validation enabled. Check that target_tape
+                    # exists before accessing validation; an ordinary tape with validation=False remains allowed.
+                    self.runtime.fwd_mode_manager
+                    or (self.runtime.target_tape and self.runtime.target_tape.validation)
+                )
+            )
+        ):
+            raise RuntimeError(
+                "graph=True kernels do not support qd.ad.FwdMode or qd.ad.Tape(validation=True). "
+                "Only reverse-mode autodiff, via .grad() or qd.ad.Tape, is supported for graph=True kernels."
+            )
+
         # Transform the primal kernel to forward mode grad kernel
         # then recover to primal when exiting the forward mode manager
         if self.runtime.fwd_mode_manager and not self.runtime.grad_replaced:

@@ -34,7 +34,7 @@ def test_data_oriented_with_ndarray_field_and_nested_data_oriented():
     state = State()
 
     @qd.kernel
-    def run(s: qd.template()):
+    def run(s: qd.Template):
         for i in range(N):
             s.x[i] = i
             s.f[i] = i * 2
@@ -48,7 +48,7 @@ def test_data_oriented_with_ndarray_field_and_nested_data_oriented():
 
 @test_utils.test(arch=qd.cpu)
 def test_dataclass_with_data_oriented_via_template():
-    """A dataclass (frozen=True) holding a @qd.data_oriented holding an ndarray, passed via qd.template()."""
+    """A dataclass (frozen=True) holding a @qd.data_oriented holding an ndarray, passed via qd.Template."""
     N = 4
 
     @qd.data_oriented
@@ -63,7 +63,7 @@ def test_dataclass_with_data_oriented_via_template():
     outer = Outer(inner=Inner())
 
     @qd.kernel
-    def run(s: qd.template()):
+    def run(s: qd.Template):
         for i in range(N):
             s.inner.y[i] = i + 11
 
@@ -89,7 +89,7 @@ def test_data_oriented_with_dataclass_and_ndarray_sibling():
     state = State()
 
     @qd.kernel
-    def run(s: qd.template()):
+    def run(s: qd.Template):
         for i in range(N):
             s.x[i] = i + 1
             s.inner.z[i] = i + 100

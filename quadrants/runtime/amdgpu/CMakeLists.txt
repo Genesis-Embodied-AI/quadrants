@@ -12,6 +12,7 @@ target_sources(amdgpu_runtime
 target_include_directories(amdgpu_runtime
   PRIVATE
     ${PROJECT_SOURCE_DIR}
+    ${PROJECT_BINARY_DIR}/generated
     ${PROJECT_SOURCE_DIR}/external/eigen
     ${PROJECT_SOURCE_DIR}/external/spdlog/include
     ${LLVM_INCLUDE_DIRS}

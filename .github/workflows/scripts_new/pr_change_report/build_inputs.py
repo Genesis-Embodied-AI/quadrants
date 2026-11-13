@@ -1,25 +1,45 @@
 #!/usr/bin/env python3
 """Build inputs for the PR change report agent.
 
-For each source file changed in the PR (.py / .c / .cc / .cpp / .h / .hpp / .cu) this writes:
+For each supported file changed in the PR (Python, C/C++, Markdown, shell, YAML) this writes:
 
   ``<output_dir>/summary.json``        list of ``{path, language, total, added, removed, is_deleted}``
-  ``<output_dir>/file_list.txt``       one path per line; SAME order as ``summary.json`` but EXCLUDES
-                                       deleted files (they have no HEAD content for the agent to attribute)
-  ``<output_dir>/report_header.md``    pre-formatted file-header lines (verbatim for the report)
-  ``<output_dir>/report_comment.md``   compact PR-comment markdown (table + totals line)
+  ``<output_dir>/files_needing_function_attribution.txt``
+                                     Python/C++ paths sent to the function-attribution agent (one per line)
   ``<output_dir>/diffs/<path>.diff``   per-file unified diff vs. merge-base
   ``<output_dir>/head/<path>``         HEAD content of the file (always present)
   ``<output_dir>/base/<path>``         file content at merge-base (absent for newly added files)
 
-``total`` is the number of code lines in the BASE (pre-PR, merge-base) version of the file, i.e.
-the size of the file before this PR's changes. For newly-added files this is 0. ``added`` and
-``removed`` are the number of code lines added or removed by this PR (vs. merge-base). A "code
-line" excludes blank lines, lines whose only non-whitespace content is a comment, and (in Python)
-lines whose only token content is a string literal (i.e. docstrings and continuation lines of
-multi-line strings). C/C++ ``/* ... */`` block comments are stripped before counting.
+``files_needing_function_attribution.txt`` selects files for per-function analysis, not files for the report. It
+contains only non-deleted Python/C++ files, preserving their relative order in ``summary.json``. Deleted files have no
+HEAD content for the agent to inspect; Markdown, shell, and YAML files receive file-level counts only. All supported
+files, including deletions, remain in ``summary.json`` and the report totals.
 
-The agent consumes these inputs to produce the per-function breakdown.
+``total`` is the number of code lines in the BASE (pre-PR, merge-base) version of the file, i.e. the size of the file
+before this PR's changes. For newly-added files this is 0. ``added`` and ``removed`` are the number of code lines added
+or removed by this PR (vs. merge-base).
+
+Counting rules:
+
++--------------+--------------------------------------------------------------------------------------------------+
+| File type    | Counting rule                                                                                    |
++==============+==================================================================================================+
+| All          | Exclude blank lines.                                                                             |
++--------------+--------------------------------------------------------------------------------------------------+
+| Python       | Exclude comment-only lines and lines whose only token content is a string literal (including     |
+|              | docstrings and continuation lines of multi-line strings).                                        |
++--------------+--------------------------------------------------------------------------------------------------+
+| C/C++        | Exclude comment-only lines. Strip /* ... */ block comments before counting.                      |
++--------------+--------------------------------------------------------------------------------------------------+
+| Markdown     | Count all nonblank lines.                                                                        |
++--------------+--------------------------------------------------------------------------------------------------+
+| Shell/YAML   | Skip lines starting with # after whitespace, except shell shebangs. This line-based heuristic    |
+|              | does not parse multiline strings, YAML block scalars, or shell heredocs; #-prefixed content      |
+|              | inside them is also excluded.                                                                    |
++--------------+--------------------------------------------------------------------------------------------------+
+
+The agent identifies function ranges from these inputs. ``render_report.py`` uses the inputs and agent output to render
+all report artifacts.
 """
 
 from __future__ import annotations
@@ -36,6 +56,7 @@ from pathlib import Path
 
 PY_EXTS = {".py"}
 CPP_EXTS = {".c", ".cc", ".cpp", ".h", ".hpp", ".cu"}
+TEXT_LANGUAGE_BY_EXTENSION = {".md": "md", ".sh": "sh", ".yaml": "yaml", ".yml": "yaml"}
 
 
 def run_git(args: list[str], *, check: bool = True) -> str:
@@ -55,7 +76,7 @@ def language_for(path: str) -> str | None:
         return "py"
     if suffix in CPP_EXTS:
         return "cpp"
-    return None
+    return TEXT_LANGUAGE_BY_EXTENSION.get(suffix)
 
 
 def strip_cpp_comments(src: str) -> str:
@@ -192,14 +213,24 @@ def _cpp_code_line_set(src: str) -> set[int]:
 
 
 def code_line_set(src: str, language: str) -> set[int]:
-    """Return 1-indexed line numbers in ``src`` that contain code (not blank, not comment-only,
-    and -- for Python -- not string-literal-only)."""
+    """Return 1-indexed counted lines using the language rules documented at module level."""
     if not src:
         return set()
     if language == "py":
         return _python_code_line_set(src)
     if language == "cpp":
         return _cpp_code_line_set(src)
+    if language in TEXT_LANGUAGE_BY_EXTENSION.values():
+        return {
+            index
+            for index, line in enumerate(src.splitlines(), start=1)
+            if line.strip()
+            and (
+                language == "md"
+                or not line.lstrip().startswith("#")
+                or (language == "sh" and index == 1 and line.startswith("#!"))
+            )
+        }
     return set()
 
 
@@ -327,52 +358,11 @@ def write_file(path: Path, content: str) -> None:
     path.write_text(content)
 
 
-def format_header(s: FileSummary) -> str:
-    parts = [s.path, str(s.total)]
-    if s.added or not s.removed:
-        parts.append(f"+{s.added}")
-    if s.removed:
-        parts.append(f"-{s.removed}")
-    return " ".join(parts)
-
-
-def render_comment_markdown(summaries: list[FileSummary], commit: str) -> str:
-    """Render the compact PR-comment markdown: heading + per-file table + totals line.
-
-    The comment intentionally does NOT include the per-function breakdown; that lives in the
-    Check page (which the comment links to).
-    """
-    head = f"## PR change report (`{commit}`)\n" if commit else "## PR change report\n"
-    lines = [head]
-    if not summaries:
-        lines.append("No source files (.py, .c, .cc, .cpp, .h, .hpp, .cu) changed in this PR.")
-        return "\n".join(lines) + "\n"
-    lines.append(
-        "LoC = code lines in the file BEFORE this PR (0 for newly-added files). "
-        "Excludes blank lines, comment-only lines, and Python multi-line strings."
-    )
-    lines.append("")
-    lines.append("| File | LoC | Added | Removed |")
-    lines.append("|------|-----|-------|---------|")
-    total_added = 0
-    total_removed = 0
-    for s in summaries:
-        added_cell = f"+{s.added}" if s.added else ""
-        removed_cell = f"-{s.removed}" if s.removed else ""
-        lines.append(f"| `{s.path}` | {s.total} | {added_cell} | {removed_cell} |")
-        total_added += s.added
-        total_removed += s.removed
-    lines.append("")
-    lines.append(f"**Total**: {len(summaries)} file(s) changed, +{total_added} -{total_removed} code lines.")
-    return "\n".join(lines) + "\n"
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-ref", required=True, help="PR base ref name (e.g. main)")
     parser.add_argument("--head-ref", default="HEAD", help="PR head ref / sha (default: HEAD)")
     parser.add_argument("--output-dir", required=True, help="Where to write summary.json + diffs/ + base/")
-    parser.add_argument("--commit-hash", default="", help="Short commit hash to embed in the comment heading")
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
@@ -431,9 +421,7 @@ def main() -> int:
             )
         )
 
-    # Sort files by descending lines added, then descending lines removed, then path. This is the
-    # order used for every downstream artifact (summary.json, file_list.txt, report_header.md,
-    # report_comment.md) so that the report and PR comment surface the largest-impact files first.
+    # Sort by additions descending, then removals, then path. Reports preserve this order within each group.
     summaries.sort(key=lambda s: (-s.added, -s.removed, s.path))
 
     summary_dicts = [
@@ -449,21 +437,14 @@ def main() -> int:
     ]
     (output_dir / "summary.json").write_text(json.dumps(summary_dicts, indent=2) + "\n")
 
-    # file_list.txt and touched_ranges.txt feed the agent. Deleted files have no HEAD content
-    # and no per-function attribution to compute, so they are excluded from both. They still
-    # appear in summary.json / report_comment.md / report.txt with correct totals.
-    file_list = "\n".join(s.path for s in summaries if not s.is_deleted)
-    (output_dir / "file_list.txt").write_text(file_list + ("\n" if file_list else ""))
-
-    headers = "\n".join(format_header(s) for s in summaries)
-    (output_dir / "report_header.md").write_text(headers + ("\n" if headers else ""))
-
-    (output_dir / "report_comment.md").write_text(render_comment_markdown(summaries, args.commit_hash))
+    # Only non-deleted Python/C++ files need per-function attribution. Other files still appear in all report totals.
+    files_needing_function_attribution = [s for s in summaries if not s.is_deleted and s.language in {"py", "cpp"}]
+    (output_dir / "files_needing_function_attribution.txt").write_text(
+        "".join(f"{s.path}\n" for s in files_needing_function_attribution)
+    )
 
     touched_lines = []
-    for s in summaries:
-        if s.is_deleted:
-            continue
+    for s in files_needing_function_attribution:
         diff_text = (diffs_dir / f"{s.path}.diff").read_text()
         head_ranges, base_ranges = diff_touched_ranges(diff_text)
         head_str = ", ".join(f"{a}-{b}" for a, b in head_ranges) or "(none)"
@@ -472,9 +453,6 @@ def main() -> int:
     (output_dir / "touched_ranges.txt").write_text("\n".join(touched_lines) + ("\n" if touched_lines else ""))
 
     print(f"Wrote summaries for {len(summaries)} file(s) to {output_dir}")
-    if summaries:
-        print()
-        print(headers)
     return 0
 
 

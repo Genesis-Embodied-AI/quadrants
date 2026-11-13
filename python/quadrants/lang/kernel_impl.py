@@ -1,4 +1,4 @@
-import inspect
+import linecache
 import re
 import sys
 import typing
@@ -141,16 +141,18 @@ _KERNEL_CLASS_STACKFRAME_STMT_RES = [
 def _inside_class(level_of_class_stackframe: int) -> bool:
     try:
         maybe_class_frame = sys._getframe(level_of_class_stackframe)
-        statement_list = inspect.getframeinfo(maybe_class_frame)[3]
-        if statement_list is None:
-            return False
-        first_statment = statement_list[0].strip()
-        for pat in _KERNEL_CLASS_STACKFRAME_STMT_RES:
-            if pat.match(first_statment):
-                return True
-    except:
-        pass
-    return False
+    except ValueError:
+        # sys._getframe raises ValueError when the requested depth exceeds the available call stack.
+        return False
+    # Read the source directly to avoid inspect's module lookup. Check for file changes to support module reloads,
+    # and pass globals so loaders such as zipimport can supply the source.
+    filename = maybe_class_frame.f_code.co_filename
+    # Drop cached lines if the file's size or modification time changed; getline then reads fresh source.
+    linecache.checkcache(filename)
+    # Use cached source if available. Otherwise, read the file or ask the module's loader for source, using
+    # module_globals (the frame's f_globals here) to find that loader.
+    first_statement = linecache.getline(filename, maybe_class_frame.f_lineno, maybe_class_frame.f_globals).strip()
+    return any(pat.match(first_statement) for pat in _KERNEL_CLASS_STACKFRAME_STMT_RES)
 
 
 def _kernel_impl(

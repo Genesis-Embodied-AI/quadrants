@@ -1037,9 +1037,8 @@ i32 amdgpu_ds_bpermute(i32 byte_index, i32 value) {
 // time and patches this stub to the ``llvm.amdgcn.permlane64`` intrinsic on gfx11, to the identity on CDNA and gfx12
 // (where ``ds_bpermute`` already reaches all 64 lanes), or to an LDS-roundtrip software emulation on gfx10.x RDNA1/2.
 // The emulation has higher latency (LDS store + ``s_waitcnt`` + LDS load -- roughly tens of cycles per call vs. a few
-// for the native swap), but produces correct cross-half results on wave64 hardware. Used by
-// ``amdgpu_cross_half_shuffle_i32`` below to repair the cross-half story for ``ds_bpermute``, which is SIMD32-scoped on
-// gfx10/11.
+// for the native swap), but produces correct cross-half results on wave64 hardware. Used by ``amdgpu_shuffle_i32``
+// below to repair the cross-half story for ``ds_bpermute``, which is SIMD32-scoped on gfx10/11.
 i32 amdgpu_permlane64(i32 value) {
   __builtin_trap();
   return 0;
@@ -1077,10 +1076,10 @@ i32 amdgpu_lane_id() {
   return amdgpu_mbcnt_hi(-1, amdgpu_mbcnt_lo(-1, 0));
 }
 
-// Lane-index mask applied to ``ds_bpermute``'s target in ``amdgpu_cross_half_shuffle_i32``. ``ds_bpermute``'s reach
-// differs by ISA, so ``llvm_context.cpp`` patches this at JIT load time: 63 on GCN/CDNA (gfx9xx) and RDNA4 (gfx12),
-// where ``ds_bpermute`` addresses the full wave64 directly, and 31 on RDNA1-3 (gfx10/11), where it is SIMD32-scoped and
-// the top half is reached via the ``permlane64`` swap instead. Defaults to 31 so an unpatched build stays correct on
+// Lane-index mask applied to ``ds_bpermute``'s target in ``amdgpu_shuffle_i32``. ``ds_bpermute``'s reach differs by
+// ISA, so ``llvm_context.cpp`` patches this at JIT load time: 63 on GCN/CDNA (gfx9xx) and RDNA4 (gfx12), where
+// ``ds_bpermute`` addresses the full wave64 directly, and 31 on RDNA1-3 (gfx10/11), where it is SIMD32-scoped and the
+// top half is reached via the ``permlane64`` swap instead. Defaults to 31 so an unpatched build stays correct on
 // gfx10/11. (runtime.cpp is compiled at -O0 to bitcode, so this stays a real call until the JIT patches + inlines it.)
 i32 amdgpu_ds_bpermute_lane_mask() {
   return 31;
@@ -1120,7 +1119,7 @@ i32 amdgpu_ds_bpermute_lane_mask() {
 // ``__shfl_sync`` also wraps), and the upstream subgroup ops never rely on it -- ``shuffle_up`` / ``shuffle_down``
 // have a ``lane_in_group`` predicate at the call site, ``shuffle_xor`` is always in-range for the mask range we
 // support, etc. We just need OOR not to crash or corrupt in-range lanes.
-i32 amdgpu_cross_half_shuffle_i32(i32 target_lane, i32 value) {
+i32 amdgpu_shuffle_i32(i32 target_lane, i32 value) {
   // Two parallel reads, then a per-lane select. ``permlane64`` is convergent and must execute uniformly across the
   // wave -- lifting it above the select keeps the AMDGPU backend happy and lets it issue exactly one
   // ``v_permlane64_b32``. ``ds_bpermute`` on gfx10/11 wave64 is SIMD32-scoped with a 5-bit address (top half of the
@@ -1160,10 +1159,6 @@ i32 amdgpu_cross_half_shuffle_i32(i32 target_lane, i32 value) {
   return ((target_lane ^ self_lane) & 32) ? from_other_half : from_self_half;
 }
 
-i32 amdgpu_shuffle_i32(i32 index, i32 value) {
-  return amdgpu_cross_half_shuffle_i32(index, value);
-}
-
 f32 amdgpu_shuffle_f32(i32 index, f32 value) {
   union {
     f32 f;
@@ -1196,7 +1191,7 @@ f64 amdgpu_shuffle_f64(i32 index, f64 value) {
 // latency). Should be upgraded to use DPP ROW_SHR instructions (~4-12 cycles) for reduction-pattern offsets (1, 2, 4,
 // 8, 16); the cross-half case (offset >= 32) still needs the helper.
 i32 amdgpu_shuffle_down_i32(i32 offset, i32 value) {
-  return amdgpu_cross_half_shuffle_i32(amdgpu_lane_id() + offset, value);
+  return amdgpu_shuffle_i32(amdgpu_lane_id() + offset, value);
 }
 
 f32 amdgpu_shuffle_down_f32(i32 offset, f32 value) {
@@ -1230,7 +1225,7 @@ f64 amdgpu_shuffle_down_f64(i32 offset, f64 value) {
 // Mirrors `amdgpu_shuffle_down`: the cross-half helper is a generic gather, so `shuffle_up` is just `shuffle_down`
 // with the source lane index decremented instead of incremented. The same DPP fast-path FIXME applies here too.
 i32 amdgpu_shuffle_up_i32(i32 offset, i32 value) {
-  return amdgpu_cross_half_shuffle_i32(amdgpu_lane_id() - offset, value);
+  return amdgpu_shuffle_i32(amdgpu_lane_id() - offset, value);
 }
 
 f32 amdgpu_shuffle_up_f32(i32 offset, f32 value) {

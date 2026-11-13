@@ -250,7 +250,7 @@ def test_hook():
             self.hook(self.val)
 
     @qd.kernel
-    def hook(x: qd.template()):
+    def hook(x: qd.Template):
         for i, j in x:
             x[i, j] = 1.0
 

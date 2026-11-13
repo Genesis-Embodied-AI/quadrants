@@ -34,11 +34,11 @@ from quadrants._lib.core.quadrants_python import KernelLaunchContext
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import _kernel_impl_dataclass, impl
-from quadrants.lang._dataclass_util import create_flat_name
-from quadrants.lang._final_dataclass_fields import (
+from quadrants.lang._final.final_dataclass_fields import (
     final_field_names,
     subtree_has_final_fields,
 )
+from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang._signature import get_func_signature
 from quadrants.lang._wrap_inspect import get_source_info_and_src
@@ -228,7 +228,8 @@ class FuncBase:
         self.arg_metas_expanded: list[ArgMetadata] = []
         self.orig_arguments: list[ArgMetadata] = []
         self.return_type = None
-        # Shared by every AST transform of this function; see ASTTransformerFuncContext.memoized_get_pos_info.
+        # Shared by every AST transform of this function; see
+        # ASTTransformerFuncContext.memoized_get_formatted_location_with_source_context.
         self.pos_info_cache: dict[tuple, str] = {}
 
         self.check_parameter_annotations()

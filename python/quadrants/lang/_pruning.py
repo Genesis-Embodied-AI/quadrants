@@ -1,9 +1,13 @@
-from ast import Attribute, Name, Starred, expr, keyword
+from ast import Name, Starred, expr, keyword
 from collections import defaultdict, deque
 from typing import TYPE_CHECKING, Any
 
-from ._dataclass_util import create_flat_name
 from ._exceptions import raise_exception
+from ._name_utils import (
+    create_flat_name,
+    create_flat_name_from_parts,
+    extract_dotted_name_parts,
+)
 from ._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
 from .exception import QuadrantsSyntaxError
 from .func import Func
@@ -16,15 +20,10 @@ def _flatten_arg_node(node: expr) -> tuple[str, str] | None:
 
     The root id is returned because the flat name alone is ambiguous: ``__qd_self__qd_dofs`` is what both the chain
     ``self.dofs`` and an already-flattened dataclass-arg Name of that name produce."""
-    if isinstance(node, Name):
-        return node.id, node.id
-    if isinstance(node, Attribute):
-        parent = _flatten_arg_node(node.value)
-        if parent is None:
-            return None
-        parent_flat, root_id = parent
-        return create_flat_name(parent_flat, node.attr), root_id
-    return None
+    name_parts = extract_dotted_name_parts(node)
+    if name_parts is None:
+        return None
+    return create_flat_name_from_parts(name_parts), name_parts[0]
 
 
 if TYPE_CHECKING:

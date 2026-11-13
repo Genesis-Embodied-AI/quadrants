@@ -414,7 +414,7 @@ def test_compound_layout_torch_noncontiguous_import(
         pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), id="ndarray-matrix"),
     ],
 )
-@test_utils.test(exclude=[qd.vulkan])
+@test_utils.test()
 def test_compound_layout_torch_zero_copy(backend: qd.Backend, dtype: MatrixType) -> None:
     """Torch sharing modes return the existing buffer and expose writes at canonical positions."""
     test_utils.require_torch_gpu_kernels()
@@ -448,7 +448,7 @@ def test_compound_layout_torch_zero_copy(backend: qd.Backend, dtype: MatrixType)
         pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
     ],
 )
-@test_utils.test(exclude=[qd.vulkan])
+@test_utils.test()
 def test_compound_layout_dlpack_shape_and_strides(
     backend: qd.Backend, dtype: MatrixType, layout: tuple[int, ...]
 ) -> None:
@@ -483,7 +483,7 @@ def test_compound_layout_dlpack_shape_and_strides(
         pytest.param(qd.Backend.NDARRAY, qd.types.matrix(2, 3, qd.f32), (1, 0, 2), id="ndarray-matrix-swap-axes-0-1"),
     ],
 )
-@test_utils.test(exclude=[qd.vulkan])
+@test_utils.test()
 def test_compound_layout_dlpack_writes(backend: qd.Backend, dtype: MatrixType, layout: tuple[int, ...]) -> None:
     """A write through a DLPack view changes the same canonical element in the tensor."""
     test_utils.require_torch_gpu_kernels()

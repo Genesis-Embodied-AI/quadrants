@@ -30,7 +30,7 @@ def test_sparse_LLT_solver(dtype, solver_type, ordering):
     def fill(
         Abuilder: qd.types.sparse_matrix_builder(),
         InputArray: qd.types.ndarray(),
-        b: qd.template(),
+        b: qd.Template,
     ):
         for i, j in qd.ndrange(n, n):
             Abuilder[i, j] += InputArray[i, j]

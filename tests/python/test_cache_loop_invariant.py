@@ -42,7 +42,7 @@ def test_atomic_dest_not_cached(use_ndarray: bool) -> None:
 
     TensorType = qd.ndarray if use_ndarray else qd.field
 
-    AnnotationType = qd.types.ndarray() if use_ndarray else qd.template()
+    AnnotationType = qd.types.ndarray() if use_ndarray else qd.Template
 
     @qd.kernel
     def k(x: AnnotationType, result: AnnotationType):
@@ -81,7 +81,7 @@ def test_conditional_store_to_loop_invariant_global(use_ndarray: bool) -> None:
     m = 8
     threshold = 3
 
-    AnnotationType = qd.types.ndarray() if use_ndarray else qd.template()
+    AnnotationType = qd.types.ndarray() if use_ndarray else qd.Template
     TensorType = qd.ndarray if use_ndarray else qd.field
 
     @qd.kernel
@@ -120,7 +120,7 @@ def test_literal_index_load_not_cached_over_aliasing_store(use_ndarray: bool) ->
 
     TensorType = qd.ndarray if use_ndarray else qd.field
 
-    AnnotationType = qd.types.ndarray() if use_ndarray else qd.template()
+    AnnotationType = qd.types.ndarray() if use_ndarray else qd.Template
 
     @qd.kernel
     def k(a: AnnotationType, out: AnnotationType):
@@ -154,7 +154,7 @@ def test_loop_index_load_not_cached_over_aliasing_store(use_ndarray: bool) -> No
 
     TensorType = qd.ndarray if use_ndarray else qd.field
 
-    AnnotationType = qd.types.ndarray() if use_ndarray else qd.template()
+    AnnotationType = qd.types.ndarray() if use_ndarray else qd.Template
 
     @qd.kernel
     def k(a: AnnotationType, out: AnnotationType):
@@ -201,7 +201,7 @@ def test_vector_element_aliasing_store_no_miscompile(use_ndarray: bool) -> None:
     else:
         a = qd.Vector.field(k, qd.i32, shape=(n,))
         out = qd.Vector.field(k, qd.i32, shape=(n,))
-        AnnotationType = qd.template()
+        AnnotationType = qd.Template
 
     @qd.kernel
     def kern(a: AnnotationType, out: AnnotationType):

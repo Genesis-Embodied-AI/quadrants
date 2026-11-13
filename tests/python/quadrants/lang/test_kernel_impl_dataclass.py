@@ -46,20 +46,20 @@ class MyStructEF:
 @dataclasses.dataclass
 class MyStructFieldAB:
     a: qd.Template
-    b: qd.template()
+    b: qd.Template
 
 
 @dataclasses.dataclass
 class MyStructFieldCD:
     c: qd.Template
-    d: qd.template()
+    d: qd.Template
     my_struct_ab: MyStructFieldAB
 
 
 @dataclasses.dataclass
 class MyStructFieldEF:
     e: qd.Template
-    f: qd.template()
+    f: qd.Template
     my_struct_cd: MyStructFieldCD
 
 
@@ -187,30 +187,30 @@ def test_expand_func_arguments(in_meta: list[ArgMetadata], expected_meta: list[A
             "my_struct_ab",
             MyStructFieldAB,
             {
-                "__qd_my_struct_ab__qd_a": qd.template,
-                "__qd_my_struct_ab__qd_b": qd.template,
+                "__qd_my_struct_ab__qd_a": qd.Template,
+                "__qd_my_struct_ab__qd_b": qd.Template,
             },
         ),
         (
             "my_struct_cd",
             MyStructFieldCD,
             {
-                "__qd_my_struct_cd__qd_c": qd.template,
-                "__qd_my_struct_cd__qd_d": qd.template,
-                "__qd_my_struct_cd__qd_my_struct_ab__qd_a": qd.template,
-                "__qd_my_struct_cd__qd_my_struct_ab__qd_b": qd.template,
+                "__qd_my_struct_cd__qd_c": qd.Template,
+                "__qd_my_struct_cd__qd_d": qd.Template,
+                "__qd_my_struct_cd__qd_my_struct_ab__qd_a": qd.Template,
+                "__qd_my_struct_cd__qd_my_struct_ab__qd_b": qd.Template,
             },
         ),
         (
             "my_struct_ef",
             MyStructFieldEF,
             {
-                "__qd_my_struct_ef__qd_e": qd.template,
-                "__qd_my_struct_ef__qd_f": qd.template,
-                "__qd_my_struct_ef__qd_my_struct_cd__qd_c": qd.template,
-                "__qd_my_struct_ef__qd_my_struct_cd__qd_d": qd.template,
-                "__qd_my_struct_ef__qd_my_struct_cd__qd_my_struct_ab__qd_a": qd.template,
-                "__qd_my_struct_ef__qd_my_struct_cd__qd_my_struct_ab__qd_b": qd.template,
+                "__qd_my_struct_ef__qd_e": qd.Template,
+                "__qd_my_struct_ef__qd_f": qd.Template,
+                "__qd_my_struct_ef__qd_my_struct_cd__qd_c": qd.Template,
+                "__qd_my_struct_ef__qd_my_struct_cd__qd_d": qd.Template,
+                "__qd_my_struct_ef__qd_my_struct_cd__qd_my_struct_ab__qd_a": qd.Template,
+                "__qd_my_struct_ef__qd_my_struct_cd__qd_my_struct_ab__qd_b": qd.Template,
             },
         ),
     ],

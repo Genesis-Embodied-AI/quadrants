@@ -145,7 +145,7 @@ def test_chain_compare():
 @test_utils.test()
 def test_static_in():
     @qd.kernel
-    def foo(a: qd.template()) -> qd.i32:
+    def foo(a: qd.Template) -> qd.i32:
         b = 0
         if qd.static(a in [qd.i32, qd.u32]):
             b = 1
@@ -161,7 +161,7 @@ def test_static_in():
 @test_utils.test()
 def test_static_is():
     @qd.kernel
-    def foo(a: qd.template()) -> qd.i32:
+    def foo(a: qd.Template) -> qd.i32:
         b = 0
         if qd.static(a is None):
             b = 1
@@ -199,7 +199,7 @@ def test_static_is_rejects_runtime_operands():
         array(value)
 
     @qd.kernel
-    def reserved_name(__qd_value: qd.template()) -> qd.i32:
+    def reserved_name(__qd_value: qd.Template) -> qd.i32:
         return 1 if qd.static(__qd_value is None) else 0
 
     with pytest.raises(
@@ -209,7 +209,7 @@ def test_static_is_rejects_runtime_operands():
         reserved_name(None)
 
     @qd.kernel
-    def shadowed_template(value: qd.template()) -> qd.i32:
+    def shadowed_template(value: qd.Template) -> qd.i32:
         result = 0
         for value in qd.static([None]):
             result = 1 if qd.static(value is None) else 0
@@ -251,7 +251,7 @@ def test_static_is_accepts_optional_ndarray_presence():
 @test_utils.test()
 def test_static_is_rejects_non_none_identity():
     @qd.kernel
-    def same(value: qd.template()) -> qd.i32:
+    def same(value: qd.Template) -> qd.i32:
         return 1 if qd.static(value is qd.i32) else 0
 
     with pytest.raises(
@@ -266,7 +266,7 @@ def test_non_static_in():
     with pytest.raises(qd.QuadrantsCompilationError, match='"In" is only supported inside `qd.static`.'):
 
         @qd.kernel
-        def foo(a: qd.template()) -> qd.i32:
+        def foo(a: qd.Template) -> qd.i32:
             b = 0
             if a in [qd.i32, qd.u32]:
                 b = 1

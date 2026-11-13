@@ -876,7 +876,7 @@ def test_vector_vector_t():
 
 def _test_field_and_ndarray(field, ndarray, func, verify):
     @qd.kernel
-    def kern_field(a: qd.template()):
+    def kern_field(a: qd.Template):
         func(a)
 
     @qd.kernel
@@ -892,7 +892,7 @@ def _test_field_and_ndarray(field, ndarray, func, verify):
 @test_utils.test()
 def test_store_scalarize():
     @qd.func
-    def func(a: qd.template()):
+    def func(a: qd.Template):
         for i in range(5):
             a[i] = [[i, i + 1], [i + 2, i + 3]]
 
@@ -911,7 +911,7 @@ def test_store_scalarize():
 @test_utils.test()
 def test_load_store_scalarize():
     @qd.func
-    def func(a: qd.template()):
+    def func(a: qd.Template):
         for i in range(3):
             a[i] = [[i, i + 1], [i + 2, i + 3]]
 
@@ -930,7 +930,7 @@ def test_load_store_scalarize():
 @test_utils.test()
 def test_load_broadcast():
     @qd.func
-    def func(a: qd.template()):
+    def func(a: qd.Template):
         for i in qd.grouped(a):
             a[i] = 42
 
@@ -946,7 +946,7 @@ def test_load_broadcast():
 @test_utils.test()
 def test_unary_op_scalarize():
     @qd.func
-    def func(a: qd.template()):
+    def func(a: qd.Template):
         a[0] = [[0, 1], [2, 3]]
         a[1] = [[3, 4], [5, 6]]
         a[2] = -a[0]
@@ -970,7 +970,7 @@ def test_unary_op_scalarize():
 @test_utils.test()
 def test_binary_op_scalarize():
     @qd.func
-    def func(a: qd.template()):
+    def func(a: qd.Template):
         a[0] = [[0.0, 1.0], [2.0, 3.0]]
         a[1] = [[3.0, 4.0], [5.0, 6.0]]
         a[2] = a[0] + a[0]
@@ -1062,7 +1062,7 @@ def test_fill_op():
 @test_utils.test(debug=True)
 def test_atomic_op_scalarize():
     @qd.func
-    def func(x: qd.template()):
+    def func(x: qd.Template):
         x[0] = [1.0, 2.0, 3.0]
         tmp = qd.Vector([3, 2, 1])
         z = qd.atomic_sub(x[0], tmp)

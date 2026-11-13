@@ -576,7 +576,7 @@ def test_eliminate_recomputable_pushes_rejects_mutated_snode_chain_leaf():
     data[0] = qd.Vector([1.0, 1.0, 1.0])
 
     @qd.kernel
-    def k(data: qd.template(), field: qd.template()):
+    def k(data: qd.Template, field: qd.Template):
         for _ in qd.ndrange(1):
             base = qd.floor(data[0]).cast(qd.i32)
             field[base, 0] += data[0]
@@ -2778,19 +2778,19 @@ def test_adstack_triangular_ndrange_self_referential_push_idempotency():
 
     @qd.kernel
     def compute(
-        batch_probe: qd.template(),
-        dst_vec_buf: qd.template(),
-        src_vec_buf: qd.template(),
-        group_base: qd.template(),
-        sub_begin: qd.template(),
-        sub_end: qd.template(),
-        src_offset: qd.template(),
-        dst_offset: qd.template(),
-        dst_buf: qd.template(),
-        outer_size: qd.template(),
-        group_begin: qd.template(),
-        group_end: qd.template(),
-        src_buf: qd.template(),
+        batch_probe: qd.Template,
+        dst_vec_buf: qd.Template,
+        src_vec_buf: qd.Template,
+        group_base: qd.Template,
+        sub_begin: qd.Template,
+        sub_end: qd.Template,
+        src_offset: qd.Template,
+        dst_offset: qd.Template,
+        dst_buf: qd.Template,
+        outer_size: qd.Template,
+        group_begin: qd.Template,
+        group_end: qd.Template,
+        src_buf: qd.Template,
     ):
         for i_e, i_b in qd.ndrange(outer_size.shape[0], batch_probe.shape[1]):
             for j_e in range(i_e, outer_size.shape[0]):
@@ -4940,11 +4940,11 @@ def test_sizer_overflow_word_is_cleared_after_poisoning():
 
 @test_utils.test(arch=[qd.cuda, qd.amdgpu, qd.vulkan, qd.metal], require=qd.extension.adstack)
 def test_max_reducer_per_kernel_registry_id_isolation():
-    # Two `qd.template()` instantiations of the same kernel hash to distinct registry ids so the per-spec max-reducer
+    # Two `qd.Template` instantiations of the same kernel hash to distinct registry ids so the per-spec max-reducer
     # cache keyed by `(registry_id, stack_id, mor_node_idx)` does not leak entries across them. GPU only: the max-
     # reducer dispatch is GPU-specific.
     #
-    # Internal details: a single `@qd.kernel` definition takes a `qd.template()` flag and selects between two distinct
+    # Internal details: a single `@qd.kernel` definition takes a `qd.Template` flag and selects between two distinct
     # reverse-mode bodies that write to different loss fields. Each instantiation captures a `MaxOverRange` spec at the
     # same `(stack_id, mor_node_idx)` coordinates because the bodies are structurally identical, and they share the same
     # `arr` so a stale entry would pass the observation freshness check (same devalloc, same write gen). The dispatch-
@@ -4958,7 +4958,7 @@ def test_max_reducer_per_kernel_registry_id_isolation():
     loss_b = qd.field(qd.f32, shape=(), needs_grad=True)
 
     @qd.kernel
-    def compute(a: qd.types.ndarray(dtype=qd.i32, ndim=1), flag: qd.template()):
+    def compute(a: qd.types.ndarray(dtype=qd.i32, ndim=1), flag: qd.Template):
         for i in range(a.shape[0]):
             accum = 0.0
             for j in range(a[i]):

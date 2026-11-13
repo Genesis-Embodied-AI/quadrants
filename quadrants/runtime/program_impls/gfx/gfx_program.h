@@ -31,6 +31,10 @@ class GfxProgramImpl : public ProgramImpl {
     return runtime_->flush();
   }
 
+  void buffer_copy(DevicePtr dst, DevicePtr src, size_t size) override {
+    runtime_->buffer_copy(dst, src, size);
+  }
+
   void destroy_snode_tree(SNodeTree *snode_tree) override {
     QD_ASSERT(snode_tree_mgr_ != nullptr);
     snode_tree_mgr_->destroy_snode_tree(snode_tree);

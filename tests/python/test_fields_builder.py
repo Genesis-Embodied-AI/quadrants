@@ -203,12 +203,12 @@ def test_field_initialize_zero():
 @test_utils.test()
 def test_field_builder_place_grad():
     @qd.kernel
-    def mul(arr: qd.template(), out: qd.template()):
+    def mul(arr: qd.Template, out: qd.Template):
         for i in arr:
             out[i] = arr[i] * 2.0
 
     @qd.kernel
-    def calc_loss(arr: qd.template(), loss: qd.template()):
+    def calc_loss(arr: qd.Template, loss: qd.Template):
         for i in arr:
             loss[()] += arr[i]
 

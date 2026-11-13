@@ -88,7 +88,7 @@ def test_func_of_data_class_as_kernel_arg():
         y: qd.f32
 
         @qd.func
-        def add(self, other: qd.template()):
+        def add(self, other: qd.Template):
             return Foo(self.x + other.x, self.y + other.y)
 
     @qd.kernel
@@ -113,7 +113,7 @@ def test_func_of_data_class_as_kernel_return():
         y: qd.f32
 
         @qd.func
-        def add(self, other: qd.template()):
+        def add(self, other: qd.Template):
             return Foo(self.x + other.x, self.y + other.y)
 
         def add_python(self, other):
@@ -238,7 +238,7 @@ def test_struct_with_matrix():
         return (struct.p1 + struct.p2) / 2
 
     @qd.kernel
-    def process_struct(field1: qd.template(), field2: qd.template()):
+    def process_struct(field1: qd.Template, field2: qd.Template):
         for i in field1:
             field1[i].get_vec(field2[i], global_struct)
 

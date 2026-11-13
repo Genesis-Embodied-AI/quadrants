@@ -236,7 +236,7 @@ def src_ll_cache_template_params_child(args: list[str]) -> None:
 
     @qd.pure
     @qd.kernel
-    def k1(a: qd.template(), output: qd.types.NDArray[qd.i32, 1]) -> None:
+    def k1(a: qd.Template, output: qd.types.NDArray[qd.i32, 1]) -> None:
         output[0] = a
 
     output = qd.ndarray(qd.i32, (10,))
@@ -516,7 +516,7 @@ def test_src_ll_cache_hit_predeclare_struct_ndarrays_pruned(tmp_path: pathlib.Pa
 
     @qd.pure
     @qd.kernel
-    def write_b(s: qd.template()) -> None:
+    def write_b(s: qd.Template) -> None:
         for i in range(N):
             s.b[i] = (i + 1) * 17
 
@@ -566,7 +566,7 @@ def test_src_ll_cache_pruning_union_across_static_branches(tmp_path: pathlib.Pat
 
     @qd.pure
     @qd.kernel
-    def write_branch(s: qd.template()) -> None:
+    def write_branch(s: qd.Template) -> None:
         if qd.static(s.flag):
             for i in range(N):
                 s.x[i] = 1
@@ -624,7 +624,7 @@ def test_src_ll_cache_data_oriented_property_value_in_key(
             return 3 if self.flag else 1
 
     @qd.kernel(fastcache=fastcache)
-    def fill_n_rows(cfg: qd.template(), out: qd.types.ndarray()) -> None:
+    def fill_n_rows(cfg: qd.Template, out: qd.types.ndarray()) -> None:
         n_rows = qd.static(cfg.n_rows)
         out[0] = n_rows
 
@@ -665,7 +665,7 @@ def test_src_ll_cache_data_oriented_unhashable_property_disables_fastcache(
             return (self.n, 2 * self.n)
 
     @qd.kernel(fastcache=fastcache)
-    def fill_dims(cfg: qd.template(), out: qd.types.ndarray()) -> None:
+    def fill_dims(cfg: qd.Template, out: qd.types.ndarray()) -> None:
         dim = qd.static(cfg.dims[1])
         out[0] = dim
 
@@ -722,7 +722,7 @@ def test_src_ll_cache_data_oriented_cached_property_disables_fastcache(
             return 2 * self.n
 
     @qd.kernel(fastcache=fastcache)
-    def fill_twice_n(cfg: qd.template(), out: qd.types.ndarray()) -> None:
+    def fill_twice_n(cfg: qd.Template, out: qd.types.ndarray()) -> None:
         twice_n = qd.static(cfg.twice_n)
         out[0] = twice_n
 

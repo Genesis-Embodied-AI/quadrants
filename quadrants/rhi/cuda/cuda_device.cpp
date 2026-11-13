@@ -7,9 +7,13 @@ namespace quadrants::lang {
 
 namespace cuda {
 
-CudaDevice::CudaDevice() {
-  // Initialize the device memory pool
-  DeviceMemoryPool::get_instance(Arch::cuda, true /*merge_upon_release*/);
+CudaDevice::CudaDevice() : CudaDevice(/*skip_initialize_memory_pool=*/false) {
+}
+
+CudaDevice::CudaDevice(bool skip_initialize_memory_pool) {
+  if (!skip_initialize_memory_pool) {
+    DeviceMemoryPool::get_instance(Arch::cuda, /*merge_upon_release=*/true);
+  }
 }
 
 CudaDevice::AllocInfo CudaDevice::get_alloc_info(const DeviceAllocation handle) {
@@ -20,7 +24,7 @@ CudaDevice::AllocInfo CudaDevice::get_alloc_info(const DeviceAllocation handle) 
 RhiResult CudaDevice::allocate_memory(const AllocParams &params, DeviceAllocation *out_devalloc) {
   AllocInfo info;
 
-  auto &mem_pool = DeviceMemoryPool::get_instance(Arch::cuda, true /*merge_upon_release*/);
+  auto &mem_pool = DeviceMemoryPool::get_instance(Arch::cuda, /*merge_upon_release=*/true);
 
   bool managed = params.host_read || params.host_write;
   void *ptr = mem_pool.allocate(params.size, DeviceMemoryPool::page_size, managed);
@@ -53,7 +57,7 @@ DeviceAllocation CudaDevice::allocate_memory_runtime(const LlvmRuntimeAllocParam
     CUDADriver::get_instance().malloc_async((void **)&info.ptr, info.size, nullptr);
   } else {
     info.ptr =
-        DeviceMemoryPool::get_instance(Arch::cuda, true /*merge_upon_release*/).allocate_with_cache(this, params);
+        DeviceMemoryPool::get_instance(Arch::cuda, /*merge_upon_release=*/true).allocate_with_cache(this, params);
 
     if (!info.ptr) {
       DeviceAllocation fail_alloc;
@@ -81,20 +85,35 @@ DeviceAllocation CudaDevice::allocate_memory_runtime(const LlvmRuntimeAllocParam
 }
 
 uint64_t *CudaDevice::allocate_llvm_runtime_memory_jit(const LlvmRuntimeAllocParams &params) {
-  // Zero the slot before the JIT call so that a null readback unambiguously signals pool exhaustion (see the
-  // AmdgpuDevice counterpart for why). The existing __assertfail hard-halt on the device side still runs, but we
-  // no longer rely on it to stop the host from dereferencing a stale pointer.
-  uint64 zero = 0;
-  CUDADriver::get_instance().memcpy_host_to_device(params.result_buffer, &zero, sizeof(uint64));
+  // An aborted allocation can leave the result slot untouched. Clear it first so the host detects failure instead
+  // of using a stale pointer. Clear and wait on the allocation kernel's stream; a device memset needs no host buffer.
+  void *active_stream = get_stream();
+  allocation_memset(params.result_buffer, 0, sizeof(uint64), active_stream);
   params.runtime_jit->call<void *, std::size_t, std::size_t>("runtime_memory_allocate_aligned", params.runtime,
                                                              params.size, quadrants_page_size, params.result_buffer);
-  CUDADriver::get_instance().stream_synchronize(nullptr);
+  allocation_synchronize(active_stream);
   uint64 *ret{nullptr};
-  CUDADriver::get_instance().memcpy_device_to_host(&ret, params.result_buffer, sizeof(uint64));
+  allocation_copy_to_host(&ret, params.result_buffer, sizeof(uint64));
   QD_ERROR_IF(ret == nullptr,
               "Out of CUDA pre-allocated memory. Consider using qd.init(device_memory_fraction=0.9) or "
               "qd.init(device_memory_GB=N) to allocate more GPU memory.");
   return ret;
+}
+
+void *CudaDevice::get_stream() {
+  return CUDAContext::get_instance().get_stream();
+}
+
+void CudaDevice::allocation_memset(void *dst, uint8 value, std::size_t size, void *stream) {
+  CUDADriver::get_instance().memset_async(dst, value, size, stream);
+}
+
+void CudaDevice::allocation_synchronize(void *stream) {
+  CUDADriver::get_instance().stream_synchronize(stream);
+}
+
+void CudaDevice::allocation_copy_to_host(void *dst, void *src, std::size_t size) {
+  CUDADriver::get_instance().memcpy_device_to_host(dst, src, size);
 }
 
 void CudaDevice::dealloc_memory(DeviceAllocation handle) {
@@ -115,10 +134,10 @@ void CudaDevice::dealloc_memory(DeviceAllocation handle) {
   if (info.use_memory_pool) {
     CUDADriver::get_instance().mem_free_async(info.ptr, nullptr);
   } else if (info.use_cached) {
-    DeviceMemoryPool::get_instance(Arch::cuda, true /*merge_upon_release*/)
+    DeviceMemoryPool::get_instance(Arch::cuda, /*merge_upon_release=*/true)
         .release(info.size, (uint64_t *)info.ptr, false);
   } else if (!info.use_preallocated) {
-    auto &mem_pool = DeviceMemoryPool::get_instance(Arch::cuda, true /*merge_upon_release*/);
+    auto &mem_pool = DeviceMemoryPool::get_instance(Arch::cuda, /*merge_upon_release=*/true);
     mem_pool.release(info.size, info.ptr, true /*release_raw*/);
   }
   info.ptr = nullptr;

@@ -14,6 +14,12 @@ from quadrants._lib.core.quadrants_python import (
     Program,
 )
 from quadrants._snode import fields_builder
+from quadrants.lang._fill_initializer import (
+    FieldInitializers,
+    _FillValue,
+    apply_initial_ndarray_fill,
+    capture_fill_value,
+)
 from quadrants.lang._ndarray import Ndarray, ScalarNdarray
 from quadrants.lang._ndrange import GroupedNDRange, _Ndrange
 from quadrants.lang.any_array import AnyArray
@@ -413,6 +419,7 @@ class PyQuadrants:
         self.grad_vars = []
         self.dual_vars = []
         self.matrix_fields = []
+        self.field_initializers = FieldInitializers()
         self.default_fp = f32
         self.default_ip = i32
         self.default_up = u32
@@ -585,12 +592,14 @@ class PyQuadrants:
         self.grad_vars.clear()
         self.dual_vars.clear()
         self.matrix_fields.clear()
+        self.field_initializers.run()
 
     def _register_signal_handlers(self):
         if self._signal_handler_registry is None:
             self._signal_handler_registry = _qd_core.HackedSignalRegister()
 
     def clear(self):
+        self.field_initializers.clear()
         if self._prog:
             self._prog.finalize()
             self._prog = None
@@ -840,7 +849,10 @@ def _field(
     offset=None,
     needs_grad=False,
     needs_dual=False,
+    *,
+    fill: _FillValue | None = None,
 ):
+    captured_fill_value = capture_fill_value(fill)
     x, x_grad, x_dual, x_grad_checkbit = create_field_member(dtype, name, needs_grad, needs_dual)
     x = ScalarField(x)
     if x_grad:
@@ -926,11 +938,12 @@ def _field(
                 object.__setattr__(x_grad, "_qd_layout", _qd_layout)  # type: ignore[attr-defined]
             if x_dual is not None:
                 object.__setattr__(x_dual, "_qd_layout", _qd_layout)  # type: ignore[attr-defined]
+    get_runtime().field_initializers.add(x, captured_fill_value)
     return x
 
 
 @python_scope
-def field(dtype, shape=None, *args, **kwargs):
+def field(dtype, shape=None, *args, fill: _FillValue | None = None, **kwargs):
     """Defines a Quadrants field.
 
     A Quadrants field can be viewed as an abstract N-dimensional array, hiding away the complexity of how its
@@ -949,6 +962,8 @@ def field(dtype, shape=None, *args, **kwargs):
             adjoint field to store the gradients.
         needs_dual (bool, optional): whether this field participates in autodiff (forward mode) and thus needs a dual
             field to store the gradients.
+        fill (optional): Initial value, applied once when the field is materialized. Defaults to None (no explicit
+            initialization). Unlike calling ``field.fill()``, this does not materialize fields immediately.
 
     Example::
 
@@ -971,18 +986,20 @@ def field(dtype, shape=None, *args, **kwargs):
         shape = (shape,)
     if isinstance(dtype, MatrixType):
         if dtype.ndim == 1:
-            return Vector.field(dtype.n, dtype.dtype, shape, *args, **kwargs)
-        return Matrix.field(dtype.n, dtype.m, dtype.dtype, shape, *args, **kwargs)
-    return _field(dtype, shape, *args, **kwargs)
+            return Vector.field(dtype.n, dtype.dtype, shape, *args, fill=fill, **kwargs)
+        return Matrix.field(dtype.n, dtype.m, dtype.dtype, shape, *args, fill=fill, **kwargs)
+    return _field(dtype, shape, *args, fill=fill, **kwargs)
 
 
 @python_scope
-def ndarray(dtype, shape, needs_grad=False):
+def ndarray(dtype, shape, needs_grad=False, *, fill: _FillValue | None = None):
     """Defines a Quadrants ndarray with scalar elements.
 
     Args:
         dtype (Union[DataType, MatrixType]): Data type of each element. This can be either a scalar type like qd.f32 or a compound type like qd.types.vector(3, qd.i32).
         shape (Union[int, tuple[int]]): Shape of the ndarray.
+        fill (optional): Initial scalar or per-component values, applied before returning the ndarray. None (default)
+            preserves the allocator's default values. Gradient buffers are not filled.
 
     Example:
         The code below shows how a Quadrants ndarray with scalar elements can be declared and defined::
@@ -1017,7 +1034,7 @@ def ndarray(dtype, shape, needs_grad=False):
             )
         x_grad = ndarray(dtype, shape, needs_grad=False)
         x._set_grad(x_grad)  # type: ignore[arg-type]
-    return x
+    return apply_initial_ndarray_fill(x, fill)
 
 
 @quadrants_scope

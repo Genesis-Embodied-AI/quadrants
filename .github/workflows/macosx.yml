@@ -17,7 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         MAC_OS_VERSION: [26]
-        PYTHON_VERSION: ['3.10', '3.11', '3.12', '3.13']
+        PYTHON_VERSION: ['3.12', '3.13', '3.14']
     name: Mac OS Build
     runs-on: macos-${{ matrix.MAC_OS_VERSION }}
     steps:
@@ -38,16 +38,7 @@ jobs:
           echo "PYTHON_CP_VERSION=${cp}"
           echo "PYTHON_CP_VERSION=${cp}" >> $GITHUB_OUTPUT
       - name: Mac OS X prerequisites
-        env:
-          # Token setup and renewal: docs/source/user_guide/contributing.md#gitlab-token-for-ci
-          GITLAB_PAT: ${{ secrets.GITLAB_PAT }}
         run: |
-          git config --global credential.https://gitlab.com.helper \
-            '!f() {
-              if [ "$1" = get ] && [ -n "$GITLAB_PAT" ]; then
-                printf "%s\n" "username=oauth2" "password=$GITLAB_PAT"
-              fi
-            }; f'
           bash .github/workflows/scripts_new/macosx/1_prerequisites.sh
       - name: Mac OS X build
         run: |
@@ -72,17 +63,17 @@ jobs:
       fail-fast: false
       matrix:
         MAC_OS_VERSION: [26]
-        PYTHON_VERSION: ['3.10', '3.11', '3.12', '3.13']
+        PYTHON_VERSION: ['3.12', '3.13', '3.14']
         ARCH: [metal, vulkan, cpu]
         include:
           - MAC_OS_VERSION: 15
-            PYTHON_VERSION: '3.10'
+            PYTHON_VERSION: '3.12'
             ARCH: metal
           - MAC_OS_VERSION: 15
-            PYTHON_VERSION: '3.10'
+            PYTHON_VERSION: '3.12'
             ARCH: vulkan
           - MAC_OS_VERSION: 15
-            PYTHON_VERSION: '3.10'
+            PYTHON_VERSION: '3.12'
             ARCH: cpu
     runs-on: macos-${{ matrix.MAC_OS_VERSION }}
     steps:
@@ -127,7 +118,7 @@ jobs:
       cancel-in-progress: true
     strategy:
       matrix:
-        PYTHON_CP_VERSION: ["cp310", "cp311", "cp312", "cp313"]
+        PYTHON_CP_VERSION: ["cp312", "cp313", "cp314"]
         MAC_OS_VERSION: [26]
       fail-fast: false
     with:

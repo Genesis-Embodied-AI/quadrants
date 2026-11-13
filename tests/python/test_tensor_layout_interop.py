@@ -66,7 +66,7 @@ def _make_fill_kernel(shape, backend):
         rolling *= max(dim, 1) * 10
     coeffs = list(reversed(coeffs))
 
-    annotation = qd.template() if backend is qd.Backend.FIELD else qd.types.ndarray()
+    annotation = qd.Template if backend is qd.Backend.FIELD else qd.types.ndarray()
 
     if len(shape) == 2:
         c0, c1 = coeffs
@@ -246,7 +246,7 @@ def test_grad_to_numpy_canonical_view_rank2(backend, layout):
     if backend is qd.Backend.FIELD:
 
         @qd.kernel
-        def fill(x: qd.template()):
+        def fill(x: qd.Template):
             for i, j in qd.ndrange(*canonical):
                 x[i, j] = float(i * 10 + j)
                 x.grad[i, j] = float(i * 100 + j * 10)
@@ -284,7 +284,7 @@ def test_grad_to_numpy_canonical_view_rank3(backend, layout):
     if backend is qd.Backend.FIELD:
 
         @qd.kernel
-        def fill(x: qd.template()):
+        def fill(x: qd.Template):
             for i, j, k in qd.ndrange(*canonical):
                 x[i, j, k] = float(i * 1000 + j * 10 + k)
                 x.grad[i, j, k] = float(i * 10000 + j * 100 + k * 10)
@@ -358,7 +358,7 @@ def _make_grouped_ndrange_fill_kernel(shape, backend):
         rolling *= max(dim, 1) * 10
     coeffs = list(reversed(coeffs))
 
-    annotation = qd.template() if backend is qd.Backend.FIELD else qd.types.ndarray()
+    annotation = qd.Template if backend is qd.Backend.FIELD else qd.types.ndarray()
 
     if len(shape) == 2:
         c0, c1 = coeffs
@@ -421,7 +421,7 @@ def test_grouped_struct_for_vector_subscript_rank2(backend, layout):
     canonical = (3, 4)
     a = qd.tensor(qd.i32, shape=canonical, backend=backend, layout=layout)
 
-    annotation = qd.template() if backend is qd.Backend.FIELD else qd.types.ndarray()
+    annotation = qd.Template if backend is qd.Backend.FIELD else qd.types.ndarray()
 
     @qd.kernel
     def fill(x: annotation):
@@ -449,7 +449,7 @@ def test_grouped_struct_for_vector_subscript_rank3_all_permutations(backend, lay
     canonical = (2, 3, 4)
     a = qd.tensor(qd.i32, shape=canonical, backend=backend, layout=layout)
 
-    annotation = qd.template() if backend is qd.Backend.FIELD else qd.types.ndarray()
+    annotation = qd.Template if backend is qd.Backend.FIELD else qd.types.ndarray()
 
     @qd.kernel
     def fill(x: annotation):
@@ -485,7 +485,7 @@ def test_multi_target_struct_for_on_layout_tagged_tensor(backend, layout):
     if backend is qd.Backend.FIELD:
 
         @qd.kernel
-        def fill(x: qd.template()):
+        def fill(x: qd.Template):
             for i, j in x:
                 x[i, j] = i * 100 + j
 
@@ -541,7 +541,7 @@ def test_genesis_shaped_dofs_batch_layout(backend):
     if backend is qd.Backend.FIELD:
 
         @qd.kernel
-        def fill(x: qd.template()):
+        def fill(x: qd.Template):
             for d, b in qd.ndrange(n_dofs, batch):
                 x[d, b] = float(d * 1000 + b)
 

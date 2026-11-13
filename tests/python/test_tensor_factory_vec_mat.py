@@ -77,7 +77,7 @@ def test_vector_tensor_kernel_roundtrip(backend):
     if backend is qd.Backend.FIELD:
 
         @qd.kernel
-        def fill(x: qd.template()):
+        def fill(x: qd.Template):
             for i in range(4):
                 for j in qd.static(range(3)):
                     x[i][j] = i * 10.0 + j
@@ -145,7 +145,7 @@ def test_matrix_tensor_kernel_roundtrip(backend):
     if backend is qd.Backend.FIELD:
 
         @qd.kernel
-        def fill(x: qd.template()):
+        def fill(x: qd.Template):
             for i in range(3):
                 for r in qd.static(range(2)):
                     for c in qd.static(range(2)):

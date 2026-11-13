@@ -173,12 +173,12 @@ def test_layout_rank2_kernel_writes_byte_identical(backend):
     if backend is qd.Backend.FIELD:
 
         @qd.kernel
-        def fill_parent(x: qd.template()):
+        def fill_parent(x: qd.Template):
             for c, b in qd.ndrange(N, B):
                 x[c, b] = c * 1000 + b
 
         @qd.kernel
-        def fill_rotated(x: qd.template()):
+        def fill_rotated(x: qd.Template):
             for b, c in qd.ndrange(B, N):
                 x[b, c] = c * 1000 + b
 
