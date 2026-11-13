@@ -1071,30 +1071,11 @@ i32 amdgpu_lane_id() {
   return amdgpu_mbcnt_hi(-1, amdgpu_mbcnt_lo(-1, 0));
 }
 
-// Keep lane addresses in vector registers so LLVM emits ds_bpermute rather than replacing a constant-address
-// read with a lane-read instruction whose scope differs on gfx10/11. The mask is explicit at each call site.
+// Convert a lane index to a byte index for ds_bpermute.
 i32 amdgpu_shuffle_byte_index(i32 target_lane, i32 lane_mask) {
   i32 byte = (target_lane & lane_mask) * 4;
-  // ``llvm.amdgcn.ds.bpermute`` is the real hardware ``ds_bpermute_b32`` -- but if LLVM's uniformity analysis decides
-  // ``byte`` is uniform across the wave (e.g. ``target_lane`` is a compile-time constant), it sometimes lowers to a
-  // ``v_readlane_b32``-style instruction that addresses lanes 0..31 wave-globally rather than SIMD32-locally. On
-  // RDNA wave64 that gives the wrong answer for top-half lanes in cross-half reads (lane 32+ would always read from
-  // the bottom half of its SIMD instead of swapping in the other SIMD's payload via ``permlane64``). The empty
-  // ``+v`` inline asm marks ``byte`` as a VGPR with an opaque write, forcing LLVM to treat it as per-lane and emit a
-  // genuine ``ds_bpermute_b32`` -- which on RDNA does SIMD-local addressing, exactly what we need to pair with the
-  // ``permlane64`` swap for cross-half traffic. On CDNA the cost is zero (the instruction is the same shape) and on
-  // RDNA the cost is also zero (we'd already be issuing a real ``ds_bpermute`` for the per-lane case; this just
-  // makes the constant-target case behave the same way).
-  //
-  // The ``+v`` constraint names the AMDGPU VGPR register class. clang accepts ``v`` as a constraint name on x86
-  // (where it means an SSE register) and on amdgcn, but rejects it outright on AArch64 -- the asm is
-  // parsed against the host's clang target even though the resulting bitcode is later re-targeted to amdgcn at JIT
-  // time (see ``llvm_context.cpp`` setting the module triple to ``amdgcn-amd-amdhsa``). The constraint string is
-  // preserved verbatim into the IR, so any host whose front-end accepts ``v`` produces bitcode that the AMDGPU
-  // backend later reads correctly. Gate on both ``ARCH_amdgpu`` (the runtime is built once per backend, see
-  // ``runtime_module/CMakeLists.txt``) and a host-arch allowlist; on AArch64 manylinux builds we drop the fence,
-  // which loses the constant-``target_lane`` VGPR hint -- the per-lane case (the common one) still emits a real
-  // ``ds_bpermute_b32`` because uniformity analysis sees per-lane inputs.
+  // Prevent LLVM from replacing constant-index reads with a lane-read instruction whose scope differs on gfx10/11.
+  // The "+v" constraint requires a vector register. AArch64 host compilers reject it, so exclude them here.
 #if defined(ARCH_amdgpu) && (defined(__x86_64__) || defined(__i386__) || defined(__amdgcn__))
   __asm__ volatile("" : "+v"(byte));
 #endif
