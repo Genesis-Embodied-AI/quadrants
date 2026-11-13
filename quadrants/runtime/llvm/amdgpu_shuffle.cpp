@@ -15,7 +15,9 @@ void inline_shuffle(llvm::Function *function) {
   function->addFnAttr(llvm::Attribute::AlwaysInline);
 }
 
-void patch_shuffle_intrinsic(llvm::Module &module, const char *name, llvm::Intrinsic::ID intrinsic,
+void patch_shuffle_intrinsic(llvm::Module &module,
+                             const char *name,
+                             llvm::Intrinsic::ID intrinsic,
                              bool overloaded = false) {
   auto *function = module.getFunction(name);
   if (!function) {
@@ -28,9 +30,8 @@ void patch_shuffle_intrinsic(llvm::Module &module, const char *name, llvm::Intri
   for (auto &arg : function->args()) {
     args.push_back(&arg);
   }
-  auto *callee = overloaded
-                     ? llvm::Intrinsic::getOrInsertDeclaration(&module, intrinsic, {builder.getInt32Ty()})
-                     : llvm::Intrinsic::getOrInsertDeclaration(&module, intrinsic);
+  auto *callee = overloaded ? llvm::Intrinsic::getOrInsertDeclaration(&module, intrinsic, {builder.getInt32Ty()})
+                            : llvm::Intrinsic::getOrInsertDeclaration(&module, intrinsic);
   builder.CreateRet(builder.CreateCall(callee, args));
   inline_shuffle(function);
 }

@@ -53,7 +53,7 @@ void check_shuffle_selection(AMDGPUShuffleMode mode, const char *target = nullpt
     EXPECT_EQ(lds != nullptr, emulated);
     if (lds) {
       EXPECT_EQ(lds->getAddressSpace(), 3);
-      EXPECT_EQ(lds->getValueType()->getArrayNumElements(), 1024);
+      EXPECT_EQ(llvm::cast<llvm::ArrayType>(lds->getValueType())->getNumElements(), 1024);
     }
     bool native_swap = mode == AMDGPUShuffleMode::TwoHalves && !emulated;
     EXPECT_EQ(module.getFunction("llvm.amdgcn.permlane64.i32") != nullptr, native_swap);
