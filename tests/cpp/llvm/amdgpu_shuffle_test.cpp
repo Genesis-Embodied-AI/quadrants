@@ -9,7 +9,7 @@ namespace {
 
 // Check the module-loader transformation without an AMD GPU. The two implementations have distinct callees so a
 // stale forwarding stub or a caller left attached to the discarded implementation is visible in the resulting IR.
-void check_shuffle_selection(AMDGPUShuffleMode mode) {
+void check_shuffle_selection(AMDGPUShuffleMode mode, const char *target = nullptr) {
   llvm::LLVMContext context;
   llvm::Module module("shuffle", context);
   auto *i32 = llvm::Type::getInt32Ty(context);
@@ -37,7 +37,29 @@ void check_shuffle_selection(AMDGPUShuffleMode mode) {
   auto *type_call = define_call(make_function("amdgpu_shuffle_f32"), entry);
 
   auto *expected = mode == AMDGPUShuffleMode::Wave64 ? wave64 : two_halves;
-  auto *selected = select_amdgpu_shuffle(module, mode);
+  llvm::Function *selected;
+  if (target) {
+    expected->addFnAttr(llvm::Attribute::OptimizeNone);
+    expected->addFnAttr(llvm::Attribute::NoInline);
+    prepare_amdgpu_shuffle(module, target);
+    selected = module.getFunction("amdgpu_shuffle_i32");
+    ASSERT_NE(selected, nullptr);
+    EXPECT_TRUE(selected->hasFnAttribute(llvm::Attribute::AlwaysInline));
+    EXPECT_FALSE(selected->hasFnAttribute(llvm::Attribute::OptimizeNone));
+    EXPECT_FALSE(selected->hasFnAttribute(llvm::Attribute::NoInline));
+    EXPECT_NE(module.getFunction("llvm.amdgcn.ds.bpermute"), nullptr);
+    bool emulated = llvm::StringRef(target).substr(0, 5) == "gfx10";
+    auto *lds = module.getNamedGlobal("__amdgpu_permlane64_lds");
+    EXPECT_EQ(lds != nullptr, emulated);
+    if (lds) {
+      EXPECT_EQ(lds->getAddressSpace(), 3);
+      EXPECT_EQ(lds->getValueType()->getArrayNumElements(), 1024);
+    }
+    bool native_swap = mode == AMDGPUShuffleMode::TwoHalves && !emulated;
+    EXPECT_EQ(module.getFunction("llvm.amdgcn.permlane64.i32") != nullptr, native_swap);
+  } else {
+    selected = select_amdgpu_shuffle(module, mode);
+  }
   EXPECT_EQ(selected, expected);
   EXPECT_EQ(module.getFunction("amdgpu_shuffle_i32"), expected);
   EXPECT_EQ(up_call->getCalledFunction(), expected);
@@ -55,6 +77,22 @@ TEST(AMDGPUShuffle, FullWaveSelectionRemovesTheHalfSwapAndRetargetsCallers) {
 
 TEST(AMDGPUShuffle, TwoHalfSelectionKeepsTheSwapAndRetargetsCallers) {
   check_shuffle_selection(AMDGPUShuffleMode::TwoHalves);
+}
+
+TEST(AMDGPUShuffle, PrepareFullWaveTarget) {
+  check_shuffle_selection(AMDGPUShuffleMode::Wave64, "gfx942");
+}
+
+TEST(AMDGPUShuffle, PrepareEmulatedHalfSwapTarget) {
+  check_shuffle_selection(AMDGPUShuffleMode::TwoHalves, "gfx1030");
+}
+
+TEST(AMDGPUShuffle, PrepareNativeHalfSwapTarget) {
+  check_shuffle_selection(AMDGPUShuffleMode::TwoHalves, "gfx1100");
+}
+
+TEST(AMDGPUShuffle, PreserveGfx12RoutingUntilSeparateFix) {
+  check_shuffle_selection(AMDGPUShuffleMode::TwoHalves, "gfx1200");
 }
 
 }  // namespace
