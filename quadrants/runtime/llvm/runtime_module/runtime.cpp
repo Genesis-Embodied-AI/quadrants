@@ -1108,10 +1108,8 @@ i32 amdgpu_shuffle_wave64_i32(i32 target_lane, i32 value) {
   return amdgpu_ds_bpermute(byte, value);
 }
 
-// Emulate a full-wave gather when ds_bpermute only reaches the issuing lane's own 32-lane half. Each lane exposes
-// its partner's value through swapped, then reads the desired position from both sets of values in its own half.
-// The XOR detects whether the requested lane is in the other half. Keep both reads and the convergent half swap
-// outside the selection so they execute together for the participating lanes.
+// Support wave64 shuffles when ds_bpermute only reaches the caller's 32-lane half.
+// Keep the half swap and both reads unconditional so participating lanes execute them together.
 i32 amdgpu_shuffle_two_halves_i32(i32 target_lane, i32 value) {
   i32 self_lane = amdgpu_lane_id();
   i32 swapped = amdgpu_permlane64(value);
