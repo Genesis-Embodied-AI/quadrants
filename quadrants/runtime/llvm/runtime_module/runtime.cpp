@@ -1083,7 +1083,7 @@ i32 amdgpu_shuffle_byte_index(i32 target_lane, i32 lane_mask) {
   //
   // The empty assembly below prevents that replacement. It does nothing at runtime, so byte keeps its value.
   // But "+v" tells LLVM that it reads and writes byte in a vector register. LLVM cannot see through that write,
-  // which hides the constant index from it.
+  // which hides the constant index from it, and prevents the optimization.
   //
   // AArch64 host compilers reject the "v" constraint, so builds on those hosts omit this workaround.
 #if defined(ARCH_amdgpu) && (defined(__x86_64__) || defined(__i386__) || defined(__amdgcn__))
