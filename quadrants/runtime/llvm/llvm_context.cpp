@@ -2,6 +2,8 @@
 
 #include "quadrants/runtime/llvm/llvm_context.h"
 #include "quadrants/runtime/llvm/amdgpu_libdevice_files.h"
+#include "quadrants/runtime/llvm/amdgpu_shuffle.h"
+#include "quadrants/runtime/llvm/runtime_module_utils.h"
 #include <iterator>
 
 #include "llvm/Transforms/Utils/Cloning.h"
@@ -295,34 +297,6 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
   auto ctx = get_this_thread_context();
   std::unique_ptr<llvm::Module> module = module_from_bitcode_file(fmt::format("{}/{}", runtime_lib_dir(), file), ctx);
   if (arch_ == Arch::cuda || arch_ == Arch::amdgpu) {
-    // Replace stub functions in the runtime bitcode with inline wrappers
-    // around LLVM intrinsics. The runtime module is compiled from C++ with
-    // placeholder functions (e.g. thread_idx(), block_dim()) that can't map
-    // to GPU intrinsics in C++. This rewires them at IR level and marks them
-    // always_inline so they disappear after inlining.
-    auto patch_intrinsic = [&](std::string name, Intrinsic::ID intrin, bool ret = true,
-                               std::vector<llvm::Type *> types = {}, std::vector<llvm::Value *> extra_args = {}) {
-      auto func = module->getFunction(name);
-      if (!func) {
-        return;
-      }
-      func->deleteBody();
-      auto bb = llvm::BasicBlock::Create(*ctx, "entry", func);
-      IRBuilder<> builder(*ctx);
-      builder.SetInsertPoint(bb);
-      std::vector<llvm::Value *> args;
-      for (auto &arg : func->args())
-        args.push_back(&arg);
-      args.insert(args.end(), extra_args.begin(), extra_args.end());
-      if (ret) {
-        builder.CreateRet(builder.CreateIntrinsic(intrin, types, args));
-      } else {
-        builder.CreateIntrinsic(intrin, types, args);
-        builder.CreateRetVoid();
-      }
-      QuadrantsLLVMContext::mark_inline(func);
-    };
-
     // The runtime bitcode ships with C++ CAS-loop bodies for these (see `runtime_module/atomic.h`); we replace them
     // with single `atomicrmw` instructions here so the GPU backend can lower them to native hardware atomics. The
     // syncscope must match the JIT-time codegen path in `codegen_llvm.cpp`, otherwise on AMDGPU the backend falls back
@@ -372,13 +346,14 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       }
 #endif
 
-      patch_intrinsic("thread_idx", Intrinsic::nvvm_read_ptx_sreg_tid_x);
-      patch_intrinsic("block_thread_idx", Intrinsic::nvvm_read_ptx_sreg_tid_x);
-      patch_intrinsic("cuda_clock_i64", Intrinsic::nvvm_read_ptx_sreg_clock64);
-      patch_intrinsic("block_idx", Intrinsic::nvvm_read_ptx_sreg_ctaid_x);
-      patch_intrinsic("block_dim", Intrinsic::nvvm_read_ptx_sreg_ntid_x);
-      patch_intrinsic("grid_dim", Intrinsic::nvvm_read_ptx_sreg_nctaid_x);
-      patch_intrinsic("block_barrier", Intrinsic::nvvm_barrier_cta_sync_aligned_all, false, {}, {get_constant(0)});
+      patch_runtime_intrinsic(*module, "thread_idx", Intrinsic::nvvm_read_ptx_sreg_tid_x);
+      patch_runtime_intrinsic(*module, "block_thread_idx", Intrinsic::nvvm_read_ptx_sreg_tid_x);
+      patch_runtime_intrinsic(*module, "cuda_clock_i64", Intrinsic::nvvm_read_ptx_sreg_clock64);
+      patch_runtime_intrinsic(*module, "block_idx", Intrinsic::nvvm_read_ptx_sreg_ctaid_x);
+      patch_runtime_intrinsic(*module, "block_dim", Intrinsic::nvvm_read_ptx_sreg_ntid_x);
+      patch_runtime_intrinsic(*module, "grid_dim", Intrinsic::nvvm_read_ptx_sreg_nctaid_x);
+      patch_runtime_intrinsic(*module, "block_barrier", Intrinsic::nvvm_barrier_cta_sync_aligned_all, false, {},
+                              {get_constant(0)});
 
       // barrier0_and/or/popc were replaced with barrier_cta_red variants that
       // take (i32 barrier_id, i1 pred) instead of (i32 pred) and return
@@ -404,39 +379,39 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       patch_barrier_red("block_barrier_and_i32", Intrinsic::nvvm_barrier_cta_red_and_aligned_all, true);
       patch_barrier_red("block_barrier_or_i32", Intrinsic::nvvm_barrier_cta_red_or_aligned_all, true);
       patch_barrier_red("block_barrier_count_i32", Intrinsic::nvvm_barrier_cta_red_popc_aligned_all, false);
-      patch_intrinsic("warp_barrier", Intrinsic::nvvm_bar_warp_sync, false);
-      patch_intrinsic("block_mem_fence", Intrinsic::nvvm_membar_cta, false);
-      patch_intrinsic("grid_mem_fence", Intrinsic::nvvm_membar_gl, false);
-      patch_intrinsic("system_mem_fence", Intrinsic::nvvm_membar_sys, false);
+      patch_runtime_intrinsic(*module, "warp_barrier", Intrinsic::nvvm_bar_warp_sync, false);
+      patch_runtime_intrinsic(*module, "block_mem_fence", Intrinsic::nvvm_membar_cta, false);
+      patch_runtime_intrinsic(*module, "grid_mem_fence", Intrinsic::nvvm_membar_gl, false);
+      patch_runtime_intrinsic(*module, "system_mem_fence", Intrinsic::nvvm_membar_sys, false);
 
-      patch_intrinsic("cuda_all", Intrinsic::nvvm_vote_all);
-      patch_intrinsic("cuda_all_sync", Intrinsic::nvvm_vote_all_sync);
+      patch_runtime_intrinsic(*module, "cuda_all", Intrinsic::nvvm_vote_all);
+      patch_runtime_intrinsic(*module, "cuda_all_sync", Intrinsic::nvvm_vote_all_sync);
 
-      patch_intrinsic("cuda_any", Intrinsic::nvvm_vote_any);
-      patch_intrinsic("cuda_any_sync", Intrinsic::nvvm_vote_any_sync);
+      patch_runtime_intrinsic(*module, "cuda_any", Intrinsic::nvvm_vote_any);
+      patch_runtime_intrinsic(*module, "cuda_any_sync", Intrinsic::nvvm_vote_any_sync);
 
-      patch_intrinsic("cuda_uni", Intrinsic::nvvm_vote_uni);
-      patch_intrinsic("cuda_uni_sync", Intrinsic::nvvm_vote_uni_sync);
+      patch_runtime_intrinsic(*module, "cuda_uni", Intrinsic::nvvm_vote_uni);
+      patch_runtime_intrinsic(*module, "cuda_uni_sync", Intrinsic::nvvm_vote_uni_sync);
 
-      patch_intrinsic("cuda_ballot", Intrinsic::nvvm_vote_ballot);
-      patch_intrinsic("cuda_ballot_sync", Intrinsic::nvvm_vote_ballot_sync);
+      patch_runtime_intrinsic(*module, "cuda_ballot", Intrinsic::nvvm_vote_ballot);
+      patch_runtime_intrinsic(*module, "cuda_ballot_sync", Intrinsic::nvvm_vote_ballot_sync);
 
-      patch_intrinsic("cuda_shfl_down_sync_i32", Intrinsic::nvvm_shfl_sync_down_i32);
-      patch_intrinsic("cuda_shfl_down_sync_f32", Intrinsic::nvvm_shfl_sync_down_f32);
+      patch_runtime_intrinsic(*module, "cuda_shfl_down_sync_i32", Intrinsic::nvvm_shfl_sync_down_i32);
+      patch_runtime_intrinsic(*module, "cuda_shfl_down_sync_f32", Intrinsic::nvvm_shfl_sync_down_f32);
 
-      patch_intrinsic("cuda_shfl_up_sync_i32", Intrinsic::nvvm_shfl_sync_up_i32);
-      patch_intrinsic("cuda_shfl_up_sync_f32", Intrinsic::nvvm_shfl_sync_up_f32);
+      patch_runtime_intrinsic(*module, "cuda_shfl_up_sync_i32", Intrinsic::nvvm_shfl_sync_up_i32);
+      patch_runtime_intrinsic(*module, "cuda_shfl_up_sync_f32", Intrinsic::nvvm_shfl_sync_up_f32);
 
-      patch_intrinsic("cuda_shfl_sync_i32", Intrinsic::nvvm_shfl_sync_idx_i32);
+      patch_runtime_intrinsic(*module, "cuda_shfl_sync_i32", Intrinsic::nvvm_shfl_sync_idx_i32);
 
-      patch_intrinsic("cuda_shfl_sync_f32", Intrinsic::nvvm_shfl_sync_idx_f32);
+      patch_runtime_intrinsic(*module, "cuda_shfl_sync_f32", Intrinsic::nvvm_shfl_sync_idx_f32);
 
-      patch_intrinsic("cuda_shfl_xor_sync_i32", Intrinsic::nvvm_shfl_sync_bfly_i32);
+      patch_runtime_intrinsic(*module, "cuda_shfl_xor_sync_i32", Intrinsic::nvvm_shfl_sync_bfly_i32);
 
-      patch_intrinsic("cuda_match_any_sync_i32", Intrinsic::nvvm_match_any_sync_i32);
+      patch_runtime_intrinsic(*module, "cuda_match_any_sync_i32", Intrinsic::nvvm_match_any_sync_i32);
 
       // Replace the runtime.cpp stubs with intrinsics to avoid host-specific inline-assembly constraints.
-      patch_intrinsic("cuda_active_mask", Intrinsic::nvvm_activemask);
+      patch_runtime_intrinsic(*module, "cuda_active_mask", Intrinsic::nvvm_activemask);
 
       // nvvm_match_all_sync_i32p returns {i32, i1}; extract only the i32.
       // Discard the predicate.
@@ -459,10 +434,12 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       // cuda_match_any_sync_i64 is not registered in internal_ops.inc.h (no
       // kernel IR emits calls to it), but it IS called from C++ runtime code
       // in node_pointer.h::is_representative() on compute capability >= 70.
-      patch_intrinsic("cuda_match_any_sync_i64", Intrinsic::nvvm_match_any_sync_i64);
+      patch_runtime_intrinsic(*module, "cuda_match_any_sync_i64", Intrinsic::nvvm_match_any_sync_i64);
 
-      patch_intrinsic("ctlz_i32", Intrinsic::ctlz, true, {llvm::Type::getInt32Ty(*ctx)}, {get_constant(false)});
-      patch_intrinsic("cttz_i32", Intrinsic::cttz, true, {llvm::Type::getInt32Ty(*ctx)}, {get_constant(false)});
+      patch_runtime_intrinsic(*module, "ctlz_i32", Intrinsic::ctlz, true, {llvm::Type::getInt32Ty(*ctx)},
+                              {get_constant(false)});
+      patch_runtime_intrinsic(*module, "cttz_i32", Intrinsic::cttz, true, {llvm::Type::getInt32Ty(*ctx)},
+                              {get_constant(false)});
 
       link_module_with_cuda_libdevice(module);
 
@@ -519,9 +496,9 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
         function_pass_manager.run(*func);
       }
       function_pass_manager.doFinalization();
-      patch_intrinsic("thread_idx", llvm::Intrinsic::amdgcn_workitem_id_x);
-      patch_intrinsic("block_thread_idx", llvm::Intrinsic::amdgcn_workitem_id_x);
-      patch_intrinsic("block_idx", llvm::Intrinsic::amdgcn_workgroup_id_x);
+      patch_runtime_intrinsic(*module, "thread_idx", llvm::Intrinsic::amdgcn_workitem_id_x);
+      patch_runtime_intrinsic(*module, "block_thread_idx", llvm::Intrinsic::amdgcn_workitem_id_x);
+      patch_runtime_intrinsic(*module, "block_idx", llvm::Intrinsic::amdgcn_workgroup_id_x);
 
       // Synthesize ``block_barrier`` as ``fence release "workgroup" -> s_barrier -> fence acquire "workgroup"`` (the
       // same sequence HIP's ``__syncthreads()`` emits via ``__work_group_barrier`` in
@@ -548,127 +525,14 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
           QuadrantsLLVMContext::mark_inline(func);
         }
       }
-      patch_intrinsic("amdgpu_clock_i64", llvm::Intrinsic::amdgcn_s_memtime);
-      patch_intrinsic("amdgpu_ds_bpermute", llvm::Intrinsic::amdgcn_ds_bpermute);
-      // The wave64 cross-half subgroup shuffle (``amdgpu_cross_half_shuffle_i32`` in runtime.cpp) is built from
-      // ``ds_bpermute`` plus, on some targets, ``permlane64``. How those behave -- and therefore how we patch them --
-      // depends on the architecture family:
-      //
-      //   * GCN / CDNA (gfx9xx: gfx900/906 Vega, gfx908/gfx90a CDNA1/2, gfx940/gfx941/gfx942 CDNA3, gfx950 CDNA4):
-      //     ``ds_bpermute`` addresses the full wave64 directly, so the cross-half shuffle is a single wide
-      //     ``ds_bpermute`` (lane mask 63) and ``permlane64`` is unnecessary. Critically, ``v_permlane64_b32`` does
-      //     not exist on CDNA -- emitting ``llvm.amdgcn.permlane64`` makes the backend select the ``V_PERMLANE64_B32``
-      //     pseudo, which has no valid MC opcode for CDNA, and then crash with a bare SIGSEGV inside
-      //     ``SIInstrInfo::getInstSizeInBytes`` during branch relaxation (genesis-world #2962). So on CDNA we patch
-      //     ``amdgpu_permlane64`` to the identity, which neutralises the helper's (RDNA-shaped) cross-SIMD branch
-      //     without ever emitting the intrinsic.
-      //   * RDNA3/4 (gfx11 / gfx12): ``ds_bpermute`` is SIMD32-scoped (lane mask 31), so the top half is reached via
-      //     the native single-instruction ``v_permlane64_b32``.
-      //   * RDNA1/2 (gfx10.x): ``ds_bpermute`` is SIMD32-scoped (lane mask 31), but ``v_permlane64_b32`` does not
-      //     exist yet, so we emulate the lane ``i`` <-> ``i ^ 32`` swap with an LDS roundtrip (below).
-      //
-      // The LDS emulation writes each lane's ``value`` to ``lds[wave_base + lane]``, issues a wavefront-scope
-      // acquire-release fence (lowers to ``s_waitcnt lgkmcnt(0)``: drains outstanding LDS writes without the
-      // cross-wave ``s_barrier`` a workgroup-scope fence would emit, which would deadlock if only some waves reach
-      // this point), then reads back ``lds[wave_base + (lane ^ 32)]``. ``wave_base`` is ``(workitem.id.x >> 6) << 6``,
-      // scoping the slot to a single wave so multi-wave workgroups don't collide. The buffer is a 1024-entry
-      // per-workgroup global (4 KiB, the AMDGPU 1024-thread wave64 max), materialised only on this path, so kernels
-      // on the other two paths pay zero LDS for cross-half shuffles.
-      //
-      // ``patch_intrinsic`` for permlane64 passes the explicit ``i32`` type alongside the ID because the intrinsic is
-      // overloaded on its element type (signature ``T -> T`` for any 32-bit-or-smaller ``T``); otherwise
-      // ``CreateIntrinsic`` segfaults inside ``getDeclaration()`` while resolving the mangled name.
-      auto mcpu_str = AMDGPUContext::get_instance().get_mcpu();
-      bool is_gcn_cdna = (mcpu_str.substr(0, 4) == "gfx9");
-      bool has_native_permlane64 = (mcpu_str.substr(0, 5) == "gfx11" || mcpu_str.substr(0, 5) == "gfx12");
-
-      // Patch the ds_bpermute lane mask used by ``amdgpu_cross_half_shuffle_i32``: 63 where ``ds_bpermute`` is
-      // wave64-wide (GCN/CDNA), 31 where it is SIMD32-scoped (RDNA, paired with the permlane64 swap above).
-      if (auto mask_func = module->getFunction("amdgpu_ds_bpermute_lane_mask")) {
-        mask_func->deleteBody();
-        auto bb = llvm::BasicBlock::Create(*ctx, "entry", mask_func);
-        IRBuilder<> builder(*ctx);
-        builder.SetInsertPoint(bb);
-        builder.CreateRet(llvm::ConstantInt::get(llvm::Type::getInt32Ty(*ctx), is_gcn_cdna ? 63 : 31));
-        QuadrantsLLVMContext::mark_inline(mask_func);
-      }
-
-      if (has_native_permlane64) {
-        patch_intrinsic("amdgpu_permlane64", llvm::Intrinsic::amdgcn_permlane64, true, {llvm::Type::getInt32Ty(*ctx)});
-      } else if (is_gcn_cdna) {
-        // CDNA: the wide ds_bpermute already reaches all 64 lanes, so permlane64 is unnecessary -- and emitting it
-        // crashes the backend. Patch it to the identity so the helper's cross-SIMD branch returns the same value as
-        // its same-SIMD branch, making the per-lane select a true no-op.
-        if (auto permlane64_func = module->getFunction("amdgpu_permlane64")) {
-          permlane64_func->deleteBody();
-          auto bb = llvm::BasicBlock::Create(*ctx, "entry", permlane64_func);
-          IRBuilder<> builder(*ctx);
-          builder.SetInsertPoint(bb);
-          builder.CreateRet(&*permlane64_func->arg_begin());
-          QuadrantsLLVMContext::mark_inline(permlane64_func);
-        }
-      } else if (auto permlane64_func = module->getFunction("amdgpu_permlane64")) {
-        // gfx10.x RDNA1/2: LDS-based software emulation. Layout: ``[1024 x i32] addrspace(3)`` indexed by ``wave_base +
-        // lane``.
-        auto i32_ty = llvm::Type::getInt32Ty(*ctx);
-        auto buf_ty = llvm::ArrayType::get(i32_ty, 1024);
-        auto lds_global = llvm::cast_or_null<llvm::GlobalVariable>(module->getNamedValue("__amdgpu_permlane64_lds"));
-        if (!lds_global) {
-          lds_global =
-              new llvm::GlobalVariable(*module, buf_ty, /*isConstant=*/false, llvm::GlobalValue::InternalLinkage,
-                                       llvm::UndefValue::get(buf_ty), "__amdgpu_permlane64_lds",
-                                       /*InsertBefore=*/nullptr, llvm::GlobalValue::NotThreadLocal, /*AddressSpace=*/3);
-          lds_global->setAlignment(llvm::Align(4));
-        }
-
-        permlane64_func->deleteBody();
-        auto bb = llvm::BasicBlock::Create(*ctx, "entry", permlane64_func);
-        IRBuilder<> builder(*ctx);
-        builder.SetInsertPoint(bb);
-
-        // lane = mbcnt_hi(-1, mbcnt_lo(-1, 0))
-        auto neg_one = llvm::ConstantInt::get(i32_ty, -1, /*IsSigned=*/true);
-        auto zero32 = llvm::ConstantInt::get(i32_ty, 0);
-        auto mbcnt_lo_fn = llvm::Intrinsic::getOrInsertDeclaration(module.get(), llvm::Intrinsic::amdgcn_mbcnt_lo);
-        auto mbcnt_hi_fn = llvm::Intrinsic::getOrInsertDeclaration(module.get(), llvm::Intrinsic::amdgcn_mbcnt_hi);
-        llvm::Value *mbcnt_lo_args[] = {neg_one, zero32};
-        auto lane_lo = builder.CreateCall(mbcnt_lo_fn, llvm::ArrayRef<llvm::Value *>(mbcnt_lo_args));
-        llvm::Value *mbcnt_hi_args[] = {neg_one, lane_lo};
-        auto lane = builder.CreateCall(mbcnt_hi_fn, llvm::ArrayRef<llvm::Value *>(mbcnt_hi_args));
-
-        // wave_base = (workitem.id.x >> 6) << 6 (wave64-scoped slot offset within the workgroup LDS buffer).
-        auto tid_fn = llvm::Intrinsic::getOrInsertDeclaration(module.get(), llvm::Intrinsic::amdgcn_workitem_id_x);
-        auto tid = builder.CreateCall(tid_fn);
-        auto wave_id = builder.CreateLShr(tid, llvm::ConstantInt::get(i32_ty, 6));
-        auto wave_base = builder.CreateShl(wave_id, llvm::ConstantInt::get(i32_ty, 6));
-        auto slot = builder.CreateAdd(wave_base, lane);
-
-        // lds[slot] = value
-        auto value_arg = &*permlane64_func->arg_begin();
-        llvm::Value *store_idxs[] = {zero32, slot};
-        auto store_ptr = builder.CreateInBoundsGEP(buf_ty, lds_global, llvm::ArrayRef<llvm::Value *>(store_idxs));
-        builder.CreateStore(value_arg, store_ptr);
-
-        // Wavefront-scope acquire-release fence -> ``s_waitcnt lgkmcnt(0)`` on AMDGPU; orders LDS writes against
-        // subsequent LDS reads within the wave without touching cross-wave state (avoids the ``s_barrier`` that a
-        // workgroup-scope fence would emit, which deadlocks if only some waves in the workgroup reach this point).
-        llvm::SyncScope::ID wave_scope = ctx->getOrInsertSyncScopeID("wavefront");
-        builder.CreateFence(llvm::AtomicOrdering::AcquireRelease, wave_scope);
-
-        // partner_lane = lane ^ 32; result = lds[wave_base + partner_lane]
-        auto partner_lane = builder.CreateXor(lane, llvm::ConstantInt::get(i32_ty, 32));
-        auto partner_slot = builder.CreateAdd(wave_base, partner_lane);
-        llvm::Value *load_idxs[] = {zero32, partner_slot};
-        auto load_ptr = builder.CreateInBoundsGEP(buf_ty, lds_global, llvm::ArrayRef<llvm::Value *>(load_idxs));
-        auto result = builder.CreateAlignedLoad(i32_ty, load_ptr, llvm::Align(4));
-        builder.CreateRet(result);
-
-        QuadrantsLLVMContext::mark_inline(permlane64_func);
-      }
-      patch_intrinsic("amdgpu_mbcnt_lo", llvm::Intrinsic::amdgcn_mbcnt_lo);
-      patch_intrinsic("amdgpu_mbcnt_hi", llvm::Intrinsic::amdgcn_mbcnt_hi);
-      patch_intrinsic("amdgpu_ballot_w32", llvm::Intrinsic::amdgcn_ballot, true, {llvm::Type::getInt32Ty(*ctx)});
-      patch_intrinsic("amdgpu_ballot_w64", llvm::Intrinsic::amdgcn_ballot, true, {llvm::Type::getInt64Ty(*ctx)});
+      patch_runtime_intrinsic(*module, "amdgpu_clock_i64", llvm::Intrinsic::amdgcn_s_memtime);
+      prepare_amdgpu_shuffle(*module, AMDGPUContext::get_instance().get_mcpu());
+      patch_runtime_intrinsic(*module, "amdgpu_mbcnt_lo", llvm::Intrinsic::amdgcn_mbcnt_lo);
+      patch_runtime_intrinsic(*module, "amdgpu_mbcnt_hi", llvm::Intrinsic::amdgcn_mbcnt_hi);
+      patch_runtime_intrinsic(*module, "amdgpu_ballot_w32", llvm::Intrinsic::amdgcn_ballot, true,
+                              {llvm::Type::getInt32Ty(*ctx)});
+      patch_runtime_intrinsic(*module, "amdgpu_ballot_w64", llvm::Intrinsic::amdgcn_ballot, true,
+                              {llvm::Type::getInt64Ty(*ctx)});
 
       // Patch warp_size() for AMDGPU. The shared `cuda_kernel_utils.inc.h` stub returns 32, which is baked into the
       // runtime bitcode by the host clang front-end. Without this patch, AMDGPU code that uses `warp_size()` (e.g. the
@@ -948,18 +812,7 @@ void QuadrantsLLVMContext::strip_nvvmir_version(llvm::Module *module) {
 }
 
 void QuadrantsLLVMContext::mark_inline(llvm::Function *f) {
-  for (auto &B : *f)
-    for (auto &I : B) {
-      if (auto *call = llvm::dyn_cast<llvm::CallInst>(&I)) {
-        if (auto func = call->getCalledFunction(); func && func->getName() == "mark_force_no_inline") {
-          // Found "mark_force_no_inline". Do not inline.
-          return;
-        }
-      }
-    }
-  f->removeFnAttr(llvm::Attribute::OptimizeNone);
-  f->removeFnAttr(llvm::Attribute::NoInline);
-  f->addFnAttr(llvm::Attribute::AlwaysInline);
+  mark_runtime_function_inline(f);
 }
 
 int QuadrantsLLVMContext::num_instructions(llvm::Function *func) {

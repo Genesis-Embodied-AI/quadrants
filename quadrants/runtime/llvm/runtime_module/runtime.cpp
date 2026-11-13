@@ -1031,14 +1031,9 @@ i32 amdgpu_ds_bpermute(i32 byte_index, i32 value) {
   return 0;
 }
 
-// Exchanges a 32-bit value between lanes ``i`` and ``i ^ 32`` in a single instruction. The native instruction
-// ``v_permlane64_b32`` is RDNA-only -- it exists on gfx11 (RDNA3) and gfx12 (RDNA4), but on NO CDNA part (the AMD
-// assembler rejects it on gfx908/gfx90a/gfx940/gfx941/gfx942/gfx950). ``llvm_context.cpp`` detects the target at JIT
-// time and patches this stub to either the ``llvm.amdgcn.permlane64`` intrinsic (on gfx11+/gfx12 only) or an
-// LDS-roundtrip software emulation (on every CDNA part and on gfx10.x RDNA1/2). The emulation has higher latency (LDS
-// store + ``s_waitcnt`` + LDS load -- roughly tens of cycles per call vs. a few for the native swap), but produces
-// correct cross-half results on wave64 hardware. Used by ``amdgpu_cross_half_shuffle_i32`` below to repair the
-// cross-half story for ``ds_bpermute``, which is SIMD32-scoped on RDNA.
+// Exchanges values between lanes i and i ^ 32 for the two-half shuffle implementation. The module loader supplies
+// the native instruction on gfx11/12 or the LDS emulation on gfx10. Full-wave shuffles never call this function;
+// their unused two-half implementation and this stub are removed before compiling GPU instructions.
 i32 amdgpu_permlane64(i32 value) {
   __builtin_trap();
   return 0;
@@ -1076,88 +1071,51 @@ i32 amdgpu_lane_id() {
   return amdgpu_mbcnt_hi(-1, amdgpu_mbcnt_lo(-1, 0));
 }
 
-// Lane-index mask applied to ``ds_bpermute``'s target in ``amdgpu_cross_half_shuffle_i32``. ``ds_bpermute``'s reach
-// differs by ISA, so ``llvm_context.cpp`` patches this at JIT load time: 63 on GCN/CDNA (gfx9xx), where
-// ``ds_bpermute`` addresses the full wave64 directly, and 31 on RDNA (gfx10/11/12), where it is SIMD32-scoped and the
-// top half is reached via the ``permlane64`` swap instead. Defaults to 31 so an unpatched build stays correct on
-// RDNA. (runtime.cpp is compiled at -O0 to bitcode, so this stays a real call until the JIT patches + inlines it.)
-i32 amdgpu_ds_bpermute_lane_mask() {
-  return 31;
-}
-
-// Wave64-aware "read ``value`` from lane ``target_lane``" gather for AMDGPU. Shared by every i32 shuffle variant
-// (``shuffle`` / ``shuffle_down`` / ``shuffle_up``); the f32 / i64 / f64 wrappers below decompose into i32 calls and
-// therefore inherit the wave64 fix for free.
-//
-// Why this isn't just ``ds_bpermute``:
-//
-// The AMDGCN ``ds_bpermute_b32`` instruction takes a 5-bit lane index (bits 2-6 of the byte argument), so it can
-// only directly address lanes 0-31 -- regardless of which lane is issuing the read and regardless of wavefront
-// size. Concretely: on wave64, ``ds_bpermute(target_lane * 4, value)`` returns ``value[target_lane & 31]`` for
-// every lane, never reaching the top half of the wavefront for ``target_lane >= 32``.
-//
-// To repair the top-half case we pair ``ds_bpermute`` with ``llvm.amdgcn.permlane64``, a single-instruction swap
-// between lanes ``i`` and ``i ^ 32``. ``permlane64(value)`` exposes the top-half payload at bottom-half lane indices,
-// so ``ds_bpermute(byte, permlane64(value))`` effectively reads from lanes 32-63. We always compute both reads and
-// select between them branchlessly based on the high bit of ``target_lane``: bit 5 picks the half.
-//
-// The lane-index mask (``amdgpu_ds_bpermute_lane_mask()``) and ``permlane64`` are both JIT-patched per architecture
-// (see ``llvm_context.cpp``), because ``ds_bpermute``'s reach differs by ISA:
-//   * GCN / CDNA (gfx9xx, incl. gfx940/gfx942/gfx950): ``ds_bpermute`` addresses the full wave64, so the mask is 63
-//     and a single ``ds_bpermute((target_lane & 63) * 4, value)`` already returns lane ``target_lane`` for the whole
-//     wave. ``permlane64`` is patched to the identity there -- ``v_permlane64_b32`` does not exist on CDNA and
-//     emitting it crashes the backend (genesis-world #2962) -- so ``from_other_half`` equals ``from_self_half`` and
-//     the select below is a true no-op.
-//   * RDNA (gfx10/11/12): ``ds_bpermute`` is SIMD32-scoped, so the mask is 31 and ``ds_bpermute`` only reaches the
-//     issuing lane's own 32-lane half. The top half is supplied by the ``permlane64`` swap -- a single
-//     ``v_permlane64_b32`` on gfx11/gfx12, or an LDS-roundtrip emulation on gfx10.x.
-//
-// OOR target lanes (``target_lane < 0`` or ``target_lane >= 64``): we mask to ``target_lane & 31`` for the byte and
-// ``& 32`` for the half-bit. The behaviour for OOR targets is implementation-defined on every backend (CUDA's
-// ``__shfl_sync`` also wraps), and the upstream subgroup ops never rely on it -- ``shuffle_up`` / ``shuffle_down``
-// have a ``lane_in_group`` predicate at the call site, ``shuffle_xor`` is always in-range for the mask range we
-// support, etc. We just need OOR not to crash or corrupt in-range lanes.
-i32 amdgpu_cross_half_shuffle_i32(i32 target_lane, i32 value) {
-  // Two parallel reads, then a per-lane select. ``permlane64`` is convergent and must execute uniformly across the
-  // wave -- lifting it above the select keeps the AMDGPU backend happy and lets it issue exactly one
-  // ``v_permlane64_b32``. ``ds_bpermute`` on RDNA wave64 is SIMD32-scoped with a 5-bit address (top half of the wave
-  // is unreachable directly), so ``from_self_half`` handles the same-SIMD case and ``from_other_half`` handles the
-  // cross-SIMD case via the ``swapped`` payload. On CDNA the lane mask is 63 (``ds_bpermute`` is wave64-wide) and
-  // ``permlane64`` is patched to the identity, so ``swapped == value``, both reads return lane ``target_lane``, and
-  // the select is a true no-op; we don't optimize that out because the dead read is cheap (LLVM CSE may fold it).
-  i32 self_lane = amdgpu_lane_id();
-  i32 swapped = amdgpu_permlane64(value);
-  i32 byte = (target_lane & amdgpu_ds_bpermute_lane_mask()) * 4;
-  // ``llvm.amdgcn.ds.bpermute`` is the real hardware ``ds_bpermute_b32`` -- but if LLVM's uniformity analysis decides
-  // ``byte`` is uniform across the wave (e.g. ``target_lane`` is a compile-time constant), it sometimes lowers to a
-  // ``v_readlane_b32``-style instruction that addresses lanes 0..31 wave-globally rather than SIMD32-locally. On
-  // RDNA wave64 that gives the wrong answer for top-half lanes in cross-half reads (lane 32+ would always read from
-  // the bottom half of its SIMD instead of swapping in the other SIMD's payload via ``permlane64``). The empty
-  // ``+v`` inline asm marks ``byte`` as a VGPR with an opaque write, forcing LLVM to treat it as per-lane and emit a
-  // genuine ``ds_bpermute_b32`` -- which on RDNA does SIMD-local addressing, exactly what we need to pair with the
-  // ``permlane64`` swap for cross-half traffic. On CDNA the cost is zero (the instruction is the same shape) and on
-  // RDNA the cost is also zero (we'd already be issuing a real ``ds_bpermute`` for the per-lane case; this just
-  // makes the constant-target case behave the same way).
+// Convert a lane index to a byte index for ds_bpermute.
+i32 amdgpu_shuffle_byte_index(i32 target_lane, i32 lane_mask) {
+  i32 byte = (target_lane & lane_mask) * 4;
+  // LLVM 22 may replace ds_bpermute with readlane when every lane uses the same index.
+  // readlane reads one absolute lane into a scalar register shared by the wave.
   //
-  // The ``+v`` constraint names the AMDGPU VGPR register class. clang accepts ``v`` as a constraint name on x86
-  // (where it means an SSE register) and on amdgcn, but rejects it outright on AArch64 -- the asm is
-  // parsed against the host's clang target even though the resulting bitcode is later re-targeted to amdgcn at JIT
-  // time (see ``llvm_context.cpp`` setting the module triple to ``amdgcn-amd-amdhsa``). The constraint string is
-  // preserved verbatim into the IR, so any host whose front-end accepts ``v`` produces bitcode that the AMDGPU
-  // backend later reads correctly. Gate on both ``ARCH_amdgpu`` (the runtime is built once per backend, see
-  // ``runtime_module/CMakeLists.txt``) and a host-arch allowlist; on AArch64 manylinux builds we drop the fence,
-  // which loses the constant-``target_lane`` VGPR hint -- the per-lane case (the common one) still emits a real
-  // ``ds_bpermute_b32`` because uniformity analysis sees per-lane inputs.
+  // On gfx10/11 in wave64 mode, ds_bpermute reads within the caller's 32-lane half: position 8 reads lane 8 in
+  // the lower half and lane 40 in the upper half. readlane at index 8 reads lane 8 for the whole wave64 wave,
+  // so this replacement can read the wrong half.
+  //
+  // The empty assembly below prevents that replacement. It does nothing at runtime, so byte keeps its value.
+  // But "+v" tells LLVM that it reads and writes byte in a vector register. LLVM cannot see through that write,
+  // which hides the constant index from it, and prevents the optimization.
+  //
+  // AArch64 host compilers reject the "v" constraint, so builds on those hosts omit this workaround.
+  // FIXME: Provide equivalent protection on AArch64 hosts. Without it, LLVM's replacement can produce incorrect
+  // reads on gfx10/11 in wave64 mode.
 #if defined(ARCH_amdgpu) && (defined(__x86_64__) || defined(__i386__) || defined(__amdgcn__))
   __asm__ volatile("" : "+v"(byte));
 #endif
+  return byte;
+}
+
+// Shuffle directly across all 64 lanes. Do not rely on results for out-of-range indices.
+i32 amdgpu_shuffle_wave64_i32(i32 target_lane, i32 value) {
+  i32 byte = amdgpu_shuffle_byte_index(target_lane, 63);
+  return amdgpu_ds_bpermute(byte, value);
+}
+
+// Support wave64 shuffles when ds_bpermute only reaches the caller's 32-lane half.
+// All participating lanes must execute the half swap and both reads.
+i32 amdgpu_shuffle_two_halves_i32(i32 target_lane, i32 value) {
+  i32 self_lane = amdgpu_lane_id();
+  i32 swapped = amdgpu_permlane64(value);
+  i32 byte = amdgpu_shuffle_byte_index(target_lane, 31);
   i32 from_self_half = amdgpu_ds_bpermute(byte, value);
   i32 from_other_half = amdgpu_ds_bpermute(byte, swapped);
   return ((target_lane ^ self_lane) & 32) ? from_other_half : from_self_half;
 }
 
-i32 amdgpu_shuffle_i32(i32 index, i32 value) {
-  return amdgpu_cross_half_shuffle_i32(index, value);
+// Shared helper for every shuffle type and direction. The module loader replaces this stub with the selected C++
+// implementation above. The choice is made once at module load, with no architecture check inside the GPU function.
+i32 amdgpu_shuffle_i32(i32 target_lane, i32 value) {
+  __builtin_trap();
+  return 0;
 }
 
 f32 amdgpu_shuffle_f32(i32 index, f32 value) {
@@ -1192,7 +1150,7 @@ f64 amdgpu_shuffle_f64(i32 index, f64 value) {
 // ``ds_bpermute`` + ``permlane64`` helper (~50-60 cycle latency). The DPP fast path lives in
 // ``amdgpu_reduce_shuffle_down_*`` below, which only the reduction trees call.
 i32 amdgpu_shuffle_down_i32(i32 offset, i32 value) {
-  return amdgpu_cross_half_shuffle_i32(amdgpu_lane_id() + offset, value);
+  return amdgpu_shuffle_i32(amdgpu_lane_id() + offset, value);
 }
 
 f32 amdgpu_shuffle_down_f32(i32 offset, f32 value) {
@@ -1286,7 +1244,7 @@ f64 amdgpu_reduce_shuffle_down_f64(i32 offset, f64 value) {
 // Mirrors `amdgpu_shuffle_down`: the cross-half helper is a generic gather, so `shuffle_up` is just `shuffle_down`
 // with the source lane index decremented instead of incremented.
 i32 amdgpu_shuffle_up_i32(i32 offset, i32 value) {
-  return amdgpu_cross_half_shuffle_i32(amdgpu_lane_id() - offset, value);
+  return amdgpu_shuffle_i32(amdgpu_lane_id() - offset, value);
 }
 
 f32 amdgpu_shuffle_up_f32(i32 offset, f32 value) {
