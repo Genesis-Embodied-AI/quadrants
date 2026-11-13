@@ -1,5 +1,6 @@
 #include "gtest/gtest.h"
 #include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/Module.h"
 #include "llvm/IR/Verifier.h"
 #include "quadrants/runtime/llvm/amdgpu_shuffle.h"
 

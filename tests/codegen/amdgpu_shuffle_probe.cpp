@@ -2,7 +2,7 @@
 // runtime.cpp, applies the shuffle selection/intrinsic patches, and emits two small kernels for inspection with
 // clang --target=amdgcn-amd-amdhsa -mcpu=<target> -mwavefrontsize64 -nogpulib -O2 -S <output.bc>.
 // Usage: amdgpu_shuffle_probe <runtime.bc> <output.bc> <gfx942|gfx1100> <before|after>
-// The before mode reproduces the old mask/identity patches; after uses the production selection helper. This probe
+// The before mode reproduces the old mask/identity patches; after uses production shuffle preparation. This probe
 // intentionally covers one full-wave and one native-swap target, not gfx10's LDS emulation or GPU execution.
 #include "quadrants/runtime/llvm/amdgpu_shuffle.h"
 
@@ -63,16 +63,17 @@ int main(int argc, char **argv) {
     });
   };
   if (revision == "after") {
-    quadrants::lang::select_amdgpu_shuffle(*module, full_wave ? quadrants::lang::AMDGPUShuffleMode::Wave64
-                                                              : quadrants::lang::AMDGPUShuffleMode::TwoHalves);
+    quadrants::lang::prepare_amdgpu_shuffle(*module, target);
   } else {
     patch("amdgpu_ds_bpermute_lane_mask",
           [&](llvm::IRBuilder<> &builder, llvm::Function *) { return builder.getInt32(full_wave ? 63 : 31); });
   }
-  intrinsic("amdgpu_ds_bpermute", llvm::Intrinsic::amdgcn_ds_bpermute);
+  if (revision == "before") {
+    intrinsic("amdgpu_ds_bpermute", llvm::Intrinsic::amdgcn_ds_bpermute);
+  }
   intrinsic("amdgpu_mbcnt_lo", llvm::Intrinsic::amdgcn_mbcnt_lo);
   intrinsic("amdgpu_mbcnt_hi", llvm::Intrinsic::amdgcn_mbcnt_hi);
-  if (!full_wave) {
+  if (revision == "before" && !full_wave) {
     intrinsic("amdgpu_permlane64", llvm::Intrinsic::amdgcn_permlane64, true);
   } else if (revision == "before") {
     patch("amdgpu_permlane64", [&](llvm::IRBuilder<> &, llvm::Function *function) { return function->getArg(0); });
