@@ -901,7 +901,7 @@ my_struct.b[37] 5
 <td class="text-center"><p>yes</p></td>
 <td class="text-center"><p>yes</p></td>
 <td class="text-center"><p>yes</p></td>
-<td class="text-center"><p>deprecated</p></td>
+<td class="text-center"><p>no</p></td>
 <td class="text-center"><p>yes</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code></p></td>
@@ -951,8 +951,9 @@ my_struct.b[37] 5
 <section id="restrictions">
 <h3>Restrictions<a class="headerlink" href="#restrictions" title="Link to this heading">#</a></h3>
 <ul class="simple">
+<li><p><strong>A class cannot be both a Python dataclass and data-oriented</strong>, including through inheritance.</p></li>
 <li><p><strong><code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> cannot contain <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code> or <code class="docutils literal notranslate"><span class="pre">qd.field</span></code> members.</strong> See the <a class="reference internal" href="#qddataclass-qdtypesstruct"><span class="xref myst"><code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code></span></a> section above for the full list of allowed member types. (The function-form factory <code class="docutils literal notranslate"><span class="pre">qd.types.struct(...)</span></code> has the same restrictions.)</p></li>
-<li><p><strong>A typed-dataclass kernel-arg annotation cannot have a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> member type</strong> — errors clearly at compile time</p></li>
+<li><p><strong>Kernel code cannot access a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> object stored inside a Python dataclass.</strong> Store the dataclass on the data-oriented object instead.</p></li>
 <li><p><strong>Declare all ndarray members on a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> class in <code class="docutils literal notranslate"><span class="pre">__init__</span></code>.</strong></p>
 <ul>
 <li><p><strong>Deleting an ndarray attribute</strong> that was present on an <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> instance’s first launch raises <code class="docutils literal notranslate"><span class="pre">AttributeError</span></code> on the next launch on that instance.</p></li>
