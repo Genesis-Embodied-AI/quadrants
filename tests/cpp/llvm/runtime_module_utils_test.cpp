@@ -8,6 +8,9 @@
 namespace quadrants::lang {
 namespace {
 
+// Replace a dummy function body with the 32-bit trailing-zero-count intrinsic. Check that the original argument is
+// forwarded, the extra false flag is appended, and the intrinsic result is returned. Also check that the wrapper
+// permits inlining and that the resulting LLVM module is valid.
 TEST(RuntimeModuleUtils, ForwardsArgumentsAndAppendsOverloadedIntrinsicArguments) {
   llvm::LLVMContext context;
   llvm::Module module("runtime", context);
