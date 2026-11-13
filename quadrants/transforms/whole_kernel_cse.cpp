@@ -16,7 +16,7 @@ namespace quadrants::lang {
 // outer iteration of the CSE fixpoint loop re-evaluates it under the new operand pointer) and replace the operand
 // with `new_stmt`. Combining the previous separate `MarkUndone::run` and `replace_all_usages_with` walks halves the
 // IR-walking cost per CSE elimination.
-class ReplaceAndMarkUndone : public BasicStmtVisitor {
+class ReplaceUsesAndMarkUsersDirty : public BasicStmtVisitor {
  private:
   std::unordered_set<int> *const visited_;
   Stmt *const old_stmt_;
@@ -32,7 +32,7 @@ class ReplaceAndMarkUndone : public BasicStmtVisitor {
  public:
   using BasicStmtVisitor::visit;
 
-  ReplaceAndMarkUndone(std::unordered_set<int> *visited, Stmt *old_stmt, Stmt *new_stmt)
+  ReplaceUsesAndMarkUsersDirty(std::unordered_set<int> *visited, Stmt *old_stmt, Stmt *new_stmt)
       : visited_(visited), old_stmt_(old_stmt), new_stmt_(new_stmt) {
     allow_undefined_visitor = true;
     invoke_default_visitor = true;
@@ -47,7 +47,7 @@ class ReplaceAndMarkUndone : public BasicStmtVisitor {
   }
 
   static void run(std::unordered_set<int> *visited, Stmt *old_stmt, Stmt *new_stmt) {
-    ReplaceAndMarkUndone walker(visited, old_stmt, new_stmt);
+    ReplaceUsesAndMarkUsersDirty walker(visited, old_stmt, new_stmt);
     if (old_stmt->parent == nullptr) {
       old_stmt->get_ir_root()->accept(&walker);
       return;
@@ -203,7 +203,7 @@ class WholeKernelCSE : public BasicStmtVisitor {
     if (it != visible_stmts_.end()) {
       for (auto *prev_stmt : it->second) {
         if (common_statement_eliminable(stmt, prev_stmt)) {
-          ReplaceAndMarkUndone::run(&visited_, stmt, prev_stmt);
+          ReplaceUsesAndMarkUsersDirty::run(&visited_, stmt, prev_stmt);
           modifier_.erase(stmt);
           return;
         }
