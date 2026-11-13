@@ -50,6 +50,7 @@ from quadrants.lang.field import Field
 from quadrants.lang.matrix import Matrix, MatrixType
 from quadrants.lang.snode import append, deactivate, length
 from quadrants.lang.struct import Struct, StructType
+from quadrants.lang.util import is_data_oriented
 from quadrants.lang.util import (
     is_from_quadrants_module as _is_from_quadrants_module,
 )
@@ -107,6 +108,19 @@ class ASTTransformer(Builder):
         else:
             node._qd_arg_chain = None  # type: ignore[attr-defined]
         node.violates_pure, node.ptr, node.violates_pure_reason = ctx.get_var_by_name(node.id)
+        # Dataclass fields can arrive as flattened names instead of attribute accesses.
+        if (
+            # Check after discovery has determined which members are used.
+            pruning.enforcing
+            # Restrict this check to known dataclass members, not ordinary variables.
+            and node.id in ctx.struct_locals
+            # Reject a data-oriented object stored in the member.
+            and is_data_oriented(node.ptr)
+        ):
+            raise exception.QuadrantsRuntimeTypeError(
+                "Data-oriented objects inside Python dataclass fields are unsupported. "
+                "Store the dataclass on the data-oriented object instead."
+            )
         # Flattened struct fields (``__qd_foo__qd_bar``) injected by ``populate_global_vars_from_dataclass`` are raw
         # ``Ndarray`` instances.  ``build_Attribute`` already promotes these via ``_promote_ndarray_if_declared`` but
         # the flattened-name path bypasses ``build_Attribute`` entirely, so we must promote here too.
@@ -787,11 +801,20 @@ class ASTTransformer(Builder):
                 node.ptr = getattr(tensor_ops, node.attr)
                 setattr(node, "caller", node.value.ptr)
         elif dataclasses.is_dataclass(node.value.ptr):
+            if is_data_oriented(node.value.ptr):
+                raise exception.QuadrantsRuntimeTypeError(
+                    "A class cannot be both a Python dataclass and data-oriented."
+                )
             lifted = maybe_lifted_primitive(ctx, node.value.ptr, node.attr)
             if lifted is not None:
                 node.ptr = lifted
                 return node.ptr
             node.ptr = getattr(node.value.ptr, node.attr)
+            if ctx.global_context.pruning.enforcing and is_data_oriented(node.ptr):
+                raise exception.QuadrantsRuntimeTypeError(
+                    "Data-oriented objects inside Python dataclass fields are unsupported. "
+                    "Store the dataclass on the data-oriented object instead."
+                )
             from quadrants._tensor_wrapper import (  # pylint: disable=C0415
                 Tensor as _TensorClass,
             )
