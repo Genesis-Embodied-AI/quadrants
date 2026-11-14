@@ -465,11 +465,12 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       llvm_val[stmt] = emit_amdgpu_shuffle(
           /* value=*/llvm_val[stmt->args[0]],
           /* dt=*/stmt->args[0]->ret_type, index);
-    } else if (stmt->func_name == "subgroupShuffleDown") {
+    } else if (stmt->func_name == "subgroupShuffleDown" || stmt->func_name == "amdgpu_reduce_shuffle_down") {
       auto offset = builder->CreateZExtOrTrunc(llvm_val[stmt->args[1]], llvm::Type::getInt32Ty(*llvm_context));
       llvm_val[stmt] = emit_amdgpu_shuffle_down(
           /* value=*/llvm_val[stmt->args[0]],
-          /* dt=*/stmt->args[0]->ret_type, offset);
+          /* dt=*/stmt->args[0]->ret_type, offset,
+          /* fn=*/stmt->func_name == "subgroupShuffleDown" ? "amdgpu_shuffle_down" : "amdgpu_reduce_shuffle_down");
     } else if (stmt->func_name == "subgroupShuffleUp") {
       auto offset = builder->CreateZExtOrTrunc(llvm_val[stmt->args[1]], llvm::Type::getInt32Ty(*llvm_context));
       llvm_val[stmt] = emit_amdgpu_shuffle_up(
@@ -574,20 +575,17 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     return nullptr;
   }
 
-  // FIXME: Currently emulates shuffle_down via ds_bpermute (~50 cycle latency).
-  // Should be upgraded to use DPP ROW_SHR instructions (~4-12 cycles) for
-  // reduction-pattern offsets (1, 2, 4, 8, 16). This requires compile-time
-  // constant DPP control values and architecture-specific handling for cross-row
-  // shifts (offset >= 16).
-  llvm::Value *emit_amdgpu_shuffle_down(llvm::Value *value, DataType dt, llvm::Value *offset) {
+  // `fn` is `amdgpu_shuffle_down` (generic `ds_bpermute` gather, ~50 cycle latency) or `amdgpu_reduce_shuffle_down`
+  // (DPP `row_shl` for offsets 1, 2, 4, 8; reduction trees only, see runtime.cpp).
+  llvm::Value *emit_amdgpu_shuffle_down(llvm::Value *value, DataType dt, llvm::Value *offset, const std::string &fn) {
     if (dt->is_primitive(PrimitiveTypeID::i32) || dt->is_primitive(PrimitiveTypeID::u32))
-      return call("amdgpu_shuffle_down_i32", offset, value);
+      return call(fn + "_i32", offset, value);
     if (dt->is_primitive(PrimitiveTypeID::f32))
-      return call("amdgpu_shuffle_down_f32", offset, value);
+      return call(fn + "_f32", offset, value);
     if (dt->is_primitive(PrimitiveTypeID::f64))
-      return call("amdgpu_shuffle_down_f64", offset, value);
+      return call(fn + "_f64", offset, value);
     if (dt->is_primitive(PrimitiveTypeID::i64) || dt->is_primitive(PrimitiveTypeID::u64))
-      return call("amdgpu_shuffle_down_i64", offset, value);
+      return call(fn + "_i64", offset, value);
     QD_ERROR("subgroup shuffle_down: unsupported type {} on AMDGPU", data_type_name(dt));
     return nullptr;
   }

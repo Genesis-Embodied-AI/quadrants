@@ -3906,6 +3906,61 @@ def test_subgroup_shuffle_down_offset_32(dtype):
         ), f"lane {i}: shuffle_down(v, 32) returned {dst[i]} but expected src[{i + 32}]={src[i + 32]}"
 
 
+@pytest.mark.parametrize("offset", [1, 2, 4, 8])
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_shuffle_down_every_in_range_lane(dtype, offset):
+    """``shuffle_down(v, offset)`` reads lane ``i + offset`` on every lane where that is still in the subgroup,
+    including lanes whose source is in the next 16-lane row (e.g. lane 15 at offset 1)."""
+    _skip_if_f64_unsupported(dtype)
+    N = 64
+    group = subgroup.group_size()
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def k():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst[i] = subgroup.shuffle_down(src[i], qd.u32(offset))
+
+    _init_field(src, N, dtype)
+
+    k()
+
+    for i in range(N):
+        if i % group + offset < group:
+            assert (
+                dst[i] == src[i + offset]
+            ), f"lane {i}: shuffle_down(v, {offset}) returned {dst[i]} but expected src[{i + offset}]={src[i + offset]}"
+
+
+@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5, 6])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_reduce_add_tiled_every_tile(log2_size):
+    """Lane 0 of every ``2**log2_size`` tile holds that tile's sum, not only the first tile."""
+    N = 64
+    if 1 << log2_size > subgroup.group_size():
+        pytest.skip(f"tile of {1 << log2_size} lanes exceeds subgroup_size={subgroup.group_size()}")
+    src = qd.field(dtype=qd.i32, shape=N)
+    dst = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def k():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst[i] = subgroup.reduce_add_tiled(src[i], log2_size)
+
+    _init_field(src, N, qd.i32)
+
+    k()
+
+    size = 1 << log2_size
+    for base in range(0, N, size):
+        expected = sum(src[base + j] for j in range(size))
+        assert dst[base] == expected, f"tile at lane {base}: got {dst[base]}, expected {expected}"
+
+
 @pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_shuffle_up_offset_32(dtype):
