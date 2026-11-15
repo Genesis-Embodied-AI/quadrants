@@ -1,6 +1,6 @@
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test(require=qd.extension.bls)
@@ -143,7 +143,7 @@ def test_multiple_inputs():
             z[i, j] = i * i - j
 
     @qd.kernel
-    def copy(bls: qd.template(), w: qd.template()):
+    def copy(bls: qd.Template, w: qd.Template):
         if qd.static(bls):
             qd.block_local(x, y, z)
         for i, j in x:

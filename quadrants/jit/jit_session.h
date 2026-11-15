@@ -25,7 +25,8 @@ class JITSession {
  public:
   JITSession(QuadrantsLLVMContext *tlctx, const CompileConfig &config);
 
-  virtual JITModule *add_module(std::unique_ptr<llvm::Module> M, int max_reg = 0) = 0;
+  // Compile and load a module; cache requests compiled-byte reuse where supported (currently AMD only).
+  virtual JITModule *add_module(std::unique_ptr<llvm::Module> M, int max_reg = 0, bool cache = false) = 0;
 
   // virtual void remove_module(JITModule *module) = 0;
 

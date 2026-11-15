@@ -1033,7 +1033,7 @@ void AtomicOpExpression::type_check(const CompileConfig *config) {
     }
     // Cast `expected` to the destination element type so it matches what the codegen will load from memory.
     // LLVM `CreateAtomicCmpXchg` and SPIR-V `OpAtomicCompareExchange` both require the comparator to have the
-    // same width as the in-memory value; without this, a common call like `qd.atomic_cas(i64_field[None], 0, 1)`
+    // same width as the in-memory value; without this, a common call like `qd.atomic_cas(i64_field[()], 0, 1)`
     // would leave `expected` at the i32 default and produce invalid IR. Mirrors how `val` gets widened later in
     // `irpass::type_check::type_check_store`, which doesn't see `expected`.
     if (expected_dtype != ret_element_type) {

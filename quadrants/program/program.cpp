@@ -90,9 +90,6 @@ Program::Program(Arch desired_arch)
 #else
     QD_ERROR("This quadrants is not compiled with Vulkan")
 #endif
-  } else if (config.arch == Arch::python) {
-    program_impl_ = nullptr;  // Python backend doesn't have a ProgramImpl
-    return;
   } else {
     QD_NOT_IMPLEMENTED
   }
@@ -396,13 +393,6 @@ void Program::finalize() {
     return;
   }
 
-  if (compile_config().arch == Arch::python) {
-    QD_TRACE("Python backend does not require finalization.");
-    finalized_ = true;
-    num_instances_ -= 1;
-    return;
-  }
-
   // Notify the backend that teardown has started before the two teardown syncs below. On LLVM this flips
   // `LlvmProgramImpl::finalizing_` so `check_adstack_overflow()` short-circuits: otherwise a pending overflow flag from
   // a kernel the user never synced explicitly would throw into the Program destructor path.
@@ -431,7 +421,7 @@ void Program::finalize() {
 
 int Program::default_block_dim(const CompileConfig &config) {
   if (arch_is_cpu(config.arch)) {
-    return config.default_cpu_block_dim;
+    return config.cpu_fixed_block_dim;
   } else {
     return config.default_gpu_block_dim;
   }

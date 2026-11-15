@@ -10,7 +10,7 @@ on:
         description: 'Python version to use'
         required: false
         type: string
-        default: '3.10'
+        default: '3.12'
     secrets:
       PYPI_TOKEN:
         required: false

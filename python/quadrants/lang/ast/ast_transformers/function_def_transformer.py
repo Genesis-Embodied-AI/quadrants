@@ -22,11 +22,11 @@ from quadrants.lang import (
     matrix,
 )
 from quadrants.lang import ops as qd_ops
-from quadrants.lang._dataclass_util import create_flat_name
-from quadrants.lang._final_dataclass_fields import (
+from quadrants.lang._final.final_dataclass_fields import (
     final_field_names,
     is_final_annotation,
 )
+from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._optional_annotation import OPTIONAL_ABSENT
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
@@ -185,15 +185,12 @@ class FunctionDefTransformer:
                         getattr(arg_value, field.name) if arg_value is not None else None,
                     )
                 elif isinstance(field.type, type) and getattr(field.type, "_data_oriented", False):
-                    # The two patterns don't compose here: dataclass flattening is annotation-driven, while a
-                    # data_oriented container has no per-attribute annotations and needs the value-driven walk that only
-                    # ``qd.template()`` / ``qd.Tensor`` annotations trigger.
+                    # Typed dataclass fields are validated before unused members are pruned.
                     raise QuadrantsSyntaxError(
                         f"Kernel arg {argument_name!r}: field {field.name!r} has @qd.data_oriented type "
                         f"{field.type.__name__!r}, which cannot be flattened into a typed-dataclass kernel arg. "
-                        f"Use ``{argument_name}: qd.template()`` for the outer kernel arg annotation instead; "
-                        f"data_oriented contents (including nested ndarrays) are walked at kernel-compile time via "
-                        f"the template path."
+                        "This annotation is rejected even if the field is unused. "
+                        "Store the dataclass on the data-oriented object instead."
                     )
                 else:
                     result, obj = FunctionDefTransformer._decl_and_create_variable(
@@ -390,7 +387,7 @@ class FunctionDefTransformer:
             ctx.create_variable(argument_name, data)
             return None
         # Template arguments are passed by reference.
-        if isinstance(argument_type, annotations.template):
+        if argument_type is annotations.Template or type(argument_type) is annotations.template:
             ctx.create_variable(argument_name, data)
             return None
 
@@ -778,7 +775,7 @@ class FunctionDefTransformer:
 
     @staticmethod
     def _is_docstring(stmt: ast.stmt, index: int) -> bool:
-        return index == 0 and isinstance(stmt, ast.Expr) and isinstance(stmt.value, (ast.Constant, ast.Str))
+        return index == 0 and isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant)
 
     @staticmethod
     def _is_coverage_probe(stmt: ast.stmt) -> bool:

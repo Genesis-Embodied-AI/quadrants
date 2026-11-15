@@ -1,4 +1,4 @@
-"""Wrapper-in-struct unwrap behaviour (`hp/tensor-stork-20`).
+"""Wrapper-in-struct unwrap behaviour.
 
 Pins the contract that a ``qd.Tensor`` wrapper stored as a *field* of a struct passed to a kernel is unwrapped to its
 bare impl before the kernel-side type resolution / template-mapper / fastcache validator / AST-build-time attribute
@@ -14,13 +14,11 @@ Genesis uses two different struct shapes depending on the global ``gs.use_ndarra
 - ``gs.use_ndarray=True``:  ``@dataclass(frozen=True)`` struct, kernel takes the struct as a single arg and the
   per-field annotation ``qd.types.NDArray[...]`` makes Quadrants recurse and bind each field as a separate kernel arg.
   Tests that mirror this shape are parametrised over the **ndarray** backend only.
-- ``gs.use_ndarray=False``: ``@qd.data_oriented`` struct, kernel takes the struct as ``qd.template()`` and accesses
+- ``gs.use_ndarray=False``: ``@qd.data_oriented`` struct, kernel takes the struct as ``qd.Template`` and accesses
   fields via attribute lookup at AST-build time. Tests that mirror this shape are parametrised over the **field**
-  backend only. (The other direction is forbidden by an existing pre-stork-20 check: "Ndarray shouldn't be passed in
-  via ``qd.template()``".)
+  backend only. (The other direction is forbidden by the check: "Ndarray shouldn't be passed in
+  via ``qd.Template``".)
 
-Both shapes had a wrapper-unwrap gap before this branch. See ``perso_hugh/doc/quadrants-tensor.md`` §8.14 and
-``perso_hugh/doc/genesis_tensor_migration.md`` Phase-1 findings.
 """
 
 import dataclasses
@@ -31,7 +29,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 LAYOUTS = [(0, 1), (1, 0)]
 LAYOUT_IDS = ["identity", "transposed"]
@@ -82,7 +80,7 @@ def test_dataclass_struct_with_wrapper_field_kernel_runs(layout):
 # Repro 2: @qd.data_oriented struct holding a qd.Tensor wrapper field.
 #
 # Mirrors the Genesis field-backend struct shape (``DATA_ORIENTED = qd.data_oriented`` with kernel arg
-# ``state: qd.template()``). The kernel body resolves ``state.a`` at AST-build time via ``build_Attribute``; without
+# ``state: qd.Template``). The kernel body resolves ``state.a`` at AST-build time via ``build_Attribute``; without
 # the wrapper-unwrap there ``state.a[i, j]`` would land in ``impl.subscript`` with a Python wrapper that the IR layer
 # doesn't understand (``__getitem__ cannot be called in Quadrants-scope``). Field-backend only — see module docstring.
 # ----------------------------------------------------------------------------
@@ -97,7 +95,7 @@ def test_data_oriented_struct_with_wrapper_field_kernel_runs(layout):
             self.a = a
 
     @qd.kernel
-    def fill(state: qd.template()):
+    def fill(state: qd.Template):
         for i, j in qd.ndrange(_M, _N):
             state.a[i, j] = i * 100 + j
 
@@ -142,7 +140,7 @@ def test_mixed_bare_and_wrapper_struct_fields():
 # ----------------------------------------------------------------------------
 # Fastcache: no PARAM_INVALID warning, fast path stays hot.
 #
-# Pins the soft-failure side of the §8.14 bug: even when the kernel eventually runs (via the slow path), the
+# Pins the soft-failure side of wrapper unwrapping: even when the kernel eventually runs (via the slow path), the
 # wrapper-as-struct-field would have tripped the fastcache's per-parameter validator
 # (``args_hasher.stringify_obj_type``) and emitted ``[FASTCACHE][PARAM_INVALID]``, killing the recompile-avoidance
 # for the whole call. Following the harness used by ``test_src_ll_cache_arg_warnings``: capfd + ``@qd.pure`` makes

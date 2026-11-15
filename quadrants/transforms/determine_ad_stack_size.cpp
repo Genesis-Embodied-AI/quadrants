@@ -420,7 +420,7 @@ std::unique_ptr<SizeExpr> resolve_global_tmp_value(std::size_t offset, IRNode *r
 }
 
 // Resolve a `RangeForStmt`'s `end` as a `SizeExpr`, applying the CPU-chunk-wrapper unwrap when the range-for is
-// the body-level child of an `OffloadedStmt`. `make_cpu_multithreaded_range_for` rewrites the original user
+// the body-level child of an `OffloadedStmt`. `make_cpu_per_worker_range_for` rewrites the original user
 // body into such a wrapper whose end is `min(end_stmt, block_begin + block_range)`; the right-hand `min`
 // operand uses `bit_shl`/`add` arithmetic that is deliberately outside the `SizeExpr` grammar, so the generic
 // `min->max` widening in `build_value_expr` falls out of the grammar. The logical bound of a chunk-wrapper
@@ -432,7 +432,7 @@ std::unique_ptr<SizeExpr> resolve_global_tmp_value(std::size_t offset, IRNode *r
 // (`LoopIndexStmt` handler, `SNodeLookupStmt` / `ExternalPtrStmt` pending-wrap resolvers,
 // `compute_bounded_adstack_size`'s outer trip-count multiplier, `resolve_loop_end`) shares one call shape
 // with `resolve_range_for_begin`. `determine_ad_stack_size` runs in `compile_to_offloads` before
-// `make_cpu_multithreaded_range_for`, so the user's original `RangeForStmt` bounds are still visible here
+// `make_cpu_per_worker_range_for`, so the user's original `RangeForStmt` bounds are still visible here
 // and the chunk wrapper's `min(end_stmt, bit_shl-add)` shape never appears in this pre-pass's input IR.
 std::unique_ptr<SizeExpr> resolve_range_for_end(RangeForStmt *range_for, IRNode *root, int32_t *var_id_counter) {
   return build_value_expr(range_for->end, root, var_id_counter);
@@ -1226,7 +1226,7 @@ AdStackBoundResult compute_bounded_adstack_size(AdStackAllocaStmt *alloca, IRNod
   // `stack_init` at visit time that resets the stack's count header to zero; re-entry of a loop that surrounds the
   // alloca therefore sees a fresh stack, not compounded depth from prior iterations. The canonical offender is
   // the CPU multithreaded outer `range_for(thread_idx << k, min(N, thread_idx << k + chunk_size))` that
-  // `make_cpu_multithreaded_range_for` emits around the user body: its bounds are unparseable in the `SizeExpr`
+  // `make_cpu_per_worker_range_for` emits around the user body: its bounds are unparseable in the `SizeExpr`
   // grammar (`bit_shl` of a `LoopIndexStmt`), and without this stop condition the walker would treat the outer
   // chunk loop as a multiplier the pre-pass cannot prove constant, which would have forced every user-written
   // adstack kernel on CPU to hard-error at compile time purely because of the chunk-loop wrapping.
@@ -1425,7 +1425,7 @@ bool determine_ad_stack_size(IRNode *root, const CompileConfig &config) {
         alloca->get_last_tb(), dump_hint);
   }
   // Build a per-task `SizeExpr` for each adstack-bearing parallel range-for offload's loop trip count, captured
-  // here BEFORE `make_cpu_multithreaded_range_for` rewrites the user loop into chunks. The same `SizeExpr`
+  // here BEFORE `make_cpu_per_worker_range_for` rewrites the user loop into chunks. The same `SizeExpr`
   // grammar `compute_bounded_adstack_size` uses for per-thread stack sizing applies: integer constants, scalar
   // i32 / i64 field reads, ndarray shape axes, ndarray element reads at constant or loop indices, plus the
   // arithmetic / max-over-range combinators. The runtime float-heap clip evaluates this expression at launch

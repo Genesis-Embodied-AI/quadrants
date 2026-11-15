@@ -11,19 +11,28 @@ import pydantic
 import pytest
 
 import quadrants as qd
-from quadrants._test_tools import qd_init_same_arch
 from quadrants.lang import _wrap_inspect
 from quadrants.lang._fast_caching import function_hasher, src_hasher
 from quadrants.lang._wrap_inspect import get_source_info_and_src
 
-from tests import test_utils
+from tests.helpers import test_utils
+from tests.helpers.runtime import qd_init_same_arch
 
 TEST_RAN = "test ran"
 RET_SUCCESS = 42
 
 
+@pytest.mark.parametrize(
+    "key,value",
+    [
+        ("random_seed", 123),
+        ("cpu_per_worker_min_block_dim", 1),
+        ("cpu_fixed_block_dim", 16),
+        ("cpu_work_scheduling", qd.CPUWorkScheduling.FIXED_SIZE),
+    ],
+)
 @test_utils.test()
-def test_src_hasher_create_cache_key_vary_config() -> None:
+def test_src_hasher_create_cache_key_vary_config(key, value) -> None:
     """Source+config key (L1) is stable across re-init with identical config, changes when the config changes.
 
     L1 is the level to test: config feeds only into it, and L2 just adds the args-narrow hash on top.
@@ -43,12 +52,16 @@ def test_src_hasher_create_cache_key_vary_config() -> None:
     kernel_info, _src = get_source_info_and_src(f1.fn)
     cache_key_same = src_hasher.make_source_config_key(kernel_info)
 
-    qd_init_same_arch(print_ir_dbg_info=False, random_seed=123)
+    qd_init_same_arch(print_ir_dbg_info=False, **{key: value})
     kernel_info, _src = get_source_info_and_src(f1.fn)
     cache_key_diff = src_hasher.make_source_config_key(kernel_info)
 
     assert cache_key_base == cache_key_same
     assert cache_key_same != cache_key_diff
+
+    # Restoring the original configuration must restore its cache key, with no stale state from the changed setting.
+    qd_init_same_arch(print_ir_dbg_info=False)
+    assert src_hasher.make_source_config_key(kernel_info) == cache_key_base
 
 
 @test_utils.test()

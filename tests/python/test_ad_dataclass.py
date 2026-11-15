@@ -3,11 +3,11 @@
 These tests pin that gradients flow correctly when kernel arguments are wrapped in plain Python dataclasses, across the
 tensor types Quadrants exposes:
 
-* ``qd.ndarray`` — typed-dataclass annotation + ``qd.template()`` path; gradient via ``kernel.grad()``.
-* ``qd.field`` — ``qd.template()`` path; gradient via ``qd.ad.Tape``.
+* ``qd.ndarray`` - typed-dataclass annotation + ``qd.Template`` path; gradient via ``kernel.grad()``.
+* ``qd.field`` - ``qd.Template`` path; gradient via ``qd.ad.Tape``.
 * ``qd.tensor(backend=NDARRAY)`` — same path as ``qd.ndarray``; dispatcher returns a wrapper whose ndarray ``_impl``
   is unwrapped by the dataclass-annotation infrastructure.
-* ``qd.tensor(backend=FIELD)`` — works when the dataclass member is annotated ``qd.Tensor`` (or ``qd.template()``).
+* ``qd.tensor(backend=FIELD)`` - works when the dataclass member is annotated ``qd.Tensor`` (or ``qd.Template``).
   With ``object`` / no annotation the wrapper survives into kernel scope and host-side ``__getitem__`` asserts.
 * mixed — single dataclass holding both a ``qd.ndarray`` and a ``qd.field`` member.
 
@@ -21,7 +21,7 @@ import numpy as np
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 archs_support_ndarray_ad = [qd.cpu, qd.cuda, qd.amdgpu, qd.metal]
 
@@ -67,7 +67,7 @@ def test_ad_dataclass_ndarray_typed_annotation():
 
 @test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_ad_dataclass_ndarray_template():
-    """dataclass holding qd.ndarrays, passed via qd.template()."""
+    """dataclass holding qd.ndarrays, passed via qd.Template."""
     N = 5
 
     @dataclasses.dataclass(frozen=True)
@@ -77,7 +77,7 @@ def test_ad_dataclass_ndarray_template():
         p: qd.types.NDArray[qd.f32, 1]
 
     @qd.kernel
-    def compute(s: qd.template()):
+    def compute(s: qd.Template):
         for i in range(N):
             s.p[i] = s.a[i] * s.b[i] + 1.0
 
@@ -106,7 +106,7 @@ def test_ad_dataclass_ndarray_template():
 
 @test_utils.test(default_fp=qd.f64, require=[qd.extension.adstack, qd.extension.data64])
 def test_ad_dataclass_field_template_tape():
-    """dataclass holding qd.fields, passed via qd.template(), gradient via qd.ad.Tape."""
+    """dataclass holding qd.fields, passed via qd.Template, gradient via qd.ad.Tape."""
     N = 5
 
     @dataclasses.dataclass(frozen=True)
@@ -125,9 +125,9 @@ def test_ad_dataclass_field_template_tape():
     state = State(a=a, b=b, loss=loss)
 
     @qd.kernel
-    def compute(s: qd.template()):
+    def compute(s: qd.Template):
         for i in range(N):
-            s.loss[None] += s.a[i] * s.b[i]
+            s.loss[()] += s.a[i] * s.b[i]
 
     with qd.ad.Tape(loss):
         compute(state)
@@ -135,7 +135,7 @@ def test_ad_dataclass_field_template_tape():
     # loss = sum_i a[i] * b[i]; dloss/da[i] = b[i]
     np.testing.assert_allclose(a.grad.to_numpy(), b.to_numpy())
     expected_loss = float((3.0 * np.arange(1, N + 1)).sum())
-    np.testing.assert_allclose(loss[None], expected_loss)
+    np.testing.assert_allclose(loss[()], expected_loss)
 
 
 # ----------------------------------------------------------------------------
@@ -204,9 +204,9 @@ def test_ad_dataclass_tensor_field_backend_tape():
     state = State(a=a, b=b, loss=loss)
 
     @qd.kernel
-    def compute(s: qd.template()):
+    def compute(s: qd.Template):
         for i in range(N):
-            s.loss[None] += s.a[i] * s.b[i]
+            s.loss[()] += s.a[i] * s.b[i]
 
     with qd.ad.Tape(loss._unwrap()):
         compute(state)
@@ -274,7 +274,7 @@ def test_ad_dataclass_mixed_ndarray_and_field_in_same_class():
         p: qd.types.NDArray[qd.f32, 1]
 
     @qd.kernel
-    def compute(s: qd.template()):
+    def compute(s: qd.Template):
         for i in range(N):
             s.p[i] = s.a_nd[i] * s.b[i]
             s.out_field[i] = s.a_nd[i] + s.b[i]

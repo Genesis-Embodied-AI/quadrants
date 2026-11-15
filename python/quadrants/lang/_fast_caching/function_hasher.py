@@ -2,7 +2,7 @@ import os
 from itertools import islice
 from typing import TYPE_CHECKING, Iterable
 
-from ..._test_tools import warnings_helper
+from ... import _warnings
 from .._wrap_inspect import FunctionSourceInfo
 from .fast_caching_types import HashedFunctionSourceInfo
 from .hash_utils import hash_iterable_strings
@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 
 def pure(fn: "QuadrantsCallable") -> "QuadrantsCallable":
-    warnings_helper.warn_once(
+    _warnings.warn_once(
         "Use of @qd.pure is deprecated. Please use @qd.kernel(fastcache=True). @qd.pure is intended to be removed in v4.0.0"
     )
     fn.is_pure = True

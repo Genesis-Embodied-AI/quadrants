@@ -1,0 +1,62 @@
+name: Clean up documentation previews
+
+on:
+  schedule:
+    - cron: '23 3 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Report expired previews without deleting them
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  pages: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      # Share the publisher's lock so cleanup cannot race a preview deployment.
+      group: gh-pages-deploy
+      cancel-in-progress: false
+    steps:
+      # Without ref, check out the run's commit: main for scheduled runs, the selected branch for manual runs.
+      # This copy supplies the cleanup script; the separate gh-pages checkout below holds the published docs.
+      - uses: actions/checkout@v4
+        with:
+          path: tooling
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: site
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+      - name: Remove previews older than seven days
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ inputs.dry_run || false }}
+        run: |
+          args=()
+          if [ "$DRY_RUN" != "true" ]; then args+=(--apply); fi
+          # The --site-dir value must match path: site in the earlier gh-pages checkout.
+          python tooling/python/tools/cleanup_doc_previews.py \
+            --site-dir site --repository "$GITHUB_REPOSITORY" "${args[@]}"
+      - name: Publish cleanup
+        env:
+          GH_TOKEN: ${{ github.token }}
+        working-directory: site
+        run: |
+          # If no deletions are staged, finish successfully without committing, pushing, or rebuilding Pages.
+          if git diff --cached --quiet; then exit 0; fi
+          git config user.name 'github-actions[bot]'
+          # GitHub's bot commit email: <account-id>+<username>@users.noreply.github.com; 41898282 is the Actions bot ID.
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Remove documentation previews older than seven days'
+          git push origin HEAD:gh-pages
+          # Queue a rebuild from the configured Pages source (gh-pages); this does not wait for deployment to finish.
+          gh api --method POST "repos/$GITHUB_REPOSITORY/pages/builds"

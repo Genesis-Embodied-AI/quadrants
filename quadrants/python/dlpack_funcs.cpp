@@ -405,7 +405,7 @@ nb::capsule ndarray_to_dlpack(Program *program,
   // canonical-axis index at each successive physical-memory axis (outermost first). We expose a *canonical* view to
   // DLPack consumers by permuting both the shape and the strides via the inverse permutation, leaving the raw pointer
   // and byte offset untouched (no data movement).
-  std::vector<int> ndarray_shape = ndarray->total_shape();
+  std::vector<int> ndarray_shape = ndarray->total_physical_shape();
   int ndim = ndarray_shape.size();
 
   if (!layout.empty() && static_cast<int>(layout.size()) != ndim) {

@@ -2,7 +2,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @pytest.mark.parametrize(
@@ -20,10 +20,10 @@ def test_py_style_mod(a, b):
 
     @qd.kernel
     def func(x: qd.i32, y: qd.i32):
-        z[None] = x % y
+        z[()] = x % y
 
     func(a, b)
-    assert z[None] == a % b
+    assert z[()] == a % b
 
 
 @pytest.mark.parametrize(
@@ -41,10 +41,10 @@ def test_c_style_mod(a, b):
 
     @qd.kernel
     def func(x: qd.i32, y: qd.i32):
-        z[None] = qd.raw_mod(x, y)
+        z[()] = qd.raw_mod(x, y)
 
     func(a, b)
-    assert z[None] == _c_mod(a, b)
+    assert z[()] == _c_mod(a, b)
 
 
 def _c_mod(a, b):
@@ -58,15 +58,15 @@ def test_mod_scan():
 
     @qd.kernel
     def func(x: qd.i32, y: qd.i32):
-        z[None] = x % y
-        w[None] = qd.raw_mod(x, y)
+        z[()] = x % y
+        w[()] = qd.raw_mod(x, y)
 
     for i in range(-10, 11):
         for j in range(-10, 11):
             if j != 0:
                 func(i, j)
-                assert z[None] == i % j
-                assert w[None] == _c_mod(i, j)
+                assert z[()] == i % j
+                assert w[()] == _c_mod(i, j)
 
 
 @test_utils.test()
@@ -110,8 +110,8 @@ def test_py_style_float_mod_field_int(x, m):
 
     @qd.kernel
     def func(a: qd.f32):
-        result[None] = a % divisor[None]
+        result[()] = a % divisor[()]
 
-    divisor[None] = m
+    divisor[()] = m
     func(x)
-    assert result[None] == x % m
+    assert result[()] == x % m

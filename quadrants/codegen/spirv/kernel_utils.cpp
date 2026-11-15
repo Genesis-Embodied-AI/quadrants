@@ -78,8 +78,7 @@ KernelContextAttributes::KernelContextAttributes(const Kernel &kernel, const Dev
   arr_access.reserve(kernel.nested_parameters.size());
   grad_arr_access.reserve(kernel.nested_parameters.size());
   arg_attribs_vec_.reserve(kernel.nested_parameters.size());
-  // TODO: We should be able to limit Kernel args and rets to be primitive types
-  // as well but let's leave that as a followup up PR.
+  // TODO: Limit Kernel args and rets to primitive types.
   for (const auto &kv : kernel.nested_parameters) {
     const auto &k = std::vector<int>{kv.first};
     const auto &ka = kv.second;
@@ -105,10 +104,8 @@ KernelContextAttributes::KernelContextAttributes(const Kernel &kernel, const Dev
     arr_access.push_back({k, irpass::ExternalPtrAccess(0)});
     grad_arr_access.push_back({k, irpass::ExternalPtrAccess(0)});
   }
-  // TODO:
-  //  ret_attribs_vec_ and this if loop is redundant now. Remove it in a follow
-  //  up PR. We keep this loop and use i32 as a placeholder to ensure that
-  //  GfxRuntime::device_to_host::require_sync works properly.
+  // TODO: Remove the redundant ret_attribs_vec_ and conditional below. Keep i32 as a placeholder until
+  // GfxRuntime::device_to_host::require_sync can work without them.
   if (!kernel.rets.empty()) {
     RetAttributes ra;
     ra.dtype = PrimitiveTypeID::i32;

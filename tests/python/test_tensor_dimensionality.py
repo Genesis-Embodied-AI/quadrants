@@ -2,7 +2,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @pytest.mark.parametrize("d", range(2, qd._lib.core.get_max_num_indices() + 1))

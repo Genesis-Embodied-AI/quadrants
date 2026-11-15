@@ -16,7 +16,7 @@ import numpy as np
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test()
@@ -104,14 +104,14 @@ def test_serial_atomic_counter_simple():
         for _ in range(1):
             for i in range(n):
                 if data[i] > 0.0:
-                    idx = qd.atomic_add(counter[None], 1)
-                    qd.atomic_add(counter2[None], 1)
+                    idx = qd.atomic_add(counter[()], 1)
+                    qd.atomic_add(counter2[()], 1)
                     output[idx] = data[i]
 
     count_nonzero()
 
     expected_count = 8
-    assert counter[None] == expected_count
-    assert counter2[None] == expected_count
+    assert counter[()] == expected_count
+    assert counter2[()] == expected_count
     for i in range(expected_count):
         assert output[i] == 1.0

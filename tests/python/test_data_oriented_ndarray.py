@@ -3,13 +3,11 @@ wrappers).
 
 The user-guide doc ``docs/source/user_guide/compound_types.md`` claims this pattern is not supported ("can contain
 ndarray? no" for ``@qd.data_oriented``). But the in-tree error message in ``python/quadrants/lang/impl.py`` lists
-``@qd.data_oriented / frozen-dataclass template`` as a *supported* route, and the ndarray-in-struct infrastructure
-added by ``#561 [Type] Tensor 24`` (2026-04-28) — specifically ``_predeclare_struct_ndarrays`` in
-``python/quadrants/lang/ast/ast_transformers/function_def_transformer.py`` — explicitly walks both
+``@qd.data_oriented / frozen-dataclass template`` as a *supported* route, and ``_predeclare_struct_ndarrays`` in
+``python/quadrants/lang/ast/ast_transformers/function_def_transformer.py`` explicitly walks both
 ``dataclasses.is_dataclass(val)`` and ``hasattr(val, "__dict__")`` containers, the latter being the data_oriented case.
 
-This file pins what actually works, and documents the gaps. See ``perso_hugh/doc/data_oriented_ndarray.md`` for the
-design analysis.
+This file pins what actually works, and documents the gaps.
 """
 
 import dataclasses
@@ -19,7 +17,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 # ---------------------------------------------------------------------------
 # 1. Single raw qd.ndarray attribute (scalar element type).
@@ -39,7 +37,7 @@ def test_data_oriented_single_ndarray():
     state = State(x=x)
 
     @qd.kernel
-    def fill(s: qd.template()):
+    def fill(s: qd.Template):
         for i in range(N):
             s.x[i] = i * 3
 
@@ -65,7 +63,7 @@ def test_data_oriented_vector_ndarray():
     state = State(v=v)
 
     @qd.kernel
-    def fill(s: qd.template()):
+    def fill(s: qd.Template):
         for i in range(N):
             s.v[i] = qd.Vector([float(i), float(i) * 2.0, float(i) * 3.0])
 
@@ -95,7 +93,7 @@ def test_data_oriented_multiple_ndarrays():
     state = State(a=a, b=b)
 
     @qd.kernel
-    def run(s: qd.template()):
+    def run(s: qd.Template):
         for i in range(N):
             s.a[i] = i + 1
             s.b[i] = float(i) * 0.5
@@ -125,7 +123,7 @@ def test_data_oriented_mixed_field_and_ndarray():
     state = State(f=f, n=n)
 
     @qd.kernel
-    def run(s: qd.template()):
+    def run(s: qd.Template):
         for i in range(N):
             s.f[i] = i + 1
             s.n[i] = s.f[i] * 10
@@ -158,7 +156,7 @@ def test_data_oriented_nested():
     outer = Outer(inner=Inner(x=x))
 
     @qd.kernel
-    def run(s: qd.template()):
+    def run(s: qd.Template):
         for i in range(N):
             s.inner.x[i] = i * 7
 
@@ -187,7 +185,7 @@ def test_data_oriented_ndarray_reassign_same_shape():
     state = State(x=x1)
 
     @qd.kernel
-    def run(s: qd.template()):
+    def run(s: qd.Template):
         for i in range(N):
             s.x[i] = i + 100
 
@@ -222,7 +220,7 @@ def test_data_oriented_ndarray_reassign_different_dtype():
     state = State(x=x_i32)
 
     @qd.kernel
-    def run(s: qd.template()):
+    def run(s: qd.Template):
         for i in range(N):
             s.x[i] = s.x[i] + 1
 
@@ -256,7 +254,7 @@ def test_data_oriented_distinct_instances():
     b = State(x=b_arr)
 
     @qd.kernel
-    def run(s: qd.template()):
+    def run(s: qd.Template):
         for i in range(N):
             s.x[i] = i + 1
 
@@ -284,7 +282,7 @@ def test_data_oriented_distinct_instances():
 
 @test_utils.test(arch=qd.cpu)
 def test_data_oriented_ndarray_fastcache_cross_init(tmp_path, monkeypatch):
-    from quadrants._test_tools import qd_init_same_arch
+    from tests.helpers.runtime import qd_init_same_arch
 
     launch_kernel_orig = qd.lang.kernel_impl.Kernel.launch_kernel
     captured_compiled_kernel_data = []
@@ -305,7 +303,7 @@ def test_data_oriented_ndarray_fastcache_cross_init(tmp_path, monkeypatch):
             self.x = x
 
     @qd.kernel(fastcache=True)
-    def run(s: qd.template()):
+    def run(s: qd.Template):
         for i in range(4):
             s.x[i] = i * 3
 
@@ -330,7 +328,7 @@ def test_data_oriented_ndarray_fastcache_cross_init(tmp_path, monkeypatch):
 
 @test_utils.test(arch=qd.cpu)
 def test_data_oriented_nested_ndarray_fastcache_cross_init(tmp_path, monkeypatch):
-    from quadrants._test_tools import qd_init_same_arch
+    from tests.helpers.runtime import qd_init_same_arch
 
     launch_kernel_orig = qd.lang.kernel_impl.Kernel.launch_kernel
     captured = []
@@ -355,7 +353,7 @@ def test_data_oriented_nested_ndarray_fastcache_cross_init(tmp_path, monkeypatch
             self.inner = inner
 
     @qd.kernel(fastcache=True)
-    def run(s: qd.template()):
+    def run(s: qd.Template):
         for i in range(4):
             s.inner.y[i] = i + 11
 
@@ -378,7 +376,7 @@ def test_data_oriented_nested_ndarray_fastcache_cross_init(tmp_path, monkeypatch
 
 @test_utils.test(arch=qd.cpu)
 def test_data_oriented_ndarray_fastcache_dtype_key_distinct(tmp_path, monkeypatch):
-    from quadrants._test_tools import qd_init_same_arch
+    from tests.helpers.runtime import qd_init_same_arch
 
     launch_kernel_orig = qd.lang.kernel_impl.Kernel.launch_kernel
     captured = []
@@ -398,7 +396,7 @@ def test_data_oriented_ndarray_fastcache_dtype_key_distinct(tmp_path, monkeypatc
             self.x = x
 
     @qd.kernel(fastcache=True)
-    def run(s: qd.template()):
+    def run(s: qd.Template):
         for i in range(4):
             s.x[i] = s.x[i] + 1
 
@@ -428,7 +426,7 @@ def test_data_oriented_ndarray_fastcache_dtype_key_distinct(tmp_path, monkeypatc
 
 @test_utils.test(arch=qd.cpu)
 def test_data_oriented_field_disables_fastcache_but_runs(tmp_path, monkeypatch):
-    from quadrants._test_tools import qd_init_same_arch
+    from tests.helpers.runtime import qd_init_same_arch
 
     qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
 
@@ -440,7 +438,7 @@ def test_data_oriented_field_disables_fastcache_but_runs(tmp_path, monkeypatch):
     state = State(4)
 
     @qd.kernel(fastcache=True)
-    def run(s: qd.template()):
+    def run(s: qd.Template):
         for i in range(4):
             s.f[i] = i + 7
 
@@ -463,7 +461,7 @@ def test_data_oriented_ndarray_fastcache_eligible():
     state = State(x=x)
 
     @qd.kernel(fastcache=True)
-    def run(s: qd.template()):
+    def run(s: qd.Template):
         for i in range(N):
             s.x[i] = i * 2
 
@@ -493,7 +491,7 @@ def test_data_oriented_ndarray_pure():
 
     @qd.pure
     @qd.kernel
-    def run(s: qd.template()):
+    def run(s: qd.Template):
         for i in range(N):
             s.x[i] = i * 5
 
@@ -550,44 +548,12 @@ def test_data_oriented_holding_dataclass_with_ndarray():
     outer = Outer(inner=Inner(x=x))
 
     @qd.kernel
-    def run(s: qd.template()):
+    def run(s: qd.Template):
         for i in range(N):
             s.inner.x[i] = i + 1
 
     run(outer)
     np.testing.assert_array_equal(x.to_numpy(), np.arange(1, N + 1))
-
-
-# ---------------------------------------------------------------------------
-# 13. Frozen dataclass holding a data_oriented holding an ndarray, kernel-arg via ``qd.template()``. Exercises the
-#     dataclass branch of ``_walk_obj`` recursing through a data_oriented child. The outer dataclass has to be frozen: a
-#     non-frozen one is unhashable, and the template-mapper key tuple needs a hashable value.
-# ---------------------------------------------------------------------------
-
-
-@test_utils.test(arch=qd.cpu)
-def test_dataclass_holding_data_oriented_with_ndarray():
-    N = 4
-
-    @qd.data_oriented
-    class Inner:
-        def __init__(self, x):
-            self.x = x
-
-    @dataclasses.dataclass(frozen=True)
-    class Outer:
-        inner: Inner
-
-    x = qd.ndarray(qd.i32, shape=(N,))
-    outer = Outer(inner=Inner(x=x))
-
-    @qd.kernel
-    def run(s: qd.template()):
-        for i in range(N):
-            s.inner.x[i] = i + 5
-
-    run(outer)
-    np.testing.assert_array_equal(x.to_numpy(), np.arange(5, 5 + N))
 
 
 # ---------------------------------------------------------------------------
@@ -618,7 +584,7 @@ def test_data_oriented_three_level_nesting():
     root = L1(l2=L2(l3=L3(x=x)))
 
     @qd.kernel
-    def run(s: qd.template()):
+    def run(s: qd.Template):
         for i in range(N):
             s.l2.l3.x[i] = i * 13
 
@@ -651,7 +617,7 @@ def test_data_oriented_nested_ndarray_reassign():
     outer = Outer(inner=Inner(x=x1))
 
     @qd.kernel
-    def run(s: qd.template()):
+    def run(s: qd.Template):
         for i in range(N):
             s.inner.x[i] = i + 200
 
@@ -661,52 +627,6 @@ def test_data_oriented_nested_ndarray_reassign():
     outer.inner.x = x2
     run(outer)
     np.testing.assert_array_equal(x2.to_numpy(), np.arange(200, 200 + N))
-
-
-# ---------------------------------------------------------------------------
-# 15b. Reassignment through a FROZEN outer container that wraps a MUTABLE inner container holding the ndarray.
-# Reproducer for Codex review #1 on PR #704
-# (https://github.com/Genesis-Embodied-AI/quadrants/pull/704#discussion_r3253017477): the launch-time mutable-nd cache
-# guard only classified mutability of the *top-level* kernel arg. With a frozen dataclass at the root, the predicate
-# returned False and no per-call walk was inserted, so reassigning ``outer.inner.x`` between launches left the
-# launch-context cache bound to the *original* ndarray.
-#
-# Fixed by widening the predicate to OR-fold mutability across every intermediate container along the recorded
-# attr-chain (not just the root). See ``launch_kernel`` in ``python/quadrants/lang/kernel.py``.
-# ---------------------------------------------------------------------------
-
-
-@test_utils.test(arch=qd.cpu)
-def test_frozen_outer_mutable_inner_ndarray_reassign():
-    N = 4
-
-    @qd.data_oriented
-    class Inner:
-        def __init__(self, x):
-            self.x = x
-
-    @dataclasses.dataclass(frozen=True)
-    class Outer:
-        inner: Inner
-
-    x1 = qd.ndarray(qd.i32, shape=(N,))
-    x2 = qd.ndarray(qd.i32, shape=(N,))
-    outer = Outer(inner=Inner(x=x1))
-
-    @qd.kernel
-    def run(s: qd.template()):
-        for i in range(N):
-            s.inner.x[i] = i + 300
-
-    run(outer)
-    np.testing.assert_array_equal(x1.to_numpy(), np.arange(300, 300 + N))
-
-    # Reassign the leaf ndarray on the (mutable) inner container while the (frozen) outer container is unchanged at
-    # the top level. id(outer) does NOT change. The launch-context cache must still invalidate so the second launch
-    # binds against x2, not the cached x1.
-    outer.inner.x = x2
-    run(outer)
-    np.testing.assert_array_equal(x2.to_numpy(), np.arange(300, 300 + N))
 
 
 # ---------------------------------------------------------------------------
@@ -730,12 +650,12 @@ def test_data_oriented_two_kernels_same_instance():
     state = State(x=x, y=y)
 
     @qd.kernel
-    def fill_x(s: qd.template()):
+    def fill_x(s: qd.Template):
         for i in range(N):
             s.x[i] = i + 1
 
     @qd.kernel
-    def fill_y_from_x(s: qd.template()):
+    def fill_y_from_x(s: qd.Template):
         for i in range(N):
             s.y[i] = s.x[i] * 100
 
@@ -765,11 +685,11 @@ def test_data_oriented_ndarray_via_func():
     state = State(x=x)
 
     @qd.func
-    def write(s: qd.template(), i: qd.i32, v: qd.i32):
+    def write(s: qd.Template, i: qd.i32, v: qd.i32):
         s.x[i] = v
 
     @qd.kernel
-    def run(s: qd.template()):
+    def run(s: qd.Template):
         for i in range(N):
             write(s, i, i * 9)
 
@@ -796,12 +716,12 @@ def test_data_oriented_ndarray_reassign_different_ndim():
     state = State(x=x_1d)
 
     @qd.kernel
-    def fill_1d(s: qd.template()):
+    def fill_1d(s: qd.Template):
         for i in range(4):
             s.x[i] = i * 2
 
     @qd.kernel
-    def fill_2d(s: qd.template()):
+    def fill_2d(s: qd.Template):
         for i, j in qd.ndrange(2, 3):
             s.x[i, j] = i * 10 + j
 
@@ -836,12 +756,12 @@ def test_data_oriented_nested_ndarray_reassign_different_dtype():
     outer = Outer(inner=Inner(x=x_i32))
 
     @qd.kernel
-    def run_i32(s: qd.template()):
+    def run_i32(s: qd.Template):
         for i in range(4):
             s.inner.x[i] = i + 1
 
     @qd.kernel
-    def run_f32(s: qd.template()):
+    def run_f32(s: qd.Template):
         for i in range(4):
             s.inner.x[i] = float(i) + 0.5
 
@@ -861,9 +781,7 @@ def test_data_oriented_nested_ndarray_reassign_different_dtype():
 
 
 # ---------------------------------------------------------------------------
-# 21. Typed-dataclass kernel arg with a ``@qd.data_oriented`` field type - should error clearly pointing the user to
-#     ``qd.template()``. The two patterns are incompatible at the kernel-arg layer: dataclass kernel args are flattened
-#     using annotations, data_oriented containers need a value-driven walk. Pins the helpful error message.
+# 21. A typed-dataclass field containing a data-oriented object reports the supported nesting direction.
 # ---------------------------------------------------------------------------
 
 
@@ -886,7 +804,7 @@ def test_typed_dataclass_with_data_oriented_field_raises_clear_error():
         for i in range(4):
             s.inner.x[i] = i + 1
 
-    with pytest.raises(Exception, match="data_oriented.*qd.template"):
+    with pytest.raises(Exception, match="Store the dataclass on the data-oriented object instead"):
         run(outer)
 
 
@@ -903,7 +821,7 @@ def test_data_oriented_field_only_no_speckey_change():
     state = State(f=f)
 
     @qd.kernel
-    def run(s: qd.template()):
+    def run(s: qd.Template):
         for i in range(N):
             s.f[i] = i + 1
 
@@ -963,7 +881,7 @@ def test_data_oriented_with_pydantic_like_child():
     state = State(x=x, opts=Options())
 
     @qd.kernel
-    def run(s: qd.template()):
+    def run(s: qd.Template):
         for i in range(N):
             s.x[i] = i + 1
 
@@ -991,7 +909,7 @@ def test_data_oriented_polymorphic_attr_across_instances():
     state_a = State(x=x_nd)
 
     @qd.kernel
-    def run(s: qd.template()):
+    def run(s: qd.Template):
         for i in range(N):
             s.x[i] = i + 1
 
@@ -1003,7 +921,7 @@ def test_data_oriented_polymorphic_attr_across_instances():
     state_b = State(x=f)
 
     @qd.kernel
-    def run_field(s: qd.template()):
+    def run_field(s: qd.Template):
         for i in range(N):
             s.x[i] = [i, i + 1]
 
@@ -1030,7 +948,7 @@ def test_data_oriented_polymorphic_attribute_set_across_instances():
                 self.extra = qd.ndarray(qd.i32, shape=(N,))
 
     @qd.kernel
-    def run(s: qd.template()):
+    def run(s: qd.Template):
         for i in range(N):
             s.x[i] = i + 1
 
@@ -1052,7 +970,7 @@ def test_data_oriented_polymorphic_attribute_set_across_instances():
                 self.extra = qd.ndarray(qd.i32, shape=(N,))
 
     @qd.kernel
-    def run_using_extra(s: qd.template()):
+    def run_using_extra(s: qd.Template):
         for i in range(N):
             s.x[i] = s.extra[i] * 10
 
@@ -1096,7 +1014,7 @@ def test_data_oriented_with_cyclic_attr_graph():
     p = Parent(x=x)
 
     @qd.kernel
-    def run(s: qd.template()):
+    def run(s: qd.Template):
         for i in range(N):
             s.x[i] = i + 10
 
@@ -1123,7 +1041,7 @@ def test_data_oriented_kernel_unused_opaque_member_does_not_affect_cache(tmp_pat
     attribute (no qualname-fallback, no spurious miss)."""
     import uuid
 
-    from quadrants._test_tools import qd_init_same_arch
+    from tests.helpers.runtime import qd_init_same_arch
 
     launch_kernel_orig = qd.lang.kernel_impl.Kernel.launch_kernel
     captured = []
@@ -1142,7 +1060,7 @@ def test_data_oriented_kernel_unused_opaque_member_does_not_affect_cache(tmp_pat
             self.uuid = uuid.uuid4()  # opaque member, kernel does not read it
 
     @qd.kernel(fastcache=True)
-    def run(s: qd.template()):
+    def run(s: qd.Template):
         for i in range(4):
             s.x[i] = s.x[i] + 1
 
@@ -1168,8 +1086,9 @@ def test_data_oriented_kernel_unused_opaque_member_does_not_affect_cache(tmp_pat
 def test_data_oriented_kernel_read_opaque_member_fails_fastcache(tmp_path, capfd) -> None:
     """Rule 2: when the kernel actually reads an unrecognised-type member, fastcache fails loudly with [UNKNOWN_TYPE]
     + [INVALID_FUNC] - no silent drop, no qualname fallback. The kernel still runs via normal compilation."""
-    from quadrants._test_tools import qd_init_same_arch
     from quadrants.lang._fast_caching.args_hasher import reset_unknown_type_warn_state
+
+    from tests.helpers.runtime import qd_init_same_arch
 
     qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
     reset_unknown_type_warn_state()
@@ -1188,7 +1107,7 @@ def test_data_oriented_kernel_read_opaque_member_fails_fastcache(tmp_path, capfd
     state = State(x=x, cfg=CustomConfig(scale=3))
 
     @qd.kernel(fastcache=True)
-    def run(s: qd.template()):
+    def run(s: qd.Template):
         scale = s.cfg.scale  # makes ``__qd_s__qd_cfg`` and ``__qd_s__qd_cfg__qd_scale`` live
         for i in range(4):
             s.x[i] = i * scale
@@ -1209,7 +1128,7 @@ def test_data_oriented_kernel_read_primitive_distinguishes_cache_key(tmp_path, m
     """Rule 3 (data_oriented works) + pruning correctness: when the kernel reads a primitive member, its value is
     baked into the kernel and must drive a distinct cache entry per value. Two State instances differing only in
     ``n`` (read by the kernel) cold-compile separately and both load from disk on the second process."""
-    from quadrants._test_tools import qd_init_same_arch
+    from tests.helpers.runtime import qd_init_same_arch
 
     launch_kernel_orig = qd.lang.kernel_impl.Kernel.launch_kernel
     captured = []
@@ -1228,7 +1147,7 @@ def test_data_oriented_kernel_read_primitive_distinguishes_cache_key(tmp_path, m
             self.n = n  # primitive, baked into kernel via ``for i in range(s.n)``
 
     @qd.kernel(fastcache=True)
-    def run(s: qd.template()):
+    def run(s: qd.Template):
         for i in range(s.n):
             s.x[i] = i + s.n
 
@@ -1253,7 +1172,7 @@ def test_data_oriented_kernel_read_primitive_distinguishes_cache_key(tmp_path, m
 def test_data_oriented_kernel_unread_primitive_does_not_affect_cache(tmp_path, monkeypatch) -> None:
     """Rule 1: kernel-unused primitive members do not affect the cache key. Mirror of the opaque case for
     primitives. Two State instances differing only in ``unused_n`` must share the cache."""
-    from quadrants._test_tools import qd_init_same_arch
+    from tests.helpers.runtime import qd_init_same_arch
 
     launch_kernel_orig = qd.lang.kernel_impl.Kernel.launch_kernel
     captured = []
@@ -1272,7 +1191,7 @@ def test_data_oriented_kernel_unread_primitive_does_not_affect_cache(tmp_path, m
             self.unused_n = unused_n  # kernel never reads this
 
     @qd.kernel(fastcache=True)
-    def run(s: qd.template()):
+    def run(s: qd.Template):
         for i in range(4):
             s.x[i] = s.x[i] + 1
 
@@ -1297,7 +1216,7 @@ def test_data_oriented_qd_func_chain_propagation_distinguishes_cache_key(tmp_pat
     ``f(self.dofs)`` and ``f`` reads ``s.x``, the kernel's pruning set must include ``__qd_self__qd_dofs__qd_x`` so
     that changes to the inner ndarray's dtype invalidate the cache. Two States differing in ``dofs.x``'s dtype must
     cold-compile separately."""
-    from quadrants._test_tools import qd_init_same_arch
+    from tests.helpers.runtime import qd_init_same_arch
 
     launch_kernel_orig = qd.lang.kernel_impl.Kernel.launch_kernel
     captured = []
@@ -1320,11 +1239,11 @@ def test_data_oriented_qd_func_chain_propagation_distinguishes_cache_key(tmp_pat
             self.dofs = dofs
 
     @qd.func
-    def write_dofs(d: qd.template(), v: qd.i32):
+    def write_dofs(d: qd.Template, v: qd.i32):
         d.x[0] = v
 
     @qd.kernel(fastcache=True)
-    def run(s: qd.template()):
+    def run(s: qd.Template):
         write_dofs(s.dofs, 7)
 
     qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
@@ -1359,7 +1278,7 @@ def test_data_oriented_nested_primitive_via_qd_func_distinguishes_cache_key(tmp_
     The fix in ``_pruning.py`` gates propagation on the *root Name* of the chain (``self``, not the flat result), so
     both ``f(self)`` and ``f(self.cfg)`` propagate, while already-flattened dataclass refs
     (``Name('__qd_state__qd_x')``) are still skipped."""
-    from quadrants._test_tools import qd_init_same_arch
+    from tests.helpers.runtime import qd_init_same_arch
 
     launch_kernel_orig = qd.lang.kernel_impl.Kernel.launch_kernel
     captured = []
@@ -1383,12 +1302,12 @@ def test_data_oriented_nested_primitive_via_qd_func_distinguishes_cache_key(tmp_
             self.cfg = cfg
 
     @qd.func
-    def write_x(x: qd.template(), c: qd.template()):
+    def write_x(x: qd.Template, c: qd.Template):
         for i in range(c.n):
             x[i] = i + c.n
 
     @qd.kernel(fastcache=True)
-    def run(s: qd.template()):
+    def run(s: qd.Template):
         write_x(s.x, s.cfg)
 
     qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)

@@ -22,7 +22,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang.util import to_numpy_type
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 # ---------------------------------------------------------------------------
 # Scratch-width helper. ``_FOURBYTE_DTYPES`` selects the u32-vs-u64 scratch element width used by the composable
@@ -292,19 +292,19 @@ def test_reduce_composition(op, dtype, N):
     if op == "add":
 
         @qd.kernel
-        def run(dtype: qd.template(), log256_max_n: qd.template()):
+        def run(dtype: qd.Template, log256_max_n: qd.Template):
             qd.algorithms.reduce_add(arr, out, scratch, count[0], dtype, log256_max_n)
 
     elif op == "min":
 
         @qd.kernel
-        def run(dtype: qd.template(), log256_max_n: qd.template()):
+        def run(dtype: qd.Template, log256_max_n: qd.Template):
             qd.algorithms.reduce_min(arr, out, scratch, count[0], dtype, log256_max_n)
 
     else:
 
         @qd.kernel
-        def run(dtype: qd.template(), log256_max_n: qd.template()):
+        def run(dtype: qd.Template, log256_max_n: qd.Template):
             qd.algorithms.reduce_max(arr, out, scratch, count[0], dtype, log256_max_n)
 
     run(dtype, log256_max_n)
@@ -427,19 +427,19 @@ def test_exclusive_scan_composition(op, dtype, N):
     if op == "add":
 
         @qd.kernel
-        def run(dtype: qd.template(), log256_max_n: qd.template()):
+        def run(dtype: qd.Template, log256_max_n: qd.Template):
             qd.algorithms.exclusive_scan_add(arr, out, scratch, count[0], dtype, log256_max_n)
 
     elif op == "min":
 
         @qd.kernel
-        def run(dtype: qd.template(), log256_max_n: qd.template()):
+        def run(dtype: qd.Template, log256_max_n: qd.Template):
             qd.algorithms.exclusive_scan_min(arr, out, scratch, count[0], dtype, log256_max_n)
 
     else:
 
         @qd.kernel
-        def run(dtype: qd.template(), log256_max_n: qd.template()):
+        def run(dtype: qd.Template, log256_max_n: qd.Template):
             qd.algorithms.exclusive_scan_max(arr, out, scratch, count[0], dtype, log256_max_n)
 
     run(dtype, log256_max_n)
@@ -486,7 +486,7 @@ def test_select_composition(dtype, N):
     count.from_numpy(np.asarray([N], dtype=np.int32))
 
     @qd.kernel
-    def run(log256_max_n: qd.template()):
+    def run(log256_max_n: qd.Template):
         qd.algorithms.select(arr, flags, out, num_out, scratch, count[0], log256_max_n)
 
     run(log256_max_n)
@@ -662,7 +662,7 @@ def test_reduce_by_key_add_composition(key_dtype, val_dtype, N):
     count.from_numpy(np.asarray([N], dtype=np.int32))
 
     @qd.kernel
-    def run(value_dtype: qd.template(), log256_max_n: qd.template()):
+    def run(value_dtype: qd.Template, log256_max_n: qd.Template):
         qd.algorithms.reduce_by_key_add(
             keys_in, values_in, keys_out, values_out, num_runs, scratch, count[0], value_dtype, log256_max_n
         )

@@ -20,7 +20,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang.exception import QuadrantsSyntaxError, QuadrantsTypeError
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test(arch=qd.gpu)
@@ -82,11 +82,11 @@ def test_volatile_load_survives_loop_invariant_caching():
     @qd.kernel
     def k():
         for i in range(16):
-            # `counter[None]` is loop-invariant from the optimiser's POV; a non-volatile load could legally be
+            # `counter[()]` is loop-invariant from the optimiser's POV; a non-volatile load could legally be
             # hoisted out of the per-iteration body.  Volatile blocks that.
-            out[i] = qd.volatile_load(counter[None]) + i
+            out[i] = qd.volatile_load(counter[()]) + i
 
-    counter[None] = 100
+    counter[()] = 100
     k()
     for i in range(16):
         assert out[i] == 100 + i

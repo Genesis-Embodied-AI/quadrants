@@ -1,6 +1,6 @@
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test()
@@ -19,17 +19,17 @@ def test_running_loss():
 
     @qd.kernel
     def compute_loss():
-        total_loss[None] = 0.0
+        total_loss[()] = 0.0
         for i in range(steps):
-            qd.atomic_add(total_loss[None], running_loss[i] * 2)
-        qd.atomic_add(total_loss[None], additional_loss[None] * 3)
+            qd.atomic_add(total_loss[()], running_loss[i] * 2)
+        qd.atomic_add(total_loss[()], additional_loss[()] * 3)
 
     compute_loss()
 
-    assert total_loss.grad[None] == 1
+    assert total_loss.grad[()] == 1
     for i in range(steps):
         assert running_loss[i] == 2
-    assert additional_loss.grad[None] == 3
+    assert additional_loss.grad[()] == 3
 
 
 @test_utils.test()
@@ -48,9 +48,9 @@ def test_reduce_separate():
     @qd.kernel
     def reduce2():
         for i in range(4):
-            c[None] += b[i]
+            c[()] += b[i]
 
-    c.grad[None] = 1
+    c.grad[()] = 1
     reduce2.grad()
     reduce1.grad()
 
@@ -74,9 +74,9 @@ def test_reduce_merged():
             b[i // 4] += a[i]
 
         for i in range(4):
-            c[None] += b[i]
+            c[()] += b[i]
 
-    c.grad[None] = 1
+    c.grad[()] = 1
     reduce.grad()
 
     for i in range(4):

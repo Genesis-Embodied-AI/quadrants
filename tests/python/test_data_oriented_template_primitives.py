@@ -1,13 +1,12 @@
 """Tests for ``@qd.data_oriented(template_primitives=False)``.
 
 By default the primitive (``int`` / ``float`` / ``bool``) members of a ``@qd.data_oriented`` object reached through a
-``qd.template()`` kernel argument are baked into the compiled kernel as compile-time constants: mutating them does not
+``qd.Template`` kernel argument are baked into the compiled kernel as compile-time constants: mutating them does not
 take effect without re-specialisation. Decorating the class ``@qd.data_oriented(template_primitives=False)`` instead
 lifts every primitive the kernel actually accesses into a runtime scalar kernel argument, read fresh on every launch.
 
 This file pins the runtime-lifting behaviour, the pruning (only accessed primitives become kernel args), the
-``qd.static`` hard error, and the opt-in boundary (default stays baked). See
-``perso_hugh/doc/data_oriented_template_primitives.md`` for the design.
+``qd.static`` hard error, and the opt-in boundary (default stays baked).
 """
 
 import dataclasses
@@ -17,7 +16,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 # ---------------------------------------------------------------------------
 # 1. Int + float members are runtime args: mutate between launches, values take effect without recompiling.
@@ -36,7 +35,7 @@ def test_runtime_primitive_int_float_mutation():
     sim = Sim()
 
     @qd.kernel
-    def step(s: qd.template()):
+    def step(s: qd.Template):
         for i in range(s.n):
             s.x[i] += s.scale
 
@@ -77,7 +76,7 @@ def test_runtime_primitive_no_respecialization(monkeypatch):
     sim = Sim()
 
     @qd.kernel
-    def step(s: qd.template()):
+    def step(s: qd.Template):
         s.out[0] = s.k * 100
 
     for k in (1, 2, 7, 42):
@@ -103,7 +102,7 @@ def test_runtime_primitive_bool():
     sim = Sim()
 
     @qd.kernel
-    def step(s: qd.template()):
+    def step(s: qd.Template):
         if s.enabled:
             s.out[0] = 1
         else:
@@ -132,7 +131,7 @@ def test_runtime_primitive_signed_int():
     sim = Sim()
 
     @qd.kernel
-    def step(s: qd.template()):
+    def step(s: qd.Template):
         s.out[0] = s.delta
 
     step(sim)
@@ -163,7 +162,7 @@ def test_runtime_primitive_nested_dataclass():
     sim = Sim()
 
     @qd.kernel
-    def step(s: qd.template()):
+    def step(s: qd.Template):
         for i in range(s.params.nt):
             s.x[i] += s.params.gain
 
@@ -196,7 +195,7 @@ def test_runtime_primitive_nested_data_oriented():
     sim = Sim()
 
     @qd.kernel
-    def step(s: qd.template()):
+    def step(s: qd.Template):
         s.out[0] = s.inner.count
 
     step(sim)
@@ -250,7 +249,7 @@ def test_runtime_primitive_pruning_unused_not_declared():
     sim = Sim()
 
     @qd.kernel
-    def step(s: qd.template()):
+    def step(s: qd.Template):
         s.out[0] = s.used
 
     # Declaring all 600+ reachable primitives would exceed MAX_ARG_NUM; pruning keeps only ``used``.
@@ -277,7 +276,7 @@ def test_runtime_primitive_in_static_raises():
     sim = Sim()
 
     @qd.kernel
-    def step(s: qd.template()):
+    def step(s: qd.Template):
         for i in range(qd.static(s.n)):
             s.out[i] = i
 
@@ -302,7 +301,7 @@ def test_default_template_primitives_still_bakes():
     sim = Sim()
 
     @qd.kernel
-    def step(s: qd.template()):
+    def step(s: qd.Template):
         for i in range(s.n):
             s.x[i] += 1.0
 
@@ -330,7 +329,7 @@ def test_runtime_primitive_fastcache_pure():
     sim = Sim()
 
     @qd.kernel(fastcache=True)
-    def step(s: qd.template()):
+    def step(s: qd.Template):
         s.out[0] = s.k * 10
 
     step(sim)
@@ -357,7 +356,7 @@ def test_runtime_primitive_distinct_instances():
     b = Sim(8)
 
     @qd.kernel
-    def step(s: qd.template()):
+    def step(s: qd.Template):
         s.out[0] = s.k
 
     step(a)
@@ -387,7 +386,7 @@ def test_runtime_primitive_int_to_float_mutation_raises():
     sim = Sim()
 
     @qd.kernel
-    def step(s: qd.template()):
+    def step(s: qd.Template):
         s.out[0] = s.k
 
     step(sim)
@@ -418,7 +417,7 @@ def test_runtime_primitive_lossless_coercions_still_bind():
     sim = Sim()
 
     @qd.kernel
-    def step(s: qd.template()):
+    def step(s: qd.Template):
         s.out[0] = s.scale * s.flag
 
     step(sim)

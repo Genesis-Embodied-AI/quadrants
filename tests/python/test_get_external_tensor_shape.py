@@ -4,7 +4,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang.util import has_pytorch
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 if has_pytorch():
     import torch
@@ -14,7 +14,7 @@ if has_pytorch():
 @test_utils.test()
 def test_get_external_tensor_shape_access_numpy(size):
     @qd.kernel
-    def func(x: qd.types.ndarray(), index: qd.template()) -> qd.i32:
+    def func(x: qd.types.ndarray(), index: qd.Template) -> qd.i32:
         return x.shape[index]
 
     x_hat = np.ones(size, dtype=np.int32)
@@ -47,7 +47,7 @@ def test_get_external_tensor_shape_sum_numpy(size):
 @test_utils.test()
 def test_get_external_tensor_shape_access_torch(size):
     @qd.kernel
-    def func(x: qd.types.ndarray(), index: qd.template()) -> qd.i32:
+    def func(x: qd.types.ndarray(), index: qd.Template) -> qd.i32:
         return x.shape[index]
 
     x_hat = torch.ones(size, dtype=torch.int32, device="cpu")
@@ -62,7 +62,7 @@ def test_get_external_tensor_shape_access_torch(size):
 @test_utils.test()
 def test_get_external_tensor_shape_access_ndarray(size):
     @qd.kernel
-    def func(x: qd.types.ndarray(), index: qd.template()) -> qd.i32:
+    def func(x: qd.types.ndarray(), index: qd.Template) -> qd.i32:
         return x.shape[index]
 
     x_hat = qd.ndarray(qd.i32, shape=size)

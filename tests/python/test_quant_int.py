@@ -2,7 +2,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test(require=qd.extension.quant_basic)
@@ -16,10 +16,10 @@ def test_quant_int_implicit_cast():
 
     @qd.kernel
     def foo():
-        x[None] = 10.3
+        x[()] = 10.3
 
     foo()
-    assert x[None] == 10
+    assert x[()] == 10
 
 
 @test_utils.test(
@@ -35,7 +35,7 @@ def test_quant_store_fusion() -> None:
     z = qd.field(dtype=qd.i32, shape=(10, 2))
 
     @qd.real_func
-    def probe(x: qd.template(), z: qd.template(), i: int, j: int) -> None:
+    def probe(x: qd.Template, z: qd.Template, i: int, j: int) -> None:
         z[i, j] = x[i]
 
     # should fuse store
@@ -77,7 +77,7 @@ def test_quant_store_no_fusion() -> None:
     z = qd.field(dtype=qd.i32, shape=(10, 2))
 
     @qd.real_func
-    def probe(x: qd.template(), z: qd.template(), i: int, j: int) -> None:
+    def probe(x: qd.Template, z: qd.Template, i: int, j: int) -> None:
         z[i, j] = x[i]
 
     @qd.kernel

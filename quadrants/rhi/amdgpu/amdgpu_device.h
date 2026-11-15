@@ -105,6 +105,17 @@ class AmdgpuDevice : public LlvmDevice {
     allocations_.clear();
   }
 
+ protected:
+  // skip_initialize_memory_pool: true skips the shared pool for mock devices that do not use it; false initializes or
+  // retrieves the pool for this backend. This step does not allocate GPU memory.
+  explicit AmdgpuDevice(bool skip_initialize_memory_pool);
+
+  // Driver operations used by runtime allocation; tests override these without initializing a GPU context.
+  virtual void *get_stream();
+  virtual void allocation_memset(void *dst, uint8 value, std::size_t size, void *stream);
+  virtual void allocation_synchronize(void *stream);
+  virtual void allocation_copy_to_host(void *dst, void *src, std::size_t size);
+
  private:
   std::vector<AllocInfo> allocations_;
   void validate_device_alloc(const DeviceAllocation alloc) {

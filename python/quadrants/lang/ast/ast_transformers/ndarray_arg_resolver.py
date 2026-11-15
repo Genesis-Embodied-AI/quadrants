@@ -11,8 +11,7 @@ so resolving the arg-id here -- once, at kernel build time -- means the runtime 
 with no per-launch name matching (which was the original ``_checkpoint_helpers`` approach and is incompatible with
 member-ndarray flattening, since the flattened name is synthesised).
 
-See ``docs/source/user_guide/graph.md`` for the user-facing surface and ``perso_hugh/doc/qipc/reentrant.md`` for the
-design.
+See ``docs/source/user_guide/graph.md`` for the user-facing surface.
 """
 
 from __future__ import annotations

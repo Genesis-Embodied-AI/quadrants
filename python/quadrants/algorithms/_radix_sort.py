@@ -22,7 +22,7 @@ Three properties make this form graph-friendly:
    taken as a host int; ``num_blocks`` / ``hist_len`` are derived on-device. Because those sizes reach the per-phase
    loop bounds as ``Expr``s (dynamic, not compile-time constant), the CUDA codegen leaves each offload's grid at the
    *saturating* value (``num_SMs * max_blocks_per_SM * 2``) and the runtime grid-stride loop walks the actual range -
-   a fixed ~core-count grid regardless of ``n``. See ``perso_hugh/doc/qipc/qipc_sort_as_kernel.md`` §D4.
+   a fixed ~core-count grid regardless of ``n``.
 3. **Single call.** One :func:`sort` invocation replaces the host ping-pong loop.
 
 Algorithm (classical histogram-scan-scatter LSB radix sort, Knuth Vol. 3 §5.2.5, Blelloch 1990). Each digit pass

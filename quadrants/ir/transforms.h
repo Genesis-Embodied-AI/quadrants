@@ -74,7 +74,7 @@ void handle_external_ptr_boundary(IRNode *root, const CompileConfig &config);
 void make_thread_local(IRNode *root, const CompileConfig &config);
 std::unique_ptr<ScratchPads> initialize_scratch_pad(OffloadedStmt *root);
 void make_block_local(IRNode *root, const CompileConfig &config, const MakeBlockLocalPass::Args &args);
-void make_cpu_multithreaded_range_for(IRNode *root, const CompileConfig &config);
+void make_cpu_per_worker_range_for(IRNode *root, const CompileConfig &config);
 void make_mesh_thread_local(IRNode *root, const CompileConfig &config, const MakeBlockLocalPass::Args &args);
 void make_mesh_block_local(IRNode *root, const CompileConfig &config, const MakeMeshBlockLocal::Args &args);
 void demote_mesh_statements(IRNode *root, const CompileConfig &config, const DemoteMeshStatements::Args &args);

@@ -1,6 +1,7 @@
 #include "compile_config.h"
 
 #include <thread>
+#include "quadrants/common/logging.h"
 #include "quadrants/rhi/arch.h"
 #include "quadrants/util/offline_cache.h"
 
@@ -27,7 +28,7 @@ CompileConfig::CompileConfig() {
   default_ip = PrimitiveType::i32;
   default_up = PrimitiveType::u32;
   kernel_profiler = false;
-  default_cpu_block_dim = 32;
+  cpu_fixed_block_dim = 32;
   default_gpu_block_dim = 128;
   fast_math = true;
   flatten_if = false;
@@ -37,11 +38,12 @@ CompileConfig::CompileConfig() {
   real_matrix_scalarize = true;
   force_scalarize_matrix = false;
   half2_vectorization = false;
-  make_cpu_multithreading_loop = true;
+  cpu_work_scheduling = CPUWorkScheduling::PER_WORKER;
 
   saturating_grid_dim = 0;
   max_block_dim = 0;
   cpu_max_num_threads = std::thread::hardware_concurrency();
+  cpu_per_worker_min_block_dim = 512;
   random_seed = 0;
 
   // LLVM backend options:
@@ -57,6 +59,9 @@ CompileConfig::CompileConfig() {
 }
 
 void CompileConfig::fit() {
+  QD_ERROR_IF(cpu_fixed_block_dim < 1, "cpu_fixed_block_dim must be >= 1, but got {}.", cpu_fixed_block_dim);
+  QD_ERROR_IF(cpu_per_worker_min_block_dim < 1, "cpu_per_worker_min_block_dim must be >= 1, but got {}.",
+              cpu_per_worker_min_block_dim);
   if (debug) {
     // TODO: allow users to run in debug mode without out-of-bound checks
     check_out_of_bound = true;

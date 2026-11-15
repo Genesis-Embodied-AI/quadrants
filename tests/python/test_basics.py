@@ -1,6 +1,6 @@
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test()
@@ -110,14 +110,14 @@ def test_while_global_load():
     def run():
         while x[3]:
             x[3] -= 1
-            y[None] += 1
+            y[()] += 1
 
     for i in range(16):
         x[i] = i
 
     run()
 
-    assert y[None] == 3
+    assert y[()] == 3
 
 
 @test_utils.test()
@@ -133,8 +133,8 @@ def test_nested_for_with_atomic():
     @qd.kernel
     def nested_loops():
         for i in range(2):
-            x[None] += 1
+            x[()] += 1
             for j in range(1):
-                x[None] += 2
+                x[()] += 2
 
     nested_loops()

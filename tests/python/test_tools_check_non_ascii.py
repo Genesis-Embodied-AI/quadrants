@@ -121,8 +121,7 @@ def test_no_newline_marker_is_ignored():
 def test_added_line_starting_with_pluses_is_scanned_not_treated_as_header():
     # An added source line whose content starts with "++ " (e.g. C++ prefix decrement of a deref)
     # is emitted by git as "+++ ...". It must be scanned as an added line, not parsed as a "+++"
-    # file header (which would skip it and let its non-ASCII slip through). Regression for
-    # PR #778 review comment r3571557923.
+    # file header (which would skip it and let its non-ASCII slip through).
     diff = _diff(
         "diff --git a/foo.cpp b/foo.cpp",
         "--- a/foo.cpp",

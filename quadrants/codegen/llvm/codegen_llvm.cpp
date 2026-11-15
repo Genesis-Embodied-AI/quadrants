@@ -1960,7 +1960,7 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
     desc.iter_count = static_cast<uint32_t>(iter_count);
     return desc;
   };
-  // CPU LLVM goes through `make_cpu_multithreaded_range_for` in `offload_to_executable`, which rewrites the user
+  // CPU LLVM goes through `make_cpu_per_worker_range_for` in `offload_to_executable`, which rewrites the user
   // loop's `[begin_value, end_value)` into per-thread chunks before codegen runs. The atomic row counter the
   // codegen emits is shared across every chunk of the same task, so the total claim count is the original
   // pre-chunk loop trip count, not the per-chunk subrange. Signal that to the analyzer so it skips filling

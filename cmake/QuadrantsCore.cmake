@@ -124,8 +124,8 @@ if(QD_WITH_LLVM)
     # http://llvm.org/docs/CMake.html#embedding-llvm-in-your-project
     find_package(LLVM REQUIRED CONFIG)
     message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
-    if(${LLVM_PACKAGE_VERSION} VERSION_LESS "10.0")
-        message(FATAL_ERROR "LLVM version < 10 is not supported")
+    if("${LLVM_PACKAGE_VERSION}" VERSION_LESS "22.1.0")
+        message(FATAL_ERROR "LLVM 22.1.0 or newer is required; found ${LLVM_PACKAGE_VERSION}")
     endif()
     message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 
@@ -395,11 +395,41 @@ if (NOT APPLE)
             DESTINATION ${INSTALL_LIB_DIR}/runtime)
 endif()
 
+# Keep the fixed device-library selection and its packaging in one place.
+set(AMDGPU_LIBDEVICE_SUFFIX "_rocm70")
+# Use code-object version 6 for both device libraries and LLVM code generation.
+set(AMDGPU_ABI_VERSION 600)
+set(AMDGPU_LIBDEVICE_FILES
+    # Supply GPU math functions.
+    ocml.bc
+    # Select 64-thread wavefronts to match our GPU compiler settings. CDNA gfx9xx defaults to wave64;
+    # RDNA gfx10/11/12 defaults to wave32 but also supports wave64. We force wave64 through target features in
+    # llvm_context_pass.h::AMDGPUConvertAllocaInstAddressSpacePass and jit_amdgpu.cpp's TargetMachine settings.
+    oclc_wavefrontsize64_on.bc
+    # Supply GPU kernel support functions.
+    ockl.bc
+    # Select the ABI used by our GPU code objects.
+    oclc_abi_version_${AMDGPU_ABI_VERSION}.bc
+    # Disable correctly rounded 32-bit square roots.
+    oclc_correctly_rounded_sqrt_off.bc
+    # Disable the finite-only assumption.
+    oclc_finite_only_off.bc
+    # Disable unsafe-math.
+    oclc_unsafe_math_off.bc)
+string(JOIN "\",\n    \"" AMDGPU_LIBDEVICE_INITIALIZER ${AMDGPU_LIBDEVICE_FILES})
+configure_file(quadrants/runtime/llvm/amdgpu_libdevice_files.h.in
+               generated/quadrants/runtime/llvm/amdgpu_libdevice_files.h @ONLY)
+
 if (QD_WITH_AMDGPU)
-    # Install ROCm 7.0 libdevice files
-    file(GLOB AMDGPU_BC_FILES_ROCM70 ${CMAKE_SOURCE_DIR}/external/amdgpu_libdevice_rocm70/*.bc)
-    install(FILES ${AMDGPU_BC_FILES_ROCM70}
-            DESTINATION ${INSTALL_LIB_DIR}/runtime_rocm70)
+    set(AMDGPU_LIBDEVICE_DIR ${CMAKE_SOURCE_DIR}/external/amdgpu_libdevice${AMDGPU_LIBDEVICE_SUFFIX})
+    foreach(library IN LISTS AMDGPU_LIBDEVICE_FILES)
+        install(FILES ${AMDGPU_LIBDEVICE_DIR}/${library}
+                DESTINATION ${INSTALL_LIB_DIR}/runtime${AMDGPU_LIBDEVICE_SUFFIX})
+    endforeach()
+    # A wheel must support GPUs other than the machine used to build it.
+    file(GLOB AMDGPU_ISA_FILES ${AMDGPU_LIBDEVICE_DIR}/oclc_isa_version_*.bc)
+    install(FILES ${AMDGPU_ISA_FILES}
+            DESTINATION ${INSTALL_LIB_DIR}/runtime${AMDGPU_LIBDEVICE_SUFFIX})
 endif()
 
 # Ship the assets submodule inside the package (replaces setup.py's copy_assets()).

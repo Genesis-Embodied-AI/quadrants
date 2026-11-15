@@ -1,6 +1,6 @@
 from functools import partial
 from typing import Any, TypeAlias
-from weakref import ReferenceType
+from weakref import ReferenceType, WeakKeyDictionary
 
 from quadrants.lang import impl
 from quadrants.lang.impl import Program
@@ -8,7 +8,7 @@ from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import is_data_oriented
 from quadrants.types import ndarray_type
 
-from .._test_tools import warnings_helper
+from .. import _warnings
 from ._kernel_types import ArgsHash
 from ._optional_annotation import OPTIONAL_ABSENT
 from ._template_mapper_hotpath import (
@@ -21,7 +21,8 @@ from ._template_mapper_hotpath import (
 # Whether an arg of this class contributes to the args_hash ndarray-id walk in ``TemplateMapper.lookup``. Only the
 # decision is per class; the paths themselves must stay per instance, since a @qd.data_oriented class can have a
 # different attribute structure per instance (Genesis ``DataManager``).
-_arg_disposition: dict[type, object] = {}
+# Weak keys avoid retaining user classes and their kernels, which can keep the runtime alive during shutdown.
+_class_needs_ndarray_member_walk: WeakKeyDictionary[type, object] = WeakKeyDictionary()
 _SKIP = object()
 _PER_INSTANCE = object()
 
@@ -120,10 +121,10 @@ class TemplateMapper:
         for i in self.template_slot_locations:
             arg = args[i]
             cls = type(arg)
-            disposition = _arg_disposition.get(cls)
+            disposition = _class_needs_ndarray_member_walk.get(cls)
             if disposition is None:
                 disposition = _classify_disposition(arg)
-                _arg_disposition[cls] = disposition
+                _class_needs_ndarray_member_walk[cls] = disposition
             if disposition is _SKIP:
                 continue
             try:
@@ -184,6 +185,6 @@ class TemplateMapper:
                 self._mapping_cache_tracker[args_hash] = mapping_cache_tracker_
                 self._mapping_cache[args_hash] = (count, key)
             except TypeError as e:
-                warnings_helper.warn_once(f"{e}. Template mapper caching disabled.")
+                _warnings.warn_once(f"{e}. Template mapper caching disabled.")
 
         return (count, key)

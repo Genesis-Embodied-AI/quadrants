@@ -2,7 +2,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
@@ -11,16 +11,16 @@ def test_function_without_return():
 
     @qd.real_func
     def foo(val: qd.i32):
-        x[None] += val
+        x[()] += val
 
     @qd.kernel
     def run():
         foo(40)
         foo(2)
 
-    x[None] = 0
+    x[()] = 0
     run()
-    assert x[None] == 42
+    assert x[()] == 42
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], debug=True)
@@ -29,7 +29,7 @@ def test_function_with_return():
 
     @qd.real_func
     def foo(val: qd.i32) -> qd.i32:
-        x[None] += val
+        x[()] += val
         return val
 
     @qd.kernel
@@ -38,9 +38,9 @@ def test_function_with_return():
         foo(2)
         assert a == 40
 
-    x[None] = 0
+    x[()] = 0
     run()
-    assert x[None] == 42
+    assert x[()] == 42
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
@@ -49,9 +49,9 @@ def test_call_expressions():
 
     @qd.real_func
     def foo(val: qd.i32) -> qd.i32:
-        if x[None] > 10:
-            x[None] += 1
-        x[None] += val
+        if x[()] > 10:
+            x[()] += 1
+        x[()] += val
         return 0
 
     @qd.kernel
@@ -59,44 +59,47 @@ def test_call_expressions():
         assert foo(15) == 0
         assert foo(10) == 0
 
-    x[None] = 0
+    x[()] = 0
     run()
-    assert x[None] == 26
+    assert x[()] == 26
 
 
+@pytest.mark.parametrize("decorate", [qd.func, qd.pyfunc], ids=["func", "pyfunc"])
 @test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], debug=True)
-def test_default_templates():
-    @qd.func
-    def func1(x: qd.template()):
+def test_default_templates(decorate):
+    """Check scalar and field reference mutation through funcs and kernel-side pyfuncs."""
+
+    @decorate
+    def func1(x: qd.Template):
         x = 1
 
-    @qd.func
-    def func2(x: qd.template()):
+    @decorate
+    def func2(x: qd.Template):
         x += 1
 
-    @qd.func
+    @decorate
     def func3(x):
         x = 1
 
-    @qd.func
+    @decorate
     def func4(x):
         x += 1
 
-    @qd.func
-    def func1_field(x: qd.template()):
-        x[None] = 1
+    @decorate
+    def func1_field(x: qd.Template):
+        x[()] = 1
 
-    @qd.func
-    def func2_field(x: qd.template()):
-        x[None] += 1
+    @decorate
+    def func2_field(x: qd.Template):
+        x[()] += 1
 
-    @qd.func
+    @decorate
     def func3_field(x):
-        x[None] = 1
+        x[()] = 1
 
-    @qd.func
+    @decorate
     def func4_field(x):
-        x[None] += 1
+        x[()] += 1
 
     v = qd.field(dtype=qd.i32, shape=())
 
@@ -115,18 +118,18 @@ def test_default_templates():
         func4(d)
         assert d == 0
 
-        v[None] = 0
+        v[()] = 0
         func1_field(v)
-        assert v[None] == 1
-        v[None] = 0
+        assert v[()] == 1
+        v[()] = 0
         func2_field(v)
-        assert v[None] == 1
-        v[None] = 0
+        assert v[()] == 1
+        v[()] = 0
         func3_field(v)
-        assert v[None] == 1
-        v[None] = 0
+        assert v[()] == 1
+        v[()] = 0
         func4_field(v)
-        assert v[None] == 1
+        assert v[()] == 1
 
     run_func()
 
@@ -138,35 +141,35 @@ def test_experimental_templates():
     answer = qd.field(qd.i32, shape=8)
 
     @qd.kernel
-    def kernel_inc(x: qd.template()):
-        x[None] += 1
+    def kernel_inc(x: qd.Template):
+        x[()] += 1
 
     def run_kernel():
-        x[None] = 10
-        y[None] = 20
+        x[()] = 10
+        y[()] = 20
         kernel_inc(x)
-        assert x[None] == 11
-        assert y[None] == 20
+        assert x[()] == 11
+        assert y[()] == 20
         kernel_inc(y)
-        assert x[None] == 11
-        assert y[None] == 21
+        assert x[()] == 11
+        assert y[()] == 21
 
     @qd.real_func
-    def inc(x: qd.template()):
-        x[None] += 1
+    def inc(x: qd.Template):
+        x[()] += 1
 
     @qd.kernel
     def run_func(a: qd.u1):
-        x[None] = 10
-        y[None] = 20
+        x[()] = 10
+        y[()] = 20
         if a:
             inc(x)
-        answer[0] = x[None]
-        answer[1] = y[None]
+        answer[0] = x[()]
+        answer[1] = y[()]
         if a:
             inc(y)
-        answer[2] = x[None]
-        answer[3] = y[None]
+        answer[2] = x[()]
+        answer[3] = y[()]
 
     def verify():
         assert answer[0] == 11
@@ -177,6 +180,25 @@ def test_experimental_templates():
     run_kernel()
     run_func(True)
     verify()
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
+def test_real_func_template_runtime_arguments():
+    """Check that real functions accept qd.Template arguments mixed with ordinary typed arguments."""
+
+    @qd.real_func
+    def apply(enabled: qd.Template, value: qd.i32, offset: qd.Template, scale: qd.i32) -> qd.i32:
+        result = value
+        if qd.static(enabled):
+            result = value * scale + offset
+        return result
+
+    @qd.kernel
+    def run(enabled: qd.Template, offset: qd.Template, value: qd.i32) -> qd.i32:
+        return apply(enabled, value, offset, 2)
+
+    for enabled, offset, value in [(True, 3, 10), (False, 3, 10), (True, 7, 20), (True, 3, 11)]:
+        assert run(enabled, offset, value) == (value * 2 + offset if enabled else value)
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
@@ -223,7 +245,7 @@ def test_different_argument_type():
 @test_utils.test(arch=[qd.cpu, qd.cuda], cuda_stack_limit=8192)
 def test_recursion():
     @qd.real_func
-    def sum(f: qd.template(), l: qd.i32, r: qd.i32) -> qd.i32:
+    def sum(f: qd.Template, l: qd.i32, r: qd.i32) -> qd.i32:
         if l == r:
             return f[l]
         else:
@@ -262,11 +284,11 @@ def test_multiple_return():
 
     @qd.real_func
     def foo(val: qd.i32) -> qd.i32:
-        if x[None] > 10:
-            if x[None] > 20:
+        if x[()] > 10:
+            if x[()] > 20:
                 return 1
-            x[None] += 1
-        x[None] += val
+            x[()] += 1
+        x[()] += val
         return 0
 
     @qd.kernel
@@ -275,9 +297,9 @@ def test_multiple_return():
         assert foo(10) == 0
         assert foo(100) == 1
 
-    x[None] = 0
+    x[()] = 0
     run()
-    assert x[None] == 26
+    assert x[()] == 26
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])

@@ -27,7 +27,6 @@ def _kernel_coverage_enabled() -> bool:
 
 
 from quadrants._lib.core.quadrants_python import (
-    Arch,
     ASTBuilder,
     CompiledKernelData,
     CompileResult,
@@ -86,7 +85,6 @@ from ._quadrants_callable import QuadrantsCallable
 # Define proxies for fast lookup
 _NONE, _VALIDATION = AutodiffMode.NONE, AutodiffMode.VALIDATION
 _FLOAT, _INT, _UINT, _QD_ARRAY, _QD_ARRAY_WITH_GRAD = KernelBatchedArgType
-_ARCH_PYTHON = Arch.python
 
 
 class LaunchContextBufferCache:
@@ -239,6 +237,7 @@ class ASTGenerator:
                 struct_locals = pruning.used_vars_by_func_id[ctx.func.func_id]
             # struct locals are the expanded py dataclass fields that we will write to local variables, and will then
             # be available to use in build_Call, later.
+            ctx.struct_locals = struct_locals
             tree = _kernel_impl_dataclass.unpack_ast_struct_expressions(self.tree, struct_locals=struct_locals)
             ctx.only_parse_function_def = self.only_parse_function_def
             # Rebuild the graph_do_while level table from scratch each compilation pass (build_While appends to it as it
@@ -989,13 +988,11 @@ class Kernel(FuncBase):
                 "qd_stream is not compatible with autograd Tape. Launch the kernel outside the Tape "
                 "context, or omit qd_stream."
             )
-        if impl.get_runtime()._arch == _ARCH_PYTHON:
-            return self.func(*py_args, **kwargs)
         config = impl.current_cfg()
 
         self.raise_on_templated_floats = config.raise_on_templated_floats
         py_args = self.fuse_args(is_func=False, is_pyfunc=False, py_args=py_args, kwargs=kwargs, global_context=None)
-        # Tensor-wrapper unwrap (stork-17). Canonicalize ``qd.Tensor`` slots, plus wrapper positions discovered on
+        # Tensor-wrapper unwrap. Canonicalize ``qd.Tensor`` slots, plus wrapper positions discovered on
         # the first launch, before the autograd tape and identity-keyed caches observe the arg tuple.
         #
         # PERF: On first call, record the candidate arg positions. On subsequent calls, skip entirely (empty
@@ -1024,6 +1021,30 @@ class Kernel(FuncBase):
                         py_args_l[i] = _arg._impl
                 if py_args_l is not None:
                     py_args = tuple(py_args_l)
+
+        # Reject calls using graph=True with unsupported autodiff modes before FwdMode / Tape record the call.
+        # When called inside a `with Tape(...)` block, this check runs inside that context, but before the tape records
+        # the kernel call. This check also runs for kernel calls outside a tape.
+        if self.use_graph and (
+            # Reject a kernel already in an autodiff mode. grad_replaced skips recording this call, but does not
+            # reset an autodiff mode already set on the kernel.
+            self.autodiff_mode != _NONE
+            or (
+                # A gradient-handling wrapper skips automatic recording of inner calls. Check the active autodiff
+                # contexts only when no such wrapper is handling this call.
+                not self.runtime.grad_replaced
+                and (
+                    # Reject an active FwdMode context or a tape with validation enabled. Check that target_tape
+                    # exists before accessing validation; an ordinary tape with validation=False remains allowed.
+                    self.runtime.fwd_mode_manager
+                    or (self.runtime.target_tape and self.runtime.target_tape.validation)
+                )
+            )
+        ):
+            raise RuntimeError(
+                "graph=True kernels do not support qd.ad.FwdMode or qd.ad.Tape(validation=True). "
+                "Only reverse-mode autodiff, via .grad() or qd.ad.Tape, is supported for graph=True kernels."
+            )
 
         # Transform the primal kernel to forward mode grad kernel
         # then recover to primal when exiting the forward mode manager

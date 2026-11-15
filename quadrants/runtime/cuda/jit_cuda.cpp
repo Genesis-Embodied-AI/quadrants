@@ -86,7 +86,7 @@ JITSessionCUDA::JITSessionCUDA(QuadrantsLLVMContext *tlctx,
   program_impl_->register_needs_finalizing(finalizer_.get());
 }
 
-JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M, int max_reg) {
+JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M, int max_reg, bool /*cache*/) {
   // Read through get_environ_config, as codegen_llvm.cpp does for QD_DUMP_IR and QD_LOAD_IR, so that a value of 0
   // turns the variable off here too rather than only its absence.
   const bool dump_ir = get_environ_config(DUMP_IR_ENV.data()) != 0;

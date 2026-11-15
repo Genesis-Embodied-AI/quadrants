@@ -213,8 +213,6 @@ if (QD_WITH_LLVM)
       string(REGEX MATCH "([0-9]+)\\.[0-9]+(\\.[0-9]+)?" CLANG_VERSION "${CLANG_VERSION_OUTPUT}")
 
       message("${CLANG_EXECUTABLE} --version: ${CLANG_VERSION}")
-
-      set(CLANG_VERSION_MAJOR "${CMAKE_MATCH_1}")
     endmacro()
 
     if (APPLE)
@@ -224,9 +222,6 @@ if (QD_WITH_LLVM)
         set(CLANG_OSX_FLAGS "")
       endif()
     endif()
-
-    # Highest clang version that we've tested
-    set(CLANG_HIGHEST_VERSION "15")
 
     check_clang_version()
 

@@ -86,17 +86,17 @@ def MatrixFreeCG(A, b, x, tol=1e-6, maxiter=5000, quiet=True):
     @kernel
     def update_x():
         for I in grouped(x):
-            x[I] += alpha[None] * p[I]
+            x[I] += alpha[()] * p[I]
 
     @kernel
     def update_r():
         for I in grouped(r):
-            r[I] -= alpha[None] * Ap[I]
+            r[I] -= alpha[()] * Ap[I]
 
     @kernel
     def update_p():
         for I in grouped(p):
-            p[I] = r[I] + beta[None] * p[I]
+            p[I] = r[I] + beta[()] * p[I]
 
     def solve():
         succeeded = True
@@ -113,7 +113,7 @@ def MatrixFreeCG(A, b, x, tol=1e-6, maxiter=5000, quiet=True):
             for i in range(maxiter):
                 A._matvec(p, Ap)  # compute Ap = A x p
                 pAp = reduce(p, Ap)
-                alpha[None] = old_rTr / pAp
+                alpha[()] = old_rTr / pAp
                 update_x()
                 update_r()
                 new_rTr = reduce(r, r)
@@ -122,7 +122,7 @@ def MatrixFreeCG(A, b, x, tol=1e-6, maxiter=5000, quiet=True):
                         print(">>> Conjugate Gradient method converged.")
                         print(f">>> #iterations {i}")
                     break
-                beta[None] = new_rTr / old_rTr
+                beta[()] = new_rTr / old_rTr
                 update_p()
                 old_rTr = new_rTr
                 if not quiet:
@@ -208,11 +208,11 @@ def MatrixFreeBICGSTAB(A, b, x, tol=1e-6, maxiter=5000, quiet=True):
             p[I] = 0.0
             Ap[I] = 0.0
             Ashat[I] = 0.0
-        rho[None] = 0.0
-        rho_1[None] = 1.0
-        alpha[None] = 1.0
-        beta[None] = 1.0
-        omega[None] = 1.0
+        rho[()] = 0.0
+        rho_1[()] = 1.0
+        alpha[()] = 1.0
+        beta[()] = 1.0
+        omega[()] = 1.0
 
     @kernel
     def reduce(p: template(), q: template()) -> solver_dtype:
@@ -229,7 +229,7 @@ def MatrixFreeBICGSTAB(A, b, x, tol=1e-6, maxiter=5000, quiet=True):
     @kernel
     def update_p():
         for I in grouped(p):
-            p[I] = r[I] + beta[None] * (p[I] - omega[None] * Ap[I])
+            p[I] = r[I] + beta[()] * (p[I] - omega[()] * Ap[I])
 
     @kernel
     def update_phat():
@@ -239,7 +239,7 @@ def MatrixFreeBICGSTAB(A, b, x, tol=1e-6, maxiter=5000, quiet=True):
     @kernel
     def update_s():
         for I in grouped(s):
-            s[I] = r[I] - alpha[None] * Ap[I]
+            s[I] = r[I] - alpha[()] * Ap[I]
 
     @kernel
     def update_shat():
@@ -249,12 +249,12 @@ def MatrixFreeBICGSTAB(A, b, x, tol=1e-6, maxiter=5000, quiet=True):
     @kernel
     def update_x():
         for I in grouped(x):
-            x[I] += alpha[None] * p_hat[I] + omega[None] * s_hat[I]
+            x[I] += alpha[()] * p_hat[I] + omega[()] * s_hat[I]
 
     @kernel
     def update_r():
         for I in grouped(r):
-            r[I] = s[I] - omega[None] * t[I]
+            r[I] = s[I] - omega[()] * t[I]
 
     def solve():
         succeeded = True
@@ -266,8 +266,8 @@ def MatrixFreeBICGSTAB(A, b, x, tol=1e-6, maxiter=5000, quiet=True):
             print(f">>> Initial residual = {initial_rTr:e}")
         if sqrt(initial_rTr) >= tol:  # Do nothing if the initial residual is small enough
             for i in range(maxiter):
-                rho[None] = reduce(r, r_tld)
-                if rho[None] == 0.0:
+                rho[()] = reduce(r, r_tld)
+                if rho[()] == 0.0:
                     if not quiet:
                         print(">>> BICGSTAB failed because r@r_tld = 0.")
                     succeeded = False
@@ -275,19 +275,19 @@ def MatrixFreeBICGSTAB(A, b, x, tol=1e-6, maxiter=5000, quiet=True):
                 if i == 0:
                     copy(orig=r, dest=p)
                 else:
-                    beta[None] = (rho[None] / rho_1[None]) * (alpha[None] / omega[None])
+                    beta[()] = (rho[()] / rho_1[()]) * (alpha[()] / omega[()])
                     update_p()
                 update_phat()
                 A._matvec(p, Ap)
                 alpha_lower = reduce(r_tld, Ap)
-                alpha[None] = rho[None] / alpha_lower
+                alpha[()] = rho[()] / alpha_lower
                 update_s()
                 update_shat()
                 A._matvec(s_hat, Ashat)
                 copy(orig=Ashat, dest=t)
                 omega_upper = reduce(t, s)
                 omega_lower = reduce(t, t)
-                omega[None] = omega_upper / (omega_lower + 1e-16) if omega_lower == 0.0 else omega_upper / omega_lower
+                omega[()] = omega_upper / (omega_lower + 1e-16) if omega_lower == 0.0 else omega_upper / omega_lower
                 update_x()
                 update_r()
                 rTr = reduce(r, r)
@@ -297,7 +297,7 @@ def MatrixFreeBICGSTAB(A, b, x, tol=1e-6, maxiter=5000, quiet=True):
                     if not quiet:
                         print(f">>> BICGSTAB method converged at #iterations {i}")
                     break
-                rho_1[None] = rho[None]
+                rho_1[()] = rho[()]
         if rTr >= tol:
             if not quiet:
                 print(f">>> BICGSTAB failed to converge in {maxiter} iterations: Residual = {sqrt(rTr):e}")

@@ -494,12 +494,12 @@ def set_kernel_profiler_metrics(metric_list=default_cupti_metrics):
 
         >>> x = qd.field(qd.f32, shape=num_elements)
         >>> y = qd.field(qd.f32, shape=())
-        >>> y[None] = 0
+        >>> y[()] = 0
 
         >>> @qd.kernel
         >>> def reduction():
         >>>     for i in x:
-        >>>         y[None] += x[i]
+        >>>         y[()] += x[i]
 
         >>> # In the case of not parameter, Quadrants will print its pre-defined metrics list
         >>> qd.profiler.get_predefined_cupti_metrics()
@@ -542,12 +542,12 @@ def collect_kernel_profiler_metrics(metric_list=default_cupti_metrics):
 
         >>> x = qd.field(qd.f32, shape=num_elements)
         >>> y = qd.field(qd.f32, shape=())
-        >>> y[None] = 0
+        >>> y[()] = 0
 
         >>> @qd.kernel
         >>> def reduction():
         >>>     for i in x:
-        >>>         y[None] += x[i]
+        >>>         y[()] += x[i]
 
         >>> # In the case of not parameter, Quadrants will print its pre-defined metrics list
         >>> qd.profiler.get_predefined_cupti_metrics()

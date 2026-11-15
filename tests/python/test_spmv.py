@@ -2,7 +2,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @pytest.mark.parametrize(
@@ -21,7 +21,7 @@ def test_sparse_matrix_vector_multiplication1(dtype, storage_format):
     b = qd.field(qd.f32, shape=n)
 
     @qd.kernel
-    def fill(Abuilder: qd.types.sparse_matrix_builder(), b: qd.template()):
+    def fill(Abuilder: qd.types.sparse_matrix_builder(), b: qd.Template):
         for i, j in qd.ndrange(n, n):
             Abuilder[i, j] += i
 
@@ -51,7 +51,7 @@ def test_sparse_matrix_vector_multiplication2(dtype, storage_format):
     b = qd.field(qd.f32, shape=n)
 
     @qd.kernel
-    def fill(Abuilder: qd.types.sparse_matrix_builder(), b: qd.template()):
+    def fill(Abuilder: qd.types.sparse_matrix_builder(), b: qd.Template):
         for i, j in qd.ndrange(n, n):
             Abuilder[i, j] += i - j
 
@@ -85,7 +85,7 @@ def test_sparse_matrix_vector_multiplication3(dtype, storage_format):
     b = qd.field(qd.f32, shape=n)
 
     @qd.kernel
-    def fill(Abuilder: qd.types.sparse_matrix_builder(), b: qd.template()):
+    def fill(Abuilder: qd.types.sparse_matrix_builder(), b: qd.Template):
         for i, j in qd.ndrange(n, n):
             Abuilder[i, j] += i + j
 

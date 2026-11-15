@@ -2,7 +2,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test()
@@ -10,7 +10,7 @@ def test_is_is_not_unsupported_in_quadrants_scope():
     with pytest.raises(qd.QuadrantsSyntaxError, match='Operator "is" in Quadrants scope is not supported'):
 
         @qd.kernel
-        def func_is(a: qd.template()):
+        def func_is(a: qd.Template):
             a is None
 
         func_is(None)
@@ -18,7 +18,7 @@ def test_is_is_not_unsupported_in_quadrants_scope():
     with pytest.raises(qd.QuadrantsSyntaxError, match='Operator "is not" in Quadrants scope is not supported'):
 
         @qd.kernel
-        def func_is_not(a: qd.template()):
+        def func_is_not(a: qd.Template):
             a is not None
 
         func_is_not(None)

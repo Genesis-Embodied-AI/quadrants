@@ -1,6 +1,6 @@
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test()
@@ -13,7 +13,7 @@ def test_kernel_template_basic():
     qd.root.dense(qd.i, n).place(x, y)
 
     @qd.kernel
-    def inc(a: qd.template(), b: qd.template()):
+    def inc(a: qd.Template, b: qd.Template):
         for i in a:
             a[i] += b
 
@@ -25,7 +25,7 @@ def test_kernel_template_basic():
         assert y[i] == 2
 
     @qd.kernel
-    def inc2(z: qd.i32, a: qd.template(), b: qd.i32):
+    def inc2(z: qd.i32, a: qd.Template, b: qd.i32):
         for i in a:
             a[i] += b + z
 
@@ -46,14 +46,14 @@ def test_kernel_template_gradient():
     qd.root.lazy_grad()
 
     @qd.kernel
-    def double(a: qd.template(), b: qd.template()):
+    def double(a: qd.Template, b: qd.Template):
         for i in range(16):
             b[i] = a[i] * 2 + 1
 
     @qd.kernel
     def compute_loss():
         for i in range(16):
-            qd.atomic_add(loss[None], z[i])
+            qd.atomic_add(loss[()], z[i])
 
     for i in range(16):
         x[i] = i
@@ -77,16 +77,16 @@ def test_func_template():
         qd.root.dense(qd.ij, 16).place(a[l], b[l])
 
     @qd.func
-    def sample(x: qd.template(), l: qd.template(), I):
+    def sample(x: qd.Template, l: qd.Template, I):
         return x[l][I]
 
     @qd.kernel
-    def fill(l: qd.template()):
+    def fill(l: qd.Template):
         for I in qd.grouped(a[l]):
             a[l][I] = l
 
     @qd.kernel
-    def aTob(l: qd.template()):
+    def aTob(l: qd.Template):
         for I in qd.grouped(b[l]):
             b[l][I] = sample(a, l, I)
 
@@ -108,7 +108,7 @@ def test_func_template2():
     qd.root.dense(qd.ij, 16).place(a, b)
 
     @qd.func
-    def sample(x: qd.template(), I):
+    def sample(x: qd.Template, I):
         return x[I]
 
     @qd.kernel

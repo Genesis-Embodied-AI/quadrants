@@ -2,7 +2,7 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test()
@@ -277,7 +277,7 @@ def test_expr_set():
 @test_utils.test()
 def test_redefining_template_args():
     @qd.kernel
-    def foo(a: qd.template()):
+    def foo(a: qd.Template):
         a = 5
 
     with pytest.raises(qd.QuadrantsSyntaxError, match='Kernel argument "a" is immutable in the kernel'):

@@ -1,6 +1,6 @@
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test()
@@ -38,7 +38,7 @@ def test_argument_error():
 
     @qd.kernel
     def set_i32(v: qd.i32):
-        x[None] = v
+        x[()] = v
 
     set_i32(123)
-    assert x[None] == 123
+    assert x[()] == 123

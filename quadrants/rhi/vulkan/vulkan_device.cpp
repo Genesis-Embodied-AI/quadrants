@@ -1,3 +1,6 @@
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -1546,6 +1549,13 @@ RhiResult VulkanDevice::create_pipeline(Pipeline **out_pipeline,
 }
 
 RhiResult VulkanDevice::allocate_memory(const AllocParams &params, DeviceAllocation *out_devalloc) {
+  static const bool poison_allocations = [] {
+    const char *poison_env = std::getenv("QD_TEST_VULKAN_POISON_ALLOCATIONS");
+    return poison_env && std::strcmp(poison_env, "1") == 0;
+  }();
+  if (poison_allocations && params.size > std::numeric_limits<size_t>::max() - 3) {
+    return RhiResult::out_of_memory;
+  }
   AllocationInternal &alloc = allocations_.acquire();
 
   RHI_ASSERT(params.size > 0);
@@ -1553,7 +1563,8 @@ RhiResult VulkanDevice::allocate_memory(const AllocParams &params, DeviceAllocat
   VkBufferCreateInfo buffer_info{};
   buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
   buffer_info.pNext = nullptr;
-  buffer_info.size = params.size;
+  // GPU fills use whole 32-bit words; pad test allocations so their final bytes are poisoned too.
+  buffer_info.size = poison_allocations ? (params.size + 3) & ~size_t(3) : params.size;
   // FIXME: How to express this in a backend-neutral way?
   buffer_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
   if (params.usage && AllocUsage::Storage) {
@@ -1676,6 +1687,20 @@ RhiResult VulkanDevice::allocate_memory(const AllocParams &params, DeviceAllocat
   }
 
   *out_devalloc = DeviceAllocation{this, (uint64_t)&alloc};
+  if (poison_allocations) {
+    auto *stream = get_compute_stream();
+    auto [cmdlist, res] = stream->new_command_list_unique();
+    if (res != RhiResult::success) {
+      dealloc_memory(*out_devalloc);
+      *out_devalloc = DeviceAllocation{};
+      return res;
+    }
+    cmdlist->buffer_fill(out_devalloc->get_ptr(0), buffer_info.size, 0xA5A5A5A5u);
+    cmdlist->buffer_barrier(*out_devalloc);
+    stream->submit_synced(cmdlist.get());
+    std::call_once(poison_allocation_log_once_,
+                   [] { std::fprintf(stderr, "[vulkan_allocator] poisoned allocation\n"); });
+  }
   return RhiResult::success;
 }
 

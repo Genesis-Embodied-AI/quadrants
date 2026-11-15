@@ -38,8 +38,7 @@ from quadrants._tensor_wrapper import (
     wrap,
 )
 
-# Back-compat aliases for stork-17/18 opt-in names. Drop in a future stork branch once downstream call sites have
-# switched to the unprefixed names.
+# Backward-compatible aliases for the prefixed tensor wrapper names.
 _Tensor = Tensor
 _VectorTensor = VectorTensor
 _MatrixTensor = MatrixTensor

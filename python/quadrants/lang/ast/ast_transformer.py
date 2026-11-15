@@ -9,14 +9,14 @@ import math
 import platform
 import warnings
 from ast import unparse
-from typing import Any, Generator, Sequence, Type
+from typing import Any, Generator, Sequence, Type, TypeAlias
 
 import numpy as np
 
 from quadrants._lib import core as _qd_core
 from quadrants.lang import exception, expr, impl, matrix, mesh
 from quadrants.lang import ops as qd_ops
-from quadrants.lang._dataclass_util import create_flat_name
+from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._ndrange import _Ndrange
 from quadrants.lang._unpacked import _UnpackedVectorRef
 from quadrants.lang.ast.ast_transformer_utils import (
@@ -50,6 +50,7 @@ from quadrants.lang.field import Field
 from quadrants.lang.matrix import Matrix, MatrixType
 from quadrants.lang.snode import append, deactivate, length
 from quadrants.lang.struct import Struct, StructType
+from quadrants.lang.util import is_data_oriented
 from quadrants.lang.util import (
     is_from_quadrants_module as _is_from_quadrants_module,
 )
@@ -60,6 +61,10 @@ from quadrants.types import primitive_types
 from quadrants.types.utils import is_integral
 
 AutodiffMode = _qd_core.AutodiffMode
+
+_LayoutIndex: TypeAlias = (
+    int | np.integer | np.ndarray | Expr | Matrix | slice | None | list["_LayoutIndex"] | tuple["_LayoutIndex", ...]
+)
 
 
 def reshape_list(flat_list: list[Any], target_shape: Sequence[int]) -> list[Any]:
@@ -103,12 +108,25 @@ class ASTTransformer(Builder):
         else:
             node._qd_arg_chain = None  # type: ignore[attr-defined]
         node.violates_pure, node.ptr, node.violates_pure_reason = ctx.get_var_by_name(node.id)
+        # Dataclass fields can arrive as flattened names instead of attribute accesses.
+        if (
+            # Check after discovery has determined which members are used.
+            pruning.enforcing
+            # Restrict this check to known dataclass members, not ordinary variables.
+            and node.id in ctx.struct_locals
+            # Reject a data-oriented object stored in the member.
+            and is_data_oriented(node.ptr)
+        ):
+            raise exception.QuadrantsRuntimeTypeError(
+                "Data-oriented objects inside Python dataclass fields are unsupported. "
+                "Store the dataclass on the data-oriented object instead."
+            )
         # Flattened struct fields (``__qd_foo__qd_bar``) injected by ``populate_global_vars_from_dataclass`` are raw
         # ``Ndarray`` instances.  ``build_Attribute`` already promotes these via ``_promote_ndarray_if_declared`` but
         # the flattened-name path bypasses ``build_Attribute`` entirely, so we must promote here too.
         node.ptr = ASTTransformer._promote_ndarray_if_declared(ctx, node.ptr)
         if isinstance(node, (ast.stmt, ast.expr)) and isinstance(node.ptr, Expr):
-            node.ptr.dbg_info = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
+            node.ptr.dbg_info = _qd_core.DebugInfo(ctx.memoized_get_formatted_location_with_source_context(node))
             node.ptr.ptr.set_dbg_info(node.ptr.dbg_info)
         # ``qd.static`` is intentionally NOT a purity escape hatch: a captured module global is still flagged inside
         # a static scope, since its value never enters the fastcache key regardless of static wrapping.
@@ -295,24 +313,26 @@ class ASTTransformer(Builder):
         return False
 
     @staticmethod
-    def _unpack_layout_vector_index(ast_builder, index, layout_len):
-        """If ``index`` is a rank-1 Vector of length ``layout_len``, return its component list so the layout permutation
-        can be applied per-axis. Otherwise return ``[index]`` unchanged.
+    def _unpack_layout_vector_index(ast_builder: _qd_core.ASTBuilder | None, index: _LayoutIndex) -> list[_LayoutIndex]:
+        """Unpack Python lists, tuples, single-column Matrix indices, and rank-1 Expr indices for per-axis layout
+        permutation. Otherwise return ``[index]`` unchanged.
 
-        Handles both forms a single subscript can take inside a kernel:
+        Handles the following forms a single subscript can take inside a kernel:
 
-        - ``Matrix`` (Python class) — produced when the kernel runs on the python backend, e.g. ``qd.grouped(field)``
-          returning a ``[Matrix([i, j])]`` list.
+        - Python ``list`` / ``tuple``, including indices passed through a ``@qd.func``.
+        - ``Matrix`` (Python class) indices supplied from Python scope.
         - ``Expr`` with tensor shape ``(N,)`` — produced by ``matrix.make_matrix(loop_indices, ...)`` in
           :func:`build_struct_for` / :func:`build_grouped_ndrange_for`, which is what real kernels see for
           ``for I in qd.grouped(...)``.
         """
-        if isinstance(index, Matrix) and index.n == layout_len and index.m == 1:
+        if isinstance(index, (list, tuple)):
+            return list(index)
+        if isinstance(index, Matrix) and index.m == 1:
             return index.to_list()
         if isinstance(index, expr.Expr) and index.is_tensor():
             shape = index.get_shape()
-            if len(shape) == 1 and shape[0] == layout_len:
-                return [impl.subscript(ast_builder, index, k) for k in range(layout_len)]
+            if len(shape) == 1:
+                return [impl.subscript(ast_builder, index, k) for k in range(shape[0])]
         return [index]
 
     @staticmethod
@@ -344,15 +364,13 @@ class ASTTransformer(Builder):
         #
         # Two indexing forms must be permuted:
         # 1. Multi-arg subscript ``x[i, j, ...]``: ``node.slice.ptr`` is already a list of N scalars; permute by axis.
-        # 2. Single-Vector subscript ``x[I]`` where I is a rank-N Matrix coming from ``qd.grouped(...)``: unpack into N
-        #    scalars first, then permute. Without this, ``x[I]`` writes at canonical indices into the smaller physical
-        #    buffer — silently OOB on permuted layouts.
+        # 2. Single-sequence subscript ``x[I]`` where I is a list, tuple, or vector coming from ``qd.grouped(...)``:
+        #    unpack into N scalars first, then permute. Without this, ``x[I]`` writes at canonical indices into the
+        #    permuted physical buffer, potentially going out of bounds.
         layout = getattr(node.value.ptr, "_qd_layout", None)
         if layout is not None:
             if len(node.slice.ptr) == 1:
-                node.slice.ptr = ASTTransformer._unpack_layout_vector_index(
-                    ctx.ast_builder, node.slice.ptr[0], len(layout)
-                )
+                node.slice.ptr = ASTTransformer._unpack_layout_vector_index(ctx.ast_builder, node.slice.ptr[0])
             if len(node.slice.ptr) == len(layout):
                 node.slice.ptr = [node.slice.ptr[axis] for axis in layout]
         node.ptr = impl.subscript(ctx.ast_builder, node.value.ptr, *node.slice.ptr)
@@ -497,7 +515,7 @@ class ASTTransformer(Builder):
             return node.ptr
         values = node.format_spec.values
         assert len(values) == 1
-        format_str = values[0].s
+        format_str = values[0].value
         assert format_str is not None
         # distinguished from normal list
         return ["__qd_fmt_value__", node.ptr, format_str]
@@ -512,8 +530,6 @@ class ASTTransformer(Builder):
                 args.append(build_stmt(ctx, sub_node))
             elif isinstance(sub_node, ast.Constant):
                 str_spec += sub_node.value
-            elif isinstance(sub_node, ast.Str):
-                str_spec += sub_node.s
             else:
                 raise QuadrantsSyntaxError("Invalid value for fstring.")
 
@@ -634,7 +650,7 @@ class ASTTransformer(Builder):
                     raise QuadrantsSyntaxError("The return type is not supported now!")
             ctx.ast_builder.create_kernel_exprgroup_return(
                 expr.make_expr_group(return_exprs),
-                _qd_core.DebugInfo(ctx.memoized_get_pos_info(node)),
+                _qd_core.DebugInfo(ctx.memoized_get_formatted_location_with_source_context(node)),
             )
         else:
             ctx.return_data = node.value.ptr
@@ -785,11 +801,20 @@ class ASTTransformer(Builder):
                 node.ptr = getattr(tensor_ops, node.attr)
                 setattr(node, "caller", node.value.ptr)
         elif dataclasses.is_dataclass(node.value.ptr):
+            if is_data_oriented(node.value.ptr):
+                raise exception.QuadrantsRuntimeTypeError(
+                    "A class cannot be both a Python dataclass and data-oriented."
+                )
             lifted = maybe_lifted_primitive(ctx, node.value.ptr, node.attr)
             if lifted is not None:
                 node.ptr = lifted
                 return node.ptr
             node.ptr = getattr(node.value.ptr, node.attr)
+            if ctx.global_context.pruning.enforcing and is_data_oriented(node.ptr):
+                raise exception.QuadrantsRuntimeTypeError(
+                    "Data-oriented objects inside Python dataclass fields are unsupported. "
+                    "Store the dataclass on the data-oriented object instead."
+                )
             from quadrants._tensor_wrapper import (  # pylint: disable=C0415
                 Tensor as _TensorClass,
             )
@@ -817,7 +842,7 @@ class ASTTransformer(Builder):
             # time. The IR layer downstream (``build_Subscript`` -> ``impl.subscript``) only knows about ``Ndarray`` /
             # ``Field`` / ``Expr``; the wrapper is host-side. Unwrap here so ``state.a[i, j]`` inside a kernel body
             # resolves to the bare impl. Top-level wrapper args (``def k(x: qd.Tensor)``) are unwrapped earlier in
-            # ``Kernel.__call__``; this handles the in-struct case. See ``perso_hugh/doc/quadrants-tensor.md`` §8.14.
+            # ``Kernel.__call__``; this handles the in-struct case.
             from quadrants._tensor_wrapper import (  # pylint: disable=C0415
                 Tensor as _TensorClass,
             )
@@ -1143,7 +1168,7 @@ class ASTTransformer(Builder):
                 begin = qd_ops.cast(expr.Expr(0), primitive_types.i32)
                 end = qd_ops.cast(end_expr, primitive_types.i32)
 
-            for_di = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
+            for_di = _qd_core.DebugInfo(ctx.memoized_get_formatted_location_with_source_context(node))
             ctx.ast_builder.begin_frontend_range_for(loop_var.ptr, begin.ptr, end.ptr, for_di)
             ctx.loop_depth += 1
             build_stmts(ctx, node.body)
@@ -1161,7 +1186,7 @@ class ASTTransformer(Builder):
                 primitive_types.i32,
             )
             ndrange_loop_var = expr.Expr(ctx.ast_builder.make_id_expr(""))
-            for_di = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
+            for_di = _qd_core.DebugInfo(ctx.memoized_get_formatted_location_with_source_context(node))
             ctx.ast_builder.begin_frontend_range_for(ndrange_loop_var.ptr, ndrange_begin.ptr, ndrange_end.ptr, for_di)
             I = impl.expr_init(ndrange_loop_var)
             targets = ASTTransformer.get_for_loop_targets(node)
@@ -1214,7 +1239,7 @@ class ASTTransformer(Builder):
                 primitive_types.i32,
             )
             ndrange_loop_var = expr.Expr(ctx.ast_builder.make_id_expr(""))
-            for_di = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
+            for_di = _qd_core.DebugInfo(ctx.memoized_get_formatted_location_with_source_context(node))
             ctx.ast_builder.begin_frontend_range_for(ndrange_loop_var.ptr, ndrange_begin.ptr, ndrange_end.ptr, for_di)
 
             targets = ASTTransformer.get_for_loop_targets(node)
@@ -1351,7 +1376,7 @@ class ASTTransformer(Builder):
             ctx.create_variable(loop_name, loop_var)
             begin = expr.Expr(0)
             end = qd_ops.cast(node.iter.ptr.size, primitive_types.i32)
-            for_di = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
+            for_di = _qd_core.DebugInfo(ctx.memoized_get_formatted_location_with_source_context(node))
             ctx.ast_builder.begin_frontend_range_for(loop_var.ptr, begin.ptr, end.ptr, for_di)
             entry_expr = _qd_core.get_relation_access(
                 ctx.mesh.mesh_ptr,
@@ -1537,7 +1562,7 @@ class ASTTransformer(Builder):
             return None
 
         with ctx.loop_scope_guard():
-            stmt_dbg_info = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
+            stmt_dbg_info = _qd_core.DebugInfo(ctx.memoized_get_formatted_location_with_source_context(node))
             ctx.ast_builder.begin_frontend_while(expr.Expr(1, dtype=primitive_types.i32).ptr, stmt_dbg_info)
             while_cond = build_stmt(ctx, node.test)
             impl.begin_frontend_if(ctx.ast_builder, while_cond, stmt_dbg_info)
@@ -1563,7 +1588,7 @@ class ASTTransformer(Builder):
             return node
 
         with ctx.non_static_if_guard(node):
-            stmt_dbg_info = _qd_core.DebugInfo(ctx.memoized_get_pos_info(node))
+            stmt_dbg_info = _qd_core.DebugInfo(ctx.memoized_get_formatted_location_with_source_context(node))
             impl.begin_frontend_if(ctx.ast_builder, node.test.ptr, stmt_dbg_info)
             ctx.ast_builder.begin_frontend_if_true()
             build_stmts(ctx, node.body)
@@ -1623,8 +1648,6 @@ class ASTTransformer(Builder):
             return False
         if not isinstance(msg.op, ast.Mod):
             return False
-        if isinstance(msg.left, ast.Str):
-            return True
         if isinstance(msg.left, ast.Constant) and isinstance(msg.left.value, str):
             return True
         return False
@@ -1675,8 +1698,6 @@ class ASTTransformer(Builder):
                 msg = build_stmt(ctx, node.msg)
                 if isinstance(node.msg, ast.Constant):
                     msg = str(msg)
-                elif isinstance(node.msg, ast.Str):
-                    pass
                 elif isinstance(msg, collections.abc.Sequence) and len(msg) > 0 and msg[0] == "__qd_format__":
                     msg, extra_args = ASTTransformer.qd_format_list_to_assert_msg(msg)
                 else:
@@ -1684,7 +1705,12 @@ class ASTTransformer(Builder):
         else:
             msg = unparse(node.test)
         test = build_stmt(ctx, node.test)
-        impl.qd_assert(test, msg.strip(), extra_args, _qd_core.DebugInfo(ctx.memoized_get_pos_info(node)))
+        impl.qd_assert(
+            test,
+            msg.strip(),
+            extra_args,
+            _qd_core.DebugInfo(ctx.memoized_get_formatted_location_with_source_context(node)),
+        )
         return None
 
     @staticmethod
@@ -1692,7 +1718,7 @@ class ASTTransformer(Builder):
         if ctx.is_in_static_for():
             nearest_non_static_if = ctx.current_loop_scope().nearest_non_static_if
             if nearest_non_static_if:
-                msg = ctx.memoized_get_pos_info(nearest_non_static_if.test)
+                msg = ctx.memoized_get_formatted_location_with_source_context(nearest_non_static_if.test)
                 msg += (
                     "You are trying to `break` a static `for` loop, "
                     "but the `break` statement is inside a non-static `if`. "
@@ -1700,7 +1726,9 @@ class ASTTransformer(Builder):
                 raise QuadrantsSyntaxError(msg)
             ctx.set_loop_status(LoopStatus.Break)
         else:
-            ctx.ast_builder.insert_break_stmt(_qd_core.DebugInfo(ctx.memoized_get_pos_info(node)))
+            ctx.ast_builder.insert_break_stmt(
+                _qd_core.DebugInfo(ctx.memoized_get_formatted_location_with_source_context(node))
+            )
         return None
 
     @staticmethod
@@ -1708,7 +1736,7 @@ class ASTTransformer(Builder):
         if ctx.is_in_static_for():
             nearest_non_static_if = ctx.current_loop_scope().nearest_non_static_if
             if nearest_non_static_if:
-                msg = ctx.memoized_get_pos_info(nearest_non_static_if.test)
+                msg = ctx.memoized_get_formatted_location_with_source_context(nearest_non_static_if.test)
                 msg += (
                     "You are trying to `continue` a static `for` loop, "
                     "but the `continue` statement is inside a non-static `if`. "
@@ -1716,7 +1744,9 @@ class ASTTransformer(Builder):
                 raise QuadrantsSyntaxError(msg)
             ctx.set_loop_status(LoopStatus.Continue)
         else:
-            ctx.ast_builder.insert_continue_stmt(_qd_core.DebugInfo(ctx.memoized_get_pos_info(node)))
+            ctx.ast_builder.insert_continue_stmt(
+                _qd_core.DebugInfo(ctx.memoized_get_formatted_location_with_source_context(node))
+            )
         return None
 
     @staticmethod

@@ -4,7 +4,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang.misc import get_host_arch_list
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test()
@@ -153,7 +153,7 @@ def test_meta_zero_one(dtype, qd_zero, zero, is_mat):
 
     @qd.kernel
     def func():
-        y[None] = qd_zero(x[None])
+        y[()] = qd_zero(x[()])
 
     for a in [-1, -2.3, -1, -0.3, 0, 1, 1.9, 2, 3]:
         if qd.types.is_integral(dtype):

@@ -3,7 +3,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang import impl
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @pytest.mark.parametrize(
@@ -29,10 +29,10 @@ def test_floor_div(arg1, a, arg2, b, arg3, c):
 
     @qd.kernel
     def func(x: arg1, y: arg2):
-        z[None] = x // y
+        z[()] = x // y
 
     func(a, b)
-    assert z[None] == c
+    assert z[()] == c
 
 
 @pytest.mark.parametrize(
@@ -56,10 +56,10 @@ def test_true_div(arg1, a, arg2, b, arg3, c):
 
     @qd.kernel
     def func(x: arg1, y: arg2):
-        z[None] = x / y
+        z[()] = x / y
 
     func(a, b)
-    assert z[None] == c
+    assert z[()] == c
 
 
 @test_utils.test()
@@ -70,10 +70,10 @@ def test_div_default_ip():
     @qd.kernel
     def func():
         a = 1e15 + 1e9
-        z[None] = a // 1e10
+        z[()] = a // 1e10
 
     func()
-    assert z[None] == 100000
+    assert z[()] == 100000
 
 
 @test_utils.test()
@@ -82,13 +82,13 @@ def test_floor_div_pythonic():
 
     @qd.kernel
     def func(x: qd.i32, y: qd.i32):
-        z[None] = x // y
+        z[()] = x // y
 
     for i in range(-10, 11):
         for j in range(-10, 11):
             if j != 0:
                 func(i, j)
-                assert z[None] == i // j
+                assert z[()] == i // j
 
 
 @pytest.mark.parametrize(
@@ -111,11 +111,11 @@ def test_exact_div_field_int(x, m):
 
     @qd.kernel
     def func(a: qd.f32):
-        result[None] = a / divisor[None]
+        result[()] = a / divisor[()]
 
-    divisor[None] = m
+    divisor[()] = m
     func(x)
-    assert result[None] == x / m
+    assert result[()] == x / m
 
 
 @pytest.mark.parametrize(
@@ -135,8 +135,8 @@ def test_floor_exact_div_field_int(x, m):
 
     @qd.kernel
     def func(a: qd.f32):
-        result[None] = qd.floor(a / divisor[None], qd.f32)
+        result[()] = qd.floor(a / divisor[()], qd.f32)
 
-    divisor[None] = m
+    divisor[()] = m
     func(x)
-    assert result[None] == float(x // m)
+    assert result[()] == float(x // m)

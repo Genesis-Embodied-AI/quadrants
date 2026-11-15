@@ -17,9 +17,9 @@ import sys
 import pytest
 
 import quadrants as qd
-from quadrants._test_tools import qd_init_same_arch
 
-from tests import test_utils
+from tests.helpers import test_utils
+from tests.helpers.runtime import qd_init_same_arch
 
 
 @test_utils.test(arch=qd.cpu)

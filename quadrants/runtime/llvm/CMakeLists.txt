@@ -9,6 +9,8 @@ target_sources(llvm_runtime
     adstack_lazy_claim/metadata_publish.cpp
     adstack_lazy_claim/heap_grow.cpp
     llvm_context.cpp
+    amdgpu_shuffle.cpp
+    runtime_module_utils.cpp
     snode_tree_buffer_manager.cpp
     kernel_launcher.cpp
   )
@@ -16,6 +18,7 @@ target_sources(llvm_runtime
 target_include_directories(llvm_runtime
   PRIVATE
     ${PROJECT_SOURCE_DIR}
+    ${PROJECT_BINARY_DIR}/generated
     ${PROJECT_SOURCE_DIR}/external/eigen
     ${PROJECT_SOURCE_DIR}/external/spdlog/include
     ${LLVM_INCLUDE_DIRS}

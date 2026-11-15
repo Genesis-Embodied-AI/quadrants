@@ -181,14 +181,10 @@ void GraphManager::resolve_ctx_ndarray_ptrs(LaunchContextBuilder &ctx,
       auto data_ptr = ctx.array_ptrs[data_ptr_idx];
       auto grad_ptr = ctx.array_ptrs[grad_ptr_idx];
 
-      QD_ERROR_IF(grad_ptr != nullptr,
-                  "graph does not support autograd; "
-                  "ndarray arg {} has a non-null gradient pointer",
-                  arg_id);
-
       // Raw device pointer to the array data, resolved from either an
       // external array (raw pointer) or a DeviceAllocation handle.
       void *resolved_data = nullptr;
+      void *resolved_grad = nullptr;
 
       if (ctx.device_allocation_type[arg_id] == LaunchContextBuilder::DevAllocType::kNone) {
         QD_ERROR_IF(!on_cuda_device(data_ptr),
@@ -196,13 +192,17 @@ void GraphManager::resolve_ctx_ndarray_ptrs(LaunchContextBuilder &ctx,
                     "ndarray arg {} is host-resident",
                     arg_id);
         resolved_data = data_ptr;
+        resolved_grad = grad_ptr;
       } else if (arr_sz > 0) {
         DeviceAllocation *ptr = static_cast<DeviceAllocation *>(data_ptr);
         resolved_data = executor->get_device_alloc_info_ptr(*ptr);
+        if (grad_ptr != nullptr) {
+          resolved_grad = executor->get_device_alloc_info_ptr(*static_cast<DeviceAllocation *>(grad_ptr));
+        }
       }
 
       if (resolved_data) {
-        ctx.set_ndarray_ptrs(arg_id, (uint64)resolved_data, (uint64) nullptr);
+        ctx.set_ndarray_ptrs(arg_id, (uint64)resolved_data, (uint64)resolved_grad);
         // Resolve every graph_do_while level whose condition ndarray is this arg (multi-level table).
         ctx.resolve_graph_do_while_flag(arg_id, resolved_data);
         // Mirror the resolution for every `qd.checkpoint(yield_on=foo)` -- walk the per-cp_id arg-id table and stash
@@ -584,15 +584,16 @@ void GraphManager::build_level(int parent_id,
 }
 
 bool GraphManager::launch_cached_graph(CachedGraph &cached, LaunchContextBuilder &ctx, bool use_graph_do_while) {
-  // TODO: these memcpy_host_to_device calls could be async (cuMemcpyHtoDAsync) on the launch stream for better CPU-GPU
-  // overlap. All are tiny (<= 8 bytes), so synchronous is fine for now.
+  auto *stream = CUDAContext::get_instance().get_stream();
+
   if (use_graph_do_while) {
     // Refresh every level's indirection slot with this launch's resolved condition ndarray pointer, so swapping any
     // level's counter ndarray between launches works without a rebuild.
     QD_ASSERT(cached.counter_ptr_slots.size() == ctx.graph_do_while_levels.size());
     for (size_t level = 0; level < ctx.graph_do_while_levels.size(); level++) {
       void *flag_ptr = ctx.graph_do_while_levels[level].flag_dev_ptr;
-      CUDADriver::get_instance().memcpy_host_to_device(cached.counter_ptr_slots[level], &flag_ptr, sizeof(void *));
+      CUDADriver::get_instance().memcpy_host_to_device_async(cached.counter_ptr_slots[level], &flag_ptr, sizeof(void *),
+                                                             stream);
     }
   }
 
@@ -602,7 +603,7 @@ bool GraphManager::launch_cached_graph(CachedGraph &cached, LaunchContextBuilder
     // from_checkpoint=cp)` and gates skip every cp_id strictly below it. The yield-check kernel may bump this to
     // INT_MAX mid-launch; the reset here ensures the next launch starts from a clean baseline.
     int32_t rp = (ctx.resume_from_checkpoint < 0) ? 0 : ctx.resume_from_checkpoint;
-    CUDADriver::get_instance().memcpy_host_to_device(cached.resume_point_dev_ptr, &rp, sizeof(int32_t));
+    CUDADriver::get_instance().memcpy_host_to_device_async(cached.resume_point_dev_ptr, &rp, sizeof(int32_t), stream);
   }
 
   if (cached.yield_signal_dev_ptr) {
@@ -610,7 +611,8 @@ bool GraphManager::launch_cached_graph(CachedGraph &cached, LaunchContextBuilder
     // launch" state. The first cp_id whose yield_on fires will CAS its value in; later yields are no-ops thanks to
     // atomicCAS semantics.
     int32_t neg_one = -1;
-    CUDADriver::get_instance().memcpy_host_to_device(cached.yield_signal_dev_ptr, &neg_one, sizeof(int32_t));
+    CUDADriver::get_instance().memcpy_host_to_device_async(cached.yield_signal_dev_ptr, &neg_one, sizeof(int32_t),
+                                                           stream);
   }
 
   // For each `qd.checkpoint(yield_on=foo)` with a resolved device pointer this launch, refresh the persistent
@@ -621,15 +623,14 @@ bool GraphManager::launch_cached_graph(CachedGraph &cached, LaunchContextBuilder
     void *slot = cached.checkpoint_yield_on_ptr_slots[cp];
     void *user_ptr = ctx.checkpoint_yield_on_dev_ptrs[cp];
     if (slot && user_ptr) {
-      CUDADriver::get_instance().memcpy_host_to_device(slot, &user_ptr, sizeof(void *));
+      CUDADriver::get_instance().memcpy_host_to_device_async(slot, &user_ptr, sizeof(void *), stream);
     }
   }
 
   if (ctx.arg_buffer_size > 0) {
-    CUDADriver::get_instance().memcpy_host_to_device(cached.persistent_device_arg_buffer, ctx.get_context().arg_buffer,
-                                                     cached.arg_buffer_size);
+    CUDADriver::get_instance().memcpy_host_to_device_async(
+        cached.persistent_device_arg_buffer, ctx.get_context().arg_buffer, cached.arg_buffer_size, stream);
   }
-  auto *stream = CUDAContext::get_instance().get_stream();
   CUDADriver::get_instance().graph_launch(cached.graph_exec, stream);
 
   // Capture the post-launch yield_signal so introspection (and slice 2's GraphStatus) can see which cp_id yielded. The
@@ -672,9 +673,8 @@ bool GraphManager::try_launch(int launch_id,
   // accordingly); both kernels are baked into the graph so the host never gets a chance to run in between.
   // For graph-compatible, statically-bounded adstack kernels, codegen still sets
   // `static_num_threads = grid_dim * block_dim` and we could size the heap once at graph build, but that
-  // path is not exercised today and the existing `grad_ptr != nullptr` guard below rejects the standard
-  // autograd entry points that would hit it. Fail loudly instead of silently running with a nullptr
-  // `runtime->adstack_heap_buffer`.
+  // path is not exercised today and this check alone covers it, since reverse-mode (adjoint) kernels never
+  // carry `use_graph`. Fail loudly instead of silently running with a nullptr `runtime->adstack_heap_buffer`.
   for (const auto &task : offloaded_tasks) {
     QD_ERROR_IF(!task.ad_stack.allocas.empty(),
                 "graph=True is not supported for kernels that use the reverse-mode autodiff stack "

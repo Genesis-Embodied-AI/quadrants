@@ -1,6 +1,6 @@
 import quadrants as qd
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 @test_utils.test()
@@ -11,13 +11,13 @@ def test_ptr_scalar():
     def func(t: qd.f32):
         b = qd.static(a)
         c = qd.static(b)
-        b[None] = b[None] * t
-        c[None] = a[None] + t
+        b[()] = b[()] * t
+        c[()] = a[()] + t
 
     for x, y in zip(range(-5, 5), range(-4, 4)):
-        a[None] = x
+        a[()] = x
         func(y)
-        assert a[None] == x * y + y
+        assert a[()] == x * y + y
 
 
 @test_utils.test()
@@ -26,13 +26,13 @@ def test_ptr_matrix():
 
     @qd.kernel
     def func(t: qd.f32):
-        a[None] = [[2, 3], [4, 5]]
+        a[()] = [[2, 3], [4, 5]]
         b = qd.static(a)
-        b[None][1, 0] = t
+        b[()][1, 0] = t
 
     for x in range(-5, 5):
         func(x)
-        assert a[None][1, 0] == x
+        assert a[()][1, 0] == x
 
 
 @test_utils.test()
@@ -61,13 +61,13 @@ def test_pythonish_tuple_assign():
     @qd.kernel
     def func(x: qd.f32, y: qd.f32):
         u, v = qd.static(b, a)
-        u[None] = x
-        v[None] = y
+        u[()] = x
+        v[()] = y
 
     for x, y in zip(range(-5, 5), range(-4, 4)):
         func(x, y)
-        assert a[None] == y
-        assert b[None] == x
+        assert a[()] == y
+        assert b[()] == x
 
 
 @test_utils.test()

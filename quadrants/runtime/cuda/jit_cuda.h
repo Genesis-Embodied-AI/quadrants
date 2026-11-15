@@ -64,7 +64,7 @@ class JITSessionCUDA : public JITSession {
                  const CompileConfig &config,
                  llvm::DataLayout data_layout,
                  ProgramImpl *program_impl);
-  JITModule *add_module(std::unique_ptr<llvm::Module> M, int max_reg) override;
+  JITModule *add_module(std::unique_ptr<llvm::Module> M, int max_reg, bool cache = false) override;
   llvm::DataLayout get_data_layout() override;
 
  private:

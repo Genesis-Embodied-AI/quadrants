@@ -13,7 +13,7 @@ import numpy as np
 import quadrants as qd
 from quadrants._tensor import _with_layout
 
-from tests import test_utils
+from tests.helpers import test_utils
 
 
 def _allocate_layout10(M, N, dtype=qd.i32):

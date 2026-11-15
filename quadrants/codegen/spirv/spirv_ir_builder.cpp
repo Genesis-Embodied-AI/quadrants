@@ -201,10 +201,7 @@ void IRBuilder::init_header() {
     // from `VK_SUBGROUP_FEATURE_BASIC_BIT`, and the spec permits a conformant device to advertise
     // BASIC without SHUFFLE. A strict validator on such a device would reject every Quadrants
     // SPIR-V module here — even kernels that do not actually use shuffle — because the declared
-    // capability is unsupported. No such device has been observed in the wild (the codepath this
-    // change broadens was already exposed pre-PR for any kernel emitting
-    // `OpGroupNonUniformShuffle*`), so this PR does not make it worse, but it does extend the
-    // surface. Fix: introduce `spirv_has_subgroup_shuffle{,_relative}` device caps in
+    // capability is unsupported. Fix: introduce `spirv_has_subgroup_shuffle{,_relative}` device caps in
     // `rhi/rhi_constants.inc.h`, populate them from the two Vulkan bits in
     // `vulkan_device_creator.cpp::populate_subgroup_caps`, and gate the two
     // `CapabilityGroupNonUniformShuffle{,Relative}` emissions on those caps individually.
