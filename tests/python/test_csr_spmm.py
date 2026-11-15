@@ -1,4 +1,4 @@
-"""Numerical and composition tests for buffer-backed CSR multiplication."""
+"""Numerical, API, and composition tests for buffer-backed CSR matrix multiplication."""
 
 from dataclasses import FrozenInstanceError, dataclass
 
@@ -11,8 +11,8 @@ from tests import test_utils
 
 
 @qd.kernel
-def _apply(matrix: qd.linalg.CSRMatrix, rhs: qd.types.NDArray, out: qd.types.NDArray):
-    (matrix @ rhs).write_to(out)
+def _apply(matrix: qd.linalg.SparseMatrix, rhs: qd.types.NDArray, out: qd.types.NDArray):
+    qd.matmul(matrix, rhs, out=out)
 
 
 def _multiply(row_ptr, col_idx, values, rhs, out):
@@ -30,9 +30,9 @@ def _reference_ordered_f32(row_ptr, col_idx, values, rhs):
     result = np.zeros((len(row_ptr) - 1, rhs.shape[1]), dtype=np.float32)
     for row in range(result.shape[0]):
         for column in range(result.shape[1]):
-            for edge in range(int(row_ptr[row]), int(row_ptr[row + 1])):
+            for entry in range(int(row_ptr[row]), int(row_ptr[row + 1])):
                 result[row, column] = np.float32(
-                    result[row, column] + np.float32(values[edge] * rhs[col_idx[edge], column])
+                    result[row, column] + np.float32(values[entry] * rhs[col_idx[entry], column])
                 )
     return result
 
@@ -51,8 +51,8 @@ def _error_budget(row_ptr, col_idx, values, rhs):
         start, end = int(row_ptr[row]), int(row_ptr[row + 1])
         nu = 2 * (end - start) * 2.0**-24
         magnitude = np.zeros(rhs.shape[1], dtype=np.float64)
-        for edge in range(start, end):
-            magnitude += np.abs(np.float64(values[edge]) * rhs[col_idx[edge]].astype(np.float64))
+        for entry in range(start, end):
+            magnitude += np.abs(np.float64(values[entry]) * rhs[col_idx[entry]].astype(np.float64))
         result[row] = 4 * nu / (1 - nu) * magnitude + 2e-6
     return result
 
@@ -74,12 +74,12 @@ def test_csr_spmm_rejects_nested_runtime_calls(indirect):
     buffers[-1].fill(-777)
 
     @qd.func
-    def helper(matrix: qd.linalg.CSRMatrix, rhs: qd.types.NDArray, out: qd.types.NDArray):
-        (matrix @ rhs).write_to(out)
+    def helper(matrix: qd.linalg.SparseMatrix, rhs: qd.types.NDArray, out: qd.types.NDArray):
+        qd.matmul(matrix, rhs, out=out)
 
     @qd.kernel
     def nested(
-        matrix: qd.linalg.CSRMatrix,
+        matrix: qd.linalg.SparseMatrix,
         rhs: qd.types.NDArray,
         out: qd.types.NDArray,
         count: qd.i32,
@@ -88,7 +88,7 @@ def test_csr_spmm_rejects_nested_runtime_calls(indirect):
             if qd.static(indirect):
                 helper(matrix, rhs, out)
             else:
-                (matrix @ rhs).write_to(out)
+                qd.matmul(matrix, rhs, out=out)
 
     with pytest.raises(qd.QuadrantsSyntaxError, match="requires_top_level"):
         nested(qd.linalg.SparseMatrix.from_csr(*buffers[:3], shape=(3, 3)), *buffers[3:], 1)
@@ -123,7 +123,7 @@ def test_csr_spmm_duplicates_empty_rows_and_poison_tail():
     host = _host_case()
     actual = _execute(host, exact=True)
     np.testing.assert_array_equal(actual, [[1.25, 1], [0, 0], [10, 12]])
-    # Keep allocation sizes fixed while changing topology and logical edge count.
+    # Keep allocation sizes fixed while changing sparsity pattern and active entry count.
     buffers = [_upload(array) for array in host]
     for pointers, columns, coefficients in (
         ([0, 0, 0, 0], [-(2**31)] * 5, [np.nan] * 5),
@@ -164,7 +164,7 @@ def test_csr_spmm_rectangular_widths_and_changed_bindings():
             np.full((5, width), -777, dtype=np.float32),
         ]
         _execute(host, exact=True)
-        # Replacement arrays of the same shape must not retain previous RHS/weight/output bindings.
+        # Replacement arrays of the same shape must not retain previous input/value/output bindings.
         replacement = [array.copy() for array in host]
         replacement[2][:4] *= -0.5
         replacement[3] += 0.25
@@ -180,7 +180,7 @@ def test_csr_spmm_rectangular_widths_and_changed_bindings():
         ],
         exact=True,
     )
-    # More sources than receivers complements the preceding M > N fixture.
+    # More columns than rows complements the preceding M > N fixture.
     _execute(
         [
             np.array([0, 2, 3], dtype=np.int32),
@@ -212,34 +212,33 @@ def test_csr_spmm_updated_values_and_rhs_in_existing_buffers():
 @test_utils.test(arch=[qd.cpu, qd.metal, qd.cuda])
 def test_csr_spmm_producer_two_calls_and_consumer():
     # Cross workgroups and read distant producers, so launch ordering is exercised beyond one workgroup.
-    rows, channels = 257, 33
+    rows, cols = 257, 33
     row_ptr = np.arange(rows + 1, dtype=np.int32) * 2
     row_ids = np.arange(rows, dtype=np.int32)
     col_idx = np.stack(((row_ids + 130) % rows, (row_ids + 1) % rows), axis=1).reshape(-1)
     values = np.tile(np.array([0.5, -0.25], dtype=np.float32), rows)
-    rhs = np.zeros((rows, channels), dtype=np.float32)
+    rhs = np.zeros((rows, cols), dtype=np.float32)
     output = np.full_like(rhs, -777)
     rp, ci, v, x, y = [_upload(array) for array in (row_ptr, col_idx, values, rhs, output)]
     intermediate = _upload(output)
 
     @qd.kernel
     def pipeline(
-        matrix: qd.linalg.CSRMatrix,
+        matrix: qd.linalg.SparseMatrix,
         x: qd.types.NDArray,
         intermediate: qd.types.NDArray,
         y: qd.types.NDArray,
     ):
         for i, j in x:
             x[i, j] = qd.cast(i + 1, qd.f32) * 0.25 + qd.cast(j, qd.f32) * 0.125
-        product = matrix @ x
-        product.write_to(intermediate)
-        (matrix @ intermediate).write_to(y)
+        qd.matmul(matrix, x, out=intermediate)
+        qd.matmul(matrix, intermediate, out=y)
         for i, j in y:
             y[i, j] = y[i, j] * 0.5 + 1
 
     pipeline(qd.linalg.SparseMatrix.from_csr(rp, ci, v, shape=(rows, rows)), x, intermediate, y)
     produced = (np.arange(rows, dtype=np.float32)[:, None] + 1) / 4
-    produced = produced + np.arange(channels, dtype=np.float32)[None, :] / 8
+    produced = produced + np.arange(cols, dtype=np.float32)[None, :] / 8
     first = _reference_dense_f64(row_ptr, col_idx, values, produced)
     second = _reference_dense_f64(row_ptr, col_idx, values, first.astype(np.float32))
     np.testing.assert_array_equal(x.to_numpy(), produced)
@@ -273,7 +272,7 @@ def test_csr_spmm_ping_pong_recurrence():
 
 
 @test_utils.test(arch=[qd.cpu, qd.metal, qd.cuda])
-def test_csr_spmm_shared_column_and_independent_ragged_batches():
+def test_csr_spmm_shared_column_and_block_diagonal_batches():
     row_ptr = np.array([0, 2, 3], dtype=np.int32)
     col_idx = np.array([2, 0, 1], dtype=np.int32)
     values = np.array([0.5, -0.25, 2], dtype=np.float32)
@@ -286,8 +285,8 @@ def test_csr_spmm_shared_column_and_independent_ragged_batches():
     expected = np.concatenate([_reference_dense_f64(row_ptr, col_idx, values, x) for x in trials], axis=1)
     np.testing.assert_array_equal(actual, expected)
 
-    # Different shapes and coefficients use a block diagonal graph, never just feature-column packing.
-    graphs = [
+    # Different shapes and coefficients packed into a block-diagonal sparse matrix.
+    blocks = [
         (row_ptr, col_idx, values, np.arange(9, dtype=np.float32).reshape(3, 3) / 8),
         (
             np.array([0, 2], dtype=np.int32),
@@ -302,21 +301,21 @@ def test_csr_spmm_shared_column_and_independent_ragged_batches():
             np.array([[2, 4, 6]], dtype=np.float32),
         ),
     ]
-    pointers, columns, coefficients, sources, results = [0], [], [], [], []
-    source_offset = edge_offset = 0
-    for rp, ci, v, x in graphs:
-        pointers.extend((rp[1:] + edge_offset).tolist())
-        columns.extend((ci + source_offset).tolist())
+    pointers, columns, coefficients, inputs, results = [0], [], [], [], []
+    col_offset = entry_offset = 0
+    for rp, ci, v, x in blocks:
+        pointers.extend((rp[1:] + entry_offset).tolist())
+        columns.extend((ci + col_offset).tolist())
         coefficients.extend(v.tolist())
-        sources.append(x)
+        inputs.append(x)
         results.append(_reference_dense_f64(rp, ci, v, x))
-        source_offset += x.shape[0]
-        edge_offset += len(ci)
+        col_offset += x.shape[0]
+        entry_offset += len(ci)
     host = [
         np.array(pointers, dtype=np.int32),
         np.array(columns + [-999], dtype=np.int32),
         np.array(coefficients + [np.nan], dtype=np.float32),
-        np.concatenate(sources, axis=0),
+        np.concatenate(inputs, axis=0),
         np.full((len(pointers) - 1, 3), -777, dtype=np.float32),
     ]
     np.testing.assert_array_equal(_execute(host, exact=True), np.concatenate(results, axis=0))
@@ -338,7 +337,7 @@ def test_csr_spmm_difficult_cancellation_and_long_rows():
         np.full((3, k), np.nan, dtype=np.float32),
     ]
     _execute(host, difficult=True)
-    # Hand-computable cancellation with duplicate, unsorted edges.
+    # Hand-computable cancellation with duplicate, unsorted entries.
     host = [
         np.array([0, 5], dtype=np.int32),
         np.array([1, 0, 1, 0, 1], dtype=np.int32),
@@ -367,54 +366,61 @@ def test_csr_spmm_float32_accumulator_with_float64_default():
 
 
 @test_utils.test(arch=[qd.cpu, qd.metal, qd.cuda])
-def test_csr_host_product_borrows_buffers_and_reads_current_contents():
+def test_csr_host_matmul_borrows_buffers_and_reads_current_contents():
     host = _host_case()
     rp, ci, values, rhs, out = [_upload(array) for array in host]
     matrix = qd.linalg.SparseMatrix.from_csr(rp, ci, values, shape=(3, 3))
+    assert isinstance(matrix, qd.linalg.SparseMatrix)
     assert matrix.shape == (3, 3)
+    assert repr(matrix) == "<SparseMatrix (CSR) shape=(3, 3)>"
     assert (matrix.row_ptr, matrix.col_idx, matrix.values) == (rp, ci, values)
     with pytest.raises(FrozenInstanceError):
         matrix.rows = 4
-    product = matrix @ rhs
-    assert product.write_to(out) is None
+    with pytest.raises(FrozenInstanceError):
+        del matrix.rows
+    returned = qd.matmul(matrix, rhs, out=out)
+    assert returned is out
     np.testing.assert_array_equal(out.to_numpy(), _reference_dense_f64(*host[:-1]))
     host[2][:4] *= 2
     host[3] += 0.5
     values.from_numpy(host[2])
     rhs.from_numpy(host[3])
-    product.write_to(out)
+    assert qd.matmul(a=matrix, b=rhs, out=out) is out
     np.testing.assert_array_equal(out.to_numpy(), _reference_dense_f64(*host[:-1]))
-    with pytest.raises(ValueError):
-        product.write_to(rhs)
+    with pytest.raises(ValueError, match="alias"):
+        qd.matmul(matrix, rhs, out=rhs)
 
 
 @test_utils.test(arch=[qd.cpu, qd.metal, qd.cuda])
-def test_csr_kernel_product_evaluates_rhs_once_and_reads_current_contents():
-    host = _host_case()
-    rp, ci, values, rhs, out = [_upload(array) for array in host]
+def test_csr_matmul_keyword_and_operand_checks():
+    rp, ci, values, rhs, out = [_upload(array) for array in _host_case()]
     matrix = qd.linalg.SparseMatrix.from_csr(rp, ci, values, shape=(3, 3))
-    count = qd.ndarray(qd.i32, shape=1)
-    count.fill(0)
 
-    @qd.func
-    def counted_rhs(rhs: qd.types.NDArray, count: qd.types.NDArray):
-        count[0] += 1
-        return rhs
+    with pytest.raises(TypeError):
+        qd.matmul(matrix, rhs)
+    with pytest.raises(TypeError):
+        qd.matmul(matrix, rhs, out)
+    with pytest.raises(TypeError):
+        qd.matmul(rhs, rhs, out=out)
 
     @qd.kernel
-    def reuse_product(
-        matrix: qd.linalg.CSRMatrix, rhs: qd.types.NDArray, out: qd.types.NDArray, count: qd.types.NDArray
-    ):
-        product = matrix @ counted_rhs(rhs, count)
-        product.write_to(out)
-        for i, j in rhs:
-            rhs[i, j] += 1.0
-        product.write_to(out)
+    def missing_out(a: qd.linalg.SparseMatrix, b: qd.types.NDArray):
+        qd.matmul(a, b)
 
-    reuse_product(matrix, rhs, out, count)
-    np.testing.assert_array_equal(count.to_numpy(), [1])
-    host[3] += 1
-    np.testing.assert_array_equal(out.to_numpy(), _reference_dense_f64(*host[:-1]))
+    @qd.kernel
+    def positional_out(a: qd.linalg.SparseMatrix, b: qd.types.NDArray, c: qd.types.NDArray):
+        qd.matmul(a, b, c)
+
+    @qd.kernel
+    def dense_lhs(a: qd.types.NDArray, b: qd.types.NDArray, c: qd.types.NDArray):
+        qd.matmul(a, b, out=c)
+
+    with pytest.raises(qd.QuadrantsCompilationError, match="out="):
+        missing_out(matrix, rhs)
+    with pytest.raises(qd.QuadrantsCompilationError, match="out="):
+        positional_out(matrix, rhs, out)
+    with pytest.raises(qd.QuadrantsCompilationError, match="SparseMatrix"):
+        dense_lhs(rhs, rhs, out)
 
 
 @test_utils.test(arch=[qd.cpu, qd.metal, qd.cuda])
@@ -444,7 +450,7 @@ def test_csr_metadata_validation():
         (buffers[-2], qd.ndarray(qd.f32, shape=6)),
     ):
         with pytest.raises((TypeError, ValueError)):
-            (matrix @ rhs).write_to(out)
+            qd.matmul(matrix, rhs, out=out)
 
 
 @test_utils.test(arch=[qd.cpu, qd.metal, qd.cuda], debug=False)
@@ -452,7 +458,7 @@ def test_csr_kernel_invalid_shapes_do_not_access_storage():
     host = _host_case()
     rp, ci, values, rhs, out = [_upload(array) for array in host]
     matrix = qd.linalg.SparseMatrix.from_csr(rp, ci, values, shape=(3, 3))
-    # The stored column 2 would read out of bounds from this incompatible RHS.
+    # The stored column 2 would read out of bounds from this incompatible dense input.
     short_rhs = qd.ndarray(qd.f32, shape=(2, 2))
     short_rhs.fill(1)
     for source in (short_rhs, rhs, short_rhs, rhs):
@@ -478,20 +484,28 @@ def test_csr_kernel_invalid_shapes_report_debug_error():
 
 
 @test_utils.test(arch=[qd.cpu, qd.metal, qd.cuda])
-def test_csr_nested_typed_binding_and_specialization():
+def test_csr_nested_typed_binding_fastcache_and_data_oriented():
     @dataclass(frozen=True)
     class Pair:
-        matrix: qd.linalg.CSRMatrix
+        matrix: qd.linalg.SparseMatrix
         unused: qd.types.NDArray[qd.f32, 1]
 
     @qd.func
-    def helper(matrix: qd.linalg.CSRMatrix, rhs: qd.types.NDArray, out: qd.types.NDArray):
-        product = matrix @ rhs
-        product.write_to(out)
+    def helper(matrix: qd.linalg.SparseMatrix, rhs: qd.types.NDArray, out: qd.types.NDArray):
+        qd.matmul(matrix, rhs, out=out)
 
-    @qd.kernel
+    @qd.kernel(fastcache=True)
     def nested(pair: Pair, rhs: qd.types.NDArray, out: qd.types.NDArray):
         helper(pair.matrix, rhs, out)
+
+    @qd.data_oriented
+    class Holder:
+        def __init__(self, matrix):
+            self.matrix = matrix
+
+        @qd.kernel
+        def run(self, rhs: qd.types.NDArray, out: qd.types.NDArray):
+            qd.matmul(self.matrix, rhs, out=out)
 
     for width in (3, 17):
         host = _host_case()
@@ -501,21 +515,48 @@ def test_csr_nested_typed_binding_and_specialization():
         matrix = qd.linalg.SparseMatrix.from_csr(rp, ci, values, shape=(3, 3))
         nested(Pair(matrix, qd.ndarray(qd.f32, shape=1)), rhs, out)
         np.testing.assert_array_equal(out.to_numpy(), _reference_dense_f64(*host[:-1]))
+
+        out.fill(-777)
+        Holder(matrix).run(rhs, out)
+        np.testing.assert_array_equal(out.to_numpy(), _reference_dense_f64(*host[:-1]))
     assert len(nested._primal.mapper.mapping) == 1
 
 
 @test_utils.test(arch=qd.cpu)
 def test_csr_native_interoperability_errors():
-    rp, ci, values, _, _ = [_upload(array) for array in _host_case()]
+    rp, ci, values, rhs, out = [_upload(array) for array in _host_case()]
     matrix = qd.linalg.SparseMatrix.from_csr(rp, ci, values, shape=(3, 3))
     native = qd.linalg.SparseMatrix(3, 3)
-    for operation in (lambda: native + matrix, lambda: native - matrix, lambda: native * matrix):
+
+    with pytest.raises(qd.QuadrantsRuntimeError, match="qd.matmul"):
+        _ = matrix @ rhs
+    with pytest.raises(qd.QuadrantsRuntimeError, match="from_csr"):
+        qd.matmul(native, rhs, out=out)
+    with pytest.raises(qd.QuadrantsRuntimeError, match="from_csr"):
+        _apply(native, rhs, out)
+
+    for operation in (
+        lambda: native + matrix,
+        lambda: matrix + native,
+        lambda: native - matrix,
+        lambda: matrix - native,
+        lambda: native * matrix,
+        lambda: matrix * 2.0,
+        lambda: 2.0 * matrix,
+        lambda: native @ matrix,
+        matrix.transpose,
+        lambda: matrix[0, 0],
+    ):
         with pytest.raises(qd.QuadrantsRuntimeError):
             operation()
     with pytest.raises(qd.QuadrantsRuntimeError):
-        qd.linalg.SparseCG(matrix, np.ones(3, np.float32))
+        matrix[0, 0] = 1.0
     with pytest.raises(qd.QuadrantsRuntimeError):
-        qd.linalg.SparseSolver().compute(matrix)
+        qd.linalg.SparseCG(matrix, np.ones(3, np.float32))
+    solver = qd.linalg.SparseSolver()
+    for method in (solver.compute, solver.analyze_pattern, solver.factorize):
+        with pytest.raises(qd.QuadrantsRuntimeError):
+            method(matrix)
 
 
 @test_utils.test(arch=qd.cpu)
@@ -527,5 +568,7 @@ def test_csr_rejects_reverse_mode():
 
 
 def test_csr_public_exports():
-    assert "CSRMatrix" in qd.linalg.__all__
+    assert "matmul" in qd.__all__
+    assert "CSRMatrix" not in qd.linalg.__all__
+    assert not hasattr(qd.linalg, "CSRMatrix")
     assert "csr_spmm" not in qd.algorithms.__all__

@@ -21,7 +21,7 @@ The current composable functions are kernel-side `@qd.func` operations called fr
 | `qd.algorithms.{reduce,exclusive_scan,select,reduce_by_key,sort}_scratch_slots(...)` | Host- and kernel-callable helpers returning the scratch slot count each op needs. | yes | yes |
 | `qd.algorithms.parallel_sort` | Odd-even merge sort (in-place, key or key-value). **Deprecated**: prefer `sort`. | no | yes |
 | `qd.algorithms.PrefixSumExecutor` | Inclusive in-place prefix sum (i32 only). **Deprecated**: prefer `exclusive_scan_add`. | no | yes |
-| `(A @ X).write_to(Y)` for `qd.linalg.CSRMatrix` | [Compressed sparse row (CSR) matrix multiplication](#csr-sparse-matrix-multiplication) into caller-provided output. | yes | yes |
+| `qd.matmul(A, X, out=Y)` for CSR `qd.linalg.SparseMatrix` | [Compressed sparse row (CSR) matrix multiplication](#csr-sparse-matrix-multiplication) into caller-owned output. | yes | yes |
 
 The reductions, scans, selection, sort, and reduce-by-key operations run on Quadrants' GPU backends (CUDA, AMDGPU, Vulkan, Metal); they are GPU-only and are not available on the CPU backend. (On Metal only 32-bit dtypes are supported - no `i64` / `u64` / `f64`; `PrefixSumExecutor` is CUDA / Vulkan only.) The `*_scratch_slots` helpers are plain integer arithmetic, so they also run on the host / CPU.
 
@@ -31,13 +31,13 @@ The reductions, scans, selection, sort, and reduce-by-key functions are composab
 
 ## CSR sparse matrix multiplication
 
-`qd.linalg.SparseMatrix.from_csr(row_ptr, col_idx, values, shape=(M, N))` returns a buffer-backed `qd.linalg.CSRMatrix` that borrows scalar `qd.ndarray` buffers: rank-1 `i32` row pointers and column indices, and rank-1 `f32` values. For `f32` arrays `X[N, K]` and `Y[M, K]`, `(A @ X).write_to(Y)` overwrites `Y` with `A @ X`, using current buffer contents. It is callable from Python or the top level of a kernel with `A: qd.linalg.CSRMatrix`, with the same interface on CPU, CUDA and Metal. Existing native `SparseMatrix` multiplication returns an allocated result.
+`qd.linalg.SparseMatrix.from_csr(row_ptr, col_idx, values, shape=(M, N))` returns a buffer-backed `qd.linalg.SparseMatrix` that borrows scalar `qd.ndarray` buffers: rank-1 `i32` row pointers and column indices, and rank-1 `f32` values. For `f32` arrays `X[N, K]` and `Y[M, K]`, `qd.matmul(A, X, out=Y)` overwrites `Y` with `A @ X`, using current buffer contents. It is callable from Python or the top level of a kernel with `A: qd.linalg.SparseMatrix`, with the same interface on CPU, CUDA and Metal.
 
 The row pointers must start at zero, be nondecreasing, and end within the equal column/value capacities; only that prefix is active. Active column indices must lie in `[0, N)`. Empty rows and unsorted columns are supported; duplicates accumulate in stored order. Dimensions and capacity must be positive, each buffer must fit `2**31 - 1` bytes, and output must not alias input storage. The operation is forward-only. Host calls raise on incompatible metadata. Kernel callers must supply matching shapes; an incompatible shape silently skips the write and leaves the previous output in place in release mode. Debug mode reports an assertion where runtime assertions are supported; Metal and Linux ARM64 do not support them. See [assertions in kernels](debug.md#assertions-in-kernels).
 
 ```python
 A = qd.linalg.SparseMatrix.from_csr(row_ptr, col_idx, values, shape=(M, N))
-(A @ X).write_to(Y)
+qd.matmul(A, X, out=Y)
 ```
 
 ## Key sizing parameters

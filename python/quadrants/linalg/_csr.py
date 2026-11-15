@@ -1,93 +1,86 @@
 # type: ignore
-"""Borrowed CSR storage and multiplication into a caller-owned dense array."""
+"""Borrowed CSR storage and sparse-dense matrix multiplication into a caller-owned array."""
 
-import ast
-import dataclasses
-import inspect
 import math
 import numbers
+from typing import Any
 
 from quadrants._lib import core as _qd_core
 from quadrants.lang._ndarray import ScalarNdarray
-from quadrants.lang.exception import QuadrantsNameError, QuadrantsSyntaxError
-from quadrants.lang.impl import current_cfg, get_runtime, static, static_assert
-from quadrants.lang.kernel_impl import data_oriented, func, kernel
+from quadrants.lang._quadrants_callable import QuadrantsCallable
+from quadrants.lang.exception import (
+    QuadrantsRuntimeError,
+    QuadrantsSyntaxError,
+    QuadrantsTypeError,
+)
+from quadrants.lang.func import Func
+from quadrants.lang.impl import (
+    current_cfg,
+    get_runtime,
+    inside_kernel,
+    static,
+    static_assert,
+)
+from quadrants.lang.kernel_impl import func, kernel
+from quadrants.linalg.sparse_matrix import SparseMatrix
 from quadrants.types.ndarray_type import NDArray
 from quadrants.types.primitive_types import f32, i32
 
-__all__ = ["CSRMatrix"]
+__all__ = ["matmul"]
 
 _MAX_ELEMENTS = (2**31 - 1) // 4
 
 
-def _check_array(array, dtype, rank, name):
+def _check_array(array: Any, dtype: Any, rank: int, name: str, context: str) -> None:
     if not isinstance(array, ScalarNdarray) or array.dtype != dtype or len(array.shape) != rank:
-        raise TypeError(f"CSRMatrix: {name} must be a scalar {dtype} Quadrants ndarray of rank {rank}")
+        raise TypeError(f"{context}: {name} must be a scalar {dtype} Quadrants ndarray of rank {rank}")
     if any(size <= 0 for size in array.shape) or math.prod(array.shape) > _MAX_ELEMENTS:
-        raise ValueError(f"CSRMatrix: {name} must have positive dimensions and at most 2**31 - 1 bytes")
+        raise ValueError(f"{context}: {name} must have positive dimensions and at most 2**31 - 1 bytes")
 
 
-@dataclasses.dataclass(frozen=True)
-class CSRMatrix:
-    """A sparse matrix borrowing i32 CSR indices and f32 coefficients.
+def _from_csr(
+    cls: type[SparseMatrix],
+    row_ptr: Any,
+    col_idx: Any,
+    values: Any,
+    *,
+    shape: Any,
+) -> SparseMatrix:
+    if not isinstance(shape, tuple) or len(shape) != 2:
+        raise ValueError("SparseMatrix.from_csr: shape must be a tuple of two positive integers")
+    for name, dimension in zip(("rows", "columns"), shape):
+        if isinstance(dimension, bool) or not isinstance(dimension, numbers.Integral):
+            raise TypeError(f"SparseMatrix.from_csr: {name} must be an integer")
+        if not 0 < dimension <= _MAX_ELEMENTS:
+            raise ValueError(f"SparseMatrix.from_csr: {name} must be positive and fit signed i32 byte addressing")
+    rows, columns = int(shape[0]), int(shape[1])
+    _check_array(row_ptr, i32, 1, "row_ptr", "SparseMatrix.from_csr")
+    _check_array(col_idx, i32, 1, "col_idx", "SparseMatrix.from_csr")
+    _check_array(values, f32, 1, "values", "SparseMatrix.from_csr")
+    if row_ptr.shape[0] != rows + 1:
+        raise ValueError("SparseMatrix.from_csr: row_ptr must contain rows + 1 entries")
+    if col_idx.shape != values.shape:
+        raise ValueError("SparseMatrix.from_csr: col_idx and values must have equal capacity")
 
-    Create with ``SparseMatrix.from_csr(..., shape=(rows, columns))``. Array bindings
-    are fixed; their contents can change between completed operations. Multiplication
-    uses ``(matrix @ rhs).write_to(out)`` with rank-2 f32 Quadrants ndarrays.
-    """
-
-    row_ptr: NDArray[i32, 1]
-    col_idx: NDArray[i32, 1]
-    values: NDArray[f32, 1]
-    rows: i32
-    columns: i32
-
-    def __post_init__(self):
-        for name in ("rows", "columns"):
-            dimension = getattr(self, name)
-            if isinstance(dimension, bool) or not isinstance(dimension, numbers.Integral):
-                raise TypeError(f"CSRMatrix: {name} must be an integer")
-            if not 0 < dimension <= _MAX_ELEMENTS:
-                raise ValueError(f"CSRMatrix: {name} must be positive and fit signed i32 byte addressing")
-            object.__setattr__(self, name, int(dimension))
-        _check_array(self.row_ptr, i32, 1, "row_ptr")
-        _check_array(self.col_idx, i32, 1, "col_idx")
-        _check_array(self.values, f32, 1, "values")
-        if self.row_ptr.shape[0] != self.rows + 1:
-            raise ValueError("CSRMatrix: row_ptr must contain rows + 1 entries")
-        if self.col_idx.shape != self.values.shape:
-            raise ValueError("CSRMatrix: col_idx and values must have equal capacity")
-
-    @property
-    def shape(self):
-        return self.rows, self.columns
-
-    def __matmul__(self, rhs):
-        _check_array(rhs, f32, 2, "rhs")
-        if rhs.shape[0] != self.columns:
-            raise ValueError("CSRMatrix: rhs must have shape (columns, K)")
-        return _HostCSRProduct(self, rhs)
+    instance = object.__new__(cls)
+    object.__setattr__(instance, "dtype", f32)
+    object.__setattr__(instance, "n", rows)
+    object.__setattr__(instance, "m", columns)
+    object.__setattr__(instance, "matrix", None)
+    object.__setattr__(instance, "row_ptr", row_ptr)
+    object.__setattr__(instance, "col_idx", col_idx)
+    object.__setattr__(instance, "values", values)
+    object.__setattr__(instance, "rows", rows)
+    object.__setattr__(instance, "columns", columns)
+    object.__setattr__(instance, "_is_csr", True)
+    return instance
 
 
-@dataclasses.dataclass(frozen=True)
-class _HostCSRProduct:
-    matrix: CSRMatrix
-    rhs: ScalarNdarray
-
-    def write_to(self, out):
-        _check_array(out, f32, 2, "out")
-        if out.shape != (self.matrix.rows, self.rhs.shape[1]):
-            raise ValueError("CSRMatrix: out must have shape (rows, K)")
-        for source in (self.matrix.row_ptr, self.matrix.col_idx, self.matrix.values, self.rhs):
-            if out is source or out.arr is source.arr:
-                raise ValueError("CSRMatrix: out must not alias an input array")
-        _launch_csr_product(self.matrix, self.rhs, out)
-
-
-def _require_forward():
+def _require_forward() -> None:
     context = get_runtime()._current_global_context
+    assert context is not None and context.current_kernel is not None
     if context.current_kernel.autodiff_mode != _qd_core.AutodiffMode.NONE:
-        raise QuadrantsSyntaxError("CSRMatrix multiplication supports forward execution only")
+        raise QuadrantsSyntaxError("matmul with CSR SparseMatrix supports forward execution only")
 
 
 @func(requires_top_level=True)
@@ -95,18 +88,18 @@ def _write_csr(
     row_ptr: NDArray[i32, 1],
     col_idx: NDArray[i32, 1],
     values: NDArray[f32, 1],
-    rhs: NDArray[f32, 2],
+    b: NDArray[f32, 2],
     out: NDArray[f32, 2],
     rows: i32,
     columns: i32,
-):
+) -> None:
     _require_forward()
     # Nested functions can receive arrays whose ranks differ from their annotations.
-    static_assert(len(row_ptr.shape) == 1, "CSRMatrix: row_ptr must have rank 1")
-    static_assert(len(col_idx.shape) == 1, "CSRMatrix: col_idx must have rank 1")
-    static_assert(len(values.shape) == 1, "CSRMatrix: values must have rank 1")
-    static_assert(len(rhs.shape) == 2, "CSRMatrix: rhs must have rank 2")
-    static_assert(len(out.shape) == 2, "CSRMatrix: out must have rank 2")
+    static_assert(len(row_ptr.shape) == 1, "matmul: row_ptr must have rank 1")
+    static_assert(len(col_idx.shape) == 1, "matmul: col_idx must have rank 1")
+    static_assert(len(values.shape) == 1, "matmul: values must have rank 1")
+    static_assert(len(b.shape) == 2, "matmul: b must have rank 2")
+    static_assert(len(out.shape) == 2, "matmul: out must have rank 2")
 
     width = out.shape[1]
     # Division keeps validation within i32 even for incompatible runtime dimensions.
@@ -122,8 +115,8 @@ def _write_csr(
         and col_idx.shape[0] > 0
         and col_idx.shape[0] <= _MAX_ELEMENTS
         and col_idx.shape[0] == values.shape[0]
-        and rhs.shape[0] == columns
-        and rhs.shape[1] == width
+        and b.shape[0] == columns
+        and b.shape[1] == width
         and out.shape[0] == rows
     )
     extent = 0
@@ -133,70 +126,77 @@ def _write_csr(
     # including in release mode where assertions are disabled.
     for element in range(extent):
         row = element // width
-        channel = element % width
-        accumulator = f32(0.0)
-        for edge in range(row_ptr[row], row_ptr[row + 1]):
-            accumulator += values[edge] * rhs[col_idx[edge], channel]
-        out[row, channel] = accumulator
+        col = element % width
+        acc = f32(0.0)
+        for entry in range(row_ptr[row], row_ptr[row + 1]):
+            acc += values[entry] * b[col_idx[entry], col]
+        out[row, col] = acc
 
     # A GPU assertion can end its task; publish and consume the safe bound first.
     if static(current_cfg().debug):
-        assert valid, "CSRMatrix: incompatible array shapes or i32 byte limits"
-
-
-@data_oriented
-class _KernelCSRProduct:
-    def __init__(self, row_ptr, col_idx, values, rhs, rows, columns):
-        self.row_ptr = row_ptr
-        self.col_idx = col_idx
-        self.values = values
-        self.rhs = rhs
-        self.rows = rows
-        self.columns = columns
-
-    @func(requires_top_level=True)
-    def write_to(self, out: NDArray[f32, 2]):
-        _write_csr(self.row_ptr, self.col_idx, self.values, self.rhs, out, self.rows, self.columns)
-
-
-@func
-def _make_product(matrix: CSRMatrix, rhs: NDArray[f32, 2]):
-    return _KernelCSRProduct(matrix.row_ptr, matrix.col_idx, matrix.values, rhs, matrix.rows, matrix.columns)
+        assert valid, "matmul: incompatible array shapes or i32 byte limits"
 
 
 @kernel
-def _launch_csr_product(matrix: CSRMatrix, rhs: NDArray[f32, 2], out: NDArray[f32, 2]):
-    _make_product(matrix, rhs).write_to(out)
+def _launch_csr_matmul(a: SparseMatrix, b: NDArray[f32, 2], out: NDArray[f32, 2]) -> None:
+    _write_csr(a.row_ptr, a.col_idx, a.values, b, out, a.rows, a.columns)
 
 
-def _static_operand(ctx, node):
-    if isinstance(node, ast.Name):
-        return ctx.get_var_by_name(node.id)[1]
-    if isinstance(node, ast.Attribute):
-        owner = _static_operand(ctx, node.value)
-        return inspect.getattr_static(owner, node.attr, None)
-    return None
+def _host_matmul(a: Any, b: Any, *, out: Any) -> Any:
+    if not isinstance(a, SparseMatrix):
+        raise TypeError("matmul: first argument must be a SparseMatrix created with SparseMatrix.from_csr(...)")
+    if a.matrix is not None:
+        raise QuadrantsRuntimeError("matmul requires a CSR SparseMatrix created with SparseMatrix.from_csr(...)")
+    _check_array(b, f32, 2, "b", "matmul")
+    _check_array(out, f32, 2, "out", "matmul")
+    if b.shape[0] != a.columns:
+        raise ValueError("matmul: b must have shape (columns, K)")
+    if out.shape != (a.rows, b.shape[1]):
+        raise ValueError("matmul: out must have shape (rows, K)")
+    for source in (a.row_ptr, a.col_idx, a.values, b):
+        if out is source or out.arr is source.arr:
+            raise ValueError("matmul: out must not alias an input array")
+    _launch_csr_matmul(a, b, out)
+    return out
 
 
-def _lower_matmul(ctx, node, build_stmt):
-    """Route CSR @ through the ordinary typed-call expansion and pruning path."""
-    try:
-        operand = _static_operand(ctx, node.left)
-    except QuadrantsNameError:
-        return False
-    if operand is not CSRMatrix and not isinstance(operand, CSRMatrix):
-        return False
+_host_matmul.__name__ = "matmul"
+_host_matmul.__qualname__ = "matmul"
 
-    name = "_qd_csr_make_product"
-    while ctx.is_var_declared(name) or name in ctx.template_vars or name in ctx.global_vars:
-        name += "_"
-    # Each compilation context owns its globals copy; no user namespace is changed.
-    ctx.global_vars[name] = _make_product
-    helper = ast.copy_location(ast.Name(id=name, ctx=ast.Load()), node.left)
-    call = ast.copy_location(ast.Call(func=helper, args=[node.left, node.right], keywords=[]), node)
-    ast.fix_missing_locations(call)
-    try:
-        node.ptr = build_stmt(ctx, call)
-    finally:
-        del ctx.global_vars[name]
-    return True
+
+def _matmul_kernel_body(a: SparseMatrix, b: NDArray[f32, 2], out: NDArray[f32, 2]) -> None:
+    """Multiply a CSR ``SparseMatrix`` ``a`` with dense ``f32`` matrix ``b`` into ``out``.
+
+    Callable from Python host scope or at the top level of a ``@qd.kernel`` as
+    ``qd.matmul(A, X, out=Y)``.
+    """
+    _write_csr(a.row_ptr, a.col_idx, a.values, b, out, a.rows, a.columns)
+
+
+_matmul_kernel_body.__name__ = "matmul"
+_matmul_kernel_body.__qualname__ = "matmul"
+
+
+class _MatmulFunc(Func):
+    def __call__(self, *py_args: Any, **kwargs: Any) -> Any:
+        if not inside_kernel():
+            return _host_matmul(*py_args, **kwargs)
+        if "out" not in kwargs:
+            raise QuadrantsSyntaxError("matmul requires keyword-only argument `out=`.")
+        if len(py_args) < 5 and not any(key.startswith("__qd_a__qd_") for key in kwargs):
+            raise QuadrantsTypeError(
+                "matmul expects a CSR SparseMatrix (from SparseMatrix.from_csr(...)) as its first argument."
+            )
+        return super().__call__(*py_args, **kwargs)
+
+
+def _build_matmul_callable() -> Any:
+    fn = _MatmulFunc(_matmul_kernel_body)
+    callable_obj = QuadrantsCallable(_matmul_kernel_body, fn)
+    callable_obj._is_quadrants_function = True
+    callable_obj._is_real_function = False
+    callable_obj._qd_requires_top_level = True
+    return callable_obj
+
+
+matmul = _build_matmul_callable()

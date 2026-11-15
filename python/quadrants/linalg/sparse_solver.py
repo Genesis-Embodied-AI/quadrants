@@ -49,6 +49,13 @@ class SparseSolver:
             f"The parameter type: {type(sparse_matrix)} is not supported in linear solvers for now."
         )
 
+    @staticmethod
+    def _require_native_matrix(sparse_matrix):
+        if sparse_matrix.matrix is None:
+            raise QuadrantsRuntimeError(
+                "SparseSolver requires a native SparseMatrix; SparseMatrix.from_csr(...) is not supported."
+            )
+
     def compute(self, sparse_matrix):
         """This method is equivalent to calling both `analyze_pattern` and then `factorize`.
 
@@ -56,6 +63,7 @@ class SparseSolver:
             sparse_matrix (SparseMatrix): The sparse matrix to be computed.
         """
         if isinstance(sparse_matrix, SparseMatrix):
+            self._require_native_matrix(sparse_matrix)
             self.matrix = sparse_matrix
             quadrants_arch = quadrants.lang.impl.get_runtime().prog.config().arch
             if quadrants_arch == _qd_core.Arch.x64 or quadrants_arch == _qd_core.Arch.arm64:
@@ -73,6 +81,7 @@ class SparseSolver:
             sparse_matrix (SparseMatrix): The sparse matrix to be analyzed.
         """
         if isinstance(sparse_matrix, SparseMatrix):
+            self._require_native_matrix(sparse_matrix)
             self.matrix = sparse_matrix
             if self.matrix.dtype != self.dtype:
                 raise QuadrantsRuntimeError(
@@ -89,6 +98,7 @@ class SparseSolver:
             sparse_matrix (SparseMatrix): The sparse matrix to be factorized.
         """
         if isinstance(sparse_matrix, SparseMatrix):
+            self._require_native_matrix(sparse_matrix)
             self.matrix = sparse_matrix
             self.solver.factorize(sparse_matrix.matrix)
         else:

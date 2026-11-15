@@ -198,6 +198,7 @@ user_api[qd] = [
     "loop_config",
     "make_spd",
     "math",
+    "matmul",
     "max",
     "mesh_local",
     "mesh_patch_idx",
