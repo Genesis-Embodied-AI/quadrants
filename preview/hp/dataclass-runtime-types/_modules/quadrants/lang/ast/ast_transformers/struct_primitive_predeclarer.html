@@ -411,6 +411,8 @@
         <span class="n">inferred_dtype</span><span class="p">:</span> <span class="n">DataTypeCxx</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""Declare a used scalar and remember how to read its value at launch."""</span>
+        <span class="c1"># Sharing this identity-based binding between aliases requires their container references to remain fixed.</span>
+        <span class="c1"># The user guide defines that contract; the alias checks below remain until support is implemented.</span>
         <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="n">parent</span><span class="p">),</span> <span class="n">attr_name</span><span class="p">)</span>
         <span class="n">flat_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"__qd_doprim_</span><span class="si">{</span><span class="n">arg_idx</span><span class="si">}</span><span class="s2">__</span><span class="si">{</span><span class="s1">'__'</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">attr_chain</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
         <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">provenance</span><span class="p">:</span>

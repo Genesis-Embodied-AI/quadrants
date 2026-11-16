@@ -318,6 +318,27 @@ Simulation(100).step()   # compiles kernel #1 with n=100 baked in
 Simulation(200).step()   # compiles kernel #2 with n=200 baked in
 ```
 
+#### Dataclass aliases and fixed container references
+
+The intended contract for dataclasses inside data-oriented arguments allows aliases: multiple references to the same object. After initialization, references connecting these objects and their containing collections must remain fixed. Replacing those references is unsupported and may produce incorrect results without an error. Initialization includes assembling the objects before their first kernel call; it need not happen entirely inside `__init__`.
+
+Ordinary runtime scalar values and tensor contents may still change. For example, given a data-oriented `owner` whose `state` is a dataclass with an ordinary integer member `value`:
+
+```python
+# During initialization:
+owner.state = State(3)
+owner.states = (owner.state,)
+
+# After initialization:
+owner.state.value = 7       # Allowed: update an ordinary runtime scalar.
+owner.state = State(9)      # Unsupported: replace a container reference.
+owner.states = (State(9),)  # Unsupported: replace a container reference.
+```
+
+A tuple prevents replacing its entries, but does not make objects inside it immutable. Mutating a nested collection to replace a referenced object also violates this contract. Existing restrictions on `Final` fields and compile-time values still apply. This contract concerns container references used to reach dataclasses; the separately documented ndarray reassignment behavior is unchanged.
+
+**Current implementation:** some alias accesses are still rejected, including aliases reached through calls or indexing and used scalar members reached through multiple stored attribute paths. The fixed-reference contract is the intended basis for relaxing those checks; it does not mean those accesses are accepted yet. Arbitrary calls and properties are not guaranteed to return a fixed object and remain outside this promise.
+
 #### Runtime primitives: `template_primitives=False`
 
 Access dataclasses inside data-oriented arguments through stored attributes, such as `owner.state`, rather than through properties, method calls, or indexing.

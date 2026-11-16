@@ -773,6 +773,23 @@ my_struct.b[37] 5
 <span class="n">Simulation</span><span class="p">(</span><span class="mi">200</span><span class="p">)</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>   <span class="c1"># compiles kernel #2 with n=200 baked in</span>
 </pre></div>
 </div>
+<section id="dataclass-aliases-and-fixed-container-references">
+<h4>Dataclass aliases and fixed container references<a class="headerlink" href="#dataclass-aliases-and-fixed-container-references" title="Link to this heading">#</a></h4>
+<p>The intended contract for dataclasses inside data-oriented arguments allows aliases: multiple references to the same object. After initialization, references connecting these objects and their containing collections must remain fixed. Replacing those references is unsupported and may produce incorrect results without an error. Initialization includes assembling the objects before their first kernel call; it need not happen entirely inside <code class="docutils literal notranslate"><span class="pre">__init__</span></code>.</p>
+<p>Ordinary runtime scalar values and tensor contents may still change. For example, given a data-oriented <code class="docutils literal notranslate"><span class="pre">owner</span></code> whose <code class="docutils literal notranslate"><span class="pre">state</span></code> is a dataclass with an ordinary integer member <code class="docutils literal notranslate"><span class="pre">value</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># During initialization:</span>
+<span class="n">owner</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">State</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<span class="n">owner</span><span class="o">.</span><span class="n">states</span> <span class="o">=</span> <span class="p">(</span><span class="n">owner</span><span class="o">.</span><span class="n">state</span><span class="p">,)</span>
+
+<span class="c1"># After initialization:</span>
+<span class="n">owner</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="mi">7</span>       <span class="c1"># Allowed: update an ordinary runtime scalar.</span>
+<span class="n">owner</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">State</span><span class="p">(</span><span class="mi">9</span><span class="p">)</span>      <span class="c1"># Unsupported: replace a container reference.</span>
+<span class="n">owner</span><span class="o">.</span><span class="n">states</span> <span class="o">=</span> <span class="p">(</span><span class="n">State</span><span class="p">(</span><span class="mi">9</span><span class="p">),)</span>  <span class="c1"># Unsupported: replace a container reference.</span>
+</pre></div>
+</div>
+<p>A tuple prevents replacing its entries, but does not make objects inside it immutable. Mutating a nested collection to replace a referenced object also violates this contract. Existing restrictions on <code class="docutils literal notranslate"><span class="pre">Final</span></code> fields and compile-time values still apply. This contract concerns container references used to reach dataclasses; the separately documented ndarray reassignment behavior is unchanged.</p>
+<p><strong>Current implementation:</strong> some alias accesses are still rejected, including aliases reached through calls or indexing and used scalar members reached through multiple stored attribute paths. The fixed-reference contract is the intended basis for relaxing those checks; it does not mean those accesses are accepted yet. Arbitrary calls and properties are not guaranteed to return a fixed object and remain outside this promise.</p>
+</section>
 <section id="runtime-primitives-template-primitives-false">
 <span id="runtime-primitives-template_primitivesfalse"></span><h4>Runtime primitives: <code class="docutils literal notranslate"><span class="pre">template_primitives=False</span></code><a class="headerlink" href="#runtime-primitives-template-primitives-false" title="Link to this heading">#</a></h4>
 <p>Access dataclasses inside data-oriented arguments through stored attributes, such as <code class="docutils literal notranslate"><span class="pre">owner.state</span></code>, rather than through properties, method calls, or indexing.</p>
@@ -1045,6 +1062,7 @@ my_struct.b[37] 5
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-data-oriented">qd.data_oriented</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#stable-members">stable_members</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#primitive-members">Primitive members</a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#dataclass-aliases-and-fixed-container-references">Dataclass aliases and fixed container references</a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#runtime-primitives-template-primitives-false">Runtime primitives: <code class="docutils literal notranslate"><span class="pre">template_primitives=False</span></code></a></li>
 </ul>
 </li>
