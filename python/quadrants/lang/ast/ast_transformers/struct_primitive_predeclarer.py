@@ -70,10 +70,10 @@ def _collect_scalars_in_single_data_oriented(
             _collect_scalars_in_single_data_oriented(attr_val, arg_idx, (*path, attr_name), seen_ids, scalar_members)
 
 
-def _collect_runtime_scalar_members_from_args(
+def _collect_runtime_scalars_from_data_oriented_args(
     py_args: tuple[Any, ...], arg_metas: list[ArgMetadata]
 ) -> list[_ScalarMember]:
-    """Find scalar members of template arguments whose owners opt into runtime primitives."""
+    """Collect scalars beneath data-oriented kernel arguments with template_primitives=False."""
     flagged: list[tuple[int, Any]] = []
     for i, arg_meta in enumerate(arg_metas):
         anno = arg_meta.annotation
@@ -146,6 +146,6 @@ def _create_scalar_bindings(ctx: ASTTransformerFuncContext, scalar_members: list
 def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
     """Find opted-in scalar members, then create their compiler bindings."""
     assert ctx.py_args is not None
-    scalar_members = _collect_runtime_scalar_members_from_args(ctx.py_args, ctx.func.arg_metas)
+    scalar_members = _collect_runtime_scalars_from_data_oriented_args(ctx.py_args, ctx.func.arg_metas)
     if scalar_members:
         _create_scalar_bindings(ctx, scalar_members)
