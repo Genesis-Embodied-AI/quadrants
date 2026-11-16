@@ -1,0 +1,31 @@
+quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer
+================================================================
+
+.. py:module:: quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer
+
+.. autoapi-nested-parse::
+
+   Bind nested dataclass scalars and opted-in data-oriented primitives as runtime kernel arguments.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer.predeclare_struct_primitives
+
+
+Module Contents
+---------------
+
+.. py:function:: predeclare_struct_primitives(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext) -> None
+
+   Declare used scalar members and record their attribute paths for binding at each launch.
+
+   Dataclasses use their inferred schemas, preserving Final constants and deferred member errors. Other data-oriented
+   members are lifted only under template_primitives=False, using the default numeric types. Attribute accesses are
+   identified by their parent object and member name, since scalar identities can be shared.
+
+
