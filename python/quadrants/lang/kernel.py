@@ -754,8 +754,7 @@ class Kernel(FuncBase):
             if struct_nd_info:
                 self._set_struct_ndarray_args(struct_nd_info, args, launch_ctx_buffer, is_launch_ctx_cacheable)
 
-            # Empty for every kernel that doesn't use template_primitives=False (the common case), so this guard
-            # short-circuits without hashing ``key`` -- keeping the per-launch hot path free of added overhead.
+            # Kernels without registered scalar members skip the per-key lookup.
             if self._struct_primitive_launch_info_by_key:
                 struct_prim_info = self._struct_primitive_launch_info_by_key.get(key)
                 if struct_prim_info:
@@ -920,9 +919,10 @@ class Kernel(FuncBase):
         args: tuple,
         launch_ctx_buffer: dict,
     ) -> None:
-        """Set scalar kernel args lifted from ``@qd.data_oriented(template_primitives=False)`` template-arg primitive
-        members. Walks each recorded attr-chain to read the live value and buckets it by declared dtype kind (``'f'``
-        float, ``'i'`` signed int, ``'u'`` unsigned int), so the value is bound fresh on every launch.
+        """Read current scalar member values and supply them to their declared kernel inputs.
+
+        Each attribute chain starts at a data-oriented argument. Values are grouped by dtype kind: ``'f'`` for float,
+        ``'i'`` for signed int, and ``'u'`` for unsigned int.
 
         The dtype kind is frozen at first compile (see ``struct_primitive_predeclarer``). Binding a ``float`` to an
         arg that was lifted as an integer would silently truncate (``int(1.5) == 1``), so that one lossy direction is

@@ -190,8 +190,8 @@ class ASTTransformerGlobalContext:
         # Lifted-primitive support for ``@qd.data_oriented(template_primitives=False)``. Mirrors the two ndarray
         # structures above, plus a provenance map driving the two-pass pruning.
         # * ``struct_primitive_provenance`` maps ``(id(parent_obj), attr_name)`` to ``(flat_name, arg_idx, attr_chain,
-        #   kind, declared_dtype)`` for every reachable primitive member of a flagged template arg. Built (cheaply, no kernel-arg
-        #   declaration) on every compilation pass. ``build_Attribute`` uses it to ``mark_used`` the accessed
+        #   kind, declared_dtype)`` for reachable scalar members. Built without kernel-argument declarations on each
+        #   compilation pass. ``build_Attribute`` uses it to ``mark_used`` the accessed
         #   primitives during the non-enforcing discovery pass.
         # * ``struct_primitive_to_expr`` maps the same key to the arg-load ``Expr``. Populated only in the enforcing
         #   pass, and only for primitives actually accessed by the body (pruning), so ``build_Attribute`` can return

@@ -11,7 +11,7 @@ from tests.helpers import test_utils
 
 
 @pytest.mark.parametrize("fastcache", [False, True])
-@test_utils.test(offline_cache=True)
+@test_utils.test(offline_cache=True, require=qd.extension.data64)
 def test_nested_scalar_aliases(fastcache: bool, monkeypatch: pytest.MonkeyPatch) -> None:
     """Shared and separate containers use compatible kernels; warmed calls reuse the alias key."""
 
