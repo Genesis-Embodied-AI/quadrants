@@ -775,7 +775,7 @@ my_struct.b[37] 5
 </div>
 <section id="dataclass-aliases-and-fixed-container-references">
 <h4>Dataclass aliases and fixed container references<a class="headerlink" href="#dataclass-aliases-and-fixed-container-references" title="Link to this heading">#</a></h4>
-<p>Dataclasses inside data-oriented arguments may have multiple stored references (aliases). Ordinary attributes and tuples, including nested tuples, can hold those references.</p>
+<p>Dataclasses inside data-oriented arguments may have multiple stored references (aliases). Dataclasses must first be discovered through stored attributes. Aliases of those discovered objects may also be accessed through indexing. Discovery of dataclasses held only in tuples is a separate feature.</p>
 <p>After initialization, references connecting data-oriented objects, dataclasses, and their containing tuples must remain fixed. Replacing these references is unsupported and may produce incorrect results without an error. Initialization includes assembling the objects before their first kernel call, not only executing <code class="docutils literal notranslate"><span class="pre">__init__</span></code>. Runtime scalar values and tensor contents can still change, subject to the existing <code class="docutils literal notranslate"><span class="pre">Final</span></code> rules.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Before first kernel use:</span>
 <span class="n">owner</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">State</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
