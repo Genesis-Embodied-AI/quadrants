@@ -338,16 +338,16 @@ def is_data_oriented(obj: Any) -> bool:
     return False
 
 
-def wants_runtime_primitives(obj: Any) -> bool:
-    """Check whether the nearest class flag requests template_primitives=False.
+def uses_template_primitives(obj: Any) -> bool:
+    """Check the nearest template_primitives flag, defaulting to True.
 
     Use the same metaclass-safe lookup as is_data_oriented.
     """
     for klass in type(obj).__mro__:
         flag = klass.__dict__.get("_qd_template_primitives")
         if flag is not None:
-            return flag is False
-    return False
+            return flag is not False
+    return True
 
 
 def is_dataclass_instance(obj: Any) -> bool:

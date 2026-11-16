@@ -21,7 +21,7 @@ from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import (
     is_data_oriented,
     is_dataclass_instance,
-    wants_runtime_primitives,
+    uses_template_primitives,
 )
 from quadrants.types import annotations
 
@@ -84,7 +84,7 @@ def _collect_runtime_scalars_from_data_oriented_args(
         val = py_args[i]
         if isinstance(val, _TensorClass):
             val = val._unwrap()
-        if wants_runtime_primitives(val):
+        if not uses_template_primitives(val):
             flagged.append((i, val))
 
     scalar_members: list[_ScalarMember] = []
