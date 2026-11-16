@@ -35,7 +35,7 @@ from quadrants.lang.ast.ast_transformers import graph_api
 from quadrants.lang.ast.ast_transformers.checkpoint_transformer import (
     CheckpointTransformer,
 )
-from quadrants.lang.ast.ast_transformers.data_oriented_scalar_parameters import (
+from quadrants.lang.ast.ast_transformers.data_oriented_runtime_scalar_binder import (
     bind_data_oriented_scalar_parameters,
 )
 from quadrants.lang.ast.symbol_resolver import ASTResolver

@@ -924,7 +924,7 @@ class Kernel(FuncBase):
         members. Walks each recorded attr-chain to read the live value and buckets it by declared dtype kind (``'f'``
         float, ``'i'`` signed int, ``'u'`` unsigned int), so the value is bound fresh on every launch.
 
-        The dtype kind is frozen at first compile (see ``data_oriented_scalar_parameters``). Binding a ``float`` to an
+        The dtype kind is frozen at first compile (see ``data_oriented_runtime_scalar_binder``). Binding a ``float`` to an
         arg that was lifted as an integer would silently truncate (``int(1.5) == 1``), so that one lossy direction is
         rejected here rather than corrupting the value; the lossless directions (``int``/``bool`` -> float, and
         ``bool`` <-> ``int``) still coerce, matching typed-scalar-arg semantics."""
