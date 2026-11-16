@@ -143,7 +143,7 @@ def _create_scalar_bindings(ctx: ASTTransformerFuncContext, scalar_members: list
         launch_info.append((arg_id[0], arg_idx, attr_chain, kind))
 
 
-def bind_data_oriented_scalar_parameters(ctx: ASTTransformerFuncContext) -> None:
+def bind_data_oriented_runtime_scalar_parameters(ctx: ASTTransformerFuncContext) -> None:
     """Find opted-in scalar members, then create their compiler bindings."""
     assert ctx.py_args is not None
     scalar_members = _collect_runtime_scalars_from_data_oriented_args(ctx.py_args, ctx.func.arg_metas)
