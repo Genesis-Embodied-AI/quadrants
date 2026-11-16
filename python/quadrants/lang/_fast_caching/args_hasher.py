@@ -8,6 +8,7 @@ from typing import Any, Sequence
 import numpy as np
 
 from quadrants import _logging, _tensor_wrapper
+from quadrants._lib.core.quadrants_python import DataTypeCxx
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorWrapper
 from quadrants.lang._container_aliases import get_container_alias_key
@@ -288,7 +289,9 @@ def dataclass_to_repr(
                 except AttributeError:
                     pass
             return _FAIL_FASTCACHE
-        full_repr = f"{field.name}: ({field.type}, {_repr})"
+        if isinstance(field.type, DataTypeCxx):
+            _repr = f"{field.type}:{_repr}"
+        full_repr = f"{field.name}: ({_repr})"
         if field.metadata.get(FIELD_METADATA_CACHE_VALUE, False):
             full_repr += f" = {child_value}"
         repr_l.append(full_repr)
