@@ -99,7 +99,7 @@ def _collect_runtime_scalars_from_data_oriented_args(
 def _create_runtime_scalar_bindings(ctx: ASTTransformerFuncContext, scalar_members: list[_ScalarMember]) -> None:
     """Record scalar routes and add the used members as kernel parameters in the enforcing pass."""
     runtime = impl.get_runtime()
-    provenance = ctx.global_context.struct_primitive_provenance
+    runtime_scalar_arg_info_by_member = ctx.global_context.runtime_scalar_arg_info_by_member
     expr_cache = ctx.global_context.struct_primitive_to_expr
     launch_info = ctx.global_context.struct_primitive_launch_info
     pruning = ctx.global_context.pruning
@@ -110,7 +110,7 @@ def _create_runtime_scalar_bindings(ctx: ASTTransformerFuncContext, scalar_membe
     for parent, attr_name, value, arg_idx, attr_chain in scalar_members:
         # Interned scalar values can be shared by unrelated members.
         key = (id(parent), attr_name)
-        if key in provenance:
+        if key in runtime_scalar_arg_info_by_member:
             continue
         value_type = type(value)
         if value_type is bool or value_type is int:
@@ -120,7 +120,7 @@ def _create_runtime_scalar_bindings(ctx: ASTTransformerFuncContext, scalar_membe
         else:
             continue
         flat_name = f"__qd_doprim_{arg_idx}__{'__'.join(attr_chain)}"
-        provenance[key] = (flat_name, arg_idx, attr_chain, kind)
+        runtime_scalar_arg_info_by_member[key] = (flat_name, arg_idx, attr_chain, kind)
         # Add only members marked used during discovery, avoiding MAX_ARG_NUM for large containers.
         if not pruning.enforcing or not pruning.is_used(func_id, flat_name):
             continue

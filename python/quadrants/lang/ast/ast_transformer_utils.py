@@ -188,8 +188,8 @@ class ASTTransformerGlobalContext:
         self.ndarray_to_any_array: dict[int, Any] = {}
         self.struct_ndarray_launch_info: list[tuple] = []
         # Lifted-primitive support for ``@qd.data_oriented(template_primitives=False)``. Mirrors the two ndarray
-        # structures above, plus a provenance map driving the two-pass pruning.
-        # * ``struct_primitive_provenance`` maps ``(id(parent_obj), attr_name)`` to ``(flat_name, arg_idx, attr_chain,
+        # structures above, plus member-to-argument metadata driving the two-pass pruning.
+        # * ``runtime_scalar_arg_info_by_member`` maps ``(id(parent_obj), attr_name)`` to ``(flat_name, arg_idx, attr_chain,
         #   kind)`` for every reachable primitive member of a flagged template arg. Built (cheaply, no kernel-arg
         #   declaration) on every compilation pass. ``build_Attribute`` uses it to ``mark_used`` the accessed
         #   primitives during the non-enforcing discovery pass.
@@ -198,7 +198,7 @@ class ASTTransformerGlobalContext:
         #   the runtime scalar arg instead of baking the value.
         # * ``struct_primitive_launch_info`` records ``(arg_id, template_arg_idx, attr_chain, kind)`` tuples (``kind``
         #   in ``{'f', 'i', 'u'}``) so the launch path can read the live value and bind it.
-        self.struct_primitive_provenance: dict[tuple[int, str], tuple] = {}
+        self.runtime_scalar_arg_info_by_member: dict[tuple[int, str], tuple] = {}
         self.struct_primitive_to_expr: dict[tuple[int, str], Any] = {}
         self.struct_primitive_launch_info: list[tuple] = []
         # Caller-side `loop_depth` snapshot for the in-flight `@qd.func` invocation. Each func compile creates a fresh
@@ -501,11 +501,11 @@ def maybe_lifted_primitive(ctx: ASTTransformerFuncContext, parent: Any, attr: st
     per-attribute baked escape hatch, so a ``qd.static`` use is unambiguously a mistake and we surface it loudly
     rather than silently baking a value that will not track mutations.
     """
-    provenance = ctx.global_context.struct_primitive_provenance
-    if not provenance:
+    runtime_scalar_arg_info_by_member = ctx.global_context.runtime_scalar_arg_info_by_member
+    if not runtime_scalar_arg_info_by_member:
         return None
     key = (id(parent), attr)
-    entry = provenance.get(key)
+    entry = runtime_scalar_arg_info_by_member.get(key)
     if entry is None:
         return None
     if ctx.is_in_static_scope():
