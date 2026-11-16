@@ -40,19 +40,19 @@ def _collect_scalar_members(
     py_obj: Any,
     arg_idx: int,
     path: tuple[str, ...],
-    seen: set[int],
-    members: list[_ScalarMember],
+    seen_ids: set[int],
+    scalar_members: list[_ScalarMember],
 ) -> None:
     """Walk stored attributes of data-oriented objects and dataclasses, collecting exact Python bool, int, and float values.
 
-    Append each scalar and its attribute route to members, including scalars the kernel does not use. Pruning later
+    Append each scalar and its attribute route to scalar_members, including scalars the kernel does not use. Pruning later
     selects the kernel parameters. Stop at previously visited objects and do not descend into lists, tuples, or dicts.
     """
     obj_id = id(py_obj)
-    if obj_id in seen:
+    if obj_id in seen_ids:
         return
 
-    seen.add(obj_id)
+    seen_ids.add(obj_id)
     if is_dataclass_instance(py_obj):
         items = [(field.name, getattr(py_obj, field.name)) for field in dataclasses.fields(py_obj)]
     elif hasattr(py_obj, "__dict__"):
@@ -65,9 +65,9 @@ def _collect_scalar_members(
             attr_val = attr_val._unwrap()
         attr_type = type(attr_val)
         if attr_type is bool or attr_type is int or attr_type is float:
-            members.append(_ScalarMember(py_obj, attr_name, attr_val, arg_idx, (*path, attr_name)))
+            scalar_members.append(_ScalarMember(py_obj, attr_name, attr_val, arg_idx, (*path, attr_name)))
         elif is_dataclass_instance(attr_val) or is_data_oriented(attr_val):
-            _collect_scalar_members(attr_val, arg_idx, (*path, attr_name), seen, members)
+            _collect_scalar_members(attr_val, arg_idx, (*path, attr_name), seen_ids, scalar_members)
 
 
 def _find_scalar_members(py_args: tuple[Any, ...], arg_metas: list[ArgMetadata]) -> list[_ScalarMember]:
@@ -85,13 +85,13 @@ def _find_scalar_members(py_args: tuple[Any, ...], arg_metas: list[ArgMetadata])
         if wants_runtime_primitives(val):
             flagged.append((i, val))
 
-    members: list[_ScalarMember] = []
+    scalar_members: list[_ScalarMember] = []
     for arg_idx, val in flagged:
-        _collect_scalar_members(val, arg_idx, (), set(), members)
-    return members
+        _collect_scalar_members(val, arg_idx, (), set(), scalar_members)
+    return scalar_members
 
 
-def _create_scalar_bindings(ctx: ASTTransformerFuncContext, members: list[_ScalarMember]) -> None:
+def _create_scalar_bindings(ctx: ASTTransformerFuncContext, scalar_members: list[_ScalarMember]) -> None:
     """Record scalar routes and add the used members as kernel parameters in the enforcing pass."""
     from quadrants._lib import core as _qd_core  # pylint: disable=C0415
     from quadrants.lang.util import cook_dtype  # pylint: disable=C0415
@@ -110,7 +110,7 @@ def _create_scalar_bindings(ctx: ASTTransformerFuncContext, members: list[_Scala
     # collides with dataclass-field pruning.
     func_id = pruning.KERNEL_FUNC_ID
 
-    for parent, attr_name, value, arg_idx, attr_chain in members:
+    for parent, attr_name, value, arg_idx, attr_chain in scalar_members:
         # Different members can share an interned scalar value, so identify the parent and attribute instead.
         key = (id(parent), attr_name)
         if key in provenance:
@@ -144,6 +144,6 @@ def _create_scalar_bindings(ctx: ASTTransformerFuncContext, members: list[_Scala
 def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
     """Find opted-in scalar members, then create their compiler bindings."""
     assert ctx.py_args is not None
-    members = _find_scalar_members(ctx.py_args, ctx.func.arg_metas)
-    if members:
-        _create_scalar_bindings(ctx, members)
+    scalar_members = _find_scalar_members(ctx.py_args, ctx.func.arg_metas)
+    if scalar_members:
+        _create_scalar_bindings(ctx, scalar_members)
