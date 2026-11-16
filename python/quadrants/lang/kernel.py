@@ -937,10 +937,10 @@ class Kernel(FuncBase):
             else:
                 if type(obj) is float:
                     raise TypeError(
-                        f"Primitive member '{'.'.join(attr_chain)}' of a @qd.data_oriented(template_primitives=False) "
-                        f"object was lifted as an integer kernel argument (its type at first compile), but is now a "
+                        f"Scalar member '{'.'.join(attr_chain)}' of a data-oriented argument "
+                        f"was declared as an integer kernel argument, but is now a "
                         f"float ({obj!r}); coercing it would truncate. Keep the member's type stable across launches, "
-                        f"or use the default template_primitives=True to re-specialise the kernel per type."
+                        f"or declare a floating-point dataclass field if fractional values are needed."
                     )
                 if kind == "u":
                     launch_ctx_buffer[_UINT].append((arg_id, int(obj)))

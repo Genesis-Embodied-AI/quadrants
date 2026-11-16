@@ -510,10 +510,9 @@ def maybe_lifted_primitive(ctx: ASTTransformerFuncContext, parent: Any, attr: st
         return None
     if ctx.is_in_static_scope():
         raise QuadrantsSyntaxError(
-            f"'{attr}' is a primitive member of a @qd.data_oriented(template_primitives=False) object, so it is "
-            f"a runtime kernel argument and cannot be used inside qd.static(). Either remove qd.static(), or "
-            f"decorate the class @qd.data_oriented (the default, template_primitives=True) to bake '{attr}' as a "
-            f"compile-time constant."
+            f"'{attr}' is a runtime scalar kernel argument and cannot be used inside qd.static(). "
+            "For a dataclass constant, annotate the field with typing.Final[T] or qd.Template. "
+            "For an ordinary data-oriented scalar, use template_primitives=True."
         )
     pruning = ctx.global_context.pruning
     if not pruning.enforcing:

@@ -9,6 +9,7 @@ from quadrants.lang.util import is_data_oriented
 from quadrants.types import ndarray_type
 
 from .. import _warnings
+from ._container_aliases import get_container_alias_key
 from ._kernel_types import ArgsHash
 from ._optional_annotation import OPTIONAL_ABSENT
 from ._template_mapper_hotpath import (
@@ -156,7 +157,7 @@ class TemplateMapper:
             if mapping_cache_tracker:
                 return self._mapping_cache[args_hash]
 
-        key = self.extract(raise_on_templated_floats, args)
+        key = self.extract(raise_on_templated_floats, args) + (get_container_alias_key(args),)
         try:
             count = self.mapping[key]
         except KeyError:

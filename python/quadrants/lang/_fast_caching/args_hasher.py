@@ -10,6 +10,7 @@ import numpy as np
 from quadrants import _logging, _tensor_wrapper
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorWrapper
+from quadrants.lang._container_aliases import get_container_alias_key
 from quadrants.types.annotations import Template
 
 from .._final.final_constant_values import final_scalar_key
@@ -274,7 +275,7 @@ def dataclass_to_repr(
             raise_on_templated_floats,
             path + (field.name,),
             child_value,
-            arg_meta=None,
+            arg_meta=ArgMetadata(field.type, field.name),
             pruning_paths=pruning_paths,
             parent_flat=child_flat,
         )
@@ -287,7 +288,7 @@ def dataclass_to_repr(
                 except AttributeError:
                     pass
             return _FAIL_FASTCACHE
-        full_repr = f"{field.name}: ({_repr})"
+        full_repr = f"{field.name}: ({field.type}, {_repr})"
         if field.metadata.get(FIELD_METADATA_CACHE_VALUE, False):
             full_repr += f" = {child_value}"
         repr_l.append(full_repr)
@@ -453,7 +454,7 @@ def hash_args(
     _should_warn = False
     g_num_calls += 1
     g_num_args += len(args)
-    hash_l = []
+    hash_l = [repr(get_container_alias_key(args))]
     if len(args) != len(arg_metas):
         raise RuntimeError(
             f"Number of args passed in {len(args)} doesnt match number of declared args {len(arg_metas)}"

@@ -1,21 +1,13 @@
 # type: ignore
-"""Lift primitive members of ``@qd.data_oriented(template_primitives=False)`` template args into runtime scalar kernel
-args at AST-build time.
-
-Lives alongside ``ndarray_arg_resolver.py`` / ``checkpoint_transformer.py`` so the central
-``function_def_transformer.py`` file doesn't have to grow per-feature (the same rationale the ndarray resolver
-documents). ``FunctionDefTransformer.transform`` delegates here right after ``_predeclare_struct_ndarrays``; this is
-the only entry point.
-
-See ``docs/source/user_guide/compound_types.md`` (section "Runtime primitives: ``template_primitives=False``") for the
-user-facing surface.
-"""
+"""Bind dataclass scalars and opted-in data-oriented primitives as runtime kernel inputs."""
 
 import dataclasses
 from typing import Any
 
+from quadrants._lib.core.quadrants_python import DataTypeCxx
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import expr, impl
+from quadrants.lang._final.final_dataclass_fields import final_field_names
 from quadrants.lang.ast.ast_transformer_utils import ASTTransformerFuncContext
 from quadrants.lang.util import (
     is_data_oriented,
@@ -26,25 +18,8 @@ from quadrants.types import annotations
 
 
 def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
-    """For each templated arg whose root class is decorated ``@qd.data_oriented(template_primitives=False)``, walk
-    the reachable attribute graph and declare every primitive (``int`` / ``float`` / ``bool``) member as a runtime
-    scalar kernel arg, instead of letting ``build_Attribute`` bake it as a compile-time constant. The arg-load
-    ``Expr`` is cached on the global context keyed by ``(id(parent_obj), attr_name)`` for ``build_Attribute`` to
-    substitute, and a ``(arg_id, template_arg_idx, attr_chain, kind)`` tuple is recorded for the launch path to
-    bind the live value.
-
-    Mirrors ``_predeclare_struct_ndarrays``. Primitive leaves have no stable identity (``id(5)`` is interned), so
-    the cache is keyed on the parent container's identity plus the attribute name. Only plain Python ``int`` /
-    ``float`` / ``bool`` are lifted (matched by exact type so numpy scalars etc. keep their previous baked
-    behaviour). dtype follows the runtime defaults (``default_ip`` / ``default_fp``), matching how a baked Python
-    constant would be typed.
-
-    ``_seen`` guards against attribute-graph cycles (e.g. ``sim.solver.sim is sim``), same as the ndarray walker.
-    """
+    """Declare used scalars and record the attribute routes supplying their values at launch."""
     assert ctx.py_args is not None
-    # Cheap early-out for the common case (no flagged template arg): the default ``template_primitives=True`` path
-    # never builds a walk, so genesis-style data_oriented kernels pay only one ``wants_runtime_primitives`` check
-    # per template arg at compile time, and nothing at launch.
     flagged: list[tuple[int, Any]] = []
     for i, arg_meta in enumerate(ctx.func.arg_metas):
         anno = arg_meta.annotation
@@ -55,14 +30,14 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
         val = ctx.py_args[i]
         if isinstance(val, _TensorClass):
             val = val._unwrap()
-        if wants_runtime_primitives(val):
+        if is_data_oriented(val):
             flagged.append((i, val))
     if not flagged:
         return
 
     from quadrants._lib import core as _qd_core  # pylint: disable=C0415
     from quadrants.lang.util import cook_dtype  # pylint: disable=C0415
-    from quadrants.types.utils import is_signed  # pylint: disable=C0415
+    from quadrants.types.utils import is_real, is_signed  # pylint: disable=C0415
 
     runtime = impl.get_runtime()
     default_ip = runtime.default_ip
@@ -77,12 +52,23 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
     # collides with dataclass-field pruning.
     func_id = pruning.KERNEL_FUNC_ID
 
-    def _register_primitive(parent, attr_name, value, arg_idx, attr_chain):
+    def _register_primitive(
+        parent: Any,
+        attr_name: str,
+        value: Any,
+        arg_idx: int,
+        attr_chain: tuple[str, ...],
+        declared_dtype: DataTypeCxx | None = None,
+    ) -> None:
+        """Declare one scalar input per member identity, shared by all aliases of that member."""
         key = (id(parent), attr_name)
         if key in provenance:
             return
         value_type = type(value)
-        if value_type is bool or value_type is int:
+        if declared_dtype is not None:
+            dtype = declared_dtype
+            kind = "f" if is_real(dtype) else ("i" if is_signed(dtype) else "u")
+        elif value_type is bool or value_type is int:
             dtype, kind = default_ip, ("i" if is_signed(default_ip) else "u")
         elif value_type is float:
             dtype, kind = default_fp, "f"
@@ -106,25 +92,49 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
         )
         launch_info.append((arg_id[0], arg_idx, attr_chain, kind))
 
-    def _walk(obj, arg_idx, path, seen):
+    def _walk(obj: Any, arg_idx: int, path: tuple[str, ...], seen: set[int], lift_plain: bool) -> None:
+        """Visit stored containers, using annotations for dataclass scalars and the owner flag for plain scalars."""
         obj_id = id(obj)
         if obj_id in seen:
             return
+
         seen.add(obj_id)
         if is_dataclass_instance(obj):
-            items = [(f.name, getattr(obj, f.name)) for f in dataclasses.fields(obj)]
+            final_names = final_field_names(type(obj))
+            for field in dataclasses.fields(obj):
+                value = getattr(obj, field.name)
+                if field.name in final_names:
+                    continue
+                annotation = field.type
+                if (
+                    annotation is int
+                    or annotation is float
+                    or annotation is bool
+                    or isinstance(annotation, DataTypeCxx)
+                ):
+                    _register_primitive(obj, field.name, value, arg_idx, (*path, field.name), cook_dtype(annotation))
+                elif is_dataclass_instance(value):
+                    _walk(value, arg_idx, (*path, field.name), seen, lift_plain)
+            return
+
+        if hasattr(obj, "_asdict"):
+            items = obj._asdict().items()
         elif hasattr(obj, "__dict__"):
-            items = list(vars(obj).items())
+            items = vars(obj).items()
         else:
             return
+
         for attr_name, attr_val in items:
+            if attr_name.startswith("_qd_"):
+                continue
             if isinstance(attr_val, _TensorClass):
                 attr_val = attr_val._unwrap()
             attr_type = type(attr_val)
-            if attr_type is bool or attr_type is int or attr_type is float:
+            if lift_plain and attr_type in (bool, int, float):
                 _register_primitive(obj, attr_name, attr_val, arg_idx, (*path, attr_name))
             elif is_dataclass_instance(attr_val) or is_data_oriented(attr_val):
-                _walk(attr_val, arg_idx, (*path, attr_name), seen)
+                _walk(attr_val, arg_idx, (*path, attr_name), seen, lift_plain)
 
+    seen: set[int] = set()
     for arg_idx, val in flagged:
-        _walk(val, arg_idx, (), set())
+        _walk(val, arg_idx, (), seen, wants_runtime_primitives(val))
