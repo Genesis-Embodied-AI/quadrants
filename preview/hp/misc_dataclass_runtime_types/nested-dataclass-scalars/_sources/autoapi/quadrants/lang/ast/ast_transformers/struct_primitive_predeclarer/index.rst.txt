@@ -1,0 +1,27 @@
+quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer
+================================================================
+
+.. py:module:: quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer
+
+.. autoapi-nested-parse::
+
+   Bind dataclass scalars and opted-in data-oriented primitives as runtime kernel inputs.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer.predeclare_struct_primitives
+
+
+Module Contents
+---------------
+
+.. py:function:: predeclare_struct_primitives(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext) -> None
+
+   Declare used scalars and record the attribute routes supplying their values at launch.
+
+
