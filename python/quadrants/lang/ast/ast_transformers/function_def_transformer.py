@@ -291,14 +291,7 @@ class FunctionDefTransformer:
         # Sharing it across the whole arg is safe because the ndarray set rooted at a node does not depend on the path
         # taken to reach it.
         def _walk_obj(obj, arg_idx, path, seen):
-            if isinstance(obj, tuple):
-                for index, child in enumerate(obj):
-                    if id(child) not in seen and (
-                        is_dataclass_instance(child) or is_data_oriented(child) or isinstance(child, tuple)
-                    ):
-                        seen.add(id(child))
-                        _walk_obj(child, arg_idx, (*path, index), seen)
-            elif is_dataclass_instance(obj):
+            if is_dataclass_instance(obj):
                 for field in dataclasses.fields(obj):
                     child = getattr(obj, field.name)
                     if isinstance(child, _TensorClass):
@@ -317,7 +310,7 @@ class FunctionDefTransformer:
                         attr_val = attr_val._unwrap()
                     if isinstance(attr_val, _ndarray.Ndarray):
                         _register_ndarray(attr_val, arg_idx, (*path, attr_name))
-                    elif is_dataclass_instance(attr_val) or is_data_oriented(attr_val) or isinstance(attr_val, tuple):
+                    elif is_dataclass_instance(attr_val) or is_data_oriented(attr_val):
                         attr_id = id(attr_val)
                         if attr_id in seen:
                             continue
@@ -338,7 +331,7 @@ class FunctionDefTransformer:
                     return
                 flat = arg_name
                 for attr in attr_chain:
-                    flat = create_flat_name(flat, str(attr))
+                    flat = create_flat_name(flat, attr)
                 if flat not in kernel_used_flat_names:
                     return
             from quadrants._lib import core as _qd_core  # pylint: disable=C0415

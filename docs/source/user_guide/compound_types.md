@@ -320,7 +320,7 @@ Simulation(200).step()   # compiles kernel #2 with n=200 baked in
 
 #### Dataclass aliases and fixed container references
 
-Dataclasses inside data-oriented arguments may have multiple stored references (aliases). Ordinary attributes and tuples, including nested tuples, can hold those references.
+Dataclasses inside data-oriented arguments may have multiple stored references (aliases). Dataclasses must first be discovered through stored attributes. Aliases of those discovered objects may also be accessed through indexing. Discovery of dataclasses held only in tuples is a separate feature.
 
 After initialization, references connecting data-oriented objects, dataclasses, and their containing tuples must remain fixed. Replacing these references is unsupported and may produce incorrect results without an error. Initialization includes assembling the objects before their first kernel call, not only executing `__init__`. Runtime scalar values and tensor contents can still change, subject to the existing `Final` rules.
 

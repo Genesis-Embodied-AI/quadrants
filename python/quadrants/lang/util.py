@@ -36,10 +36,10 @@ from quadrants.types.primitive_types import (
 MAP_TYPE_IDS = {id(dtype): dtype for dtype in all_types}
 
 
-def get_member_at_path(py_obj: Any, path: tuple[str | int, ...]) -> Any:
-    """Follow attribute names and tuple indices and return the resulting object."""
+def get_member_at_path(py_obj: Any, path: tuple[str, ...]) -> Any:
+    """Follow the attribute names in path and return the resulting object."""
     for name in path:
-        py_obj = py_obj[name] if isinstance(name, int) else getattr(py_obj, name)
+        py_obj = getattr(py_obj, name)
     return py_obj
 
 

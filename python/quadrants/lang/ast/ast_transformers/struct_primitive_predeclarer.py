@@ -72,13 +72,13 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
         attr_name: str,
         value: Any,
         arg_idx: int,
-        attr_chain: tuple[str | int, ...],
+        attr_chain: tuple[str, ...],
         inferred_dtype: DataTypeCxx | None = None,
     ) -> None:
         """Declare a used scalar and remember how to read its value at launch."""
         # Sharing this identity-based binding between aliases requires their container references to remain fixed.
         key = (id(parent), attr_name)
-        flat_name = f"__qd_doprim_{arg_idx}__{'__'.join(map(str, attr_chain))}"
+        flat_name = f"__qd_doprim_{arg_idx}__{'__'.join(attr_chain)}"
         if key in provenance:
             return
 
@@ -112,7 +112,7 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
     def _walk(
         obj: Any,
         arg_idx: int,
-        path: tuple[str | int, ...],
+        path: tuple[str, ...],
         seen: set[int],
         schema: type | None = None,
         lift_plain: bool = False,
@@ -124,9 +124,7 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
         seen.add(obj_id)
         if is_dataclass_instance(obj):
             ctx.global_context.runtime_dataclass_binding_objects.add(obj_id)
-            schema = schema or cached_infer_dataclass_type(
-                obj, ".".join(map(str, (ctx.func.arg_metas[arg_idx].name, *path)))
-            )
+            schema = schema or cached_infer_dataclass_type(obj, ".".join((ctx.func.arg_metas[arg_idx].name, *path)))
             for field in dataclasses.fields(schema):
                 value = getattr(obj, field.name)
                 if isinstance(field.type, DeferredMemberType):
@@ -134,7 +132,7 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
                     if errors is None:
                         errors = ctx.global_context.nested_dataclass_errors = {}
                     errors[(id(obj), field.name)] = field.type.bind(
-                        ".".join(map(str, (ctx.func.arg_metas[arg_idx].name, *path, field.name)))
+                        ".".join((ctx.func.arg_metas[arg_idx].name, *path, field.name))
                     )
                 elif is_final_annotation(field.type):
                     continue
