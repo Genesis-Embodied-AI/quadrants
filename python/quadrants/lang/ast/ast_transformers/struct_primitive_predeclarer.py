@@ -36,7 +36,7 @@ class _ScalarMember(NamedTuple):
     attr_chain: tuple[str, ...]
 
 
-def _collect_scalar_members(
+def _collect_scalar_members_in_data_oriented(
     py_obj: Any,
     arg_idx: int,
     path: tuple[str, ...],
@@ -67,10 +67,12 @@ def _collect_scalar_members(
         if attr_type is bool or attr_type is int or attr_type is float:
             scalar_members.append(_ScalarMember(py_obj, attr_name, attr_val, arg_idx, (*path, attr_name)))
         elif is_dataclass_instance(attr_val) or is_data_oriented(attr_val):
-            _collect_scalar_members(attr_val, arg_idx, (*path, attr_name), seen_ids, scalar_members)
+            _collect_scalar_members_in_data_oriented(attr_val, arg_idx, (*path, attr_name), seen_ids, scalar_members)
 
 
-def _find_scalar_members(py_args: tuple[Any, ...], arg_metas: list[ArgMetadata]) -> list[_ScalarMember]:
+def _collect_runtime_scalar_members_from_args(
+    py_args: tuple[Any, ...], arg_metas: list[ArgMetadata]
+) -> list[_ScalarMember]:
     """Find scalar members of template arguments whose owners opt into runtime primitives."""
     flagged: list[tuple[int, Any]] = []
     for i, arg_meta in enumerate(arg_metas):
@@ -87,7 +89,7 @@ def _find_scalar_members(py_args: tuple[Any, ...], arg_metas: list[ArgMetadata])
 
     scalar_members: list[_ScalarMember] = []
     for arg_idx, val in flagged:
-        _collect_scalar_members(val, arg_idx, (), set(), scalar_members)
+        _collect_scalar_members_in_data_oriented(val, arg_idx, (), set(), scalar_members)
     return scalar_members
 
 
@@ -144,6 +146,6 @@ def _create_scalar_bindings(ctx: ASTTransformerFuncContext, scalar_members: list
 def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
     """Find opted-in scalar members, then create their compiler bindings."""
     assert ctx.py_args is not None
-    scalar_members = _find_scalar_members(ctx.py_args, ctx.func.arg_metas)
+    scalar_members = _collect_runtime_scalar_members_from_args(ctx.py_args, ctx.func.arg_metas)
     if scalar_members:
         _create_scalar_bindings(ctx, scalar_members)
