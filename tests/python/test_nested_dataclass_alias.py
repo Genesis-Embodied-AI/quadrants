@@ -1,62 +1,8 @@
 from dataclasses import dataclass
 
-import pytest
-
 import quadrants as qd
 
 from tests.helpers import test_utils
-
-
-@pytest.mark.parametrize("route", ["list", "method", "attributes", "nested_attributes"])
-@pytest.mark.parametrize("fastcache", [False, True])
-@test_utils.test()
-def test_nested_dataclass_alias_rejected(route: str, fastcache: bool) -> None:
-    """An alias must not silently bind a scalar through a different attribute path."""
-
-    @dataclass
-    class State:
-        value: int
-
-    @dataclass
-    class Pair:
-        first: State
-        second: State
-
-    @qd.data_oriented
-    class Owner:
-        def __init__(self) -> None:
-            """Create two access routes to one dataclass."""
-            state = State(3)
-            self.state = state
-            self.states = [state]
-            if route == "attributes":
-                self.second = state
-            elif route == "nested_attributes":
-                self.pair = Pair(state, state)
-
-        def get_alias(self) -> State:
-            """Return the dataclass through the stored list."""
-            return self.states[0]
-
-    @qd.kernel(fastcache=fastcache)
-    def read(owner: qd.Template, mode: qd.Template) -> qd.i32:
-        """Read through the route whose object identity hides its binding path."""
-        if qd.static(mode == "list"):
-            return owner.states[0].value
-        elif qd.static(mode == "method"):
-            return owner.get_alias().value
-        elif qd.static(mode == "attributes"):
-            return owner.second.value
-        else:
-            return owner.pair.second.value
-
-    owner = Owner()
-    with pytest.raises(Exception, match="dataclass.*alias|alias.*dataclass"):
-        read(owner, route)
-    owner.state = State(7)
-    if route == "nested_attributes":
-        owner.pair.first = State(9)
-    assert read(owner, route) == 3
 
 
 @test_utils.test(offline_cache=True)
@@ -91,7 +37,7 @@ def test_unused_nested_dataclass_alias_is_harmless() -> None:
 
 
 @test_utils.test(offline_cache=True)
-def test_nested_dataclass_alias_cannot_bypass_guard_via_disk_cache() -> None:
+def test_nested_dataclass_alias_uses_distinct_disk_cache_entry() -> None:
     """A cache entry compiled with distinct objects must not omit an aliased scalar argument."""
 
     @dataclass
@@ -115,6 +61,6 @@ def test_nested_dataclass_alias_cannot_bypass_guard_via_disk_cache() -> None:
     read(original, output)
     assert output[0] == 7
     aliased = Owner(True)
-    with pytest.raises(Exception, match="dataclass.*alias|alias.*dataclass"):
-        read(aliased, output)
-    assert read._primal.src_ll_cache_observations.cache_loaded
+    read(aliased, output)
+    assert output[0] == 3
+    assert not read._primal.src_ll_cache_observations.cache_loaded

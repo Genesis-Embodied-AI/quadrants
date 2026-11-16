@@ -875,7 +875,7 @@ class Kernel(FuncBase):
         """Walk a struct's attribute chain to find the live ndarray (or Tensor wrapper)."""
         obj = args[template_arg_idx]
         for attr_name in attr_chain:
-            obj = getattr(obj, attr_name)
+            obj = obj[attr_name] if isinstance(attr_name, int) else getattr(obj, attr_name)
         if type(obj) in _TENSOR_WRAPPER_TYPES:
             obj = obj._unwrap()
         return obj
@@ -893,7 +893,7 @@ class Kernel(FuncBase):
         for arg_id, template_arg_idx, attr_chain in launch_info:
             obj = args[template_arg_idx]
             for attr_name in attr_chain:
-                obj = getattr(obj, attr_name)
+                obj = obj[attr_name] if isinstance(attr_name, int) else getattr(obj, attr_name)
             if type(obj) in _TENSOR_WRAPPER_TYPES:
                 obj = obj._unwrap()
             assert isinstance(obj, Ndarray), f"Expected Ndarray at {attr_chain}, got {type(obj)}"
@@ -921,13 +921,14 @@ class Kernel(FuncBase):
         for arg_id, template_arg_idx, attr_chain, kind in launch_info:
             obj = args[template_arg_idx]
             for attr_name in attr_chain:
-                obj = getattr(obj, attr_name)
+                obj = obj[attr_name] if isinstance(attr_name, int) else getattr(obj, attr_name)
             if kind == "f":
                 launch_ctx_buffer[_FLOAT].append((arg_id, float(obj)))
             else:
                 if type(obj) is float:
                     raise TypeError(
-                        f"Primitive member '{'.'.join(attr_chain)}' of a @qd.data_oriented(template_primitives=False) "
+                        f"Primitive member '{'.'.join(map(str, attr_chain))}' of a "
+                        f"@qd.data_oriented(template_primitives=False) "
                         f"object was lifted as an integer kernel argument (its type at first compile), but is now a "
                         f"float ({obj!r}); coercing it would truncate. Keep the member's type stable across launches, "
                         f"or use the default template_primitives=True to re-specialise the kernel per type."

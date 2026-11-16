@@ -320,28 +320,26 @@ Simulation(200).step()   # compiles kernel #2 with n=200 baked in
 
 #### Dataclass aliases and fixed container references
 
-The intended contract for dataclasses inside data-oriented arguments allows aliases: multiple references to the same object. After initialization, references connecting these objects and their containing collections must remain fixed. Replacing those references is unsupported and may produce incorrect results without an error. Initialization includes assembling the objects before their first kernel call; it need not happen entirely inside `__init__`.
+Dataclasses inside data-oriented arguments may have multiple stored references (aliases). Ordinary attributes and tuples, including nested tuples, can hold those references.
 
-Ordinary runtime scalar values and tensor contents may still change. For example, given a data-oriented `owner` whose `state` is a dataclass with an ordinary integer member `value`:
+After initialization, references connecting data-oriented objects, dataclasses, and their containing tuples must remain fixed. Replacing these references is unsupported and may produce incorrect results without an error. Initialization includes assembling the objects before their first kernel call, not only executing `__init__`. Runtime scalar values and tensor contents can still change, subject to the existing `Final` rules.
 
 ```python
-# During initialization:
+# Before first kernel use:
 owner.state = State(3)
 owner.states = (owner.state,)
 
-# After initialization:
-owner.state.value = 7       # Allowed: update an ordinary runtime scalar.
+# After first kernel use:
+owner.state.value = 7       # Allowed: update runtime data.
 owner.state = State(9)      # Unsupported: replace a container reference.
 owner.states = (State(9),)  # Unsupported: replace a container reference.
 ```
 
-A tuple prevents replacing its entries, but does not make objects inside it immutable. Mutating a nested collection to replace a referenced object also violates this contract. Existing restrictions on `Final` fields and compile-time values still apply. This contract concerns container references used to reach dataclasses; the separately documented ndarray reassignment behavior is unchanged.
-
-**Current implementation:** some alias accesses are still rejected, including aliases reached through calls or indexing and used scalar members reached through multiple stored attribute paths. The fixed-reference contract is the intended basis for relaxing those checks; it does not mean those accesses are accepted yet. Arbitrary calls and properties are not guaranteed to return a fixed object and remain outside this promise.
+Python calls returning registered runtime dataclasses or containing objects, and undiscovered property routes, remain rejected. Lists, dictionaries, and sets along the container access routes are unsupported. The separately documented ndarray reassignment behavior is unchanged.
 
 #### Runtime primitives: `template_primitives=False`
 
-Access dataclasses inside data-oriented arguments through stored attributes, such as `owner.state`, rather than through properties, method calls, or indexing.
+Access dataclasses inside data-oriented arguments through stored attributes or tuple entries, such as `owner.state` or `owner.states[0]`.
 
 If you want to change a primitive member's value **from Python between launches without triggering a recompile**, decorate the class with `@qd.data_oriented(template_primitives=False)`. Every primitive member the kernel actually accesses (`int`, `float`, `bool`, including those reached through nested `dataclasses.dataclass` / `@qd.data_oriented` members) is then lifted into a runtime scalar kernel argument and read fresh on every launch, instead of being compiled into the kernel as a constant. The member stays read-only inside the kernel (it is a kernel argument, not a writable variable): you mutate it in Python, and the kernel sees the new value on the next launch.
 
