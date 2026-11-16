@@ -36,7 +36,7 @@ class _ScalarMember(NamedTuple):
     attr_chain: tuple[str, ...]
 
 
-def _collect_scalar_members_in_data_oriented(
+def _collect_scalars_in_single_data_oriented(
     py_obj: Any,
     arg_idx: int,
     path: tuple[str, ...],
@@ -67,7 +67,7 @@ def _collect_scalar_members_in_data_oriented(
         if attr_type is bool or attr_type is int or attr_type is float:
             scalar_members.append(_ScalarMember(py_obj, attr_name, attr_val, arg_idx, (*path, attr_name)))
         elif is_dataclass_instance(attr_val) or is_data_oriented(attr_val):
-            _collect_scalar_members_in_data_oriented(attr_val, arg_idx, (*path, attr_name), seen_ids, scalar_members)
+            _collect_scalars_in_single_data_oriented(attr_val, arg_idx, (*path, attr_name), seen_ids, scalar_members)
 
 
 def _collect_runtime_scalar_members_from_args(
@@ -89,7 +89,7 @@ def _collect_runtime_scalar_members_from_args(
 
     scalar_members: list[_ScalarMember] = []
     for arg_idx, val in flagged:
-        _collect_scalar_members_in_data_oriented(val, arg_idx, (), set(), scalar_members)
+        _collect_scalars_in_single_data_oriented(val, arg_idx, (), set(), scalar_members)
     return scalar_members
 
 
