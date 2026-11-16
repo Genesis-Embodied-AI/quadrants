@@ -93,7 +93,7 @@ def _collect_runtime_scalars_from_data_oriented_args(
     return scalar_members
 
 
-def _create_scalar_bindings(ctx: ASTTransformerFuncContext, scalar_members: list[_ScalarMember]) -> None:
+def _create_runtime_scalar_bindings(ctx: ASTTransformerFuncContext, scalar_members: list[_ScalarMember]) -> None:
     """Record scalar routes and add the used members as kernel parameters in the enforcing pass."""
     from quadrants._lib import core as _qd_core  # pylint: disable=C0415
     from quadrants.lang.util import cook_dtype  # pylint: disable=C0415
@@ -148,4 +148,4 @@ def bind_data_oriented_runtime_scalar_parameters(ctx: ASTTransformerFuncContext)
     assert ctx.py_args is not None
     scalar_members = _collect_runtime_scalars_from_data_oriented_args(ctx.py_args, ctx.func.arg_metas)
     if scalar_members:
-        _create_scalar_bindings(ctx, scalar_members)
+        _create_runtime_scalar_bindings(ctx, scalar_members)
