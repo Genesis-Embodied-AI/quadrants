@@ -12,7 +12,9 @@ from tests.helpers import test_utils
 
 @pytest.mark.parametrize("fastcache", [False, True])
 @test_utils.test(offline_cache=True, require=qd.extension.data64)
-def test_nested_scalar_aliases(fastcache: bool, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_nested_scalar_aliases(
+    fastcache: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Shared and separate containers use compatible kernels; warmed calls reuse the alias key."""
 
     @dataclass
@@ -41,7 +43,9 @@ def test_nested_scalar_aliases(fastcache: bool, monkeypatch: pytest.MonkeyPatch)
     def unexpected_walk(args: tuple[object, ...]) -> None:
         raise AssertionError("A warmed call must reuse its cached alias key")
 
-    monkeypatch.setattr("quadrants.lang._template_mapper.get_container_alias_key", unexpected_walk)
+    monkeypatch.setattr(
+        "quadrants.lang._container_aliases.get_container_alias_key", unexpected_walk
+    )
     assert read(owner) == 22
 
 
@@ -172,3 +176,52 @@ def test_shared_owner_keeps_runtime_primitive_opt_in() -> None:
     assert read(default, runtime) == 3
     child.value = 7
     assert read(default, runtime) == 7
+
+
+def test_alias_cache_reuses_graphs_and_releases_owners(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cache hits skip discovery; new argument combinations reuse graphs without retaining their owners."""
+    import gc
+    import weakref
+
+    from quadrants.lang import _container_aliases as aliases
+
+    @dataclass
+    class State:
+        value: int
+
+    @qd.data_oriented
+    class Owner:
+        def __init__(self, state: State) -> None:
+            self.state = state
+            self.cycle = self
+
+    state = State(3)
+    first, second = Owner(state), Owner(state)
+    args = (first, second, 1)
+    cache: aliases.AliasKeyCache = {}
+    key = aliases.get_cached_container_alias_key(args, tuple(map(id, args)), cache)
+
+    def unexpected_walk(py_obj: object) -> None:
+        raise AssertionError("A cached container graph must not be walked again")
+
+    monkeypatch.setattr(aliases, "_collect_container_ids", unexpected_walk)
+    assert (
+        aliases.get_cached_container_alias_key(args, tuple(map(id, args)), cache) == key
+    )
+    state.value = 9
+    for scalar in range(140):
+        changed_args = (first, second, scalar)
+        assert (
+            aliases.get_cached_container_alias_key(
+                changed_args, tuple(map(id, changed_args)), cache
+            )
+            == key
+        )
+    assert len(cache) == 128
+    first_ref = weakref.ref(first)
+    del args, changed_args, first, second
+    gc.collect()
+    assert first_ref() is None
+    assert not cache
