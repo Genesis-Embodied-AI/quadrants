@@ -99,8 +99,6 @@ def _collect_runtime_scalars_from_data_oriented_args(
 def _create_runtime_scalar_bindings(ctx: ASTTransformerFuncContext, scalar_members: list[_ScalarMember]) -> None:
     """Record scalar routes and add the used members as kernel parameters in the enforcing pass."""
     runtime = impl.get_runtime()
-    default_ip = runtime.default_ip
-    default_fp = runtime.default_fp
     provenance = ctx.global_context.struct_primitive_provenance
     expr_cache = ctx.global_context.struct_primitive_to_expr
     launch_info = ctx.global_context.struct_primitive_launch_info
@@ -116,9 +114,9 @@ def _create_runtime_scalar_bindings(ctx: ASTTransformerFuncContext, scalar_membe
             continue
         value_type = type(value)
         if value_type is bool or value_type is int:
-            dtype, kind = default_ip, ("i" if is_signed(default_ip) else "u")
+            dtype, kind = runtime.default_ip, ("i" if is_signed(runtime.default_ip) else "u")
         elif value_type is float:
-            dtype, kind = default_fp, "f"
+            dtype, kind = runtime.default_fp, "f"
         else:
             continue
         flat_name = f"__qd_doprim_{arg_idx}__{'__'.join(attr_chain)}"
