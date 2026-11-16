@@ -106,14 +106,12 @@ def _create_runtime_scalar_bindings(ctx: ASTTransformerFuncContext, scalar_membe
     expr_cache = ctx.global_context.struct_primitive_to_expr
     launch_info = ctx.global_context.struct_primitive_launch_info
     pruning = ctx.global_context.pruning
-    # Lifted primitives are tracked under the kernel's func id (rather than the accessing function's), so a
-    # primitive accessed only inside an inlined ``@qd.func`` is still declared, and so the used set is captured by
-    # the existing ``KERNEL_FUNC_ID`` fastcache serialisation. Flat names are globally unique, so this never
-    # collides with dataclass-field pruning.
+    # The kernel ID preserves uses inside inlined qd.func calls and includes them in fastcache pruning metadata.
+    # Globally unique flat names avoid collisions with dataclass fields.
     func_id = pruning.KERNEL_FUNC_ID
 
     for parent, attr_name, value, arg_idx, attr_chain in scalar_members:
-        # Different members can share an interned scalar value, so identify the parent and attribute instead.
+        # Interned scalar values can be shared by unrelated members.
         key = (id(parent), attr_name)
         if key in provenance:
             continue
@@ -126,15 +124,11 @@ def _create_runtime_scalar_bindings(ctx: ASTTransformerFuncContext, scalar_membe
             continue
         flat_name = f"__qd_doprim_{arg_idx}__{'__'.join(attr_chain)}"
         provenance[key] = (flat_name, arg_idx, attr_chain, kind)
-        # Declare a real kernel arg only in the enforcing pass, and only for primitives the body actually accessed
-        # (recorded via ``mark_used`` in ``build_Attribute`` during the discovery pass). This keeps the kernel arg
-        # count proportional to what is used rather than to every reachable scalar (a Genesis solver has hundreds),
-        # avoiding the MAX_ARG_NUM limit. The discovery pass declares nothing; its IR is discarded.
+        # Add only members marked used during discovery, avoiding MAX_ARG_NUM for large containers.
         if not pruning.enforcing or not pruning.is_used(func_id, flat_name):
             continue
         cooked = cook_dtype(dtype)
-        # ``insert_scalar_param`` returns an arg-id vector (like ``insert_ndarray_param``); ``make_arg_load_expr``
-        # consumes the vector, while the launch path needs the integer slot ``arg_id[0]``.
+        # Argument loads use the full ID vector; launches use its first integer slot.
         arg_id = impl.get_runtime().compiling_callable.insert_scalar_param(cooked, flat_name)
         argload_di = _qd_core.DebugInfo(impl.get_runtime().get_current_src_info())
         expr_cache[key] = expr.Expr(
