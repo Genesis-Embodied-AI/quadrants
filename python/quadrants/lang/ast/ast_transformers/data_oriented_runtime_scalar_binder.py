@@ -14,16 +14,19 @@ user-facing surface.
 import dataclasses
 from typing import Any, NamedTuple
 
+from quadrants._lib import core as _qd_core
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import expr, impl
 from quadrants.lang.ast.ast_transformer_utils import ASTTransformerFuncContext
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import (
+    cook_dtype,
     is_data_oriented,
     is_dataclass_instance,
     uses_template_primitives,
 )
 from quadrants.types import annotations
+from quadrants.types.utils import is_signed
 
 
 class _ScalarMember(NamedTuple):
@@ -95,10 +98,6 @@ def _collect_runtime_scalars_from_data_oriented_args(
 
 def _create_runtime_scalar_bindings(ctx: ASTTransformerFuncContext, scalar_members: list[_ScalarMember]) -> None:
     """Record scalar routes and add the used members as kernel parameters in the enforcing pass."""
-    from quadrants._lib import core as _qd_core  # pylint: disable=C0415
-    from quadrants.lang.util import cook_dtype  # pylint: disable=C0415
-    from quadrants.types.utils import is_signed  # pylint: disable=C0415
-
     runtime = impl.get_runtime()
     default_ip = runtime.default_ip
     default_fp = runtime.default_fp
