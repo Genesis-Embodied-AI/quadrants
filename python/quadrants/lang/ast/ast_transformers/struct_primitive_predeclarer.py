@@ -43,7 +43,11 @@ def _collect_scalar_members(
     seen: set[int],
     members: list[_ScalarMember],
 ) -> None:
-    """Append scalars reached through stored data-oriented and dataclass attributes, stopping repeated visits."""
+    """Walk stored attributes of data-oriented objects and dataclasses, collecting exact Python bool, int, and float values.
+
+    Append each scalar and its attribute route to members, including scalars the kernel does not use. Pruning later
+    selects the kernel parameters. Stop at previously visited objects and do not descend into lists, tuples, or dicts.
+    """
     obj_id = id(py_obj)
     if obj_id in seen:
         return
