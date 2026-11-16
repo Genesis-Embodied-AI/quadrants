@@ -34,9 +34,9 @@ def test_nested_scalar_aliases(fastcache: bool, monkeypatch: pytest.MonkeyPatch)
         owner = Owner(shared)
         assert read(owner) == (2**34 if shared else 2**33 + 7)
         owner.second.value = 11
-        count = len(read._primal.compiled_kernels)
+        count = len(read._primal.materialized_kernels)
         assert read(owner) == (22 if shared else 2**33 + 11)
-        assert len(read._primal.compiled_kernels) == count
+        assert len(read._primal.materialized_kernels) == count
 
     def unexpected_walk(args: tuple[object, ...]) -> None:
         raise AssertionError("A warmed call must reuse its cached alias key")
