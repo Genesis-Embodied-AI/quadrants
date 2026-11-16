@@ -489,17 +489,10 @@ def get_decorator(ctx: ASTTransformerFuncContext, node) -> str:
 
 
 def maybe_lifted_primitive(ctx: ASTTransformerFuncContext, parent: Any, attr: str):
-    """Handle access to a primitive member that ``@qd.data_oriented(template_primitives=False)`` lifted into a
-    runtime scalar kernel arg (see ``predeclare_struct_primitives``).
+    """Resolve a scalar member to its runtime input and reject its use in static expressions.
 
-    Returns the arg-load ``Expr`` to substitute for the baked value in the enforcing pass; returns ``None`` when
-    the attribute is not a lifted primitive, or during the non-enforcing discovery pass (where the access is
-    instead recorded via ``mark_used`` and the caller falls back to baking the throw-away discovery-pass IR).
-
-    Raises ``QuadrantsSyntaxError`` if the lifted primitive is used inside ``qd.static(...)``: that context
-    requires a compile-time constant, which a runtime-lifted primitive is not. Under this flag there is no
-    per-attribute baked escape hatch, so a ``qd.static`` use is unambiguously a mistake and we surface it loudly
-    rather than silently baking a value that will not track mutations.
+    Discovery records the member as used and preserves a dataclass scalar's declared width in its temporary
+    expression. The enforcing pass returns the actual kernel-input expression. Unregistered members return None.
     """
     provenance = ctx.global_context.struct_primitive_provenance
     if not provenance:

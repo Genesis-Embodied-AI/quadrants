@@ -14,7 +14,7 @@ from quadrants.lang.util import (
     is_dataclass_instance,
     wants_runtime_primitives,
 )
-from quadrants.types import annotations
+from quadrants.types import annotations, primitive_types
 
 
 def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
@@ -106,12 +106,7 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
                 if field.name in final_names:
                     continue
                 annotation = field.type
-                if (
-                    annotation is int
-                    or annotation is float
-                    or annotation is bool
-                    or isinstance(annotation, DataTypeCxx)
-                ):
+                if id(annotation) in primitive_types.type_ids or isinstance(annotation, DataTypeCxx):
                     _register_primitive(obj, field.name, value, arg_idx, (*path, field.name), cook_dtype(annotation))
                 elif is_dataclass_instance(value):
                     _walk(value, arg_idx, (*path, field.name), seen, lift_plain)
