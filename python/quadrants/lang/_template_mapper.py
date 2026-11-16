@@ -9,7 +9,10 @@ from quadrants.lang._runtime_typing.dataclass_in_data_oriented import (
 from quadrants.lang._runtime_typing.runtime_dataclass import (
     prepare_kernel_dataclass_args_for_mapper,
 )
-from quadrants.lang._runtime_typing.fixed_containers import fix_container_references_and_get_alias_key
+from quadrants.lang._runtime_typing.fixed_containers import (
+    AliasKeyCache,
+    get_cached_or_fix_container_references_and_get_alias_key,
+)
 from quadrants.lang.impl import Program
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import get_member_at_path, is_data_oriented
@@ -54,6 +57,7 @@ def _destroy_callback(template_mapper_ref: ReferenceType["TemplateMapper"], ref:
     if maybe_template_mapper is not None:
         maybe_template_mapper._mapping_cache.clear()
         maybe_template_mapper._mapping_cache_tracker.clear()
+        maybe_template_mapper._alias_key_by_args_hash.clear()
         maybe_template_mapper._prog_weakref = None
 
 
@@ -80,6 +84,7 @@ class TemplateMapper:
         # Whether a Final-bearing argument disables the instance-keyed ``_mapping_cache`` (see
         # ``annotation_has_final_subtree``). Computed lazily on first ``lookup`` so its ``Final`` validation runs then.
         self._mapping_cache_disabled: bool | None = None
+        self._alias_key_by_args_hash: AliasKeyCache = {}
 
     def extract(self, raise_on_templated_floats: bool, args: tuple[Any, ...], final_value_key_by_value_id=None) -> Key:
         # Optional ndarray + None gets its own key: _extract_arg's NdarrayType branch reads .shape and raises on None.
@@ -109,8 +114,6 @@ class TemplateMapper:
     ) -> tuple[int, Key]:
         if len(args) != self.num_args:
             raise TypeError(f"{self.num_args} argument(s) needed but {len(args)} provided.")
-
-        alias_key = fix_container_references_and_get_alias_key(args)
 
         # Keep track of quadrants runtime to automatically clear cache if destroyed
         if self._prog_weakref is None:
@@ -178,6 +181,10 @@ class TemplateMapper:
                 pass
             if mapping_cache_tracker:
                 return self._mapping_cache[args_hash]
+
+        alias_key = get_cached_or_fix_container_references_and_get_alias_key(
+            args, args_hash, self._alias_key_by_args_hash
+        )
 
         # Only calls without nested dataclasses enter the identity cache. Its hits can skip schema discovery.
         launch_arg_schemas = infer_nested_dataclass_schemas(args, self.arguments, self.template_slot_locations)

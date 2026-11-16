@@ -142,3 +142,30 @@ def test_nested_reference_guard_preserves_custom_setattr() -> None:
     fresh = Owner()
     fresh.pair = Pair(State(11))
     assert read(fresh) == 11
+
+
+@test_utils.test(arch=qd.cpu)
+def test_alias_key_tracks_whole_argument_combination() -> None:
+    """Switch between combinations sharing a dataclass and combinations with independent dataclasses."""
+
+    @dataclass
+    class State:
+        value: int
+
+    @qd.data_oriented
+    class Owner:
+        def __init__(self, state: State) -> None:
+            self.state = state
+
+    @qd.kernel
+    def read(first: qd.Template, second: qd.Template) -> qd.i32:
+        return first.state.value + second.state.value
+
+    first = Owner(State(3))
+    shared = Owner(first.state)
+    independent = Owner(State(7))
+    assert read(first, shared) == 6
+    assert read(first, independent) == 10
+    first.state.value = 5
+    assert read(first, shared) == 10
+    assert read(first, independent) == 12

@@ -1,11 +1,16 @@
 """Fix container references at first kernel use and describe their alias relationships."""
 
 import dataclasses
-from typing import Any
+from typing import Any, TypeAlias
+from weakref import ReferenceType, ref
 
 from quadrants.lang._weak_identity_cache import WeakIdentityCache
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.util import is_data_oriented, is_dataclass_instance
+
+AliasKey: TypeAlias = tuple[tuple[int, ...], ...]
+# Entries retain primitive arguments and weak references to other arguments to prevent recycled-ID hits.
+AliasKeyCache: TypeAlias = dict[tuple[int, ...], tuple[AliasKey, tuple[object, ...]]]
 
 _fixed_names: WeakIdentityCache[frozenset[str]] = WeakIdentityCache()
 _graph_ids: WeakIdentityCache[tuple[int, ...]] = WeakIdentityCache()
@@ -123,3 +128,37 @@ def fix_container_references_and_get_alias_key(
                 pass
         result.append(tuple(serials.setdefault(identity, len(serials)) for identity in identities))
     return tuple(result)
+
+
+def get_cached_or_fix_container_references_and_get_alias_key(
+    args: tuple[Any, ...], args_hash: tuple[int, ...], cache: AliasKeyCache
+) -> AliasKey:
+    """Reuse a whole-call alias key while its argument identities remain alive."""
+    cached = cache.get(args_hash)
+    if cached is not None:
+        return cached[0]
+
+    alias_key = fix_container_references_and_get_alias_key(args)
+    references: list[object] = []
+
+    def evict(expired: ReferenceType[Any]) -> None:
+        """Remove only the entry containing this expired weak reference."""
+        entry = cache.get(args_hash)
+        if entry is not None and any(item is expired for item in entry[1]):
+            del cache[args_hash]
+
+    for arg in args:
+        if type(arg) in (int, float, bool, str, bytes, complex, type(None)):
+            references.append(arg)
+        else:
+            try:
+                references.append(ref(arg, evict))
+            except TypeError:
+                # Non-weakrefable containers must not be retained by the optimization.
+                return alias_key
+
+    # Scalar arguments can vary indefinitely while their owners stay alive. Bound this optional cache.
+    if len(cache) >= 128:
+        del cache[next(iter(cache))]
+    cache[args_hash] = (alias_key, tuple(references))
+    return alias_key
