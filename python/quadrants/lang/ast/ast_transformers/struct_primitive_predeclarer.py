@@ -77,6 +77,8 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
         inferred_dtype: DataTypeCxx | None = None,
     ) -> None:
         """Declare a used scalar and remember how to read its value at launch."""
+        # Sharing this identity-based binding between aliases requires their container references to remain fixed.
+        # The user guide defines that contract; the alias checks below remain until support is implemented.
         key = (id(parent), attr_name)
         flat_name = f"__qd_doprim_{arg_idx}__{'__'.join(attr_chain)}"
         if key in provenance:
