@@ -34,14 +34,10 @@ def _collect_container_ids(py_obj: Any) -> tuple[int, ...]:
 
         seen_ids.add(identity)
         if is_dataclass:
-            pending.extend(
-                getattr(child, field.name) for field in dataclasses.fields(child)
-            )
+            pending.extend(getattr(child, field.name) for field in dataclasses.fields(child))
         else:
             members = child._asdict() if hasattr(child, "_asdict") else vars(child)
-            pending.extend(
-                value for name, value in members.items() if not name.startswith("_qd_")
-            )
+            pending.extend(value for name, value in members.items() if not name.startswith("_qd_"))
     return tuple(identities)
 
 
@@ -65,24 +61,18 @@ def get_container_alias_key(args: Sequence[Any]) -> AliasKey:
             except TypeError:
                 # Named tuples cannot be weakly referenced; recompute rather than retaining them.
                 pass
-        result.append(
-            tuple(serials.setdefault(identity, len(serials)) for identity in identities)
-        )
+        result.append(tuple(serials.setdefault(identity, len(serials)) for identity in identities))
     return tuple(result)
 
 
-def _evict_alias_key(
-    cache: AliasKeyCache, args_hash: tuple[int, ...], expired: ReferenceType[Any]
-) -> None:
+def _evict_alias_key(cache: AliasKeyCache, args_hash: tuple[int, ...], expired: ReferenceType[Any]) -> None:
     """Remove only the entry containing the expired reference, protecting against recycled object IDs."""
     entry = cache.get(args_hash)
     if entry is not None and any(item is expired for item in entry[1]):
         del cache[args_hash]
 
 
-def get_cached_container_alias_key(
-    args: tuple[Any, ...], args_hash: tuple[int, ...], cache: AliasKeyCache
-) -> AliasKey:
+def get_cached_container_alias_key(args: tuple[Any, ...], args_hash: tuple[int, ...], cache: AliasKeyCache) -> AliasKey:
     """Reuse a whole-call alias key while its argument identities remain alive."""
     cached = cache.get(args_hash)
     if cached is not None:

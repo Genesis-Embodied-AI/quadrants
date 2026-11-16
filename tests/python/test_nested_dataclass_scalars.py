@@ -12,9 +12,7 @@ from tests.helpers import test_utils
 
 @pytest.mark.parametrize("fastcache", [False, True])
 @test_utils.test(offline_cache=True, require=qd.extension.data64)
-def test_nested_scalar_aliases(
-    fastcache: bool, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_nested_scalar_aliases(fastcache: bool, monkeypatch: pytest.MonkeyPatch) -> None:
     """Shared and separate containers use compatible kernels; warmed calls reuse the alias key."""
 
     @dataclass
@@ -43,9 +41,7 @@ def test_nested_scalar_aliases(
     def unexpected_walk(args: tuple[object, ...]) -> None:
         raise AssertionError("A warmed call must reuse its cached alias key")
 
-    monkeypatch.setattr(
-        "quadrants.lang._container_aliases.get_container_alias_key", unexpected_walk
-    )
+    monkeypatch.setattr("quadrants.lang._container_aliases.get_container_alias_key", unexpected_walk)
     assert read(owner) == 22
 
 
@@ -207,18 +203,11 @@ def test_alias_cache_reuses_graphs_and_releases_owners(
         raise AssertionError("A cached container graph must not be walked again")
 
     monkeypatch.setattr(aliases, "_collect_container_ids", unexpected_walk)
-    assert (
-        aliases.get_cached_container_alias_key(args, tuple(map(id, args)), cache) == key
-    )
+    assert aliases.get_cached_container_alias_key(args, tuple(map(id, args)), cache) == key
     state.value = 9
     for scalar in range(140):
         changed_args = (first, second, scalar)
-        assert (
-            aliases.get_cached_container_alias_key(
-                changed_args, tuple(map(id, changed_args)), cache
-            )
-            == key
-        )
+        assert aliases.get_cached_container_alias_key(changed_args, tuple(map(id, changed_args)), cache) == key
     assert len(cache) == 128
     first_ref = weakref.ref(first)
     del args, changed_args, first, second
