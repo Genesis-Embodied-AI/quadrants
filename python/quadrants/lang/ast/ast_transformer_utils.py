@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, List
 
 from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import ASTBuilder
-from quadrants.lang import impl
+from quadrants.lang import expr, impl
 from quadrants.lang._ndrange import ndrange
 from quadrants.lang.ast.symbol_resolver import ASTResolver
 from quadrants.lang.exception import (
@@ -190,7 +190,7 @@ class ASTTransformerGlobalContext:
         # Lifted-primitive support for ``@qd.data_oriented(template_primitives=False)``. Mirrors the two ndarray
         # structures above, plus a provenance map driving the two-pass pruning.
         # * ``struct_primitive_provenance`` maps ``(id(parent_obj), attr_name)`` to ``(flat_name, arg_idx, attr_chain,
-        #   kind)`` for every reachable primitive member of a flagged template arg. Built (cheaply, no kernel-arg
+        #   kind, declared_dtype)`` for every reachable primitive member of a flagged template arg. Built (cheaply, no kernel-arg
         #   declaration) on every compilation pass. ``build_Attribute`` uses it to ``mark_used`` the accessed
         #   primitives during the non-enforcing discovery pass.
         # * ``struct_primitive_to_expr`` maps the same key to the arg-load ``Expr``. Populated only in the enforcing
@@ -510,7 +510,7 @@ def maybe_lifted_primitive(ctx: ASTTransformerFuncContext, parent: Any, attr: st
         return None
     if ctx.is_in_static_scope():
         raise QuadrantsSyntaxError(
-            f"'{attr}' is a runtime scalar kernel argument and cannot be used inside qd.static(). "
+            f"'{attr}' is a scalar passed as a runtime kernel argument and cannot be used inside qd.static(). "
             "For a dataclass constant, annotate the field with typing.Final[T] or qd.Template. "
             "For an ordinary data-oriented scalar, use template_primitives=True."
         )
@@ -519,5 +519,8 @@ def maybe_lifted_primitive(ctx: ASTTransformerFuncContext, parent: Any, attr: st
         # Record under the kernel's func id (see ``predeclare_struct_primitives``) so the enforcing pass declares
         # this primitive and the existing fastcache serialisation captures it.
         pruning.mark_used(pruning.KERNEL_FUNC_ID, entry[0])
+        # Preserve declared widths during discovery too: a large i64 value need not fit default_ip.
+        if entry[4] is not None:
+            return expr.Expr(getattr(parent, attr), dtype=entry[4])
         return None
     return ctx.global_context.struct_primitive_to_expr.get(key)

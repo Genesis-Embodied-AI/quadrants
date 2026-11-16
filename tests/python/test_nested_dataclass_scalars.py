@@ -140,5 +140,5 @@ def test_nested_runtime_scalar_rejects_static() -> None:
     def read(owner: qd.Template) -> qd.i32:
         return qd.static(owner.state.value)
 
-    with pytest.raises(qd.QuadrantsSyntaxError, match="runtime scalar kernel argument"):
+    with pytest.raises(qd.QuadrantsSyntaxError, match="runtime kernel argument"):
         read(Owner())

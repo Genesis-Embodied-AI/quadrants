@@ -75,7 +75,7 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
         else:
             return
         flat_name = f"__qd_doprim_{arg_idx}__{'__'.join(attr_chain)}"
-        provenance[key] = (flat_name, arg_idx, attr_chain, kind)
+        provenance[key] = (flat_name, arg_idx, attr_chain, kind, declared_dtype)
         # Declare a real kernel arg only in the enforcing pass, and only for primitives the body actually accessed
         # (recorded via ``mark_used`` in ``build_Attribute`` during the discovery pass). This keeps the kernel arg
         # count proportional to what is used rather than to every reachable scalar (a Genesis solver has hundreds),
