@@ -9,6 +9,7 @@ from quadrants.lang._runtime_typing.dataclass_in_data_oriented import (
 from quadrants.lang._runtime_typing.runtime_dataclass import (
     prepare_kernel_dataclass_args_for_mapper,
 )
+from quadrants.lang._runtime_typing.fixed_containers import fix_container_references_and_get_alias_key
 from quadrants.lang.impl import Program
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import get_member_at_path, is_data_oriented
@@ -109,6 +110,8 @@ class TemplateMapper:
         if len(args) != self.num_args:
             raise TypeError(f"{self.num_args} argument(s) needed but {len(args)} provided.")
 
+        alias_key = fix_container_references_and_get_alias_key(args)
+
         # Keep track of quadrants runtime to automatically clear cache if destroyed
         if self._prog_weakref is None:
             prog = impl.get_runtime().prog
@@ -184,7 +187,7 @@ class TemplateMapper:
                 schema._qd_runtime_has_deferred for _, _, schema in launch_arg_schemas
             )
 
-        key = self.extract(raise_on_templated_floats, args, final_value_key_by_value_id)
+        key = self.extract(raise_on_templated_floats, args, final_value_key_by_value_id) + (alias_key,)
         if launch_arg_schemas:
             key += tuple(
                 (

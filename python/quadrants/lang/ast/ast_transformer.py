@@ -382,7 +382,6 @@ class ASTTransformer(Builder):
             if len(node.slice.ptr) == len(layout):
                 node.slice.ptr = [node.slice.ptr[axis] for axis in layout]
         node.ptr = impl.subscript(ctx.ast_builder, node.value.ptr, *node.slice.ptr)
-        reject_computed_dataclass_alias(node.ptr, ctx.global_context.runtime_dataclass_binding_objects)
         node.violates_pure = node.value.violates_pure
         if node.violates_pure:
             node.violates_pure_reason = node.value.violates_pure_reason

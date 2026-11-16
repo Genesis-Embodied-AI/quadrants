@@ -18,6 +18,7 @@ from .._name_utils import create_flat_name
 from .._ndarray import ScalarNdarray
 from .._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
 from .._runtime_typing.deferred_errors import DeferredMemberType
+from .._runtime_typing.fixed_containers import fix_container_references_and_get_alias_key
 from .._runtime_typing.runtime_dataclass import RuntimeDataclassSchema
 from ..field import ScalarField
 from ..kernel_arguments import ArgMetadata
@@ -44,7 +45,7 @@ g_num_ignored_calls = 0
 
 FIELD_METADATA_CACHE_VALUE = "add_value_to_cache_key"
 
-LaunchArgSchemas: TypeAlias = Sequence[tuple[int, tuple[str, ...], type[RuntimeDataclassSchema]]]
+LaunchArgSchemas: TypeAlias = Sequence[tuple[int, tuple[str | int, ...], type[RuntimeDataclassSchema]]]
 LaunchArgSchemaByIndexAndPath: TypeAlias = Mapping[tuple[str, ...], type[RuntimeDataclassSchema]]
 
 
@@ -353,6 +354,17 @@ def stringify_obj_type(
         # TODO: think about whether there is a way to include fields
         _mark_warn_if_not_tensor_annotation(arg_meta)
         return _FAIL_FASTCACHE
+    if isinstance(obj, tuple) and not is_data_oriented(obj):
+        parts = []
+        for index, child in enumerate(obj):
+            child_repr = stringify_obj_type(
+                raise_on_templated_floats, (*index_and_path, str(index)), child, arg_meta,
+                None, _child_flat(parent_flat, str(index)), launch_arg_schema_by_index_and_path,
+            )
+            if child_repr is _FAIL_FASTCACHE:
+                return _FAIL_FASTCACHE
+            parts.append(child_repr)
+        return f"tuple({parts!r})"
     if is_dataclass_instance(obj):
         # Hash only with schemas supplied by discovery or argument metadata.
         schema = (
@@ -458,7 +470,7 @@ def hash_args(
     _should_warn = False
     g_num_calls += 1
     g_num_args += len(args)
-    launch_arg_schema_by_index_and_path = {(str(index), *path): schema for index, path, schema in launch_arg_schemas}
+    launch_arg_schema_by_index_and_path = {(str(index), *map(str, path)): schema for index, path, schema in launch_arg_schemas}
     hash_l = []
     if len(args) != len(arg_metas):
         raise RuntimeError(
@@ -484,6 +496,7 @@ def hash_args(
             return FastcacheSkip.WARN if _should_warn else FastcacheSkip.FIELD_VIA_TENSOR
         hash_l.append(_hash)
     start = time.time()
+    hash_l.append(repr(fix_container_references_and_get_alias_key(args)))
     res = hash_iterable_strings(hash_l)
     g_hashing_time += time.time() - start
     return res

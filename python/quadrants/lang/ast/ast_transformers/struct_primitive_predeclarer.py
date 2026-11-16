@@ -11,7 +11,6 @@ from quadrants.lang._final.final_annotation import is_final_annotation
 from quadrants.lang._runtime_typing.deferred_errors import DeferredMemberType
 from quadrants.lang._runtime_typing.runtime_dataclass import cached_infer_dataclass_type
 from quadrants.lang.ast.ast_transformer_utils import ASTTransformerFuncContext
-from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.util import (
     get_member_at_path,
     is_data_oriented,
@@ -73,30 +72,16 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
         attr_name: str,
         value: Any,
         arg_idx: int,
-        attr_chain: tuple[str, ...],
+        attr_chain: tuple[str | int, ...],
         inferred_dtype: DataTypeCxx | None = None,
     ) -> None:
         """Declare a used scalar and remember how to read its value at launch."""
         # Sharing this identity-based binding between aliases requires their container references to remain fixed.
-        # The user guide defines that contract; the alias checks below remain until support is implemented.
         key = (id(parent), attr_name)
-        flat_name = f"__qd_doprim_{arg_idx}__{'__'.join(attr_chain)}"
+        flat_name = f"__qd_doprim_{arg_idx}__{'__'.join(map(str, attr_chain))}"
         if key in provenance:
-            if is_dataclass_instance(parent) and provenance[key][1:3] != (arg_idx, attr_chain):
-                errors = getattr(ctx.global_context, "nested_dataclass_errors", None)
-                if errors is None:
-                    errors = ctx.global_context.nested_dataclass_errors = {}
-                errors[key] = DeferredMemberType(
-                    QuadrantsRuntimeTypeError,
-                    "A runtime dataclass scalar alias has multiple attribute paths and is unsupported. "
-                    "Use distinct dataclass instances for independently rebound attributes.",
-                ).bind(".".join((ctx.func.arg_metas[arg_idx].name, *attr_chain)))
-                # A source-cache hit parses only argument declarations, so the body cannot raise this error.
-                if pruning.enforcing and (
-                    pruning.is_used(func_id, provenance[key][0]) or pruning.is_used(func_id, flat_name)
-                ):
-                    errors[key].reject()
             return
+
         value_type = type(value)
         if inferred_dtype is not None:
             dtype = inferred_dtype
@@ -127,7 +112,7 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
     def _walk(
         obj: Any,
         arg_idx: int,
-        path: tuple[str, ...],
+        path: tuple[str | int, ...],
         seen: set[int],
         schema: type | None = None,
         lift_plain: bool = False,
@@ -139,7 +124,7 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
         seen.add(obj_id)
         if is_dataclass_instance(obj):
             ctx.global_context.runtime_dataclass_binding_objects.add(obj_id)
-            schema = schema or cached_infer_dataclass_type(obj, ".".join((ctx.func.arg_metas[arg_idx].name, *path)))
+            schema = schema or cached_infer_dataclass_type(obj, ".".join(map(str, (ctx.func.arg_metas[arg_idx].name, *path))))
             for field in dataclasses.fields(schema):
                 value = getattr(obj, field.name)
                 if isinstance(field.type, DeferredMemberType):
@@ -147,7 +132,7 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
                     if errors is None:
                         errors = ctx.global_context.nested_dataclass_errors = {}
                     errors[(id(obj), field.name)] = field.type.bind(
-                        ".".join((ctx.func.arg_metas[arg_idx].name, *path, field.name))
+                        ".".join(map(str, (ctx.func.arg_metas[arg_idx].name, *path, field.name)))
                     )
                 elif is_final_annotation(field.type):
                     continue

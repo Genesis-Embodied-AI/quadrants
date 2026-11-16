@@ -16,13 +16,13 @@ from quadrants.lang.util import (
 )
 
 # Data-oriented attribute layouts are fixed after their first kernel call, like ndarray member paths.
-_dataclass_paths_by_data_oriented_instance: WeakIdentityCache[tuple[tuple[str, ...], ...]] = WeakIdentityCache()
+_dataclass_paths_by_data_oriented_instance: WeakIdentityCache[tuple[tuple[str | int, ...], ...]] = WeakIdentityCache()
 
 
 def _collect_dataclass_paths_in_data_oriented(
     py_obj: Any,
-    path: tuple[str, ...],
-    dataclass_paths: list[tuple[str, ...]],
+    path: tuple[str | int, ...],
+    dataclass_paths: list[tuple[str | int, ...]],
     active_ids: set[int],
 ) -> None:
     """From a data-oriented root, walk only data-oriented objects and append dataclass paths to dataclass_paths.
@@ -31,6 +31,11 @@ def _collect_dataclass_paths_in_data_oriented(
     """
     if is_dataclass_instance(py_obj):
         dataclass_paths.append(path)
+        return
+
+    if isinstance(py_obj, tuple) and not is_data_oriented(py_obj):
+        for index, child in enumerate(py_obj):
+            _collect_dataclass_paths_in_data_oriented(child, (*path, index), dataclass_paths, active_ids)
         return
 
     if not is_data_oriented(py_obj):
@@ -49,13 +54,13 @@ def _collect_dataclass_paths_in_data_oriented(
         active_ids.remove(id(py_obj))
 
 
-def _cached_collect_dataclass_paths_in_data_oriented(data_oriented_obj: Any) -> tuple[tuple[str, ...], ...]:
+def _cached_collect_dataclass_paths_in_data_oriented(data_oriented_obj: Any) -> tuple[tuple[str | int, ...], ...]:
     """Find outermost dataclass members."""
     cached = _dataclass_paths_by_data_oriented_instance.get(data_oriented_obj)
     if cached is not None:
         return cached
 
-    paths: list[tuple[str, ...]] = []
+    paths: list[tuple[str | int, ...]] = []
     active_ids: set[int] = set()
     _collect_dataclass_paths_in_data_oriented(data_oriented_obj, (), paths, active_ids)
     dataclass_paths = tuple(paths)
@@ -69,10 +74,10 @@ def _cached_collect_dataclass_paths_in_data_oriented(data_oriented_obj: Any) -> 
 
 def infer_nested_dataclass_schemas(
     args: tuple[Any, ...], arg_metas: list[ArgMetadata], template_slots: list[int]
-) -> list[tuple[int, tuple[str, ...], type[RuntimeDataclassSchema]]]:
+) -> list[tuple[int, tuple[str | int, ...], type[RuntimeDataclassSchema]]]:
     """Infer current schemas for dataclasses reached through data-oriented arguments."""
     # Schemas for this launch, paired with argument indices and member paths.
-    launch_arg_schemas: list[tuple[int, tuple[str, ...], type[RuntimeDataclassSchema]]] = []
+    launch_arg_schemas: list[tuple[int, tuple[str | int, ...], type[RuntimeDataclassSchema]]] = []
     for index in template_slots:
         owner = args[index]
         if is_dataclass_instance(owner) or not is_data_oriented(owner):
@@ -82,7 +87,7 @@ def infer_nested_dataclass_schemas(
             child = get_member_at_path(owner, path)
             if not hasattr(type(child), "__dataclass_fields__"):
                 raise TypeError("A data-oriented dataclass member must remain a dataclass between kernel calls.")
-            schema = cached_infer_dataclass_type(child, ".".join((arg_metas[index].name, *path)))
+            schema = cached_infer_dataclass_type(child, ".".join(map(str, (arg_metas[index].name, *path))))
             launch_arg_schemas.append((index, path, schema))
     return launch_arg_schemas
 
@@ -115,8 +120,8 @@ def reject_undiscovered_dataclass_member(
 
 def reject_computed_dataclass_alias(py_obj: Any, bound_objects: set[int]) -> None:
     """Reject computed routes that could borrow an unrelated runtime dataclass binding."""
-    if id(py_obj) in bound_objects:
+    if is_dataclass_instance(py_obj) or id(py_obj) in bound_objects:
         raise QuadrantsRuntimeTypeError(
-            "A runtime dataclass alias reached through a call or indexing is unsupported. "
+            "Python calls returning runtime dataclasses or their bound containers are unsupported. "
             "Access the dataclass through its ordinary stored attributes instead."
         )
