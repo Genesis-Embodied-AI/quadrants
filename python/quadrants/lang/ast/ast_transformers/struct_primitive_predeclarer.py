@@ -12,11 +12,12 @@ user-facing surface.
 """
 
 import dataclasses
-from typing import Any
+from typing import Any, NamedTuple
 
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import expr, impl
 from quadrants.lang.ast.ast_transformer_utils import ASTTransformerFuncContext
+from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import (
     is_data_oriented,
     is_dataclass_instance,
@@ -25,41 +26,69 @@ from quadrants.lang.util import (
 from quadrants.types import annotations
 
 
-def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
-    """For each templated arg whose root class is decorated ``@qd.data_oriented(template_primitives=False)``, walk
-    the reachable attribute graph and declare every primitive (``int`` / ``float`` / ``bool``) member as a runtime
-    scalar kernel arg, instead of letting ``build_Attribute`` bake it as a compile-time constant. The arg-load
-    ``Expr`` is cached on the global context keyed by ``(id(parent_obj), attr_name)`` for ``build_Attribute`` to
-    substitute, and a ``(arg_id, template_arg_idx, attr_chain, kind)`` tuple is recorded for the launch path to
-    bind the live value.
+class _ScalarMember(NamedTuple):
+    """A scalar value and the attribute route locating it from a kernel argument."""
 
-    Mirrors ``_predeclare_struct_ndarrays``. Primitive leaves have no stable identity (``id(5)`` is interned), so
-    the cache is keyed on the parent container's identity plus the attribute name. Only plain Python ``int`` /
-    ``float`` / ``bool`` are lifted (matched by exact type so numpy scalars etc. keep their previous baked
-    behaviour). dtype follows the runtime defaults (``default_ip`` / ``default_fp``), matching how a baked Python
-    constant would be typed.
+    parent: Any
+    attr_name: str
+    value: bool | int | float
+    arg_idx: int
+    attr_chain: tuple[str, ...]
 
-    ``_seen`` guards against attribute-graph cycles (e.g. ``sim.solver.sim is sim``), same as the ndarray walker.
-    """
-    assert ctx.py_args is not None
-    # Cheap early-out for the common case (no flagged template arg): the default ``template_primitives=True`` path
-    # never builds a walk, so genesis-style data_oriented kernels pay only one ``wants_runtime_primitives`` check
-    # per template arg at compile time, and nothing at launch.
+
+def _collect_scalar_members(
+    py_obj: Any,
+    arg_idx: int,
+    path: tuple[str, ...],
+    seen: set[int],
+    members: list[_ScalarMember],
+) -> None:
+    """Append scalars reached through stored data-oriented and dataclass attributes, stopping repeated visits."""
+    obj_id = id(py_obj)
+    if obj_id in seen:
+        return
+
+    seen.add(obj_id)
+    if is_dataclass_instance(py_obj):
+        items = [(field.name, getattr(py_obj, field.name)) for field in dataclasses.fields(py_obj)]
+    elif hasattr(py_obj, "__dict__"):
+        items = list(vars(py_obj).items())
+    else:
+        return
+
+    for attr_name, attr_val in items:
+        if isinstance(attr_val, _TensorClass):
+            attr_val = attr_val._unwrap()
+        attr_type = type(attr_val)
+        if attr_type is bool or attr_type is int or attr_type is float:
+            members.append(_ScalarMember(py_obj, attr_name, attr_val, arg_idx, (*path, attr_name)))
+        elif is_dataclass_instance(attr_val) or is_data_oriented(attr_val):
+            _collect_scalar_members(attr_val, arg_idx, (*path, attr_name), seen, members)
+
+
+def _find_scalar_members(py_args: tuple[Any, ...], arg_metas: list[ArgMetadata]) -> list[_ScalarMember]:
+    """Find scalar members of template arguments whose owners opt into runtime primitives."""
     flagged: list[tuple[int, Any]] = []
-    for i, arg_meta in enumerate(ctx.func.arg_metas):
+    for i, arg_meta in enumerate(arg_metas):
         anno = arg_meta.annotation
         is_template = anno is annotations.template or isinstance(anno, annotations.template)
         is_tensor_anno = anno is _TensorClass
         if not (is_template or is_tensor_anno):
             continue
-        val = ctx.py_args[i]
+        val = py_args[i]
         if isinstance(val, _TensorClass):
             val = val._unwrap()
         if wants_runtime_primitives(val):
             flagged.append((i, val))
-    if not flagged:
-        return
 
+    members: list[_ScalarMember] = []
+    for arg_idx, val in flagged:
+        _collect_scalar_members(val, arg_idx, (), set(), members)
+    return members
+
+
+def _create_scalar_bindings(ctx: ASTTransformerFuncContext, members: list[_ScalarMember]) -> None:
+    """Record scalar routes and add the used members as kernel parameters in the enforcing pass."""
     from quadrants._lib import core as _qd_core  # pylint: disable=C0415
     from quadrants.lang.util import cook_dtype  # pylint: disable=C0415
     from quadrants.types.utils import is_signed  # pylint: disable=C0415
@@ -77,17 +106,18 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
     # collides with dataclass-field pruning.
     func_id = pruning.KERNEL_FUNC_ID
 
-    def _register_primitive(parent, attr_name, value, arg_idx, attr_chain):
+    for parent, attr_name, value, arg_idx, attr_chain in members:
+        # Different members can share an interned scalar value, so identify the parent and attribute instead.
         key = (id(parent), attr_name)
         if key in provenance:
-            return
+            continue
         value_type = type(value)
         if value_type is bool or value_type is int:
             dtype, kind = default_ip, ("i" if is_signed(default_ip) else "u")
         elif value_type is float:
             dtype, kind = default_fp, "f"
         else:
-            return
+            continue
         flat_name = f"__qd_doprim_{arg_idx}__{'__'.join(attr_chain)}"
         provenance[key] = (flat_name, arg_idx, attr_chain, kind)
         # Declare a real kernel arg only in the enforcing pass, and only for primitives the body actually accessed
@@ -95,7 +125,7 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
         # count proportional to what is used rather than to every reachable scalar (a Genesis solver has hundreds),
         # avoiding the MAX_ARG_NUM limit. The discovery pass declares nothing; its IR is discarded.
         if not pruning.enforcing or not pruning.is_used(func_id, flat_name):
-            return
+            continue
         cooked = cook_dtype(dtype)
         # ``insert_scalar_param`` returns an arg-id vector (like ``insert_ndarray_param``); ``make_arg_load_expr``
         # consumes the vector, while the launch path needs the integer slot ``arg_id[0]``.
@@ -106,25 +136,10 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
         )
         launch_info.append((arg_id[0], arg_idx, attr_chain, kind))
 
-    def _walk(obj, arg_idx, path, seen):
-        obj_id = id(obj)
-        if obj_id in seen:
-            return
-        seen.add(obj_id)
-        if is_dataclass_instance(obj):
-            items = [(f.name, getattr(obj, f.name)) for f in dataclasses.fields(obj)]
-        elif hasattr(obj, "__dict__"):
-            items = list(vars(obj).items())
-        else:
-            return
-        for attr_name, attr_val in items:
-            if isinstance(attr_val, _TensorClass):
-                attr_val = attr_val._unwrap()
-            attr_type = type(attr_val)
-            if attr_type is bool or attr_type is int or attr_type is float:
-                _register_primitive(obj, attr_name, attr_val, arg_idx, (*path, attr_name))
-            elif is_dataclass_instance(attr_val) or is_data_oriented(attr_val):
-                _walk(attr_val, arg_idx, (*path, attr_name), seen)
 
-    for arg_idx, val in flagged:
-        _walk(val, arg_idx, (), set())
+def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
+    """Find opted-in scalar members, then create their compiler bindings."""
+    assert ctx.py_args is not None
+    members = _find_scalar_members(ctx.py_args, ctx.func.arg_metas)
+    if members:
+        _create_scalar_bindings(ctx, members)
