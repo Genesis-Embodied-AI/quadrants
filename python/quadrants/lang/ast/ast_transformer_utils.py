@@ -193,13 +193,13 @@ class ASTTransformerGlobalContext:
         #   kind)`` for every reachable primitive member of a flagged template arg. Built (cheaply, no kernel-arg
         #   declaration) on every compilation pass. ``build_Attribute`` uses it to ``mark_used`` the accessed
         #   primitives during the non-enforcing discovery pass.
-        # * ``struct_primitive_to_expr`` maps the same key to the arg-load ``Expr``. Populated only in the enforcing
+        # * ``runtime_scalar_arg_expr_by_member`` maps the same key to the arg-load ``Expr``. Populated only in the enforcing
         #   pass, and only for primitives actually accessed by the body (pruning), so ``build_Attribute`` can return
         #   the runtime scalar arg instead of baking the value.
         # * ``struct_primitive_launch_info`` records ``(arg_id, template_arg_idx, attr_chain, kind)`` tuples (``kind``
         #   in ``{'f', 'i', 'u'}``) so the launch path can read the live value and bind it.
         self.runtime_scalar_arg_info_by_member: dict[tuple[int, str], tuple] = {}
-        self.struct_primitive_to_expr: dict[tuple[int, str], Any] = {}
+        self.runtime_scalar_arg_expr_by_member: dict[tuple[int, str], Any] = {}
         self.struct_primitive_launch_info: list[tuple] = []
         # Caller-side `loop_depth` snapshot for the in-flight `@qd.func` invocation. Each func compile creates a fresh
         # `ASTTransformerFuncContext` with `loop_depth = 0`, so without this snapshot a non-static `range(...)` loop
@@ -521,4 +521,4 @@ def maybe_lifted_primitive(ctx: ASTTransformerFuncContext, parent: Any, attr: st
         # this primitive and the existing fastcache serialisation captures it.
         pruning.mark_used(pruning.KERNEL_FUNC_ID, entry[0])
         return None
-    return ctx.global_context.struct_primitive_to_expr.get(key)
+    return ctx.global_context.runtime_scalar_arg_expr_by_member.get(key)

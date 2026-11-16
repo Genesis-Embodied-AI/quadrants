@@ -100,7 +100,7 @@ def _create_runtime_scalar_bindings(ctx: ASTTransformerFuncContext, scalar_membe
     """Record scalar routes and add the used members as kernel parameters in the enforcing pass."""
     runtime = impl.get_runtime()
     runtime_scalar_arg_info_by_member = ctx.global_context.runtime_scalar_arg_info_by_member
-    expr_cache = ctx.global_context.struct_primitive_to_expr
+    runtime_scalar_arg_expr_by_member = ctx.global_context.runtime_scalar_arg_expr_by_member
     launch_info = ctx.global_context.struct_primitive_launch_info
     pruning = ctx.global_context.pruning
     # The kernel ID preserves uses inside inlined qd.func calls and includes them in fastcache pruning metadata.
@@ -128,7 +128,7 @@ def _create_runtime_scalar_bindings(ctx: ASTTransformerFuncContext, scalar_membe
         # Argument loads use the full ID vector; launches use its first integer slot.
         arg_id = impl.get_runtime().compiling_callable.insert_scalar_param(cooked, flat_name)
         argload_di = _qd_core.DebugInfo(impl.get_runtime().get_current_src_info())
-        expr_cache[key] = expr.Expr(
+        runtime_scalar_arg_expr_by_member[key] = expr.Expr(
             _qd_core.make_arg_load_expr(arg_id, cooked, False, create_load=True, dbg_info=argload_di)
         )
         launch_info.append((arg_id[0], arg_idx, attr_chain, kind))
