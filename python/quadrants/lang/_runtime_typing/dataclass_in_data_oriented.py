@@ -5,7 +5,6 @@ from typing import Any
 from quadrants.lang._runtime_typing.runtime_dataclass import (
     RuntimeDataclassSchema,
     cached_infer_dataclass_type,
-    runtime_template_members,
 )
 from quadrants.lang._weak_identity_cache import WeakIdentityCache
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
@@ -74,34 +73,17 @@ def infer_nested_dataclass_schemas(
     """Infer current schemas for dataclasses reached through data-oriented arguments."""
     # Schemas for this launch, paired with argument indices and member paths.
     launch_arg_schemas: list[tuple[int, tuple[str, ...], type[RuntimeDataclassSchema]]] = []
-    active_ids: set[int] = set()
-
-    def visit_owner(index: int, owner: Any, owner_path: tuple[str, ...]) -> None:
-        """Infer descendants and continue through any data-oriented members inside their schemas."""
-        if id(owner) in active_ids or not is_data_oriented(owner):
-            return
-
-        active_ids.add(id(owner))
-        try:
-            for relative_path in _cached_collect_dataclass_paths_in_data_oriented(owner):
-                path = (*owner_path, *relative_path)
-                child = get_member_at_path(owner, relative_path)
-                if not hasattr(type(child), "__dataclass_fields__"):
-                    raise TypeError("A data-oriented dataclass member must remain a dataclass between kernel calls.")
-                schema = cached_infer_dataclass_type(child, ".".join((arg_metas[index].name, *path)))
-                launch_arg_schemas.append((index, path, schema))
-                for member_path, member in runtime_template_members(schema, child):
-                    visit_owner(index, member, (*path, *member_path))
-        finally:
-            active_ids.remove(id(owner))
-
     for index in template_slots:
-        if not is_dataclass_instance(args[index]):
-            visit_owner(index, args[index], ())
-    for index, meta in enumerate(arg_metas):
-        if hasattr(meta.annotation, "_qd_runtime_origin"):
-            for path, member in runtime_template_members(meta.annotation, args[index]):
-                visit_owner(index, member, path)
+        owner = args[index]
+        if is_dataclass_instance(owner) or not is_data_oriented(owner):
+            continue
+
+        for path in _cached_collect_dataclass_paths_in_data_oriented(owner):
+            child = get_member_at_path(owner, path)
+            if not hasattr(type(child), "__dataclass_fields__"):
+                raise TypeError("A data-oriented dataclass member must remain a dataclass between kernel calls.")
+            schema = cached_infer_dataclass_type(child, ".".join((arg_metas[index].name, *path)))
+            launch_arg_schemas.append((index, path, schema))
     return launch_arg_schemas
 
 

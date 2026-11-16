@@ -39,7 +39,7 @@ from quadrants.lang.matrix import Matrix, MatrixType, VectorType
 from quadrants.lang.struct import Struct, StructType
 from quadrants.lang.util import is_data_oriented, to_quadrants_type
 from quadrants.types import buffer_view_type, ndarray_type, primitive_types
-from quadrants.types.annotations import RuntimeTyped, Template
+from quadrants.types.annotations import RuntimeTyped
 
 if TYPE_CHECKING:
     from quadrants.lang._func_base import FuncBase
@@ -368,21 +368,6 @@ def prepare_kernel_dataclass_args_for_mapper(
     kernel._runtime_metadata_defaults = defaults
 
     return final_value_key_by_value_id
-
-
-def runtime_template_members(
-    schema: type[DataclassInstance], dataclass_instance: DataclassInstance, path: tuple[str, ...] = ()
-) -> Iterator[tuple[tuple[str, ...], Any]]:
-    """Yield template-valued subobjects with paths rooted at the original kernel argument."""
-    if not hasattr(schema, "_qd_runtime_origin"):
-        return
-    for field in dataclasses.fields(schema):
-        child = getattr(dataclass_instance, field.name)
-        child_path = (*path, field.name)
-        if field.type is Template:
-            yield child_path, child
-        elif hasattr(field.type, "_qd_runtime_origin"):
-            yield from runtime_template_members(cast(type[RuntimeDataclassSchema], field.type), child, child_path)
 
 
 def is_runtime_member_name(arg_metas: list[ArgMetadata], name: str) -> bool:

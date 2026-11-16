@@ -35,7 +35,6 @@ from quadrants.lang._runtime_typing.deferred_errors import (
     DeferredMemberError,
     DeferredMemberType,
 )
-from quadrants.lang._runtime_typing.runtime_dataclass import runtime_template_members
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
 )
@@ -361,8 +360,6 @@ class FunctionDefTransformer:
             is_template = anno is annotations.template or isinstance(anno, annotations.template)
             is_tensor_anno = anno is _TensorClass
             if hasattr(anno, "_qd_runtime_origin"):
-                for path, child in runtime_template_members(anno, ctx.py_args[i]):
-                    _walk_obj(child, i, path, {id(child)})
                 continue
             if not (is_template or is_tensor_anno):
                 continue
