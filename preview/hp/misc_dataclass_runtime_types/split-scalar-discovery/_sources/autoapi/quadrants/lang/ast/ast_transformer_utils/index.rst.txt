@@ -263,11 +263,11 @@ Module Contents
 
 
 
-   .. py:attribute:: struct_primitive_provenance
+   .. py:attribute:: runtime_scalar_arg_info_by_member
       :type:  dict[tuple[int, str], tuple]
 
 
-   .. py:attribute:: struct_primitive_to_expr
+   .. py:attribute:: runtime_scalar_arg_expr_by_member
       :type:  dict[tuple[int, str], Any]
 
 
@@ -507,7 +507,7 @@ Module Contents
 .. py:function:: maybe_lifted_primitive(ctx: ASTTransformerFuncContext, parent: Any, attr: str)
 
    Handle access to a primitive member that ``@qd.data_oriented(template_primitives=False)`` lifted into a
-   runtime scalar kernel arg (see ``predeclare_struct_primitives``).
+   runtime scalar kernel arg (see ``bind_data_oriented_runtime_scalars``).
 
    Returns the arg-load ``Expr`` to substitute for the baked value in the enforcing pass; returns ``None`` when
    the attribute is not a lifted primitive, or during the non-enforcing discovery pass (where the access is
