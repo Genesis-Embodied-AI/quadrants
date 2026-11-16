@@ -223,7 +223,7 @@ class ASTGenerator:
             )
         self.current_kernel.kernel_cpp = kernel_cxx
         ctx = self.ctx
-        pruning = ctx.global_context.pruning
+        pruning = ctx.kernel_compile_context.pruning
         self.runtime.inside_kernel = True
         assert self.runtime._compiling_callable is None
         self.runtime._compiling_callable = kernel_cxx
@@ -253,7 +253,7 @@ class ASTGenerator:
                     raise QuadrantsSyntaxError("Kernel has a return type but does not have a return statement")
         finally:
             self.current_kernel.runtime.inside_kernel = False
-            self.runtime._current_global_context = None
+            self.runtime._current_kernel_compile_context = None
             self.current_kernel.runtime._compiling_callable = None
 
     def _dump_ast(self) -> None:
@@ -374,7 +374,7 @@ class Kernel(FuncBase):
         self._last_launch_key = None  # for dev/debug
 
         # next two parameters are ONLY used at kernel launch time,
-        # NOT for compilation. (for compilation, global_context.pruning is used).
+        # NOT for compilation. (for compilation, kernel_compile_context.pruning is used).
         # These parameters here are used to filter args passed into the already-compiled kernel.
         # used_py_dataclass_parameters_by_key_enforcing will also be serialized with fast cache.
         self.used_py_dataclass_parameters_by_key_enforcing: dict[CompiledKernelKeyType, set[str]] = {}
@@ -566,7 +566,7 @@ class Kernel(FuncBase):
                     pruning=pruning,
                     currently_compiling_materialize_key=key,
                 )
-                runtime._current_global_context = ctx.global_context
+                runtime._current_kernel_compile_context = ctx.kernel_compile_context
 
                 if self.autodiff_mode != _NONE:
                     KernelSimplicityASTChecker(self.func).visit(tree)
@@ -586,7 +586,7 @@ class Kernel(FuncBase):
                     assert key not in self.materialized_kernels
                     self.materialized_kernels[key] = quadrants_kernel
                     self._struct_ndarray_launch_info_by_key[key] = getattr(
-                        ctx.global_context, "struct_ndarray_launch_info", []
+                        ctx.kernel_compile_context, "struct_ndarray_launch_info", []
                     )
                     # Both folds bring data_oriented member accesses into the kernel's used-flat-names set, which
                     # dataclass-arg expansion is the only other contributor to. Without them the narrow args hash walks
@@ -599,7 +599,9 @@ class Kernel(FuncBase):
                     # skip the whole primitive-binding path with a single empty-dict check instead of paying a
                     # per-launch ``.get(key)`` (tuple hash) on every cache-missing launch -- which is the hot path for
                     # CPU / unbatched genesis steps that launch many tiny kernels.
-                    struct_primitive_launch_info = getattr(ctx.global_context, "struct_primitive_launch_info", [])
+                    struct_primitive_launch_info = getattr(
+                        ctx.kernel_compile_context, "struct_primitive_launch_info", []
+                    )
                     if struct_primitive_launch_info:
                         self._struct_primitive_launch_info_by_key[key] = struct_primitive_launch_info
                 else:
@@ -620,7 +622,7 @@ class Kernel(FuncBase):
                     self.used_py_dataclass_parameters_by_key_enforcing[key] = pruning.used_vars_by_func_id[
                         Pruning.KERNEL_FUNC_ID
                     ]
-                runtime._current_global_context = None
+                runtime._current_kernel_compile_context = None
 
             self._maybe_persist_l1_and_set_l2_key(key, py_args)
 
@@ -991,7 +993,9 @@ class Kernel(FuncBase):
         config = impl.current_cfg()
 
         self.raise_on_templated_floats = config.raise_on_templated_floats
-        py_args = self.fuse_args(is_func=False, is_pyfunc=False, py_args=py_args, kwargs=kwargs, global_context=None)
+        py_args = self.fuse_args(
+            is_func=False, is_pyfunc=False, py_args=py_args, kwargs=kwargs, kernel_compile_context=None
+        )
         # Tensor-wrapper unwrap. Canonicalize ``qd.Tensor`` slots, plus wrapper positions discovered on
         # the first launch, before the autograd tape and identity-keyed caches observe the arg tuple.
         #

@@ -67,10 +67,10 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
     runtime = impl.get_runtime()
     default_ip = runtime.default_ip
     default_fp = runtime.default_fp
-    provenance = ctx.global_context.struct_primitive_provenance
-    expr_cache = ctx.global_context.struct_primitive_to_expr
-    launch_info = ctx.global_context.struct_primitive_launch_info
-    pruning = ctx.global_context.pruning
+    provenance = ctx.kernel_compile_context.struct_primitive_provenance
+    expr_cache = ctx.kernel_compile_context.struct_primitive_to_expr
+    launch_info = ctx.kernel_compile_context.struct_primitive_launch_info
+    pruning = ctx.kernel_compile_context.pruning
     # Lifted primitives are tracked under the kernel's func id (rather than the accessing function's), so a
     # primitive accessed only inside an inlined ``@qd.func`` is still declared, and so the used set is captured by
     # the existing ``KERNEL_FUNC_ID`` fastcache serialisation. Flat names are globally unique, so this never

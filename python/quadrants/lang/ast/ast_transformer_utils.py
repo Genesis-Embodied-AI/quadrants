@@ -177,7 +177,7 @@ class PureViolation:
     var_name: str
 
 
-class ASTTransformerGlobalContext:
+class KernelCompileContext:
     def __init__(
         self, current_kernel: "Kernel", pruning: "Pruning", currently_compiling_materialize_key, pass_idx: int
     ) -> None:
@@ -224,7 +224,7 @@ class ASTTransformerGlobalContext:
 class ASTTransformerFuncContext:
     def __init__(
         self,
-        global_context: ASTTransformerGlobalContext,
+        kernel_compile_context: KernelCompileContext,
         template_slot_locations,
         end_lineno: int,
         is_kernel: bool,
@@ -244,7 +244,7 @@ class ASTTransformerFuncContext:
     ):
         from quadrants import extension  # pylint: disable=import-outside-toplevel
 
-        self.global_context: ASTTransformerGlobalContext = global_context
+        self.kernel_compile_context: KernelCompileContext = kernel_compile_context
         self.func: "FuncBase" = func
         self.local_scopes: list[dict[str, Any]] = []
         self.loop_scopes: List[LoopScopeAttribute] = []
@@ -285,8 +285,8 @@ class ASTTransformerFuncContext:
         self.autodiff_mode = autodiff_mode
         self.loop_depth: int = 0
         # Whether the (transitive) caller chain that reached this func compile was already inside non-static control
-        # flow. Seeded from `global_context.caller_in_non_static_control_flow` in `_func_base.py`; kernels start at the
-        # top of the call stack so they always begin False. Consulted (together with the local
+        # flow. Seeded from `kernel_compile_context.caller_in_non_static_control_flow` in `_func_base.py`; kernels
+        # start at the top of the call stack so they always begin False. Consulted (together with the local
         # `non_static_control_flow_status`) by the `requires_top_level` guard in `CallTransformer.build_Call`.
         self.inherited_non_static_control_flow: bool = False
         self.raise_on_templated_floats = raise_on_templated_floats
@@ -501,7 +501,7 @@ def maybe_lifted_primitive(ctx: ASTTransformerFuncContext, parent: Any, attr: st
     per-attribute baked escape hatch, so a ``qd.static`` use is unambiguously a mistake and we surface it loudly
     rather than silently baking a value that will not track mutations.
     """
-    provenance = ctx.global_context.struct_primitive_provenance
+    provenance = ctx.kernel_compile_context.struct_primitive_provenance
     if not provenance:
         return None
     key = (id(parent), attr)
@@ -515,10 +515,10 @@ def maybe_lifted_primitive(ctx: ASTTransformerFuncContext, parent: Any, attr: st
             f"decorate the class @qd.data_oriented (the default, template_primitives=True) to bake '{attr}' as a "
             f"compile-time constant."
         )
-    pruning = ctx.global_context.pruning
+    pruning = ctx.kernel_compile_context.pruning
     if not pruning.enforcing:
         # Record under the kernel's func id (see ``predeclare_struct_primitives``) so the enforcing pass declares
         # this primitive and the existing fastcache serialisation captures it.
         pruning.mark_used(pruning.KERNEL_FUNC_ID, entry[0])
         return None
-    return ctx.global_context.struct_primitive_to_expr.get(key)
+    return ctx.kernel_compile_context.struct_primitive_to_expr.get(key)

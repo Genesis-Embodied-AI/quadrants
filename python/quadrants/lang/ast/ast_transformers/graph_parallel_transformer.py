@@ -68,7 +68,7 @@ class GraphParallelTransformer:
         graph_api.warn_if_deprecated(node.items[0].context_expr.func, "parallel_context")
         if not ctx.is_kernel:
             raise QuadrantsSyntaxError("qd.graph.parallel_context() can only be used inside @qd.kernel, not @qd.func")
-        kernel = ctx.global_context.current_kernel
+        kernel = ctx.kernel_compile_context.current_kernel
         if kernel is None or not kernel.use_graph:
             raise QuadrantsSyntaxError("qd.graph.parallel_context() requires @qd.kernel(graph=True)")
         # A region cannot coexist with the checkpoint/resume model. Its section for-loops escape the checkpoint net:

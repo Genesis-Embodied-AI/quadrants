@@ -97,9 +97,9 @@ def boundary_type_cast_warning(expression: Expr) -> None:
 class ASTTransformer(Builder):
     @staticmethod
     def build_Name(ctx: ASTTransformerFuncContext, node: ast.Name):
-        pruning = ctx.global_context.pruning
+        pruning = ctx.kernel_compile_context.pruning
         if not pruning.enforcing and not ctx.expanding_dataclass_call_parameters and node.id.startswith("__qd_"):
-            ctx.global_context.pruning.mark_used(ctx.func.func_id, node.id)
+            ctx.kernel_compile_context.pruning.mark_used(ctx.func.func_id, node.id)
         # Seed the chain annotation that ``build_Attribute`` extends and records in pruning. Only non-flattened
         # parameters need it - a data_oriented kernel arg (``self``), or a ``qd.template()`` func param; dataclass args
         # arrive here already flattened and are handled by ``mark_used`` above.
@@ -715,12 +715,12 @@ class ASTTransformer(Builder):
         """
         from quadrants.lang._ndarray import Ndarray  # pylint: disable=C0415
 
-        pruning = ctx.global_context.pruning
+        pruning = ctx.kernel_compile_context.pruning
         # Same gate as ``build_Name``'s mark_used: the callee body's own accesses are what count, not the synthetic
         # per-leaf expansion of a ``@qd.func`` call's arguments.
         should_mark = not pruning.enforcing and not ctx.expanding_dataclass_call_parameters
         if isinstance(value, Ndarray):
-            cache = ctx.global_context.ndarray_to_any_array
+            cache = ctx.kernel_compile_context.ndarray_to_any_array
             key = id(value)
             arr = cache.get(key)
             if arr is not None:
@@ -810,7 +810,7 @@ class ASTTransformer(Builder):
                 node.ptr = lifted
                 return node.ptr
             node.ptr = getattr(node.value.ptr, node.attr)
-            if ctx.global_context.pruning.enforcing and is_data_oriented(node.ptr):
+            if ctx.kernel_compile_context.pruning.enforcing and is_data_oriented(node.ptr):
                 raise exception.QuadrantsRuntimeTypeError(
                     "Data-oriented objects inside Python dataclass fields are unsupported. "
                     "Store the dataclass on the data-oriented object instead."
@@ -879,7 +879,7 @@ class ASTTransformer(Builder):
         if parent_chain is not None:
             flat = create_flat_name(parent_chain, node.attr)
             node._qd_arg_chain = flat  # type: ignore[attr-defined]
-            pruning = ctx.global_context.pruning
+            pruning = ctx.kernel_compile_context.pruning
             if not pruning.enforcing and not ctx.expanding_dataclass_call_parameters:
                 pruning.mark_kernel_arg_chain_used(ctx.func.func_id, flat)
         else:
@@ -1524,7 +1524,7 @@ class ASTTransformer(Builder):
             graph_api.warn_if_deprecated(node.test.func, "do_while")
             from quadrants.lang.kernel import GraphDoWhileLevel  # pylint: disable=C0415
 
-            kernel = ctx.global_context.current_kernel
+            kernel = ctx.kernel_compile_context.current_kernel
             if not kernel.use_graph:
                 raise QuadrantsSyntaxError("qd.graph.do_while() requires @qd.kernel(graph=True)")
             # graph_do_while emits no loop IR; its body's for-loops must be top-level (offloaded) tasks. So it may only
@@ -1776,7 +1776,7 @@ class ASTTransformer(Builder):
             )
         if not ctx.is_kernel:
             raise QuadrantsSyntaxError("qd.stream_parallel() can only be used inside @qd.kernel, not @qd.func")
-        kernel = ctx.global_context.current_kernel
+        kernel = ctx.kernel_compile_context.current_kernel
         if kernel is not None and kernel.use_graph:
             raise QuadrantsSyntaxError(
                 "qd.stream_parallel() is not compatible with graph=True kernels. Streams and graphs cannot be "

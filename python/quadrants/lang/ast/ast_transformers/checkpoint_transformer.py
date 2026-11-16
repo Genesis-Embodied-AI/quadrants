@@ -207,7 +207,7 @@ class CheckpointTransformer:
         """
         if not ctx.is_kernel:
             raise QuadrantsSyntaxError("qd.checkpoint() can only be used inside @qd.kernel, not @qd.func")
-        kernel = ctx.global_context.current_kernel
+        kernel = ctx.kernel_compile_context.current_kernel
         if not kernel.use_graph:
             raise QuadrantsSyntaxError(
                 "qd.checkpoint() requires @qd.kernel(graph=True); the resume model only applies to graph kernels"
