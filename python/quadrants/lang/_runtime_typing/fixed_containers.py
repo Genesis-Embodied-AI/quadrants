@@ -98,7 +98,7 @@ def _collect_containers(
     owners.append((py_obj, frozenset(fixed)))
 
 
-def fix_container_references_and_get_alias_key(
+def get_container_alias_key(
     args: tuple[Any, ...],
 ) -> tuple[tuple[int, ...], ...]:
     """Lock references on first use and return an identity-independent description of shared containers."""
@@ -130,7 +130,7 @@ def fix_container_references_and_get_alias_key(
     return tuple(result)
 
 
-def get_cached_or_fix_container_references_and_get_alias_key(
+def get_cached_container_alias_key(
     args: tuple[Any, ...], args_hash: tuple[int, ...], cache: AliasKeyCache
 ) -> AliasKey:
     """Reuse a whole-call alias key while its argument identities remain alive."""
@@ -138,7 +138,7 @@ def get_cached_or_fix_container_references_and_get_alias_key(
     if cached is not None:
         return cached[0]
 
-    alias_key = fix_container_references_and_get_alias_key(args)
+    alias_key = get_container_alias_key(args)
     references: list[object] = []
 
     def evict(expired: ReferenceType[Any]) -> None:

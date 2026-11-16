@@ -18,7 +18,7 @@ from .._name_utils import create_flat_name
 from .._ndarray import ScalarNdarray
 from .._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
 from .._runtime_typing.deferred_errors import DeferredMemberType
-from .._runtime_typing.fixed_containers import fix_container_references_and_get_alias_key
+from .._runtime_typing.fixed_containers import get_container_alias_key
 from .._runtime_typing.runtime_dataclass import RuntimeDataclassSchema
 from ..field import ScalarField
 from ..kernel_arguments import ArgMetadata
@@ -498,7 +498,7 @@ def hash_args(
             return FastcacheSkip.WARN if _should_warn else FastcacheSkip.FIELD_VIA_TENSOR
         hash_l.append(_hash)
     start = time.time()
-    hash_l.append(repr(fix_container_references_and_get_alias_key(args)))
+    hash_l.append(repr(get_container_alias_key(args)))
     res = hash_iterable_strings(hash_l)
     g_hashing_time += time.time() - start
     return res

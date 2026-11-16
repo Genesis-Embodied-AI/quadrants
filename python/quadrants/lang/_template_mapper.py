@@ -11,7 +11,7 @@ from quadrants.lang._runtime_typing.runtime_dataclass import (
 )
 from quadrants.lang._runtime_typing.fixed_containers import (
     AliasKeyCache,
-    get_cached_or_fix_container_references_and_get_alias_key,
+    get_cached_container_alias_key,
 )
 from quadrants.lang.impl import Program
 from quadrants.lang.kernel_arguments import ArgMetadata
@@ -182,7 +182,7 @@ class TemplateMapper:
             if mapping_cache_tracker:
                 return self._mapping_cache[args_hash]
 
-        alias_key = get_cached_or_fix_container_references_and_get_alias_key(
+        alias_key = get_cached_container_alias_key(
             args, args_hash, self._alias_key_by_args_hash
         )
 
