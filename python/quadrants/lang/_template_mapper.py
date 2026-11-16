@@ -197,7 +197,7 @@ class TemplateMapper:
                         raise_on_templated_floats,
                         get_member_at_path(args[index], path),
                         schema,
-                        ".".join((self.arguments[index].name, *path)),
+                        ".".join(map(str, (self.arguments[index].name, *path))),
                         final_value_key_by_value_id,
                     ),
                 )

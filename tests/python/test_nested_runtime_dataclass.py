@@ -89,8 +89,8 @@ def test_nested_dataclass_unused_invalid_final() -> None:
 
 
 @test_utils.test()
-def test_nested_dataclass_final_replacement_changes_specialization() -> None:
-    """Replacing a frozen dataclass updates baked Final values inside its data-oriented owner."""
+def test_nested_dataclass_final_container_replacement_rejected() -> None:
+    """A Final-bearing dataclass keeps its container reference after first use."""
 
     @dataclass(frozen=True)
     class State:
@@ -108,8 +108,8 @@ def test_nested_dataclass_final_replacement_changes_specialization() -> None:
 
     owner = Owner()
     assert read(owner) == 5
-    owner.state = State(7, 4)
-    assert read(owner) == 11
+    with pytest.raises(Exception, match="fixed after first kernel use"):
+        owner.state = State(7, 4)
 
 
 @test_utils.test()
@@ -354,9 +354,8 @@ def test_dataclass_added_after_discovery_is_rejected(template_primitives: bool) 
 
     owner = Owner()
     assert initial(owner) == 1
-    owner.added = State()
-    with pytest.raises(Exception, match=r"Owner\.added.*not discovered"):
-        read(owner)
+    with pytest.raises(Exception, match=r"Cannot add container reference Owner\.added"):
+        owner.added = State()
 
 
 @test_utils.test()

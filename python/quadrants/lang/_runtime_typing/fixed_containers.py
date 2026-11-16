@@ -77,6 +77,7 @@ def _collect_containers(
             _collect_containers(child, identities, seen, owners)
         return
 
+    dataclass_owner = is_dataclass_instance(py_obj)
     members = (
         ((field.name, getattr(py_obj, field.name)) for field in dataclasses.fields(py_obj))
         if is_dataclass_instance(py_obj)
@@ -87,7 +88,8 @@ def _collect_containers(
         if not name.startswith("_qd_"):
             if _is_container(child):
                 fixed.add(name)
-            _collect_containers(child, identities, seen, owners)
+            if not dataclass_owner or is_dataclass_instance(child) or is_data_oriented(child):
+                _collect_containers(child, identities, seen, owners)
     owners.append((py_obj, frozenset(fixed)))
 
 
