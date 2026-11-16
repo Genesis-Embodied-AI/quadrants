@@ -20,7 +20,7 @@ from quadrants.types import annotations
 def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
     """Declare used scalars and record the attribute routes supplying their values at launch."""
     assert ctx.py_args is not None
-    flagged: list[tuple[int, Any]] = []
+    owners: list[tuple[int, Any]] = []
     for i, arg_meta in enumerate(ctx.func.arg_metas):
         anno = arg_meta.annotation
         is_template = anno is annotations.template or isinstance(anno, annotations.template)
@@ -31,8 +31,8 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
         if isinstance(val, _TensorClass):
             val = val._unwrap()
         if is_data_oriented(val):
-            flagged.append((i, val))
-    if not flagged:
+            owners.append((i, val))
+    if not owners:
         return
 
     from quadrants._lib import core as _qd_core  # pylint: disable=C0415
@@ -135,6 +135,5 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
             elif is_dataclass_instance(attr_val) or is_data_oriented(attr_val):
                 _walk(attr_val, arg_idx, (*path, attr_name), seen, lift_plain)
 
-    seen: set[int] = set()
-    for arg_idx, val in flagged:
-        _walk(val, arg_idx, (), seen, wants_runtime_primitives(val))
+    for arg_idx, val in owners:
+        _walk(val, arg_idx, (), set(), wants_runtime_primitives(val))

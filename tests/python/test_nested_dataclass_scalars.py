@@ -142,3 +142,33 @@ def test_nested_runtime_scalar_rejects_static() -> None:
 
     with pytest.raises(qd.QuadrantsSyntaxError, match="runtime kernel argument"):
         read(Owner())
+
+
+@test_utils.test()
+def test_shared_owner_keeps_runtime_primitive_opt_in() -> None:
+    """A default owner visited first must not hide the runtime opt-in of another owner sharing its child."""
+
+    @qd.data_oriented
+    class Child:
+        def __init__(self) -> None:
+            self.value = 3
+
+    @qd.data_oriented
+    class DefaultOwner:
+        def __init__(self, child: Child) -> None:
+            self.child = child
+
+    @qd.data_oriented(template_primitives=False)
+    class RuntimeOwner:
+        def __init__(self, child: Child) -> None:
+            self.child = child
+
+    @qd.kernel
+    def read(default: qd.Template, runtime: qd.Template) -> qd.i32:
+        return runtime.child.value
+
+    child = Child()
+    default, runtime = DefaultOwner(child), RuntimeOwner(child)
+    assert read(default, runtime) == 3
+    child.value = 7
+    assert read(default, runtime) == 7
