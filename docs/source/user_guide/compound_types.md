@@ -327,9 +327,6 @@ replacing containers or changing their layout after that point is unsupported. O
 This does not add discovery through tuples or lists: an indexed alias must refer to a dataclass already reachable
 through stored attributes.
 
-Previously, these nested dataclass scalars were compile-time constants unless their owner opted into runtime
-primitives. Code using them in static expressions must now mark those fields as constants explicitly.
-
 ### Runtime primitives: `template_primitives=False`
 
 If you want to change a primitive member's value **from Python between launches without triggering a recompile**, decorate the class with `@qd.data_oriented(template_primitives=False)`. Every primitive member the kernel actually accesses (`int`, `float`, `bool`, including those reached through nested `dataclasses.dataclass` / `@qd.data_oriented` members) is then lifted into a runtime scalar kernel argument and read fresh on every launch, instead of being compiled into the kernel as a constant. The member stays read-only inside the kernel (it is a kernel argument, not a writable variable): you mutate it in Python, and the kernel sees the new value on the next launch.
