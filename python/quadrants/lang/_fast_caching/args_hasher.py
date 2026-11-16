@@ -470,7 +470,9 @@ def hash_args(
     _should_warn = False
     g_num_calls += 1
     g_num_args += len(args)
-    launch_arg_schema_by_index_and_path = {(str(index), *map(str, path)): schema for index, path, schema in launch_arg_schemas}
+    launch_arg_schema_by_index_and_path = {
+        (str(index), *map(str, path)): schema for index, path, schema in launch_arg_schemas
+    }
     hash_l = []
     if len(args) != len(arg_metas):
         raise RuntimeError(

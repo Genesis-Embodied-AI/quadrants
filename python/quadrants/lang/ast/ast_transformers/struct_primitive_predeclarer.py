@@ -124,7 +124,9 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
         seen.add(obj_id)
         if is_dataclass_instance(obj):
             ctx.global_context.runtime_dataclass_binding_objects.add(obj_id)
-            schema = schema or cached_infer_dataclass_type(obj, ".".join(map(str, (ctx.func.arg_metas[arg_idx].name, *path))))
+            schema = schema or cached_infer_dataclass_type(
+                obj, ".".join(map(str, (ctx.func.arg_metas[arg_idx].name, *path)))
+            )
             for field in dataclasses.fields(schema):
                 value = getattr(obj, field.name)
                 if isinstance(field.type, DeferredMemberType):

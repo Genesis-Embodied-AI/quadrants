@@ -927,7 +927,8 @@ class Kernel(FuncBase):
             else:
                 if type(obj) is float:
                     raise TypeError(
-                        f"Primitive member '{'.'.join(map(str, attr_chain))}' of a @qd.data_oriented(template_primitives=False) "
+                        f"Primitive member '{'.'.join(map(str, attr_chain))}' of a "
+                        f"@qd.data_oriented(template_primitives=False) "
                         f"object was lifted as an integer kernel argument (its type at first compile), but is now a "
                         f"float ({obj!r}); coercing it would truncate. Keep the member's type stable across launches, "
                         f"or use the default template_primitives=True to re-specialise the kernel per type."

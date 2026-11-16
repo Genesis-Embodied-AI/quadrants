@@ -25,9 +25,9 @@ def _collect_dataclass_paths_in_data_oriented(
     dataclass_paths: list[tuple[str | int, ...]],
     active_ids: set[int],
 ) -> None:
-    """From a data-oriented root, walk only data-oriented objects and append dataclass paths to dataclass_paths.
+    """From a data-oriented root, walk stored attributes and tuples and append dataclass paths to dataclass_paths.
 
-    Stop each branch at a dataclass (recording its path), any other non-data-oriented object, or an active cycle.
+    Stop each branch at a dataclass (recording its path), any other object, or an active cycle.
     """
     if is_dataclass_instance(py_obj):
         dataclass_paths.append(path)

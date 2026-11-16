@@ -293,7 +293,9 @@ class FunctionDefTransformer:
         def _walk_obj(obj, arg_idx, path, seen):
             if isinstance(obj, tuple):
                 for index, child in enumerate(obj):
-                    if (is_dataclass_instance(child) or is_data_oriented(child) or isinstance(child, tuple)) and id(child) not in seen:
+                    if id(child) not in seen and (
+                        is_dataclass_instance(child) or is_data_oriented(child) or isinstance(child, tuple)
+                    ):
                         seen.add(id(child))
                         _walk_obj(child, arg_idx, (*path, index), seen)
             elif is_dataclass_instance(obj):
