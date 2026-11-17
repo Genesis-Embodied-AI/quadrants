@@ -20,20 +20,20 @@ class MemberBinding(NamedTuple):
     reject_in_static_scope: bool = False
 
 
-def resolve_bound_member(ctx: "FuncCompileContext", parent: Any, attr: str) -> Any:
+def resolve_bound_member(func_ctx: "FuncCompileContext", parent: Any, attr: str) -> Any:
     """Read a registered member and record its kernel input as used during discovery."""
-    binding = ctx.kernel_compile_context.member_bindings.get((id(parent), attr))
+    binding = func_ctx.kernel_compile_context.member_bindings.get((id(parent), attr))
     if binding is None:
-        if id(parent) in ctx.kernel_compile_context.bound_dataclass_ids:
+        if id(parent) in func_ctx.kernel_compile_context.bound_dataclass_ids:
             raise QuadrantsSyntaxError(f"Member {attr!r} is absent from the declared dataclass fields")
         return None
 
-    if binding.reject_in_static_scope and ctx.is_in_static_scope():
+    if binding.reject_in_static_scope and func_ctx.is_in_static_scope():
         raise QuadrantsSyntaxError(
             f"'{attr}' is a runtime kernel argument and cannot be used inside qd.static(). "
             "Use template_primitives=True for compile-time data-oriented scalars."
         )
-    pruning = ctx.kernel_compile_context.pruning
+    pruning = func_ctx.kernel_compile_context.pruning
     if not pruning.enforcing:
         pruning.mark_used(pruning.KERNEL_FUNC_ID, binding.name)
     return binding.member_access_result
