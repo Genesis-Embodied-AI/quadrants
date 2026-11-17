@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, List
 from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import ASTBuilder
 from quadrants.lang import impl
+from quadrants.lang._kernel_parameter_bindings import KernelParameterBindings
 from quadrants.lang._ndrange import ndrange
 from quadrants.lang.ast.symbol_resolver import ASTResolver
 from quadrants.lang.exception import (
@@ -187,20 +188,7 @@ class KernelCompileContext:
         self.pass_idx: int = pass_idx
         self.ndarray_to_any_array: dict[int, Any] = {}
         self.struct_ndarray_launch_info: list[tuple] = []
-        # Lifted-primitive support for ``@qd.data_oriented(template_primitives=False)``. Mirrors the two ndarray
-        # structures above, plus a provenance map driving the two-pass pruning.
-        # * ``struct_primitive_provenance`` maps ``(id(parent_obj), attr_name)`` to ``(flat_name, arg_idx, attr_chain,
-        #   kind)`` for every reachable primitive member of a flagged template arg. Built (cheaply, no kernel-arg
-        #   declaration) on every compilation pass. ``build_Attribute`` uses it to ``mark_used`` the accessed
-        #   primitives during the non-enforcing discovery pass.
-        # * ``struct_primitive_to_expr`` maps the same key to the arg-load ``Expr``. Populated only in the enforcing
-        #   pass, and only for primitives actually accessed by the body (pruning), so ``build_Attribute`` can return
-        #   the runtime scalar arg instead of baking the value.
-        # * ``struct_primitive_launch_info`` records ``(arg_id, template_arg_idx, attr_chain, kind)`` tuples (``kind``
-        #   in ``{'f', 'i', 'u'}``) so the launch path can read the live value and bind it.
-        self.struct_primitive_provenance: dict[tuple[int, str], tuple] = {}
-        self.struct_primitive_to_expr: dict[tuple[int, str], Any] = {}
-        self.struct_primitive_launch_info: list[tuple] = []
+        self.parameter_bindings = KernelParameterBindings(pruning)
         # Caller-side `loop_depth` snapshot for the in-flight `@qd.func` invocation. Each func compile creates a fresh
         # `FuncCompileContext` with `loop_depth = 0`, so without this snapshot a non-static `range(...)` loop
         # inside a func body would not see any outer for-loops in the caller and would skip the backward-mode dynamic-
@@ -501,7 +489,7 @@ def maybe_lifted_primitive(ctx: FuncCompileContext, parent: Any, attr: str):
     per-attribute baked escape hatch, so a ``qd.static`` use is unambiguously a mistake and we surface it loudly
     rather than silently baking a value that will not track mutations.
     """
-    provenance = ctx.kernel_compile_context.struct_primitive_provenance
+    provenance = ctx.kernel_compile_context.parameter_bindings.arg_info_by_member
     if not provenance:
         return None
     key = (id(parent), attr)
@@ -521,4 +509,4 @@ def maybe_lifted_primitive(ctx: FuncCompileContext, parent: Any, attr: str):
         # this primitive and the existing fastcache serialisation captures it.
         pruning.mark_used(pruning.KERNEL_FUNC_ID, entry[0])
         return None
-    return ctx.kernel_compile_context.struct_primitive_to_expr.get(key)
+    return ctx.kernel_compile_context.parameter_bindings.arg_expr_by_member.get(key)

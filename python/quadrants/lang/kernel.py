@@ -70,6 +70,7 @@ from quadrants.types.enums import AutodiffMode
 from quadrants.types.utils import is_signed
 
 from ._func_base import FuncBase
+from ._kernel_parameter_bindings import KernelParameterLaunchBindings
 from ._kernel_types import (
     ArgsHash,
     CompiledKernelKeyType,
@@ -385,9 +386,10 @@ class Kernel(FuncBase):
 
         self.launch_context_buffer_cache = LaunchContextBufferCache()
         self._struct_ndarray_launch_info_by_key: dict[CompiledKernelKeyType, list] = {}
-        # Launch info for primitives lifted from ``@qd.data_oriented(template_primitives=False)`` template args (see
-        # ``predeclare_struct_primitives``). Maps key -> list of ``(arg_id, template_arg_idx, attr_chain, kind)``.
-        self._struct_primitive_launch_info_by_key: dict[CompiledKernelKeyType, list] = {}
+        # Retain launch records without keeping compiler expressions or pruning state alive.
+        self._parameter_launch_bindings_by_compiled_kernel_key: dict[
+            CompiledKernelKeyType, KernelParameterLaunchBindings
+        ] = {}
         self._mutable_nd_cached_key: CompiledKernelKeyType | None = None
         self._mutable_nd_cached_val: list = []
         self._tensor_unwrap_indices: tuple[int, ...] | None = None
@@ -599,11 +601,9 @@ class Kernel(FuncBase):
                     # skip the whole primitive-binding path with a single empty-dict check instead of paying a
                     # per-launch ``.get(key)`` (tuple hash) on every cache-missing launch -- which is the hot path for
                     # CPU / unbatched genesis steps that launch many tiny kernels.
-                    struct_primitive_launch_info = getattr(
-                        ctx.kernel_compile_context, "struct_primitive_launch_info", []
-                    )
-                    if struct_primitive_launch_info:
-                        self._struct_primitive_launch_info_by_key[key] = struct_primitive_launch_info
+                    launch_bindings = ctx.kernel_compile_context.parameter_bindings.launch_bindings
+                    if launch_bindings.launch_infos:
+                        self._parameter_launch_bindings_by_compiled_kernel_key[key] = launch_bindings
                 else:
                     # Propagate used-sets across call edges to a fixpoint (order-independent) before
                     # collapsing flat names to their used prefixes below.
@@ -758,10 +758,10 @@ class Kernel(FuncBase):
 
             # Empty for every kernel that doesn't use template_primitives=False (the common case), so this guard
             # short-circuits without hashing ``key`` -- keeping the per-launch hot path free of added overhead.
-            if self._struct_primitive_launch_info_by_key:
-                struct_prim_info = self._struct_primitive_launch_info_by_key.get(key)
-                if struct_prim_info:
-                    self._set_struct_primitive_args(struct_prim_info, args, launch_ctx_buffer)
+            if self._parameter_launch_bindings_by_compiled_kernel_key:
+                launch_bindings = self._parameter_launch_bindings_by_compiled_kernel_key.get(key)
+                if launch_bindings is not None:
+                    launch_bindings.populate_launch_buffer(args, launch_ctx_buffer)
                     # Lifted primitives are read fresh from the live object on every launch (that is the whole point),
                     # so the prepared launch context must not be cached under ``args_hash`` (the hash keys on object
                     # id, not primitive value, so a cached context would serve stale values when the user mutates the
@@ -915,39 +915,6 @@ class Kernel(FuncBase):
                 launch_ctx_buffer[_QD_ARRAY].append((arg_id, v_primal))
             else:
                 launch_ctx_buffer[_QD_ARRAY_WITH_GRAD].append((arg_id, v_primal, v_grad))
-
-    @staticmethod
-    def _set_struct_primitive_args(
-        launch_info: list,
-        args: tuple,
-        launch_ctx_buffer: dict,
-    ) -> None:
-        """Set scalar kernel args lifted from ``@qd.data_oriented(template_primitives=False)`` template-arg primitive
-        members. Walks each recorded attr-chain to read the live value and buckets it by declared dtype kind (``'f'``
-        float, ``'i'`` signed int, ``'u'`` unsigned int), so the value is bound fresh on every launch.
-
-        The dtype kind is frozen at first compile (see ``struct_primitive_predeclarer``). Binding a ``float`` to an
-        arg that was lifted as an integer would silently truncate (``int(1.5) == 1``), so that one lossy direction is
-        rejected here rather than corrupting the value; the lossless directions (``int``/``bool`` -> float, and
-        ``bool`` <-> ``int``) still coerce, matching typed-scalar-arg semantics."""
-        for arg_id, template_arg_idx, attr_chain, kind in launch_info:
-            obj = args[template_arg_idx]
-            for attr_name in attr_chain:
-                obj = getattr(obj, attr_name)
-            if kind == "f":
-                launch_ctx_buffer[_FLOAT].append((arg_id, float(obj)))
-            else:
-                if type(obj) is float:
-                    raise TypeError(
-                        f"Primitive member '{'.'.join(attr_chain)}' of a @qd.data_oriented(template_primitives=False) "
-                        f"object was lifted as an integer kernel argument (its type at first compile), but is now a "
-                        f"float ({obj!r}); coercing it would truncate. Keep the member's type stable across launches, "
-                        f"or use the default template_primitives=True to re-specialise the kernel per type."
-                    )
-                if kind == "u":
-                    launch_ctx_buffer[_UINT].append((arg_id, int(obj)))
-                else:
-                    launch_ctx_buffer[_INT].append((arg_id, int(obj)))
 
     def ensure_compiled(self, *py_args: tuple[Any, ...]) -> tuple[Callable, int, AutodiffMode]:
         try:
