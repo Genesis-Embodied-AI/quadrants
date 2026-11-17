@@ -387,7 +387,7 @@ class Kernel(FuncBase):
         self._struct_ndarray_launch_info_by_key: dict[CompiledKernelKeyType, list] = {}
         # Launch info for primitives lifted from ``@qd.data_oriented(template_primitives=False)`` template args (see
         # ``bind_data_oriented_runtime_scalars``). Maps key -> list of ``(arg_id, template_arg_idx, attr_chain, kind)``.
-        self._runtime_scalar_launch_info_by_key: dict[CompiledKernelKeyType, list] = {}
+        self._runtime_scalar_launch_info_by_compiled_kernel_key: dict[CompiledKernelKeyType, list] = {}
         self._mutable_nd_cached_key: CompiledKernelKeyType | None = None
         self._mutable_nd_cached_val: list = []
         self._tensor_unwrap_indices: tuple[int, ...] | None = None
@@ -603,7 +603,7 @@ class Kernel(FuncBase):
                         ctx.kernel_compile_context, "runtime_scalar_launch_info", []
                     )
                     if runtime_scalar_launch_info:
-                        self._runtime_scalar_launch_info_by_key[key] = runtime_scalar_launch_info
+                        self._runtime_scalar_launch_info_by_compiled_kernel_key[key] = runtime_scalar_launch_info
                 else:
                     # Propagate used-sets across call edges to a fixpoint (order-independent) before
                     # collapsing flat names to their used prefixes below.
@@ -758,8 +758,8 @@ class Kernel(FuncBase):
 
             # Empty for every kernel that doesn't use template_primitives=False (the common case), so this guard
             # short-circuits without hashing ``key`` -- keeping the per-launch hot path free of added overhead.
-            if self._runtime_scalar_launch_info_by_key:
-                runtime_scalar_launch_info = self._runtime_scalar_launch_info_by_key.get(key)
+            if self._runtime_scalar_launch_info_by_compiled_kernel_key:
+                runtime_scalar_launch_info = self._runtime_scalar_launch_info_by_compiled_kernel_key.get(key)
                 if runtime_scalar_launch_info:
                     self._set_struct_primitive_args(runtime_scalar_launch_info, args, launch_ctx_buffer)
                     # Lifted primitives are read fresh from the live object on every launch (that is the whole point),
