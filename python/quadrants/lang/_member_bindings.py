@@ -9,11 +9,13 @@ if TYPE_CHECKING:
 
 
 class MemberBinding(NamedTuple):
-    """A member's pruning name, declared type, and compiler value."""
+    """A member's pruning name, declared type, and result of compiling an access."""
 
     name: str
     annotation: Any
-    value: Any
+    # Result of compiling a member access: an Expr for a runtime scalar,
+    # an array representation, a Python constant, or a nested dataclass instance.
+    member_access_result: Any
     runtime_scalar: bool = False
 
 
@@ -33,4 +35,4 @@ def resolve_bound_member(ctx: "FuncCompileContext", parent: Any, attr: str) -> A
     pruning = ctx.kernel_compile_context.pruning
     if not pruning.enforcing:
         pruning.mark_used(pruning.KERNEL_FUNC_ID, binding.name)
-    return binding.value
+    return binding.member_access_result
