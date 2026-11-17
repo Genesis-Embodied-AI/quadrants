@@ -465,6 +465,10 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="k">continue</span>
         <span class="n">flat_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"__qd_doprim_</span><span class="si">{</span><span class="n">arg_idx</span><span class="si">}</span><span class="s2">__</span><span class="si">{</span><span class="s1">'__'</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">attr_chain</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
+        <span class="c1"># Discovery reads the Python scalar, while enforcement reads an Expr. Reject static reads so the two passes</span>
+        <span class="c1"># cannot choose different branches.</span>
+        <span class="c1"># FIXME: Represent the scalar as an Expr during discovery too, so qd.static((s.n,)) can build a tuple</span>
+        <span class="c1"># whose element still reads the runtime value.</span>
         <span class="n">bindings</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">MemberBinding</span><span class="p">(</span><span class="n">flat_name</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">reject_in_static_scope</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
         <span class="c1"># Add only members marked used during discovery, avoiding MAX_ARG_NUM for large containers.</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">pruning</span><span class="o">.</span><span class="n">enforcing</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">pruning</span><span class="o">.</span><span class="n">is_used</span><span class="p">(</span><span class="n">func_id</span><span class="p">,</span> <span class="n">flat_name</span><span class="p">):</span>
