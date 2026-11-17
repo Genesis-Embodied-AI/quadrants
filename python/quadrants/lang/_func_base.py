@@ -10,11 +10,7 @@ import textwrap
 import types
 import typing
 import warnings
-from dataclasses import (
-    _FIELD,  # type: ignore[reportAttributeAccessIssue]
-    _FIELDS,  # type: ignore[reportAttributeAccessIssue]
-    is_dataclass,
-)
+from dataclasses import is_dataclass
 
 # Must import 'partial' directly instead of the entire module to avoid attribute lookup overhead.
 from functools import partial
@@ -34,18 +30,12 @@ from quadrants._lib.core.quadrants_python import KernelLaunchContext
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import _kernel_impl_dataclass, impl
-from quadrants.lang._final.final_dataclass_fields import (
-    final_field_names,
-    subtree_has_final_fields,
-)
-from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang._signature import get_func_signature
 from quadrants.lang._wrap_inspect import get_source_info_and_src
 from quadrants.lang.ast import FuncCompileContext
 from quadrants.lang.buffer_view import BufferView as BufferViewInstance
 from quadrants.lang.exception import (
-    QuadrantsRuntimeError,
     QuadrantsRuntimeTypeError,
     QuadrantsSyntaxError,
 )
@@ -81,132 +71,11 @@ from ._optional_annotation import split_optional
 from ._template_mapper import TemplateMapper
 from ._template_mapper_hotpath import _is_external_array
 
-MAX_ARG_NUM = 512
-
 # Define proxies for fast lookup
 _FLOAT, _INT, _UINT, _QD_ARRAY, _QD_ARRAY_WITH_GRAD = KernelBatchedArgType
 _ARG_EMPTY = inspect.Parameter.empty
 _arch_cuda = _qd_core.Arch.cuda
 _is_cpython = sys.implementation.name == "cpython"
-
-# PERF: Frozen-dataclass dispatch caching.
-#
-# When a frozen dataclass (e.g. Genesis's StructConstraintState with ~43 fields) is passed to a kernel, the per-launch
-# field iteration in ``_recursive_set_args`` is expensive: it loops over all fields, filters by
-# ``used_py_dataclass_parameters``, calls ``getattr`` + ``_unwrap`` for each, and makes two recursive calls per field.
-# On the old ``@qd.data_oriented`` + ``qd.template()`` path this cost was zero (template args skip the launch loop).
-#
-# Two caches eliminate this overhead:
-#
-# 1. **Field plan cache** (module-level): for a given (struct class, used_parameters set, basename) triple, pre-compute
-#    which fields are active and their (name, full_name, type) tuples. Reduces the 43-iteration filter loop to ~10-15
-#    direct entries.
-#
-# 2. **Unwrapped-value cache** (per-instance ``_qd_dc_unwrapped``): for a frozen dataclass, field values never change,
-#    so cache each field's unwrapped (post-``_unwrap()``) value, eliminating ``getattr`` + ``_unwrap()`` per launch.
-#    Keyed by ``id(annotated_type)`` so one instance reused under several ancestor annotations keeps a per-view entry.
-
-_frozen_dc_plans: dict[tuple[int, type, str], tuple[set[str], tuple[tuple[str, str, Any], ...]]] = {}
-
-_frozen_dc_plans_hook_registered = False
-
-
-def _ensure_frozen_dc_plans_reset_hook():
-    global _frozen_dc_plans_hook_registered
-    if not _frozen_dc_plans_hook_registered:
-        impl.on_reset(_frozen_dc_plans.clear)
-        _frozen_dc_plans_hook_registered = True
-
-
-def _get_frozen_dc_plan(
-    used_params: set[str], struct_cls: type, basename: str, fields_dict: dict
-) -> tuple[tuple[str, str, Any], ...]:
-    _ensure_frozen_dc_plans_reset_hook()
-    key = (id(used_params), struct_cls, basename)
-    entry = _frozen_dc_plans.get(key)
-    # Guard against id() reuse: after the original set is garbage-collected, a new set can be allocated at the same
-    # address. mimalloc (default in CPython 3.13+) makes this significantly more likely. Validate with an identity
-    # check so a stale plan from a different kernel specialization is never returned.
-    if entry is not None and entry[0] is used_params:
-        return entry[1]
-    # ``Final[T]`` fields are baked constants with no runtime arg slot, so exclude them from the plan to keep the arg
-    # count consistent.
-    final_names = final_field_names(struct_cls)
-    entries: list[tuple[str, str, Any]] = []
-    for field in fields_dict.values():
-        if field._field_type is not _FIELD:
-            continue
-        if field.name in final_names:
-            continue
-        full_name = create_flat_name(basename, field.name)
-        if full_name not in used_params:
-            continue
-        entries.append((field.name, full_name, field.type))
-    plan = tuple(entries)
-    _frozen_dc_plans[key] = (used_params, plan)
-    return plan
-
-
-def _compute_frozen_dc_unwrapped(v: Any, fields_dict: dict) -> dict[str, Any]:
-    """field_name -> unwrapped value for a frozen dataclass (no caching)."""
-    unwrapped: dict[str, Any] = {}
-    for field in fields_dict.values():
-        if field._field_type is not _FIELD:
-            continue
-        val = getattr(v, field.name)
-        if _tensor_wrapper._any_tensor_constructed and type(val) in _TENSOR_WRAPPER_TYPES:
-            val = val._unwrap()
-        unwrapped[field.name] = val
-    return unwrapped
-
-
-def _get_frozen_dc_unwrapped(v: Any, struct_cls: type, fields_dict: dict) -> dict[str, Any]:
-    """field_name -> unwrapped value for a frozen dataclass, cached on the instance.
-
-    Keyed by ``id(struct_cls)`` so a subclass instance reused under several ancestor annotations keeps a distinct entry
-    per view. The stored ``(struct_cls, ...)`` tuple is identity-checked on read, so a recycled ``id`` or a metaclass
-    that makes two ancestors compare/hash equal cannot serve the wrong view.
-
-    A ``Final``-bearing subtree is exempt from the cache (and from the ``_qd_all_field`` shortcut): like the
-    spec-key/offline-repr/mapper caches it must re-read every launch so ``Final``-value validation re-runs, and an
-    ``unsafe_hash=True`` instance may also mutate an *ordinary* field between launches - a stale cache would keep
-    sending the first-launch value. (Such a config always has a non-``Field`` scalar leaf, so ``_qd_all_field`` would
-    be ``False`` anyway; leaving it unset defaults to ``False``, i.e. the full ``_recursive_set_args`` path.)
-
-    The Final gate uses the annotated ``struct_cls``, not ``type(v)``: only the base's fields reach the kernel, so a
-    subclass's application-only ``Final`` field (e.g. an unbakeable ``Final[list]``) must be ignored, not validated.
-    """
-    if subtree_has_final_fields(struct_cls):
-        return _compute_frozen_dc_unwrapped(v, fields_dict)
-    cache = getattr(v, "_qd_dc_unwrapped", None)
-    if cache is not None:
-        hit = cache.get(id(struct_cls))
-        if hit is not None and hit[0] is struct_cls:  # identity guard against a recycled id
-            return hit[1]
-    unwrapped = _compute_frozen_dc_unwrapped(v, fields_dict)
-    if cache is None:
-        try:
-            object.__setattr__(v, "_qd_dc_unwrapped", {id(struct_cls): (struct_cls, unwrapped)})
-        except AttributeError:
-            pass
-    else:
-        cache[id(struct_cls)] = (struct_cls, unwrapped)
-    # Cache whether ALL unwrapped values are Fields (zero launch-context slots); this depends on the active field
-    # subset, so it is keyed per annotated type like the unwrapped values above.
-    all_field_cache = getattr(v, "_qd_all_field", None)
-    _af_hit = None if all_field_cache is None else all_field_cache.get(id(struct_cls))
-    if _af_hit is None or _af_hit[0] is not struct_cls:
-        from quadrants.lang.field import Field as _Field  # pylint: disable=C0415
-
-        _all_field = all(isinstance(fv, _Field) for fv in unwrapped.values())
-        if all_field_cache is None:
-            try:
-                object.__setattr__(v, "_qd_all_field", {id(struct_cls): (struct_cls, _all_field)})
-            except (AttributeError, TypeError):
-                pass
-        else:
-            all_field_cache[id(struct_cls)] = (struct_cls, _all_field)
-    return unwrapped
 
 
 class FuncBase:
@@ -215,7 +84,13 @@ class FuncBase:
     """
 
     def __init__(
-        self, func, func_id: int, is_kernel: bool, is_classkernel: bool, is_classfunc: bool, is_real_function: bool
+        self,
+        func,
+        func_id: int,
+        is_kernel: bool,
+        is_classkernel: bool,
+        is_classfunc: bool,
+        is_real_function: bool,
     ) -> None:
         self.func = func
         self.func_id = func_id
@@ -550,7 +425,10 @@ class FuncBase:
         if not (kwargs or num_arg_metas > num_args):
             return py_args
 
-        fused_py_args: list[Any] = [*py_args, *[arg_meta.default for arg_meta in self.arg_metas_expanded[num_args:]]]
+        fused_py_args: list[Any] = [
+            *py_args,
+            *[arg_meta.default for arg_meta in self.arg_metas_expanded[num_args:]],
+        ]
         errors_l: list[str] = []
         if kwargs:
             num_invalid_kwargs_args = len(kwargs)
@@ -615,48 +493,18 @@ class FuncBase:
         return int(x)
 
     @staticmethod
-    def _recursive_set_args(
-        used_py_dataclass_parameters: set[str],
-        py_dataclass_basename: str,
+    def _set_parameter_value(
         launch_ctx: KernelLaunchContext,
         launch_ctx_buffer: DefaultDict[KernelBatchedArgType, list[tuple]],
         needed_arg_type: Type,
         provided_arg_type: Type,
         v: Any,
         index: int,
-        actual_argument_slot: int,
         callbacks: list[Callable[[], Any]],
-    ) -> tuple[int, bool]:
-        """
-        This function processes all the input python-side arguments of a given kernel so as to add them to the current
-        launch context of a given kernel. Apart from a few exceptions, no call is made to the launch context directly,
-        but rather accumulated in a buffer to be called all at once in a later stage. This avoid accumulating pybind11
-        overhead for every single argument.
-
-        Returns the number of underlying kernel args being set for a given Python arg, and whether the launch context
-        buffer can be cached (see 'launch_kernel' for details).
-
-        Note that templates don't set kernel args, and a single scalar, an external array (numpy or torch) or a quadrants
-        ndarray all set 1 kernel arg. Similarlty, a struct of N ndarrays would set N kernel args.
-        """
-        if actual_argument_slot >= MAX_ARG_NUM:
-            raise QuadrantsRuntimeError(
-                f"The number of elements in kernel arguments is too big! Do not exceed {MAX_ARG_NUM} on "
-                f"{_qd_core.arch_name(impl.current_cfg().arch)} backend."
-            )
-        actual_argument_slot += 1
-
-        # ``qd.Tensor`` wrappers passed as struct fields. The top-level kernel-arg unwrap hook in ``Kernel.__call__``
-        # strips wrappers off positional / keyword args before they reach the template-mapper or this dispatch path, but
-        # it does **not** walk into struct args. When the recursion below descends into a ``@qd.data_oriented`` (or
-        # plain dataclass) struct field whose value is a wrapper, we land here with ``needed_arg_type`` set to whatever
-        # annotation the struct declared on the field (e.g. ``NdarrayType``) and ``v`` set to a ``Tensor`` instance.
-        # Unwrap defensively so the rest of the function sees the bare impl, matching what callers expect.
-        # Idempotent for top-level args (already unwrapped).
-        #
-        # PERF-CRITICAL: The _any_tensor_constructed guard makes this check zero-cost when no qd.Tensor has been
-        # created. ``type(v) in _TENSOR_WRAPPER_TYPES`` is used instead of ``isinstance`` because it is a pointer
-        # comparison (~10 ns) vs an MRO walk (~100–200 ns). Do not replace with isinstance or remove the guard.
+    ) -> bool:
+        """Populate one parameter's launch value and return whether that value can be cached."""
+        # Top-level arguments are already unwrapped; member sources can still contain Tensor wrappers.
+        # The construction guard avoids type checks when no Tensor wrappers exist.
         if (
             _tensor_wrapper._any_tensor_constructed and type(v) in _TENSOR_WRAPPER_TYPES
         ):  # pyright: ignore[reportOptionalMemberAccess]
@@ -681,14 +529,14 @@ class FuncBase:
                 v = cast(Any, v)
             else:
                 # Field/SNode/scalar template: launch path is a no-op (templates don't set kernel args).
-                return 0, True
+                return True
 
         # Note: do not use sth like "needed == f32". That would be slow.
         if needed_arg_type_id in primitive_types.real_type_ids:
             if not isinstance(v, (float, int, np.floating, np.integer)):
                 raise QuadrantsRuntimeTypeError.get((index,), needed_arg_type.to_string(), provided_arg_type)
             launch_ctx_buffer[_FLOAT].append((index, float(v)))
-            return 1, False
+            return False
         if needed_arg_type_id in primitive_types.integer_type_ids:
             if not isinstance(v, (int, np.integer)):
                 raise QuadrantsRuntimeTypeError.get((index,), needed_arg_type.to_string(), provided_arg_type)
@@ -698,87 +546,7 @@ class FuncBase:
             else:
                 launch_ctx_buffer[_UINT].append((index, v))
             # See for reference: https://docs.python.org/3/c-api/long.html#c.PyLong_FromLong
-            return 1, _is_cpython and -5 <= v <= 256
-        needed_arg_fields = getattr(needed_arg_type, _FIELDS, None)
-        # We get the fields from the needed arg type, thus subclasses are allowed
-        if needed_arg_fields is not None:
-            if provided_arg_type is not needed_arg_type and not issubclass(provided_arg_type, needed_arg_type):
-                # PERF: Check immediate case first (`is not needed_arg_type`), fallback to subclass
-                raise QuadrantsRuntimeTypeError(
-                    "needed", needed_arg_type, "cannot be assigned the provided", provided_arg_type
-                )
-            # Must agree with the compile-time gate (``_rebinding_is_prevented``): ``__hash__ is not None`` alone
-            # disagrees for a ``frozen=True`` class that also hand-sets ``__hash__ = None`` (compile bakes its ``Final``
-            # fields, so launch must take the frozen plan too). The ``or`` only runs when ``__hash__ is None``.
-            is_frozen = needed_arg_type.__hash__ is not None
-            if not is_frozen:
-                params = getattr(needed_arg_type, "__dataclass_params__", None)
-                is_frozen = params is not None and (params.frozen or params.unsafe_hash)
-            idx = 0
-            if is_frozen:
-                # PERF: Frozen-dataclass fast path. Uses the pre-computed field plan (which fields are active for this
-                # kernel) and the per-instance unwrapped-value cache (which eliminates getattr + _unwrap per field).
-                # Together these reduce per-launch cost from O(all_fields) with getattr/unwrap to O(active_fields) with
-                # direct dict lookups. See module-level comment on ``_frozen_dc_plans``.
-                plan = _get_frozen_dc_plan(
-                    used_py_dataclass_parameters, needed_arg_type, py_dataclass_basename, needed_arg_fields
-                )
-                unwrapped = _get_frozen_dc_unwrapped(v, needed_arg_type, needed_arg_fields)
-                for field_name, field_full_name, field_type in plan:
-                    field_value = unwrapped[field_name]
-                    num_args_, _ = FuncBase._recursive_set_args(
-                        used_py_dataclass_parameters,
-                        field_full_name,
-                        launch_ctx,
-                        launch_ctx_buffer,
-                        field_type,
-                        field_type,
-                        field_value,
-                        index + idx,
-                        actual_argument_slot,
-                        callbacks,
-                    )
-                    idx += num_args_
-                # A Final-bearing subtree must not cache its launch context (``args_hash`` keys on ``id(arg)``, so a
-                # cached buffer would resend the first-launch values): re-read every launch so a mutated ordinary field
-                # supplies its new value and ``final_scalar_key`` re-validates. Matches ``args_hasher``'s repr gate.
-                return idx, not subtree_has_final_fields(needed_arg_type)
-            # Non-frozen dataclass: original path. No ``Final`` handling - ``final_field_names`` rejects ``Final`` on a
-            # non-frozen class, so such a class already failed during template mapping.
-            is_launch_ctx_cacheable = False
-            for field in needed_arg_fields.values():
-                if field._field_type is not _FIELD:
-                    continue
-                field_name = field.name
-                field_full_name = create_flat_name(py_dataclass_basename, field_name)
-                if field_full_name not in used_py_dataclass_parameters:
-                    continue
-                # Storing attribute in a temporary to avoid repeated attribute lookup (~20ns penalty)
-                field_type = field.type
-                assert not isinstance(field_type, str)
-                field_value = getattr(v, field_name)
-                num_args_, is_launch_ctx_cacheable_ = FuncBase._recursive_set_args(
-                    used_py_dataclass_parameters,
-                    field_full_name,
-                    launch_ctx,
-                    launch_ctx_buffer,
-                    field_type,
-                    field_type,
-                    field_value,
-                    index + idx,
-                    actual_argument_slot,
-                    callbacks,
-                )
-                idx += num_args_
-                is_launch_ctx_cacheable &= is_launch_ctx_cacheable_
-            return idx, is_launch_ctx_cacheable
-        if needed_arg_basetype is buffer_view_type.BufferViewType and isinstance(v, BufferViewInstance):
-            inner = v.get_ndarray()
-            assert isinstance(inner, Ndarray)
-            launch_ctx_buffer[_QD_ARRAY].append((index, inner.arr))
-            launch_ctx_buffer[_INT].append((index + 1, int(v.offset)))
-            launch_ctx_buffer[_INT].append((index + 2, int(v.size)))
-            return 3, False
+            return _is_cpython and -5 <= v <= 256
         if needed_arg_basetype is ndarray_type.NdarrayType and isinstance(v, Ndarray):
             v_primal = v.arr
             v_grad = v.grad.arr if v.grad else None
@@ -786,7 +554,7 @@ class FuncBase:
                 launch_ctx_buffer[_QD_ARRAY].append((index, v_primal))
             else:
                 launch_ctx_buffer[_QD_ARRAY_WITH_GRAD].append((index, v_primal, v_grad))
-            return 1, True
+            return True
         if needed_arg_basetype is ndarray_type.NdarrayType:
             # v is things like torch Tensor and numpy array
             # Not adding type for this, since adds additional dependencies
@@ -884,7 +652,7 @@ class FuncBase:
                 raise QuadrantsRuntimeTypeError(
                     f"Argument {needed_arg_type} cannot be converted into required type {v}"
                 )
-            return 1, False
+            return False
         if issubclass(needed_arg_basetype, MatrixType):
             cast_func: Callable[[Any], int | float] | None = None
             if needed_arg_type.dtype in primitive_types.real_types:
@@ -906,7 +674,7 @@ class FuncBase:
 
             v = needed_arg_type(*v)
             needed_arg_type.set_kernel_struct_args(v, launch_ctx, (index,))
-            return 1, False
+            return False
         if needed_arg_basetype is StructType:
             # Unclear how to make the following pass typing checks StructType implements __instancecheck__,
             # which should be a classmethod, but is currently an instance method.
@@ -916,11 +684,11 @@ class FuncBase:
                     f"Argument {provided_arg_type} cannot be converted into required type {needed_arg_type}"
                 )
             needed_arg_type.set_kernel_struct_args(v, launch_ctx, (index,))
-            return 1, False
+            return False
         if needed_arg_type is template or needed_arg_basetype is template:
-            return 0, True
+            return True
         if needed_arg_basetype is sparse_matrix_builder:
             # Pass only the base pointer of the qd.types.sparse_matrix_builder() argument
             launch_ctx_buffer[_UINT].append((index, v._get_ndarray_addr()))
-            return 1, True
+            return True
         raise ValueError(f"Argument type mismatch. Expecting {needed_arg_type}, got {type(v)}.")

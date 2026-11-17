@@ -50,7 +50,7 @@ def _expected_canonical():
 #
 # Mirrors the Genesis ndarray-backend struct shape (``DATA_ORIENTED = partial(dataclasses.dataclass, frozen=True)``
 # with ``qd.types.NDArray`` field annotations). Without the in-struct unwrap fix in
-# ``_func_base._recursive_set_args`` the kernel call raises ``QuadrantsRuntimeTypeError`` from the dataclass-field
+# ``_func_base._set_parameter_value`` the kernel call raises ``QuadrantsRuntimeTypeError`` from the dataclass-field
 # recursion. Ndarray-backend only because the dataclass-of-NDArray pattern only makes sense for ndarray-backed values.
 # ----------------------------------------------------------------------------
 

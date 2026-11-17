@@ -3923,7 +3923,7 @@ def test_bare_final_annotation_is_rejected():
     """A bare ``Final`` (no ``[T]``) must be rejected up front with a message naming the fix.
 
     ``typing.get_origin(typing.Final)`` is ``None``, so the bare spelling does not look like a Final annotation and
-    would otherwise be treated as an ordinary runtime field - reaching ``decl_scalar_arg`` and dying in ``cook_dtype``
+    would otherwise be treated as an ordinary runtime field - reaching ``create_kernel_parameter`` and failing in ``cook_dtype``
     with ``ValueError: Invalid data type typing.Final``. That is precisely the confusing failure this feature removes
     for ``Final[T]``, so it must not be how the unsupported spelling behaves."""
     import typing
@@ -4051,7 +4051,6 @@ def test_final_unsafe_hash_ordinary_field_reread_each_launch():
     cfg.n = 7  # mutate an ordinary field on the same instance (same Final -> same specialization)
     k(cfg, out)
     assert out.to_numpy()[0] == 70  # 7 * 10 - the new value, not a stale 30 from a cached unwrap
-    assert not hasattr(cfg, "_qd_dc_unwrapped")  # Final-bearing configs never cache unwrapped field values
 
 
 @test_utils.test()

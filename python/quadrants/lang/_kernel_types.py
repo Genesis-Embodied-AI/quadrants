@@ -1,8 +1,18 @@
 from dataclasses import dataclass
-from enum import IntEnum
+from enum import Enum, IntEnum, auto
 from typing import Callable, TypeAlias
 
 from quadrants.types.enums import AutodiffMode
+
+
+class ParameterKind(Enum):
+    """Select the native parameter representation created during compilation."""
+
+    SCALAR = auto()
+    NDARRAY = auto()
+    MATRIX = auto()
+    STRUCT = auto()
+    SPARSE = auto()
 
 
 class KernelBatchedArgType(IntEnum):

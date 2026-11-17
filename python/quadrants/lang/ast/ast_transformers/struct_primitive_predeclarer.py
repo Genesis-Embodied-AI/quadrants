@@ -1,4 +1,5 @@
 # type: ignore
+
 """Lift primitive members of ``@qd.data_oriented(template_primitives=False)`` template args into runtime scalar kernel
 args at AST-build time.
 
@@ -15,7 +16,9 @@ import dataclasses
 from typing import Any
 
 from quadrants._tensor_wrapper import Tensor as _TensorClass
-from quadrants.lang import expr, impl
+from quadrants.lang import impl
+from quadrants.lang._kernel_parameter_bindings import ParameterSource
+from quadrants.lang._kernel_types import ParameterKind
 from quadrants.lang.ast.ast_transformer_utils import FuncCompileContext
 from quadrants.lang.util import (
     is_data_oriented,
@@ -26,20 +29,10 @@ from quadrants.types import annotations
 
 
 def predeclare_struct_primitives(ctx: FuncCompileContext) -> None:
-    """For each templated arg whose root class is decorated ``@qd.data_oriented(template_primitives=False)``, walk
-    the reachable attribute graph and declare every primitive (``int`` / ``float`` / ``bool``) member as a runtime
-    scalar kernel arg, instead of letting ``build_Attribute`` bake it as a compile-time constant. The arg-load
-    ``Expr`` is cached on the global context keyed by ``(id(parent_obj), attr_name)`` for ``build_Attribute`` to
-    substitute, and a ``(arg_id, template_arg_idx, attr_chain, kind)`` tuple is recorded for the launch path to
-    bind the live value.
+    """Walk opted-in data-oriented arguments and register their scalar members as kernel parameters.
 
-    Mirrors ``_predeclare_struct_ndarrays``. Primitive leaves have no stable identity (``id(5)`` is interned), so
-    the cache is keyed on the parent container's identity plus the attribute name. Only plain Python ``int`` /
-    ``float`` / ``bool`` are lifted (matched by exact type so numpy scalars etc. keep their previous baked
-    behaviour). dtype follows the runtime defaults (``default_ip`` / ``default_fp``), matching how a baked Python
-    constant would be typed.
-
-    ``_seen`` guards against attribute-graph cycles (e.g. ``sim.solver.sim is sim``), same as the ndarray walker.
+    Visit stored attributes of data-oriented objects and dataclasses, stopping at cycles. Only exact Python
+    bool, int, and float members become runtime parameters; their types follow the runtime defaults.
     """
     assert ctx.py_args is not None
     # Cheap early-out for the common case (no flagged template arg): the default ``template_primitives=True`` path
@@ -60,51 +53,8 @@ def predeclare_struct_primitives(ctx: FuncCompileContext) -> None:
     if not flagged:
         return
 
-    from quadrants._lib import core as _qd_core  # pylint: disable=C0415
-    from quadrants.lang.util import cook_dtype  # pylint: disable=C0415
-    from quadrants.types.utils import is_signed  # pylint: disable=C0415
-
     runtime = impl.get_runtime()
-    default_ip = runtime.default_ip
-    default_fp = runtime.default_fp
-    provenance = ctx.kernel_compile_context.struct_primitive_provenance
-    expr_cache = ctx.kernel_compile_context.struct_primitive_to_expr
-    launch_info = ctx.kernel_compile_context.struct_primitive_launch_info
-    pruning = ctx.kernel_compile_context.pruning
-    # Lifted primitives are tracked under the kernel's func id (rather than the accessing function's), so a
-    # primitive accessed only inside an inlined ``@qd.func`` is still declared, and so the used set is captured by
-    # the existing ``KERNEL_FUNC_ID`` fastcache serialisation. Flat names are globally unique, so this never
-    # collides with dataclass-field pruning.
-    func_id = pruning.KERNEL_FUNC_ID
-
-    def _register_primitive(parent, attr_name, value, arg_idx, attr_chain):
-        key = (id(parent), attr_name)
-        if key in provenance:
-            return
-        value_type = type(value)
-        if value_type is bool or value_type is int:
-            dtype, kind = default_ip, ("i" if is_signed(default_ip) else "u")
-        elif value_type is float:
-            dtype, kind = default_fp, "f"
-        else:
-            return
-        flat_name = f"__qd_doprim_{arg_idx}__{'__'.join(attr_chain)}"
-        provenance[key] = (flat_name, arg_idx, attr_chain, kind)
-        # Declare a real kernel arg only in the enforcing pass, and only for primitives the body actually accessed
-        # (recorded via ``mark_used`` in ``build_Attribute`` during the discovery pass). This keeps the kernel arg
-        # count proportional to what is used rather than to every reachable scalar (a Genesis solver has hundreds),
-        # avoiding the MAX_ARG_NUM limit. The discovery pass declares nothing; its IR is discarded.
-        if not pruning.enforcing or not pruning.is_used(func_id, flat_name):
-            return
-        cooked = cook_dtype(dtype)
-        # ``insert_scalar_param`` returns an arg-id vector (like ``insert_ndarray_param``); ``make_arg_load_expr``
-        # consumes the vector, while the launch path needs the integer slot ``arg_id[0]``.
-        arg_id = impl.get_runtime().compiling_callable.insert_scalar_param(cooked, flat_name)
-        argload_di = _qd_core.DebugInfo(impl.get_runtime().get_current_src_info())
-        expr_cache[key] = expr.Expr(
-            _qd_core.make_arg_load_expr(arg_id, cooked, False, create_load=True, dbg_info=argload_di)
-        )
-        launch_info.append((arg_id[0], arg_idx, attr_chain, kind))
+    bindings = ctx.kernel_compile_context.parameter_bindings
 
     def _walk(obj, arg_idx, path, seen):
         obj_id = id(obj)
@@ -122,7 +72,14 @@ def predeclare_struct_primitives(ctx: FuncCompileContext) -> None:
                 attr_val = attr_val._unwrap()
             attr_type = type(attr_val)
             if attr_type is bool or attr_type is int or attr_type is float:
-                _register_primitive(obj, attr_name, attr_val, arg_idx, (*path, attr_name))
+                dtype = runtime.default_fp if attr_type is float else runtime.default_ip
+                bindings.add_kernel_parameter(
+                    ParameterKind.SCALAR,
+                    dtype,
+                    f"__qd_doprim_{arg_idx}__{'__'.join((*path, attr_name))}",
+                    source=ParameterSource(arg_idx, (*path, attr_name)),
+                    member=(id(obj), attr_name),
+                )
             elif is_dataclass_instance(attr_val) or is_data_oriented(attr_val):
                 _walk(attr_val, arg_idx, (*path, attr_name), seen)
 

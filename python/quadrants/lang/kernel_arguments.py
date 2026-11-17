@@ -1,14 +1,15 @@
 # type: ignore
 
 import inspect
+from typing import Any
 
 import quadrants.lang
 from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import (
     BoundaryMode,
-    DataTypeCxx,
 )
 from quadrants.lang import impl, ops
+from quadrants.lang._kernel_types import ParameterKind
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.expr import Expr
 from quadrants.lang.matrix import MatrixType
@@ -63,21 +64,6 @@ class SparseMatrixProxy:
         return SparseMatrixEntry(self.ptr, i, j, self.dtype)
 
 
-def decl_scalar_arg(dtype, name):
-    is_ref = False
-    if isinstance(dtype, RefType):
-        is_ref = True
-        dtype = dtype.tp
-    dtype = cook_dtype(dtype)
-    if is_ref:
-        arg_id = impl.get_runtime().compiling_callable.insert_pointer_param(dtype, name)
-    else:
-        arg_id = impl.get_runtime().compiling_callable.insert_scalar_param(dtype, name)
-
-    argload_di = _qd_core.DebugInfo(impl.get_runtime().get_current_src_info())
-    return Expr(_qd_core.make_arg_load_expr(arg_id, dtype, is_ref, create_load=True, dbg_info=argload_di))
-
-
 def get_type_for_kernel_args(dtype, name):
     if isinstance(dtype, MatrixType):
         # Compiling the matrix type to a struct type because the support for the matrix type is not ready yet on SPIR-V based backends.
@@ -99,46 +85,48 @@ def get_type_for_kernel_args(dtype, name):
     return dtype
 
 
-def decl_matrix_arg(matrixtype, name):
-    arg_type = get_type_for_kernel_args(matrixtype, name)
-    arg_id = impl.get_runtime().compiling_callable.insert_scalar_param(arg_type, name)
-    argload_di = _qd_core.DebugInfo(impl.get_runtime().get_current_src_info())
-    arg_load = Expr(_qd_core.make_arg_load_expr(arg_id, arg_type, create_load=False, dbg_info=argload_di))
-    return matrixtype.from_quadrants_object(arg_load)
-
-
-def decl_struct_arg(structtype, name):
-    arg_type = get_type_for_kernel_args(structtype, name)
-    arg_id = impl.get_runtime().compiling_callable.insert_scalar_param(arg_type, name)
-    argload_di = _qd_core.DebugInfo(impl.get_runtime().get_current_src_info())
-    arg_load = Expr(_qd_core.make_arg_load_expr(arg_id, arg_type, create_load=False, dbg_info=argload_di))
-    return structtype.from_quadrants_object(arg_load)
-
-
-def decl_sparse_matrix(dtype, name):
-    value_type = cook_dtype(dtype)
-    ptr_type = cook_dtype(u64)
-    # Treat the sparse matrix argument as a scalar since we only need to pass in the base pointer
-    arg_id = impl.get_runtime().compiling_callable.insert_scalar_param(ptr_type, name)
-    argload_di = _qd_core.DebugInfo(impl.get_runtime().get_current_src_info())
-    return SparseMatrixProxy(
-        _qd_core.make_arg_load_expr(arg_id, ptr_type, is_ptr=False, dbg_info=argload_di), value_type
-    )
-
-
-def decl_ndarray_arg(
-    element_type: DataTypeCxx,
-    ndim: int,
+def create_kernel_parameter(
+    kind: ParameterKind,
+    dtype: Any,
     name: str,
-    needs_grad: bool,
-    boundary: BoundaryMode,
-    layout=None,
-) -> AnyArray:
-    arg_id = impl.get_runtime().compiling_callable.insert_ndarray_param(element_type, ndim, name, needs_grad)
-    return AnyArray(
-        _qd_core.make_external_tensor_expr(element_type, ndim, arg_id, needs_grad, boundary),
-        _qd_layout=layout,
-    )
+    *,
+    ndim: int = 0,
+    needs_grad: bool = False,
+    boundary: BoundaryMode | None = None,
+    layout: Any = None,
+) -> tuple[list[int], Any]:
+    """Create a native parameter and its Python compiler value; return both its ID and that value."""
+    runtime = impl.get_runtime()
+    if kind is ParameterKind.NDARRAY:
+        arg_id = runtime.compiling_callable.insert_ndarray_param(dtype, ndim, name, needs_grad)
+        value = AnyArray(
+            _qd_core.make_external_tensor_expr(dtype, ndim, arg_id, needs_grad, boundary), _qd_layout=layout
+        )
+        return arg_id, value
+
+    is_ref = isinstance(dtype, RefType)
+    if kind in (ParameterKind.MATRIX, ParameterKind.STRUCT):
+        arg_type = get_type_for_kernel_args(dtype, name)
+    elif kind is ParameterKind.SPARSE:
+        arg_type = cook_dtype(u64)
+    else:
+        arg_type = cook_dtype(dtype.tp if is_ref else dtype)
+    if is_ref:
+        arg_id = runtime.compiling_callable.insert_pointer_param(arg_type, name)
+    else:
+        arg_id = runtime.compiling_callable.insert_scalar_param(arg_type, name)
+    debug_info = _qd_core.DebugInfo(runtime.get_current_src_info())
+    if kind is ParameterKind.SPARSE:
+        value = SparseMatrixProxy(
+            _qd_core.make_arg_load_expr(arg_id, arg_type, is_ptr=False, dbg_info=debug_info), cook_dtype(dtype)
+        )
+    else:
+        value = Expr(
+            _qd_core.make_arg_load_expr(arg_id, arg_type, is_ref, create_load=kind is ParameterKind.SCALAR, dbg_info=debug_info)
+        )
+        if kind in (ParameterKind.MATRIX, ParameterKind.STRUCT):
+            value = dtype.from_quadrants_object(value)
+    return arg_id, value
 
 
 def decl_ret(dtype):
