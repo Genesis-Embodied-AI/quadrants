@@ -29,7 +29,7 @@ Functions
 Module Contents
 ---------------
 
-.. py:function:: predeclare_struct_primitives(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext) -> None
+.. py:function:: predeclare_struct_primitives(ctx: quadrants.lang.ast.ast_transformer_utils.FuncCompileContext) -> None
 
    For each templated arg whose root class is decorated ``@qd.data_oriented(template_primitives=False)``, walk
    the reachable attribute graph and declare every primitive (``int`` / ``float`` / ``bool``) member as a runtime

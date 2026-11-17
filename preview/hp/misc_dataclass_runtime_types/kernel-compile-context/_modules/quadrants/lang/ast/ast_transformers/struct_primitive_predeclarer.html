@@ -348,7 +348,7 @@
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor_wrapper</span><span class="w"> </span><span class="kn">import</span> <span class="n">Tensor</span> <span class="k">as</span> <span class="n">_TensorClass</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">expr</span><span class="p">,</span> <span class="n">impl</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">ASTTransformerFuncContext</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">FuncCompileContext</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.util</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">is_data_oriented</span><span class="p">,</span>
     <span class="n">is_dataclass_instance</span><span class="p">,</span>
@@ -359,7 +359,7 @@
 
 <div class="viewcode-block" id="predeclare_struct_primitives">
 <a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/struct_primitive_predeclarer/index.html#quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer.predeclare_struct_primitives">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">predeclare_struct_primitives</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">predeclare_struct_primitives</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""For each templated arg whose root class is decorated ``@qd.data_oriented(template_primitives=False)``, walk</span>
 <span class="sd">    the reachable attribute graph and declare every primitive (``int`` / ``float`` / ``bool``) member as a runtime</span>
 <span class="sd">    scalar kernel arg, instead of letting ``build_Attribute`` bake it as a compile-time constant. The arg-load</span>

@@ -381,7 +381,7 @@
     <span class="n">transform_tree</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-    <span class="n">ASTTransformerFuncContext</span><span class="p">,</span>
+    <span class="n">FuncCompileContext</span><span class="p">,</span>
     <span class="n">ReturnStatus</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.exception</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
@@ -534,7 +534,7 @@
 <span class="k">class</span><span class="w"> </span><span class="nc">ASTGenerator</span><span class="p">:</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span>
         <span class="n">kernel_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">current_kernel</span><span class="p">:</span> <span class="s2">"Kernel"</span><span class="p">,</span>
         <span class="n">only_parse_function_def</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
