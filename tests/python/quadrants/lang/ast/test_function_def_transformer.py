@@ -46,6 +46,7 @@ def test_process_func_arg_preserves_dataclass(argument_type: type) -> None:
     class MockContext:
         def __init__(self) -> None:
             self.variables: dict[str, Any] = {}
+            self.fn_param_names: set[str] = set()
 
         def create_variable(self, name: str, data: Any) -> None:
             assert name not in self.variables
