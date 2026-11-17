@@ -117,8 +117,8 @@ def _create_runtime_scalar_bindings(func_ctx: FuncCompileContext, scalar_members
     runtime_scalar_arg_expr_by_member = func_ctx.kernel_compile_context.runtime_scalar_arg_expr_by_member
     runtime_scalar_launch_infos = func_ctx.kernel_compile_context.runtime_scalar_launch_infos
     pruning = func_ctx.kernel_compile_context.pruning
-    # The kernel ID preserves uses inside inlined qd.func calls and includes them in fastcache pruning metadata.
-    # Root names distinguish members reached through different kernel arguments.
+    # The kernel ID preserves uses inside inlined qd.func calls and includes them in fastcache pruning metadata. Root
+    # names distinguish members reached through different kernel arguments.
     func_id = pruning.KERNEL_FUNC_ID
 
     for parent, attr_name, value, arg_idx, attr_chain in scalar_members:
