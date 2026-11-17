@@ -133,6 +133,8 @@ def _create_runtime_scalar_bindings(func_ctx: FuncCompileContext, scalar_members
         else:
             continue
         flat_name = f"__qd_doprim_{arg_idx}__{'__'.join(attr_chain)}"
+        # Discovery reads the Python scalar, while enforcement reads an Expr. Reject static reads so the two passes
+        # cannot choose different branches.
         bindings[key] = MemberBinding(flat_name, dtype, None, reject_in_static_scope=True)
         # Add only members marked used during discovery, avoiding MAX_ARG_NUM for large containers.
         if not pruning.enforcing or not pruning.is_used(func_id, flat_name):
