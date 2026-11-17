@@ -648,30 +648,20 @@
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.KernelCompileContext.bound_dataclass_ids">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">bound_dataclass_ids</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span></div>
 
+        <span class="c1"># (arg_id, template_arg_idx, attr_chain, kind) entries locate live values at launch; kind is 'f', 'i', or 'u'.</span>
 <div class="viewcode-block" id="KernelCompileContext.runtime_scalar_launch_infos">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.KernelCompileContext.runtime_scalar_launch_infos">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">runtime_scalar_launch_infos</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span></div>
 
-        <span class="c1"># Caller-side `loop_depth` snapshot for the in-flight `@qd.func` invocation. Each func compile creates a fresh</span>
-        <span class="c1"># `FuncCompileContext` with `loop_depth = 0`, so without this snapshot a non-static `range(...)` loop</span>
-        <span class="c1"># inside a func body would not see any outer for-loops in the caller and would skip the backward-mode dynamic-</span>
-        <span class="c1"># range diagnostic, silently emitting a wrong adjoint. `CallTransformer.build_Call` writes the caller</span>
-        <span class="c1"># `ctx.loop_depth` here before invoking the func and restores the previous value after, so the new func ctx</span>
-        <span class="c1"># can seed its `loop_depth` from this field via `_func_base.py`.</span>
+        <span class="c1"># Carry caller loop depth into fresh qd.func contexts so backward-mode dynamic-range checks see outer loops.</span>
+        <span class="c1"># Saved and restored around each call.</span>
 <div class="viewcode-block" id="KernelCompileContext.caller_loop_depth">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.KernelCompileContext.caller_loop_depth">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">caller_loop_depth</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span></div>
 
-        <span class="c1"># Caller-side "am I (transitively) inside non-static control flow?" snapshot for the in-flight `@qd.func`</span>
-        <span class="c1"># invocation. Each func compile creates a fresh `FuncCompileContext` whose own</span>
-        <span class="c1"># `non_static_control_flow_status` starts False, so a `@qd.func(requires_top_level=True)` reached *through* an</span>
-        <span class="c1"># unmarked helper called from a runtime for / if / while would not observe the caller's control-flow context</span>
-        <span class="c1"># and would escape the top-level check. `CallTransformer.build_Call` writes</span>
-        <span class="c1"># `ctx.is_in_non_static_control_flow() or &lt;inherited&gt;` here before invoking the func (so it accumulates down a</span>
-        <span class="c1"># multi-level call chain) and restores the previous value after; the new func ctx seeds</span>
-        <span class="c1"># `inherited_non_static_control_flow` from this field via `_func_base.py`. Kept separate from the live</span>
-        <span class="c1"># `non_static_control_flow_status` flag on purpose: that flag also gates the "return inside non-static if/for"</span>
-        <span class="c1"># diagnostic in `build_Return`, and seeding it True would spuriously reject a top-level `return` in a helper.</span>
+        <span class="c1"># Carry runtime control flow through nested calls so requires_top_level checks cannot be bypassed by helpers.</span>
+        <span class="c1"># Saved and restored around each call. Separate from the callee's local control-flow flag so ordinary helper</span>
+        <span class="c1"># returns remain valid.</span>
 <div class="viewcode-block" id="KernelCompileContext.caller_in_non_static_control_flow">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.KernelCompileContext.caller_in_non_static_control_flow">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">caller_in_non_static_control_flow</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></div>
