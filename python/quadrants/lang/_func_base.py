@@ -225,7 +225,6 @@ class FuncBase:
         self.is_classkernel = is_classkernel
         self.is_classfunc = is_classfunc
         self.arg_metas: list[ArgMetadata] = []
-        self.arg_metas_expanded: list[ArgMetadata] = []
         self.orig_arguments: list[ArgMetadata] = []
         self.return_type = None
         # Shared by every AST transform of this function; see
@@ -464,18 +463,16 @@ class FuncBase:
         kwargs,
     ) -> tuple[Any, ...]:
         """Combine positional arguments, keyword arguments, and defaults in parameter order."""
-        self.arg_metas_expanded = list(self.arg_metas)
-
         num_args = len(py_args)
-        num_arg_metas = len(self.arg_metas_expanded)
+        num_arg_metas = len(self.arg_metas)
         if num_args > num_arg_metas:
             arg_str = ", ".join(map(str, py_args))
-            expected_str = ", ".join(f"{arg.name} : {arg.annotation}" for arg in self.arg_metas_expanded)
+            expected_str = ", ".join(f"{arg.name} : {arg.annotation}" for arg in self.arg_metas)
             msg_l = []
             msg_l.append(f"Too many arguments. Expected ({expected_str}), got ({arg_str}).")
             for i in range(num_args):
                 if i < num_arg_metas:
-                    msg_l.append(f" - {i} arg meta: {self.arg_metas_expanded[i].name} arg type: {type(py_args[i])}")
+                    msg_l.append(f" - {i} arg meta: {self.arg_metas[i].name} arg type: {type(py_args[i])}")
                 else:
                     msg_l.append(f" - {i} arg meta: <out of arg metas> arg type: {type(py_args[i])}")
             msg_l.append(f"In function: {self.func}")
@@ -485,12 +482,12 @@ class FuncBase:
         if not (kwargs or num_arg_metas > num_args):
             return py_args
 
-        fused_py_args: list[Any] = [*py_args, *[arg_meta.default for arg_meta in self.arg_metas_expanded[num_args:]]]
+        fused_py_args: list[Any] = [*py_args, *[arg_meta.default for arg_meta in self.arg_metas[num_args:]]]
         errors_l: list[str] = []
         if kwargs:
             num_invalid_kwargs_args = len(kwargs)
             for i in range(num_args, num_arg_metas):
-                arg_meta = self.arg_metas_expanded[i]
+                arg_meta = self.arg_metas[i]
                 py_arg = kwargs.get(arg_meta.name, _ARG_EMPTY)
                 if py_arg is not _ARG_EMPTY:
                     fused_py_args[i] = py_arg
@@ -500,7 +497,7 @@ class FuncBase:
                     continue
             if num_invalid_kwargs_args:
                 for key, py_arg in kwargs.items():
-                    for i, arg_meta in enumerate(self.arg_metas_expanded):
+                    for i, arg_meta in enumerate(self.arg_metas):
                         if key == arg_meta.name:
                             if i < num_args:
                                 errors_l.append(f"Multiple values for argument '{key}'.")
@@ -510,7 +507,7 @@ class FuncBase:
         else:
             for i in range(num_args, num_arg_metas):
                 if fused_py_args[i] is _ARG_EMPTY:
-                    arg_meta = self.arg_metas_expanded[i]
+                    arg_meta = self.arg_metas[i]
                     errors_l.append(f"Missing argument '{arg_meta.name}'.")
                     continue
 

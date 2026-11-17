@@ -503,7 +503,7 @@ class FunctionDefTransformer:
         assert isinstance(ctx.func, Func)
         assert ctx.py_args is not None
         for py_arg_i, py_arg in enumerate(ctx.py_args):
-            argument = ctx.func.arg_metas_expanded[py_arg_i]
+            argument = ctx.func.arg_metas[py_arg_i]
             FunctionDefTransformer._transform_func_arg(ctx, argument.name, argument.annotation, py_arg)
 
     @staticmethod

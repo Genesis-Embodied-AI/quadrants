@@ -209,12 +209,7 @@ class Pruning:
 
         caller_func_id = ctx.func.func_id
         callee_func_id = func.wrapper.func_id  # type: ignore
-        # node.args ordering will match that of the called function's arg_metas_expanded, because of
-        # the way calling with sequential args works. We read the callee's declared (flat) parameter
-        # name from its metas - we can't tell their name just by looking at our own metas.
-        #
-        # One issue is when calling data-oriented methods, there will be a `self`, which occupies the
-        # first callee meta slot; we skip it with self_offset.
+        # Match positional arguments to the callee's parameter names, skipping self for bound methods.
         callee_func: Func = node.func.ptr.wrapper  # type: ignore
         has_self = type(func) is BoundQuadrantsCallable
         self_offset = 1 if has_self else 0
@@ -223,7 +218,7 @@ class Pruning:
         for arg_id, arg in enumerate(node_args):
             if type(arg) in {Name}:
                 caller_arg_name = arg.id  # type: ignore
-                callee_param_name = callee_func.arg_metas_expanded[arg_id + self_offset].name  # type: ignore
+                callee_param_name = callee_func.arg_metas[arg_id + self_offset].name  # type: ignore
                 edge.pairs.append((caller_arg_name, callee_param_name))
                 if caller_arg_name.startswith("__qd_"):
                     edge.positional_map.setdefault(caller_arg_name, []).append(callee_param_name)
@@ -235,7 +230,7 @@ class Pruning:
             if flat is not None:
                 caller_flat, root_id = flat
                 if not root_id.startswith("__qd_"):
-                    callee_param_name = callee_func.arg_metas_expanded[arg_id + self_offset].name  # type: ignore
+                    callee_param_name = callee_func.arg_metas[arg_id + self_offset].name  # type: ignore
                     edge.chain_pairs.append((callee_param_name, caller_flat))
         # For keywords we don't need the callee metas (whose ordering need not match ours): the
         # callee's parameter name is available directly from our own keyword node.
