@@ -69,6 +69,8 @@ def _collect_scalars_in_single_data_oriented(
         if isinstance(attr_val, _TensorClass):
             attr_val = attr_val._unwrap()
         attr_type = type(attr_val)
+        # Only exact Python primitives become runtime parameters; NumPy scalars and subclasses retain their
+        # compile-time behavior.
         if attr_type is bool or attr_type is int or attr_type is float:
             scalar_members.append(_ScalarMember(py_obj, attr_name, attr_val, arg_idx, (*path, attr_name)))
         elif is_dataclass_instance(attr_val) or is_data_oriented(attr_val):

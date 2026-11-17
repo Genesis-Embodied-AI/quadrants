@@ -339,9 +339,9 @@ def is_data_oriented(obj: Any) -> bool:
 
 
 def uses_template_primitives(obj: Any) -> bool:
-    """Check the nearest template_primitives flag, defaulting to True.
+    """Return whether primitive members are treated as compile-time constants.
 
-    Use the same metaclass-safe lookup as is_data_oriented.
+    Check the nearest template_primitives flag, defaulting to True, using the metaclass-safe lookup of is_data_oriented.
     """
     for klass in type(obj).__mro__:
         flag = klass.__dict__.get("_qd_template_primitives")
