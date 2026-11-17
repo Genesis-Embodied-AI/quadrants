@@ -97,7 +97,15 @@ def _collect_runtime_scalars_from_data_oriented_args(
 
 
 def _create_runtime_scalar_bindings(func_ctx: FuncCompileContext, scalar_members: list[_ScalarMember]) -> None:
-    """Record scalar routes and add the used members as kernel parameters in the enforcing pass."""
+    """Record scalar members and create kernel parameters for those used by the compiled kernel.
+
+    During discovery, record each member's location and scalar kind so accesses can be marked as used.
+    During the enforcing pass, for each used member:
+
+    - Append a scalar parameter to the callable's parameter list and get its index.
+    - Record launch info describing how to populate that parameter from the Python object at each launch.
+    - Create an expression that reads the parameter inside the compiled kernel.
+    """
     runtime = impl.get_runtime()
     runtime_scalar_arg_info_by_member = func_ctx.kernel_compile_context.runtime_scalar_arg_info_by_member
     runtime_scalar_arg_expr_by_member = func_ctx.kernel_compile_context.runtime_scalar_arg_expr_by_member
