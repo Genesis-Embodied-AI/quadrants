@@ -35,7 +35,7 @@ from quadrants._lib.core.quadrants_python import (
 )
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorClass
-from quadrants.lang import _kernel_impl_dataclass, impl, runtime_ops
+from quadrants.lang import impl, runtime_ops
 
 # `qd.checkpoint` pause / resume model helpers. See `kernel_checkpoint.py` for the full extracted surface; `Kernel`
 # delegates the resume-cookie validation, label translation, per-launch yield_on= arg-id table build, and GraphStatus
@@ -231,14 +231,7 @@ class ASTGenerator:
             ctx.ast_builder = kernel_cxx.ast_builder()
             if self.dump_ast:
                 self._dump_ast()
-            if not pruning.enforcing:
-                struct_locals = _kernel_impl_dataclass.extract_struct_locals_from_context(ctx)
-            else:
-                struct_locals = pruning.used_vars_by_func_id[ctx.func.func_id]
-            # struct locals are the expanded py dataclass fields that we will write to local variables, and will then
-            # be available to use in build_Call, later.
-            ctx.struct_locals = struct_locals
-            tree = _kernel_impl_dataclass.unpack_ast_struct_expressions(self.tree, struct_locals=struct_locals)
+            tree = self.tree
             ctx.only_parse_function_def = self.only_parse_function_def
             # Rebuild the graph_do_while level table from scratch each compilation pass (build_While appends to it as it
             # walks the AST). Skip when only_parse_function_def: the body is not walked, so build_While never runs to

@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, List
 from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import ASTBuilder
 from quadrants.lang import impl
+from quadrants.lang._member_bindings import MemberBinding
 from quadrants.lang._ndrange import ndrange
 from quadrants.lang.ast.symbol_resolver import ASTResolver
 from quadrants.lang.exception import (
@@ -187,19 +188,9 @@ class KernelCompileContext:
         self.pass_idx: int = pass_idx
         self.ndarray_to_any_array: dict[int, Any] = {}
         self.struct_ndarray_launch_info: list[tuple] = []
-        # Lifted-primitive support for ``@qd.data_oriented(template_primitives=False)``. Mirrors the two ndarray
-        # structures above, plus member-to-argument metadata driving the two-pass pruning.
-        # * ``runtime_scalar_arg_info_by_member`` maps ``(id(parent_obj), attr_name)`` to ``(flat_name, arg_idx,
-        #   attr_chain, kind)`` for every reachable primitive member of a flagged template arg. Built (cheaply, no
-        #   kernel-arg declaration) on every compilation pass. ``build_Attribute`` uses it to ``mark_used`` the accessed
-        #   primitives during the non-enforcing discovery pass.
-        # * ``runtime_scalar_arg_expr_by_member`` maps the same key to the arg-load ``Expr``. Populated only in the
-        #   enforcing pass, and only for primitives actually accessed by the body (pruning), so ``build_Attribute`` can
-        #   return the runtime scalar arg instead of baking the value.
-        # * ``runtime_scalar_launch_infos`` records ``(arg_id, template_arg_idx, attr_chain, kind)`` tuples (``kind`` in
-        #   ``{'f', 'i', 'u'}``) so the launch path can read the live value and bind it.
-        self.runtime_scalar_arg_info_by_member: dict[tuple[int, str], tuple] = {}
-        self.runtime_scalar_arg_expr_by_member: dict[tuple[int, str], Any] = {}
+        # Shared identity-based lookup for dataclass members and data-oriented runtime scalars.
+        self.member_bindings: dict[tuple[int, str], MemberBinding] = {}
+        self.bound_dataclass_ids: set[int] = set()
         self.runtime_scalar_launch_infos: list[tuple] = []
         # Caller-side `loop_depth` snapshot for the in-flight `@qd.func` invocation. Each func compile creates a fresh
         # `FuncCompileContext` with `loop_depth = 0`, so without this snapshot a non-static `range(...)` loop
@@ -486,39 +477,3 @@ def get_decorator(ctx: FuncCompileContext, node) -> str:
         if ASTResolver.resolve_to(node.func, wanted, ctx.global_vars):
             return name
     return ""
-
-
-def maybe_lifted_primitive(ctx: FuncCompileContext, parent: Any, attr: str):
-    """Handle access to a primitive member that ``@qd.data_oriented(template_primitives=False)`` lifted into a runtime
-    scalar kernel arg (see ``bind_data_oriented_runtime_scalars``).
-
-    Returns the arg-load ``Expr`` to substitute for the baked value in the enforcing pass; returns ``None`` when the
-    attribute is not a lifted primitive, or during the non-enforcing discovery pass (where the access is instead
-    recorded via ``mark_used`` and the caller falls back to baking the throw-away discovery-pass IR).
-
-    Raises ``QuadrantsSyntaxError`` if the lifted primitive is used inside ``qd.static(...)``: that context requires a
-    compile-time constant, which a runtime-lifted primitive is not. Under this flag there is no per-attribute baked
-    escape hatch, so a ``qd.static`` use is unambiguously a mistake and we surface it loudly rather than silently baking
-    a value that will not track mutations.
-    """
-    runtime_scalar_arg_info_by_member = ctx.kernel_compile_context.runtime_scalar_arg_info_by_member
-    if not runtime_scalar_arg_info_by_member:
-        return None
-    key = (id(parent), attr)
-    entry = runtime_scalar_arg_info_by_member.get(key)
-    if entry is None:
-        return None
-    if ctx.is_in_static_scope():
-        raise QuadrantsSyntaxError(
-            f"'{attr}' is a primitive member of a @qd.data_oriented(template_primitives=False) object, so it is "
-            f"a runtime kernel argument and cannot be used inside qd.static(). Either remove qd.static(), or "
-            f"decorate the class @qd.data_oriented (the default, template_primitives=True) to bake '{attr}' as a "
-            f"compile-time constant."
-        )
-    pruning = ctx.kernel_compile_context.pruning
-    if not pruning.enforcing:
-        # Record under the kernel's func id (see ``bind_data_oriented_runtime_scalars``) so the enforcing pass declares
-        # this primitive and the existing fastcache serialisation captures it.
-        pruning.mark_used(pruning.KERNEL_FUNC_ID, entry[0])
-        return None
-    return ctx.kernel_compile_context.runtime_scalar_arg_expr_by_member.get(key)

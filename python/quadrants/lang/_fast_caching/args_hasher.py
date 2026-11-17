@@ -10,6 +10,7 @@ import numpy as np
 from quadrants import _logging, _tensor_wrapper
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorWrapper
+from quadrants.lang._container_aliases import get_container_alias_key
 from quadrants.types.annotations import Template
 
 from .._final.final_constant_values import final_scalar_key
@@ -453,7 +454,7 @@ def hash_args(
     _should_warn = False
     g_num_calls += 1
     g_num_args += len(args)
-    hash_l = []
+    hash_l = [repr(get_container_alias_key(args))]
     if len(args) != len(arg_metas):
         raise RuntimeError(
             f"Number of args passed in {len(args)} doesnt match number of declared args {len(arg_metas)}"
