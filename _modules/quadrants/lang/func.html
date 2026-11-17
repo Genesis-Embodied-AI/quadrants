@@ -409,10 +409,14 @@
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">:</span> <span class="s2">"Func"</span><span class="p">,</span> <span class="o">*</span><span class="n">py_args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
         <span class="n">runtime</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span>
-        <span class="n">global_context</span> <span class="o">=</span> <span class="n">runtime</span><span class="o">.</span><span class="n">_current_global_context</span>
-        <span class="n">current_kernel</span> <span class="o">=</span> <span class="n">global_context</span><span class="o">.</span><span class="n">current_kernel</span> <span class="k">if</span> <span class="n">global_context</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="n">kernel_compile_context</span> <span class="o">=</span> <span class="n">runtime</span><span class="o">.</span><span class="n">_current_kernel_compile_context</span>
+        <span class="n">current_kernel</span> <span class="o">=</span> <span class="n">kernel_compile_context</span><span class="o">.</span><span class="n">current_kernel</span> <span class="k">if</span> <span class="n">kernel_compile_context</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
         <span class="n">py_args</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fuse_args</span><span class="p">(</span>
-            <span class="n">is_func</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_pyfunc</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">pyfunc</span><span class="p">,</span> <span class="n">py_args</span><span class="o">=</span><span class="n">py_args</span><span class="p">,</span> <span class="n">kwargs</span><span class="o">=</span><span class="n">kwargs</span><span class="p">,</span> <span class="n">global_context</span><span class="o">=</span><span class="n">global_context</span>  <span class="c1"># type: ignore[arg-type]</span>
+            <span class="n">is_func</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">is_pyfunc</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">pyfunc</span><span class="p">,</span>
+            <span class="n">py_args</span><span class="o">=</span><span class="n">py_args</span><span class="p">,</span>
+            <span class="n">kwargs</span><span class="o">=</span><span class="n">kwargs</span><span class="p">,</span>
+            <span class="n">kernel_compile_context</span><span class="o">=</span><span class="n">kernel_compile_context</span><span class="p">,</span>  <span class="c1"># type: ignore[arg-type]</span>
         <span class="p">)</span>
 
         <span class="k">if</span> <span class="ow">not</span> <span class="n">impl</span><span class="o">.</span><span class="n">inside_kernel</span><span class="p">():</span>
@@ -421,7 +425,7 @@
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="p">(</span><span class="o">*</span><span class="n">py_args</span><span class="p">)</span>
 
         <span class="k">assert</span> <span class="n">current_kernel</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
-        <span class="k">assert</span> <span class="n">global_context</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+        <span class="k">assert</span> <span class="n">kernel_compile_context</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_real_function</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">current_kernel</span><span class="o">.</span><span class="n">autodiff_mode</span> <span class="o">!=</span> <span class="n">_NONE</span><span class="p">:</span>
                 <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"Real function in gradient kernels unsupported."</span><span class="p">)</span>
