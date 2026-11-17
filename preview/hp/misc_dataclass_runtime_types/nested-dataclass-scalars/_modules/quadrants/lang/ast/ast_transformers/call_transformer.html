@@ -351,7 +351,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">ops</span> <span class="k">as</span> <span class="n">qd_ops</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._name_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_flat_name</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-    <span class="n">ASTTransformerFuncContext</span><span class="p">,</span>
+    <span class="n">FuncCompileContext</span><span class="p">,</span>
     <span class="n">get_decorator</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.exception</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
@@ -370,7 +370,7 @@
 <a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/call_transformer/index.html#quadrants.lang.ast.ast_transformers.call_transformer.CallTransformer">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">CallTransformer</span><span class="p">:</span>
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_build_call_if_is_builtin</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">keywords</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_build_call_if_is_builtin</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">keywords</span><span class="p">):</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix_ops</span>  <span class="c1"># pylint: disable=C0415</span>
 
         <span class="n">func</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">ptr</span>
@@ -400,7 +400,7 @@
         <span class="k">return</span> <span class="kc">False</span>
 
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_build_call_if_is_type</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">keywords</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_build_call_if_is_type</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">keywords</span><span class="p">):</span>
         <span class="n">func</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">ptr</span>
         <span class="k">if</span> <span class="nb">id</span><span class="p">(</span><span class="n">func</span><span class="p">)</span> <span class="ow">in</span> <span class="n">primitive_types</span><span class="o">.</span><span class="n">type_ids</span><span class="p">:</span>
             <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span> <span class="ow">or</span> <span class="n">keywords</span><span class="p">:</span>
@@ -418,7 +418,7 @@
         <span class="k">return</span> <span class="kc">False</span>
 
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_is_external_func</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">func</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_is_external_func</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">func</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_in_static_scope</span><span class="p">():</span>  <span class="c1"># allow external function in static scope</span>
             <span class="k">return</span> <span class="kc">False</span>
         <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="s2">"_is_quadrants_function"</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="s2">"_is_wrapped_kernel"</span><span class="p">):</span>  <span class="c1"># quadrants func/kernel</span>
@@ -428,7 +428,7 @@
         <span class="k">return</span> <span class="kc">True</span>
 
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_warn_if_is_external_func</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_warn_if_is_external_func</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
         <span class="n">func</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">ptr</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">CallTransformer</span><span class="o">.</span><span class="n">_is_external_func</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">func</span><span class="p">):</span>
             <span class="k">return</span>
@@ -500,7 +500,7 @@
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_expand_Call_dataclass_args</span><span class="p">(</span>
-        <span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span>
         <span class="n">args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
         <span class="n">called_needed</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">callee_arg_names</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -514,7 +514,7 @@
 <span class="sd">        """</span>
         <span class="n">args_new</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="n">added_args</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="n">pruning</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">pruning</span>
+        <span class="n">pruning</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="o">.</span><span class="n">pruning</span>
         <span class="n">func_id</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">func_id</span>
         <span class="k">for</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="n">arg</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
             <span class="n">val</span> <span class="o">=</span> <span class="n">arg</span><span class="o">.</span><span class="n">ptr</span>
@@ -594,7 +594,7 @@
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_expand_Call_dataclass_kwargs</span><span class="p">(</span>
-        <span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span>
         <span class="n">kwargs</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">keyword</span><span class="p">],</span>
         <span class="n">used_args</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">keyword</span><span class="p">],</span> <span class="nb">list</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">keyword</span><span class="p">]]:</span>
@@ -691,7 +691,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="CallTransformer.build_Call">
 <a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/call_transformer/index.html#quadrants.lang.ast.ast_transformers.call_transformer.CallTransformer.build_Call">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_Call</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">,</span> <span class="n">build_stmt</span><span class="p">,</span> <span class="n">build_stmts</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_Call</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">,</span> <span class="n">build_stmt</span><span class="p">,</span> <span class="n">build_stmts</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        example ast:</span>
 <span class="sd">        Call(func=Name(id='f2', ctx=Load()), args=[Name(id='my_struct_ab', ctx=Load())], keywords=[])</span>
@@ -725,7 +725,7 @@
                 <span class="sa">f</span><span class="s2">"cannot be nested inside a runtime for / if / while: that demotes its phase loops out of "</span>
                 <span class="sa">f</span><span class="s2">"top-level position, collapsing the per-phase grid-wide barriers and corrupting the result."</span>
             <span class="p">)</span>
-        <span class="n">pruning</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">pruning</span>
+        <span class="n">pruning</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="o">.</span><span class="n">pruning</span>
         <span class="n">called_needed</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="n">callee_arg_names</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="k">if</span> <span class="n">pruning</span><span class="o">.</span><span class="n">enforcing</span> <span class="ow">and</span> <span class="n">is_func_base_wrapper</span><span class="p">:</span>
@@ -817,20 +817,22 @@
 
         <span class="n">CallTransformer</span><span class="o">.</span><span class="n">_warn_if_is_external_func</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="p">)</span>
         <span class="c1"># Snapshot the caller's `loop_depth` on the global context so a `@qd.func` invocation routed through</span>
-        <span class="c1"># `func(*py_args, **py_kwargs)` below can seed its fresh `ASTTransformerFuncContext` from this value in</span>
+        <span class="c1"># `func(*py_args, **py_kwargs)` below can seed its fresh `FuncCompileContext` from this value in</span>
         <span class="c1"># `_func_base.py` and inherit any outer for-loops we are already inside. Save/restore unconditionally because</span>
         <span class="c1"># we cannot tell from this site whether `func` is a Quadrants func, a builtin, or a Python callable; the</span>
         <span class="c1"># snapshot is harmless for non-func callables and nests correctly through chained calls.</span>
-        <span class="n">prev_caller_loop_depth</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">caller_loop_depth</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">caller_loop_depth</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">loop_depth</span>
+        <span class="n">prev_caller_loop_depth</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="o">.</span><span class="n">caller_loop_depth</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="o">.</span><span class="n">caller_loop_depth</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">loop_depth</span>
         <span class="c1"># Likewise snapshot whether we are (transitively) inside non-static control flow, so a</span>
         <span class="c1"># `requires_top_level=True` func reached through an unmarked intermediate `@qd.func` still sees the caller's</span>
         <span class="c1"># control-flow context. OR with the existing value so it accumulates down a multi-level call chain.</span>
-        <span class="n">prev_caller_in_non_static_control_flow</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">caller_in_non_static_control_flow</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">caller_in_non_static_control_flow</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_in_non_static_control_flow_including_caller</span><span class="p">()</span>
+        <span class="n">prev_caller_in_non_static_control_flow</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="o">.</span><span class="n">caller_in_non_static_control_flow</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="o">.</span><span class="n">caller_in_non_static_control_flow</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">is_in_non_static_control_flow_including_caller</span><span class="p">()</span>
+        <span class="p">)</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="k">try</span><span class="p">:</span>
-                <span class="n">pruning</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">pruning</span>
+                <span class="n">pruning</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="o">.</span><span class="n">pruning</span>
                 <span class="k">if</span> <span class="n">pruning</span><span class="o">.</span><span class="n">enforcing</span><span class="p">:</span>
                     <span class="n">py_args</span> <span class="o">=</span> <span class="n">pruning</span><span class="o">.</span><span class="n">filter_call_args</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">func_id</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">node_args</span><span class="p">,</span> <span class="n">node_keywords</span><span class="p">,</span> <span class="n">py_args</span><span class="p">)</span>
 
@@ -855,8 +857,8 @@
                             <span class="n">msg</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">"</span><span class="se">\n</span><span class="s2">Did you mean to use `qd.</span><span class="si">{</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">` instead of `</span><span class="si">{</span><span class="n">module</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">`?"</span>
                 <span class="k">raise</span> <span class="n">QuadrantsTypeError</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
         <span class="k">finally</span><span class="p">:</span>
-            <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">caller_loop_depth</span> <span class="o">=</span> <span class="n">prev_caller_loop_depth</span>
-            <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">caller_in_non_static_control_flow</span> <span class="o">=</span> <span class="n">prev_caller_in_non_static_control_flow</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="o">.</span><span class="n">caller_loop_depth</span> <span class="o">=</span> <span class="n">prev_caller_loop_depth</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="o">.</span><span class="n">caller_in_non_static_control_flow</span> <span class="o">=</span> <span class="n">prev_caller_in_non_static_control_flow</span>
 
         <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="s2">"_is_quadrants_function"</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">has_print</span> <span class="o">|=</span> <span class="n">func</span><span class="o">.</span><span class="n">wrapper</span><span class="o">.</span><span class="n">has_print</span>
