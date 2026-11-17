@@ -428,3 +428,38 @@ def test_runtime_primitive_lossless_coercions_still_bind():
     sim.flag = 2
     step(sim)
     assert sim.out.to_numpy()[0] == 6.0
+
+
+@pytest.mark.parametrize("fastcache", [False, True])
+@test_utils.test(arch=qd.cpu, offline_cache=True)
+def test_runtime_scalar_names_with_dataclass_parameters(fastcache: bool):
+    """Shared name formatting preserves direct dataclass inputs and data-oriented reads through an inlined function."""
+
+    @dataclasses.dataclass(frozen=True)
+    class State:
+        value: int
+        unused: int
+
+    @qd.data_oriented(template_primitives=False)
+    class Owner:
+        def __init__(self, value: int):
+            self.value = value
+            self.unused = 99
+
+    @qd.func
+    def read_owner(member: qd.Template):
+        return member.value
+
+    @qd.kernel(fastcache=fastcache)
+    def read(state: State, owner: qd.Template) -> qd.i32:
+        return state.value + owner.value + read_owner(owner)
+
+    assert read(State(3, 100), Owner(5)) == 13
+    state, owner = State(7, 200), Owner(9)
+    assert read(state, owner) == 25
+    if fastcache:
+        assert read._primal.src_ll_cache_observations.cache_loaded
+    count = len(read._primal.materialized_kernels)
+    owner.value = 11
+    assert read(state, owner) == 29
+    assert len(read._primal.materialized_kernels) == count

@@ -231,10 +231,11 @@ class ASTGenerator:
             ctx.ast_builder = kernel_cxx.ast_builder()
             if self.dump_ast:
                 self._dump_ast()
-            if not pruning.enforcing:
-                struct_locals = _kernel_impl_dataclass.extract_struct_locals_from_context(ctx)
-            else:
-                struct_locals = pruning.used_vars_by_func_id[ctx.func.func_id]
+            # Used names also include data-oriented members, which are resolved through attribute access.
+            # Only dataclass-parameter members have flattened local variables to substitute here.
+            struct_locals = _kernel_impl_dataclass.extract_struct_locals_from_context(ctx)
+            if pruning.enforcing:
+                struct_locals &= pruning.used_vars_by_func_id[ctx.func.func_id]
             # struct locals are the expanded py dataclass fields that we will write to local variables, and will then
             # be available to use in build_Call, later.
             ctx.struct_locals = struct_locals

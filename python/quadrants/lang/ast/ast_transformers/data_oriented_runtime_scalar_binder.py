@@ -17,6 +17,7 @@ from typing import Any, NamedTuple
 from quadrants._lib import core as _qd_core
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import expr, impl
+from quadrants.lang._name_utils import create_flat_name_from_parts
 from quadrants.lang.ast.ast_transformer_utils import FuncCompileContext
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import (
@@ -117,7 +118,7 @@ def _create_runtime_scalar_bindings(func_ctx: FuncCompileContext, scalar_members
     runtime_scalar_launch_infos = func_ctx.kernel_compile_context.runtime_scalar_launch_infos
     pruning = func_ctx.kernel_compile_context.pruning
     # The kernel ID preserves uses inside inlined qd.func calls and includes them in fastcache pruning metadata.
-    # Globally unique flat names avoid collisions with dataclass fields.
+    # Root names distinguish members reached through different kernel arguments.
     func_id = pruning.KERNEL_FUNC_ID
 
     for parent, attr_name, value, arg_idx, attr_chain in scalar_members:
@@ -132,7 +133,7 @@ def _create_runtime_scalar_bindings(func_ctx: FuncCompileContext, scalar_members
             dtype, kind = runtime.default_fp, "f"
         else:
             continue
-        flat_name = f"__qd_doprim_{arg_idx}__{'__'.join(attr_chain)}"
+        flat_name = create_flat_name_from_parts([func_ctx.func.arg_metas[arg_idx].name, *attr_chain])
         runtime_scalar_arg_info_by_member[key] = (flat_name, arg_idx, attr_chain, kind)
         # Add only members marked used during discovery, avoiding MAX_ARG_NUM for large containers.
         if not pruning.enforcing or not pruning.is_used(func_id, flat_name):
