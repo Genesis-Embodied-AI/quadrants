@@ -191,24 +191,14 @@ class KernelCompileContext:
         # Shared identity-based lookup for dataclass members and data-oriented runtime scalars.
         self.member_bindings: dict[tuple[int, str], MemberBinding] = {}
         self.bound_dataclass_ids: set[int] = set()
+        # (arg_id, template_arg_idx, attr_chain, kind) entries locate live values at launch; kind is 'f', 'i', or 'u'.
         self.runtime_scalar_launch_infos: list[tuple] = []
-        # Caller-side `loop_depth` snapshot for the in-flight `@qd.func` invocation. Each func compile creates a fresh
-        # `FuncCompileContext` with `loop_depth = 0`, so without this snapshot a non-static `range(...)` loop
-        # inside a func body would not see any outer for-loops in the caller and would skip the backward-mode dynamic-
-        # range diagnostic, silently emitting a wrong adjoint. `CallTransformer.build_Call` writes the caller
-        # `ctx.loop_depth` here before invoking the func and restores the previous value after, so the new func ctx
-        # can seed its `loop_depth` from this field via `_func_base.py`.
+        # Carry caller loop depth into fresh qd.func contexts so backward-mode dynamic-range checks see outer loops.
+        # Saved and restored around each call.
         self.caller_loop_depth: int = 0
-        # Caller-side "am I (transitively) inside non-static control flow?" snapshot for the in-flight `@qd.func`
-        # invocation. Each func compile creates a fresh `FuncCompileContext` whose own
-        # `non_static_control_flow_status` starts False, so a `@qd.func(requires_top_level=True)` reached *through* an
-        # unmarked helper called from a runtime for / if / while would not observe the caller's control-flow context
-        # and would escape the top-level check. `CallTransformer.build_Call` writes
-        # `ctx.is_in_non_static_control_flow() or <inherited>` here before invoking the func (so it accumulates down a
-        # multi-level call chain) and restores the previous value after; the new func ctx seeds
-        # `inherited_non_static_control_flow` from this field via `_func_base.py`. Kept separate from the live
-        # `non_static_control_flow_status` flag on purpose: that flag also gates the "return inside non-static if/for"
-        # diagnostic in `build_Return`, and seeding it True would spuriously reject a top-level `return` in a helper.
+        # Carry runtime control flow through nested calls so requires_top_level checks cannot be bypassed by helpers.
+        # Saved and restored around each call. Separate from the callee's local control-flow flag so ordinary helper
+        # returns remain valid.
         self.caller_in_non_static_control_flow: bool = False
 
 
