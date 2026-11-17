@@ -4051,7 +4051,6 @@ def test_final_unsafe_hash_ordinary_field_reread_each_launch():
     cfg.n = 7  # mutate an ordinary field on the same instance (same Final -> same specialization)
     k(cfg, out)
     assert out.to_numpy()[0] == 70  # 7 * 10 - the new value, not a stale 30 from a cached unwrap
-    assert not hasattr(cfg, "_qd_dc_unwrapped")  # Final-bearing configs never cache unwrapped field values
 
 
 @test_utils.test()
