@@ -505,7 +505,9 @@ class FuncBase:
         """Populate one parameter's launch value and return whether that value can be cached."""
         # Top-level arguments are already unwrapped; member sources can still contain Tensor wrappers.
         # The construction guard avoids type checks when no Tensor wrappers exist.
-        if _tensor_wrapper._any_tensor_constructed and type(v) in _TENSOR_WRAPPER_TYPES:  # pyright: ignore[reportOptionalMemberAccess]
+        if (
+            _tensor_wrapper._any_tensor_constructed and type(v) in _TENSOR_WRAPPER_TYPES
+        ):  # pyright: ignore[reportOptionalMemberAccess]
             v = v._unwrap()
 
         needed_arg_type_id = id(needed_arg_type)
