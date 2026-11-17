@@ -29,7 +29,7 @@ Functions
 Module Contents
 ---------------
 
-.. py:function:: bind_data_oriented_runtime_scalars(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext) -> None
+.. py:function:: bind_data_oriented_runtime_scalars(func_ctx: quadrants.lang.ast.ast_transformer_utils.FuncCompileContext) -> None
 
    Find opted-in scalar members, then create their compiler bindings.
 
