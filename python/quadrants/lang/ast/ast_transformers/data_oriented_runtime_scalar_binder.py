@@ -133,7 +133,7 @@ def _create_runtime_scalar_bindings(func_ctx: FuncCompileContext, scalar_members
         else:
             continue
         flat_name = f"__qd_doprim_{arg_idx}__{'__'.join(attr_chain)}"
-        bindings[key] = MemberBinding(flat_name, dtype, None, True)
+        bindings[key] = MemberBinding(flat_name, dtype, None, reject_in_static_scope=True)
         # Add only members marked used during discovery, avoiding MAX_ARG_NUM for large containers.
         if not pruning.enforcing or not pruning.is_used(func_id, flat_name):
             continue
@@ -144,7 +144,7 @@ def _create_runtime_scalar_bindings(func_ctx: FuncCompileContext, scalar_members
         value_expr = expr.Expr(
             _qd_core.make_arg_load_expr(arg_id, cooked, False, create_load=True, dbg_info=argload_di)
         )
-        bindings[key] = MemberBinding(flat_name, dtype, value_expr, True)
+        bindings[key] = MemberBinding(flat_name, dtype, value_expr, reject_in_static_scope=True)
         runtime_scalar_launch_infos.append((arg_id[0], arg_idx, attr_chain, kind))
 
 

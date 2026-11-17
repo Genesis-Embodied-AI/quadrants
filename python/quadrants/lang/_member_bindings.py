@@ -16,7 +16,9 @@ class MemberBinding(NamedTuple):
     # Result of compiling a member access: an Expr for a runtime scalar,
     # an array representation, a Python constant, or a nested dataclass instance.
     member_access_result: Any
-    runtime_scalar: bool = False
+    # Reject every static-scope read of this member. Data-oriented scalars can select different static branches
+    # because discovery sees a Python scalar and enforcement sees an Expr.
+    reject_in_static_scope: bool = False
 
 
 def resolve_bound_member(ctx: "FuncCompileContext", parent: Any, attr: str) -> Any:
@@ -27,7 +29,7 @@ def resolve_bound_member(ctx: "FuncCompileContext", parent: Any, attr: str) -> A
             raise QuadrantsSyntaxError(f"Member {attr!r} is absent from the declared dataclass fields")
         return None
 
-    if binding.runtime_scalar and ctx.is_in_static_scope():
+    if binding.reject_in_static_scope and ctx.is_in_static_scope():
         raise QuadrantsSyntaxError(
             f"'{attr}' is a runtime kernel argument and cannot be used inside qd.static(). "
             "Use template_primitives=True for compile-time data-oriented scalars."
