@@ -42,7 +42,7 @@ from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang._signature import get_func_signature
 from quadrants.lang._wrap_inspect import get_source_info_and_src
-from quadrants.lang.ast import ASTTransformerFuncContext
+from quadrants.lang.ast import FuncCompileContext
 from quadrants.lang.buffer_view import BufferView as BufferViewInstance
 from quadrants.lang.exception import (
     QuadrantsRuntimeError,
@@ -62,7 +62,7 @@ from quadrants.types import (
 )
 
 from ._exceptions import raise_exception
-from .ast.ast_transformer_utils import ASTTransformerGlobalContext
+from .ast.ast_transformer_utils import KernelCompileContext
 
 if TYPE_CHECKING:
     from quadrants._lib.core.quadrants_python import ASTBuilder
@@ -229,7 +229,7 @@ class FuncBase:
         self.orig_arguments: list[ArgMetadata] = []
         self.return_type = None
         # Shared by every AST transform of this function; see
-        # ASTTransformerFuncContext.memoized_get_formatted_location_with_source_context.
+        # FuncCompileContext.memoized_get_formatted_location_with_source_context.
         self.pos_info_cache: dict[tuple, str] = {}
 
         self.check_parameter_annotations()
@@ -390,7 +390,7 @@ class FuncBase:
         pruning: "Pruning | None" = None,  # has value when called from Kernel.materialize
         currently_compiling_materialize_key=None,  # has value when called from Kernel.materialize
         pass_idx: int | None = None,  # has value when called from Kernel.materialize
-    ) -> tuple[ast.Module, ASTTransformerFuncContext]:
+    ) -> tuple[ast.Module, FuncCompileContext]:
         function_source_info, src = get_source_info_and_src(self.func)
         src = [textwrap.fill(line, tabsize=4, width=9999) for line in src]
         tree = ast.parse(textwrap.dedent("\n".join(src)))
@@ -404,19 +404,19 @@ class FuncBase:
             assert pruning is not None
             assert pass_idx is not None
             current_kernel.kernel_function_info = function_source_info
-            global_context = ASTTransformerGlobalContext(
+            kernel_compile_context = KernelCompileContext(
                 pass_idx=pass_idx,
                 current_kernel=current_kernel,
                 pruning=pruning,
                 currently_compiling_materialize_key=currently_compiling_materialize_key,
             )
         else:  # Func
-            global_context = runtime._current_global_context
-            assert global_context is not None
-            current_kernel = global_context.current_kernel
+            kernel_compile_context = runtime._current_kernel_compile_context
+            assert kernel_compile_context is not None
+            current_kernel = kernel_compile_context.current_kernel
 
         assert current_kernel is not None
-        assert global_context is not None
+        assert kernel_compile_context is not None
         current_kernel.visited_functions.add(function_source_info)
 
         autodiff_mode = current_kernel.autodiff_mode
@@ -449,8 +449,8 @@ class FuncBase:
 
         raise_on_templated_floats = impl.current_cfg().raise_on_templated_floats
 
-        ctx = ASTTransformerFuncContext(
-            global_context=global_context,  # type: ignore[arg-type]
+        ctx = FuncCompileContext(
+            kernel_compile_context=kernel_compile_context,  # type: ignore[arg-type]
             template_slot_locations=template_slot_locations,
             is_kernel=is_kernel,
             is_pure=is_pure,
@@ -474,16 +474,16 @@ class FuncBase:
             # mode diagnostic at `ASTTransformer.build_For` only fires when the loop is written directly in the
             # kernel, and routing the same loop through a `@qd.func` would silently emit a wrong adjoint. Kernels
             # start at the top of the call stack so they always begin at depth 0.
-            ctx.loop_depth = global_context.caller_loop_depth
+            ctx.loop_depth = kernel_compile_context.caller_loop_depth
             # Likewise inherit whether the caller chain was already inside non-static control flow, so a
             # `requires_top_level=True` func called at this func's top level is still rejected when this func was
             # itself invoked from a runtime for / if / while. Kernels always begin False.
-            ctx.inherited_non_static_control_flow = global_context.caller_in_non_static_control_flow
+            ctx.inherited_non_static_control_flow = kernel_compile_context.caller_in_non_static_control_flow
         return tree, ctx
 
     def fuse_args(
         self,
-        global_context: ASTTransformerGlobalContext | None,
+        kernel_compile_context: KernelCompileContext | None,
         is_pyfunc: bool,
         is_func: bool,
         py_args: tuple[Any, ...],
@@ -503,7 +503,7 @@ class FuncBase:
         but if we did, we'd still have output exactly matching the order and size of
         self.arg_metas_expanded, just with some of the values coming from defaults.
 
-        for kernels, global_context is None. We aren't compiling yet. This is only called once
+        for kernels, kernel_compile_context is None. We aren't compiling yet. This is only called once
         per launch, but it is called every launch, even if we already compiled.
 
         For funcs, this is only called during compilation, once per pass.
@@ -515,13 +515,15 @@ class FuncBase:
         - second pass - with enforcing on - the expanded parameters are pruned
         """
         if is_func and not is_pyfunc:
-            assert global_context is not None
-            current_kernel = global_context.current_kernel
+            assert kernel_compile_context is not None
+            current_kernel = kernel_compile_context.current_kernel
             assert current_kernel is not None
-            pruning = global_context.pruning
+            pruning = kernel_compile_context.pruning
             used_by_dataclass_parameters_enforcing = None
             if pruning.enforcing:
-                used_by_dataclass_parameters_enforcing = global_context.pruning.used_vars_by_func_id[self.func_id]
+                used_by_dataclass_parameters_enforcing = kernel_compile_context.pruning.used_vars_by_func_id[
+                    self.func_id
+                ]
             self.arg_metas_expanded = _kernel_impl_dataclass.expand_func_arguments(
                 used_by_dataclass_parameters_enforcing,
                 self.arg_metas,

@@ -80,7 +80,7 @@ def test_process_func_arg(argument_name: str, argument_type: Any, expected_varia
     class MockContext:
         def __init__(self) -> None:
             self.variables: dict[str, Any] = {}
-            # Mirror the real ``ASTTransformerFuncContext.fn_param_names`` so ``_transform_func_arg`` can record bare
+            # Mirror the real ``FuncCompileContext.fn_param_names`` so ``_transform_func_arg`` can record bare
             # param names without crashing.
             self.fn_param_names: set[str] = set()
 

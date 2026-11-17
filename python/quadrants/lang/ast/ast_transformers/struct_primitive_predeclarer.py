@@ -16,7 +16,7 @@ from typing import Any
 
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import expr, impl
-from quadrants.lang.ast.ast_transformer_utils import ASTTransformerFuncContext
+from quadrants.lang.ast.ast_transformer_utils import FuncCompileContext
 from quadrants.lang.util import (
     is_data_oriented,
     is_dataclass_instance,
@@ -25,7 +25,7 @@ from quadrants.lang.util import (
 from quadrants.types import annotations
 
 
-def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
+def predeclare_struct_primitives(ctx: FuncCompileContext) -> None:
     """For each templated arg whose root class is decorated ``@qd.data_oriented(template_primitives=False)``, walk
     the reachable attribute graph and declare every primitive (``int`` / ``float`` / ``bool``) member as a runtime
     scalar kernel arg, instead of letting ``build_Attribute`` bake it as a compile-time constant. The arg-load
@@ -67,10 +67,10 @@ def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
     runtime = impl.get_runtime()
     default_ip = runtime.default_ip
     default_fp = runtime.default_fp
-    provenance = ctx.global_context.struct_primitive_provenance
-    expr_cache = ctx.global_context.struct_primitive_to_expr
-    launch_info = ctx.global_context.struct_primitive_launch_info
-    pruning = ctx.global_context.pruning
+    provenance = ctx.kernel_compile_context.struct_primitive_provenance
+    expr_cache = ctx.kernel_compile_context.struct_primitive_to_expr
+    launch_info = ctx.kernel_compile_context.struct_primitive_launch_info
+    pruning = ctx.kernel_compile_context.pruning
     # Lifted primitives are tracked under the kernel's func id (rather than the accessing function's), so a
     # primitive accessed only inside an inlined ``@qd.func`` is still declared, and so the used set is captured by
     # the existing ``KERNEL_FUNC_ID`` fastcache serialisation. Flat names are globally unique, so this never

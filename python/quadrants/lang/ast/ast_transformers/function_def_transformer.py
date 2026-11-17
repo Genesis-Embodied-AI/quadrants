@@ -29,7 +29,7 @@ from quadrants.lang._final.final_dataclass_fields import (
 from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._optional_annotation import OPTIONAL_ABSENT
 from quadrants.lang.ast.ast_transformer_utils import (
-    ASTTransformerFuncContext,
+    FuncCompileContext,
 )
 from quadrants.lang.ast.ast_transformers import graph_api
 from quadrants.lang.ast.ast_transformers.checkpoint_transformer import (
@@ -57,7 +57,7 @@ from quadrants.types import annotations, buffer_view_type, ndarray_type, primiti
 class FunctionDefTransformer:
     @staticmethod
     def _decl_and_create_variable(
-        ctx: ASTTransformerFuncContext,
+        ctx: FuncCompileContext,
         annotation: Any,
         name: str,
         this_arg_features: tuple[tuple[Any, ...], ...] | None,
@@ -151,13 +151,13 @@ class FunctionDefTransformer:
 
     @staticmethod
     def _transform_kernel_arg(
-        ctx: ASTTransformerFuncContext,
+        ctx: FuncCompileContext,
         argument_name: str,
         argument_type: Any,
         this_arg_features: tuple[Any, ...],
         arg_value: Any = None,
     ) -> None:
-        pruning = ctx.global_context.pruning
+        pruning = ctx.kernel_compile_context.pruning
         func_id = ctx.func.func_id
         if dataclasses.is_dataclass(argument_type):
             ctx.create_variable(argument_name, argument_type)
@@ -220,7 +220,7 @@ class FunctionDefTransformer:
             ctx.create_variable(argument_name, obj)
 
     @staticmethod
-    def _transform_as_kernel(ctx: ASTTransformerFuncContext, node: ast.FunctionDef, args: ast.arguments) -> None:
+    def _transform_as_kernel(ctx: FuncCompileContext, node: ast.FunctionDef, args: ast.arguments) -> None:
         assert ctx.func is not None
         assert ctx.arg_features is not None
         if node.returns is not None:
@@ -249,14 +249,14 @@ class FunctionDefTransformer:
         node.args.args = []
 
     @staticmethod
-    def _predeclare_struct_ndarrays(ctx: ASTTransformerFuncContext) -> None:
+    def _predeclare_struct_ndarrays(ctx: FuncCompileContext) -> None:
         """Walk template args that are structs and pre-declare any ``Ndarray`` attributes as kernel args (via
         ``decl_ndarray_arg``) so they are registered before ``finalize_params``. The resulting ``AnyArray`` objects are
-        cached on the global context for later lookup by ``build_Attribute``.
+        cached on the kernel compilation context for later lookup by ``build_Attribute``.
 
         Also stores ``(arg_id, template_arg_idx, attr_chain)`` tuples in
-        ``ctx.global_context.struct_ndarray_launch_info`` so the launch path can populate the corresponding slots in the
-        launch context.
+        ``ctx.kernel_compile_context.struct_ndarray_launch_info`` so the launch path can populate the corresponding slots
+        in the launch context.
 
         Pruning: the enforcing pass registers only the ndarrays the first pass saw accessed
         (``pruning.used_struct_ndarray_ids``), dropping the rest from the kernel's parameter list. The first pass must
@@ -265,9 +265,9 @@ class FunctionDefTransformer:
         from quadrants.lang._pruning import Pruning  # pylint: disable=C0415
         from quadrants.lang.util import cook_dtype  # pylint: disable=C0415
 
-        cache = ctx.global_context.ndarray_to_any_array
-        launch_info = ctx.global_context.struct_ndarray_launch_info
-        pruning = ctx.global_context.pruning
+        cache = ctx.kernel_compile_context.ndarray_to_any_array
+        launch_info = ctx.kernel_compile_context.struct_ndarray_launch_info
+        pruning = ctx.kernel_compile_context.pruning
         used_ids = getattr(pruning, "used_struct_ndarray_ids", None)
         prune = pruning.enforcing and used_ids is not None and getattr(pruning, "pass_0_ran", False)
         # A fastcache hit skips pass 0, so there are no ids to prune by - but the cached flat-name set describes the
@@ -371,7 +371,7 @@ class FunctionDefTransformer:
 
     @staticmethod
     def _transform_func_arg(
-        ctx: ASTTransformerFuncContext,
+        ctx: FuncCompileContext,
         argument_name: str,
         argument_type: Any,
         data: Any,
@@ -396,7 +396,7 @@ class FunctionDefTransformer:
         # directly — ndarray and field impls are both valid pass-by-reference arguments.
         if argument_type is _TensorClass:
             data = FunctionDefTransformer._unwrap_tensor(data)
-            _cache = getattr(getattr(ctx, "global_context", None), "ndarray_to_any_array", None)
+            _cache = getattr(getattr(ctx, "kernel_compile_context", None), "ndarray_to_any_array", None)
             promoted = _cache.get(id(data)) if _cache else None
             ctx.create_variable(argument_name, promoted if promoted is not None else data)
             return None
@@ -419,7 +419,7 @@ class FunctionDefTransformer:
                     if field.type is not _TensorClass and hasattr(field.type, "check_matched"):
                         field.type.check_matched(data_child.get_type(), field.name)
                     _cache = getattr(
-                        getattr(ctx, "global_context", None),
+                        getattr(ctx, "kernel_compile_context", None),
                         "ndarray_to_any_array",
                         None,
                     )
@@ -507,7 +507,7 @@ class FunctionDefTransformer:
         return None
 
     @staticmethod
-    def _bind_intermediate_dataclass_sentinels(ctx: ASTTransformerFuncContext, basename: str, dc_type: Any) -> None:
+    def _bind_intermediate_dataclass_sentinels(ctx: FuncCompileContext, basename: str, dc_type: Any) -> None:
         """Recursively bind every nested dataclass node ``__qd_<basename>__qd_<field>`` to its dataclass type, so
         AST-flattened intermediate names (e.g. ``s.child`` rewritten to ``Name("__qd_s__qd_child")`` by
         FlattenAttributeNameTransformer) resolve at lookup time and call-site expansion in
@@ -525,7 +525,7 @@ class FunctionDefTransformer:
                 FunctionDefTransformer._bind_intermediate_dataclass_sentinels(ctx, child_name, field.type)
 
     @staticmethod
-    def _transform_as_func(ctx: ASTTransformerFuncContext, node: ast.FunctionDef, args: ast.arguments) -> None:
+    def _transform_as_func(ctx: FuncCompileContext, node: ast.FunctionDef, args: ast.arguments) -> None:
         # pylint: disable=import-outside-toplevel
         from quadrants.lang.kernel_impl import Func
 
@@ -543,9 +543,9 @@ class FunctionDefTransformer:
 
     @staticmethod
     def build_FunctionDef(
-        ctx: ASTTransformerFuncContext,
+        ctx: FuncCompileContext,
         node: ast.FunctionDef,
-        build_stmts: Callable[[ASTTransformerFuncContext, list[ast.stmt]], None],
+        build_stmts: Callable[[FuncCompileContext, list[ast.stmt]], None],
     ) -> None:
         if ctx.visited_funcdef:
             raise QuadrantsSyntaxError(
@@ -576,7 +576,7 @@ class FunctionDefTransformer:
         if ctx.is_kernel:
             FunctionDefTransformer._validate_stream_parallel_exclusivity(node.body, ctx.global_vars)
             FunctionDefTransformer._validate_graph_do_while_structure(node.body)
-            kernel = ctx.global_context.current_kernel
+            kernel = ctx.kernel_compile_context.current_kernel
             if kernel is not None:
                 # Reset before walking the body so re-materialisations (e.g. when a templated kernel is compiled with a
                 # different argument shape) start from an empty list. Mirrors how `graph_do_while_arg` gets overwritten
