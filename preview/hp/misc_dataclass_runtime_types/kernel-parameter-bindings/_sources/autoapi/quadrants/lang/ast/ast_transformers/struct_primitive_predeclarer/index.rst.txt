@@ -1,0 +1,39 @@
+quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer
+================================================================
+
+.. py:module:: quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer
+
+.. autoapi-nested-parse::
+
+   Lift primitive members of ``@qd.data_oriented(template_primitives=False)`` template args into runtime scalar kernel
+   args at AST-build time.
+
+   Lives alongside ``ndarray_arg_resolver.py`` / ``checkpoint_transformer.py`` so the central
+   ``function_def_transformer.py`` file doesn't have to grow per-feature (the same rationale the ndarray resolver
+   documents). ``FunctionDefTransformer.transform`` delegates here right after ``_predeclare_struct_ndarrays``; this is
+   the only entry point.
+
+   See ``docs/source/user_guide/compound_types.md`` (section "Runtime primitives: ``template_primitives=False``") for the
+   user-facing surface.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer.predeclare_struct_primitives
+
+
+Module Contents
+---------------
+
+.. py:function:: predeclare_struct_primitives(ctx: quadrants.lang.ast.ast_transformer_utils.FuncCompileContext) -> None
+
+   Walk opted-in data-oriented arguments and register their scalar members as kernel parameters.
+
+   Visit stored attributes of data-oriented objects and dataclasses, stopping at cycles. Only exact Python
+   bool, int, and float members become runtime parameters; their types follow the runtime defaults.
+
+
