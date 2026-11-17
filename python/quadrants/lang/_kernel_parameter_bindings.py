@@ -1,35 +1,101 @@
-"""Register kernel parameters and populate their values from Python argument attributes."""
+"""Register kernel parameters as data records and process their launch values in batches."""
 
 from collections.abc import Callable
-from dataclasses import _FIELDS
-from typing import TYPE_CHECKING, Any, Literal
+from enum import Enum, auto
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
 from quadrants._lib import core as _qd_core
-from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants.lang import expr
 from quadrants.lang._kernel_types import KernelBatchedArgType
+from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.util import cook_dtype
-from quadrants.types import ndarray_type, template
 from quadrants.types.utils import is_signed
 
 if TYPE_CHECKING:
     from quadrants.lang._pruning import Pruning
-    from quadrants.lang.kernel_arguments import ArgMetadata
 
-ScalarKind = Literal["f", "i", "u"]
 ParameterKind = Literal["scalar", "ndarray", "matrix", "struct", "sparse"]
-_FLOAT, _INT, _UINT = KernelBatchedArgType.FLOAT, KernelBatchedArgType.INT, KernelBatchedArgType.UINT
+ScalarKind = Literal["f", "i", "u"]
+
+
+class SourceProjection(Enum):
+    """Select the whole value or one native parameter of a buffer view."""
+
+    VALUE = auto()
+    BUFFER_ARRAY = auto()
+    BUFFER_OFFSET = auto()
+    BUFFER_SIZE = auto()
+
+
+class ValuePolicy(Enum):
+    """Select a shared value-processing system without attaching behavior to individual parameters."""
+
+    TYPED = auto()
+    MEMBER_FLOAT = auto()
+    MEMBER_INT = auto()
+    MEMBER_UINT = auto()
+
+
+class ParameterSource(NamedTuple):
+    """Locate a value relative to the Python kernel arguments."""
+
+    argument_index: int
+    attributes: tuple[str, ...] = ()
+    projection: SourceProjection = SourceProjection.VALUE
+
+
+class ParameterRecord(NamedTuple):
+    """Describe one native parameter, its source, and its launch validation and caching policy."""
+
+    slot: int
+    source: ParameterSource
+    annotation: Any
+    name: str
+    cacheable: bool | None
+    member_ndarray: bool = False
+
+
+class DataclassGuard(NamedTuple):
+    """Preserve type checks on containers even when none of their members become parameters."""
+
+    source: ParameterSource
+    annotation: type
+
+
+def _read_source(args: tuple[Any, ...], source: ParameterSource) -> Any:
+    """Read an argument or attribute chain, then select a buffer-view component if requested."""
+    py_obj = args[source.argument_index]
+    for name in source.attributes:
+        py_obj = getattr(py_obj, name)
+    if source.projection is SourceProjection.BUFFER_ARRAY:
+        return py_obj.get_ndarray()
+
+    if source.projection is SourceProjection.BUFFER_OFFSET:
+        return py_obj.offset
+
+    if source.projection is SourceProjection.BUFFER_SIZE:
+        return py_obj.size
+
+    return py_obj
 
 
 class KernelParameterLaunchBindings:
-    """Keep only the records needed to supply registered parameters on each launch."""
+    """Own parameter records grouped by value policy; no compiler expressions or application objects are retained."""
 
     def __init__(self) -> None:
-        """Create empty records for direct arguments, array members, and scalar members."""
-        self.arg_metas: list["ArgMetadata"] = []
-        self.used_dataclass_members: set[str] = set()
-        self.ndarray_launch_infos: list[tuple[int, int, tuple[str, ...]]] = []
-        self.launch_infos: list[tuple[int, int, tuple[str, ...], ScalarKind]] = []
+        """Create empty parameter groups and container validation records."""
+        self.records_by_policy: dict[ValuePolicy, list[ParameterRecord]] = {}
+        self.dataclass_guards: list[DataclassGuard] = []
+        self.cacheable = True
+
+    def member_ndarray_launch_infos(self) -> list[tuple[int, int, tuple[str, ...]]]:
+        """Derive the member-array view used by pruning and array-rebinding invalidation."""
+        return [
+            (record.slot, record.source.argument_index, record.source.attributes)
+            for records in self.records_by_policy.values()
+            for record in records
+            if record.member_ndarray
+        ]
 
     def populate_launch_buffer(
         self,
@@ -38,91 +104,67 @@ class KernelParameterLaunchBindings:
         launch_ctx_buffer: dict[KernelBatchedArgType, list],
         callbacks: list[Callable[[], Any]],
     ) -> bool:
-        """Populate all registered argument groups, returning whether the resulting launch context is cacheable."""
-        # FuncBase imports compiler contexts, so import its existing value handlers after initialization.
+        """Validate containers, then process each parameter group into the existing batched launch buffers."""
+        # FuncBase imports compiler contexts; its existing typed codecs are available after initialization.
         from quadrants.lang._func_base import FuncBase
-        from quadrants.lang._ndarray import Ndarray
 
-        actual_argument_slot = 0
-        is_launch_ctx_cacheable = True
-        template_num = 0
-        i_out = 0
-        for i_in, val in enumerate(args):
-            needed_ = self.arg_metas[i_in].annotation
-            if needed_ is template or type(needed_) is template:
-                template_num += 1
-                i_out += 1
-                continue
-            if (
-                val is None
-                and self.arg_metas[i_in].optional
-                and type(self.arg_metas[i_in].annotation) is ndarray_type.NdarrayType
-            ):
-                # Optional ndarray + None is specialized away at compile time, so it consumes no runtime arg.
-                continue
-            # An all-Field dataclass unwraps to zero launch-context slots, so skip _recursive_set_args(). That also
-            # skips its provided-is-needed type check, so only shortcut when _qd_all_field is cached True for THIS
-            # exact annotation (proof the check already ran and passed for it) - hence the per-annotation id() key.
-            _all_field_cache = getattr(val, "_qd_all_field", None)
-            if _all_field_cache is not None and getattr(needed_, _FIELDS, None) is not None:
-                _af_hit = _all_field_cache.get(id(needed_))
-                if _af_hit is not None and _af_hit[0] is needed_ and _af_hit[1]:
-                    continue
-            num_args_, is_launch_ctx_cacheable_ = FuncBase._recursive_set_args(
-                self.used_dataclass_members,
-                self.arg_metas[i_in].name,
+        for source, annotation in self.dataclass_guards:
+            py_obj = _read_source(args, source)
+            if type(py_obj) is not annotation and not isinstance(py_obj, annotation):
+                raise QuadrantsRuntimeTypeError("needed", annotation, "cannot be assigned the provided", type(py_obj))
+
+        cacheable = self.cacheable
+        for record in self.records_by_policy.get(ValuePolicy.TYPED, ()):
+            py_obj = _read_source(args, record.source)
+            # Native slots are recorded during compilation, rather than recomputed by a dataclass walk at launch.
+            _, value_cacheable = FuncBase._recursive_set_args(
+                set(),
+                record.name,
                 launch_ctx,
                 launch_ctx_buffer,
-                needed_,
-                type(val),
-                val,
-                i_out - template_num,
-                actual_argument_slot,
+                record.annotation,
+                record.annotation if record.source.attributes else type(py_obj),
+                py_obj,
+                record.slot,
+                0,
                 callbacks,
             )
-            i_out += num_args_
-            is_launch_ctx_cacheable &= is_launch_ctx_cacheable_
+            cacheable &= value_cacheable if record.cacheable is None else record.cacheable
 
-        for arg_id, argument_index, attr_chain in self.ndarray_launch_infos:
-            py_obj = args[argument_index]
-            for attr_name in attr_chain:
-                py_obj = getattr(py_obj, attr_name)
-            if type(py_obj) in _TENSOR_WRAPPER_TYPES:
-                py_obj = py_obj._unwrap()
-            assert isinstance(py_obj, Ndarray), f"Expected Ndarray at {attr_chain}, got {type(py_obj)}"
-            if py_obj.grad is None:
-                launch_ctx_buffer[KernelBatchedArgType.QD_ARRAY].append((arg_id, py_obj.arr))
-            else:
-                launch_ctx_buffer[KernelBatchedArgType.QD_ARRAY_WITH_GRAD].append((arg_id, py_obj.arr, py_obj.grad.arr))
+        # These policies preserve the existing coercions for opted-in data-oriented scalar members.
+        for policy, buffer_kind in (
+            (ValuePolicy.MEMBER_FLOAT, KernelBatchedArgType.FLOAT),
+            (ValuePolicy.MEMBER_INT, KernelBatchedArgType.INT),
+            (ValuePolicy.MEMBER_UINT, KernelBatchedArgType.UINT),
+        ):
+            records = self.records_by_policy.get(policy)
+            if not records:
+                continue
 
-        for arg_id, argument_index, attr_chain, kind in self.launch_infos:
-            py_obj = args[argument_index]
-            for attr_name in attr_chain:
-                py_obj = getattr(py_obj, attr_name)
-            if kind == "f":
-                launch_ctx_buffer[_FLOAT].append((arg_id, float(py_obj)))
-            else:
-                # A float replacing an integer would silently lose its fractional part.
-                if type(py_obj) is float:
-                    raise TypeError(
-                        f"Primitive member '{'.'.join(attr_chain)}' of a @qd.data_oriented(template_primitives=False) "
-                        f"object was lifted as an integer kernel argument (its type at first compile), but is now a "
-                        f"float ({py_obj!r}); coercing it would truncate. Keep the member's type stable across launches, "
-                        f"or use the default template_primitives=True to re-specialise the kernel per type."
-                    )
-                if kind == "u":
-                    launch_ctx_buffer[_UINT].append((arg_id, int(py_obj)))
+            cacheable = False
+            for record in records:
+                py_obj = _read_source(args, record.source)
+                if policy is ValuePolicy.MEMBER_FLOAT:
+                    value = float(py_obj)
                 else:
-                    launch_ctx_buffer[_INT].append((arg_id, int(py_obj)))
-
-        return is_launch_ctx_cacheable and not self.launch_infos
+                    if type(py_obj) is float:
+                        raise TypeError(
+                            f"Primitive member '{'.'.join(record.source.attributes)}' of a "
+                            f"@qd.data_oriented(template_primitives=False) object was lifted as an integer kernel "
+                            f"argument (its type at first compile), but is now a float ({py_obj!r}); coercing it would "
+                            "truncate. Keep the member's type stable across launches, or use the default "
+                            "template_primitives=True to re-specialise the kernel per type."
+                        )
+                    value = int(py_obj)
+                launch_ctx_buffer[buffer_kind].append((record.slot, value))
+        return cacheable
 
 
 class KernelParameterBindings:
-    """Own parameter registration, compiler values, and launch records for all kernel argument kinds."""
+    """Create native parameters and compiler values, recording their value sources for the launch systems."""
 
     def __init__(self, pruning: "Pruning") -> None:
-        """Start one compilation pass with empty member mappings and launch records."""
+        """Start one compilation pass with empty compiler mappings and launch records."""
         self.pruning = pruning
         self.arg_info_by_member: dict[tuple[int, str], tuple[str, int, tuple[str, ...], ScalarKind]] = {}
         self.arg_expr_by_member: dict[tuple[int, str], expr.Expr] = {}
@@ -134,41 +176,51 @@ class KernelParameterBindings:
         dtype: Any,
         name: str,
         *,
-        source: tuple[int, tuple[str, ...]] | None = None,
+        source: ParameterSource | None = None,
+        launch_annotation: Any = None,
+        cacheable: bool | None = None,
         member: tuple[int, str] | None = None,
+        member_ndarray: bool = False,
         ndim: int = 0,
         needs_grad: bool = False,
         boundary: Any = None,
         layout: Any = None,
     ) -> Any:
-        """Create a parameter and its compiler value, recording member sources for launch when supplied.
+        """Create a parameter and read expression, and register its source in a shared launch-processing group.
 
-        Direct Python arguments use arg_metas and the existing typed value handlers at launch. A member source
-        supplies an argument index and attribute chain. Scalar members also use member identity for pruning.
+        Scalar members are first recorded for pruning; only used members get native parameters. Every parameter
+        with a source uses the same record format, whether supplied directly or reached through a container.
         """
         from quadrants.lang.kernel_arguments import create_kernel_parameter
 
-        scalar_kind: ScalarKind = "f"
+        policy = ValuePolicy.TYPED
         if member is not None:
             assert kind == "scalar" and source is not None
             if member in self.arg_info_by_member:
                 return self.arg_expr_by_member.get(member)
 
             cooked = cook_dtype(dtype)
-            scalar_kind = "f" if _qd_core.is_real(cooked) else ("i" if is_signed(cooked) else "u")
-            self.arg_info_by_member[member] = (name, *source, scalar_kind)
-            # The kernel ID includes uses inside inlined functions in pruning and fastcache metadata.
+            scalar_kind: ScalarKind = "f" if _qd_core.is_real(cooked) else ("i" if is_signed(cooked) else "u")
+            policy = {"f": ValuePolicy.MEMBER_FLOAT, "i": ValuePolicy.MEMBER_INT, "u": ValuePolicy.MEMBER_UINT}[
+                scalar_kind
+            ]
+            self.arg_info_by_member[member] = (name, source.argument_index, source.attributes, scalar_kind)
             if not self.pruning.enforcing or not self.pruning.is_used(self.pruning.KERNEL_FUNC_ID, name):
                 return None
 
         arg_id, value = create_kernel_parameter(
             kind, dtype, name, ndim=ndim, needs_grad=needs_grad, boundary=boundary, layout=layout
         )
+        if member is not None:
+            self.arg_expr_by_member[member] = value
         if source is not None:
-            if kind == "ndarray":
-                self.launch_bindings.ndarray_launch_infos.append((arg_id[0], *source))
-            else:
-                assert member is not None
-                self.arg_expr_by_member[member] = value
-                self.launch_bindings.launch_infos.append((arg_id[0], *source, scalar_kind))
+            record = ParameterRecord(
+                arg_id[0],
+                source,
+                dtype if launch_annotation is None else launch_annotation,
+                name,
+                cacheable,
+                member_ndarray,
+            )
+            self.launch_bindings.records_by_policy.setdefault(policy, []).append(record)
         return value

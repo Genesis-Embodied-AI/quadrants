@@ -586,7 +586,7 @@ class Kernel(FuncBase):
                     assert key not in self.materialized_kernels
                     self.materialized_kernels[key] = quadrants_kernel
                     self._struct_ndarray_launch_info_by_key[key] = (
-                        ctx.kernel_compile_context.parameter_bindings.launch_bindings.ndarray_launch_infos
+                        ctx.kernel_compile_context.parameter_bindings.launch_bindings.member_ndarray_launch_infos()
                     )
                     # Both folds bring data_oriented member accesses into the kernel's used-flat-names set, which
                     # dataclass-arg expansion is the only other contributor to. Without them the narrow args hash walks
@@ -595,7 +595,6 @@ class Kernel(FuncBase):
                     pruning.fold_struct_nd_paths(self._struct_ndarray_launch_info_by_key.get(key, []), self.arg_metas)
                     pruning.fold_kernel_arg_chain_paths()
                     launch_bindings = ctx.kernel_compile_context.parameter_bindings.launch_bindings
-                    launch_bindings.used_dataclass_members = self.used_py_dataclass_parameters_by_key_enforcing[key]
                     self._parameter_launch_bindings_by_compiled_kernel_key[key] = launch_bindings
                 else:
                     # Propagate used-sets across call edges to a fixpoint (order-independent) before
