@@ -20,7 +20,7 @@ from .._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
 from ..field import ScalarField
 from ..kernel_arguments import ArgMetadata
 from ..matrix import MatrixField, MatrixNdarray, VectorNdarray
-from ..util import is_data_oriented, is_dataclass_instance, wants_runtime_primitives
+from ..util import is_data_oriented, is_dataclass_instance, uses_template_primitives
 from .hash_utils import hash_iterable_strings
 
 _FIELD_TYPES = (ScalarField, MatrixField)
@@ -231,6 +231,8 @@ def dataclass_to_repr(
 
     Returns ``_FAIL_FASTCACHE`` if any visited subtree holds an unsupported tensor type.
     """
+    if is_data_oriented(arg):
+        raise TypeError("A class cannot be both a Python dataclass and data-oriented.")
     # PERF: a frozen dataclass's repr never changes, so cache it on the instance (``dataclasses.fields()`` is slow, see
     # the _template_mapper_hotpath.py module docstring). ``_DC_REPR_NONE`` caches a failure verdict.
     #
@@ -264,6 +266,10 @@ def dataclass_to_repr(
         child_flat = _child_flat(parent_flat, field.name)
         if not _is_path_used(pruning_paths, child_flat):
             continue
+        # Compile unsupported nesting so the attribute check reports it instead of loading an old artifact.
+        if is_data_oriented(child_value):
+            return _FAIL_FASTCACHE
+
         _repr = stringify_obj_type(
             raise_on_templated_floats,
             path + (field.name,),
@@ -385,7 +391,7 @@ def stringify_obj_type(
         # A normal @qd.data_oriented bakes primitive members into the kernel (value in the cache key); one declared
         # with template_primitives=False lifts them to runtime args (type only - value must NOT enter the key, or it
         # would recompile on every value change, defeating the feature). Decide per object, since the flag is per class.
-        child_meta = _NON_TEMPLATE_CHILD_META if wants_runtime_primitives(obj) else ArgMetadata(Template, "")
+        child_meta = ArgMetadata(Template, "") if uses_template_primitives(obj) else _NON_TEMPLATE_CHILD_META
         for k, v in _dict.items():
             # ``QuadrantsCallable.__get__`` stashes bound callables on ``instance.__dict__``; they are not data.
             v_type = type(v)

@@ -81,7 +81,7 @@ from quadrants.types.primitive_types import (
 )
 
 if TYPE_CHECKING:
-    from .ast.ast_transformer_utils import ASTTransformerGlobalContext
+    from .ast.ast_transformer_utils import KernelCompileContext
 
 
 @quadrants_scope
@@ -229,7 +229,7 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
     # Ndarray from struct template field: resolve via the AnyArray cache populated by _predeclare_struct_ndarrays
     # during kernel compilation.
     if isinstance(value, Ndarray):
-        gc = getattr(get_runtime(), "_current_global_context", None)
+        gc = getattr(get_runtime(), "_current_kernel_compile_context", None)
         if gc is not None:
             arr = gc.ndarray_to_any_array.get(id(value))
             if arr is not None:
@@ -414,7 +414,7 @@ class PyQuadrants:
         self.inside_kernel: bool = False
         self.compilation_lock = threading.RLock()
         self._compiling_callable: KernelCxx | Kernel | Function | None = None
-        self._current_global_context: "ASTTransformerGlobalContext | None" = None
+        self._current_kernel_compile_context: "KernelCompileContext | None" = None
         self.global_vars = []
         self.grad_vars = []
         self.dual_vars = []
