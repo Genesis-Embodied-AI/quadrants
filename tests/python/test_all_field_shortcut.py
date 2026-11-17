@@ -1,17 +1,4 @@
-"""Tests for the _qd_all_field kernel launch shortcut.
-
-Verifies that the per-instance ``_qd_all_field`` cache (which lets kernel.py skip ``_recursive_set_args`` entirely for
-all-Field frozen dataclass structs) does not cause incorrect behavior in edge cases:
-
-- Struct mixing Field tensors with scalar (float/int) fields
-- Struct mixing Field tensors with Ndarray tensors
-- Struct with only Ndarray fields (must NOT be skipped)
-- Struct with nested frozen dataclass fields
-- Same struct instance passed to multiple kernels using different field subsets
-- Struct with qd.Tensor fields wrapping Fields
-- Struct with qd.Tensor fields wrapping Ndarrays
-- Struct surviving across qd.reset()
-"""
+"""Field-only and mixed dataclass arguments preserve their launch behavior."""
 
 import dataclasses
 
@@ -22,20 +9,9 @@ import quadrants as qd
 from tests.helpers import test_utils
 
 
-def _cached_all_field(obj, annotated):
-    """Read the ``_qd_all_field`` verdict for ``annotated`` (identity-guarded), or None if absent."""
-    entry = getattr(obj, "_qd_all_field", {}).get(id(annotated))
-    return entry[1] if entry is not None and entry[0] is annotated else None
-
-
-# ---------------------------------------------------------------------------
-# All-Field struct with qd.Tensor: shortcut should fire, kernel must work.
-# ---------------------------------------------------------------------------
-
-
 @test_utils.test(arch=qd.cpu)
 def test_all_field_struct_tensor_basic():
-    """A frozen struct where all fields are qd.Tensor wrapping Fields — the shortcut fires."""
+    """A frozen dataclass can contain only Tensor-wrapped fields."""
 
     @dataclasses.dataclass(frozen=True)
     class State:
@@ -56,7 +32,6 @@ def test_all_field_struct_tensor_basic():
     np.testing.assert_array_equal(x.to_numpy(), [10, 10, 10, 10])
     np.testing.assert_array_equal(y.to_numpy(), [20, 20, 20, 20])
 
-    # Second call must also work (shortcut cached)
     x.fill(0)
     y.fill(0)
     write(state)
@@ -64,14 +39,9 @@ def test_all_field_struct_tensor_basic():
     np.testing.assert_array_equal(y.to_numpy(), [20, 20, 20, 20])
 
 
-# ---------------------------------------------------------------------------
-# All-Ndarray struct: shortcut must NOT fire.
-# ---------------------------------------------------------------------------
-
-
 @test_utils.test(arch=qd.cpu)
 def test_ndarray_struct_not_skipped():
-    """A frozen struct with Ndarray fields must NOT have _qd_all_field=True."""
+    """Ndarray members still populate kernel parameters."""
 
     @dataclasses.dataclass(frozen=True)
     class State:
@@ -88,16 +58,8 @@ def test_ndarray_struct_not_skipped():
     fill(state, 42)
     np.testing.assert_array_equal(a.to_numpy(), [42, 42, 42, 42])
 
-    # Verify the flag is False (not set or explicitly False)
-    assert not _cached_all_field(state, State)
-
     fill(state, 99)
     np.testing.assert_array_equal(a.to_numpy(), [99, 99, 99, 99])
-
-
-# ---------------------------------------------------------------------------
-# Mixed struct: Field + scalar float — shortcut must NOT fire.
-# ---------------------------------------------------------------------------
 
 
 @test_utils.test(arch=qd.cpu)
@@ -122,15 +84,9 @@ def test_mixed_field_and_scalar_not_skipped():
     apply_scale(cfg, out)
     np.testing.assert_allclose(out.to_numpy(), [2.0, 4.0, 6.0, 8.0])
 
-    # Second call — must still work (not broken by cached flag)
     out2 = qd.ndarray(qd.f32, shape=(4,))
     apply_scale(cfg, out2)
     np.testing.assert_allclose(out2.to_numpy(), [2.0, 4.0, 6.0, 8.0])
-
-
-# ---------------------------------------------------------------------------
-# Mixed struct: Field + Ndarray — shortcut must NOT fire.
-# ---------------------------------------------------------------------------
 
 
 @test_utils.test(arch=qd.cpu)
@@ -156,14 +112,6 @@ def test_mixed_field_and_ndarray_not_skipped():
     state = State(field_data=qd.Tensor(f), ndarray_data=nd)
     combine(state, out)
     np.testing.assert_array_equal(out.to_numpy(), [11, 22, 33, 44])
-
-    # Verify flag is False
-    assert not _cached_all_field(state, State)
-
-
-# ---------------------------------------------------------------------------
-# Nested frozen dataclass: outer has only Fields, inner has Fields too.
-# ---------------------------------------------------------------------------
 
 
 @test_utils.test(arch=qd.cpu)
@@ -192,11 +140,6 @@ def test_nested_frozen_dc_all_field():
 
     write(outer)
     np.testing.assert_array_equal(x.to_numpy(), [77, 77, 77, 77])
-
-
-# ---------------------------------------------------------------------------
-# Same all-Field struct passed to two kernels using different field subsets.
-# ---------------------------------------------------------------------------
 
 
 @test_utils.test(arch=qd.cpu)
@@ -231,14 +174,9 @@ def test_all_field_struct_multiple_kernels():
     np.testing.assert_array_equal(y.to_numpy(), [99, 99, 99, 99])
 
 
-# ---------------------------------------------------------------------------
-# Struct with qd.Tensor wrapping Ndarray — must NOT be skipped.
-# ---------------------------------------------------------------------------
-
-
 @test_utils.test(arch=qd.cpu)
 def test_tensor_wrapping_ndarray_not_skipped():
-    """A frozen struct with qd.Tensor wrapping Ndarray must NOT have _qd_all_field=True."""
+    """Tensor-wrapped ndarray members still populate kernel parameters."""
 
     @dataclasses.dataclass(frozen=True)
     class State:
@@ -255,21 +193,14 @@ def test_tensor_wrapping_ndarray_not_skipped():
     fill(state)
     np.testing.assert_array_equal(nd.to_numpy(), [55, 55, 55, 55])
 
-    assert not _cached_all_field(state, State)
-
     # Second call
     nd.fill(0)
     fill(state)
     np.testing.assert_array_equal(nd.to_numpy(), [55, 55, 55, 55])
 
 
-# ---------------------------------------------------------------------------
-# All-Field struct survives qd.reset() — flag must remain correct.
-# ---------------------------------------------------------------------------
-
-
 @test_utils.test(arch=qd.cpu)
-def test_all_field_flag_survives_reset():
+def test_field_only_dataclass_survives_reset():
     """After qd.reset() + qd.init(), a new all-Field struct must work correctly."""
 
     @dataclasses.dataclass(frozen=True)
@@ -293,11 +224,6 @@ def test_all_field_flag_survives_reset():
     s2 = State(x=qd.Tensor(x2))
     fill(s2)
     np.testing.assert_array_equal(x2.to_numpy(), [11, 11, 11, 11])
-
-
-# ---------------------------------------------------------------------------
-# Struct with int field — must NOT be skipped.
-# ---------------------------------------------------------------------------
 
 
 @test_utils.test(arch=qd.cpu)
@@ -328,15 +254,9 @@ def test_struct_with_int_field_not_skipped():
     np.testing.assert_array_equal(out2.to_numpy(), [2, 4, 6, 8])
 
 
-# ---------------------------------------------------------------------------
-# All-Field struct passed to a parameter with wrong annotation — must error, not silently skip.
-# ---------------------------------------------------------------------------
-
-
 @test_utils.test(arch=qd.cpu)
 def test_all_field_struct_wrong_annotation_raises():
-    """If an all-Field struct (with _qd_all_field=True cached) is passed to a kernel parameter annotated as a
-    different type (e.g. float), the kernel must raise an error — not silently skip due to the shortcut."""
+    """A field-only dataclass cannot be passed to a scalar parameter."""
 
     @dataclasses.dataclass(frozen=True)
     class State:
@@ -354,9 +274,7 @@ def test_all_field_struct_wrong_annotation_raises():
     x = qd.field(qd.i32, shape=(4,))
     state = State(x=qd.Tensor(x))
 
-    # First call caches _qd_all_field[State]=True
     correct_kernel(state)
-    assert _cached_all_field(state, State) is True
 
     # Passing the struct to a kernel expecting a float must raise, not silently skip
     import pytest
@@ -387,7 +305,6 @@ def test_all_field_struct_passed_as_ndarray_param_raises():
     state = State(x=qd.Tensor(x))
 
     correct_kernel(state)
-    assert _cached_all_field(state, State) is True
 
     import pytest
 

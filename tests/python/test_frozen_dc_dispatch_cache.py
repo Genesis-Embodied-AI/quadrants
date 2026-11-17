@@ -1,27 +1,14 @@
-"""Tests for frozen-dataclass dispatch caching.
-
-Verifies that the per-launch field plan cache (``_frozen_dc_plans``) and the per-instance unwrapped-value cache
-(``_qd_dc_unwrapped``) in ``_func_base._recursive_set_args`` work correctly for frozen dataclasses with ndarray
-fields. The caching must be transparent: calling a kernel multiple times with the same frozen struct instance must
-produce identical results, and the cached values must not interfere when the same struct type is used with different
-kernel instances or when a new struct instance is created.
-"""
+"""Frozen dataclass arguments preserve values across repeated launches and resets."""
 
 import dataclasses
 
 import numpy as np
 
 import quadrants as qd
-from quadrants.lang._func_base import _frozen_dc_plans, _get_frozen_dc_plan
 
 from tests.helpers import test_utils
 
 _M, _N = 3, 4
-
-
-# ---------------------------------------------------------------------------
-# Basic: frozen dataclass with ndarray fields, called multiple times.
-# ---------------------------------------------------------------------------
 
 
 @test_utils.test(arch=qd.cpu)
@@ -49,11 +36,6 @@ def test_frozen_dc_cache_basic_ndarray():
 
     fill(state)
     np.testing.assert_array_equal(a.to_numpy(), expected)
-
-
-# ---------------------------------------------------------------------------
-# Multi-field: struct with many ndarray fields (mirrors Genesis pattern).
-# ---------------------------------------------------------------------------
 
 
 @test_utils.test(arch=qd.cpu)
@@ -89,11 +71,6 @@ def test_frozen_dc_cache_multi_field():
     np.testing.assert_allclose(vel.to_numpy(), [0.2, 0.4, 0.6, 0.8], atol=1e-6)
 
 
-# ---------------------------------------------------------------------------
-# Separate struct instances: new instance must NOT use stale cached values.
-# ---------------------------------------------------------------------------
-
-
 @test_utils.test(arch=qd.cpu)
 def test_frozen_dc_cache_separate_instances():
     """Two different instances of the same frozen dataclass type must produce independent results."""
@@ -120,14 +97,9 @@ def test_frozen_dc_cache_separate_instances():
     np.testing.assert_array_equal(a2.to_numpy(), [20, 20, 20, 20])
 
 
-# ---------------------------------------------------------------------------
-# Multiple kernels sharing the same struct: field plan cache keyed correctly.
-# ---------------------------------------------------------------------------
-
-
 @test_utils.test(arch=qd.cpu)
 def test_frozen_dc_cache_multiple_kernels():
-    """Two kernels using different subsets of a frozen struct's fields must not interfere via the plan cache."""
+    """Two kernels can use different subsets of the same frozen dataclass."""
 
     @dataclasses.dataclass(frozen=True)
     class State:
@@ -155,43 +127,6 @@ def test_frozen_dc_cache_multiple_kernels():
     write_y(state)
     np.testing.assert_array_equal(x.to_numpy(), [42, 42, 42, 42])
     np.testing.assert_array_equal(y.to_numpy(), [99, 99, 99, 99])
-
-
-# ---------------------------------------------------------------------------
-# Unwrapped-value cache: verify _qd_dc_unwrapped is populated on frozen instances.
-# ---------------------------------------------------------------------------
-
-
-@test_utils.test(arch=qd.cpu)
-def test_frozen_dc_unwrapped_cache_populated():
-    """After the first kernel call, the frozen instance should have ``_qd_dc_unwrapped`` cached."""
-
-    @dataclasses.dataclass(frozen=True)
-    class State:
-        a: qd.types.NDArray[qd.i32, 1]
-
-    @qd.kernel
-    def noop(state: State):
-        for i in range(4):
-            state.a[i] = state.a[i]
-
-    a = qd.ndarray(qd.i32, shape=(4,))
-    state = State(a=a)
-
-    assert not hasattr(state, "_qd_dc_unwrapped")
-    noop(state)
-    assert hasattr(state, "_qd_dc_unwrapped")
-    cache = state._qd_dc_unwrapped
-    assert id(State) in cache
-    retained_ty, cached = cache[id(State)]
-    assert retained_ty is State
-    assert "a" in cached
-    assert cached["a"] is a
-
-
-# ---------------------------------------------------------------------------
-# Template-key cache: verify _qd_spec_key is cached per annotated type (covariant reuse).
-# ---------------------------------------------------------------------------
 
 
 @test_utils.test(arch=qd.cpu)
@@ -233,14 +168,9 @@ def test_frozen_dc_template_key_cache_populated():
     assert sub._qd_spec_key[id(Base1)][1] != sub._qd_spec_key[id(Base2)][1]
 
 
-# ---------------------------------------------------------------------------
-# all-Field cache: the _recursive_set_args shortcut must be keyed per annotated type.
-# ---------------------------------------------------------------------------
-
-
 @test_utils.test(arch=qd.cpu)
-def test_frozen_dc_all_field_cache_per_annotated_type():
-    """We should have different all field caches depending on the ways that a subclass is used"""
+def test_frozen_dc_field_only_ancestor_views():
+    """Each ancestor annotation selects its own field members."""
 
     @dataclasses.dataclass(frozen=True)
     class Base1:
@@ -269,79 +199,15 @@ def test_frozen_dc_all_field_cache_per_annotated_type():
     sub = Sub(a=a, b=b)
 
     use1(sub)
-    assert sub._qd_all_field == {id(Base1): (Base1, True)}
     use2(sub)
-    # Second annotation gets its own entry rather than reusing Base1's shortcut verdict.
-    assert sub._qd_all_field == {id(Base1): (Base1, True), id(Base2): (Base2, True)}
 
     np.testing.assert_array_equal(a.to_numpy(), [1, 1, 1, 1])
     np.testing.assert_array_equal(b.to_numpy(), [2, 2, 2, 2])
 
 
-# ---------------------------------------------------------------------------
-# Identity keying: the per-annotation caches must not conflate two metaclass-equal ancestors.
-# ---------------------------------------------------------------------------
-
-
-@test_utils.test(arch=qd.cpu)
-def test_frozen_dc_caches_identity_keyed_against_metaclass_eq():
-    """Two distinct ancestor dataclasses whose metaclass makes them compare *and* hash equal must not collide in the
-    per-annotation caches: a class-keyed dict would serve one ancestor's cached view for the other, but ``id()`` keying
-    with an ``is`` guard keeps them separate. Exercised on ``_get_frozen_dc_unwrapped`` (``_qd_dc_unwrapped`` and
-    ``_qd_all_field``); ``_qd_spec_key`` uses identical keying."""
-    from quadrants.lang._func_base import _get_frozen_dc_unwrapped
-
-    class EqMeta(type):
-        # Hostile spoof: make distinct classes compare and hash equal, which a class-keyed dict would conflate.
-        def __eq__(cls, other):
-            return isinstance(other, EqMeta)
-
-        def __hash__(cls):
-            return 0
-
-    @dataclasses.dataclass(frozen=True)
-    class Base1(metaclass=EqMeta):
-        x1: qd.types.NDArray[qd.i32, 1]
-
-    @dataclasses.dataclass(frozen=True)
-    class Base2(metaclass=EqMeta):
-        x2: qd.types.NDArray[qd.i32, 1]
-
-    assert Base1 == Base2 and hash(Base1) == hash(Base2) and Base1 is not Base2  # the spoof is in effect
-
-    @dataclasses.dataclass(frozen=True)
-    class Sub(Base1, Base2):
-        pass
-
-    sub = Sub(x1=qd.ndarray(qd.i32, shape=(2,)), x2=qd.ndarray(qd.i32, shape=(3,)))
-    b1_fields = getattr(Base1, "__dataclass_fields__")
-    b2_fields = getattr(Base2, "__dataclass_fields__")
-
-    u1 = _get_frozen_dc_unwrapped(sub, Base1, b1_fields)
-    u2 = _get_frozen_dc_unwrapped(sub, Base2, b2_fields)
-    assert set(u1) == {"x1"} and set(u2) == {"x2"}  # each ancestor view sees only its own field
-
-    unwrapped_cache = sub._qd_dc_unwrapped
-    all_field_cache = sub._qd_all_field
-    # Separate identity-keyed entries despite ``Base1 == Base2``; a class-keyed dict would hold a single merged entry.
-    assert id(Base1) in unwrapped_cache and id(Base2) in unwrapped_cache
-    assert unwrapped_cache[id(Base1)][0] is Base1 and unwrapped_cache[id(Base2)][0] is Base2
-    assert id(Base1) in all_field_cache and id(Base2) in all_field_cache
-    assert all_field_cache[id(Base1)][0] is Base1 and all_field_cache[id(Base2)][0] is Base2
-
-    # The read path honours the identity guard: the Base2 lookup returns Base2's view, not Base1's cached one.
-    assert _get_frozen_dc_unwrapped(sub, Base2, b2_fields) is u2
-    assert set(_get_frozen_dc_unwrapped(sub, Base1, b1_fields)) == {"x1"}
-
-
-# ---------------------------------------------------------------------------
-# Many fields: exercise with a larger struct to stress the plan cache.
-# ---------------------------------------------------------------------------
-
-
 @test_utils.test(arch=qd.cpu)
 def test_frozen_dc_cache_many_fields():
-    """A struct with 10 fields: only the 2 used by the kernel should be in the plan, all 10 in the unwrap cache."""
+    """Only the two used members of a ten-field dataclass affect the result."""
 
     @dataclasses.dataclass(frozen=True)
     class BigState:
@@ -376,83 +242,9 @@ def test_frozen_dc_cache_many_fields():
     np.testing.assert_allclose(arrays[9].to_numpy(), [2.0, 2.0, 2.0, 2.0])
 
 
-# -----------------------------------------------------------------------------------------------------------------------
-# id() reuse guard: _get_frozen_dc_plan must not return a stale plan when a new used_params set is allocated at the same
-# address as a garbage-collected one.
-# -----------------------------------------------------------------------------------------------------------------------
-
-
-@test_utils.test(arch=qd.cpu)
-def test_frozen_dc_plan_id_reuse_guard():
-    """Simulate id() reuse: after the original used_params set is deleted, a new set at the same address must not
-    receive the stale cached plan.  CPython 3.13+ (mimalloc) makes this scenario likely in practice.
-    """
-    from quadrants.lang._name_utils import create_flat_name
-
-    @dataclasses.dataclass(frozen=True)
-    class S:
-        x: qd.types.NDArray[qd.i32, 1]
-
-    fields_dict = {f.name: f for f in dataclasses.fields(S)}
-    flat_x = create_flat_name("S", "x")
-
-    params_a = {flat_x, "__qd_S__qd_y"}
-    plan_a = _get_frozen_dc_plan(params_a, S, "S", fields_dict)
-    assert len(plan_a) == 1
-    assert plan_a[0][0] == "x"
-    assert plan_a[0][1] == flat_x
-
-    saved_id = id(params_a)
-    del params_a
-
-    params_b = {"__qd_S__qd_z"}
-    if id(params_b) == saved_id:
-        plan_b = _get_frozen_dc_plan(params_b, S, "S", fields_dict)
-        assert plan_b == (), (
-            f"id() reuse guard failed: got plan {plan_b!r} from a stale cache entry "
-            f"instead of empty tuple for params_b={params_b!r}"
-        )
-
-
-# -----------------------------------------------------------------------------------------------------------------------
-# qd.reset() must clear _frozen_dc_plans so stale entries from a previous qd.init() cycle don't leak into a fresh
-# session.
-# -----------------------------------------------------------------------------------------------------------------------
-
-
-@test_utils.test(arch=qd.cpu)
-def test_frozen_dc_plans_cleared_on_reset():
-    """After qd.reset(), _frozen_dc_plans must be empty."""
-
-    @dataclasses.dataclass(frozen=True)
-    class State:
-        a: qd.types.NDArray[qd.i32, 1]
-
-    @qd.kernel
-    def fill(state: State):
-        for i in range(4):
-            state.a[i] = 7
-
-    a = qd.ndarray(qd.i32, shape=(4,))
-    fill(State(a=a))
-    np.testing.assert_array_equal(a.to_numpy(), [7, 7, 7, 7])
-
-    assert len(_frozen_dc_plans) > 0, "Plan cache should be populated after kernel call"
-
-    qd.reset()
-    assert len(_frozen_dc_plans) == 0, "qd.reset() must clear _frozen_dc_plans"
-
-
-# ---------------------------------------------------------------------------
-# End-to-end: kernel correctness survives qd.reset() with frozen dataclass args.
-# ---------------------------------------------------------------------------
-
-
 @test_utils.test(arch=qd.cpu)
 def test_frozen_dc_kernel_correct_after_reset():
-    """A kernel using a frozen dataclass must produce correct results after qd.reset() re-initializes the runtime,
-    even though the plan cache was cleared.
-    """
+    """Frozen dataclass arguments still work after resetting and reinitializing the runtime."""
 
     @dataclasses.dataclass(frozen=True)
     class State:
@@ -473,11 +265,6 @@ def test_frozen_dc_kernel_correct_after_reset():
     a2 = qd.ndarray(qd.i32, shape=(4,))
     fill(State(a=a2), 20)
     np.testing.assert_array_equal(a2.to_numpy(), [20, 20, 20, 20])
-
-
-# ---------------------------------------------------------------------------
-# Regression: qd.grouped() on flattened struct ndarray field after field→ndarray switch.
-# ---------------------------------------------------------------------------
 
 
 @test_utils.test(arch=qd.cpu)

@@ -91,7 +91,7 @@ class LaunchContextBufferCache:
     # buffer is allowing skipping recursive processing of all the input arguments one-by-one, which is adding a
     # significant overhead, without changing anything in regards of the function calls to the launch context that must
     # be made for a given kernel.
-    # You can understand this as resolving the static part of the entire control flow of '_recursive_set_args' for a
+    # You can understand this as resolving the static part of the entire control flow of '_set_parameter_value' for a
     # given set of arguments, which is (mostly surely uniquely) characterized by its hash, gathering all the
     # instructions that cannot be evaluated statically and packing them in a buffer without evaluating them at this
     # point. This buffer is then cached once and for all and evaluated every time the exact same set of input argument

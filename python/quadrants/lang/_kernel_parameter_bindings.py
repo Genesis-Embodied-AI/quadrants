@@ -110,22 +110,24 @@ class KernelParameterLaunchBindings:
         for source, annotation in self.dataclass_guards:
             py_obj = _read_source(args, source)
             if type(py_obj) is not annotation and not isinstance(py_obj, annotation):
-                raise QuadrantsRuntimeTypeError("needed", annotation, "cannot be assigned the provided", type(py_obj))
+                raise QuadrantsRuntimeTypeError(
+                    "needed",
+                    annotation,
+                    "cannot be assigned the provided",
+                    type(py_obj),
+                )
 
         cacheable = self.cacheable
         for record in self.records_by_policy.get(ValuePolicy.TYPED, ()):
             py_obj = _read_source(args, record.source)
             # Native slots are recorded during compilation, rather than recomputed by a dataclass walk at launch.
-            _, value_cacheable = FuncBase._recursive_set_args(
-                set(),
-                record.name,
+            value_cacheable = FuncBase._set_parameter_value(
                 launch_ctx,
                 launch_ctx_buffer,
                 record.annotation,
                 record.annotation if record.source.attributes else type(py_obj),
                 py_obj,
                 record.slot,
-                0,
                 callbacks,
             )
             cacheable &= value_cacheable if record.cacheable is None else record.cacheable
@@ -200,15 +202,28 @@ class KernelParameterBindings:
 
             cooked = cook_dtype(dtype)
             scalar_kind: ScalarKind = "f" if _qd_core.is_real(cooked) else ("i" if is_signed(cooked) else "u")
-            policy = {"f": ValuePolicy.MEMBER_FLOAT, "i": ValuePolicy.MEMBER_INT, "u": ValuePolicy.MEMBER_UINT}[
-                scalar_kind
-            ]
-            self.arg_info_by_member[member] = (name, source.argument_index, source.attributes, scalar_kind)
+            policy = {
+                "f": ValuePolicy.MEMBER_FLOAT,
+                "i": ValuePolicy.MEMBER_INT,
+                "u": ValuePolicy.MEMBER_UINT,
+            }[scalar_kind]
+            self.arg_info_by_member[member] = (
+                name,
+                source.argument_index,
+                source.attributes,
+                scalar_kind,
+            )
             if not self.pruning.enforcing or not self.pruning.is_used(self.pruning.KERNEL_FUNC_ID, name):
                 return None
 
         arg_id, value = create_kernel_parameter(
-            kind, dtype, name, ndim=ndim, needs_grad=needs_grad, boundary=boundary, layout=layout
+            kind,
+            dtype,
+            name,
+            ndim=ndim,
+            needs_grad=needs_grad,
+            boundary=boundary,
+            layout=layout,
         )
         if member is not None:
             self.arg_expr_by_member[member] = value
