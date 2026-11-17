@@ -473,7 +473,7 @@ def hash_args(
             parent_flat=top_flat,
         )
         g_repr_time += time.time() - start
-        if _hash is _FAIL_FASTCACHE:
+        if isinstance(_hash, _FailFastcache):
             g_num_ignored_calls += 1
             return FastcacheSkip.WARN if _should_warn else FastcacheSkip.FIELD_VIA_TENSOR
         hash_l.append(_hash)
