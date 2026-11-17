@@ -6,7 +6,6 @@ import pathlib
 import time
 import warnings
 from collections import defaultdict
-from dataclasses import _FIELDS  # type: ignore[reportAttributeAccessIssue]
 
 # Must import 'partial' directly instead of the entire module to avoid attribute lookup overhead.
 from functools import partial
@@ -61,7 +60,6 @@ from quadrants.lang.impl import Program
 from quadrants.lang.shell import _shell_pop_print
 from quadrants.lang.util import cook_dtype, is_data_oriented
 from quadrants.types import (
-    ndarray_type,
     primitive_types,
     template,
 )
@@ -587,8 +585,8 @@ class Kernel(FuncBase):
                 if _pass == 1:
                     assert key not in self.materialized_kernels
                     self.materialized_kernels[key] = quadrants_kernel
-                    self._struct_ndarray_launch_info_by_key[key] = getattr(
-                        ctx.kernel_compile_context, "struct_ndarray_launch_info", []
+                    self._struct_ndarray_launch_info_by_key[key] = (
+                        ctx.kernel_compile_context.parameter_bindings.launch_bindings.ndarray_launch_infos
                     )
                     # Both folds bring data_oriented member accesses into the kernel's used-flat-names set, which
                     # dataclass-arg expansion is the only other contributor to. Without them the narrow args hash walks
@@ -596,14 +594,9 @@ class Kernel(FuncBase):
                     # entry.
                     pruning.fold_struct_nd_paths(self._struct_ndarray_launch_info_by_key.get(key, []), self.arg_metas)
                     pruning.fold_kernel_arg_chain_paths()
-                    # Only record an entry when this key actually lifts primitives, so the dict stays empty for the
-                    # overwhelming majority of kernels (none use template_primitives=False). launch_kernel can then
-                    # skip the whole primitive-binding path with a single empty-dict check instead of paying a
-                    # per-launch ``.get(key)`` (tuple hash) on every cache-missing launch -- which is the hot path for
-                    # CPU / unbatched genesis steps that launch many tiny kernels.
                     launch_bindings = ctx.kernel_compile_context.parameter_bindings.launch_bindings
-                    if launch_bindings.launch_infos:
-                        self._parameter_launch_bindings_by_compiled_kernel_key[key] = launch_bindings
+                    launch_bindings.used_dataclass_members = self.used_py_dataclass_parameters_by_key_enforcing[key]
+                    self._parameter_launch_bindings_by_compiled_kernel_key[key] = launch_bindings
                 else:
                     # Propagate used-sets across call edges to a fixpoint (order-independent) before
                     # collapsing flat names to their used prefixes below.
@@ -704,69 +697,8 @@ class Kernel(FuncBase):
             )
         if not self.launch_context_buffer_cache.populate_launch_ctx_from_cache(args_hash, launch_ctx):
             launch_ctx_buffer: dict[KernelBatchedArgType, list[tuple]] = defaultdict(list)
-            actual_argument_slot = 0
-            is_launch_ctx_cacheable = True
-            template_num = 0
-            i_out = 0
-            # `checkpoint_yield_on_cpp_arg_ids` is populated at AST-build time (see
-            # `CheckpointTransformer.build_checkpoint_with`); no per-arg name match is needed here. The launch path
-            # below forwards the table to the launch context with a single `forward_yield_on_table_to_ctx` call.
-            for i_in, val in enumerate(args):
-                needed_ = self.arg_metas[i_in].annotation
-                if needed_ is template or type(needed_) is template:
-                    template_num += 1
-                    i_out += 1
-                    continue
-                if (
-                    val is None
-                    and self.arg_metas[i_in].optional
-                    and type(self.arg_metas[i_in].annotation) is ndarray_type.NdarrayType
-                ):
-                    # Optional ndarray + None is specialized away at compile time, so it consumes no runtime arg.
-                    continue
-                # An all-Field dataclass unwraps to zero launch-context slots, so skip _recursive_set_args(). That also
-                # skips its provided-is-needed type check, so only shortcut when _qd_all_field is cached True for THIS
-                # exact annotation (proof the check already ran and passed for it) - hence the per-annotation id() key.
-                _all_field_cache = getattr(val, "_qd_all_field", None)
-                if _all_field_cache is not None and getattr(needed_, _FIELDS, None) is not None:
-                    _af_hit = _all_field_cache.get(id(needed_))
-                    if _af_hit is not None and _af_hit[0] is needed_ and _af_hit[1]:
-                        continue
-                # `graph_do_while_levels[*].cond_cpp_arg_id` is also populated at AST-build time (see
-                # `ASTTransformer.build_While` -> `_resolve_ndarray_kernel_arg_id`), so the launch path forwards it
-                # directly below without per-arg name matching here. This uniformly handles bare parameter conditions
-                # (`qd.graph_do_while(counter)`) and `@qd.data_oriented` member conditions
-                # (`qd.graph_do_while(self.counter)`).
-                num_args_, is_launch_ctx_cacheable_ = self._recursive_set_args(
-                    self.used_py_dataclass_parameters_by_key_enforcing[key],
-                    self.arg_metas[i_in].name,
-                    launch_ctx,
-                    launch_ctx_buffer,
-                    needed_,
-                    type(val),
-                    val,
-                    i_out - template_num,
-                    actual_argument_slot,
-                    callbacks,
-                )
-                i_out += num_args_
-                is_launch_ctx_cacheable &= is_launch_ctx_cacheable_
-
-            struct_nd_info = self._struct_ndarray_launch_info_by_key.get(key)
-            if struct_nd_info:
-                self._set_struct_ndarray_args(struct_nd_info, args, launch_ctx_buffer, is_launch_ctx_cacheable)
-
-            # Empty for every kernel that doesn't use template_primitives=False (the common case), so this guard
-            # short-circuits without hashing ``key`` -- keeping the per-launch hot path free of added overhead.
-            if self._parameter_launch_bindings_by_compiled_kernel_key:
-                launch_bindings = self._parameter_launch_bindings_by_compiled_kernel_key.get(key)
-                if launch_bindings is not None:
-                    launch_bindings.populate_launch_buffer(args, launch_ctx_buffer)
-                    # Lifted primitives are read fresh from the live object on every launch (that is the whole point),
-                    # so the prepared launch context must not be cached under ``args_hash`` (the hash keys on object
-                    # id, not primitive value, so a cached context would serve stale values when the user mutates the
-                    # member). Marking it non-cacheable keeps this kernel correct at the cost of rebuilding each launch.
-                    is_launch_ctx_cacheable = False
+            bindings = self._parameter_launch_bindings_by_compiled_kernel_key[key]
+            is_launch_ctx_cacheable = bindings.populate_launch_buffer(args, launch_ctx, launch_ctx_buffer, callbacks)
 
             kernel_args_count_by_type = defaultdict(int)
             kernel_args_count_by_type.update(
@@ -891,30 +823,6 @@ class Kernel(FuncBase):
         if type(obj) in _TENSOR_WRAPPER_TYPES:
             obj = obj._unwrap()
         return obj
-
-    @staticmethod
-    def _set_struct_ndarray_args(
-        launch_info: list,
-        args: tuple,
-        launch_ctx_buffer: dict,
-        is_launch_ctx_cacheable: bool,
-    ) -> None:
-        """Set ndarray kernel args that were pre-declared from struct template fields during compilation."""
-        from quadrants.lang._ndarray import Ndarray  # pylint: disable=C0415
-
-        for arg_id, template_arg_idx, attr_chain in launch_info:
-            obj = args[template_arg_idx]
-            for attr_name in attr_chain:
-                obj = getattr(obj, attr_name)
-            if type(obj) in _TENSOR_WRAPPER_TYPES:
-                obj = obj._unwrap()
-            assert isinstance(obj, Ndarray), f"Expected Ndarray at {attr_chain}, got {type(obj)}"
-            v_primal = obj.arr
-            v_grad = obj.grad.arr if obj.grad else None
-            if v_grad is None:
-                launch_ctx_buffer[_QD_ARRAY].append((arg_id, v_primal))
-            else:
-                launch_ctx_buffer[_QD_ARRAY_WITH_GRAD].append((arg_id, v_primal, v_grad))
 
     def ensure_compiled(self, *py_args: tuple[Any, ...]) -> tuple[Callable, int, AutodiffMode]:
         try:

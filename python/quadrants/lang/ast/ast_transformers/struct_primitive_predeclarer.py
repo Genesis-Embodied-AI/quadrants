@@ -70,7 +70,13 @@ def predeclare_struct_primitives(ctx: FuncCompileContext) -> None:
             attr_type = type(attr_val)
             if attr_type is bool or attr_type is int or attr_type is float:
                 dtype = runtime.default_fp if attr_type is float else runtime.default_ip
-                bindings.add_kernel_parameter(obj, attr_name, arg_idx, (*path, attr_name), dtype)
+                bindings.add_kernel_parameter(
+                    "scalar",
+                    dtype,
+                    f"__qd_doprim_{arg_idx}__{'__'.join((*path, attr_name))}",
+                    source=(arg_idx, (*path, attr_name)),
+                    member=(id(obj), attr_name),
+                )
             elif is_dataclass_instance(attr_val) or is_data_oriented(attr_val):
                 _walk(attr_val, arg_idx, (*path, attr_name), seen)
 

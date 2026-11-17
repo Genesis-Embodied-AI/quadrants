@@ -63,6 +63,7 @@ class FunctionDefTransformer:
         this_arg_features: tuple[tuple[Any, ...], ...] | None,
         prefix_name: str,
     ) -> tuple[bool, Any]:
+        bindings = ctx.kernel_compile_context.parameter_bindings
         full_name = prefix_name + "_" + name
         if not isinstance(annotation, primitive_types.RefType):
             ctx.kernel_args.append(name)
@@ -80,16 +81,9 @@ class FunctionDefTransformer:
             marker = this_arg_features[0]
             if marker == _TENSOR_T_NDARRAY_MARKER:
                 raw_element_type, ndim, needs_grad, boundary, layout = this_arg_features[1:]
-                return False, (
-                    kernel_arguments.decl_ndarray_arg,
-                    (
-                        to_quadrants_type(raw_element_type),
-                        ndim,
-                        full_name,
-                        needs_grad,
-                        BoundaryMode(boundary),
-                        layout,
-                    ),
+                return True, bindings.add_kernel_parameter(
+                    "ndarray", to_quadrants_type(raw_element_type), full_name,
+                    ndim=ndim, needs_grad=needs_grad, boundary=BoundaryMode(boundary), layout=layout,
                 )
             if marker == _TENSOR_T_FIELD_MARKER:
                 # Field branch: behave exactly like a template arg.
@@ -104,25 +98,16 @@ class FunctionDefTransformer:
             assert ctx.global_vars is not None
             return True, ctx.global_vars.get(name)
         if isinstance(annotation, annotations.sparse_matrix_builder):
-            return False, (
-                kernel_arguments.decl_sparse_matrix,
-                (
-                    to_quadrants_type(this_arg_features),
-                    full_name,
-                ),
-            )
+            return True, bindings.add_kernel_parameter("sparse", to_quadrants_type(this_arg_features), full_name)
         if isinstance(annotation, buffer_view_type.BufferViewType):
             assert this_arg_features is not None
             raw_element_type, ndim, needs_grad, boundary = this_arg_features
-            arr = kernel_arguments.decl_ndarray_arg(
-                to_quadrants_type(raw_element_type),
-                ndim,
-                full_name + "_buf",
-                needs_grad,
-                BoundaryMode(boundary),
+            arr = bindings.add_kernel_parameter(
+                "ndarray", to_quadrants_type(raw_element_type), full_name + "_buf",
+                ndim=ndim, needs_grad=needs_grad, boundary=BoundaryMode(boundary),
             )
-            offset = kernel_arguments.decl_scalar_arg(primitive_types.i32, full_name + "_offset")
-            size = kernel_arguments.decl_scalar_arg(primitive_types.i32, full_name + "_size")
+            offset = bindings.add_kernel_parameter("scalar", primitive_types.i32, full_name + "_offset")
+            size = bindings.add_kernel_parameter("scalar", primitive_types.i32, full_name + "_size")
             return True, BufferView(arr, offset, size)
         if isinstance(annotation, ndarray_type.NdarrayType):
             assert this_arg_features is not None
@@ -132,22 +117,15 @@ class FunctionDefTransformer:
             boundary: int
             # Tensors layout is the trailing slot; None for legacy / identity.
             raw_element_type, ndim, needs_grad, boundary, layout = this_arg_features
-            return False, (
-                kernel_arguments.decl_ndarray_arg,
-                (
-                    to_quadrants_type(raw_element_type),
-                    ndim,
-                    full_name,
-                    needs_grad,
-                    BoundaryMode(boundary),
-                    layout,
-                ),
+            return True, bindings.add_kernel_parameter(
+                "ndarray", to_quadrants_type(raw_element_type), full_name,
+                ndim=ndim, needs_grad=needs_grad, boundary=BoundaryMode(boundary), layout=layout,
             )
         if isinstance(annotation, MatrixType):
-            return True, kernel_arguments.decl_matrix_arg(annotation, name)
+            return True, bindings.add_kernel_parameter("matrix", annotation, name)
         if isinstance(annotation, StructType):
-            return True, kernel_arguments.decl_struct_arg(annotation, name)
-        return True, kernel_arguments.decl_scalar_arg(annotation, name)
+            return True, bindings.add_kernel_parameter("struct", annotation, name)
+        return True, bindings.add_kernel_parameter("scalar", annotation, name)
 
     @staticmethod
     def _transform_kernel_arg(
@@ -232,6 +210,7 @@ class FunctionDefTransformer:
         assert compiling_callable is not None
         compiling_callable.finalize_rets()
 
+        ctx.kernel_compile_context.parameter_bindings.launch_bindings.arg_metas = ctx.func.arg_metas
         for i in range(len(args.args)):
             arg_meta = ctx.func.arg_metas[i]
             FunctionDefTransformer._transform_kernel_arg(
@@ -255,8 +234,7 @@ class FunctionDefTransformer:
         cached on the kernel compilation context for later lookup by ``build_Attribute``.
 
         Also stores ``(arg_id, template_arg_idx, attr_chain)`` tuples in
-        ``ctx.kernel_compile_context.struct_ndarray_launch_info`` so the launch path can populate the corresponding slots
-        in the launch context.
+        ``parameter_bindings.launch_bindings.ndarray_launch_infos`` so launch code can populate those parameters.
 
         Pruning: the enforcing pass registers only the ndarrays the first pass saw accessed
         (``pruning.used_struct_ndarray_ids``), dropping the rest from the kernel's parameter list. The first pass must
@@ -266,7 +244,6 @@ class FunctionDefTransformer:
         from quadrants.lang.util import cook_dtype  # pylint: disable=C0415
 
         cache = ctx.kernel_compile_context.ndarray_to_any_array
-        launch_info = ctx.kernel_compile_context.struct_ndarray_launch_info
         pruning = ctx.kernel_compile_context.pruning
         used_ids = getattr(pruning, "used_struct_ndarray_ids", None)
         prune = pruning.enforcing and used_ids is not None and getattr(pruning, "pass_0_ran", False)
@@ -325,25 +302,15 @@ class FunctionDefTransformer:
                     flat = create_flat_name(flat, attr)
                 if flat not in kernel_used_flat_names:
                     return
-            from quadrants._lib import core as _qd_core  # pylint: disable=C0415
-
-            element_type = cook_dtype(nd.element_type)
-            ndim = len(nd._physical_shape)
-            needs_grad = nd.grad is not None
-            layout = getattr(nd, "_qd_layout", None)
-            name = f"__qd_struct_nd_{key}"
-            arg_id_vec = impl.get_runtime().compiling_callable.insert_ndarray_param(
-                element_type, ndim, name, needs_grad
-            )
-            arr = any_array.AnyArray(
-                _qd_core.make_external_tensor_expr(element_type, ndim, arg_id_vec, needs_grad, BoundaryMode.UNSAFE),
-                _qd_layout=layout,
+            arr = ctx.kernel_compile_context.parameter_bindings.add_kernel_parameter(
+                "ndarray", cook_dtype(nd.element_type), f"__qd_struct_nd_{key}",
+                source=(arg_idx, attr_chain), ndim=len(nd._physical_shape), needs_grad=nd.grad is not None,
+                boundary=BoundaryMode.UNSAFE, layout=getattr(nd, "_qd_layout", None),
             )
             # Lets ``_promote_ndarray_if_declared`` still mark the ndarray used when an access reaches it through this
             # proxy rather than the ndarray itself, as happens inside an inlined ``@qd.func`` body.
             arr._qd_source_ndarray_id = key
             cache[key] = arr
-            launch_info.append((arg_id_vec[0], arg_idx, attr_chain))
 
         assert ctx.py_args is not None
         for i, arg_meta in enumerate(ctx.func.arg_metas):

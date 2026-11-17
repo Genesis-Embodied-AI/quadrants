@@ -187,7 +187,6 @@ class KernelCompileContext:
         self.currently_compiling_materialize_key = currently_compiling_materialize_key
         self.pass_idx: int = pass_idx
         self.ndarray_to_any_array: dict[int, Any] = {}
-        self.struct_ndarray_launch_info: list[tuple] = []
         self.parameter_bindings = KernelParameterBindings(pruning)
         # Caller-side `loop_depth` snapshot for the in-flight `@qd.func` invocation. Each func compile creates a fresh
         # `FuncCompileContext` with `loop_depth = 0`, so without this snapshot a non-static `range(...)` loop
