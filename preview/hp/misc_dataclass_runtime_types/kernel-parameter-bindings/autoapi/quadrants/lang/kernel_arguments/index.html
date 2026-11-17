@@ -383,28 +383,13 @@
 <h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.kernel_arguments.decl_scalar_arg" title="quadrants.lang.kernel_arguments.decl_scalar_arg"><code class="xref py py-obj docutils literal notranslate"><span class="pre">decl_scalar_arg</span></code></a>(dtype, name)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.kernel_arguments.get_type_for_kernel_args" title="quadrants.lang.kernel_arguments.get_type_for_kernel_args"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_type_for_kernel_args</span></code></a>(dtype, name)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.kernel_arguments.get_type_for_kernel_args" title="quadrants.lang.kernel_arguments.get_type_for_kernel_args"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_type_for_kernel_args</span></code></a>(dtype, name)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.kernel_arguments.create_kernel_parameter" title="quadrants.lang.kernel_arguments.create_kernel_parameter"><code class="xref py py-obj docutils literal notranslate"><span class="pre">create_kernel_parameter</span></code></a>(kind, dtype, name, *[, ndim, ...]) → tuple[list[int], Any]</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.kernel_arguments.create_kernel_parameter" title="quadrants.lang.kernel_arguments.create_kernel_parameter"><code class="xref py py-obj docutils literal notranslate"><span class="pre">create_kernel_parameter</span></code></a>(kind, dtype, name, *[, ndim, ...]) → tuple[list[int], Any]</p></td>
 <td><p>Create a native parameter and its Python compiler value; return both its ID and that value.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.kernel_arguments.decl_matrix_arg" title="quadrants.lang.kernel_arguments.decl_matrix_arg"><code class="xref py py-obj docutils literal notranslate"><span class="pre">decl_matrix_arg</span></code></a>(matrixtype, name)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.kernel_arguments.decl_struct_arg" title="quadrants.lang.kernel_arguments.decl_struct_arg"><code class="xref py py-obj docutils literal notranslate"><span class="pre">decl_struct_arg</span></code></a>(structtype, name)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.kernel_arguments.decl_sparse_matrix" title="quadrants.lang.kernel_arguments.decl_sparse_matrix"><code class="xref py py-obj docutils literal notranslate"><span class="pre">decl_sparse_matrix</span></code></a>(dtype, name)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.kernel_arguments.decl_ndarray_arg" title="quadrants.lang.kernel_arguments.decl_ndarray_arg"><code class="xref py py-obj docutils literal notranslate"><span class="pre">decl_ndarray_arg</span></code></a>(element_type, ndim, name, needs_grad, ...) → quadrants.lang.any_array.AnyArray</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.kernel_arguments.decl_ret" title="quadrants.lang.kernel_arguments.decl_ret"><code class="xref py py-obj docutils literal notranslate"><span class="pre">decl_ret</span></code></a>(dtype)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.kernel_arguments.decl_ret" title="quadrants.lang.kernel_arguments.decl_ret"><code class="xref py py-obj docutils literal notranslate"><span class="pre">decl_ret</span></code></a>(dtype)</p></td>
 <td><p></p></td>
 </tr>
 </tbody>
@@ -485,11 +470,6 @@
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="quadrants.lang.kernel_arguments.decl_scalar_arg">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.kernel_arguments.</span></span><span class="sig-name descname"><span class="pre">decl_scalar_arg</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dtype</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/kernel_arguments.html#decl_scalar_arg"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.kernel_arguments.decl_scalar_arg" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.kernel_arguments.get_type_for_kernel_args">
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.kernel_arguments.</span></span><span class="sig-name descname"><span class="pre">get_type_for_kernel_args</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dtype</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/kernel_arguments.html#get_type_for_kernel_args"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.kernel_arguments.get_type_for_kernel_args" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
@@ -499,26 +479,6 @@
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.kernel_arguments.</span></span><span class="sig-name descname"><span class="pre">create_kernel_parameter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">kind</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">quadrants.lang._kernel_types.ParameterKind</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">ndim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">needs_grad</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">boundary</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">quadrants._lib.core.quadrants_python.BoundaryMode</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">layout</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/kernel_arguments.html#create_kernel_parameter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.kernel_arguments.create_kernel_parameter" title="Link to this definition">#</a></dt>
 <dd><p>Create a native parameter and its Python compiler value; return both its ID and that value.</p>
 </dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="quadrants.lang.kernel_arguments.decl_matrix_arg">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.kernel_arguments.</span></span><span class="sig-name descname"><span class="pre">decl_matrix_arg</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">matrixtype</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/kernel_arguments.html#decl_matrix_arg"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.kernel_arguments.decl_matrix_arg" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="quadrants.lang.kernel_arguments.decl_struct_arg">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.kernel_arguments.</span></span><span class="sig-name descname"><span class="pre">decl_struct_arg</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">structtype</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/kernel_arguments.html#decl_struct_arg"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.kernel_arguments.decl_struct_arg" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="quadrants.lang.kernel_arguments.decl_sparse_matrix">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.kernel_arguments.</span></span><span class="sig-name descname"><span class="pre">decl_sparse_matrix</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dtype</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/kernel_arguments.html#decl_sparse_matrix"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.kernel_arguments.decl_sparse_matrix" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="quadrants.lang.kernel_arguments.decl_ndarray_arg">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.kernel_arguments.</span></span><span class="sig-name descname"><span class="pre">decl_ndarray_arg</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">element_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">quadrants._lib.core.quadrants_python.DataTypeCxx</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ndim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">needs_grad</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">boundary</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">quadrants._lib.core.quadrants_python.BoundaryMode</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">layout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">quadrants.lang.any_array.AnyArray</span></span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/kernel_arguments.html#decl_ndarray_arg"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.kernel_arguments.decl_ndarray_arg" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.kernel_arguments.decl_ret">
@@ -598,13 +558,8 @@
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel_arguments.SparseMatrixProxy.subscript"><code class="docutils literal notranslate"><span class="pre">SparseMatrixProxy.subscript()</span></code></a></li>
 </ul>
 </li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel_arguments.decl_scalar_arg"><code class="docutils literal notranslate"><span class="pre">decl_scalar_arg()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel_arguments.get_type_for_kernel_args"><code class="docutils literal notranslate"><span class="pre">get_type_for_kernel_args()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel_arguments.create_kernel_parameter"><code class="docutils literal notranslate"><span class="pre">create_kernel_parameter()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel_arguments.decl_matrix_arg"><code class="docutils literal notranslate"><span class="pre">decl_matrix_arg()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel_arguments.decl_struct_arg"><code class="docutils literal notranslate"><span class="pre">decl_struct_arg()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel_arguments.decl_sparse_matrix"><code class="docutils literal notranslate"><span class="pre">decl_sparse_matrix()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel_arguments.decl_ndarray_arg"><code class="docutils literal notranslate"><span class="pre">decl_ndarray_arg()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel_arguments.decl_ret"><code class="docutils literal notranslate"><span class="pre">decl_ret()</span></code></a></li>
 </ul>
 </li>

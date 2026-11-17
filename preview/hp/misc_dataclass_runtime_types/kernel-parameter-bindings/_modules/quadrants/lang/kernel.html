@@ -421,24 +421,8 @@
 <div class="viewcode-block" id="LaunchContextBufferCache">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.LaunchContextBufferCache">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">LaunchContextBufferCache</span><span class="p">:</span>
-    <span class="c1"># Here, we are tracking whether a launch context buffer can be cached. The point of caching the launch context</span>
-    <span class="c1"># buffer is allowing skipping recursive processing of all the input arguments one-by-one, which is adding a</span>
-    <span class="c1"># significant overhead, without changing anything in regards of the function calls to the launch context that must</span>
-    <span class="c1"># be made for a given kernel.</span>
-    <span class="c1"># You can understand this as resolving the static part of the entire control flow of '_recursive_set_args' for a</span>
-    <span class="c1"># given set of arguments, which is (mostly surely uniquely) characterized by its hash, gathering all the</span>
-    <span class="c1"># instructions that cannot be evaluated statically and packing them in a buffer without evaluating them at this</span>
-    <span class="c1"># point. This buffer is then cached once and for all and evaluated every time the exact same set of input argument</span>
-    <span class="c1"># is passed. This means that, ultimately, it will result in the exact same function calls with or without caching.</span>
-    <span class="c1"># In this particular case, the function calls corresponds to adding arguments to the current context for this kernel</span>
-    <span class="c1"># call.</span>
-    <span class="c1"># A launch context buffer is considered cache-friendly if and only if no direct call to the launch context where</span>
-    <span class="c1"># made preemptively during the recursive processing of the arguments, all of parameters of the arguments are</span>
-    <span class="c1"># pointers, the address of these pointers cannot change, and the set of parameters is fixed.</span>
-    <span class="c1"># The lifetime of a cache entry is bound to the lifetime of any of its input arguments: the first being garbage</span>
-    <span class="c1"># collected will invalidate the entire entry. Moreover, the entire cache registry is bound to the lifetime of the</span>
-    <span class="c1"># quadrants prog itself, which means that calling `qd.reset()` will automatically clear the cache. Note that the cache</span>
-    <span class="c1"># stores wear references to pointers, so it does not hold alife any allocated memory.</span>
+    <span class="c1"># Reuse populated launch buffers when argument identities and parameter sources remain stable.</span>
+    <span class="c1"># Entries expire when an input is collected or qd.reset() replaces the runtime program.</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="c1"># Keep track of quadrants runtime to automatically clear cache if destroyed</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_prog_weakref</span><span class="p">:</span> <span class="n">ReferenceType</span><span class="p">[</span><span class="n">Program</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>

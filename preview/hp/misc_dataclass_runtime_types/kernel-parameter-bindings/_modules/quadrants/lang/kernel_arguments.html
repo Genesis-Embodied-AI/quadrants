@@ -339,7 +339,6 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib.core.quadrants_python</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">BoundaryMode</span><span class="p">,</span>
-    <span class="n">DataTypeCxx</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span><span class="p">,</span> <span class="n">ops</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._kernel_types</span><span class="w"> </span><span class="kn">import</span> <span class="n">ParameterKind</span>
@@ -439,13 +438,6 @@
 
 
 
-<div class="viewcode-block" id="decl_scalar_arg">
-<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_arguments/index.html#quadrants.lang.kernel_arguments.decl_scalar_arg">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">decl_scalar_arg</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
-    <span class="k">return</span> <span class="n">create_kernel_parameter</span><span class="p">(</span><span class="n">ParameterKind</span><span class="o">.</span><span class="n">SCALAR</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">name</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span></div>
-
-
-
 <div class="viewcode-block" id="get_type_for_kernel_args">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_arguments/index.html#quadrants.lang.kernel_arguments.get_type_for_kernel_args">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">get_type_for_kernel_args</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
@@ -514,43 +506,6 @@
         <span class="k">if</span> <span class="n">kind</span> <span class="ow">in</span> <span class="p">(</span><span class="n">ParameterKind</span><span class="o">.</span><span class="n">MATRIX</span><span class="p">,</span> <span class="n">ParameterKind</span><span class="o">.</span><span class="n">STRUCT</span><span class="p">):</span>
             <span class="n">value</span> <span class="o">=</span> <span class="n">dtype</span><span class="o">.</span><span class="n">from_quadrants_object</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">arg_id</span><span class="p">,</span> <span class="n">value</span></div>
-
-
-
-<div class="viewcode-block" id="decl_matrix_arg">
-<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_arguments/index.html#quadrants.lang.kernel_arguments.decl_matrix_arg">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">decl_matrix_arg</span><span class="p">(</span><span class="n">matrixtype</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
-    <span class="k">return</span> <span class="n">create_kernel_parameter</span><span class="p">(</span><span class="n">ParameterKind</span><span class="o">.</span><span class="n">MATRIX</span><span class="p">,</span> <span class="n">matrixtype</span><span class="p">,</span> <span class="n">name</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span></div>
-
-
-
-<div class="viewcode-block" id="decl_struct_arg">
-<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_arguments/index.html#quadrants.lang.kernel_arguments.decl_struct_arg">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">decl_struct_arg</span><span class="p">(</span><span class="n">structtype</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
-    <span class="k">return</span> <span class="n">create_kernel_parameter</span><span class="p">(</span><span class="n">ParameterKind</span><span class="o">.</span><span class="n">STRUCT</span><span class="p">,</span> <span class="n">structtype</span><span class="p">,</span> <span class="n">name</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span></div>
-
-
-
-<div class="viewcode-block" id="decl_sparse_matrix">
-<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_arguments/index.html#quadrants.lang.kernel_arguments.decl_sparse_matrix">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">decl_sparse_matrix</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
-    <span class="k">return</span> <span class="n">create_kernel_parameter</span><span class="p">(</span><span class="n">ParameterKind</span><span class="o">.</span><span class="n">SPARSE</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">name</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span></div>
-
-
-
-<div class="viewcode-block" id="decl_ndarray_arg">
-<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_arguments/index.html#quadrants.lang.kernel_arguments.decl_ndarray_arg">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">decl_ndarray_arg</span><span class="p">(</span>
-    <span class="n">element_type</span><span class="p">:</span> <span class="n">DataTypeCxx</span><span class="p">,</span>
-    <span class="n">ndim</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
-    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-    <span class="n">needs_grad</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
-    <span class="n">boundary</span><span class="p">:</span> <span class="n">BoundaryMode</span><span class="p">,</span>
-    <span class="n">layout</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AnyArray</span><span class="p">:</span>
-    <span class="k">return</span> <span class="n">create_kernel_parameter</span><span class="p">(</span>
-        <span class="n">ParameterKind</span><span class="o">.</span><span class="n">NDARRAY</span><span class="p">,</span> <span class="n">element_type</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="n">ndim</span><span class="p">,</span> <span class="n">needs_grad</span><span class="o">=</span><span class="n">needs_grad</span><span class="p">,</span> <span class="n">boundary</span><span class="o">=</span><span class="n">boundary</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="n">layout</span>
-    <span class="p">)[</span><span class="mi">1</span><span class="p">]</span></div>
 
 
 
