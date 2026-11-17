@@ -196,14 +196,18 @@ Every `qd.atomic_*` is emitted at **device-wide scope**: visible to all threads 
 
 You don't normally need to think about scope as a user. It's listed here so the per-backend behavior is explicit:
 
-| Backend                 | Scope spelling in the IR          |
-|-------------------------|-----------------------------------|
-| CPU (x86_64)            | LLVM `seq_cst` (System)           |
-| CUDA (NVPTX)            | LLVM `seq_cst` (System)           |
-| AMDGPU                  | LLVM `seq_cst syncscope("agent")` |
-| Vulkan / Metal (SPIR-V) | SPIR-V `Scope = Device`           |
+| Backend                 | Scope spelling in the IR                       |
+|-------------------------|------------------------------------------------|
+| CPU (x86_64)            | LLVM `seq_cst` (System)                        |
+| CUDA (NVPTX)            | LLVM `seq_cst` (System)                        |
+| AMDGPU                  | LLVM `syncscope("agent")`; ordering: see below |
+| Vulkan / Metal (SPIR-V) | SPIR-V `Scope = Device`                        |
 
-CPU and CUDA lower system-scope atomics directly to a single hardware instruction, so they leave the LLVM default alone. AMDGPU's LLVM backend, in contrast, refuses to use its native single-instruction atomics at system scope (it would have to add cache-flush instructions that don't exist for that op), and silently falls back to a CAS loop; setting `syncscope("agent")` is what unlocks the native `flat_atomic_xor` / `global_atomic_xor` / `flat_atomic_smin` / `flat_atomic_add_f32` / … SPIR-V backends spell the same idea with the `Device` scope token. The user-visible semantics are identical across all four.
+CPU and CUDA lower system-scope atomics directly to a single hardware instruction, so they leave the LLVM default alone. AMDGPU's LLVM backend, in contrast, refuses to use its native single-instruction atomics at system scope (it would have to add cache-flush instructions that don't exist for that op), and silently falls back to a CAS loop; setting `syncscope("agent")` is what unlocks the native `flat_atomic_xor` / `global_atomic_xor` / `flat_atomic_smin` / `flat_atomic_add_f32` / ... SPIR-V backends spell the same idea with the `Device` scope token. The user-visible semantics are identical across all four (under the per-location contract above).
+
+### Atomic memory ordering on AMDGPU
+
+On AMDGPU the accumulating ops (`atomic_add`, `atomic_sub`, `atomic_min`, `atomic_max`, and the `+=` / `-=` augmented assignments) are emitted with LLVM `monotonic` ordering: atomic on the location, with no ordering of other memory. That is the contract described at the top of this page, and it is also what CUDA C's `atomicAdd` provides. A `seq_cst` agent-scope atomic would instead be bracketed by cache maintenance: on gfx942 / gfx950 an L2 writeback before and an L2 invalidate after every atomic, which makes atomic-heavy kernels much slower. This applies to integer, `f32` and `f64` add / sub / min / max. `f16` and quantized types go through a compare-and-swap loop that keeps `seq_cst`, and so do the runtime's internal atomic helper stubs. `atomic_and` / `atomic_or` / `atomic_xor` / `atomic_exchange` and `atomic_cas` stay `seq_cst`. Code that used an accumulating atomic to order other memory (for example, polling a counter with `atomic_add(x, 0)` and then reading data another block published with plain loads) relied on behavior that was never documented; add `qd.simt.grid.mem_fence()` (or `qd.simt.block.mem_fence()` for shared memory) as described above, on every backend.
 
 ### Native instruction vs CAS fallback
 
