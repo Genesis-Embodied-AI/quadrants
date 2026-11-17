@@ -176,10 +176,7 @@ class Pruning:
         for sub in callee_chain_paths:
             if sub.startswith(prefix):
                 rest = sub[len(prefix) :]
-                if caller_flat.startswith("__qd_"):
-                    new_flat = f"{caller_flat}__qd_{rest}"
-                else:
-                    new_flat = f"__qd_{caller_flat}__qd_{rest}"
+                new_flat = create_flat_name(caller_flat, rest)
                 chain_paths_to_propagate.add(new_flat)
 
     def enforce(self) -> None:
