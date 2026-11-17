@@ -10,8 +10,8 @@ quadrants.lang.ast.ast_transformers.data_oriented_runtime_scalar_binder
 
    Lives alongside ``ndarray_arg_resolver.py`` / ``checkpoint_transformer.py`` so the central
    ``function_def_transformer.py`` file doesn't have to grow per-feature (the same rationale the ndarray resolver
-   documents). ``FunctionDefTransformer.transform`` delegates here right after ``_predeclare_struct_ndarrays``; this is
-   the only entry point.
+   documents). ``FunctionDefTransformer.transform`` delegates here right after ``_predeclare_struct_ndarrays``; this is the
+   only entry point.
 
    See ``docs/source/user_guide/compound_types.md`` (section "Runtime primitives: ``template_primitives=False``") for the
    user-facing surface.

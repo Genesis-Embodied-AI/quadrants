@@ -1055,9 +1055,7 @@
                     <span class="c1"># skip the whole primitive-binding path with a single empty-dict check instead of paying a</span>
                     <span class="c1"># per-launch ``.get(key)`` (tuple hash) on every cache-missing launch -- which is the hot path for</span>
                     <span class="c1"># CPU / unbatched genesis steps that launch many tiny kernels.</span>
-                    <span class="n">runtime_scalar_launch_infos</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span>
-                        <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="p">,</span> <span class="s2">"runtime_scalar_launch_infos"</span><span class="p">,</span> <span class="p">[]</span>
-                    <span class="p">)</span>
+                    <span class="n">runtime_scalar_launch_infos</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="p">,</span> <span class="s2">"runtime_scalar_launch_infos"</span><span class="p">,</span> <span class="p">[])</span>
                     <span class="k">if</span> <span class="n">runtime_scalar_launch_infos</span><span class="p">:</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">_runtime_scalar_launch_infos_by_compiled_kernel_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">runtime_scalar_launch_infos</span>
                 <span class="k">else</span><span class="p">:</span>
@@ -1389,10 +1387,10 @@
 <span class="sd">        members. Walks each recorded attr-chain to read the live value and buckets it by declared dtype kind (``'f'``</span>
 <span class="sd">        float, ``'i'`` signed int, ``'u'`` unsigned int), so the value is bound fresh on every launch.</span>
 
-<span class="sd">        The dtype kind is frozen at first compile (see ``data_oriented_runtime_scalar_binder``). Binding a ``float`` to an</span>
-<span class="sd">        arg that was lifted as an integer would silently truncate (``int(1.5) == 1``), so that one lossy direction is</span>
-<span class="sd">        rejected here rather than corrupting the value; the lossless directions (``int``/``bool`` -&gt; float, and</span>
-<span class="sd">        ``bool`` &lt;-&gt; ``int``) still coerce, matching typed-scalar-arg semantics."""</span>
+<span class="sd">        The dtype kind is frozen at first compile (see ``data_oriented_runtime_scalar_binder``). Binding a ``float`` to</span>
+<span class="sd">        an arg that was lifted as an integer would silently truncate (``int(1.5) == 1``), so that one lossy direction is</span>
+<span class="sd">        rejected here rather than corrupting the value; the lossless directions (``int``/``bool`` -&gt; float, and ``bool``</span>
+<span class="sd">        &lt;-&gt; ``int``) still coerce, matching typed-scalar-arg semantics."""</span>
         <span class="k">for</span> <span class="n">arg_id</span><span class="p">,</span> <span class="n">template_arg_idx</span><span class="p">,</span> <span class="n">attr_chain</span><span class="p">,</span> <span class="n">kind</span> <span class="ow">in</span> <span class="n">launch_info</span><span class="p">:</span>
             <span class="n">obj</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="n">template_arg_idx</span><span class="p">]</span>
             <span class="k">for</span> <span class="n">attr_name</span> <span class="ow">in</span> <span class="n">attr_chain</span><span class="p">:</span>

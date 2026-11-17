@@ -336,8 +336,8 @@
 
 <span class="sd">Lives alongside ``ndarray_arg_resolver.py`` / ``checkpoint_transformer.py`` so the central</span>
 <span class="sd">``function_def_transformer.py`` file doesn't have to grow per-feature (the same rationale the ndarray resolver</span>
-<span class="sd">documents). ``FunctionDefTransformer.transform`` delegates here right after ``_predeclare_struct_ndarrays``; this is</span>
-<span class="sd">the only entry point.</span>
+<span class="sd">documents). ``FunctionDefTransformer.transform`` delegates here right after ``_predeclare_struct_ndarrays``; this is the</span>
+<span class="sd">only entry point.</span>
 
 <span class="sd">See ``docs/source/user_guide/compound_types.md`` (section "Runtime primitives: ``template_primitives=False``") for the</span>
 <span class="sd">user-facing surface.</span>
@@ -378,10 +378,12 @@
     <span class="n">seen_ids</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span>
     <span class="n">scalar_members</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">_ScalarMember</span><span class="p">],</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">"""Walk stored attributes of data-oriented objects and dataclasses, collecting exact Python bool, int, and float values.</span>
+<span class="w">    </span><span class="sd">"""Walk stored attributes of data-oriented objects and dataclasses, collecting exact Python bool, int, and float</span>
+<span class="sd">    values.</span>
 
-<span class="sd">    Append each scalar and its attribute route to scalar_members, including scalars the kernel does not use. Pruning later</span>
-<span class="sd">    selects the kernel parameters. Stop at previously visited objects and do not descend into lists, tuples, or dicts.</span>
+<span class="sd">    Append each scalar and its attribute route to scalar_members, including scalars the kernel does not use. Pruning</span>
+<span class="sd">    later selects the kernel parameters. Stop at previously visited objects and do not descend into lists, tuples, or</span>
+<span class="sd">    dicts.</span>
 <span class="sd">    """</span>
     <span class="n">obj_id</span> <span class="o">=</span> <span class="nb">id</span><span class="p">(</span><span class="n">py_obj</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">obj_id</span> <span class="ow">in</span> <span class="n">seen_ids</span><span class="p">:</span>
@@ -399,6 +401,8 @@
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">attr_val</span><span class="p">,</span> <span class="n">_TensorClass</span><span class="p">):</span>
             <span class="n">attr_val</span> <span class="o">=</span> <span class="n">attr_val</span><span class="o">.</span><span class="n">_unwrap</span><span class="p">()</span>
         <span class="n">attr_type</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">attr_val</span><span class="p">)</span>
+        <span class="c1"># Only exact Python primitives become runtime parameters; NumPy scalars and subclasses retain their</span>
+        <span class="c1"># compile-time behavior.</span>
         <span class="k">if</span> <span class="n">attr_type</span> <span class="ow">is</span> <span class="nb">bool</span> <span class="ow">or</span> <span class="n">attr_type</span> <span class="ow">is</span> <span class="nb">int</span> <span class="ow">or</span> <span class="n">attr_type</span> <span class="ow">is</span> <span class="nb">float</span><span class="p">:</span>
             <span class="n">scalar_members</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_ScalarMember</span><span class="p">(</span><span class="n">py_obj</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">,</span> <span class="n">attr_val</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="p">(</span><span class="o">*</span><span class="n">path</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">)))</span>
         <span class="k">elif</span> <span class="n">is_dataclass_instance</span><span class="p">(</span><span class="n">attr_val</span><span class="p">)</span> <span class="ow">or</span> <span class="n">is_data_oriented</span><span class="p">(</span><span class="n">attr_val</span><span class="p">):</span>
@@ -432,6 +436,7 @@
 <span class="w">    </span><span class="sd">"""Record scalar members and create kernel parameters for those used by the compiled kernel.</span>
 
 <span class="sd">    During discovery, record each member's location and scalar kind so accesses can be marked as used.</span>
+
 <span class="sd">    During the enforcing pass, for each used member:</span>
 
 <span class="sd">    - Append a scalar parameter to the callable's parameter list and get its index.</span>

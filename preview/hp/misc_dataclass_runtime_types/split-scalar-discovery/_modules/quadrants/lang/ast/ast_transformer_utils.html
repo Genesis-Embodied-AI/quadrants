@@ -640,15 +640,15 @@
 
         <span class="c1"># Lifted-primitive support for ``@qd.data_oriented(template_primitives=False)``. Mirrors the two ndarray</span>
         <span class="c1"># structures above, plus member-to-argument metadata driving the two-pass pruning.</span>
-        <span class="c1"># * ``runtime_scalar_arg_info_by_member`` maps ``(id(parent_obj), attr_name)`` to ``(flat_name, arg_idx, attr_chain,</span>
-        <span class="c1">#   kind)`` for every reachable primitive member of a flagged template arg. Built (cheaply, no kernel-arg</span>
-        <span class="c1">#   declaration) on every compilation pass. ``build_Attribute`` uses it to ``mark_used`` the accessed</span>
+        <span class="c1"># * ``runtime_scalar_arg_info_by_member`` maps ``(id(parent_obj), attr_name)`` to ``(flat_name, arg_idx,</span>
+        <span class="c1">#   attr_chain, kind)`` for every reachable primitive member of a flagged template arg. Built (cheaply, no</span>
+        <span class="c1">#   kernel-arg declaration) on every compilation pass. ``build_Attribute`` uses it to ``mark_used`` the accessed</span>
         <span class="c1">#   primitives during the non-enforcing discovery pass.</span>
-        <span class="c1"># * ``runtime_scalar_arg_expr_by_member`` maps the same key to the arg-load ``Expr``. Populated only in the enforcing</span>
-        <span class="c1">#   pass, and only for primitives actually accessed by the body (pruning), so ``build_Attribute`` can return</span>
-        <span class="c1">#   the runtime scalar arg instead of baking the value.</span>
-        <span class="c1"># * ``runtime_scalar_launch_infos`` records ``(arg_id, template_arg_idx, attr_chain, kind)`` tuples (``kind``</span>
-        <span class="c1">#   in ``{'f', 'i', 'u'}``) so the launch path can read the live value and bind it.</span>
+        <span class="c1"># * ``runtime_scalar_arg_expr_by_member`` maps the same key to the arg-load ``Expr``. Populated only in the</span>
+        <span class="c1">#   enforcing pass, and only for primitives actually accessed by the body (pruning), so ``build_Attribute`` can</span>
+        <span class="c1">#   return the runtime scalar arg instead of baking the value.</span>
+        <span class="c1"># * ``runtime_scalar_launch_infos`` records ``(arg_id, template_arg_idx, attr_chain, kind)`` tuples (``kind`` in</span>
+        <span class="c1">#   ``{'f', 'i', 'u'}``) so the launch path can read the live value and bind it.</span>
 <div class="viewcode-block" id="KernelCompileContext.runtime_scalar_arg_info_by_member">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.KernelCompileContext.runtime_scalar_arg_info_by_member">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">runtime_scalar_arg_info_by_member</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="nb">tuple</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span></div>
@@ -1126,17 +1126,17 @@
 <div class="viewcode-block" id="maybe_lifted_primitive">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.maybe_lifted_primitive">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">maybe_lifted_primitive</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">parent</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">attr</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""Handle access to a primitive member that ``@qd.data_oriented(template_primitives=False)`` lifted into a</span>
-<span class="sd">    runtime scalar kernel arg (see ``bind_data_oriented_runtime_scalars``).</span>
+<span class="w">    </span><span class="sd">"""Handle access to a primitive member that ``@qd.data_oriented(template_primitives=False)`` lifted into a runtime</span>
+<span class="sd">    scalar kernel arg (see ``bind_data_oriented_runtime_scalars``).</span>
 
-<span class="sd">    Returns the arg-load ``Expr`` to substitute for the baked value in the enforcing pass; returns ``None`` when</span>
-<span class="sd">    the attribute is not a lifted primitive, or during the non-enforcing discovery pass (where the access is</span>
-<span class="sd">    instead recorded via ``mark_used`` and the caller falls back to baking the throw-away discovery-pass IR).</span>
+<span class="sd">    Returns the arg-load ``Expr`` to substitute for the baked value in the enforcing pass; returns ``None`` when the</span>
+<span class="sd">    attribute is not a lifted primitive, or during the non-enforcing discovery pass (where the access is instead</span>
+<span class="sd">    recorded via ``mark_used`` and the caller falls back to baking the throw-away discovery-pass IR).</span>
 
-<span class="sd">    Raises ``QuadrantsSyntaxError`` if the lifted primitive is used inside ``qd.static(...)``: that context</span>
-<span class="sd">    requires a compile-time constant, which a runtime-lifted primitive is not. Under this flag there is no</span>
-<span class="sd">    per-attribute baked escape hatch, so a ``qd.static`` use is unambiguously a mistake and we surface it loudly</span>
-<span class="sd">    rather than silently baking a value that will not track mutations.</span>
+<span class="sd">    Raises ``QuadrantsSyntaxError`` if the lifted primitive is used inside ``qd.static(...)``: that context requires a</span>
+<span class="sd">    compile-time constant, which a runtime-lifted primitive is not. Under this flag there is no per-attribute baked</span>
+<span class="sd">    escape hatch, so a ``qd.static`` use is unambiguously a mistake and we surface it loudly rather than silently baking</span>
+<span class="sd">    a value that will not track mutations.</span>
 <span class="sd">    """</span>
     <span class="n">runtime_scalar_arg_info_by_member</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="o">.</span><span class="n">runtime_scalar_arg_info_by_member</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">runtime_scalar_arg_info_by_member</span><span class="p">:</span>

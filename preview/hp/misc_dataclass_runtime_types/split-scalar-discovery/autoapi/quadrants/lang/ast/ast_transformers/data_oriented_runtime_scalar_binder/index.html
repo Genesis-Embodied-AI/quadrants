@@ -372,8 +372,8 @@
 args at AST-build time.</p>
 <p>Lives alongside <code class="docutils literal notranslate"><span class="pre">ndarray_arg_resolver.py</span></code> / <code class="docutils literal notranslate"><span class="pre">checkpoint_transformer.py</span></code> so the central
 <code class="docutils literal notranslate"><span class="pre">function_def_transformer.py</span></code> file doesn’t have to grow per-feature (the same rationale the ndarray resolver
-documents). <code class="docutils literal notranslate"><span class="pre">FunctionDefTransformer.transform</span></code> delegates here right after <code class="docutils literal notranslate"><span class="pre">_predeclare_struct_ndarrays</span></code>; this is
-the only entry point.</p>
+documents). <code class="docutils literal notranslate"><span class="pre">FunctionDefTransformer.transform</span></code> delegates here right after <code class="docutils literal notranslate"><span class="pre">_predeclare_struct_ndarrays</span></code>; this is the
+only entry point.</p>
 <p>See <code class="docutils literal notranslate"><span class="pre">docs/source/user_guide/compound_types.md</span></code> (section “Runtime primitives: <code class="docutils literal notranslate"><span class="pre">template_primitives=False</span></code>”) for the
 user-facing surface.</p>
 <section id="functions">
