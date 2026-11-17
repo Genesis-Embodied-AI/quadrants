@@ -288,9 +288,9 @@ class FunctionDefTransformer:
 
     @staticmethod
     def _predeclare_struct_ndarrays(ctx: FuncCompileContext) -> None:
-        """Walk template args that are structs and pre-declare any ``Ndarray`` attributes as kernel args (via
-        ``decl_ndarray_arg``) so they are registered before ``finalize_params``. The resulting ``AnyArray`` objects are
-        cached on the kernel compilation context for later lookup by ``build_Attribute``.
+        """Register ndarray members through add_kernel_parameter before finalize_params.
+
+        Cache their AnyArray expressions on the kernel compilation context for build_Attribute to retrieve.
 
         Also stores ``(arg_id, template_arg_idx, attr_chain)`` tuples in
         the bindings object so launch code can populate those parameters.

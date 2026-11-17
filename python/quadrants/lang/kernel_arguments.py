@@ -7,7 +7,6 @@ import quadrants.lang
 from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import (
     BoundaryMode,
-    DataTypeCxx,
 )
 from quadrants.lang import impl, ops
 from quadrants.lang._kernel_types import ParameterKind
@@ -63,10 +62,6 @@ class SparseMatrixProxy:
 
     def subscript(self, i, j):
         return SparseMatrixEntry(self.ptr, i, j, self.dtype)
-
-
-def decl_scalar_arg(dtype, name):
-    return create_kernel_parameter(ParameterKind.SCALAR, dtype, name)[1]
 
 
 def get_type_for_kernel_args(dtype, name):
@@ -132,31 +127,6 @@ def create_kernel_parameter(
         if kind in (ParameterKind.MATRIX, ParameterKind.STRUCT):
             value = dtype.from_quadrants_object(value)
     return arg_id, value
-
-
-def decl_matrix_arg(matrixtype, name):
-    return create_kernel_parameter(ParameterKind.MATRIX, matrixtype, name)[1]
-
-
-def decl_struct_arg(structtype, name):
-    return create_kernel_parameter(ParameterKind.STRUCT, structtype, name)[1]
-
-
-def decl_sparse_matrix(dtype, name):
-    return create_kernel_parameter(ParameterKind.SPARSE, dtype, name)[1]
-
-
-def decl_ndarray_arg(
-    element_type: DataTypeCxx,
-    ndim: int,
-    name: str,
-    needs_grad: bool,
-    boundary: BoundaryMode,
-    layout=None,
-) -> AnyArray:
-    return create_kernel_parameter(
-        ParameterKind.NDARRAY, element_type, name, ndim=ndim, needs_grad=needs_grad, boundary=boundary, layout=layout
-    )[1]
 
 
 def decl_ret(dtype):
