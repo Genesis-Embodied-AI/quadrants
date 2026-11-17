@@ -93,6 +93,8 @@ is therefore unsafe: LLVM's loop-invariant-code-motion will hoist the load out o
 
   `qd.volatile_load` lowers to LLVM `load volatile` on CUDA / AMDGPU and to `OpLoad` with the SPIR-V `Volatile` `MemoryAccess` mask on Vulkan / Metal — the optimizer is forbidden from hoisting / merging the load on every backend, with no per-iteration cache-flush or atomic-RMW overhead. See [atomics](atomics.md) for the full primitive description, including the producer-side pairing requirements (atomic store, or plain store + fence on non-Metal backends).
 
+  The volatile load orders only `flags[prev]`: keep the reader-side `qd.simt.grid.mem_fence()` (the third fence in the example above) between the spin and the reads of `partials[prev]`.
+
 - **Fence inside the loop body** (used in the example above; legacy approach):
 
   ```python
@@ -109,13 +111,13 @@ is therefore unsafe: LLVM's loop-invariant-code-motion will hoist the load out o
       pass
   ```
 
-  `qd.atomic_or(x, 0)` is an atomic op that returns the current value without modifying it, which forces a real memory access on every iteration and additionally pins down ordering. Cheaper than a per-iteration full grid fence but still pays the atomic-RMW hardware cost (and contention with concurrent stores on the same cell). Was previously the only Metal-portable approach; `qd.volatile_load` now covers Metal too and is preferred for new code. Useful as a paired idiom with an atomic *store* on the producer side (`qd.atomic_or(flags[bid], STATE_AGGREGATE)`) when the producer also wants atomic-store semantics.
+  `qd.atomic_or(x, 0)` is an atomic op that returns the current value without modifying it, which forces a real memory access on every iteration. Like any atomic it orders only this location, not other published data: put a `qd.simt.grid.mem_fence()` after the spin before reading anything else the producer wrote (e.g. `partials[prev]`). Cheaper than a per-iteration full grid fence but still pays the atomic-RMW hardware cost (and contention with concurrent stores on the same cell). Was previously the only Metal-portable approach; `qd.volatile_load` now covers Metal too and is preferred for new code. Useful as a paired idiom with an atomic *store* on the producer side (`qd.atomic_or(flags[bid], STATE_AGGREGATE)`) when the producer also wants atomic-store semantics.
 
 ## Performance and portability notes
 
 - **GPU-portable.** All four GPU backends implement `grid.mem_fence()` natively (see "Per-backend lowering"). The one residual portability gap is Metal / Vulkan-on-macOS only ordering *atomic* memory accesses across the device — patterns relying on plain stores becoming visible across workgroups must publish through atomics on those targets.
 - **Cost scales with the global-cache invalidation domain.** A grid fence drains the L2 (and on some GPUs the L1) caches of all SMs / CUs touching the address. On A100 / H100 the cost is on the order of tens to low hundreds of nanoseconds per call; AMDGPU `acq_rel` agent fences and Vulkan `OpMemoryBarrier(ScopeDevice)` are in the same ballpark on contemporary hardware. In tight loops, prefer batching multiple cross-block updates per fence.
-- **Pair with the right ordering of memory ops.** The fence orders the *calling thread*'s memory ops; readers in other blocks need their own fence (or an atomic load) to refresh their view. The producer-fence + consumer-fence pattern is the canonical idiom.
+- **Pair with the right ordering of memory ops.** The fence orders the *calling thread*'s memory ops; readers in other blocks need their own fence to refresh their view. An atomic or volatile load of the flag orders only the flag itself, so the reader still needs a `qd.simt.grid.mem_fence()` after observing it and before reading other published data. The producer-fence + consumer-fence pattern is the canonical idiom.
 - **Not a substitute for atomics on contended locations.** A fence orders writes but does not serialize them. If multiple blocks write to the same location, you need an atomic regardless of how the fence is placed.
 
 ## Related
