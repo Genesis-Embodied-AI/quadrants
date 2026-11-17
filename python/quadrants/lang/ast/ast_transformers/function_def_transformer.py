@@ -32,6 +32,7 @@ from quadrants.lang._kernel_parameter_bindings import (
     ParameterSource,
     SourceProjection,
 )
+from quadrants.lang._kernel_types import ParameterKind
 from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._optional_annotation import OPTIONAL_ABSENT
 from quadrants.lang.ast.ast_transformer_utils import (
@@ -90,7 +91,7 @@ class FunctionDefTransformer:
             if marker == _TENSOR_T_NDARRAY_MARKER:
                 raw_element_type, ndim, needs_grad, boundary, layout = this_arg_features[1:]
                 return bindings.add_kernel_parameter(
-                    "ndarray",
+                    ParameterKind.NDARRAY,
                     to_quadrants_type(raw_element_type),
                     full_name,
                     ndim=ndim,
@@ -115,7 +116,7 @@ class FunctionDefTransformer:
             return ctx.global_vars.get(name)
         if isinstance(annotation, annotations.sparse_matrix_builder):
             return bindings.add_kernel_parameter(
-                "sparse",
+                ParameterKind.SPARSE,
                 to_quadrants_type(this_arg_features),
                 full_name,
                 source=source,
@@ -126,7 +127,7 @@ class FunctionDefTransformer:
             assert this_arg_features is not None
             raw_element_type, ndim, needs_grad, boundary = this_arg_features
             arr = bindings.add_kernel_parameter(
-                "ndarray",
+                ParameterKind.NDARRAY,
                 to_quadrants_type(raw_element_type),
                 full_name + "_buf",
                 ndim=ndim,
@@ -137,14 +138,14 @@ class FunctionDefTransformer:
                 cacheable=False,
             )
             offset = bindings.add_kernel_parameter(
-                "scalar",
+                ParameterKind.SCALAR,
                 primitive_types.i32,
                 full_name + "_offset",
                 source=source._replace(projection=SourceProjection.BUFFER_OFFSET),
                 cacheable=False,
             )
             size = bindings.add_kernel_parameter(
-                "scalar",
+                ParameterKind.SCALAR,
                 primitive_types.i32,
                 full_name + "_size",
                 source=source._replace(projection=SourceProjection.BUFFER_SIZE),
@@ -160,7 +161,7 @@ class FunctionDefTransformer:
             # Tensors layout is the trailing slot; None for legacy / identity.
             raw_element_type, ndim, needs_grad, boundary, layout = this_arg_features
             return bindings.add_kernel_parameter(
-                "ndarray",
+                ParameterKind.NDARRAY,
                 to_quadrants_type(raw_element_type),
                 full_name,
                 ndim=ndim,
@@ -172,10 +173,10 @@ class FunctionDefTransformer:
                 cacheable=cacheable,
             )
         if isinstance(annotation, MatrixType):
-            return bindings.add_kernel_parameter("matrix", annotation, name, source=source, cacheable=cacheable)
+            return bindings.add_kernel_parameter(ParameterKind.MATRIX, annotation, name, source=source, cacheable=cacheable)
         if isinstance(annotation, StructType):
-            return bindings.add_kernel_parameter("struct", annotation, name, source=source, cacheable=cacheable)
-        return bindings.add_kernel_parameter("scalar", annotation, name, source=source, cacheable=cacheable)
+            return bindings.add_kernel_parameter(ParameterKind.STRUCT, annotation, name, source=source, cacheable=cacheable)
+        return bindings.add_kernel_parameter(ParameterKind.SCALAR, annotation, name, source=source, cacheable=cacheable)
 
     @staticmethod
     def _transform_kernel_arg(
@@ -361,7 +362,7 @@ class FunctionDefTransformer:
                 if flat not in kernel_used_flat_names:
                     return
             arr = ctx.kernel_compile_context.parameter_bindings.add_kernel_parameter(
-                "ndarray", cook_dtype(nd.element_type), f"__qd_struct_nd_{key}",
+                ParameterKind.NDARRAY, cook_dtype(nd.element_type), f"__qd_struct_nd_{key}",
                 source=ParameterSource(arg_idx, attr_chain), launch_annotation=ndarray_type.NdarrayType(),
                 member_ndarray=True, ndim=len(nd._physical_shape), needs_grad=nd.grad is not None,
                 boundary=BoundaryMode.UNSAFE, layout=getattr(nd, "_qd_layout", None),

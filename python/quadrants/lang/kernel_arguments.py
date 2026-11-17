@@ -1,7 +1,7 @@
 # type: ignore
 
 import inspect
-from typing import Any, Literal
+from typing import Any
 
 import quadrants.lang
 from quadrants._lib import core as _qd_core
@@ -10,6 +10,7 @@ from quadrants._lib.core.quadrants_python import (
     DataTypeCxx,
 )
 from quadrants.lang import impl, ops
+from quadrants.lang._kernel_types import ParameterKind
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.expr import Expr
 from quadrants.lang.matrix import MatrixType
@@ -65,7 +66,7 @@ class SparseMatrixProxy:
 
 
 def decl_scalar_arg(dtype, name):
-    return create_kernel_parameter("scalar", dtype, name)[1]
+    return create_kernel_parameter(ParameterKind.SCALAR, dtype, name)[1]
 
 
 def get_type_for_kernel_args(dtype, name):
@@ -90,7 +91,7 @@ def get_type_for_kernel_args(dtype, name):
 
 
 def create_kernel_parameter(
-    kind: Literal["scalar", "ndarray", "matrix", "struct", "sparse"],
+    kind: ParameterKind,
     dtype: Any,
     name: str,
     *,
@@ -101,7 +102,7 @@ def create_kernel_parameter(
 ) -> tuple[list[int], Any]:
     """Create a native parameter and its Python compiler value; return both its ID and that value."""
     runtime = impl.get_runtime()
-    if kind == "ndarray":
+    if kind is ParameterKind.NDARRAY:
         arg_id = runtime.compiling_callable.insert_ndarray_param(dtype, ndim, name, needs_grad)
         value = AnyArray(
             _qd_core.make_external_tensor_expr(dtype, ndim, arg_id, needs_grad, boundary), _qd_layout=layout
@@ -109,9 +110,9 @@ def create_kernel_parameter(
         return arg_id, value
 
     is_ref = isinstance(dtype, RefType)
-    if kind in ("matrix", "struct"):
+    if kind in (ParameterKind.MATRIX, ParameterKind.STRUCT):
         arg_type = get_type_for_kernel_args(dtype, name)
-    elif kind == "sparse":
+    elif kind is ParameterKind.SPARSE:
         arg_type = cook_dtype(u64)
     else:
         arg_type = cook_dtype(dtype.tp if is_ref else dtype)
@@ -120,29 +121,29 @@ def create_kernel_parameter(
     else:
         arg_id = runtime.compiling_callable.insert_scalar_param(arg_type, name)
     debug_info = _qd_core.DebugInfo(runtime.get_current_src_info())
-    if kind == "sparse":
+    if kind is ParameterKind.SPARSE:
         value = SparseMatrixProxy(
             _qd_core.make_arg_load_expr(arg_id, arg_type, is_ptr=False, dbg_info=debug_info), cook_dtype(dtype)
         )
     else:
         value = Expr(
-            _qd_core.make_arg_load_expr(arg_id, arg_type, is_ref, create_load=kind == "scalar", dbg_info=debug_info)
+            _qd_core.make_arg_load_expr(arg_id, arg_type, is_ref, create_load=kind is ParameterKind.SCALAR, dbg_info=debug_info)
         )
-        if kind in ("matrix", "struct"):
+        if kind in (ParameterKind.MATRIX, ParameterKind.STRUCT):
             value = dtype.from_quadrants_object(value)
     return arg_id, value
 
 
 def decl_matrix_arg(matrixtype, name):
-    return create_kernel_parameter("matrix", matrixtype, name)[1]
+    return create_kernel_parameter(ParameterKind.MATRIX, matrixtype, name)[1]
 
 
 def decl_struct_arg(structtype, name):
-    return create_kernel_parameter("struct", structtype, name)[1]
+    return create_kernel_parameter(ParameterKind.STRUCT, structtype, name)[1]
 
 
 def decl_sparse_matrix(dtype, name):
-    return create_kernel_parameter("sparse", dtype, name)[1]
+    return create_kernel_parameter(ParameterKind.SPARSE, dtype, name)[1]
 
 
 def decl_ndarray_arg(
@@ -154,7 +155,7 @@ def decl_ndarray_arg(
     layout=None,
 ) -> AnyArray:
     return create_kernel_parameter(
-        "ndarray", element_type, name, ndim=ndim, needs_grad=needs_grad, boundary=boundary, layout=layout
+        ParameterKind.NDARRAY, element_type, name, ndim=ndim, needs_grad=needs_grad, boundary=boundary, layout=layout
     )[1]
 
 

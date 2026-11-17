@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
 from quadrants._lib import core as _qd_core
 from quadrants.lang import expr
-from quadrants.lang._kernel_types import KernelBatchedArgType
+from quadrants.lang._kernel_types import KernelBatchedArgType, ParameterKind
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.util import cook_dtype
 from quadrants.types.utils import is_signed
@@ -14,7 +14,6 @@ from quadrants.types.utils import is_signed
 if TYPE_CHECKING:
     from quadrants.lang._pruning import Pruning
 
-ParameterKind = Literal["scalar", "ndarray", "matrix", "struct", "sparse"]
 ScalarKind = Literal["f", "i", "u"]
 
 
@@ -195,7 +194,7 @@ class KernelParameterBindings:
 
         policy = ValuePolicy.TYPED
         if member is not None:
-            assert kind == "scalar" and source is not None
+            assert kind is ParameterKind.SCALAR and source is not None
             if member in self.arg_info_by_member:
                 return self.arg_expr_by_member.get(member)
 
