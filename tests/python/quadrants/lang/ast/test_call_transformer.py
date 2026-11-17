@@ -7,8 +7,8 @@ import quadrants as qd
 from quadrants.lang._func_base import FuncBase
 from quadrants.lang._pruning import Pruning
 from quadrants.lang.ast.ast_transformer_utils import (
-    ASTTransformerFuncContext,
-    ASTTransformerGlobalContext,
+    FuncCompileContext,
+    KernelCompileContext,
 )
 from quadrants.lang.ast.ast_transformers.call_transformer import CallTransformer
 
@@ -84,11 +84,11 @@ def test_expand_Call_dataclass_args(args_in: tuple[ast.stmt, ...], expected_args
 
     pruning = Pruning(kernel_used_parameters=None)
 
-    class MockGlobalContext(ASTTransformerGlobalContext):
+    class MockKernelCompileContext(KernelCompileContext):
         def __init__(self):
             self.pruning = pruning
 
-    mock_global_context = MockGlobalContext()
+    mock_kernel_compile_context = MockKernelCompileContext()
 
     class MockFunc(FuncBase):
         def __init__(self) -> None:
@@ -96,10 +96,10 @@ def test_expand_Call_dataclass_args(args_in: tuple[ast.stmt, ...], expected_args
 
     mock_func = MockFunc()
 
-    class MockContext(ASTTransformerFuncContext):
+    class MockContext(FuncCompileContext):
         def __init__(self):
             self.used_py_dataclass_parameters_enforcing = None
-            self.global_context = mock_global_context
+            self.kernel_compile_context = mock_kernel_compile_context
             self.func = mock_func
 
     ctx = MockContext()

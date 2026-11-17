@@ -28,7 +28,7 @@ AutodiffMode = _qd_core.AutodiffMode
 
 
 class Builder:
-    def __call__(self, ctx: "ASTTransformerFuncContext", node: ast.AST):
+    def __call__(self, ctx: "FuncCompileContext", node: ast.AST):
         method_name = "build_" + node.__class__.__name__
         method = getattr(self, method_name, None)
         try:
@@ -177,7 +177,7 @@ class PureViolation:
     var_name: str
 
 
-class ASTTransformerGlobalContext:
+class KernelCompileContext:
     def __init__(
         self, current_kernel: "Kernel", pruning: "Pruning", currently_compiling_materialize_key, pass_idx: int
     ) -> None:
@@ -187,44 +187,26 @@ class ASTTransformerGlobalContext:
         self.pass_idx: int = pass_idx
         self.ndarray_to_any_array: dict[int, Any] = {}
         self.struct_ndarray_launch_info: list[tuple] = []
-        # Lifted-primitive support for ``@qd.data_oriented(template_primitives=False)``. Mirrors the two ndarray
-        # structures above, plus a provenance map driving the two-pass pruning.
-        # * ``struct_primitive_provenance`` maps ``(id(parent_obj), attr_name)`` to ``(flat_name, arg_idx, attr_chain,
-        #   kind)`` for every reachable primitive member of a flagged template arg. Built (cheaply, no kernel-arg
-        #   declaration) on every compilation pass. ``build_Attribute`` uses it to ``mark_used`` the accessed
-        #   primitives during the non-enforcing discovery pass.
-        # * ``struct_primitive_to_expr`` maps the same key to the arg-load ``Expr``. Populated only in the enforcing
-        #   pass, and only for primitives actually accessed by the body (pruning), so ``build_Attribute`` can return
-        #   the runtime scalar arg instead of baking the value.
-        # * ``struct_primitive_launch_info`` records ``(arg_id, template_arg_idx, attr_chain, kind)`` tuples (``kind``
-        #   in ``{'f', 'i', 'u'}``) so the launch path can read the live value and bind it.
-        self.struct_primitive_provenance: dict[tuple[int, str], tuple] = {}
-        self.struct_primitive_to_expr: dict[tuple[int, str], Any] = {}
-        self.struct_primitive_launch_info: list[tuple] = []
-        # Caller-side `loop_depth` snapshot for the in-flight `@qd.func` invocation. Each func compile creates a fresh
-        # `ASTTransformerFuncContext` with `loop_depth = 0`, so without this snapshot a non-static `range(...)` loop
-        # inside a func body would not see any outer for-loops in the caller and would skip the backward-mode dynamic-
-        # range diagnostic, silently emitting a wrong adjoint. `CallTransformer.build_Call` writes the caller
-        # `ctx.loop_depth` here before invoking the func and restores the previous value after, so the new func ctx
-        # can seed its `loop_depth` from this field via `_func_base.py`.
+        # For template_primitives=False, map (id(parent), attr_name) to (flat_name, arg_idx, attr_chain, kind). Rebuilt
+        # each pass without declaring arguments; discovery uses it to record which primitive members are read.
+        self.runtime_scalar_arg_info_by_member: dict[tuple[int, str], tuple] = {}
+        # Map the same member keys to runtime argument expressions, only for used members in the enforcing pass.
+        self.runtime_scalar_arg_expr_by_member: dict[tuple[int, str], Any] = {}
+        # (arg_id, template_arg_idx, attr_chain, kind) entries locate live values at launch; kind is 'f', 'i', or 'u'.
+        self.runtime_scalar_launch_infos: list[tuple] = []
+        # Carry caller loop depth into fresh qd.func contexts so backward-mode dynamic-range checks see outer loops.
+        # Saved and restored around each call.
         self.caller_loop_depth: int = 0
-        # Caller-side "am I (transitively) inside non-static control flow?" snapshot for the in-flight `@qd.func`
-        # invocation. Each func compile creates a fresh `ASTTransformerFuncContext` whose own
-        # `non_static_control_flow_status` starts False, so a `@qd.func(requires_top_level=True)` reached *through* an
-        # unmarked helper called from a runtime for / if / while would not observe the caller's control-flow context
-        # and would escape the top-level check. `CallTransformer.build_Call` writes
-        # `ctx.is_in_non_static_control_flow() or <inherited>` here before invoking the func (so it accumulates down a
-        # multi-level call chain) and restores the previous value after; the new func ctx seeds
-        # `inherited_non_static_control_flow` from this field via `_func_base.py`. Kept separate from the live
-        # `non_static_control_flow_status` flag on purpose: that flag also gates the "return inside non-static if/for"
-        # diagnostic in `build_Return`, and seeding it True would spuriously reject a top-level `return` in a helper.
+        # Carry runtime control flow through nested calls so requires_top_level checks cannot be bypassed by helpers.
+        # Saved and restored around each call. Separate from the callee's local control-flow flag so ordinary helper
+        # returns remain valid.
         self.caller_in_non_static_control_flow: bool = False
 
 
-class ASTTransformerFuncContext:
+class FuncCompileContext:
     def __init__(
         self,
-        global_context: ASTTransformerGlobalContext,
+        kernel_compile_context: KernelCompileContext,
         template_slot_locations,
         end_lineno: int,
         is_kernel: bool,
@@ -244,7 +226,7 @@ class ASTTransformerFuncContext:
     ):
         from quadrants import extension  # pylint: disable=import-outside-toplevel
 
-        self.global_context: ASTTransformerGlobalContext = global_context
+        self.kernel_compile_context: KernelCompileContext = kernel_compile_context
         self.func: "FuncBase" = func
         self.local_scopes: list[dict[str, Any]] = []
         self.loop_scopes: List[LoopScopeAttribute] = []
@@ -285,8 +267,8 @@ class ASTTransformerFuncContext:
         self.autodiff_mode = autodiff_mode
         self.loop_depth: int = 0
         # Whether the (transitive) caller chain that reached this func compile was already inside non-static control
-        # flow. Seeded from `global_context.caller_in_non_static_control_flow` in `_func_base.py`; kernels start at the
-        # top of the call stack so they always begin False. Consulted (together with the local
+        # flow. Seeded from `kernel_compile_context.caller_in_non_static_control_flow` in `_func_base.py`; kernels
+        # start at the top of the call stack so they always begin False. Consulted (together with the local
         # `non_static_control_flow_status`) by the `requires_top_level` guard in `CallTransformer.build_Call`.
         self.inherited_non_static_control_flow: bool = False
         self.raise_on_templated_floats = raise_on_templated_floats
@@ -474,7 +456,7 @@ class ASTTransformerFuncContext:
         return msg
 
 
-def get_decorator(ctx: ASTTransformerFuncContext, node) -> str:
+def get_decorator(ctx: FuncCompileContext, node) -> str:
     if not isinstance(node, ast.Call):
         return ""
     for wanted, name in [
@@ -488,24 +470,24 @@ def get_decorator(ctx: ASTTransformerFuncContext, node) -> str:
     return ""
 
 
-def maybe_lifted_primitive(ctx: ASTTransformerFuncContext, parent: Any, attr: str):
-    """Handle access to a primitive member that ``@qd.data_oriented(template_primitives=False)`` lifted into a
-    runtime scalar kernel arg (see ``predeclare_struct_primitives``).
+def maybe_lifted_primitive(ctx: FuncCompileContext, parent: Any, attr: str):
+    """Handle access to a primitive member that ``@qd.data_oriented(template_primitives=False)`` lifted into a runtime
+    scalar kernel arg (see ``bind_data_oriented_runtime_scalars``).
 
-    Returns the arg-load ``Expr`` to substitute for the baked value in the enforcing pass; returns ``None`` when
-    the attribute is not a lifted primitive, or during the non-enforcing discovery pass (where the access is
-    instead recorded via ``mark_used`` and the caller falls back to baking the throw-away discovery-pass IR).
+    Returns the arg-load ``Expr`` to substitute for the baked value in the enforcing pass; returns ``None`` when the
+    attribute is not a lifted primitive, or during the non-enforcing discovery pass (where the access is instead
+    recorded via ``mark_used`` and the caller falls back to baking the throw-away discovery-pass IR).
 
-    Raises ``QuadrantsSyntaxError`` if the lifted primitive is used inside ``qd.static(...)``: that context
-    requires a compile-time constant, which a runtime-lifted primitive is not. Under this flag there is no
-    per-attribute baked escape hatch, so a ``qd.static`` use is unambiguously a mistake and we surface it loudly
-    rather than silently baking a value that will not track mutations.
+    Raises ``QuadrantsSyntaxError`` if the lifted primitive is used inside ``qd.static(...)``: that context requires a
+    compile-time constant, which a runtime-lifted primitive is not. Under this flag there is no per-attribute baked
+    escape hatch, so a ``qd.static`` use is unambiguously a mistake and we surface it loudly rather than silently baking
+    a value that will not track mutations.
     """
-    provenance = ctx.global_context.struct_primitive_provenance
-    if not provenance:
+    runtime_scalar_arg_info_by_member = ctx.kernel_compile_context.runtime_scalar_arg_info_by_member
+    if not runtime_scalar_arg_info_by_member:
         return None
     key = (id(parent), attr)
-    entry = provenance.get(key)
+    entry = runtime_scalar_arg_info_by_member.get(key)
     if entry is None:
         return None
     if ctx.is_in_static_scope():
@@ -515,10 +497,10 @@ def maybe_lifted_primitive(ctx: ASTTransformerFuncContext, parent: Any, attr: st
             f"decorate the class @qd.data_oriented (the default, template_primitives=True) to bake '{attr}' as a "
             f"compile-time constant."
         )
-    pruning = ctx.global_context.pruning
+    pruning = ctx.kernel_compile_context.pruning
     if not pruning.enforcing:
-        # Record under the kernel's func id (see ``predeclare_struct_primitives``) so the enforcing pass declares
+        # Record under the kernel's func id (see ``bind_data_oriented_runtime_scalars``) so the enforcing pass declares
         # this primitive and the existing fastcache serialisation captures it.
         pruning.mark_used(pruning.KERNEL_FUNC_ID, entry[0])
         return None
-    return ctx.global_context.struct_primitive_to_expr.get(key)
+    return ctx.kernel_compile_context.runtime_scalar_arg_expr_by_member.get(key)
