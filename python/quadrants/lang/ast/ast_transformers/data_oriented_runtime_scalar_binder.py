@@ -101,7 +101,7 @@ def _create_runtime_scalar_bindings(func_ctx: FuncCompileContext, scalar_members
     runtime = impl.get_runtime()
     runtime_scalar_arg_info_by_member = func_ctx.kernel_compile_context.runtime_scalar_arg_info_by_member
     runtime_scalar_arg_expr_by_member = func_ctx.kernel_compile_context.runtime_scalar_arg_expr_by_member
-    launch_info = func_ctx.kernel_compile_context.struct_primitive_launch_info
+    runtime_scalar_launch_info = func_ctx.kernel_compile_context.runtime_scalar_launch_info
     pruning = func_ctx.kernel_compile_context.pruning
     # The kernel ID preserves uses inside inlined qd.func calls and includes them in fastcache pruning metadata.
     # Globally unique flat names avoid collisions with dataclass fields.
@@ -131,7 +131,7 @@ def _create_runtime_scalar_bindings(func_ctx: FuncCompileContext, scalar_members
         runtime_scalar_arg_expr_by_member[key] = expr.Expr(
             _qd_core.make_arg_load_expr(arg_id, cooked, False, create_load=True, dbg_info=argload_di)
         )
-        launch_info.append((arg_id[0], arg_idx, attr_chain, kind))
+        runtime_scalar_launch_info.append((arg_id[0], arg_idx, attr_chain, kind))
 
 
 def bind_data_oriented_runtime_scalars(func_ctx: FuncCompileContext) -> None:
