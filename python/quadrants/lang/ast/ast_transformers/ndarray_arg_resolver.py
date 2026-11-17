@@ -18,12 +18,12 @@ from __future__ import annotations
 
 import ast
 
-from quadrants.lang.ast.ast_transformer_utils import ASTTransformerFuncContext
+from quadrants.lang.ast.ast_transformer_utils import FuncCompileContext
 from quadrants.lang.exception import QuadrantsSyntaxError
 
 
 def resolve_ndarray_kernel_arg_id(
-    ctx: ASTTransformerFuncContext,
+    ctx: FuncCompileContext,
     kernel,
     node: ast.expr,
     usage: str,

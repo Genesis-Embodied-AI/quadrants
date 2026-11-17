@@ -22,7 +22,7 @@ from .._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
 from ..field import ScalarField
 from ..kernel_arguments import ArgMetadata
 from ..matrix import MatrixField, MatrixNdarray, VectorNdarray
-from ..util import is_data_oriented, is_dataclass_instance, wants_runtime_primitives
+from ..util import is_data_oriented, is_dataclass_instance, uses_template_primitives
 from .hash_utils import hash_iterable_strings
 
 _FIELD_TYPES = (ScalarField, MatrixField)
@@ -395,7 +395,7 @@ def stringify_obj_type(
         # A normal @qd.data_oriented bakes primitive members into the kernel (value in the cache key); one declared
         # with template_primitives=False lifts them to runtime args (type only - value must NOT enter the key, or it
         # would recompile on every value change, defeating the feature). Decide per object, since the flag is per class.
-        child_meta = _NON_TEMPLATE_CHILD_META if wants_runtime_primitives(obj) else ArgMetadata(Template, "")
+        child_meta = ArgMetadata(Template, "") if uses_template_primitives(obj) else _NON_TEMPLATE_CHILD_META
         for k, v in _dict.items():
             # ``QuadrantsCallable.__get__`` stashes bound callables on ``instance.__dict__``; they are not data.
             v_type = type(v)
