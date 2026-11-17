@@ -12,7 +12,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang._kernel_types import KernelBatchedArgType
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
-from quadrants.lang.impl import Kernel, QuadrantsSyntaxError
+from quadrants.lang.impl import Kernel
 
 from tests.helpers import test_utils
 
@@ -3038,41 +3038,41 @@ def test_pruning_star_args() -> None:
 
 
 @test_utils.test()
-def test_pruning_star_args_error_not_at_end_another_arg() -> None:
+def test_pruning_star_args_followed_by_positional_arg() -> None:
     @qd.func
     def f1(a: qd.types.NDArray[qd.i32, 1], b: qd.i32, c: qd.i32, d: qd.i32):
         a[0] = b
         a[1] = c
+        a[2] = d
 
     @qd.kernel
     def k1(a: qd.types.NDArray[qd.i32, 1]) -> None:
-        f1(a, *star_args, 3)
+        f1(a, *star_args, 7)
 
     star_args = [3, 5]
 
     a = qd.ndarray(qd.i32, (10,))
-    with pytest.raises(QuadrantsSyntaxError) as e:
-        k1(a)
-    assert "STARNOTLAST" in e.value.args[0]
+    k1(a)
+    assert [a[i] for i in range(3)] == [3, 5, 7]
 
 
 @test_utils.test()
-def test_pruning_star_args_error_not_at_end_kwargs() -> None:
+def test_pruning_star_args_followed_by_keyword_arg() -> None:
     @qd.func
     def f1(a: qd.types.NDArray[qd.i32, 1], b: qd.i32, c: qd.i32, d: qd.i32):
         a[0] = b
         a[1] = c
+        a[2] = d
 
     @qd.kernel
     def k1(a: qd.types.NDArray[qd.i32, 1]) -> None:
-        f1(a, *star_args, d=3)
+        f1(a, *star_args, d=7)
 
     star_args = [3, 5]
 
     a = qd.ndarray(qd.i32, (10,))
-    with pytest.raises(QuadrantsSyntaxError) as e:
-        k1(a)
-    assert "STARNOTLAST" in e.value.args[0]
+    k1(a)
+    assert [a[i] for i in range(3)] == [3, 5, 7]
 
 
 @test_utils.test()

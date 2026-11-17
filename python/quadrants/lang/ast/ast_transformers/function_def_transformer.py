@@ -176,7 +176,10 @@ class FunctionDefTransformer:
                     )
                     value = child
                 elif is_data_oriented(child):
-                    raise QuadrantsSyntaxError("Data-oriented objects inside Python dataclass fields are unsupported.")
+                    raise QuadrantsSyntaxError(
+                        "Data-oriented objects inside Python dataclass fields are unsupported. "
+                        "Store the dataclass on the data-oriented object instead."
+                    )
                 else:
                     result, value = FunctionDefTransformer._decl_and_create_variable(
                         ctx, field.type, flat_name, this_arg_features[field_idx], "", child
