@@ -84,12 +84,7 @@ class TemplateMapper:
                 (
                     OPTIONAL_ABSENT
                     if arg is None and kernel_arg.optional and type(kernel_arg.annotation) is ndarray_type.NdarrayType
-                    else _extract_arg(
-                        raise_on_templated_floats,
-                        arg,
-                        kernel_arg.annotation,
-                        kernel_arg.name,
-                    )
+                    else _extract_arg(raise_on_templated_floats, arg, kernel_arg.annotation, kernel_arg.name)
                 )
                 for arg, kernel_arg in zip(args, self.arguments)
             ]
