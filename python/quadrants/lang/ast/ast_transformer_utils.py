@@ -189,15 +189,15 @@ class KernelCompileContext:
         self.struct_ndarray_launch_info: list[tuple] = []
         # Lifted-primitive support for ``@qd.data_oriented(template_primitives=False)``. Mirrors the two ndarray
         # structures above, plus member-to-argument metadata driving the two-pass pruning.
-        # * ``runtime_scalar_arg_info_by_member`` maps ``(id(parent_obj), attr_name)`` to ``(flat_name, arg_idx, attr_chain,
-        #   kind)`` for every reachable primitive member of a flagged template arg. Built (cheaply, no kernel-arg
-        #   declaration) on every compilation pass. ``build_Attribute`` uses it to ``mark_used`` the accessed
+        # * ``runtime_scalar_arg_info_by_member`` maps ``(id(parent_obj), attr_name)`` to ``(flat_name, arg_idx,
+        #   attr_chain, kind)`` for every reachable primitive member of a flagged template arg. Built (cheaply, no
+        #   kernel-arg declaration) on every compilation pass. ``build_Attribute`` uses it to ``mark_used`` the accessed
         #   primitives during the non-enforcing discovery pass.
-        # * ``runtime_scalar_arg_expr_by_member`` maps the same key to the arg-load ``Expr``. Populated only in the enforcing
-        #   pass, and only for primitives actually accessed by the body (pruning), so ``build_Attribute`` can return
-        #   the runtime scalar arg instead of baking the value.
-        # * ``runtime_scalar_launch_infos`` records ``(arg_id, template_arg_idx, attr_chain, kind)`` tuples (``kind``
-        #   in ``{'f', 'i', 'u'}``) so the launch path can read the live value and bind it.
+        # * ``runtime_scalar_arg_expr_by_member`` maps the same key to the arg-load ``Expr``. Populated only in the
+        #   enforcing pass, and only for primitives actually accessed by the body (pruning), so ``build_Attribute`` can
+        #   return the runtime scalar arg instead of baking the value.
+        # * ``runtime_scalar_launch_infos`` records ``(arg_id, template_arg_idx, attr_chain, kind)`` tuples (``kind`` in
+        #   ``{'f', 'i', 'u'}``) so the launch path can read the live value and bind it.
         self.runtime_scalar_arg_info_by_member: dict[tuple[int, str], tuple] = {}
         self.runtime_scalar_arg_expr_by_member: dict[tuple[int, str], Any] = {}
         self.runtime_scalar_launch_infos: list[tuple] = []
@@ -489,17 +489,17 @@ def get_decorator(ctx: FuncCompileContext, node) -> str:
 
 
 def maybe_lifted_primitive(ctx: FuncCompileContext, parent: Any, attr: str):
-    """Handle access to a primitive member that ``@qd.data_oriented(template_primitives=False)`` lifted into a
-    runtime scalar kernel arg (see ``bind_data_oriented_runtime_scalars``).
+    """Handle access to a primitive member that ``@qd.data_oriented(template_primitives=False)`` lifted into a runtime
+    scalar kernel arg (see ``bind_data_oriented_runtime_scalars``).
 
-    Returns the arg-load ``Expr`` to substitute for the baked value in the enforcing pass; returns ``None`` when
-    the attribute is not a lifted primitive, or during the non-enforcing discovery pass (where the access is
-    instead recorded via ``mark_used`` and the caller falls back to baking the throw-away discovery-pass IR).
+    Returns the arg-load ``Expr`` to substitute for the baked value in the enforcing pass; returns ``None`` when the
+    attribute is not a lifted primitive, or during the non-enforcing discovery pass (where the access is instead
+    recorded via ``mark_used`` and the caller falls back to baking the throw-away discovery-pass IR).
 
-    Raises ``QuadrantsSyntaxError`` if the lifted primitive is used inside ``qd.static(...)``: that context
-    requires a compile-time constant, which a runtime-lifted primitive is not. Under this flag there is no
-    per-attribute baked escape hatch, so a ``qd.static`` use is unambiguously a mistake and we surface it loudly
-    rather than silently baking a value that will not track mutations.
+    Raises ``QuadrantsSyntaxError`` if the lifted primitive is used inside ``qd.static(...)``: that context requires a
+    compile-time constant, which a runtime-lifted primitive is not. Under this flag there is no per-attribute baked
+    escape hatch, so a ``qd.static`` use is unambiguously a mistake and we surface it loudly rather than silently baking
+    a value that will not track mutations.
     """
     runtime_scalar_arg_info_by_member = ctx.kernel_compile_context.runtime_scalar_arg_info_by_member
     if not runtime_scalar_arg_info_by_member:

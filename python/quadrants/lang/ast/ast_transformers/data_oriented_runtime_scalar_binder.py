@@ -4,8 +4,8 @@ args at AST-build time.
 
 Lives alongside ``ndarray_arg_resolver.py`` / ``checkpoint_transformer.py`` so the central
 ``function_def_transformer.py`` file doesn't have to grow per-feature (the same rationale the ndarray resolver
-documents). ``FunctionDefTransformer.transform`` delegates here right after ``_predeclare_struct_ndarrays``; this is
-the only entry point.
+documents). ``FunctionDefTransformer.transform`` delegates here right after ``_predeclare_struct_ndarrays``; this is the
+only entry point.
 
 See ``docs/source/user_guide/compound_types.md`` (section "Runtime primitives: ``template_primitives=False``") for the
 user-facing surface.
@@ -46,10 +46,12 @@ def _collect_scalars_in_single_data_oriented(
     seen_ids: set[int],
     scalar_members: list[_ScalarMember],
 ) -> None:
-    """Walk stored attributes of data-oriented objects and dataclasses, collecting exact Python bool, int, and float values.
+    """Walk stored attributes of data-oriented objects and dataclasses, collecting exact Python bool, int, and float
+    values.
 
-    Append each scalar and its attribute route to scalar_members, including scalars the kernel does not use. Pruning later
-    selects the kernel parameters. Stop at previously visited objects and do not descend into lists, tuples, or dicts.
+    Append each scalar and its attribute route to scalar_members, including scalars the kernel does not use. Pruning
+    later selects the kernel parameters. Stop at previously visited objects and do not descend into lists, tuples, or
+    dicts.
     """
     obj_id = id(py_obj)
     if obj_id in seen_ids:
@@ -100,6 +102,7 @@ def _create_runtime_scalar_bindings(func_ctx: FuncCompileContext, scalar_members
     """Record scalar members and create kernel parameters for those used by the compiled kernel.
 
     During discovery, record each member's location and scalar kind so accesses can be marked as used.
+
     During the enforcing pass, for each used member:
 
     - Append a scalar parameter to the callable's parameter list and get its index.
