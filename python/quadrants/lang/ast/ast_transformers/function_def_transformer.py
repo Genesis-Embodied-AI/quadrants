@@ -35,8 +35,8 @@ from quadrants.lang.ast.ast_transformers import graph_api
 from quadrants.lang.ast.ast_transformers.checkpoint_transformer import (
     CheckpointTransformer,
 )
-from quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer import (
-    predeclare_struct_primitives,
+from quadrants.lang.ast.ast_transformers.data_oriented_runtime_scalar_binder import (
+    bind_data_oriented_runtime_scalars,
 )
 from quadrants.lang.ast.symbol_resolver import ASTResolver
 from quadrants.lang.buffer_view import BufferView
@@ -243,7 +243,7 @@ class FunctionDefTransformer:
             )
 
         FunctionDefTransformer._predeclare_struct_ndarrays(ctx)
-        predeclare_struct_primitives(ctx)
+        bind_data_oriented_runtime_scalars(ctx)
         compiling_callable.finalize_params()
         # remove original args
         node.args.args = []

@@ -386,8 +386,8 @@ class Kernel(FuncBase):
         self.launch_context_buffer_cache = LaunchContextBufferCache()
         self._struct_ndarray_launch_info_by_key: dict[CompiledKernelKeyType, list] = {}
         # Launch info for primitives lifted from ``@qd.data_oriented(template_primitives=False)`` template args (see
-        # ``predeclare_struct_primitives``). Maps key -> list of ``(arg_id, template_arg_idx, attr_chain, kind)``.
-        self._struct_primitive_launch_info_by_key: dict[CompiledKernelKeyType, list] = {}
+        # ``bind_data_oriented_runtime_scalars``). Maps key -> list of ``(arg_id, template_arg_idx, attr_chain, kind)``.
+        self._runtime_scalar_launch_infos_by_compiled_kernel_key: dict[CompiledKernelKeyType, list] = {}
         self._mutable_nd_cached_key: CompiledKernelKeyType | None = None
         self._mutable_nd_cached_val: list = []
         self._tensor_unwrap_indices: tuple[int, ...] | None = None
@@ -599,11 +599,9 @@ class Kernel(FuncBase):
                     # skip the whole primitive-binding path with a single empty-dict check instead of paying a
                     # per-launch ``.get(key)`` (tuple hash) on every cache-missing launch -- which is the hot path for
                     # CPU / unbatched genesis steps that launch many tiny kernels.
-                    struct_primitive_launch_info = getattr(
-                        ctx.kernel_compile_context, "struct_primitive_launch_info", []
-                    )
-                    if struct_primitive_launch_info:
-                        self._struct_primitive_launch_info_by_key[key] = struct_primitive_launch_info
+                    runtime_scalar_launch_infos = getattr(ctx.kernel_compile_context, "runtime_scalar_launch_infos", [])
+                    if runtime_scalar_launch_infos:
+                        self._runtime_scalar_launch_infos_by_compiled_kernel_key[key] = runtime_scalar_launch_infos
                 else:
                     # Propagate used-sets across call edges to a fixpoint (order-independent) before
                     # collapsing flat names to their used prefixes below.
@@ -758,10 +756,10 @@ class Kernel(FuncBase):
 
             # Empty for every kernel that doesn't use template_primitives=False (the common case), so this guard
             # short-circuits without hashing ``key`` -- keeping the per-launch hot path free of added overhead.
-            if self._struct_primitive_launch_info_by_key:
-                struct_prim_info = self._struct_primitive_launch_info_by_key.get(key)
-                if struct_prim_info:
-                    self._set_struct_primitive_args(struct_prim_info, args, launch_ctx_buffer)
+            if self._runtime_scalar_launch_infos_by_compiled_kernel_key:
+                runtime_scalar_launch_infos = self._runtime_scalar_launch_infos_by_compiled_kernel_key.get(key)
+                if runtime_scalar_launch_infos:
+                    self._set_struct_primitive_args(runtime_scalar_launch_infos, args, launch_ctx_buffer)
                     # Lifted primitives are read fresh from the live object on every launch (that is the whole point),
                     # so the prepared launch context must not be cached under ``args_hash`` (the hash keys on object
                     # id, not primitive value, so a cached context would serve stale values when the user mutates the
@@ -926,10 +924,10 @@ class Kernel(FuncBase):
         members. Walks each recorded attr-chain to read the live value and buckets it by declared dtype kind (``'f'``
         float, ``'i'`` signed int, ``'u'`` unsigned int), so the value is bound fresh on every launch.
 
-        The dtype kind is frozen at first compile (see ``struct_primitive_predeclarer``). Binding a ``float`` to an
-        arg that was lifted as an integer would silently truncate (``int(1.5) == 1``), so that one lossy direction is
-        rejected here rather than corrupting the value; the lossless directions (``int``/``bool`` -> float, and
-        ``bool`` <-> ``int``) still coerce, matching typed-scalar-arg semantics."""
+        The dtype kind is frozen at first compile (see ``data_oriented_runtime_scalar_binder``). Binding a ``float`` to
+        an arg that was lifted as an integer would silently truncate (``int(1.5) == 1``), so that one lossy direction is
+        rejected here rather than corrupting the value; the lossless directions (``int``/``bool`` -> float, and ``bool``
+        <-> ``int``) still coerce, matching typed-scalar-arg semantics."""
         for arg_id, template_arg_idx, attr_chain, kind in launch_info:
             obj = args[template_arg_idx]
             for attr_name in attr_chain:
