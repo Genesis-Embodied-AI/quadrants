@@ -196,11 +196,11 @@ class KernelCompileContext:
         # * ``runtime_scalar_arg_expr_by_member`` maps the same key to the arg-load ``Expr``. Populated only in the enforcing
         #   pass, and only for primitives actually accessed by the body (pruning), so ``build_Attribute`` can return
         #   the runtime scalar arg instead of baking the value.
-        # * ``runtime_scalar_launch_info`` records ``(arg_id, template_arg_idx, attr_chain, kind)`` tuples (``kind``
+        # * ``runtime_scalar_launch_infos`` records ``(arg_id, template_arg_idx, attr_chain, kind)`` tuples (``kind``
         #   in ``{'f', 'i', 'u'}``) so the launch path can read the live value and bind it.
         self.runtime_scalar_arg_info_by_member: dict[tuple[int, str], tuple] = {}
         self.runtime_scalar_arg_expr_by_member: dict[tuple[int, str], Any] = {}
-        self.runtime_scalar_launch_info: list[tuple] = []
+        self.runtime_scalar_launch_infos: list[tuple] = []
         # Caller-side `loop_depth` snapshot for the in-flight `@qd.func` invocation. Each func compile creates a fresh
         # `FuncCompileContext` with `loop_depth = 0`, so without this snapshot a non-static `range(...)` loop
         # inside a func body would not see any outer for-loops in the caller and would skip the backward-mode dynamic-
