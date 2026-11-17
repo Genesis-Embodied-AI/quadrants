@@ -599,9 +599,7 @@ class Kernel(FuncBase):
                     # skip the whole primitive-binding path with a single empty-dict check instead of paying a
                     # per-launch ``.get(key)`` (tuple hash) on every cache-missing launch -- which is the hot path for
                     # CPU / unbatched genesis steps that launch many tiny kernels.
-                    runtime_scalar_launch_infos = getattr(
-                        ctx.kernel_compile_context, "runtime_scalar_launch_infos", []
-                    )
+                    runtime_scalar_launch_infos = getattr(ctx.kernel_compile_context, "runtime_scalar_launch_infos", [])
                     if runtime_scalar_launch_infos:
                         self._runtime_scalar_launch_infos_by_compiled_kernel_key[key] = runtime_scalar_launch_infos
                 else:
