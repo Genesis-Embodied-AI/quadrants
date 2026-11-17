@@ -16,7 +16,7 @@ from typing import Any
 
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import expr, impl
-from quadrants.lang.ast.ast_transformer_utils import ASTTransformerFuncContext
+from quadrants.lang.ast.ast_transformer_utils import FuncCompileContext
 from quadrants.lang.util import (
     is_data_oriented,
     is_dataclass_instance,
@@ -25,7 +25,7 @@ from quadrants.lang.util import (
 from quadrants.types import annotations
 
 
-def predeclare_struct_primitives(ctx: ASTTransformerFuncContext) -> None:
+def predeclare_struct_primitives(ctx: FuncCompileContext) -> None:
     """For each templated arg whose root class is decorated ``@qd.data_oriented(template_primitives=False)``, walk
     the reachable attribute graph and declare every primitive (``int`` / ``float`` / ``bool``) member as a runtime
     scalar kernel arg, instead of letting ``build_Attribute`` bake it as a compile-time constant. The arg-load

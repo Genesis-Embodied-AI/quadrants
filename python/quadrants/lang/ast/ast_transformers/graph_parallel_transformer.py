@@ -17,7 +17,7 @@ from __future__ import annotations
 import ast
 
 from quadrants.lang.ast.ast_transformer_utils import (
-    ASTTransformerFuncContext,
+    FuncCompileContext,
     get_decorator,
 )
 from quadrants.lang.ast.ast_transformers import graph_api
@@ -56,7 +56,7 @@ class GraphParallelTransformer:
         return True
 
     @staticmethod
-    def build_graph_parallel_context_with(ctx: ASTTransformerFuncContext, node: ast.With, build_stmts) -> None:
+    def build_graph_parallel_context_with(ctx: FuncCompileContext, node: ast.With, build_stmts) -> None:
         """Handles ``with qd.graph_parallel_context():`` fork/join regions.
 
         Validates the use-site (kernel must be graph=True, no nesting), then validates the whole region grammar up-front
@@ -114,13 +114,13 @@ class GraphParallelTransformer:
     #                   `qd.checkpoint`, `qd.graph_parallel_context`, or a nested `qd.graph_parallel` section).
     # ------------------------------------------------------------------------------------------------------------------
     @staticmethod
-    def validate_region(ctx: ASTTransformerFuncContext, node: ast.With) -> None:
+    def validate_region(ctx: FuncCompileContext, node: ast.With) -> None:
         """Validate an entire ``qd.graph_parallel_context()`` region (body + every section's body) up-front. The single
         entry point for the region/section grammar; see the block comment above."""
         GraphParallelTransformer._validate_region_body(ctx, node.body)
 
     @staticmethod
-    def _validate_region_body(ctx: ASTTransformerFuncContext, stmts: list[ast.stmt]) -> None:
+    def _validate_region_body(ctx: FuncCompileContext, stmts: list[ast.stmt]) -> None:
         """A region body may contain only `with qd.graph_parallel():` sections, optionally wrapped in compile-time
         `if qd.static(...)` (the optional ``qd.graph_parallel`` section pattern, e.g. qipc's ENABLE_EE) or
         `for ... in qd.static(...)` loops (one section per element of a compile-time sequence). Docstrings / coverage
@@ -157,7 +157,7 @@ class GraphParallelTransformer:
             )
 
     @staticmethod
-    def _validate_section_body(ctx: ASTTransformerFuncContext, stmts: list[ast.stmt]) -> None:
+    def _validate_section_body(ctx: FuncCompileContext, stmts: list[ast.stmt]) -> None:
         """A ``qd.graph_parallel()`` section body must be straight-line task work: no nested graph-structuring construct
         (``qd.graph_do_while``, ``qd.checkpoint``, ``qd.graph_parallel_context``, or a nested ``qd.graph_parallel``
         section) anywhere inside it. See ``docs/source/user_guide/graph.md``.
@@ -205,7 +205,7 @@ class GraphParallelTransformer:
         return graph_api.matches(node.func, "do_while")
 
     @staticmethod
-    def build_parallel_section_with(ctx: ASTTransformerFuncContext, node: ast.With, build_stmts) -> None:
+    def build_parallel_section_with(ctx: FuncCompileContext, node: ast.With, build_stmts) -> None:
         """Handles a ``with qd.graph_parallel():`` section of a ``qd.graph_parallel_context()`` region.
 
         The section body grammar is validated up-front by ``validate_region`` (called from

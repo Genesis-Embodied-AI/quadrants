@@ -11,7 +11,7 @@ from quadrants.lang._name_utils import (
 )
 from quadrants.lang._signature import get_func_signature
 from quadrants.lang.ast import (
-    ASTTransformerFuncContext,
+    FuncCompileContext,
 )
 from quadrants.lang.kernel_arguments import ArgMetadata
 
@@ -74,7 +74,7 @@ def _populate_struct_locals_from_params_dict(basename: str, struct_locals, struc
             struct_locals.add(child_name)
 
 
-def extract_struct_locals_from_context(ctx: ASTTransformerFuncContext) -> set[str]:
+def extract_struct_locals_from_context(ctx: FuncCompileContext) -> set[str]:
     """
     Provides meta information for later tarnsformation of nodes in AST
 

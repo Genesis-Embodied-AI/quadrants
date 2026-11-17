@@ -42,7 +42,7 @@ from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang._signature import get_func_signature
 from quadrants.lang._wrap_inspect import get_source_info_and_src
-from quadrants.lang.ast import ASTTransformerFuncContext
+from quadrants.lang.ast import FuncCompileContext
 from quadrants.lang.buffer_view import BufferView as BufferViewInstance
 from quadrants.lang.exception import (
     QuadrantsRuntimeError,
@@ -229,7 +229,7 @@ class FuncBase:
         self.orig_arguments: list[ArgMetadata] = []
         self.return_type = None
         # Shared by every AST transform of this function; see
-        # ASTTransformerFuncContext.memoized_get_formatted_location_with_source_context.
+        # FuncCompileContext.memoized_get_formatted_location_with_source_context.
         self.pos_info_cache: dict[tuple, str] = {}
 
         self.check_parameter_annotations()
@@ -390,7 +390,7 @@ class FuncBase:
         pruning: "Pruning | None" = None,  # has value when called from Kernel.materialize
         currently_compiling_materialize_key=None,  # has value when called from Kernel.materialize
         pass_idx: int | None = None,  # has value when called from Kernel.materialize
-    ) -> tuple[ast.Module, ASTTransformerFuncContext]:
+    ) -> tuple[ast.Module, FuncCompileContext]:
         function_source_info, src = get_source_info_and_src(self.func)
         src = [textwrap.fill(line, tabsize=4, width=9999) for line in src]
         tree = ast.parse(textwrap.dedent("\n".join(src)))
@@ -449,7 +449,7 @@ class FuncBase:
 
         raise_on_templated_floats = impl.current_cfg().raise_on_templated_floats
 
-        ctx = ASTTransformerFuncContext(
+        ctx = FuncCompileContext(
             kernel_compile_context=kernel_compile_context,  # type: ignore[arg-type]
             template_slot_locations=template_slot_locations,
             is_kernel=is_kernel,

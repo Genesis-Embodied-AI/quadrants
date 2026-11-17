@@ -15,7 +15,7 @@ from __future__ import annotations
 import ast
 from dataclasses import dataclass
 
-from quadrants.lang.ast.ast_transformer_utils import ASTTransformerFuncContext
+from quadrants.lang.ast.ast_transformer_utils import FuncCompileContext
 from quadrants.lang.exception import QuadrantsSyntaxError
 
 # Sentinel name used by `_kernel_coverage.py` (`FIELD_VAR_NAME`) for the probe-tracking field. The checkpoint validator
@@ -191,7 +191,7 @@ class CheckpointTransformer:
 
     @staticmethod
     def build_checkpoint_with(
-        ctx: ASTTransformerFuncContext,
+        ctx: FuncCompileContext,
         node: ast.With,
         info: CheckpointCallInfo,
         build_stmts,

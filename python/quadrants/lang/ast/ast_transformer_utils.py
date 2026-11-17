@@ -28,7 +28,7 @@ AutodiffMode = _qd_core.AutodiffMode
 
 
 class Builder:
-    def __call__(self, ctx: "ASTTransformerFuncContext", node: ast.AST):
+    def __call__(self, ctx: "FuncCompileContext", node: ast.AST):
         method_name = "build_" + node.__class__.__name__
         method = getattr(self, method_name, None)
         try:
@@ -202,14 +202,14 @@ class KernelCompileContext:
         self.struct_primitive_to_expr: dict[tuple[int, str], Any] = {}
         self.struct_primitive_launch_info: list[tuple] = []
         # Caller-side `loop_depth` snapshot for the in-flight `@qd.func` invocation. Each func compile creates a fresh
-        # `ASTTransformerFuncContext` with `loop_depth = 0`, so without this snapshot a non-static `range(...)` loop
+        # `FuncCompileContext` with `loop_depth = 0`, so without this snapshot a non-static `range(...)` loop
         # inside a func body would not see any outer for-loops in the caller and would skip the backward-mode dynamic-
         # range diagnostic, silently emitting a wrong adjoint. `CallTransformer.build_Call` writes the caller
         # `ctx.loop_depth` here before invoking the func and restores the previous value after, so the new func ctx
         # can seed its `loop_depth` from this field via `_func_base.py`.
         self.caller_loop_depth: int = 0
         # Caller-side "am I (transitively) inside non-static control flow?" snapshot for the in-flight `@qd.func`
-        # invocation. Each func compile creates a fresh `ASTTransformerFuncContext` whose own
+        # invocation. Each func compile creates a fresh `FuncCompileContext` whose own
         # `non_static_control_flow_status` starts False, so a `@qd.func(requires_top_level=True)` reached *through* an
         # unmarked helper called from a runtime for / if / while would not observe the caller's control-flow context
         # and would escape the top-level check. `CallTransformer.build_Call` writes
@@ -221,7 +221,7 @@ class KernelCompileContext:
         self.caller_in_non_static_control_flow: bool = False
 
 
-class ASTTransformerFuncContext:
+class FuncCompileContext:
     def __init__(
         self,
         kernel_compile_context: KernelCompileContext,
@@ -474,7 +474,7 @@ class ASTTransformerFuncContext:
         return msg
 
 
-def get_decorator(ctx: ASTTransformerFuncContext, node) -> str:
+def get_decorator(ctx: FuncCompileContext, node) -> str:
     if not isinstance(node, ast.Call):
         return ""
     for wanted, name in [
@@ -488,7 +488,7 @@ def get_decorator(ctx: ASTTransformerFuncContext, node) -> str:
     return ""
 
 
-def maybe_lifted_primitive(ctx: ASTTransformerFuncContext, parent: Any, attr: str):
+def maybe_lifted_primitive(ctx: FuncCompileContext, parent: Any, attr: str):
     """Handle access to a primitive member that ``@qd.data_oriented(template_primitives=False)`` lifted into a
     runtime scalar kernel arg (see ``predeclare_struct_primitives``).
 
