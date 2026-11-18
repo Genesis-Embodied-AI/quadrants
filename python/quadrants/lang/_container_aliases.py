@@ -17,7 +17,7 @@ _ContainerIds: TypeAlias = tuple[int | None, ...]
 
 _alias_key_by_container_ids: dict[_ContainerIds, tuple[AliasKey, tuple[ReferenceType, ...]]] = {}
 _cache_capacity: int | None = None
-_capacity_evictions = 0
+_num_cache_evictions = 0
 _cleanup_hooks_registered = False
 
 # Container references are fixed after first use; scalar values do not affect these identities.
@@ -88,7 +88,7 @@ def _evict_alias_key(container_ids: _ContainerIds, expired: ReferenceType[Any]) 
 
 def get_cached_container_alias_key(args: tuple[Any, ...]) -> AliasKey:
     """Reuse the sharing pattern for the same containers in the same argument positions."""
-    global _cache_capacity, _capacity_evictions
+    global _cache_capacity, _num_cache_evictions
     container_ids = tuple(id(arg) if is_dataclass_instance(arg) or is_data_oriented(arg) else None for arg in args)
     cached = _alias_key_by_container_ids.get(container_ids)
     if cached is not None:
@@ -105,20 +105,20 @@ def get_cached_container_alias_key(args: tuple[Any, ...]) -> AliasKey:
         _cache_capacity = impl.get_runtime().container_alias_cache_size
     if len(_alias_key_by_container_ids) >= _cache_capacity:
         del _alias_key_by_container_ids[next(iter(_alias_key_by_container_ids))]
-        _capacity_evictions += 1
+        _num_cache_evictions += 1
     _alias_key_by_container_ids[container_ids] = (alias_key, references)
     return alias_key
 
 
 def _clear_container_alias_cache() -> None:
     """Report capacity evictions and clear cached argument combinations and container graphs."""
-    global _cache_capacity, _capacity_evictions
+    global _cache_capacity, _num_cache_evictions
     _alias_key_by_container_ids.clear()
     _graph_ids_by_instance.clear()
-    if _capacity_evictions:
+    if _num_cache_evictions:
         _logging.warn(
-            f"The container alias cache evicted {_capacity_evictions} entries at capacity {_cache_capacity}. "
+            f"The container alias cache evicted {_num_cache_evictions} entries at capacity {_cache_capacity}. "
             "See https://genesis-embodied-ai.github.io/quadrants/user_guide/compound_types.html#container-alias-cache"
         )
-        _capacity_evictions = 0
+        _num_cache_evictions = 0
     _cache_capacity = None
