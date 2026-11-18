@@ -151,16 +151,8 @@ dataclass and data-oriented objects fixed. For example, if `state.grid` holds a 
 
 ### Container alias cache
 
-Two kernel arguments can refer to the same dataclass or data-oriented object. Quadrants remembers which container
-arguments share an object so it can reuse the kernel compiled for that pattern. All kernels share this cache.
-Changing a scalar argument leaves its entry reusable.
-
-The cache holds up to 1,024 argument combinations by default. When it fills, adding an entry evicts the oldest one.
-If that combination is needed again, Quadrants recomputes its sharing pattern. The compiled kernel remains available.
-At `qd.reset()` or normal process exit, a warning reports the total capacity evictions since the last reset, if any.
-
-To keep more combinations in memory, pass a larger positive integer at initialization, for example
-`qd.init(container_alias_cache_size=4096)`, or set `QD_CONTAINER_ALIAS_CACHE_SIZE=4096`.
+If Quadrants warns that this cache is full, your kernels still work. To keep more entries,
+increase the limit from its default of 1,024 with `qd.init(container_alias_cache_size=4096)`.
 
 ### Subclasses
 
