@@ -381,7 +381,7 @@
     <span class="n">transform_tree</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-    <span class="n">FuncCompileContext</span><span class="p">,</span>
+    <span class="n">FuncCompilePassContext</span><span class="p">,</span>
     <span class="n">ReturnStatus</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.exception</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
@@ -413,6 +413,7 @@
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">._pruning</span><span class="w"> </span><span class="kn">import</span> <span class="n">Pruning</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">._quadrants_callable</span><span class="w"> </span><span class="kn">import</span> <span class="n">QuadrantsCallable</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">KernelCompileContext</span><span class="p">,</span> <span class="n">KernelCompilePassContext</span>
 
 <span class="c1"># Define proxies for fast lookup</span>
 <span class="n">_NONE</span><span class="p">,</span> <span class="n">_VALIDATION</span> <span class="o">=</span> <span class="n">AutodiffMode</span><span class="o">.</span><span class="n">NONE</span><span class="p">,</span> <span class="n">AutodiffMode</span><span class="o">.</span><span class="n">VALIDATION</span>
@@ -534,7 +535,7 @@
 <span class="k">class</span><span class="w"> </span><span class="nc">ASTGenerator</span><span class="p">:</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span>
         <span class="n">kernel_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">current_kernel</span><span class="p">:</span> <span class="s2">"Kernel"</span><span class="p">,</span>
         <span class="n">only_parse_function_def</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
@@ -1008,19 +1009,18 @@
             <span class="n">pruning</span> <span class="o">=</span> <span class="n">Pruning</span><span class="p">(</span><span class="n">kernel_used_parameters</span><span class="o">=</span><span class="n">used_py_dataclass_parameters</span><span class="p">)</span>
             <span class="n">range_begin</span> <span class="o">=</span> <span class="mi">0</span> <span class="k">if</span> <span class="n">used_py_dataclass_parameters</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="mi">1</span>
             <span class="n">runtime</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span>
+            <span class="n">kernel_ctx</span> <span class="o">=</span> <span class="n">KernelCompileContext</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pruning</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
             <span class="k">for</span> <span class="n">_pass</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">range_begin</span><span class="p">,</span> <span class="mi">2</span><span class="p">):</span>
+                <span class="n">kernel_ctx</span><span class="o">.</span><span class="n">current_pass</span> <span class="o">=</span> <span class="n">KernelCompilePassContext</span><span class="p">(</span><span class="n">_pass</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">_pass</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
                     <span class="n">pruning</span><span class="o">.</span><span class="n">pass_0_ran</span> <span class="o">=</span> <span class="kc">True</span>
                 <span class="k">if</span> <span class="n">_pass</span> <span class="o">&gt;=</span> <span class="mi">1</span><span class="p">:</span>
                     <span class="n">pruning</span><span class="o">.</span><span class="n">enforce</span><span class="p">()</span>
                 <span class="n">tree</span><span class="p">,</span> <span class="n">ctx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_tree_and_ctx</span><span class="p">(</span>
-                    <span class="n">pass_idx</span><span class="o">=</span><span class="n">_pass</span><span class="p">,</span>
+                    <span class="n">kernel_compile_context</span><span class="o">=</span><span class="n">kernel_ctx</span><span class="p">,</span>
                     <span class="n">py_args</span><span class="o">=</span><span class="n">py_args</span><span class="p">,</span>
                     <span class="n">template_slot_locations</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">template_slot_locations</span><span class="p">,</span>
                     <span class="n">arg_features</span><span class="o">=</span><span class="n">arg_features</span><span class="p">,</span>
-                    <span class="n">current_kernel</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span>
-                    <span class="n">pruning</span><span class="o">=</span><span class="n">pruning</span><span class="p">,</span>
-                    <span class="n">currently_compiling_materialize_key</span><span class="o">=</span><span class="n">key</span><span class="p">,</span>
                 <span class="p">)</span>
                 <span class="n">runtime</span><span class="o">.</span><span class="n">_current_kernel_compile_context</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span>
 
@@ -1041,9 +1041,7 @@
                 <span class="k">if</span> <span class="n">_pass</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
                     <span class="k">assert</span> <span class="n">key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">materialized_kernels</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">materialized_kernels</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">quadrants_kernel</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">_struct_ndarray_launch_info_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span>
-                        <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="p">,</span> <span class="s2">"struct_ndarray_launch_info"</span><span class="p">,</span> <span class="p">[]</span>
-                    <span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_struct_ndarray_launch_info_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">kernel_ctx</span><span class="o">.</span><span class="n">current_pass</span><span class="o">.</span><span class="n">struct_ndarray_launch_info</span>
                     <span class="c1"># Both folds bring data_oriented member accesses into the kernel's used-flat-names set, which</span>
                     <span class="c1"># dataclass-arg expansion is the only other contributor to. Without them the narrow args hash walks</span>
                     <span class="c1"># nothing for a data_oriented arg, and a change of member dtype or value cannot invalidate the cache</span>
@@ -1055,7 +1053,7 @@
                     <span class="c1"># skip the whole primitive-binding path with a single empty-dict check instead of paying a</span>
                     <span class="c1"># per-launch ``.get(key)`` (tuple hash) on every cache-missing launch -- which is the hot path for</span>
                     <span class="c1"># CPU / unbatched genesis steps that launch many tiny kernels.</span>
-                    <span class="n">runtime_scalar_launch_infos</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="p">,</span> <span class="s2">"runtime_scalar_launch_infos"</span><span class="p">,</span> <span class="p">[])</span>
+                    <span class="n">runtime_scalar_launch_infos</span> <span class="o">=</span> <span class="n">kernel_ctx</span><span class="o">.</span><span class="n">current_pass</span><span class="o">.</span><span class="n">runtime_scalar_launch_infos</span>
                     <span class="k">if</span> <span class="n">runtime_scalar_launch_infos</span><span class="p">:</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">_runtime_scalar_launch_infos_by_compiled_kernel_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">runtime_scalar_launch_infos</span>
                 <span class="k">else</span><span class="p">:</span>

@@ -365,7 +365,7 @@
 <div class="viewcode-block" id="Builder">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.Builder">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Builder</span><span class="p">:</span>
-    <span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="s2">"FuncCompileContext"</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">AST</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="s2">"FuncCompilePassContext"</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">AST</span><span class="p">):</span>
         <span class="n">method_name</span> <span class="o">=</span> <span class="s2">"build_"</span> <span class="o">+</span> <span class="n">node</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span>
         <span class="n">method</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">method_name</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">try</span><span class="p">:</span>
@@ -611,9 +611,9 @@
 <div class="viewcode-block" id="KernelCompileContext">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.KernelCompileContext">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">KernelCompileContext</span><span class="p">:</span>
-    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span> <span class="n">current_kernel</span><span class="p">:</span> <span class="s2">"Kernel"</span><span class="p">,</span> <span class="n">pruning</span><span class="p">:</span> <span class="s2">"Pruning"</span><span class="p">,</span> <span class="n">currently_compiling_materialize_key</span><span class="p">,</span> <span class="n">pass_idx</span><span class="p">:</span> <span class="nb">int</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""State shared by all passes of one kernel compilation."""</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">current_kernel</span><span class="p">:</span> <span class="s2">"Kernel"</span><span class="p">,</span> <span class="n">pruning</span><span class="p">:</span> <span class="s2">"Pruning"</span><span class="p">,</span> <span class="n">currently_compiling_materialize_key</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <div class="viewcode-block" id="KernelCompileContext.current_kernel">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.KernelCompileContext.current_kernel">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">current_kernel</span><span class="p">:</span> <span class="s2">"Kernel"</span> <span class="o">=</span> <span class="n">current_kernel</span></div>
@@ -626,53 +626,68 @@
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.KernelCompileContext.currently_compiling_materialize_key">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">currently_compiling_materialize_key</span> <span class="o">=</span> <span class="n">currently_compiling_materialize_key</span></div>
 
-<div class="viewcode-block" id="KernelCompileContext.pass_idx">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.KernelCompileContext.pass_idx">[docs]</a>
+<div class="viewcode-block" id="KernelCompileContext.current_pass">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.KernelCompileContext.current_pass">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_pass</span><span class="p">:</span> <span class="n">KernelCompilePassContext</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="KernelCompilePassContext">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">KernelCompilePassContext</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""State shared by the kernel and its function calls during one compilation pass."""</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pass_idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="viewcode-block" id="KernelCompilePassContext.pass_idx">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext.pass_idx">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">pass_idx</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">pass_idx</span></div>
 
-<div class="viewcode-block" id="KernelCompileContext.ndarray_to_any_array">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.KernelCompileContext.ndarray_to_any_array">[docs]</a>
+<div class="viewcode-block" id="KernelCompilePassContext.ndarray_to_any_array">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext.ndarray_to_any_array">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">ndarray_to_any_array</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span></div>
 
-<div class="viewcode-block" id="KernelCompileContext.struct_ndarray_launch_info">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.KernelCompileContext.struct_ndarray_launch_info">[docs]</a>
+<div class="viewcode-block" id="KernelCompilePassContext.struct_ndarray_launch_info">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext.struct_ndarray_launch_info">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">struct_ndarray_launch_info</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span></div>
 
         <span class="c1"># For template_primitives=False, map (id(parent), attr_name) to (flat_name, arg_idx, attr_chain, kind). Rebuilt</span>
         <span class="c1"># each pass without declaring arguments; discovery uses it to record which primitive members are read.</span>
-<div class="viewcode-block" id="KernelCompileContext.runtime_scalar_arg_info_by_member">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.KernelCompileContext.runtime_scalar_arg_info_by_member">[docs]</a>
+<div class="viewcode-block" id="KernelCompilePassContext.runtime_scalar_arg_info_by_member">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext.runtime_scalar_arg_info_by_member">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">runtime_scalar_arg_info_by_member</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="nb">tuple</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span></div>
 
         <span class="c1"># Map the same member keys to runtime argument expressions, only for used members in the enforcing pass.</span>
-<div class="viewcode-block" id="KernelCompileContext.runtime_scalar_arg_expr_by_member">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.KernelCompileContext.runtime_scalar_arg_expr_by_member">[docs]</a>
+<div class="viewcode-block" id="KernelCompilePassContext.runtime_scalar_arg_expr_by_member">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext.runtime_scalar_arg_expr_by_member">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">runtime_scalar_arg_expr_by_member</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span></div>
 
         <span class="c1"># (arg_id, template_arg_idx, attr_chain, kind) entries locate live values at launch; kind is 'f', 'i', or 'u'.</span>
-<div class="viewcode-block" id="KernelCompileContext.runtime_scalar_launch_infos">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.KernelCompileContext.runtime_scalar_launch_infos">[docs]</a>
+<div class="viewcode-block" id="KernelCompilePassContext.runtime_scalar_launch_infos">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext.runtime_scalar_launch_infos">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">runtime_scalar_launch_infos</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span></div>
 
         <span class="c1"># Carry caller loop depth into fresh qd.func contexts so backward-mode dynamic-range checks see outer loops.</span>
         <span class="c1"># Saved and restored around each call.</span>
-<div class="viewcode-block" id="KernelCompileContext.caller_loop_depth">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.KernelCompileContext.caller_loop_depth">[docs]</a>
+<div class="viewcode-block" id="KernelCompilePassContext.caller_loop_depth">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext.caller_loop_depth">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">caller_loop_depth</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span></div>
 
         <span class="c1"># Carry runtime control flow through nested calls so requires_top_level checks cannot be bypassed by helpers.</span>
         <span class="c1"># Saved and restored around each call. Separate from the callee's local control-flow flag so ordinary helper</span>
         <span class="c1"># returns remain valid.</span>
-<div class="viewcode-block" id="KernelCompileContext.caller_in_non_static_control_flow">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.KernelCompileContext.caller_in_non_static_control_flow">[docs]</a>
+<div class="viewcode-block" id="KernelCompilePassContext.caller_in_non_static_control_flow">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext.caller_in_non_static_control_flow">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">caller_in_non_static_control_flow</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></div>
 </div>
 
 
 
-<div class="viewcode-block" id="FuncCompileContext">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext">[docs]</a>
-<span class="k">class</span><span class="w"> </span><span class="nc">FuncCompileContext</span><span class="p">:</span>
+<div class="viewcode-block" id="FuncCompilePassContext">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">FuncCompilePassContext</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""State for compiling one kernel or qd.func invocation during one compiler pass."""</span>
+
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">kernel_compile_context</span><span class="p">:</span> <span class="n">KernelCompileContext</span><span class="p">,</span>
@@ -695,72 +710,72 @@
     <span class="p">):</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="kn">import</span> <span class="n">extension</span>  <span class="c1"># pylint: disable=import-outside-toplevel</span>
 
-<div class="viewcode-block" id="FuncCompileContext.kernel_compile_context">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.kernel_compile_context">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.kernel_compile_context">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.kernel_compile_context">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="p">:</span> <span class="n">KernelCompileContext</span> <span class="o">=</span> <span class="n">kernel_compile_context</span></div>
 
-<div class="viewcode-block" id="FuncCompileContext.func">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.func">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.func">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.func">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="p">:</span> <span class="s2">"FuncBase"</span> <span class="o">=</span> <span class="n">func</span></div>
 
-<div class="viewcode-block" id="FuncCompileContext.local_scopes">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.local_scopes">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.local_scopes">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.local_scopes">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">local_scopes</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span></div>
 
-<div class="viewcode-block" id="FuncCompileContext.loop_scopes">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.loop_scopes">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.loop_scopes">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.loop_scopes">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">loop_scopes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">LoopScopeAttribute</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span></div>
 
-<div class="viewcode-block" id="FuncCompileContext.template_slot_locations">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.template_slot_locations">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.template_slot_locations">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.template_slot_locations">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">template_slot_locations</span> <span class="o">=</span> <span class="n">template_slot_locations</span></div>
 
-<div class="viewcode-block" id="FuncCompileContext.is_kernel">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.is_kernel">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.is_kernel">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.is_kernel">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">is_kernel</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">is_kernel</span></div>
 
-<div class="viewcode-block" id="FuncCompileContext.arg_features">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.arg_features">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.arg_features">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.arg_features">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">arg_features</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">]]</span> <span class="o">=</span> <span class="n">arg_features</span></div>
 
-<div class="viewcode-block" id="FuncCompileContext.returns">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.returns">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.returns">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.returns">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">returns</span> <span class="o">=</span> <span class="kc">None</span></div>
 
-<div class="viewcode-block" id="FuncCompileContext.global_vars">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.global_vars">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.global_vars">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.global_vars">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">global_vars</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="n">global_vars</span></div>
 
-<div class="viewcode-block" id="FuncCompileContext.template_vars">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.template_vars">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.template_vars">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.template_vars">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">template_vars</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="n">template_vars</span></div>
 
-<div class="viewcode-block" id="FuncCompileContext.struct_locals">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.struct_locals">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.struct_locals">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.struct_locals">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">struct_locals</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span></div>
 
-<div class="viewcode-block" id="FuncCompileContext.is_pure">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.is_pure">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.is_pure">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.is_pure">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">is_pure</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">is_pure</span></div>
 
-<div class="viewcode-block" id="FuncCompileContext.py_args">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.py_args">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.py_args">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.py_args">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">py_args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="n">py_args</span></div>
 
-<div class="viewcode-block" id="FuncCompileContext.return_data">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.return_data">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.return_data">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.return_data">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">return_data</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="n">Any</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span></div>
 
-<div class="viewcode-block" id="FuncCompileContext.file">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.file">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.file">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.file">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">file</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">file</span></div>
 
-<div class="viewcode-block" id="FuncCompileContext.src">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.src">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.src">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.src">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">src</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">src</span></div>
 
-<div class="viewcode-block" id="FuncCompileContext.indent">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.indent">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.indent">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.indent">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">indent</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span></div>
 
         <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">src</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
@@ -768,88 +783,88 @@
                 <span class="bp">self</span><span class="o">.</span><span class="n">indent</span> <span class="o">+=</span> <span class="mi">1</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="k">break</span>
-<div class="viewcode-block" id="FuncCompileContext.lineno_offset">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.lineno_offset">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.lineno_offset">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.lineno_offset">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">lineno_offset</span> <span class="o">=</span> <span class="n">start_lineno</span> <span class="o">-</span> <span class="mi">1</span></div>
 
-<div class="viewcode-block" id="FuncCompileContext.start_lineno">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.start_lineno">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.start_lineno">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.start_lineno">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">start_lineno</span> <span class="o">=</span> <span class="n">start_lineno</span></div>
 
-<div class="viewcode-block" id="FuncCompileContext.end_lineno">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.end_lineno">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.end_lineno">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.end_lineno">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">end_lineno</span> <span class="o">=</span> <span class="n">end_lineno</span></div>
 
-<div class="viewcode-block" id="FuncCompileContext.raised">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.raised">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.raised">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.raised">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">raised</span> <span class="o">=</span> <span class="kc">False</span></div>
 
-<div class="viewcode-block" id="FuncCompileContext.non_static_control_flow_status">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.non_static_control_flow_status">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.non_static_control_flow_status">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.non_static_control_flow_status">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">non_static_control_flow_status</span> <span class="o">=</span> <span class="n">NonStaticControlFlowStatus</span><span class="p">()</span></div>
 
-<div class="viewcode-block" id="FuncCompileContext.static_scope_status">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.static_scope_status">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.static_scope_status">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.static_scope_status">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">static_scope_status</span> <span class="o">=</span> <span class="n">StaticScopeStatus</span><span class="p">()</span></div>
 
-<div class="viewcode-block" id="FuncCompileContext.returned">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.returned">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.returned">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.returned">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">returned</span> <span class="o">=</span> <span class="n">ReturnStatus</span><span class="o">.</span><span class="n">NoReturn</span></div>
 
-<div class="viewcode-block" id="FuncCompileContext.ast_builder">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.ast_builder">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.ast_builder">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.ast_builder">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">ast_builder</span> <span class="o">=</span> <span class="n">ast_builder</span></div>
 
-<div class="viewcode-block" id="FuncCompileContext.visited_funcdef">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.visited_funcdef">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.visited_funcdef">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.visited_funcdef">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">visited_funcdef</span> <span class="o">=</span> <span class="kc">False</span></div>
 
-<div class="viewcode-block" id="FuncCompileContext.is_real_function">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.is_real_function">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.is_real_function">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.is_real_function">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">is_real_function</span> <span class="o">=</span> <span class="n">is_real_function</span></div>
 
-<div class="viewcode-block" id="FuncCompileContext.kernel_args">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.kernel_args">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.kernel_args">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.kernel_args">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">kernel_args</span><span class="p">:</span> <span class="nb">list</span> <span class="o">=</span> <span class="p">[]</span></div>
 
         <span class="c1"># Bare (non-flattened) parameter names of the ``@qd.func`` being processed, so ``build_Name`` can seed</span>
         <span class="c1"># ``_qd_arg_chain`` for chains rooted at them. Kept apart from ``kernel_args`` rather than appended to it, which</span>
         <span class="c1"># would make the "kernel arg is immutable" diagnostic fire for func params.</span>
-<div class="viewcode-block" id="FuncCompileContext.fn_param_names">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.fn_param_names">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.fn_param_names">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.fn_param_names">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">fn_param_names</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span></div>
 
-<div class="viewcode-block" id="FuncCompileContext.only_parse_function_def">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.only_parse_function_def">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.only_parse_function_def">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.only_parse_function_def">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">only_parse_function_def</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></div>
 
-<div class="viewcode-block" id="FuncCompileContext.autodiff_mode">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.autodiff_mode">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.autodiff_mode">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.autodiff_mode">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">autodiff_mode</span> <span class="o">=</span> <span class="n">autodiff_mode</span></div>
 
-<div class="viewcode-block" id="FuncCompileContext.loop_depth">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.loop_depth">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.loop_depth">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.loop_depth">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">loop_depth</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span></div>
 
         <span class="c1"># Whether the (transitive) caller chain that reached this func compile was already inside non-static control</span>
-        <span class="c1"># flow. Seeded from `kernel_compile_context.caller_in_non_static_control_flow` in `_func_base.py`; kernels</span>
+        <span class="c1"># flow. Inherited from the current pass in `_func_base.py`; kernels</span>
         <span class="c1"># start at the top of the call stack so they always begin False. Consulted (together with the local</span>
         <span class="c1"># `non_static_control_flow_status`) by the `requires_top_level` guard in `CallTransformer.build_Call`.</span>
-<div class="viewcode-block" id="FuncCompileContext.inherited_non_static_control_flow">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.inherited_non_static_control_flow">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.inherited_non_static_control_flow">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.inherited_non_static_control_flow">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">inherited_non_static_control_flow</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></div>
 
-<div class="viewcode-block" id="FuncCompileContext.raise_on_templated_floats">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.raise_on_templated_floats">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.raise_on_templated_floats">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.raise_on_templated_floats">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">raise_on_templated_floats</span> <span class="o">=</span> <span class="n">raise_on_templated_floats</span></div>
 
-<div class="viewcode-block" id="FuncCompileContext.expanding_dataclass_call_parameters">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.expanding_dataclass_call_parameters">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.expanding_dataclass_call_parameters">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.expanding_dataclass_call_parameters">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">expanding_dataclass_call_parameters</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></div>
 
 
-<div class="viewcode-block" id="FuncCompileContext.adstack_enabled">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.adstack_enabled">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.adstack_enabled">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.adstack_enabled">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">adstack_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="p">(</span>
             <span class="n">_qd_core</span><span class="o">.</span><span class="n">is_extension_supported</span><span class="p">(</span>
                 <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span><span class="p">,</span>
@@ -860,23 +875,23 @@
 
 
     <span class="c1"># e.g.: FunctionDef, Module, Global</span>
-<div class="viewcode-block" id="FuncCompileContext.variable_scope_guard">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.variable_scope_guard">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.variable_scope_guard">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.variable_scope_guard">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">variable_scope_guard</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">VariableScopeGuard</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">local_scopes</span><span class="p">)</span></div>
 
 
     <span class="c1"># e.g.: For, While</span>
-<div class="viewcode-block" id="FuncCompileContext.loop_scope_guard">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.loop_scope_guard">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.loop_scope_guard">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.loop_scope_guard">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">loop_scope_guard</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">is_static</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
         <span class="k">if</span> <span class="n">is_static</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">LoopScopeGuard</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">loop_scopes</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">LoopScopeGuard</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">loop_scopes</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">non_static_control_flow_guard</span><span class="p">())</span></div>
 
 
-<div class="viewcode-block" id="FuncCompileContext.non_static_if_guard">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.non_static_if_guard">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.non_static_if_guard">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.non_static_if_guard">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">non_static_if_guard</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">if_node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">If</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">NonStaticIfGuard</span><span class="p">(</span>
             <span class="n">if_node</span><span class="p">,</span>
@@ -885,60 +900,60 @@
         <span class="p">)</span></div>
 
 
-<div class="viewcode-block" id="FuncCompileContext.non_static_control_flow_guard">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.non_static_control_flow_guard">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.non_static_control_flow_guard">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.non_static_control_flow_guard">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">non_static_control_flow_guard</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">NonStaticControlFlowGuard</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">NonStaticControlFlowGuard</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">non_static_control_flow_status</span><span class="p">)</span></div>
 
 
-<div class="viewcode-block" id="FuncCompileContext.static_scope_guard">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.static_scope_guard">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.static_scope_guard">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.static_scope_guard">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">static_scope_guard</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StaticScopeGuard</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">StaticScopeGuard</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">static_scope_status</span><span class="p">)</span></div>
 
 
-<div class="viewcode-block" id="FuncCompileContext.current_scope">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.current_scope">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.current_scope">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.current_scope">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">current_scope</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">local_scopes</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span></div>
 
 
-<div class="viewcode-block" id="FuncCompileContext.current_loop_scope">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.current_loop_scope">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.current_loop_scope">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.current_loop_scope">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">current_loop_scope</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">loop_scopes</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span></div>
 
 
-<div class="viewcode-block" id="FuncCompileContext.loop_status">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.loop_status">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.loop_status">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.loop_status">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">loop_status</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">LoopStatus</span><span class="p">:</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">loop_scopes</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">loop_scopes</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">status</span>
         <span class="k">return</span> <span class="n">LoopStatus</span><span class="o">.</span><span class="n">Normal</span></div>
 
 
-<div class="viewcode-block" id="FuncCompileContext.set_loop_status">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.set_loop_status">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.set_loop_status">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.set_loop_status">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">set_loop_status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">status</span><span class="p">:</span> <span class="n">LoopStatus</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">loop_scopes</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="n">status</span></div>
 
 
-<div class="viewcode-block" id="FuncCompileContext.is_in_static_for">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.is_in_static_for">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.is_in_static_for">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.is_in_static_for">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">is_in_static_for</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">loop_scopes</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">loop_scopes</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">is_static</span>
         <span class="k">return</span> <span class="kc">False</span></div>
 
 
-<div class="viewcode-block" id="FuncCompileContext.is_in_non_static_control_flow">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.is_in_non_static_control_flow">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.is_in_non_static_control_flow">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.is_in_non_static_control_flow">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">is_in_non_static_control_flow</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">non_static_control_flow_status</span><span class="o">.</span><span class="n">is_in_non_static_control_flow</span></div>
 
 
-<div class="viewcode-block" id="FuncCompileContext.is_in_non_static_control_flow_including_caller">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.is_in_non_static_control_flow_including_caller">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.is_in_non_static_control_flow_including_caller">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.is_in_non_static_control_flow_including_caller">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">is_in_non_static_control_flow_including_caller</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
         <span class="c1"># Like `is_in_non_static_control_flow`, but also True when a (transitive) caller reached this func compile from</span>
         <span class="c1"># within non-static control flow. Used by the `requires_top_level` guard so the check is not laundered by an</span>
@@ -948,14 +963,14 @@
         <span class="p">)</span></div>
 
 
-<div class="viewcode-block" id="FuncCompileContext.is_in_static_scope">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.is_in_static_scope">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.is_in_static_scope">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.is_in_static_scope">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">is_in_static_scope</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">static_scope_status</span><span class="o">.</span><span class="n">is_in_static_scope</span></div>
 
 
-<div class="viewcode-block" id="FuncCompileContext.is_var_declared">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.is_var_declared">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.is_var_declared">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.is_var_declared">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">is_var_declared</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
         <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">local_scopes</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">s</span><span class="p">:</span>
@@ -963,16 +978,16 @@
         <span class="k">return</span> <span class="kc">False</span></div>
 
 
-<div class="viewcode-block" id="FuncCompileContext.create_variable">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.create_variable">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.create_variable">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.create_variable">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">create_variable</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">var</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_scope</span><span class="p">():</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"Recreating variables is not allowed"</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">current_scope</span><span class="p">()[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">var</span></div>
 
 
-<div class="viewcode-block" id="FuncCompileContext.check_loop_var">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.check_loop_var">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.check_loop_var">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.check_loop_var">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">check_loop_var</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">loop_var</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_var_declared</span><span class="p">(</span><span class="n">loop_var</span><span class="p">):</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
@@ -980,8 +995,8 @@
             <span class="p">)</span></div>
 
 
-<div class="viewcode-block" id="FuncCompileContext.get_var_by_name">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.get_var_by_name">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.get_var_by_name">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.get_var_by_name">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_var_by_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]:</span>
         <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">reversed</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">local_scopes</span><span class="p">):</span>
             <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">s</span><span class="p">:</span>
@@ -1020,8 +1035,8 @@
             <span class="k">raise</span> <span class="n">QuadrantsNameError</span><span class="p">(</span><span class="sa">f</span><span class="s1">'Name "</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s1">" is not defined'</span><span class="p">)</span></div>
 
 
-<div class="viewcode-block" id="FuncCompileContext.memoized_get_formatted_location_with_source_context">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompileContext.memoized_get_formatted_location_with_source_context">[docs]</a>
+<div class="viewcode-block" id="FuncCompilePassContext.memoized_get_formatted_location_with_source_context">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext.memoized_get_formatted_location_with_source_context">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">memoized_get_formatted_location_with_source_context</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">AST</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""Return the location, source lines, and caret markers, caching the result for each source span and node type."""</span>
         <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">lineno</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">col_offset</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">end_lineno</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">end_col_offset</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="p">)</span>
@@ -1090,7 +1105,7 @@
 
 <div class="viewcode-block" id="get_decorator">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.get_decorator">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">get_decorator</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_decorator</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">):</span>
         <span class="k">return</span> <span class="s2">""</span>
     <span class="k">for</span> <span class="n">wanted</span><span class="p">,</span> <span class="n">name</span> <span class="ow">in</span> <span class="p">[</span>
@@ -1107,7 +1122,7 @@
 
 <div class="viewcode-block" id="maybe_lifted_primitive">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.maybe_lifted_primitive">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">maybe_lifted_primitive</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">parent</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">attr</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">maybe_lifted_primitive</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">parent</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">attr</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Handle access to a primitive member that ``@qd.data_oriented(template_primitives=False)`` lifted into a runtime</span>
 <span class="sd">    scalar kernel arg (see ``bind_data_oriented_runtime_scalars``).</span>
 
@@ -1120,7 +1135,7 @@
 <span class="sd">    escape hatch, so a ``qd.static`` use is unambiguously a mistake and we surface it loudly rather than silently baking</span>
 <span class="sd">    a value that will not track mutations.</span>
 <span class="sd">    """</span>
-    <span class="n">runtime_scalar_arg_info_by_member</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="o">.</span><span class="n">runtime_scalar_arg_info_by_member</span>
+    <span class="n">runtime_scalar_arg_info_by_member</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="o">.</span><span class="n">current_pass</span><span class="o">.</span><span class="n">runtime_scalar_arg_info_by_member</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">runtime_scalar_arg_info_by_member</span><span class="p">:</span>
         <span class="k">return</span> <span class="kc">None</span>
     <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="n">parent</span><span class="p">),</span> <span class="n">attr</span><span class="p">)</span>
@@ -1140,7 +1155,7 @@
         <span class="c1"># this primitive and the existing fastcache serialisation captures it.</span>
         <span class="n">pruning</span><span class="o">.</span><span class="n">mark_used</span><span class="p">(</span><span class="n">pruning</span><span class="o">.</span><span class="n">KERNEL_FUNC_ID</span><span class="p">,</span> <span class="n">entry</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
         <span class="k">return</span> <span class="kc">None</span>
-    <span class="k">return</span> <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="o">.</span><span class="n">runtime_scalar_arg_expr_by_member</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="o">.</span><span class="n">current_pass</span><span class="o">.</span><span class="n">runtime_scalar_arg_expr_by_member</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span></div>
 
 </pre></div>
 
