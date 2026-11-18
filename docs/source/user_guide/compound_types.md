@@ -144,7 +144,7 @@ Note: assigning a sub-struct to a local variable and then passing it (`t = s.inn
 
 A `dataclasses.dataclass` may be either non-frozen (the default) or frozen (`@dataclass(frozen=True)`). Both work as kernel arguments, but **kernel launch is faster with `frozen=True`** (because it enables some optimizations that would otherwise not be possible). Recommend `frozen=True` unless you specifically need to rebind members after construction. Note that rebinding members after construction contradicts certain best practices; for example, it is typically incompatible with type linters such as pyright and mypy.
 
-Once a dataclass or `@qd.data_oriented` object has been used in a kernel call, keep its references to nested
+**Important.** Once a dataclass or `@qd.data_oriented` object has been used in a kernel call, keep its references to nested
 dataclass and data-oriented objects fixed. For example, if `state.grid` holds a dataclass, assigning
 `state.grid = another_grid` between launches is unsupported and can give incorrect results. You can pass a different
 `state` instance on the next call, or update an ordinary runtime scalar such as `state.grid.n` on a mutable dataclass.
