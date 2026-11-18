@@ -13,9 +13,8 @@ from quadrants.lang._weak_identity_cache import WeakIdentityCache
 from quadrants.lang.util import is_data_oriented, is_dataclass_instance
 
 AliasKey: TypeAlias = tuple[tuple[int, ...], ...]
-_ContainerIds: TypeAlias = tuple[int | None, ...]
 
-_alias_key_by_container_ids: dict[_ContainerIds, tuple[AliasKey, tuple[ReferenceType, ...]]] = {}
+_alias_key_by_container_ids: dict[tuple[int | None, ...], tuple[AliasKey, tuple[ReferenceType, ...]]] = {}
 _cache_capacity: int | None = None
 _num_cache_evictions = 0
 _cleanup_hooks_registered = False
@@ -79,7 +78,7 @@ def get_container_alias_key(args: Sequence[Any]) -> AliasKey:
     return tuple(result)
 
 
-def _evict_alias_key(container_ids: _ContainerIds, expired: ReferenceType[Any]) -> None:
+def _evict_alias_key(container_ids: tuple[int | None, ...], expired: ReferenceType[Any]) -> None:
     """Remove only the entry containing the expired reference, protecting against recycled object IDs."""
     entry = _alias_key_by_container_ids.get(container_ids)
     if entry is not None and any(item is expired for item in entry[1]):
