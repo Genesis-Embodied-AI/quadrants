@@ -139,9 +139,9 @@ def _create_runtime_scalar_bindings(func_ctx: FuncCompilePassContext, scalar_mem
         # cannot choose different branches.
         # FIXME: Represent the scalar as an Expr during discovery too, so qd.static((s.n,)) can build a tuple
         # whose element still reads the runtime value.
-        bindings[key] = MemberBinding(flat_name, dtype, None, reject_in_static_scope=True)
         # Add only members marked used during discovery, avoiding MAX_ARG_NUM for large containers.
         if not pruning.enforcing or not pruning.is_used(func_id, flat_name):
+            bindings[key] = MemberBinding(flat_name, dtype, None, reject_in_static_scope=True)
             continue
         cooked = cook_dtype(dtype)
         # Argument loads use the full ID vector; launches use its first integer slot.
