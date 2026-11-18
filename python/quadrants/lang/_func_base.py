@@ -42,7 +42,7 @@ from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang._signature import get_func_signature
 from quadrants.lang._wrap_inspect import get_source_info_and_src
-from quadrants.lang.ast import FuncCompileContext
+from quadrants.lang.ast import FuncCompilePassContext
 from quadrants.lang.buffer_view import BufferView as BufferViewInstance
 from quadrants.lang.exception import (
     QuadrantsRuntimeError,
@@ -227,7 +227,7 @@ class FuncBase:
         self.orig_arguments: list[ArgMetadata] = []
         self.return_type = None
         # Shared by every AST transform of this function; see
-        # FuncCompileContext.memoized_get_formatted_location_with_source_context.
+        # FuncCompilePassContext.memoized_get_formatted_location_with_source_context.
         self.pos_info_cache: dict[tuple, str] = {}
 
         self.check_parameter_annotations()
@@ -385,7 +385,7 @@ class FuncBase:
         ast_builder: "ASTBuilder | None" = None,
         is_real_function: bool = False,
         kernel_compile_context: KernelCompileContext | None = None,
-    ) -> tuple[ast.Module, FuncCompileContext]:
+    ) -> tuple[ast.Module, FuncCompilePassContext]:
         function_source_info, src = get_source_info_and_src(self.func)
         src = [textwrap.fill(line, tabsize=4, width=9999) for line in src]
         tree = ast.parse(textwrap.dedent("\n".join(src)))
@@ -433,7 +433,7 @@ class FuncBase:
 
         raise_on_templated_floats = impl.current_cfg().raise_on_templated_floats
 
-        ctx = FuncCompileContext(
+        ctx = FuncCompilePassContext(
             kernel_compile_context=kernel_compile_context,  # type: ignore[arg-type]
             template_slot_locations=template_slot_locations,
             is_kernel=is_kernel,

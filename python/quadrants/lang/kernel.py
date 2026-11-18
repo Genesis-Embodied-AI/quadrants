@@ -49,7 +49,7 @@ from quadrants.lang.ast import (
     transform_tree,
 )
 from quadrants.lang.ast.ast_transformer_utils import (
-    FuncCompileContext,
+    FuncCompilePassContext,
     ReturnStatus,
 )
 from quadrants.lang.exception import (
@@ -192,7 +192,7 @@ class LaunchContextBufferCache:
 class ASTGenerator:
     def __init__(
         self,
-        ctx: FuncCompileContext,
+        ctx: FuncCompilePassContext,
         kernel_name: str,
         current_kernel: "Kernel",
         only_parse_function_def: bool,

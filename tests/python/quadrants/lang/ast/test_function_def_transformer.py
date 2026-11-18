@@ -82,7 +82,7 @@ def test_process_func_arg(argument_name: str, argument_type: Any, expected_varia
         def __init__(self) -> None:
             self.kernel_compile_context = SimpleNamespace(current_pass=SimpleNamespace(ndarray_to_any_array={}))
             self.variables: dict[str, Any] = {}
-            # Mirror the real ``FuncCompileContext.fn_param_names`` so ``_transform_func_arg`` can record bare
+            # Mirror the real ``FuncCompilePassContext.fn_param_names`` so ``_transform_func_arg`` can record bare
             # param names without crashing.
             self.fn_param_names: set[str] = set()
 

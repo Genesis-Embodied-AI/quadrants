@@ -28,7 +28,7 @@ AutodiffMode = _qd_core.AutodiffMode
 
 
 class Builder:
-    def __call__(self, ctx: "FuncCompileContext", node: ast.AST):
+    def __call__(self, ctx: "FuncCompilePassContext", node: ast.AST):
         method_name = "build_" + node.__class__.__name__
         method = getattr(self, method_name, None)
         try:
@@ -210,7 +210,9 @@ class KernelCompilePassContext:
         self.caller_in_non_static_control_flow: bool = False
 
 
-class FuncCompileContext:
+class FuncCompilePassContext:
+    """State for compiling one kernel or qd.func invocation during one compiler pass."""
+
     def __init__(
         self,
         kernel_compile_context: KernelCompileContext,
@@ -463,7 +465,7 @@ class FuncCompileContext:
         return msg
 
 
-def get_decorator(ctx: FuncCompileContext, node) -> str:
+def get_decorator(ctx: FuncCompilePassContext, node) -> str:
     if not isinstance(node, ast.Call):
         return ""
     for wanted, name in [
@@ -477,7 +479,7 @@ def get_decorator(ctx: FuncCompileContext, node) -> str:
     return ""
 
 
-def maybe_lifted_primitive(ctx: FuncCompileContext, parent: Any, attr: str):
+def maybe_lifted_primitive(ctx: FuncCompilePassContext, parent: Any, attr: str):
     """Handle access to a primitive member that ``@qd.data_oriented(template_primitives=False)`` lifted into a runtime
     scalar kernel arg (see ``bind_data_oriented_runtime_scalars``).
 
