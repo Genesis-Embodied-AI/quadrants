@@ -14,10 +14,9 @@ from quadrants.lang.util import is_data_oriented, is_dataclass_instance
 
 AliasKey: TypeAlias = tuple[tuple[int, ...], ...]
 _ContainerIds: TypeAlias = tuple[int | None, ...]
-DEFAULT_CONTAINER_ALIAS_CACHE_SIZE = 1024
 
 _alias_key_by_container_ids: dict[_ContainerIds, tuple[AliasKey, tuple[ReferenceType, ...]]] = {}
-_cache_capacity = DEFAULT_CONTAINER_ALIAS_CACHE_SIZE
+_cache_capacity: int | None = None
 _capacity_evictions = 0
 _cleanup_hooks_registered = False
 
@@ -89,7 +88,7 @@ def _evict_alias_key(container_ids: _ContainerIds, expired: ReferenceType[Any]) 
 
 def get_cached_container_alias_key(args: tuple[Any, ...]) -> AliasKey:
     """Reuse the sharing pattern for the same containers in the same argument positions."""
-    global _capacity_evictions
+    global _cache_capacity, _capacity_evictions
     container_ids = tuple(id(arg) if is_dataclass_instance(arg) or is_data_oriented(arg) else None for arg in args)
     cached = _alias_key_by_container_ids.get(container_ids)
     if cached is not None:
@@ -102,6 +101,8 @@ def get_cached_container_alias_key(args: tuple[Any, ...]) -> AliasKey:
     except TypeError:
         return alias_key
 
+    if _cache_capacity is None:
+        _cache_capacity = impl.get_runtime().container_alias_cache_size
     if len(_alias_key_by_container_ids) >= _cache_capacity:
         del _alias_key_by_container_ids[next(iter(_alias_key_by_container_ids))]
         _capacity_evictions += 1
@@ -109,17 +110,9 @@ def get_cached_container_alias_key(args: tuple[Any, ...]) -> AliasKey:
     return alias_key
 
 
-def set_container_alias_cache_size(size: int) -> None:
-    """Set the shared cache capacity during qd.init, after the cache has been cleared."""
-    global _cache_capacity
-    if type(size) is not int or size < 1:
-        raise ValueError("container_alias_cache_size must be a positive integer")
-    _cache_capacity = size
-
-
 def _clear_container_alias_cache() -> None:
     """Report capacity evictions and clear cached argument combinations and container graphs."""
-    global _capacity_evictions
+    global _cache_capacity, _capacity_evictions
     _alias_key_by_container_ids.clear()
     _graph_ids_by_instance.clear()
     if _capacity_evictions:
@@ -128,3 +121,4 @@ def _clear_container_alias_cache() -> None:
             "See https://genesis-embodied-ai.github.io/quadrants/user_guide/compound_types.html#container-alias-cache"
         )
         _capacity_evictions = 0
+    _cache_capacity = None
