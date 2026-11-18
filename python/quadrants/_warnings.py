@@ -16,5 +16,5 @@ def warn_uncacheable_weakref(error: TypeError) -> None:
     warn_once(
         f"{error}. Quadrants cannot use this object as a weak cache key. "
         "For a slotted dataclass, use @dataclass(slots=True, weakref_slot=True). "
-        "See https://genesis-embodied-ai.github.io/quadrants/user_guide/compound_types.html#container-alias-cache"
+        'For a regular class with __slots__, include "__weakref__" in its slots.'
     )
