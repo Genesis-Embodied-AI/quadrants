@@ -71,7 +71,7 @@ class FunctionDefTransformer:
         # Optional ndarray + None declares no runtime arg; bind the name to the injected None global so
         # qd.static(x is not None) specializes the present-only body away.
         if this_arg_features is OPTIONAL_ABSENT:
-            return True, py_value
+            return False, py_value
         # qd.Tensor value-dispatch. The first slot of this_arg_features is a string marker placed by
         # _template_mapper_hotpath. The annotation is the wrapper class itself (``qd.Tensor``).
         if annotation is _TensorClass:
@@ -79,7 +79,7 @@ class FunctionDefTransformer:
             marker = this_arg_features[0]
             if marker == _TENSOR_T_NDARRAY_MARKER:
                 raw_element_type, ndim, needs_grad, boundary, layout = this_arg_features[1:]
-                return False, (
+                return True, (
                     kernel_arguments.decl_ndarray_arg,
                     (
                         to_quadrants_type(raw_element_type),
@@ -92,12 +92,12 @@ class FunctionDefTransformer:
                 )
             if marker == _TENSOR_T_FIELD_MARKER:
                 # Field branch: behave exactly like a template arg.
-                return True, py_value._unwrap() if isinstance(py_value, _TensorClass) else py_value
+                return False, py_value._unwrap() if isinstance(py_value, _TensorClass) else py_value
             raise AssertionError(f"unknown qd.Tensor marker: {marker!r}")
         if annotation == annotations.template or isinstance(annotation, annotations.template):
-            return True, py_value
+            return False, py_value
         if isinstance(annotation, annotations.sparse_matrix_builder):
-            return False, (
+            return True, (
                 kernel_arguments.decl_sparse_matrix,
                 (
                     to_quadrants_type(this_arg_features),
@@ -116,7 +116,7 @@ class FunctionDefTransformer:
             )
             offset = kernel_arguments.decl_scalar_arg(primitive_types.i32, full_name + "_offset")
             size = kernel_arguments.decl_scalar_arg(primitive_types.i32, full_name + "_size")
-            return True, BufferView(arr, offset, size)
+            return False, BufferView(arr, offset, size)
         if isinstance(annotation, ndarray_type.NdarrayType):
             assert this_arg_features is not None
             raw_element_type: DataTypeCxx
@@ -125,7 +125,7 @@ class FunctionDefTransformer:
             boundary: int
             # Tensors layout is the trailing slot; None for legacy / identity.
             raw_element_type, ndim, needs_grad, boundary, layout = this_arg_features
-            return False, (
+            return True, (
                 kernel_arguments.decl_ndarray_arg,
                 (
                     to_quadrants_type(raw_element_type),
@@ -137,10 +137,10 @@ class FunctionDefTransformer:
                 ),
             )
         if isinstance(annotation, MatrixType):
-            return True, kernel_arguments.decl_matrix_arg(annotation, name)
+            return False, kernel_arguments.decl_matrix_arg(annotation, name)
         if isinstance(annotation, StructType):
-            return True, kernel_arguments.decl_struct_arg(annotation, name)
-        return True, kernel_arguments.decl_scalar_arg(annotation, name)
+            return False, kernel_arguments.decl_struct_arg(annotation, name)
+        return False, kernel_arguments.decl_scalar_arg(annotation, name)
 
     @staticmethod
     def _bind_kernel_arg_or_nested_dataclass(
@@ -181,15 +181,15 @@ class FunctionDefTransformer:
                         "Store the dataclass on the data-oriented object instead."
                     )
                 else:
-                    result, value = FunctionDefTransformer._decl_and_create_variable(
+                    needs_declaration_call, value = FunctionDefTransformer._decl_and_create_variable(
                         ctx, field.type, flat_name, this_arg_features[field_idx], "", child
                     )
-                    if not result:
+                    if needs_declaration_call:
                         decl_type_func, type_args = value
                         value = decl_type_func(*type_args)
                 bindings[member_key] = MemberBinding(flat_name, field.type, value)
         else:
-            result, obj = FunctionDefTransformer._decl_and_create_variable(
+            needs_declaration_call, obj = FunctionDefTransformer._decl_and_create_variable(
                 ctx,
                 argument_type,
                 argument_name,
@@ -197,7 +197,7 @@ class FunctionDefTransformer:
                 "",
                 arg_value,
             )
-            if not result:
+            if needs_declaration_call:
                 # Function call
                 decl_type_func, type_args = obj
                 obj = decl_type_func(*type_args)
