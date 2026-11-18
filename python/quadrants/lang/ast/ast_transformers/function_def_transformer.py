@@ -255,7 +255,7 @@ class FunctionDefTransformer:
         cached on the kernel compilation context for later lookup by ``build_Attribute``.
 
         Also stores ``(arg_id, template_arg_idx, attr_chain)`` tuples in
-        ``ctx.kernel_compile_context.struct_ndarray_launch_info`` so the launch path can populate the corresponding slots
+        ``ctx.kernel_compile_context.current_pass.struct_ndarray_launch_info`` so the launch path can populate the corresponding slots
         in the launch context.
 
         Pruning: the enforcing pass registers only the ndarrays the first pass saw accessed
@@ -265,8 +265,8 @@ class FunctionDefTransformer:
         from quadrants.lang._pruning import Pruning  # pylint: disable=C0415
         from quadrants.lang.util import cook_dtype  # pylint: disable=C0415
 
-        cache = ctx.kernel_compile_context.ndarray_to_any_array
-        launch_info = ctx.kernel_compile_context.struct_ndarray_launch_info
+        cache = ctx.kernel_compile_context.current_pass.ndarray_to_any_array
+        launch_info = ctx.kernel_compile_context.current_pass.struct_ndarray_launch_info
         pruning = ctx.kernel_compile_context.pruning
         used_ids = getattr(pruning, "used_struct_ndarray_ids", None)
         prune = pruning.enforcing and used_ids is not None and getattr(pruning, "pass_0_ran", False)
@@ -396,8 +396,7 @@ class FunctionDefTransformer:
         # directly — ndarray and field impls are both valid pass-by-reference arguments.
         if argument_type is _TensorClass:
             data = FunctionDefTransformer._unwrap_tensor(data)
-            _cache = getattr(getattr(ctx, "kernel_compile_context", None), "ndarray_to_any_array", None)
-            promoted = _cache.get(id(data)) if _cache else None
+            promoted = ctx.kernel_compile_context.current_pass.ndarray_to_any_array.get(id(data))
             ctx.create_variable(argument_name, promoted if promoted is not None else data)
             return None
 
@@ -418,12 +417,7 @@ class FunctionDefTransformer:
                     # polymorphic).
                     if field.type is not _TensorClass and hasattr(field.type, "check_matched"):
                         field.type.check_matched(data_child.get_type(), field.name)
-                    _cache = getattr(
-                        getattr(ctx, "kernel_compile_context", None),
-                        "ndarray_to_any_array",
-                        None,
-                    )
-                    promoted = _cache.get(id(data_child)) if _cache else None
+                    promoted = ctx.kernel_compile_context.current_pass.ndarray_to_any_array.get(id(data_child))
                     ctx.create_variable(flat_name, promoted if promoted is not None else data_child)
                 elif dataclasses.is_dataclass(data_child):
                     FunctionDefTransformer._transform_func_arg(

@@ -112,9 +112,9 @@ def _create_runtime_scalar_bindings(func_ctx: FuncCompileContext, scalar_members
     - Create an expression that reads the parameter inside the compiled kernel.
     """
     runtime = impl.get_runtime()
-    runtime_scalar_arg_info_by_member = func_ctx.kernel_compile_context.runtime_scalar_arg_info_by_member
-    runtime_scalar_arg_expr_by_member = func_ctx.kernel_compile_context.runtime_scalar_arg_expr_by_member
-    runtime_scalar_launch_infos = func_ctx.kernel_compile_context.runtime_scalar_launch_infos
+    runtime_scalar_arg_info_by_member = func_ctx.kernel_compile_context.current_pass.runtime_scalar_arg_info_by_member
+    runtime_scalar_arg_expr_by_member = func_ctx.kernel_compile_context.current_pass.runtime_scalar_arg_expr_by_member
+    runtime_scalar_launch_infos = func_ctx.kernel_compile_context.current_pass.runtime_scalar_launch_infos
     pruning = func_ctx.kernel_compile_context.pruning
     # The kernel ID preserves uses inside inlined qd.func calls and includes them in fastcache pruning metadata.
     # Globally unique flat names avoid collisions with dataclass fields.

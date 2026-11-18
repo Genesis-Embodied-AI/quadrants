@@ -720,7 +720,7 @@ class ASTTransformer(Builder):
         # per-leaf expansion of a ``@qd.func`` call's arguments.
         should_mark = not pruning.enforcing and not ctx.expanding_dataclass_call_parameters
         if isinstance(value, Ndarray):
-            cache = ctx.kernel_compile_context.ndarray_to_any_array
+            cache = ctx.kernel_compile_context.current_pass.ndarray_to_any_array
             key = id(value)
             arr = cache.get(key)
             if arr is not None:
