@@ -54,16 +54,7 @@ def get_container_alias_key(py_args: Sequence[Any]) -> AliasKey:
 
     Container references must remain fixed after first use. Weak keys release graphs when their owners die.
 
-    Example::
-
-        @dataclasses.dataclass
-        class State:
-            n: int
-
-        state = State(7)
-        print(get_container_alias_key((state, 42, state)))  # ((0,), (), (0,))
-
-    Both occurrences of state have label 0. The integer contributes an empty tuple.
+    See :func:`cached_get_container_alias_key` for example arguments and their resulting key.
     """
     global _cleanup_hooks_registered
     if not _cleanup_hooks_registered:
