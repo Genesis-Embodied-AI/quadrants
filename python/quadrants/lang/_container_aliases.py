@@ -121,7 +121,9 @@ def cached_get_container_alias_key(py_args: tuple[Any, ...]) -> AliasKey:
 
     drop_fn = partial(_evict_alias_key, container_ids)
     try:
-        references = tuple(ref(arg, drop_fn) for arg, identity in zip(py_args, container_ids) if identity is not None)
+        container_weak_refs = tuple(
+            ref(arg, drop_fn) for arg, identity in zip(py_args, container_ids) if identity is not None
+        )
     except TypeError:
         return alias_key
 
@@ -130,7 +132,7 @@ def cached_get_container_alias_key(py_args: tuple[Any, ...]) -> AliasKey:
     if len(_alias_key_by_container_ids) >= _cache_capacity:
         del _alias_key_by_container_ids[next(iter(_alias_key_by_container_ids))]
         _num_cache_evictions += 1
-    _alias_key_by_container_ids[container_ids] = (alias_key, references)
+    _alias_key_by_container_ids[container_ids] = (alias_key, container_weak_refs)
     return alias_key
 
 
