@@ -86,18 +86,21 @@ def _evict_alias_key(container_ids: tuple[int | None, ...], expired: ReferenceTy
         del _alias_key_by_container_ids[container_ids]
 
 
-def get_cached_container_alias_key(args: tuple[Any, ...]) -> AliasKey:
-    """Reuse the sharing pattern for the same containers in the same argument positions."""
+def get_cached_container_alias_key(py_args: tuple[Any, ...]) -> AliasKey:
+    """Return a key describing which containers in py_args refer to the same object, including nested containers.
+
+    Reuse the cached key when the same container objects occupy the same argument positions.
+    """
     global _cache_capacity, _num_cache_evictions
-    container_ids = tuple(id(arg) if is_dataclass_instance(arg) or is_data_oriented(arg) else None for arg in args)
+    container_ids = tuple(id(arg) if is_dataclass_instance(arg) or is_data_oriented(arg) else None for arg in py_args)
     cached = _alias_key_by_container_ids.get(container_ids)
     if cached is not None:
         return cached[0]
 
-    alias_key = get_container_alias_key(args)
+    alias_key = get_container_alias_key(py_args)
     try:
         drop = partial(_evict_alias_key, container_ids)
-        references = tuple(ref(arg, drop) for arg, identity in zip(args, container_ids) if identity is not None)
+        references = tuple(ref(arg, drop) for arg, identity in zip(py_args, container_ids) if identity is not None)
     except TypeError:
         return alias_key
 
