@@ -495,8 +495,7 @@ def get_decorator(ctx: FuncCompilePassContext, node) -> str:
 
 def resolve_bound_member(func_ctx: FuncCompilePassContext, parent: Any, node: ast.Attribute) -> Any:
     """Read a registered member and record its kernel input as used during discovery."""
-    attr = node.attr
-    binding = func_ctx.kernel_compile_context.current_pass.binding_by_member.get((id(parent), attr))
+    binding = func_ctx.kernel_compile_context.current_pass.binding_by_member.get((id(parent), node.attr))
     if binding is None:
         if id(parent) in func_ctx.kernel_compile_context.current_pass.bound_dataclass_ids:
             raise QuadrantsSyntaxError(f"Member {ast.unparse(node)!r} is absent from the declared dataclass fields")
@@ -504,7 +503,7 @@ def resolve_bound_member(func_ctx: FuncCompilePassContext, parent: Any, node: as
 
     if binding.reject_in_static_scope and func_ctx.is_in_static_scope():
         raise QuadrantsSyntaxError(
-            f"'{attr}' is a runtime kernel argument and cannot be used inside qd.static(). "
+            f"{ast.unparse(node)!r} is a runtime kernel argument and cannot be used inside qd.static(). "
             "Use template_primitives=True for compile-time data-oriented scalars."
         )
     pruning = func_ctx.kernel_compile_context.pruning
