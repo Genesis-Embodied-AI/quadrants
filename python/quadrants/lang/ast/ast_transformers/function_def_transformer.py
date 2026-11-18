@@ -26,11 +26,11 @@ from quadrants.lang._final.final_dataclass_fields import (
     final_field_names,
     is_final_annotation,
 )
-from quadrants.lang._member_bindings import MemberBinding
 from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._optional_annotation import OPTIONAL_ABSENT
 from quadrants.lang.ast.ast_transformer_utils import (
     FuncCompilePassContext,
+    MemberBinding,
 )
 from quadrants.lang.ast.ast_transformers import graph_api
 from quadrants.lang.ast.ast_transformers.checkpoint_transformer import (

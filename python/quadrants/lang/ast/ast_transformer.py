@@ -16,7 +16,6 @@ import numpy as np
 from quadrants._lib import core as _qd_core
 from quadrants.lang import exception, expr, impl, matrix, mesh
 from quadrants.lang import ops as qd_ops
-from quadrants.lang._member_bindings import resolve_bound_member
 from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._ndrange import _Ndrange
 from quadrants.lang._unpacked import _UnpackedVectorRef
@@ -26,6 +25,7 @@ from quadrants.lang.ast.ast_transformer_utils import (
     LoopStatus,
     ReturnStatus,
     get_decorator,
+    resolve_bound_member,
 )
 from quadrants.lang.ast.ast_transformers import graph_api
 from quadrants.lang.ast.ast_transformers.call_transformer import CallTransformer

@@ -17,8 +17,10 @@ from typing import Any, NamedTuple
 from quadrants._lib import core as _qd_core
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import expr, impl
-from quadrants.lang._member_bindings import MemberBinding
-from quadrants.lang.ast.ast_transformer_utils import FuncCompilePassContext
+from quadrants.lang.ast.ast_transformer_utils import (
+    FuncCompilePassContext,
+    MemberBinding,
+)
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import (
     cook_dtype,

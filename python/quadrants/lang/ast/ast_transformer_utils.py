@@ -6,12 +6,11 @@ import dataclasses
 import traceback
 from enum import Enum
 from textwrap import TextWrapper
-from typing import TYPE_CHECKING, Any, List
+from typing import TYPE_CHECKING, Any, List, NamedTuple
 
 from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import ASTBuilder
 from quadrants.lang import impl
-from quadrants.lang._member_bindings import MemberBinding
 from quadrants.lang._ndrange import ndrange
 from quadrants.lang.ast.symbol_resolver import ASTResolver
 from quadrants.lang.exception import (
@@ -186,6 +185,18 @@ class KernelCompileContext:
         self.pruning: "Pruning" = pruning
         self.currently_compiling_materialize_key = currently_compiling_materialize_key
         self.current_pass: KernelCompilePassContext
+
+
+class MemberBinding(NamedTuple):
+    """A member's pruning name, declared type, and result of compiling an access."""
+
+    name: str
+    annotation: Any
+    # Result of compiling a member access: an Expr for a runtime scalar,
+    # an array representation, a Python constant, or a nested dataclass instance.
+    member_access_result: Any
+    # Reject every static-scope read of this member.
+    reject_in_static_scope: bool = False
 
 
 class KernelCompilePassContext:
@@ -480,3 +491,22 @@ def get_decorator(ctx: FuncCompilePassContext, node) -> str:
         if ASTResolver.resolve_to(node.func, wanted, ctx.global_vars):
             return name
     return ""
+
+
+def resolve_bound_member(func_ctx: FuncCompilePassContext, parent: Any, attr: str) -> Any:
+    """Read a registered member and record its kernel input as used during discovery."""
+    binding = func_ctx.kernel_compile_context.current_pass.binding_by_member.get((id(parent), attr))
+    if binding is None:
+        if id(parent) in func_ctx.kernel_compile_context.current_pass.bound_dataclass_ids:
+            raise QuadrantsSyntaxError(f"Member {attr!r} is absent from the declared dataclass fields")
+        return None
+
+    if binding.reject_in_static_scope and func_ctx.is_in_static_scope():
+        raise QuadrantsSyntaxError(
+            f"'{attr}' is a runtime kernel argument and cannot be used inside qd.static(). "
+            "Use template_primitives=True for compile-time data-oriented scalars."
+        )
+    pruning = func_ctx.kernel_compile_context.pruning
+    if not pruning.enforcing:
+        pruning.mark_used(pruning.KERNEL_FUNC_ID, binding.name)
+    return binding.member_access_result
