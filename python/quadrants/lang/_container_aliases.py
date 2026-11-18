@@ -49,7 +49,7 @@ def _collect_container_ids(py_obj: Any) -> tuple[int, ...]:
     return tuple(identities)
 
 
-def get_container_alias_key(args: Sequence[Any]) -> AliasKey:
+def get_container_alias_key(py_args: Sequence[Any]) -> AliasKey:
     """Describe sharing across arguments, reusing each container's cached graph.
 
     Container references must remain fixed after first use. Weak keys release graphs when their owners die.
@@ -62,7 +62,7 @@ def get_container_alias_key(args: Sequence[Any]) -> AliasKey:
 
     serials: dict[int, int] = {}
     result: list[tuple[int, ...]] = []
-    for arg in args:
+    for arg in py_args:
         if not (is_dataclass_instance(arg) or is_data_oriented(arg)):
             result.append(())
             continue
