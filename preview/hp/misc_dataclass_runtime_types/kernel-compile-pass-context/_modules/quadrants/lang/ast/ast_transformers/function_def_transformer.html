@@ -588,9 +588,8 @@
 <span class="sd">        ``decl_ndarray_arg``) so they are registered before ``finalize_params``. The resulting ``AnyArray`` objects are</span>
 <span class="sd">        cached on the kernel compilation context for later lookup by ``build_Attribute``.</span>
 
-<span class="sd">        Also stores ``(arg_id, template_arg_idx, attr_chain)`` tuples in</span>
-<span class="sd">        ``ctx.kernel_compile_context.current_pass.struct_ndarray_launch_info`` so the launch path can populate the corresponding slots</span>
-<span class="sd">        in the launch context.</span>
+<span class="sd">        At launch, the kernel uses the current pass's ``struct_ndarray_launch_info`` entries to fill argument slots.</span>
+<span class="sd">        Each entry contains ``(arg_id, template_arg_idx, attr_chain)``.</span>
 
 <span class="sd">        Pruning: the enforcing pass registers only the ndarrays the first pass saw accessed</span>
 <span class="sd">        (``pruning.used_struct_ndarray_ids``), dropping the rest from the kernel's parameter list. The first pass must</span>
