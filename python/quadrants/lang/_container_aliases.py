@@ -3,7 +3,6 @@
 import atexit
 import dataclasses
 from collections.abc import Sequence
-from functools import partial
 from typing import Any, TypeAlias
 from weakref import ReferenceType, ref
 
@@ -117,9 +116,15 @@ def cached_get_container_alias_key(py_args: tuple[Any, ...]) -> AliasKey:
         return cached[0]
 
     alias_key = get_container_alias_key(py_args)
+
+    def _on_container_collected(expired: ReferenceType[Any]) -> None:
+        """Evict this entry when one of its containers is collected."""
+        _evict_alias_key(container_ids, expired)
+
     try:
-        drop = partial(_evict_alias_key, container_ids)
-        references = tuple(ref(arg, drop) for arg, identity in zip(py_args, container_ids) if identity is not None)
+        references = tuple(
+            ref(arg, _on_container_collected) for arg, identity in zip(py_args, container_ids) if identity is not None
+        )
     except TypeError:
         return alias_key
 
