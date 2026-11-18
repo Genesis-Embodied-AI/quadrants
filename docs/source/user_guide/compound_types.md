@@ -148,7 +148,7 @@ A `dataclasses.dataclass` may be either non-frozen (the default) or frozen (`@da
 
 ### Container alias cache
 
-Passing newly created dataclass or data-oriented objects to kernels can fill this cache if you keep many distinct argument combinations alive. When a container is garbage-collected, its cache entries are removed. If you see a capacity warning, your kernels still work. You can raise the default limit of 1,024 entries with `qd.init(container_alias_cache_size=4096)`.
+To speed up repeated kernel calls, Quadrants caches which arguments share the same dataclass or data-oriented object, including objects nested inside those arguments. If you repeatedly create new containers to pass to kernels and keep many different argument combinations alive, the cache can fill up. Quadrants then reports a warning at reset or process exit. Your kernels still run correctly, but recomputing entries can slow down later calls. Where practical, create these containers during setup and reuse them across calls. You can raise the default limit of 1,024 entries with `qd.init(container_alias_cache_size=4096)`.
 
 ### Subclasses
 
