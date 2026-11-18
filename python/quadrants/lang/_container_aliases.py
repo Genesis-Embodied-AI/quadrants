@@ -129,8 +129,8 @@ def cached_get_container_alias_key(py_args: tuple[Any, ...]) -> AliasKey:
         container_weak_refs = tuple(
             ref(py_arg, drop_fn) for py_arg, identity in zip(py_args, container_ids) if identity is not None
         )
-    except TypeError:
-        # get_container_alias_key already warned about this argument.
+    except TypeError as error:
+        _warnings.warn_uncacheable_weakref(error)
         return alias_key
 
     if _cache_capacity is None:
