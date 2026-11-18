@@ -44,6 +44,8 @@ class NDArrayBuilder:
 @pytest.mark.parametrize("argument_type", [MyStructAB, MyStructCD, MyStructEF])
 @test_utils.test()
 def test_process_func_arg_preserves_dataclass(argument_type: type) -> None:
+    """A @qd.func binds only the parameter name to the original dataclass so member reads can use its identity."""
+
     class MockContext:
         def __init__(self) -> None:
             self.kernel_compile_context = SimpleNamespace(current_pass=SimpleNamespace(ndarray_to_any_array={}))
