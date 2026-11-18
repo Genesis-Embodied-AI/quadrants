@@ -144,6 +144,12 @@ Note: assigning a sub-struct to a local variable and then passing it (`t = s.inn
 
 A `dataclasses.dataclass` may be either non-frozen (the default) or frozen (`@dataclass(frozen=True)`). Both work as kernel arguments, but **kernel launch is faster with `frozen=True`** (because it enables some optimizations that would otherwise not be possible). Recommend `frozen=True` unless you specifically need to rebind members after construction. Note that rebinding members after construction contradicts certain best practices; for example, it is typically incompatible with type linters such as pyright and mypy.
 
+**Important.** Once a dataclass or `@qd.data_oriented` object has been used in a kernel call, keep its references to nested dataclass and data-oriented objects fixed. For example, if `state.grid` holds a dataclass, assigning `state.grid = another_grid` between launches is unsupported and can give incorrect results. You can pass a different `state` instance on the next call, or update an ordinary runtime scalar such as `state.grid.n` on a mutable dataclass.
+
+### Container alias cache
+
+To speed up repeated kernel calls, Quadrants caches which arguments share the same dataclass or data-oriented object, including objects nested inside those arguments. If you repeatedly create new containers to pass to kernels and keep many different argument combinations alive, the cache can fill up. Quadrants then reports a warning at reset or process exit. Your kernels still run correctly, but recomputing entries can slow down later calls. Where practical, create these containers during setup and reuse them across calls. You can raise the default limit of 1,024 entries with `qd.init(container_alias_cache_size=4096)`.
+
 ### Subclasses
 
 You are able to pass any subclass of the annotated dataclass type. This is especially useful for cases where only a subset of your class is valid in quadrants, as below:
@@ -296,10 +302,7 @@ Simulation(200).step()   # compiles kernel #2 with n=200 baked in
 
 #### Dataclasses stored on data-oriented objects
 
-Scalar fields of a Python dataclass stored on a data-oriented object are runtime kernel parameters, just as when
-passing the dataclass directly. Their annotations determine the parameter types. Updating an ordinary scalar value
-between launches takes effect without recompilation. This applies regardless of `template_primitives` on the owner.
-Use `Final[T]` or `qd.Template` for dataclass fields needed in `qd.static(...)`.
+Scalar fields of a Python dataclass stored on a data-oriented object are runtime kernel parameters, just as when passing the dataclass directly. Their annotations determine the parameter types. Updating an ordinary scalar value between launches takes effect without recompilation. This applies regardless of `template_primitives` on the owner. Use `Final[T]` or `qd.Template` for dataclass fields needed in `qd.static(...)`.
 
 ```python
 @dataclasses.dataclass
@@ -322,12 +325,9 @@ owner.state.count = 7
 print(read(owner))  # 7, using the same compiled kernel
 ```
 
-Stored aliases are supported. Keep references to their containing objects fixed after the first kernel call;
-replacing containers or changing their layout after that point is unsupported. Ordinary scalar values may change.
-This does not add discovery through tuples or lists: an indexed alias must refer to a dataclass already reachable
-through stored attributes.
+Stored aliases are supported. Keep references to their containing objects fixed after the first kernel call; replacing containers or changing their layout after that point is unsupported. Ordinary scalar values may change. This does not add discovery through tuples or lists: an indexed alias must refer to a dataclass already reachable through stored attributes.
 
-### Runtime primitives: `template_primitives=False`
+#### Runtime primitives: `template_primitives=False`
 
 If you want to change a primitive member's value **from Python between launches without triggering a recompile**, decorate the class with `@qd.data_oriented(template_primitives=False)`. Every primitive member the kernel actually accesses (`int`, `float`, `bool`, including those reached through nested `dataclasses.dataclass` / `@qd.data_oriented` members) is then lifted into a runtime scalar kernel argument and read fresh on every launch, instead of being compiled into the kernel as a constant. The member stays read-only inside the kernel (it is a kernel argument, not a writable variable): you mutate it in Python, and the kernel sees the new value on the next launch.
 
