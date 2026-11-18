@@ -1973,6 +1973,39 @@ def test_prune_used_parameters_fastcache_forward_same_name_swapped_slots_same_ca
         assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 2
 
 
+@pytest.mark.parametrize("nested", [False, True])
+@test_utils.test(arch=qd.cpu)
+def test_container_weakref_warning(nested: bool, monkeypatch: pytest.MonkeyPatch) -> None:
+    from quadrants import _warnings
+
+    monkeypatch.setattr(_warnings, "_seen", set())
+
+    @dataclass(slots=True)
+    class SlottedState:
+        n: int
+
+    @dataclass
+    class Owner:
+        state: SlottedState
+
+    @qd.kernel
+    def read_direct(state: SlottedState) -> int:
+        return state.n
+
+    @qd.kernel
+    def read_nested(owner: Owner) -> int:
+        return owner.state.n
+
+    state = SlottedState(7)
+    kernel, arg = (read_nested, Owner(state)) if nested else (read_direct, state)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        assert kernel(arg) == 7
+        state.n = 9
+        assert kernel(arg) == 9
+    assert sum("SlottedState" in str(w.message) and "weak cache key" in str(w.message) for w in caught) == 1
+
+
 @test_utils.test(arch=qd.cpu)
 def test_dataclass_alias_layout_and_live_values() -> None:
     """Shared and independent dataclass arguments select compatible bindings, including through functions."""

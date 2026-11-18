@@ -7,7 +7,7 @@ from functools import partial
 from typing import Any, TypeAlias
 from weakref import ReferenceType, ref
 
-from quadrants import _logging
+from quadrants import _logging, _warnings
 from quadrants.lang import impl
 from quadrants.lang._weak_identity_cache import WeakIdentityCache
 from quadrants.lang.util import is_data_oriented, is_dataclass_instance
@@ -41,6 +41,12 @@ def _collect_container_ids(py_obj: Any) -> tuple[int, ...]:
             continue
 
         seen_ids.add(identity)
+        if child is not py_obj:
+            # Only the root is used as a weak cache key below. Diagnose nested containers during discovery too.
+            try:
+                ref(child)
+            except TypeError as error:
+                _warnings.warn_uncacheable_weakref(error)
         if is_dataclass:
             pending.extend(getattr(child, field.name) for field in dataclasses.fields(child))
         else:
@@ -74,9 +80,8 @@ def get_container_alias_key(py_args: Sequence[Any]) -> AliasKey:
             identities = _collect_container_ids(py_arg)
             try:
                 _graph_ids_by_instance[py_arg] = identities
-            except TypeError:
-                # Named tuples cannot be weakly referenced; recompute rather than retaining them.
-                pass
+            except TypeError as error:
+                _warnings.warn_uncacheable_weakref(error)
         result.append(tuple(serials.setdefault(identity, len(serials)) for identity in identities))
     return tuple(result)
 
@@ -131,6 +136,7 @@ def cached_get_container_alias_key(py_args: tuple[Any, ...]) -> AliasKey:
             ref(py_arg, drop_fn) for py_arg, identity in zip(py_args, container_ids) if identity is not None
         )
     except TypeError:
+        # get_container_alias_key already warned about this argument.
         return alias_key
 
     if _cache_capacity is None:
