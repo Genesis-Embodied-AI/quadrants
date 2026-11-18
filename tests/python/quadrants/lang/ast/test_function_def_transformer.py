@@ -44,7 +44,9 @@ class NDArrayBuilder:
 @pytest.mark.parametrize("argument_type", [MyStructAB, MyStructCD, MyStructEF])
 @test_utils.test()
 def test_process_func_arg_preserves_dataclass(argument_type: type) -> None:
-    """A @qd.func binds only the parameter name to the original dataclass so member reads can use its identity."""
+    """The compiler creates one local variable, "state", even when the dataclass has nested fields.
+    That variable holds the exact dataclass instance the caller passed in.
+    """
 
     class MockContext:
         def __init__(self) -> None:
