@@ -116,6 +116,6 @@ def clear_container_alias_cache() -> None:
     if _capacity_evictions:
         _logging.warn(
             f"The container alias cache evicted {_capacity_evictions} entries at capacity {_cache_capacity}. "
-            "See https://genesis-embodied-ai.github.io/quadrants/user_guide/init_options.html#container-alias-cache"
+            "See https://genesis-embodied-ai.github.io/quadrants/user_guide/compound_types.html#container-alias-cache"
         )
         _capacity_evictions = 0

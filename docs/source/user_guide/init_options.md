@@ -21,19 +21,6 @@ When to set it to `False`:
 
 For normal use, leave it at `True`; the caches are the main reason a repeated run starts up quickly.
 
-### Container alias cache
-
-Two kernel arguments can refer to the same dataclass or data-oriented object. Quadrants remembers which container
-arguments share an object so it can reuse the kernel compiled for that pattern. All kernels share this cache.
-Changing a scalar argument leaves its entry reusable.
-
-The cache holds up to 1,024 argument combinations by default. When it fills, adding an entry evicts the oldest one.
-If that combination is needed again, Quadrants recomputes its sharing pattern. The compiled kernel remains available.
-At `qd.reset()` or normal process exit, a warning reports the total capacity evictions since the last reset, if any.
-
-To keep more combinations in memory, pass a larger positive integer at initialization, for example
-`qd.init(container_alias_cache_size=4096)`, or set `QD_CONTAINER_ALIAS_CACHE_SIZE=4096`.
-
 ## CPU loop scheduling
 
 See [CPU parallelization](parallelization.md#cpu-parallelization) for scheduling modes, configuration options, examples, and tuning guidance.
@@ -148,7 +135,7 @@ Most `qd.init` keywords set a compiler-configuration option. Each option below c
 `qd.init` also accepts a number of options that are handled on the Python side and so do not appear in the generated list above. Some can only be set in the `qd.init` call; others are also reachable through a `QD_` environment variable, as noted per option:
 
 - `enable_fallback` (`bool`, default `True`): fall back to the CPU backend when the requested `arch` is unavailable, instead of raising an error. No environment variable equivalent.
-- [`container_alias_cache_size`](#container-alias-cache) (`int`, default `1024`): maximum entries in the shared container alias cache.
+- [`container_alias_cache_size`](compound_types.md#container-alias-cache) (`int`, default `1024`): maximum entries in the shared container alias cache.
 - `src_ll_cache` (`bool`, default `True`): use an additional source-level on-disk cache that speeds up loading previously compiled kernels. It only applies to kernels declared `@qd.kernel(fastcache=True)` (or the deprecated `@qd.kernel(pure=True)`; see [fastcache](./fastcache.md)). Reusing a kernel's compiled code across processes also needs the offline cache, so with `offline_cache=False` it no longer speeds up loading, but it still does source-cache bookkeeping on disk; set `src_ll_cache=False` to turn it off entirely. No environment variable equivalent.
 - `require_version` (`str`): raise an error unless the installed Quadrants version is compatible with the given `major.minor.patch` string (same major version, and at least the given minor and patch). No environment variable equivalent.
 - `print_non_pure` (`bool`, default `False`): print the name of each executed kernel that is not *declared* pure, i.e. not marked `@qd.kernel(fastcache=True)` (or the deprecated `@qd.kernel(pure=True)`). This is a declaration check, not an analysis of what the kernel actually touches: a plain `@qd.kernel` is reported even if it only uses its explicit parameters. Only kernels declared pure can use [fastcache](./fastcache.md) to speed up load, so use this to find kernels that could opt in. No environment variable equivalent.
