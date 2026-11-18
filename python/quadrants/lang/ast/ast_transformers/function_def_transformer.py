@@ -254,9 +254,8 @@ class FunctionDefTransformer:
         ``decl_ndarray_arg``) so they are registered before ``finalize_params``. The resulting ``AnyArray`` objects are
         cached on the kernel compilation context for later lookup by ``build_Attribute``.
 
-        Also stores ``(arg_id, template_arg_idx, attr_chain)`` tuples in
-        ``ctx.kernel_compile_context.current_pass.struct_ndarray_launch_info`` so the launch path can populate the corresponding slots
-        in the launch context.
+        At launch, the kernel uses the current pass's ``struct_ndarray_launch_info`` entries to fill argument slots.
+        Each entry contains ``(arg_id, template_arg_idx, attr_chain)``.
 
         Pruning: the enforcing pass registers only the ndarrays the first pass saw accessed
         (``pruning.used_struct_ndarray_ids``), dropping the rest from the kernel's parameter list. The first pass must
