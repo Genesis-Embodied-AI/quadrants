@@ -62,16 +62,16 @@ def get_container_alias_key(py_args: Sequence[Any]) -> AliasKey:
 
     serials: dict[int, int] = {}
     result: list[tuple[int, ...]] = []
-    for arg in py_args:
-        if not (is_dataclass_instance(arg) or is_data_oriented(arg)):
+    for py_arg in py_args:
+        if not (is_dataclass_instance(py_arg) or is_data_oriented(py_arg)):
             result.append(())
             continue
 
-        identities = _graph_ids_by_instance.get(arg)
+        identities = _graph_ids_by_instance.get(py_arg)
         if identities is None:
-            identities = _collect_container_ids(arg)
+            identities = _collect_container_ids(py_arg)
             try:
-                _graph_ids_by_instance[arg] = identities
+                _graph_ids_by_instance[py_arg] = identities
             except TypeError:
                 # Named tuples cannot be weakly referenced; recompute rather than retaining them.
                 pass
@@ -111,7 +111,9 @@ def cached_get_container_alias_key(py_args: tuple[Any, ...]) -> AliasKey:
     Reuse the cached key when the same container objects occupy the same argument positions.
     """
     global _cache_capacity, _num_cache_evictions
-    container_ids = tuple(id(arg) if is_dataclass_instance(arg) or is_data_oriented(arg) else None for arg in py_args)
+    container_ids = tuple(
+        id(py_arg) if is_dataclass_instance(py_arg) or is_data_oriented(py_arg) else None for py_arg in py_args
+    )
     cached_alias_key_entry = _alias_key_by_container_ids.get(container_ids)
     if cached_alias_key_entry is not None:
         alias_key, _ = cached_alias_key_entry
@@ -122,7 +124,7 @@ def cached_get_container_alias_key(py_args: tuple[Any, ...]) -> AliasKey:
     drop_fn = partial(_evict_alias_key, container_ids)
     try:
         container_weak_refs = tuple(
-            ref(arg, drop_fn) for arg, identity in zip(py_args, container_ids) if identity is not None
+            ref(py_arg, drop_fn) for py_arg, identity in zip(py_args, container_ids) if identity is not None
         )
     except TypeError:
         return alias_key
