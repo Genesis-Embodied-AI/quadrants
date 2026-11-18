@@ -1,4 +1,5 @@
 import dataclasses
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -45,6 +46,7 @@ class NDArrayBuilder:
 def test_process_func_arg_preserves_dataclass(argument_type: type) -> None:
     class MockContext:
         def __init__(self) -> None:
+            self.kernel_compile_context = SimpleNamespace(current_pass=SimpleNamespace(ndarray_to_any_array={}))
             self.variables: dict[str, Any] = {}
             self.fn_param_names: set[str] = set()
 

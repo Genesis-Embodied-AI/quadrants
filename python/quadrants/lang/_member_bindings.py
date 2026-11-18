@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 from quadrants.lang.exception import QuadrantsSyntaxError
 
 if TYPE_CHECKING:
-    from quadrants.lang.ast.ast_transformer_utils import FuncCompileContext
+    from quadrants.lang.ast.ast_transformer_utils import FuncCompilePassContext
 
 
 class MemberBinding(NamedTuple):
@@ -20,11 +20,11 @@ class MemberBinding(NamedTuple):
     reject_in_static_scope: bool = False
 
 
-def resolve_bound_member(func_ctx: "FuncCompileContext", parent: Any, attr: str) -> Any:
+def resolve_bound_member(func_ctx: "FuncCompilePassContext", parent: Any, attr: str) -> Any:
     """Read a registered member and record its kernel input as used during discovery."""
-    binding = func_ctx.kernel_compile_context.member_bindings.get((id(parent), attr))
+    binding = func_ctx.kernel_compile_context.current_pass.member_bindings.get((id(parent), attr))
     if binding is None:
-        if id(parent) in func_ctx.kernel_compile_context.bound_dataclass_ids:
+        if id(parent) in func_ctx.kernel_compile_context.current_pass.bound_dataclass_ids:
             raise QuadrantsSyntaxError(f"Member {attr!r} is absent from the declared dataclass fields")
         return None
 

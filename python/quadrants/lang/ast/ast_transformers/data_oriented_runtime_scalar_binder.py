@@ -18,7 +18,7 @@ from quadrants._lib import core as _qd_core
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import expr, impl
 from quadrants.lang._member_bindings import MemberBinding
-from quadrants.lang.ast.ast_transformer_utils import FuncCompileContext
+from quadrants.lang.ast.ast_transformer_utils import FuncCompilePassContext
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import (
     cook_dtype,
@@ -101,7 +101,7 @@ def _collect_runtime_scalars_from_data_oriented_args(
     return scalar_members
 
 
-def _create_runtime_scalar_bindings(func_ctx: FuncCompileContext, scalar_members: list[_ScalarMember]) -> None:
+def _create_runtime_scalar_bindings(func_ctx: FuncCompilePassContext, scalar_members: list[_ScalarMember]) -> None:
     """Record scalar members and create kernel parameters for those used by the compiled kernel.
 
     During discovery, record each member's location and scalar kind so accesses can be marked as used.
@@ -113,8 +113,8 @@ def _create_runtime_scalar_bindings(func_ctx: FuncCompileContext, scalar_members
     - Create an expression that reads the parameter inside the compiled kernel.
     """
     runtime = impl.get_runtime()
-    bindings = func_ctx.kernel_compile_context.member_bindings
-    runtime_scalar_launch_infos = func_ctx.kernel_compile_context.runtime_scalar_launch_infos
+    bindings = func_ctx.kernel_compile_context.current_pass.member_bindings
+    runtime_scalar_launch_infos = func_ctx.kernel_compile_context.current_pass.runtime_scalar_launch_infos
     pruning = func_ctx.kernel_compile_context.pruning
     # The kernel ID preserves uses inside inlined qd.func calls and includes them in fastcache pruning metadata.
     # Globally unique flat names avoid collisions with dataclass fields.
@@ -152,7 +152,7 @@ def _create_runtime_scalar_bindings(func_ctx: FuncCompileContext, scalar_members
         runtime_scalar_launch_infos.append((arg_id[0], arg_idx, attr_chain, kind))
 
 
-def bind_data_oriented_runtime_scalars(func_ctx: FuncCompileContext) -> None:
+def bind_data_oriented_runtime_scalars(func_ctx: FuncCompilePassContext) -> None:
     """Find opted-in scalar members, then create their compiler bindings."""
     assert func_ctx.py_args is not None
     scalar_members = _collect_runtime_scalars_from_data_oriented_args(func_ctx.py_args, func_ctx.func.arg_metas)
