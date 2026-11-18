@@ -30,6 +30,7 @@ Classes
    quadrants.lang.ast.ast_transformer_utils.ReturnStatus
    quadrants.lang.ast.ast_transformer_utils.PureViolation
    quadrants.lang.ast.ast_transformer_utils.KernelCompileContext
+   quadrants.lang.ast.ast_transformer_utils.MemberBinding
    quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext
    quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext
 
@@ -40,6 +41,7 @@ Functions
 .. autoapisummary::
 
    quadrants.lang.ast.ast_transformer_utils.get_decorator
+   quadrants.lang.ast.ast_transformer_utils.resolve_bound_member
 
 
 Module Contents
@@ -256,6 +258,32 @@ Module Contents
       :type:  KernelCompilePassContext
 
 
+.. py:class:: MemberBinding
+
+   Bases: :py:obj:`NamedTuple`
+
+
+   A member's pruning name, declared type, and result of compiling an access.
+
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: annotation
+      :type:  Any
+
+
+   .. py:attribute:: member_access_result
+      :type:  Any
+
+
+   .. py:attribute:: reject_in_static_scope
+      :type:  bool
+      :value: False
+
+
+
 .. py:class:: KernelCompilePassContext(pass_idx: int)
 
    State shared by the kernel and its function calls during one compilation pass.
@@ -276,7 +304,7 @@ Module Contents
 
 
    .. py:attribute:: binding_by_member
-      :type:  dict[tuple[int, str], quadrants.lang._member_bindings.MemberBinding]
+      :type:  dict[tuple[int, str], MemberBinding]
 
 
    .. py:attribute:: bound_dataclass_ids
@@ -518,4 +546,9 @@ Module Contents
 
 
 .. py:function:: get_decorator(ctx: FuncCompilePassContext, node) -> str
+
+.. py:function:: resolve_bound_member(func_ctx: FuncCompilePassContext, parent: Any, node: ast.Attribute) -> Any
+
+   Read a registered member and record its kernel input as used during discovery.
+
 

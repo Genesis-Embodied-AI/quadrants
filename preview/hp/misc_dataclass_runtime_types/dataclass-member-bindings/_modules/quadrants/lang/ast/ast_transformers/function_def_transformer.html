@@ -358,11 +358,11 @@
     <span class="n">final_field_names</span><span class="p">,</span>
     <span class="n">is_final_annotation</span><span class="p">,</span>
 <span class="p">)</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._member_bindings</span><span class="w"> </span><span class="kn">import</span> <span class="n">MemberBinding</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._name_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_flat_name</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._optional_annotation</span><span class="w"> </span><span class="kn">import</span> <span class="n">OPTIONAL_ABSENT</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">FuncCompilePassContext</span><span class="p">,</span>
+    <span class="n">MemberBinding</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">graph_api</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformers.checkpoint_transformer</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
@@ -399,13 +399,16 @@
         <span class="n">prefix_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">py_value</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">"""Return (needs_declaration_call, value).</span>
+
+<span class="sd">        If needs_declaration_call is True, unpack value as (func, args) and bind func(*args). Otherwise bind value.</span>
+<span class="sd">        """</span>
         <span class="n">full_name</span> <span class="o">=</span> <span class="n">prefix_name</span> <span class="o">+</span> <span class="s2">"_"</span> <span class="o">+</span> <span class="n">name</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">annotation</span><span class="p">,</span> <span class="n">primitive_types</span><span class="o">.</span><span class="n">RefType</span><span class="p">):</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
-        <span class="c1"># Optional ndarray + None declares no runtime arg; bind the name to the injected None global so</span>
-        <span class="c1"># qd.static(x is not None) specializes the present-only body away.</span>
+        <span class="c1"># Bind an absent optional ndarray directly to None so qd.static(x is not None) evaluates to False.</span>
         <span class="k">if</span> <span class="n">this_arg_features</span> <span class="ow">is</span> <span class="n">OPTIONAL_ABSENT</span><span class="p">:</span>
-            <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">py_value</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">None</span>
         <span class="c1"># qd.Tensor value-dispatch. The first slot of this_arg_features is a string marker placed by</span>
         <span class="c1"># _template_mapper_hotpath. The annotation is the wrapper class itself (``qd.Tensor``).</span>
         <span class="k">if</span> <span class="n">annotation</span> <span class="ow">is</span> <span class="n">_TensorClass</span><span class="p">:</span>
@@ -413,7 +416,7 @@
             <span class="n">marker</span> <span class="o">=</span> <span class="n">this_arg_features</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
             <span class="k">if</span> <span class="n">marker</span> <span class="o">==</span> <span class="n">_TENSOR_T_NDARRAY_MARKER</span><span class="p">:</span>
                 <span class="n">raw_element_type</span><span class="p">,</span> <span class="n">ndim</span><span class="p">,</span> <span class="n">needs_grad</span><span class="p">,</span> <span class="n">boundary</span><span class="p">,</span> <span class="n">layout</span> <span class="o">=</span> <span class="n">this_arg_features</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
-                <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="p">(</span>
+                <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="p">(</span>
                     <span class="n">kernel_arguments</span><span class="o">.</span><span class="n">decl_ndarray_arg</span><span class="p">,</span>
                     <span class="p">(</span>
                         <span class="n">to_quadrants_type</span><span class="p">(</span><span class="n">raw_element_type</span><span class="p">),</span>
@@ -426,12 +429,12 @@
                 <span class="p">)</span>
             <span class="k">if</span> <span class="n">marker</span> <span class="o">==</span> <span class="n">_TENSOR_T_FIELD_MARKER</span><span class="p">:</span>
                 <span class="c1"># Field branch: behave exactly like a template arg.</span>
-                <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">py_value</span><span class="o">.</span><span class="n">_unwrap</span><span class="p">()</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">py_value</span><span class="p">,</span> <span class="n">_TensorClass</span><span class="p">)</span> <span class="k">else</span> <span class="n">py_value</span>
+                <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="n">py_value</span><span class="o">.</span><span class="n">_unwrap</span><span class="p">()</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">py_value</span><span class="p">,</span> <span class="n">_TensorClass</span><span class="p">)</span> <span class="k">else</span> <span class="n">py_value</span>
             <span class="k">raise</span> <span class="ne">AssertionError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"unknown qd.Tensor marker: </span><span class="si">{</span><span class="n">marker</span><span class="si">!r}</span><span class="s2">"</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">annotation</span> <span class="o">==</span> <span class="n">annotations</span><span class="o">.</span><span class="n">template</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">annotation</span><span class="p">,</span> <span class="n">annotations</span><span class="o">.</span><span class="n">template</span><span class="p">):</span>
-            <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">py_value</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="n">py_value</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">annotation</span><span class="p">,</span> <span class="n">annotations</span><span class="o">.</span><span class="n">sparse_matrix_builder</span><span class="p">):</span>
-            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="p">(</span>
+            <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="p">(</span>
                 <span class="n">kernel_arguments</span><span class="o">.</span><span class="n">decl_sparse_matrix</span><span class="p">,</span>
                 <span class="p">(</span>
                     <span class="n">to_quadrants_type</span><span class="p">(</span><span class="n">this_arg_features</span><span class="p">),</span>
@@ -450,7 +453,7 @@
             <span class="p">)</span>
             <span class="n">offset</span> <span class="o">=</span> <span class="n">kernel_arguments</span><span class="o">.</span><span class="n">decl_scalar_arg</span><span class="p">(</span><span class="n">primitive_types</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">full_name</span> <span class="o">+</span> <span class="s2">"_offset"</span><span class="p">)</span>
             <span class="n">size</span> <span class="o">=</span> <span class="n">kernel_arguments</span><span class="o">.</span><span class="n">decl_scalar_arg</span><span class="p">(</span><span class="n">primitive_types</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">full_name</span> <span class="o">+</span> <span class="s2">"_size"</span><span class="p">)</span>
-            <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">BufferView</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="n">size</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="n">BufferView</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="n">size</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">annotation</span><span class="p">,</span> <span class="n">ndarray_type</span><span class="o">.</span><span class="n">NdarrayType</span><span class="p">):</span>
             <span class="k">assert</span> <span class="n">this_arg_features</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
             <span class="n">raw_element_type</span><span class="p">:</span> <span class="n">DataTypeCxx</span>
@@ -459,7 +462,7 @@
             <span class="n">boundary</span><span class="p">:</span> <span class="nb">int</span>
             <span class="c1"># Tensors layout is the trailing slot; None for legacy / identity.</span>
             <span class="n">raw_element_type</span><span class="p">,</span> <span class="n">ndim</span><span class="p">,</span> <span class="n">needs_grad</span><span class="p">,</span> <span class="n">boundary</span><span class="p">,</span> <span class="n">layout</span> <span class="o">=</span> <span class="n">this_arg_features</span>
-            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="p">(</span>
+            <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="p">(</span>
                 <span class="n">kernel_arguments</span><span class="o">.</span><span class="n">decl_ndarray_arg</span><span class="p">,</span>
                 <span class="p">(</span>
                     <span class="n">to_quadrants_type</span><span class="p">(</span><span class="n">raw_element_type</span><span class="p">),</span>
@@ -471,10 +474,10 @@
                 <span class="p">),</span>
             <span class="p">)</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">annotation</span><span class="p">,</span> <span class="n">MatrixType</span><span class="p">):</span>
-            <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">kernel_arguments</span><span class="o">.</span><span class="n">decl_matrix_arg</span><span class="p">(</span><span class="n">annotation</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="n">kernel_arguments</span><span class="o">.</span><span class="n">decl_matrix_arg</span><span class="p">(</span><span class="n">annotation</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">annotation</span><span class="p">,</span> <span class="n">StructType</span><span class="p">):</span>
-            <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">kernel_arguments</span><span class="o">.</span><span class="n">decl_struct_arg</span><span class="p">(</span><span class="n">annotation</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
-        <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">kernel_arguments</span><span class="o">.</span><span class="n">decl_scalar_arg</span><span class="p">(</span><span class="n">annotation</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="n">kernel_arguments</span><span class="o">.</span><span class="n">decl_struct_arg</span><span class="p">(</span><span class="n">annotation</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="n">kernel_arguments</span><span class="o">.</span><span class="n">decl_scalar_arg</span><span class="p">(</span><span class="n">annotation</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_bind_kernel_arg_or_nested_dataclass</span><span class="p">(</span>
@@ -515,15 +518,15 @@
                         <span class="s2">"Store the dataclass on the data-oriented object instead."</span>
                     <span class="p">)</span>
                 <span class="k">else</span><span class="p">:</span>
-                    <span class="n">result</span><span class="p">,</span> <span class="n">value</span> <span class="o">=</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_decl_and_create_variable</span><span class="p">(</span>
+                    <span class="n">needs_declaration_call</span><span class="p">,</span> <span class="n">value</span> <span class="o">=</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_decl_and_create_variable</span><span class="p">(</span>
                         <span class="n">ctx</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">flat_name</span><span class="p">,</span> <span class="n">this_arg_features</span><span class="p">[</span><span class="n">field_idx</span><span class="p">],</span> <span class="s2">""</span><span class="p">,</span> <span class="n">child</span>
                     <span class="p">)</span>
-                    <span class="k">if</span> <span class="ow">not</span> <span class="n">result</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">needs_declaration_call</span><span class="p">:</span>
                         <span class="n">decl_type_func</span><span class="p">,</span> <span class="n">type_args</span> <span class="o">=</span> <span class="n">value</span>
                         <span class="n">value</span> <span class="o">=</span> <span class="n">decl_type_func</span><span class="p">(</span><span class="o">*</span><span class="n">type_args</span><span class="p">)</span>
                 <span class="n">bindings</span><span class="p">[</span><span class="n">member_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">MemberBinding</span><span class="p">(</span><span class="n">flat_name</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">result</span><span class="p">,</span> <span class="n">obj</span> <span class="o">=</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_decl_and_create_variable</span><span class="p">(</span>
+            <span class="n">needs_declaration_call</span><span class="p">,</span> <span class="n">obj</span> <span class="o">=</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_decl_and_create_variable</span><span class="p">(</span>
                 <span class="n">ctx</span><span class="p">,</span>
                 <span class="n">argument_type</span><span class="p">,</span>
                 <span class="n">argument_name</span><span class="p">,</span>
@@ -531,7 +534,8 @@
                 <span class="s2">""</span><span class="p">,</span>
                 <span class="n">arg_value</span><span class="p">,</span>
             <span class="p">)</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">result</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">needs_declaration_call</span><span class="p">:</span>
+                <span class="c1"># Function call</span>
                 <span class="n">decl_type_func</span><span class="p">,</span> <span class="n">type_args</span> <span class="o">=</span> <span class="n">obj</span>
                 <span class="n">obj</span> <span class="o">=</span> <span class="n">decl_type_func</span><span class="p">(</span><span class="o">*</span><span class="n">type_args</span><span class="p">)</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">argument_name</span><span class="p">,</span> <span class="n">obj</span><span class="p">)</span>
@@ -571,9 +575,8 @@
 <span class="sd">        ``decl_ndarray_arg``) so they are registered before ``finalize_params``. The resulting ``AnyArray`` objects are</span>
 <span class="sd">        cached on the kernel compilation context for later lookup by ``build_Attribute``.</span>
 
-<span class="sd">        Also stores ``(arg_id, template_arg_idx, attr_chain)`` tuples in</span>
-<span class="sd">        ``ctx.kernel_compile_context.current_pass.struct_ndarray_launch_info`` so the launch path can populate the corresponding slots</span>
-<span class="sd">        in the launch context.</span>
+<span class="sd">        At launch, the kernel uses the current pass's ``struct_ndarray_launch_info`` entries to fill argument slots.</span>
+<span class="sd">        Each entry contains ``(arg_id, template_arg_idx, attr_chain)``.</span>
 
 <span class="sd">        Pruning: the enforcing pass registers only the ndarrays the first pass saw accessed</span>
 <span class="sd">        (``pruning.used_struct_ndarray_ids``), dropping the rest from the kernel's parameter list. The first pass must</span>

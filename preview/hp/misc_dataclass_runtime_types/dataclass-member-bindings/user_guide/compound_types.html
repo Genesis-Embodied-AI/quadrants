@@ -612,6 +612,10 @@ my_struct.b[37] 5
 <section id="frozen-vs-non-frozen">
 <h3>Frozen vs non-frozen<a class="headerlink" href="#frozen-vs-non-frozen" title="Link to this heading">#</a></h3>
 <p>A <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> may be either non-frozen (the default) or frozen (<code class="docutils literal notranslate"><span class="pre">&#64;dataclass(frozen=True)</span></code>). Both work as kernel arguments, but <strong>kernel launch is faster with <code class="docutils literal notranslate"><span class="pre">frozen=True</span></code></strong> (because it enables some optimizations that would otherwise not be possible). Recommend <code class="docutils literal notranslate"><span class="pre">frozen=True</span></code> unless you specifically need to rebind members after construction. Note that rebinding members after construction contradicts certain best practices; for example, it is typically incompatible with type linters such as pyright and mypy.</p>
+<p><strong>Important.</strong> Once a dataclass or <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> object has been used in a kernel call, keep its references to nested
+dataclass and data-oriented objects fixed. For example, if <code class="docutils literal notranslate"><span class="pre">state.grid</span></code> holds a dataclass, assigning
+<code class="docutils literal notranslate"><span class="pre">state.grid</span> <span class="pre">=</span> <span class="pre">another_grid</span></code> between launches is unsupported and can give incorrect results. You can pass a different
+<code class="docutils literal notranslate"><span class="pre">state</span></code> instance on the next call, or update an ordinary runtime scalar such as <code class="docutils literal notranslate"><span class="pre">state.grid.n</span></code> on a mutable dataclass.</p>
 </section>
 <section id="subclasses">
 <h3>Subclasses<a class="headerlink" href="#subclasses" title="Link to this heading">#</a></h3>
