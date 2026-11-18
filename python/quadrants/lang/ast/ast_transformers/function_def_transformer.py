@@ -65,7 +65,10 @@ class FunctionDefTransformer:
         prefix_name: str,
         py_value: Any = None,
     ) -> tuple[bool, Any]:
-        """Return (False, value) to bind value directly, or (True, (func, args)) to bind the result of func(*args)."""
+        """Return (needs_declaration_call, value).
+
+        If needs_declaration_call is True, unpack value as (func, args) and bind func(*args). Otherwise bind value.
+        """
         full_name = prefix_name + "_" + name
         if not isinstance(annotation, primitive_types.RefType):
             ctx.kernel_args.append(name)
