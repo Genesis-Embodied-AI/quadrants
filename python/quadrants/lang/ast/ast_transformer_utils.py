@@ -493,12 +493,13 @@ def get_decorator(ctx: FuncCompilePassContext, node) -> str:
     return ""
 
 
-def resolve_bound_member(func_ctx: FuncCompilePassContext, parent: Any, attr: str) -> Any:
+def resolve_bound_member(func_ctx: FuncCompilePassContext, parent: Any, node: ast.Attribute) -> Any:
     """Read a registered member and record its kernel input as used during discovery."""
+    attr = node.attr
     binding = func_ctx.kernel_compile_context.current_pass.binding_by_member.get((id(parent), attr))
     if binding is None:
         if id(parent) in func_ctx.kernel_compile_context.current_pass.bound_dataclass_ids:
-            raise QuadrantsSyntaxError(f"Member {attr!r} is absent from the declared dataclass fields")
+            raise QuadrantsSyntaxError(f"Member {ast.unparse(node)!r} is absent from the declared dataclass fields")
         return None
 
     if binding.reject_in_static_scope and func_ctx.is_in_static_scope():
