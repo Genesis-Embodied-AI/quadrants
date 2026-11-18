@@ -477,7 +477,7 @@
         <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">kernel_arguments</span><span class="o">.</span><span class="n">decl_scalar_arg</span><span class="p">(</span><span class="n">annotation</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
 
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_transform_kernel_arg</span><span class="p">(</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_bind_kernel_arg_or_nested_dataclass</span><span class="p">(</span>
         <span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span>
         <span class="n">argument_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">argument_type</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
@@ -505,7 +505,7 @@
                 <span class="k">if</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">final_names</span><span class="p">:</span>
                     <span class="n">value</span> <span class="o">=</span> <span class="n">child</span>
                 <span class="k">elif</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">is_dataclass</span><span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">):</span>
-                    <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_transform_kernel_arg</span><span class="p">(</span>
+                    <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_bind_kernel_arg_or_nested_dataclass</span><span class="p">(</span>
                         <span class="n">ctx</span><span class="p">,</span> <span class="n">flat_name</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">this_arg_features</span><span class="p">[</span><span class="n">field_idx</span><span class="p">],</span> <span class="n">child</span>
                     <span class="p">)</span>
                     <span class="n">value</span> <span class="o">=</span> <span class="n">child</span>
@@ -551,7 +551,7 @@
 
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">args</span><span class="p">)):</span>
             <span class="n">arg_meta</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
-            <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_transform_kernel_arg</span><span class="p">(</span>
+            <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_bind_kernel_arg_or_nested_dataclass</span><span class="p">(</span>
                 <span class="n">ctx</span><span class="p">,</span>
                 <span class="n">arg_meta</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
                 <span class="n">arg_meta</span><span class="o">.</span><span class="n">annotation</span><span class="p">,</span>
