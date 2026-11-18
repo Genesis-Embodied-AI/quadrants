@@ -196,7 +196,7 @@ class KernelCompilePassContext:
         self.ndarray_to_any_array: dict[int, Any] = {}
         self.struct_ndarray_launch_info: list[tuple] = []
         # Shared identity-based lookup for dataclass members and data-oriented runtime scalars.
-        self.member_bindings: dict[tuple[int, str], MemberBinding] = {}
+        self.binding_by_member: dict[tuple[int, str], MemberBinding] = {}
         # IDs of dataclass instances registered in this pass.
         # Instance                          Discovery              Enforcement
         # Dataclass-annotated kernel arg    Always                 Always, even if unused

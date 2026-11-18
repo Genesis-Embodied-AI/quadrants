@@ -156,7 +156,7 @@ class FunctionDefTransformer:
             ctx.create_variable(argument_name, arg_value)
             ctx.kernel_compile_context.current_pass.bound_dataclass_ids.add(id(arg_value))
             final_names = final_field_names(argument_type)
-            bindings = ctx.kernel_compile_context.current_pass.member_bindings
+            bindings = ctx.kernel_compile_context.current_pass.binding_by_member
             for field_idx, field in enumerate(dataclasses.fields(argument_type)):
                 flat_name = create_flat_name(argument_name, field.name)
                 if pruning.enforcing and flat_name not in pruning.used_vars_by_func_id[func_id]:
