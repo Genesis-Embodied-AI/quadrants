@@ -246,6 +246,7 @@ class _SpecialConfig:
         self.short_circuit_operators = True
         self.print_full_traceback = False
         self.unrolling_limit = 32
+        self.container_alias_cache_size = impl.DEFAULT_CONTAINER_ALIAS_CACHE_SIZE
 
 
 def prepare_sandbox():
@@ -429,6 +430,7 @@ def init(
     env_spec.configure("short_circuit_operators")
     env_spec.configure("print_full_traceback")
     env_spec.configure("unrolling_limit")
+    env_spec.configure("container_alias_cache_size")
 
     normalize_deprecated_cpu_scheduling_aliases(env_comp)
 
@@ -444,6 +446,9 @@ def init(
     if len(unexpected_keys):
         raise KeyError(f'Unrecognized keyword argument(s) for qd.init: {", ".join(unexpected_keys)}')
 
+    if type(spec_cfg.container_alias_cache_size) is not int or spec_cfg.container_alias_cache_size < 1:
+        raise ValueError("container_alias_cache_size must be a positive integer")
+
     if (cfg.print_ir or os.getenv("QD_DUMP_IR") == "1") and cfg.offline_cache:
         util.warning(
             "Even with print_ir/QD_DUMP_IR enabled, already cached kernels won't get their IRs shown. "
@@ -458,6 +463,7 @@ def init(
         runtime.short_circuit_operators = spec_cfg.short_circuit_operators
         runtime.print_full_traceback = spec_cfg.print_full_traceback
         runtime.unrolling_limit = spec_cfg.unrolling_limit
+        runtime.container_alias_cache_size = spec_cfg.container_alias_cache_size
         runtime.src_ll_cache = src_ll_cache
         runtime.print_non_pure = print_non_pure
         _logging.set_logging_level(spec_cfg.log_level.lower())

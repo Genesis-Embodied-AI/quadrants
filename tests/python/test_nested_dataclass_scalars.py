@@ -196,21 +196,18 @@ def test_alias_cache_reuses_graphs_and_releases_owners(
     state = State(3)
     first, second = Owner(state), Owner(state)
     args = (first, second, 1)
-    cache: aliases.AliasKeyCache = {}
-    key = aliases.get_cached_container_alias_key(args, tuple(map(id, args)), cache)
+    key = aliases.cached_get_container_alias_key(args)
 
     def unexpected_walk(py_obj: object) -> None:
         raise AssertionError("A cached container graph must not be walked again")
 
     monkeypatch.setattr(aliases, "_collect_container_ids", unexpected_walk)
-    assert aliases.get_cached_container_alias_key(args, tuple(map(id, args)), cache) == key
+    assert aliases.cached_get_container_alias_key(args) == key
     state.value = 9
     for scalar in range(140):
         changed_args = (first, second, scalar)
-        assert aliases.get_cached_container_alias_key(changed_args, tuple(map(id, changed_args)), cache) == key
-    assert len(cache) == 128
+        assert aliases.cached_get_container_alias_key(changed_args) == key
     first_ref = weakref.ref(first)
     del args, changed_args, first, second
     gc.collect()
     assert first_ref() is None
-    assert not cache

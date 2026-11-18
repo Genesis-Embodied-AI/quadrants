@@ -5,7 +5,7 @@ from quadrants._lib.core.quadrants_python import (
     Function as FunctionCxx,
 )
 from quadrants._lib.core.quadrants_python import FunctionKey
-from quadrants.lang import _kernel_impl_dataclass, impl, ops
+from quadrants.lang import impl, ops
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.ast import (
     transform_tree,
@@ -86,10 +86,6 @@ class Func(FuncBase):
             is_real_function=self.is_real_function,
         )
 
-        struct_locals = _kernel_impl_dataclass.extract_struct_locals_from_context(ctx)
-
-        ctx.struct_locals = struct_locals
-        tree = _kernel_impl_dataclass.unpack_ast_struct_expressions(tree, struct_locals=struct_locals)
         ret = transform_tree(tree, ctx)
         if not self.is_real_function:
             if self.return_type and ctx.returned != ReturnStatus.ReturnedValue:

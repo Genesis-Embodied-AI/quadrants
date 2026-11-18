@@ -15,7 +15,7 @@ import quadrants as qd
 _KERNEL_COVERAGE = os.environ.get("QD_KERNEL_COVERAGE") == "1"
 import quadrants.lang
 from quadrants.lang._fast_caching import args_hasher
-from quadrants.lang._kernel_types import SrcLlCacheObservations
+from quadrants.lang._kernel_types import KernelBatchedArgType, SrcLlCacheObservations
 
 from tests.helpers import test_utils
 from tests.helpers.runtime import qd_init_same_arch
@@ -438,6 +438,55 @@ def test_src_ll_cache_self_arg_checked(tmp_path: pathlib.Path) -> None:
     assert tuple(my_do.k1()) == (7, 30)
     assert my_do.k1._primal.src_ll_cache_observations.cache_key_generated
     assert my_do.k1._primal.src_ll_cache_observations.cache_validated
+
+
+@test_utils.test()
+def test_prune_used_parameters_fastcache_forward_same_name_same_call_two_slots(tmp_path: pathlib.Path) -> None:
+    """Passing one dataclass twice to a function needs one ndarray slot on both a cold compile and a disk hit."""
+
+    @dataclasses.dataclass
+    class MyDataclass:
+        x: qd.types.NDArray[qd.i32, 1]
+
+    @qd.func
+    def inner(a: MyDataclass, b: MyDataclass) -> None:
+        a.x[0] = 42
+
+    @qd.func
+    def caller(md: MyDataclass) -> None:
+        inner(md, md)
+
+    @qd.kernel(fastcache=True)
+    def k1(p: MyDataclass) -> None:
+        caller(p)
+
+    for expect_hit in (False, True):
+        qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+        p_x = qd.ndarray(qd.i32, (4,))
+        k1(MyDataclass(x=p_x))
+        assert p_x[0] == 42
+        kernel_args_count_by_type = k1._primal.launch_stats.kernel_args_count_by_type
+        assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 1
+        assert k1._primal.src_ll_cache_observations.cache_loaded == expect_hit
+
+
+@test_utils.test(arch=qd.cpu)
+def test_src_ll_cache_distinguishes_dataclass_alias_layouts(tmp_path: pathlib.Path) -> None:
+    """A shared pair and a separate pair each need their own disk entry."""
+
+    @dataclasses.dataclass
+    class State:
+        value: int
+
+    @qd.kernel(fastcache=True)
+    def add(first: State, second: State) -> int:
+        return first.value + second.value
+
+    first, second = State(2), State(9)
+    for other, expected_sum, expect_hit in ((second, 11, False), (first, 4, False), (second, 11, True)):
+        qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+        assert add(first, other) == expected_sum
+        assert add._primal.src_ll_cache_observations.cache_loaded == expect_hit
 
 
 @test_utils.test()

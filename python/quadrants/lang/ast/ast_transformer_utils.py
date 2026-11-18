@@ -6,7 +6,7 @@ import dataclasses
 import traceback
 from enum import Enum
 from textwrap import TextWrapper
-from typing import TYPE_CHECKING, Any, List
+from typing import TYPE_CHECKING, Any, List, NamedTuple
 
 from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import ASTBuilder
@@ -28,7 +28,7 @@ AutodiffMode = _qd_core.AutodiffMode
 
 
 class Builder:
-    def __call__(self, ctx: "FuncCompileContext", node: ast.AST):
+    def __call__(self, ctx: "FuncCompilePassContext", node: ast.AST):
         method_name = "build_" + node.__class__.__name__
         method = getattr(self, method_name, None)
         try:
@@ -178,48 +178,55 @@ class PureViolation:
 
 
 class KernelCompileContext:
-    def __init__(
-        self, current_kernel: "Kernel", pruning: "Pruning", currently_compiling_materialize_key, pass_idx: int
-    ) -> None:
+    """State shared by all passes of one kernel compilation."""
+
+    def __init__(self, current_kernel: "Kernel", pruning: "Pruning", currently_compiling_materialize_key) -> None:
         self.current_kernel: "Kernel" = current_kernel
         self.pruning: "Pruning" = pruning
         self.currently_compiling_materialize_key = currently_compiling_materialize_key
+        self.current_pass: KernelCompilePassContext
+
+
+class MemberBinding(NamedTuple):
+    """A member's pruning name, declared type, and result of compiling an access."""
+
+    name: str
+    annotation: Any
+    # Result of compiling a member access: an Expr for a runtime scalar,
+    # an array representation, a Python constant, or a nested dataclass instance.
+    member_access_result: Any
+    # Reject every static-scope read of this member.
+    reject_in_static_scope: bool = False
+
+
+class KernelCompilePassContext:
+    """State shared by the kernel and its function calls during one compilation pass."""
+
+    def __init__(self, pass_idx: int) -> None:
         self.pass_idx: int = pass_idx
         self.ndarray_to_any_array: dict[int, Any] = {}
         self.struct_ndarray_launch_info: list[tuple] = []
-        # Runtime inputs for dataclass scalars and opted-in data-oriented primitives use two-pass pruning.
-        # * ``runtime_scalar_arg_info_by_member`` maps ``(id(parent_obj), attr_name)`` to
-        #   ``(flat_name, arg_idx, attr_chain, kind, declared_dtype)``. Discovery records accesses through
-        #   ``build_Attribute`` without adding kernel parameters.
-        # * ``runtime_scalar_arg_expr_by_member`` maps the same key to the arg-load ``Expr``. Populated only in the
-        #   enforcing pass, and only for primitives actually accessed by the body (pruning), so ``build_Attribute`` can
-        #   return the runtime scalar arg instead of baking the value.
-        # * ``runtime_scalar_launch_infos`` records ``(arg_id, template_arg_idx, attr_chain, kind)`` tuples (``kind`` in
-        #   ``{'f', 'i', 'u'}``) so the launch path can read the live value and bind it.
-        self.runtime_scalar_arg_info_by_member: dict[tuple[int, str], tuple] = {}
-        self.runtime_scalar_arg_expr_by_member: dict[tuple[int, str], Any] = {}
+        # Shared identity-based lookup for dataclass members and data-oriented runtime scalars.
+        self.binding_by_member: dict[tuple[int, str], MemberBinding] = {}
+        # IDs of dataclass instances registered in this pass.
+        # Instance                          Discovery              Enforcement
+        # Dataclass-annotated kernel arg    Always                 Always, even if unused
+        # Nested dataclass-typed field      Every declared path    Only paths kept by pruning
+        self.bound_dataclass_ids: set[int] = set()
+        # (arg_id, template_arg_idx, attr_chain, kind) entries locate live values at launch; kind is 'f', 'i', or 'u'.
         self.runtime_scalar_launch_infos: list[tuple] = []
-        # Caller-side `loop_depth` snapshot for the in-flight `@qd.func` invocation. Each func compile creates a fresh
-        # `FuncCompileContext` with `loop_depth = 0`, so without this snapshot a non-static `range(...)` loop
-        # inside a func body would not see any outer for-loops in the caller and would skip the backward-mode dynamic-
-        # range diagnostic, silently emitting a wrong adjoint. `CallTransformer.build_Call` writes the caller
-        # `ctx.loop_depth` here before invoking the func and restores the previous value after, so the new func ctx
-        # can seed its `loop_depth` from this field via `_func_base.py`.
+        # Carry caller loop depth into fresh qd.func contexts so backward-mode dynamic-range checks see outer loops.
+        # Saved and restored around each call.
         self.caller_loop_depth: int = 0
-        # Caller-side "am I (transitively) inside non-static control flow?" snapshot for the in-flight `@qd.func`
-        # invocation. Each func compile creates a fresh `FuncCompileContext` whose own
-        # `non_static_control_flow_status` starts False, so a `@qd.func(requires_top_level=True)` reached *through* an
-        # unmarked helper called from a runtime for / if / while would not observe the caller's control-flow context
-        # and would escape the top-level check. `CallTransformer.build_Call` writes
-        # `ctx.is_in_non_static_control_flow() or <inherited>` here before invoking the func (so it accumulates down a
-        # multi-level call chain) and restores the previous value after; the new func ctx seeds
-        # `inherited_non_static_control_flow` from this field via `_func_base.py`. Kept separate from the live
-        # `non_static_control_flow_status` flag on purpose: that flag also gates the "return inside non-static if/for"
-        # diagnostic in `build_Return`, and seeding it True would spuriously reject a top-level `return` in a helper.
+        # Carry runtime control flow through nested calls so requires_top_level checks cannot be bypassed by helpers.
+        # Saved and restored around each call. Separate from the callee's local control-flow flag so ordinary helper
+        # returns remain valid.
         self.caller_in_non_static_control_flow: bool = False
 
 
-class FuncCompileContext:
+class FuncCompilePassContext:
+    """State for compiling one kernel or qd.func invocation during one compiler pass."""
+
     def __init__(
         self,
         kernel_compile_context: KernelCompileContext,
@@ -283,7 +290,7 @@ class FuncCompileContext:
         self.autodiff_mode = autodiff_mode
         self.loop_depth: int = 0
         # Whether the (transitive) caller chain that reached this func compile was already inside non-static control
-        # flow. Seeded from `kernel_compile_context.caller_in_non_static_control_flow` in `_func_base.py`; kernels
+        # flow. Inherited from the current pass in `_func_base.py`; kernels
         # start at the top of the call stack so they always begin False. Consulted (together with the local
         # `non_static_control_flow_status`) by the `requires_top_level` guard in `CallTransformer.build_Call`.
         self.inherited_non_static_control_flow: bool = False
@@ -472,7 +479,7 @@ class FuncCompileContext:
         return msg
 
 
-def get_decorator(ctx: FuncCompileContext, node) -> str:
+def get_decorator(ctx: FuncCompilePassContext, node) -> str:
     if not isinstance(node, ast.Call):
         return ""
     for wanted, name in [
@@ -486,32 +493,23 @@ def get_decorator(ctx: FuncCompileContext, node) -> str:
     return ""
 
 
-def maybe_lifted_primitive(ctx: FuncCompileContext, parent: Any, attr: str):
-    """Resolve a scalar member to its runtime input and reject its use in static expressions.
+def resolve_bound_member(func_ctx: FuncCompilePassContext, parent: Any, node: ast.Attribute) -> Any:
+    """Read a registered member and record its kernel input as used during discovery."""
+    binding = func_ctx.kernel_compile_context.current_pass.binding_by_member.get((id(parent), node.attr))
+    if binding is None:
+        if id(parent) in func_ctx.kernel_compile_context.current_pass.bound_dataclass_ids:
+            raise QuadrantsSyntaxError(f"Member {ast.unparse(node)!r} is absent from the declared dataclass fields")
+        return None
 
-    Discovery records the member as used and preserves a dataclass scalar's declared width in its temporary
-    expression. The enforcing pass returns the actual kernel-input expression. Unregistered members return None.
-    """
-    runtime_scalar_arg_info_by_member = ctx.kernel_compile_context.runtime_scalar_arg_info_by_member
-    if not runtime_scalar_arg_info_by_member:
-        return None
-    key = (id(parent), attr)
-    entry = runtime_scalar_arg_info_by_member.get(key)
-    if entry is None:
-        return None
-    if ctx.is_in_static_scope():
+    if binding.reject_in_static_scope and func_ctx.is_in_static_scope():
         raise QuadrantsSyntaxError(
-            f"'{attr}' is a scalar passed as a runtime kernel argument and cannot be used inside qd.static(). "
-            "For a dataclass constant, annotate the field with typing.Final[T] or qd.Template. "
-            "For an ordinary data-oriented scalar, use template_primitives=True."
+            f"{ast.unparse(node)!r} is a runtime kernel argument and cannot be used inside qd.static(). "
+            "Use Final[T] or qd.Template for dataclass constants, or template_primitives=True for data-oriented scalars."
         )
-    pruning = ctx.kernel_compile_context.pruning
+    pruning = func_ctx.kernel_compile_context.pruning
     if not pruning.enforcing:
-        # Record under the kernel's func id (see ``bind_data_oriented_runtime_scalars``) so the enforcing pass declares
-        # this primitive and the existing fastcache serialisation captures it.
-        pruning.mark_used(pruning.KERNEL_FUNC_ID, entry[0])
-        # Preserve declared widths during discovery too: a large i64 value need not fit default_ip.
-        if entry[4] is not None:
-            return expr.Expr(getattr(parent, attr), dtype=entry[4])
-        return None
-    return ctx.kernel_compile_context.runtime_scalar_arg_expr_by_member.get(key)
+        pruning.mark_used(pruning.KERNEL_FUNC_ID, binding.name)
+        if binding.reject_in_static_scope and binding.member_access_result is None and dataclasses.is_dataclass(parent):
+            # Preserve the declared width when discovery reads a nested scalar such as an i64.
+            return expr.Expr(getattr(parent, node.attr), dtype=binding.annotation)
+    return binding.member_access_result

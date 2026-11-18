@@ -108,7 +108,7 @@ def _mark_should_warn() -> None:
     _should_warn = True
 
 
-def _fail_unknown_type(obj: object, path: tuple[str, ...]) -> _FailFastcache:
+def _fail_unknown_type(obj: object, index_and_path: tuple[str, ...]) -> _FailFastcache:
     """Disable fastcache for the call when an unrecognised type appears at a kernel-read path.
 
     Neither alternative is safe: a ``__qualname__`` fallback captures type identity only, and so hides a
@@ -120,7 +120,7 @@ def _fail_unknown_type(obj: object, path: tuple[str, ...]) -> _FailFastcache:
     if qualname not in _warned_unknown_types:
         _warned_unknown_types.add(qualname)
         _logging.warn(
-            f"[FASTCACHE][UNKNOWN_TYPE] Unrecognised type {qualname} reached at kernel-read path {path}. "
+            f"[FASTCACHE][UNKNOWN_TYPE] Unrecognised type {qualname} reached at kernel-read path {index_and_path}. "
             f"Fastcache is disabled for this call. Add explicit handling for this type to "
             f"``quadrants/lang/_fast_caching/args_hasher.py::stringify_obj_type``, or refactor the kernel "
             f"so it does not read this member."
@@ -152,7 +152,7 @@ def _is_path_used(pruning_paths: set[str] | None, child_flat: str | None) -> boo
 
 
 def _get_used_properties(
-    path: tuple[str, ...], obj: object, parent_flat: str | None, pruning_paths: set[str] | None
+    index_and_path: tuple[str, ...], obj: object, parent_flat: str | None, pruning_paths: set[str] | None
 ) -> list[str] | _FailFastcache:
     """Names of the properties of ``obj`` the kernel reads, sorted so the key is stable."""
     seen: set[str] = set()
@@ -173,7 +173,8 @@ def _get_used_properties(
                     _warned_cached_properties.add(qualname)
                     _logging.warn(
                         f"[FASTCACHE][CACHED_PROPERTY] Kernel reads functools.cached_property {qualname} at path "
-                        f"{path + (name,)}, which fastcache does not support. Fastcache is disabled for this call. "
+                        f"{index_and_path + (name,)}, which fastcache does not support. "
+                        f"Fastcache is disabled for this call. "
                         f"Use @property instead."
                     )
                 _mark_should_warn()
@@ -184,24 +185,24 @@ def _get_used_properties(
 
 def _stringify_used_properties(
     raise_on_templated_floats: bool,
-    path: tuple[str, ...],
+    index_and_path: tuple[str, ...],
     obj: object,
     pruning_paths: set[str] | None,
     parent_flat: str | None,
 ) -> list[str] | _FailFastcache:
     """Represents names and values of used properties as a string."""
-    names = _get_used_properties(path, obj, parent_flat, pruning_paths)
+    names = _get_used_properties(index_and_path, obj, parent_flat, pruning_paths)
     if isinstance(names, _FailFastcache):
         return _FAIL_FASTCACHE
     repr_l = []
     for name in names:
-        child_path = path + (name,)
+        child_index_and_path = index_and_path + (name,)
         try:
             value = getattr(obj, name)
         except Exception as e:  # pylint: disable=broad-exception-caught
             _logging.warn(
-                f"[FASTCACHE][PROPERTY_RAISED] Property at kernel-read path {child_path} raised {e!r} while computing "
-                f"the fastcache key. Fastcache is disabled for this call."
+                f"[FASTCACHE][PROPERTY_RAISED] Property at kernel-read path {child_index_and_path} raised {e!r} "
+                f"while computing the fastcache key. Fastcache is disabled for this call."
             )
             _mark_should_warn()
             return _FAIL_FASTCACHE
@@ -209,7 +210,7 @@ def _stringify_used_properties(
         # key.
         _repr = stringify_obj_type(
             raise_on_templated_floats,
-            child_path,
+            child_index_and_path,
             value,
             ArgMetadata(Template, ""),
             pruning_paths=pruning_paths,
@@ -223,7 +224,7 @@ def _stringify_used_properties(
 
 def dataclass_to_repr(
     raise_on_templated_floats: bool,
-    path: tuple[str, ...],
+    index_and_path: tuple[str, ...],
     arg: Any,
     annotated_type: type | None = None,
     pruning_paths: set[str] | None = None,
@@ -274,7 +275,7 @@ def dataclass_to_repr(
 
         _repr = stringify_obj_type(
             raise_on_templated_floats,
-            path + (field.name,),
+            index_and_path + (field.name,),
             child_value,
             arg_meta=ArgMetadata(field.type, field.name),
             pruning_paths=pruning_paths,
@@ -313,7 +314,7 @@ def _is_template(arg_meta: ArgMetadata | None) -> bool:
 
 def stringify_obj_type(
     raise_on_templated_floats: bool,
-    path: tuple[str, ...],
+    index_and_path: tuple[str, ...],
     obj: object,
     arg_meta: ArgMetadata | None,
     pruning_paths: set[str] | None = None,
@@ -382,7 +383,12 @@ def stringify_obj_type(
             if isinstance(ann, type) and dataclasses.is_dataclass(ann) and isinstance(obj, ann):
                 annotated_type = ann
         return dataclass_to_repr(
-            raise_on_templated_floats, path, obj, annotated_type, pruning_paths=pruning_paths, parent_flat=parent_flat
+            raise_on_templated_floats,
+            index_and_path,
+            obj,
+            annotated_type,
+            pruning_paths=pruning_paths,
+            parent_flat=parent_flat,
         )
     if is_data_oriented(obj):
         # Narrowed by pruning info: a member the kernel cannot read cannot affect codegen, so it stays out of the key.
@@ -406,7 +412,7 @@ def stringify_obj_type(
                 continue
             _child_repr = stringify_obj_type(
                 raise_on_templated_floats,
-                (*path, k),
+                (*index_and_path, k),
                 v,
                 child_meta,
                 pruning_paths=pruning_paths,
@@ -415,7 +421,9 @@ def stringify_obj_type(
             if _child_repr is _FAIL_FASTCACHE:
                 return _FAIL_FASTCACHE
             child_repr_l.append(f"{k}: {_child_repr}")
-        property_repr_l = _stringify_used_properties(raise_on_templated_floats, path, obj, pruning_paths, parent_flat)
+        property_repr_l = _stringify_used_properties(
+            raise_on_templated_floats, index_and_path, obj, pruning_paths, parent_flat
+        )
         if isinstance(property_repr_l, _FailFastcache):
             return _FAIL_FASTCACHE
         child_repr_l.extend(property_repr_l)
@@ -438,7 +446,7 @@ def stringify_obj_type(
     if obj is None:
         # ``None`` is a singleton, so its type fully determines its value and a constant tag is a complete cache key.
         return "None"
-    return _fail_unknown_type(obj, path)
+    return _fail_unknown_type(obj, index_and_path)
 
 
 def hash_args(
@@ -476,7 +484,7 @@ def hash_args(
             parent_flat=top_flat,
         )
         g_repr_time += time.time() - start
-        if _hash is _FAIL_FASTCACHE:
+        if isinstance(_hash, _FailFastcache):
             g_num_ignored_calls += 1
             return FastcacheSkip.WARN if _should_warn else FastcacheSkip.FIELD_VIA_TENSOR
         hash_l.append(_hash)

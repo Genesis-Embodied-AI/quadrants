@@ -1,108 +1,27 @@
-import dataclasses
-from typing import Any
+from dataclasses import dataclass
+from unittest.mock import Mock
 
-import pytest
-
-import quadrants as qd
 from quadrants.lang.ast.ast_transformers.function_def_transformer import (
     FunctionDefTransformer,
 )
 
-from tests.helpers import dataclass_helpers, test_utils
 
+def test_process_func_arg_preserves_dataclass() -> None:
+    """The compiler creates one local variable, "state", holding the caller's original nested dataclass."""
 
-@dataclasses.dataclass
-class MyStructAB:
-    a: qd.types.NDArray[qd.i32, 1]
-    b: qd.types.NDArray[qd.i32, 1]
+    @dataclass
+    class Grid:
+        size: int
 
+    @dataclass
+    class State:
+        grid: Grid
 
-@dataclasses.dataclass
-class MyStructCD:
-    c: qd.types.NDArray[qd.i32, 1]
-    d: qd.types.NDArray[qd.i32, 1]
-    my_struct_ab: MyStructAB
+    state = State(Grid(4))
+    ctx = Mock(fn_param_names=set())
+    FunctionDefTransformer._transform_func_arg(ctx, "state", State, state)
 
-
-@dataclasses.dataclass
-class MyStructEF:
-    e: qd.types.NDArray[qd.i32, 1]
-    f: qd.types.NDArray[qd.i32, 1]
-    my_struct_cd: MyStructCD
-
-
-class NDArrayBuilder:
-    def __init__(self, dtype: Any, shape: tuple[int, ...]) -> None:
-        self.dtype = dtype
-        self.shape = shape
-
-    def build(self) -> qd.types.NDArray:
-        return qd.ndarray(self.dtype, self.shape)
-
-
-@pytest.mark.parametrize(
-    "argument_name, argument_type, expected_variables",
-    [
-        (
-            "my_struct_1",
-            MyStructAB,
-            {
-                "__qd_my_struct_1__qd_a": qd.types.NDArray[qd.i32, 1],
-                "__qd_my_struct_1__qd_b": qd.types.NDArray[qd.i32, 1],
-            },
-        ),
-        (
-            "my_struct_2",
-            MyStructCD,
-            {
-                "__qd_my_struct_2__qd_c": qd.types.NDArray[qd.i32, 1],
-                "__qd_my_struct_2__qd_d": qd.types.NDArray[qd.i32, 1],
-                "__qd_my_struct_2__qd_my_struct_ab__qd_a": qd.types.NDArray[qd.i32, 1],
-                "__qd_my_struct_2__qd_my_struct_ab__qd_b": qd.types.NDArray[qd.i32, 1],
-            },
-        ),
-        (
-            "my_struct_3",
-            MyStructEF,
-            {
-                "__qd_my_struct_3__qd_e": qd.types.NDArray[qd.i32, 1],
-                "__qd_my_struct_3__qd_f": qd.types.NDArray[qd.i32, 1],
-                "__qd_my_struct_3__qd_my_struct_cd__qd_c": qd.types.NDArray[qd.i32, 1],
-                "__qd_my_struct_3__qd_my_struct_cd__qd_d": qd.types.NDArray[qd.i32, 1],
-                "__qd_my_struct_3__qd_my_struct_cd__qd_my_struct_ab__qd_a": qd.types.NDArray[qd.i32, 1],
-                "__qd_my_struct_3__qd_my_struct_cd__qd_my_struct_ab__qd_b": qd.types.NDArray[qd.i32, 1],
-            },
-        ),
-    ],
-)
-@test_utils.test()
-def test_process_func_arg(argument_name: str, argument_type: Any, expected_variables: dict[str, Any]) -> None:
-    class MockContext:
-        def __init__(self) -> None:
-            self.variables: dict[str, Any] = {}
-            # Mirror the real ``FuncCompileContext.fn_param_names`` so ``_transform_func_arg`` can record bare
-            # param names without crashing.
-            self.fn_param_names: set[str] = set()
-
-        def create_variable(self, name: str, data: Any) -> None:
-            assert name not in self.variables
-            self.variables[name] = data
-
-    data = dataclass_helpers.build_struct(argument_type)
-    ctx = MockContext()
-    FunctionDefTransformer._transform_func_arg(
-        ctx,
-        argument_name,
-        argument_type,
-        data,
-    )
-    # since these should both be flat, we can just loop over both
-    assert set(ctx.variables.keys()) == set(expected_variables.keys())
-    for k, expected_obj in expected_variables.items():
-        if isinstance(expected_obj, qd.types.NDArray):
-            actual = ctx.variables[k]
-            assert isinstance(actual, (qd.ScalarNdarray,))
-            assert len(actual.shape) == expected_obj.ndim
-            assert actual.dtype == expected_obj.dtype
-        else:
-            raise Exception("unexpected expected type", expected_obj)
+    ctx.create_variable.assert_called_once()
+    name, value = ctx.create_variable.call_args.args
+    assert name == "state"
+    assert value is state

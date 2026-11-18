@@ -4,7 +4,7 @@ import enum
 from typing import Any
 
 from quadrants.lang._final.final_class_identity import (
-    _STRUCTURAL_CLASS_ATTRS,
+    _CLASS_METADATA_ATTRS,
     _is_supported_builtin_scalar_type,
     _observable_metaclass_attr,
     _slot_names,
@@ -239,7 +239,7 @@ def _compute_enum_reference_checked_attrs() -> "frozenset[str]":
             default = reference.get(name, _MISSING)
             if default is not _MISSING and getattr(member, "__func__", member) is getattr(default, "__func__", default):
                 matches[name] = matches.get(name, 0) + 1
-    return frozenset(name for name, count in appears.items() if matches.get(name, 0) == count) - _STRUCTURAL_CLASS_ATTRS
+    return frozenset(name for name, count in appears.items() if matches.get(name, 0) == count) - _CLASS_METADATA_ATTRS
 
 
 # Fallback allowlist (see ``_compute_enum_generated_class_attrs``); the primary path uses the per-class reference.
@@ -286,7 +286,7 @@ def _observable_class_dict_attr(klass: type) -> "str | None":
                 continue  # base/data-type dunder copied by the machinery (>=3.11)
             return name  # a genuine user operator/behavior dunder override
         if is_sunder_dunder:
-            if name in _STRUCTURAL_CLASS_ATTRS:
+            if name in _CLASS_METADATA_ATTRS:
                 continue  # structural names (some absent from the programmatic reference); always exempt
             if reference is _MISSING:
                 reference = _enum_machinery_class_dict(klass)

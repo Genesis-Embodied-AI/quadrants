@@ -35,7 +35,7 @@ from quadrants._lib.core.quadrants_python import (
 )
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorClass
-from quadrants.lang import _kernel_impl_dataclass, impl, runtime_ops
+from quadrants.lang import impl, runtime_ops
 
 # `qd.checkpoint` pause / resume model helpers. See `kernel_checkpoint.py` for the full extracted surface; `Kernel`
 # delegates the resume-cookie validation, label translation, per-launch yield_on= arg-id table build, and GraphStatus
@@ -49,7 +49,7 @@ from quadrants.lang.ast import (
     transform_tree,
 )
 from quadrants.lang.ast.ast_transformer_utils import (
-    FuncCompileContext,
+    FuncCompilePassContext,
     ReturnStatus,
 )
 from quadrants.lang.exception import (
@@ -81,6 +81,7 @@ from ._kernel_types import (
 )
 from ._pruning import Pruning
 from ._quadrants_callable import QuadrantsCallable
+from .ast.ast_transformer_utils import KernelCompileContext, KernelCompilePassContext
 
 # Define proxies for fast lookup
 _NONE, _VALIDATION = AutodiffMode.NONE, AutodiffMode.VALIDATION
@@ -191,7 +192,7 @@ class LaunchContextBufferCache:
 class ASTGenerator:
     def __init__(
         self,
-        ctx: FuncCompileContext,
+        ctx: FuncCompilePassContext,
         kernel_name: str,
         current_kernel: "Kernel",
         only_parse_function_def: bool,
@@ -231,14 +232,7 @@ class ASTGenerator:
             ctx.ast_builder = kernel_cxx.ast_builder()
             if self.dump_ast:
                 self._dump_ast()
-            if not pruning.enforcing:
-                struct_locals = _kernel_impl_dataclass.extract_struct_locals_from_context(ctx)
-            else:
-                struct_locals = pruning.used_vars_by_func_id[ctx.func.func_id]
-            # struct locals are the expanded py dataclass fields that we will write to local variables, and will then
-            # be available to use in build_Call, later.
-            ctx.struct_locals = struct_locals
-            tree = _kernel_impl_dataclass.unpack_ast_struct_expressions(self.tree, struct_locals=struct_locals)
+            tree = self.tree
             ctx.only_parse_function_def = self.only_parse_function_def
             # Rebuild the graph_do_while level table from scratch each compilation pass (build_While appends to it as it
             # walks the AST). Skip when only_parse_function_def: the body is not walked, so build_While never runs to
@@ -552,19 +546,18 @@ class Kernel(FuncBase):
             pruning = Pruning(kernel_used_parameters=used_py_dataclass_parameters)
             range_begin = 0 if used_py_dataclass_parameters is None else 1
             runtime = impl.get_runtime()
+            kernel_ctx = KernelCompileContext(self, pruning, key)
             for _pass in range(range_begin, 2):
+                kernel_ctx.current_pass = KernelCompilePassContext(_pass)
                 if _pass == 0:
                     pruning.pass_0_ran = True
                 if _pass >= 1:
                     pruning.enforce()
                 tree, ctx = self.get_tree_and_ctx(
-                    pass_idx=_pass,
+                    kernel_compile_context=kernel_ctx,
                     py_args=py_args,
                     template_slot_locations=self.template_slot_locations,
                     arg_features=arg_features,
-                    current_kernel=self,
-                    pruning=pruning,
-                    currently_compiling_materialize_key=key,
                 )
                 runtime._current_kernel_compile_context = ctx.kernel_compile_context
 
@@ -585,9 +578,7 @@ class Kernel(FuncBase):
                 if _pass == 1:
                     assert key not in self.materialized_kernels
                     self.materialized_kernels[key] = quadrants_kernel
-                    self._struct_ndarray_launch_info_by_key[key] = getattr(
-                        ctx.kernel_compile_context, "struct_ndarray_launch_info", []
-                    )
+                    self._struct_ndarray_launch_info_by_key[key] = kernel_ctx.current_pass.struct_ndarray_launch_info
                     # Both folds bring data_oriented member accesses into the kernel's used-flat-names set, which
                     # dataclass-arg expansion is the only other contributor to. Without them the narrow args hash walks
                     # nothing for a data_oriented arg, and a change of member dtype or value cannot invalidate the cache
@@ -599,7 +590,7 @@ class Kernel(FuncBase):
                     # skip the whole primitive-binding path with a single empty-dict check instead of paying a
                     # per-launch ``.get(key)`` (tuple hash) on every cache-missing launch -- which is the hot path for
                     # CPU / unbatched genesis steps that launch many tiny kernels.
-                    runtime_scalar_launch_infos = getattr(ctx.kernel_compile_context, "runtime_scalar_launch_infos", [])
+                    runtime_scalar_launch_infos = kernel_ctx.current_pass.runtime_scalar_launch_infos
                     if runtime_scalar_launch_infos:
                         self._runtime_scalar_launch_infos_by_compiled_kernel_key[key] = runtime_scalar_launch_infos
                 else:
