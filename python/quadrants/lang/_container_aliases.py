@@ -41,12 +41,6 @@ def _collect_container_ids(py_obj: Any) -> tuple[int, ...]:
             continue
 
         seen_ids.add(identity)
-        if child is not py_obj:
-            # Only the root is used as a weak cache key below. Diagnose nested containers during discovery too.
-            try:
-                ref(child)
-            except TypeError as error:
-                _warnings.warn_uncacheable_weakref(error)
         if is_dataclass:
             pending.extend(getattr(child, field.name) for field in dataclasses.fields(child))
         else:

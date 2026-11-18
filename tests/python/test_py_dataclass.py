@@ -1973,9 +1973,9 @@ def test_prune_used_parameters_fastcache_forward_same_name_swapped_slots_same_ca
         assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 2
 
 
-@pytest.mark.parametrize("nested", [False, True])
+@pytest.mark.parametrize(("nested", "expected_warnings"), [(False, 1), (True, 0)])
 @test_utils.test(arch=qd.cpu)
-def test_container_weakref_warning(nested: bool, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_container_weakref_warning(nested: bool, expected_warnings: int, monkeypatch: pytest.MonkeyPatch) -> None:
     from quadrants import _warnings
 
     monkeypatch.setattr(_warnings, "_seen", set())
@@ -2003,7 +2003,8 @@ def test_container_weakref_warning(nested: bool, monkeypatch: pytest.MonkeyPatch
         assert kernel(arg) == 7
         state.n = 9
         assert kernel(arg) == 9
-    assert sum("SlottedState" in str(w.message) and "weak cache key" in str(w.message) for w in caught) == 1
+    weakref_warnings = [w for w in caught if "SlottedState" in str(w.message) and "weak cache key" in str(w.message)]
+    assert len(weakref_warnings) == expected_warnings
 
 
 @test_utils.test(arch=qd.cpu)
