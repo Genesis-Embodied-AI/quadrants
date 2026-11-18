@@ -353,7 +353,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._unpacked</span><span class="w"> </span><span class="kn">import</span> <span class="n">_UnpackedVectorRef</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">Builder</span><span class="p">,</span>
-    <span class="n">FuncCompileContext</span><span class="p">,</span>
+    <span class="n">FuncCompilePassContext</span><span class="p">,</span>
     <span class="n">LoopStatus</span><span class="p">,</span>
     <span class="n">ReturnStatus</span><span class="p">,</span>
     <span class="n">get_decorator</span><span class="p">,</span>
@@ -441,7 +441,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_Name">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_Name">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_Name</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_Name</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">):</span>
         <span class="n">pruning</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="o">.</span><span class="n">pruning</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">pruning</span><span class="o">.</span><span class="n">enforcing</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">expanding_dataclass_call_parameters</span> <span class="ow">and</span> <span class="n">node</span><span class="o">.</span><span class="n">id</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"__qd_"</span><span class="p">):</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="o">.</span><span class="n">pruning</span><span class="o">.</span><span class="n">mark_used</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">func_id</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
@@ -496,7 +496,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_AnnAssign">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_AnnAssign">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_AnnAssign</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">AnnAssign</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_AnnAssign</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">AnnAssign</span><span class="p">):</span>
         <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
         <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">annotation</span><span class="p">)</span>
 
@@ -512,7 +512,7 @@
 <div class="viewcode-block" id="ASTTransformer.build_assign_annotated">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_assign_annotated">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">build_assign_annotated</span><span class="p">(</span>
-        <span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span>
         <span class="n">target</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">,</span>
         <span class="n">value</span><span class="p">,</span>
         <span class="n">is_static_assign</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
@@ -551,7 +551,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_Assign">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_Assign">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_Assign</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Assign</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_Assign</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Assign</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
         <span class="n">is_static_assign</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">)</span> <span class="ow">and</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">ptr</span> <span class="ow">is</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span>
 
@@ -568,7 +568,7 @@
 <div class="viewcode-block" id="ASTTransformer.build_assign_unpack">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_assign_unpack">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">build_assign_unpack</span><span class="p">(</span>
-        <span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span>
         <span class="n">node_target</span><span class="p">:</span> <span class="nb">list</span> <span class="o">|</span> <span class="n">ast</span><span class="o">.</span><span class="n">Tuple</span><span class="p">,</span>
         <span class="n">values</span><span class="p">,</span>
         <span class="n">is_static_assign</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
@@ -621,7 +621,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_assign_basic">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_assign_basic">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_assign_basic</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">target</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">is_static_assign</span><span class="p">:</span> <span class="nb">bool</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_assign_basic</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">target</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">is_static_assign</span><span class="p">:</span> <span class="nb">bool</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">"""Build basic assignment like this: target = value.</span>
 
 <span class="sd">        Args:</span>
@@ -659,7 +659,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_NamedExpr">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_NamedExpr">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_NamedExpr</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">NamedExpr</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_NamedExpr</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">NamedExpr</span><span class="p">):</span>
         <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
         <span class="n">is_static_assign</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">)</span> <span class="ow">and</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">ptr</span> <span class="ow">is</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span>
         <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">build_assign_basic</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">target</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">is_static_assign</span><span class="p">)</span>
@@ -705,7 +705,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_Subscript">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_Subscript">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_Subscript</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Subscript</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_Subscript</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Subscript</span><span class="p">):</span>
         <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
         <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="p">)</span>
         <span class="c1"># Unpacked-vector group subscript: rewrite ``obj.{group}[k]`` to a direct reference to the synthetic scalar</span>
@@ -752,7 +752,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_Slice">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_Slice">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_Slice</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Slice</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_Slice</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Slice</span><span class="p">):</span>
         <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">lower</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">lower</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">upper</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -771,7 +771,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_ExtSlice">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_ExtSlice">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_ExtSlice</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">ExtSlice</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_ExtSlice</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">ExtSlice</span><span class="p">):</span>
         <span class="n">build_stmts</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">dims</span><span class="p">)</span>
         <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">dim</span><span class="o">.</span><span class="n">ptr</span> <span class="k">for</span> <span class="n">dim</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">dims</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">node</span><span class="o">.</span><span class="n">ptr</span></div>
@@ -780,7 +780,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_Tuple">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_Tuple">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_Tuple</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Tuple</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_Tuple</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Tuple</span><span class="p">):</span>
         <span class="n">build_stmts</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">elts</span><span class="p">)</span>
         <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">elt</span><span class="o">.</span><span class="n">ptr</span> <span class="k">for</span> <span class="n">elt</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">elts</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">node</span><span class="o">.</span><span class="n">ptr</span></div>
@@ -789,7 +789,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_List">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_List">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_List</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">List</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_List</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">List</span><span class="p">):</span>
         <span class="n">build_stmts</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">elts</span><span class="p">)</span>
         <span class="n">reason</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">elt</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">elts</span><span class="p">:</span>
@@ -804,7 +804,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_Dict">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_Dict">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_Dict</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Dict</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_Dict</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Dict</span><span class="p">):</span>
         <span class="n">dic</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">keys</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">values</span><span class="p">):</span>
             <span class="k">if</span> <span class="n">key</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
@@ -818,14 +818,14 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.process_listcomp">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.process_listcomp">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">process_listcomp</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">process_listcomp</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">elt</span><span class="p">))</span></div>
 
 
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.process_dictcomp">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.process_dictcomp">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">process_dictcomp</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">process_dictcomp</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">key</span> <span class="o">=</span> <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">key</span><span class="p">)</span>
         <span class="n">value</span> <span class="o">=</span> <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
         <span class="n">result</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span></div>
@@ -834,7 +834,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.process_generators">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.process_generators">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">process_generators</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">GeneratorExp</span><span class="p">,</span> <span class="n">now_comp</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">result</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">process_generators</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">GeneratorExp</span><span class="p">,</span> <span class="n">now_comp</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">result</span><span class="p">):</span>
         <span class="k">if</span> <span class="n">now_comp</span> <span class="o">&gt;=</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">generators</span><span class="p">):</span>
             <span class="k">return</span> <span class="n">func</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span>
         <span class="k">with</span> <span class="n">ctx</span><span class="o">.</span><span class="n">static_scope_guard</span><span class="p">():</span>
@@ -857,7 +857,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.process_ifs">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.process_ifs">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">process_ifs</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">If</span><span class="p">,</span> <span class="n">now_comp</span><span class="p">,</span> <span class="n">now_if</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">result</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">process_ifs</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">If</span><span class="p">,</span> <span class="n">now_comp</span><span class="p">,</span> <span class="n">now_if</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">result</span><span class="p">):</span>
         <span class="k">if</span> <span class="n">now_if</span> <span class="o">&gt;=</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">generators</span><span class="p">[</span><span class="n">now_comp</span><span class="p">]</span><span class="o">.</span><span class="n">ifs</span><span class="p">):</span>
             <span class="k">return</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">process_generators</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">now_comp</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span>
         <span class="n">cond</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">generators</span><span class="p">[</span><span class="n">now_comp</span><span class="p">]</span><span class="o">.</span><span class="n">ifs</span><span class="p">[</span><span class="n">now_if</span><span class="p">]</span><span class="o">.</span><span class="n">ptr</span>
@@ -870,7 +870,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_ListComp">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_ListComp">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_ListComp</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">ListComp</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_ListComp</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">ListComp</span><span class="p">):</span>
         <span class="n">result</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">process_generators</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">process_listcomp</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span>
         <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">result</span>
@@ -880,7 +880,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_DictComp">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_DictComp">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_DictComp</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">DictComp</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_DictComp</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">DictComp</span><span class="p">):</span>
         <span class="n">result</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">process_generators</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">process_dictcomp</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span>
         <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">result</span>
@@ -890,7 +890,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_Index">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_Index">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_Index</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Index</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_Index</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Index</span><span class="p">):</span>
         <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">node</span><span class="o">.</span><span class="n">ptr</span></div>
 
@@ -898,7 +898,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_Constant">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_Constant">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_Constant</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Constant</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_Constant</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Constant</span><span class="p">):</span>
         <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span>
         <span class="k">return</span> <span class="n">node</span><span class="o">.</span><span class="n">ptr</span></div>
 
@@ -906,7 +906,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_keyword">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_keyword">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_keyword</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">keyword</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_keyword</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">keyword</span><span class="p">):</span>
         <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">arg</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span>
@@ -918,7 +918,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_Starred">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_Starred">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_Starred</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Starred</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_Starred</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Starred</span><span class="p">):</span>
         <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">node</span><span class="o">.</span><span class="n">ptr</span></div>
 
@@ -926,7 +926,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_FormattedValue">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_FormattedValue">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_FormattedValue</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">FormattedValue</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_FormattedValue</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">FormattedValue</span><span class="p">):</span>
         <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">format_spec</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">format_spec</span><span class="o">.</span><span class="n">values</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">node</span><span class="o">.</span><span class="n">ptr</span>
@@ -941,7 +941,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_JoinedStr">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_JoinedStr">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_JoinedStr</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">JoinedStr</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_JoinedStr</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">JoinedStr</span><span class="p">):</span>
         <span class="n">str_spec</span> <span class="o">=</span> <span class="s2">""</span>
         <span class="n">args</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">sub_node</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">values</span><span class="p">:</span>
@@ -961,21 +961,21 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_Call">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_Call">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_Call</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_Call</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">CallTransformer</span><span class="o">.</span><span class="n">build_Call</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">build_stmt</span><span class="p">,</span> <span class="n">build_stmts</span><span class="p">)</span></div>
 
 
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_FunctionDef">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_FunctionDef">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_FunctionDef</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">FunctionDef</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_FunctionDef</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">FunctionDef</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">build_FunctionDef</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">build_stmts</span><span class="p">)</span></div>
 
 
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_Return">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_Return">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_Return</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Return</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_Return</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Return</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_real_function</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_in_non_static_control_flow</span><span class="p">():</span>
                 <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"Return inside non-static if/for is not supported"</span><span class="p">)</span>
@@ -1099,7 +1099,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_Module">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_Module">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_Module</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Module</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_Module</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Module</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">with</span> <span class="n">ctx</span><span class="o">.</span><span class="n">variable_scope_guard</span><span class="p">():</span>
             <span class="c1"># Do NOT use |build_stmts| which inserts 'del' statements to the</span>
             <span class="c1"># end and deletes parameters passed into the module</span>
@@ -1111,7 +1111,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_attribute_if_is_dynamic_snode_method">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_attribute_if_is_dynamic_snode_method">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_attribute_if_is_dynamic_snode_method</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_attribute_if_is_dynamic_snode_method</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
         <span class="n">is_subscript</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Subscript</span><span class="p">)</span>
         <span class="n">names</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"append"</span><span class="p">,</span> <span class="s2">"deactivate"</span><span class="p">,</span> <span class="s2">"length"</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">attr</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">names</span><span class="p">:</span>
@@ -1141,7 +1141,7 @@
 
 
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_promote_ndarray_if_declared</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_promote_ndarray_if_declared</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""If *value* is a bare ``Ndarray`` that was pre-declared as a kernel arg (in ``_predeclare_struct_ndarrays``),</span>
 <span class="sd">        return the ``AnyArray`` proxy from the cache. Otherwise return *value* unchanged.</span>
 
@@ -1173,7 +1173,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_Attribute">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_Attribute">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_Attribute</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_Attribute</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">):</span>
         <span class="c1"># There are two valid cases for the methods of Dynamic SNode:</span>
         <span class="c1">#</span>
         <span class="c1"># 1. x[i, j].append (where the dimension of the field (3 in this case) is equal to one plus the number of the</span>
@@ -1328,7 +1328,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_BinOp">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_BinOp">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_BinOp</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">BinOp</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_BinOp</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">BinOp</span><span class="p">):</span>
         <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="p">)</span>
         <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">right</span><span class="p">)</span>
         <span class="c1"># pylint: disable-msg=C0415</span>
@@ -1359,7 +1359,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_AugAssign">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_AugAssign">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_AugAssign</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">AugAssign</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_AugAssign</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">AugAssign</span><span class="p">):</span>
         <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">target</span><span class="p">)</span>
         <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">target</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">)</span> <span class="ow">and</span> <span class="n">node</span><span class="o">.</span><span class="n">target</span><span class="o">.</span><span class="n">id</span> <span class="ow">in</span> <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_args</span><span class="p">:</span>
@@ -1374,7 +1374,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_UnaryOp">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_UnaryOp">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_UnaryOp</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">UnaryOp</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_UnaryOp</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">UnaryOp</span><span class="p">):</span>
         <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">operand</span><span class="p">)</span>
         <span class="n">op</span> <span class="o">=</span> <span class="p">{</span>
             <span class="n">ast</span><span class="o">.</span><span class="n">UAdd</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">l</span><span class="p">:</span> <span class="n">l</span><span class="p">,</span>
@@ -1421,7 +1421,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_BoolOp">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_BoolOp">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_BoolOp</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">BoolOp</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_BoolOp</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">BoolOp</span><span class="p">):</span>
         <span class="n">build_stmts</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_in_static_scope</span><span class="p">():</span>
             <span class="n">ops</span> <span class="o">=</span> <span class="p">{</span>
@@ -1446,7 +1446,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_Compare">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_Compare">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_Compare</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Compare</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_Compare</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Compare</span><span class="p">):</span>
         <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="p">)</span>
         <span class="n">build_stmts</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">comparators</span><span class="p">)</span>
         <span class="n">ops</span> <span class="o">=</span> <span class="p">{</span>
@@ -1535,7 +1535,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_static_for">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_static_for">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_static_for</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">For</span><span class="p">,</span> <span class="n">is_grouped</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_static_for</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">For</span><span class="p">,</span> <span class="n">is_grouped</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">qd_unroll_limit</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">unrolling_limit</span>
         <span class="k">if</span> <span class="n">is_grouped</span><span class="p">:</span>
             <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span>
@@ -1611,7 +1611,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_range_for">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_range_for">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_range_for</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">For</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_range_for</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">For</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">with</span> <span class="n">ctx</span><span class="o">.</span><span class="n">variable_scope_guard</span><span class="p">():</span>
             <span class="n">loop_name</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">target</span><span class="o">.</span><span class="n">id</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">check_loop_var</span><span class="p">(</span><span class="n">loop_name</span><span class="p">)</span>
@@ -1651,7 +1651,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_ndrange_for">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_ndrange_for">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_ndrange_for</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">For</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_ndrange_for</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">For</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">with</span> <span class="n">ctx</span><span class="o">.</span><span class="n">variable_scope_guard</span><span class="p">():</span>
             <span class="n">ndrange_var</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="p">))</span>
             <span class="n">ndrange_begin</span> <span class="o">=</span> <span class="n">qd_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="n">primitive_types</span><span class="o">.</span><span class="n">i32</span><span class="p">)</span>
@@ -1707,7 +1707,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_grouped_ndrange_for">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_grouped_ndrange_for">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_grouped_ndrange_for</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">For</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_grouped_ndrange_for</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">For</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">with</span> <span class="n">ctx</span><span class="o">.</span><span class="n">variable_scope_guard</span><span class="p">():</span>
             <span class="n">ndrange_var</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
             <span class="n">ndrange_begin</span> <span class="o">=</span> <span class="n">qd_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="n">primitive_types</span><span class="o">.</span><span class="n">i32</span><span class="p">)</span>
@@ -1754,7 +1754,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_struct_for">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_struct_for">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_struct_for</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">For</span><span class="p">,</span> <span class="n">is_grouped</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_struct_for</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">For</span><span class="p">,</span> <span class="n">is_grouped</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="c1"># for i, j in x</span>
         <span class="c1"># for I in qd.grouped(x)</span>
         <span class="n">targets</span> <span class="o">=</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">get_for_loop_targets</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
@@ -1819,7 +1819,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_mesh_for">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_mesh_for">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_mesh_for</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">For</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_mesh_for</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">For</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">targets</span> <span class="o">=</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">get_for_loop_targets</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">targets</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"Mesh for should have 1 loop target, found {len(targets)}"</span><span class="p">)</span>
@@ -1848,7 +1848,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_nested_mesh_for">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_nested_mesh_for">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_nested_mesh_for</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">For</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_nested_mesh_for</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">For</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">targets</span> <span class="o">=</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">get_for_loop_targets</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">targets</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"Nested-mesh for should have 1 loop target, found {len(targets)}"</span><span class="p">)</span>
@@ -1884,7 +1884,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_For">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_For">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_For</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">For</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_For</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">For</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">orelse</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"'else' clause for 'for' not supported in Quadrants kernels"</span><span class="p">)</span>
         <span class="n">decorator</span> <span class="o">=</span> <span class="n">get_decorator</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="p">)</span>
@@ -1981,7 +1981,7 @@
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_ndarray_kernel_arg_id</span><span class="p">(</span>
-        <span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span>
         <span class="n">kernel</span><span class="p">,</span>
         <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">,</span>
         <span class="n">usage</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
@@ -2007,7 +2007,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_While">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_While">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_While</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">While</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_While</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">While</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">orelse</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"'else' clause for 'while' not supported in Quadrants kernels"</span><span class="p">)</span>
 
@@ -2071,7 +2071,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_If">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_If">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_If</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">If</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ast</span><span class="o">.</span><span class="n">If</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_If</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">If</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ast</span><span class="o">.</span><span class="n">If</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">test</span><span class="p">)</span>
         <span class="n">is_static_if</span> <span class="o">=</span> <span class="n">get_decorator</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">test</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"static"</span>
 
@@ -2097,7 +2097,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_Expr">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_Expr">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_Expr</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Expr</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_Expr</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Expr</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
         <span class="k">return</span> <span class="kc">None</span></div>
 
@@ -2105,7 +2105,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_IfExp">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_IfExp">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_IfExp</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">IfExp</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_IfExp</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">IfExp</span><span class="p">):</span>
         <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">test</span><span class="p">)</span>
         <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
         <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">orelse</span><span class="p">)</span>
@@ -2155,7 +2155,7 @@
         <span class="k">return</span> <span class="kc">False</span>
 
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_handle_string_mod_args</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_handle_string_mod_args</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
         <span class="n">msg</span> <span class="o">=</span> <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="p">)</span>
         <span class="n">args</span> <span class="o">=</span> <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">right</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Sequence</span><span class="p">):</span>
@@ -2191,7 +2191,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_Assert">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_Assert">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_Assert</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Assert</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_Assert</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Assert</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">u</span> <span class="o">=</span> <span class="n">platform</span><span class="o">.</span><span class="n">uname</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">u</span><span class="o">.</span><span class="n">system</span> <span class="o">==</span> <span class="s2">"linux"</span> <span class="ow">and</span> <span class="n">u</span><span class="o">.</span><span class="n">machine</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"arm64"</span><span class="p">,</span> <span class="s2">"aarch64"</span><span class="p">):</span>
             <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">test</span><span class="p">)</span>
@@ -2224,7 +2224,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_Break">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_Break">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_Break</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Break</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_Break</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Break</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_in_static_for</span><span class="p">():</span>
             <span class="n">nearest_non_static_if</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">current_loop_scope</span><span class="p">()</span><span class="o">.</span><span class="n">nearest_non_static_if</span>
             <span class="k">if</span> <span class="n">nearest_non_static_if</span><span class="p">:</span>
@@ -2245,7 +2245,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_Continue">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_Continue">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_Continue</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Continue</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_Continue</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Continue</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_in_static_for</span><span class="p">():</span>
             <span class="n">nearest_non_static_if</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">current_loop_scope</span><span class="p">()</span><span class="o">.</span><span class="n">nearest_non_static_if</span>
             <span class="k">if</span> <span class="n">nearest_non_static_if</span><span class="p">:</span>
@@ -2266,7 +2266,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_With">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_With">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_With</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_With</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">items</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"'with' in Quadrants kernels only supports a single context manager"</span><span class="p">)</span>
         <span class="n">item</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">items</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
@@ -2306,7 +2306,7 @@
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_build_checkpoint_with</span><span class="p">(</span>
-        <span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span>
         <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">,</span>
         <span class="n">info</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -2317,7 +2317,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_Pass">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_Pass">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_Pass</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Pass</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_Pass</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Pass</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">return</span> <span class="kc">None</span></div>
 </div>
 
@@ -2331,7 +2331,7 @@
 
 <div class="viewcode-block" id="build_stmts">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.build_stmts">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">build_stmts</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">stmts</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">]):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">build_stmts</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">stmts</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">]):</span>
     <span class="c1"># TODO: Should we just make this part of ASTTransformer? Then, easier to pass around (just</span>
     <span class="c1"># pass the ASTTransformer object around)</span>
     <span class="k">with</span> <span class="n">ctx</span><span class="o">.</span><span class="n">variable_scope_guard</span><span class="p">():</span>

@@ -349,7 +349,7 @@
 <span class="kn">import</span><span class="w"> </span><span class="nn">ast</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-    <span class="n">FuncCompileContext</span><span class="p">,</span>
+    <span class="n">FuncCompilePassContext</span><span class="p">,</span>
     <span class="n">get_decorator</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">graph_api</span>
@@ -398,7 +398,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="GraphParallelTransformer.build_graph_parallel_context_with">
 <a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/graph_parallel_transformer/index.html#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.build_graph_parallel_context_with">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_graph_parallel_context_with</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">,</span> <span class="n">build_stmts</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_graph_parallel_context_with</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">,</span> <span class="n">build_stmts</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""Handles ``with qd.graph_parallel_context():`` fork/join regions.</span>
 
 <span class="sd">        Validates the use-site (kernel must be graph=True, no nesting), then validates the whole region grammar up-front</span>
@@ -459,14 +459,14 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="GraphParallelTransformer.validate_region">
 <a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/graph_parallel_transformer/index.html#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.validate_region">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">validate_region</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">validate_region</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""Validate an entire ``qd.graph_parallel_context()`` region (body + every section's body) up-front. The single</span>
 <span class="sd">        entry point for the region/section grammar; see the block comment above."""</span>
         <span class="n">GraphParallelTransformer</span><span class="o">.</span><span class="n">_validate_region_body</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">)</span></div>
 
 
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_validate_region_body</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">stmts</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_validate_region_body</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">stmts</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""A region body may contain only `with qd.graph_parallel():` sections, optionally wrapped in compile-time</span>
 <span class="sd">        `if qd.static(...)` (the optional ``qd.graph_parallel`` section pattern, e.g. qipc's ENABLE_EE) or</span>
 <span class="sd">        `for ... in qd.static(...)` loops (one section per element of a compile-time sequence). Docstrings / coverage</span>
@@ -503,7 +503,7 @@
             <span class="p">)</span>
 
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_validate_section_body</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">stmts</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_validate_section_body</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">stmts</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""A ``qd.graph_parallel()`` section body must be straight-line task work: no nested graph-structuring construct</span>
 <span class="sd">        (``qd.graph_do_while``, ``qd.checkpoint``, ``qd.graph_parallel_context``, or a nested ``qd.graph_parallel``</span>
 <span class="sd">        section) anywhere inside it. See ``docs/source/user_guide/graph.md``.</span>
@@ -553,7 +553,7 @@
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="GraphParallelTransformer.build_parallel_section_with">
 <a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/graph_parallel_transformer/index.html#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.build_parallel_section_with">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_parallel_section_with</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompileContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">,</span> <span class="n">build_stmts</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_parallel_section_with</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">,</span> <span class="n">build_stmts</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""Handles a ``with qd.graph_parallel():`` section of a ``qd.graph_parallel_context()`` region.</span>
 
 <span class="sd">        The section body grammar is validated up-front by ``validate_region`` (called from</span>
