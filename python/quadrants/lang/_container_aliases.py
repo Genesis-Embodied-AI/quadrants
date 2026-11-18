@@ -89,6 +89,9 @@ def _evict_alias_key(container_ids: tuple[int | None, ...], expired: ReferenceTy
 def get_cached_container_alias_key(py_args: tuple[Any, ...]) -> AliasKey:
     """Return a key describing which containers in py_args refer to the same object, including nested containers.
 
+    For distinct dataclass instances a and b with only scalar fields, (a, a) returns ((0,), (0,)), while
+    (a, b) returns ((0,), (1,)). Each number labels a distinct container in the call.
+
     Reuse the cached key when the same container objects occupy the same argument positions.
     """
     global _cache_capacity, _num_cache_evictions
