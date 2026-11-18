@@ -14,6 +14,7 @@ from quadrants.lang.util import is_data_oriented, is_dataclass_instance
 
 AliasKey: TypeAlias = tuple[tuple[int, ...], ...]
 
+# Each key has one entry per kernel argument. None marks an argument that is neither a dataclass nor data-oriented.
 _alias_key_by_container_ids: dict[tuple[int | None, ...], tuple[AliasKey, tuple[ReferenceType, ...]]] = {}
 _cache_capacity: int | None = None
 _num_cache_evictions = 0
