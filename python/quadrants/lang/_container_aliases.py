@@ -112,9 +112,10 @@ def cached_get_container_alias_key(py_args: tuple[Any, ...]) -> AliasKey:
     """
     global _cache_capacity, _num_cache_evictions
     container_ids = tuple(id(arg) if is_dataclass_instance(arg) or is_data_oriented(arg) else None for arg in py_args)
-    cached = _alias_key_by_container_ids.get(container_ids)
-    if cached is not None:
-        return cached[0]
+    cached_alias_key_entry = _alias_key_by_container_ids.get(container_ids)
+    if cached_alias_key_entry is not None:
+        alias_key, _ = cached_alias_key_entry
+        return alias_key
 
     alias_key = get_container_alias_key(py_args)
 
