@@ -19,7 +19,7 @@ from quadrants.lang import (
 from quadrants.lang import ops as qd_ops
 from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang.ast.ast_transformer_utils import (
-    FuncCompileContext,
+    FuncCompilePassContext,
     get_decorator,
 )
 from quadrants.lang.exception import (
@@ -36,7 +36,7 @@ from ..._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
 
 class CallTransformer:
     @staticmethod
-    def _build_call_if_is_builtin(ctx: FuncCompileContext, node, args, keywords):
+    def _build_call_if_is_builtin(ctx: FuncCompilePassContext, node, args, keywords):
         from quadrants.lang import matrix_ops  # pylint: disable=C0415
 
         func = node.func.ptr
@@ -66,7 +66,7 @@ class CallTransformer:
         return False
 
     @staticmethod
-    def _build_call_if_is_type(ctx: FuncCompileContext, node, args, keywords):
+    def _build_call_if_is_type(ctx: FuncCompilePassContext, node, args, keywords):
         func = node.func.ptr
         if id(func) in primitive_types.type_ids:
             if len(args) != 1 or keywords:
@@ -84,7 +84,7 @@ class CallTransformer:
         return False
 
     @staticmethod
-    def _is_external_func(ctx: FuncCompileContext, func) -> bool:
+    def _is_external_func(ctx: FuncCompilePassContext, func) -> bool:
         if ctx.is_in_static_scope():  # allow external function in static scope
             return False
         if hasattr(func, "_is_quadrants_function") or hasattr(func, "_is_wrapped_kernel"):  # quadrants func/kernel
@@ -94,7 +94,7 @@ class CallTransformer:
         return True
 
     @staticmethod
-    def _warn_if_is_external_func(ctx: FuncCompileContext, node):
+    def _warn_if_is_external_func(ctx: FuncCompilePassContext, node):
         func = node.func.ptr
         if not CallTransformer._is_external_func(ctx, func):
             return
@@ -166,7 +166,7 @@ class CallTransformer:
 
     @staticmethod
     def _expand_Call_dataclass_args(
-        ctx: FuncCompileContext,
+        ctx: FuncCompilePassContext,
         args: tuple[ast.stmt, ...],
         called_needed: set[str] | None = None,
         callee_arg_names: list[str] | None = None,
@@ -260,7 +260,7 @@ class CallTransformer:
 
     @staticmethod
     def _expand_Call_dataclass_kwargs(
-        ctx: FuncCompileContext,
+        ctx: FuncCompilePassContext,
         kwargs: list[ast.keyword],
         used_args: set[str] | None,
     ) -> tuple[list[ast.keyword], list[ast.keyword]]:
@@ -355,7 +355,7 @@ class CallTransformer:
         return added_kwargs, kwargs_new
 
     @staticmethod
-    def build_Call(ctx: FuncCompileContext, node: ast.Call, build_stmt, build_stmts) -> Any | None:
+    def build_Call(ctx: FuncCompilePassContext, node: ast.Call, build_stmt, build_stmts) -> Any | None:
         """
         example ast:
         Call(func=Name(id='f2', ctx=Load()), args=[Name(id='my_struct_ab', ctx=Load())], keywords=[])
@@ -481,19 +481,18 @@ class CallTransformer:
 
         CallTransformer._warn_if_is_external_func(ctx, node)
         # Snapshot the caller's `loop_depth` on the global context so a `@qd.func` invocation routed through
-        # `func(*py_args, **py_kwargs)` below can seed its fresh `FuncCompileContext` from this value in
+        # `func(*py_args, **py_kwargs)` below can seed its fresh `FuncCompilePassContext` from this value in
         # `_func_base.py` and inherit any outer for-loops we are already inside. Save/restore unconditionally because
         # we cannot tell from this site whether `func` is a Quadrants func, a builtin, or a Python callable; the
         # snapshot is harmless for non-func callables and nests correctly through chained calls.
-        prev_caller_loop_depth = ctx.kernel_compile_context.caller_loop_depth
-        ctx.kernel_compile_context.caller_loop_depth = ctx.loop_depth
+        current_pass = ctx.kernel_compile_context.current_pass
+        prev_caller_loop_depth = current_pass.caller_loop_depth
+        current_pass.caller_loop_depth = ctx.loop_depth
         # Likewise snapshot whether we are (transitively) inside non-static control flow, so a
         # `requires_top_level=True` func reached through an unmarked intermediate `@qd.func` still sees the caller's
         # control-flow context. OR with the existing value so it accumulates down a multi-level call chain.
-        prev_caller_in_non_static_control_flow = ctx.kernel_compile_context.caller_in_non_static_control_flow
-        ctx.kernel_compile_context.caller_in_non_static_control_flow = (
-            ctx.is_in_non_static_control_flow_including_caller()
-        )
+        prev_caller_in_non_static_control_flow = current_pass.caller_in_non_static_control_flow
+        current_pass.caller_in_non_static_control_flow = ctx.is_in_non_static_control_flow_including_caller()
         try:
             try:
                 pruning = ctx.kernel_compile_context.pruning
@@ -521,8 +520,8 @@ class CallTransformer:
                             msg += f"\nDid you mean to use `qd.{func.__name__}` instead of `{module.__name__}.{func.__name__}`?"
                 raise QuadrantsTypeError(msg)
         finally:
-            ctx.kernel_compile_context.caller_loop_depth = prev_caller_loop_depth
-            ctx.kernel_compile_context.caller_in_non_static_control_flow = prev_caller_in_non_static_control_flow
+            current_pass.caller_loop_depth = prev_caller_loop_depth
+            current_pass.caller_in_non_static_control_flow = prev_caller_in_non_static_control_flow
 
         if getattr(func, "_is_quadrants_function", False):
             ctx.func.has_print |= func.wrapper.has_print

@@ -29,7 +29,7 @@ def _flatten_arg_node(node: expr) -> tuple[str, str] | None:
 if TYPE_CHECKING:
     import ast
 
-    from .ast.ast_transformer_utils import FuncCompileContext
+    from .ast.ast_transformer_utils import FuncCompilePassContext
 
 
 # (caller_func_id, callee_func_id, call node lineno, call node col_offset). We key call edges by the
@@ -191,7 +191,7 @@ class Pruning:
 
     def record_after_call(
         self,
-        ctx: "FuncCompileContext",
+        ctx: "FuncCompilePassContext",
         func: "QuadrantsCallable",
         node: "ast.Call",
         node_args: list[expr],

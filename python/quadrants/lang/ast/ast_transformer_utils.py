@@ -28,7 +28,7 @@ AutodiffMode = _qd_core.AutodiffMode
 
 
 class Builder:
-    def __call__(self, ctx: "FuncCompileContext", node: ast.AST):
+    def __call__(self, ctx: "FuncCompilePassContext", node: ast.AST):
         method_name = "build_" + node.__class__.__name__
         method = getattr(self, method_name, None)
         try:
@@ -178,12 +178,19 @@ class PureViolation:
 
 
 class KernelCompileContext:
-    def __init__(
-        self, current_kernel: "Kernel", pruning: "Pruning", currently_compiling_materialize_key, pass_idx: int
-    ) -> None:
+    """State shared by all passes of one kernel compilation."""
+
+    def __init__(self, current_kernel: "Kernel", pruning: "Pruning", currently_compiling_materialize_key) -> None:
         self.current_kernel: "Kernel" = current_kernel
         self.pruning: "Pruning" = pruning
         self.currently_compiling_materialize_key = currently_compiling_materialize_key
+        self.current_pass: KernelCompilePassContext
+
+
+class KernelCompilePassContext:
+    """State shared by the kernel and its function calls during one compilation pass."""
+
+    def __init__(self, pass_idx: int) -> None:
         self.pass_idx: int = pass_idx
         self.ndarray_to_any_array: dict[int, Any] = {}
         self.struct_ndarray_launch_info: list[tuple] = []
@@ -203,7 +210,9 @@ class KernelCompileContext:
         self.caller_in_non_static_control_flow: bool = False
 
 
-class FuncCompileContext:
+class FuncCompilePassContext:
+    """State for compiling one kernel or qd.func invocation during one compiler pass."""
+
     def __init__(
         self,
         kernel_compile_context: KernelCompileContext,
@@ -267,7 +276,7 @@ class FuncCompileContext:
         self.autodiff_mode = autodiff_mode
         self.loop_depth: int = 0
         # Whether the (transitive) caller chain that reached this func compile was already inside non-static control
-        # flow. Seeded from `kernel_compile_context.caller_in_non_static_control_flow` in `_func_base.py`; kernels
+        # flow. Inherited from the current pass in `_func_base.py`; kernels
         # start at the top of the call stack so they always begin False. Consulted (together with the local
         # `non_static_control_flow_status`) by the `requires_top_level` guard in `CallTransformer.build_Call`.
         self.inherited_non_static_control_flow: bool = False
@@ -456,7 +465,7 @@ class FuncCompileContext:
         return msg
 
 
-def get_decorator(ctx: FuncCompileContext, node) -> str:
+def get_decorator(ctx: FuncCompilePassContext, node) -> str:
     if not isinstance(node, ast.Call):
         return ""
     for wanted, name in [
@@ -470,7 +479,7 @@ def get_decorator(ctx: FuncCompileContext, node) -> str:
     return ""
 
 
-def maybe_lifted_primitive(ctx: FuncCompileContext, parent: Any, attr: str):
+def maybe_lifted_primitive(ctx: FuncCompilePassContext, parent: Any, attr: str):
     """Handle access to a primitive member that ``@qd.data_oriented(template_primitives=False)`` lifted into a runtime
     scalar kernel arg (see ``bind_data_oriented_runtime_scalars``).
 
@@ -483,7 +492,7 @@ def maybe_lifted_primitive(ctx: FuncCompileContext, parent: Any, attr: str):
     escape hatch, so a ``qd.static`` use is unambiguously a mistake and we surface it loudly rather than silently baking
     a value that will not track mutations.
     """
-    runtime_scalar_arg_info_by_member = ctx.kernel_compile_context.runtime_scalar_arg_info_by_member
+    runtime_scalar_arg_info_by_member = ctx.kernel_compile_context.current_pass.runtime_scalar_arg_info_by_member
     if not runtime_scalar_arg_info_by_member:
         return None
     key = (id(parent), attr)
@@ -503,4 +512,4 @@ def maybe_lifted_primitive(ctx: FuncCompileContext, parent: Any, attr: str):
         # this primitive and the existing fastcache serialisation captures it.
         pruning.mark_used(pruning.KERNEL_FUNC_ID, entry[0])
         return None
-    return ctx.kernel_compile_context.runtime_scalar_arg_expr_by_member.get(key)
+    return ctx.kernel_compile_context.current_pass.runtime_scalar_arg_expr_by_member.get(key)

@@ -42,7 +42,7 @@ from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang._signature import get_func_signature
 from quadrants.lang._wrap_inspect import get_source_info_and_src
-from quadrants.lang.ast import FuncCompileContext
+from quadrants.lang.ast import FuncCompilePassContext
 from quadrants.lang.buffer_view import BufferView as BufferViewInstance
 from quadrants.lang.exception import (
     QuadrantsRuntimeError,
@@ -67,8 +67,6 @@ from .ast.ast_transformer_utils import KernelCompileContext
 if TYPE_CHECKING:
     from quadrants._lib.core.quadrants_python import ASTBuilder
 
-    from ._pruning import Pruning
-    from .kernel import Kernel
 from quadrants.types.enums import Layout
 from quadrants.types.utils import is_signed
 
@@ -229,7 +227,7 @@ class FuncBase:
         self.orig_arguments: list[ArgMetadata] = []
         self.return_type = None
         # Shared by every AST transform of this function; see
-        # FuncCompileContext.memoized_get_formatted_location_with_source_context.
+        # FuncCompilePassContext.memoized_get_formatted_location_with_source_context.
         self.pos_info_cache: dict[tuple, str] = {}
 
         self.check_parameter_annotations()
@@ -386,11 +384,8 @@ class FuncBase:
         arg_features=None,
         ast_builder: "ASTBuilder | None" = None,
         is_real_function: bool = False,
-        current_kernel: "Kernel | None" = None,  # has value when called from Kernel.materialize
-        pruning: "Pruning | None" = None,  # has value when called from Kernel.materialize
-        currently_compiling_materialize_key=None,  # has value when called from Kernel.materialize
-        pass_idx: int | None = None,  # has value when called from Kernel.materialize
-    ) -> tuple[ast.Module, FuncCompileContext]:
+        kernel_compile_context: KernelCompileContext | None = None,
+    ) -> tuple[ast.Module, FuncCompilePassContext]:
         function_source_info, src = get_source_info_and_src(self.func)
         src = [textwrap.fill(line, tabsize=4, width=9999) for line in src]
         tree = ast.parse(textwrap.dedent("\n".join(src)))
@@ -400,23 +395,12 @@ class FuncBase:
 
         runtime = impl.get_runtime()
 
-        if current_kernel is not None:  # Kernel
-            assert pruning is not None
-            assert pass_idx is not None
-            current_kernel.kernel_function_info = function_source_info
-            kernel_compile_context = KernelCompileContext(
-                pass_idx=pass_idx,
-                current_kernel=current_kernel,
-                pruning=pruning,
-                currently_compiling_materialize_key=currently_compiling_materialize_key,
-            )
-        else:  # Func
+        if kernel_compile_context is None:
             kernel_compile_context = runtime._current_kernel_compile_context
             assert kernel_compile_context is not None
-            current_kernel = kernel_compile_context.current_kernel
-
-        assert current_kernel is not None
-        assert kernel_compile_context is not None
+        current_kernel = kernel_compile_context.current_kernel
+        if is_kernel:
+            current_kernel.kernel_function_info = function_source_info
         current_kernel.visited_functions.add(function_source_info)
 
         autodiff_mode = current_kernel.autodiff_mode
@@ -449,7 +433,7 @@ class FuncBase:
 
         raise_on_templated_floats = impl.current_cfg().raise_on_templated_floats
 
-        ctx = FuncCompileContext(
+        ctx = FuncCompilePassContext(
             kernel_compile_context=kernel_compile_context,  # type: ignore[arg-type]
             template_slot_locations=template_slot_locations,
             is_kernel=is_kernel,
@@ -474,11 +458,13 @@ class FuncBase:
             # mode diagnostic at `ASTTransformer.build_For` only fires when the loop is written directly in the
             # kernel, and routing the same loop through a `@qd.func` would silently emit a wrong adjoint. Kernels
             # start at the top of the call stack so they always begin at depth 0.
-            ctx.loop_depth = kernel_compile_context.caller_loop_depth
+            ctx.loop_depth = kernel_compile_context.current_pass.caller_loop_depth
             # Likewise inherit whether the caller chain was already inside non-static control flow, so a
             # `requires_top_level=True` func called at this func's top level is still rejected when this func was
             # itself invoked from a runtime for / if / while. Kernels always begin False.
-            ctx.inherited_non_static_control_flow = kernel_compile_context.caller_in_non_static_control_flow
+            ctx.inherited_non_static_control_flow = (
+                kernel_compile_context.current_pass.caller_in_non_static_control_flow
+            )
         return tree, ctx
 
     def fuse_args(
