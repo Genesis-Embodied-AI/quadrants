@@ -9,7 +9,7 @@ from quadrants.lang.util import is_data_oriented
 from quadrants.types import ndarray_type
 
 from .. import _warnings
-from ._container_aliases import AliasKeyCache, get_cached_container_alias_key
+from ._container_aliases import get_cached_container_alias_key
 from ._kernel_types import ArgsHash
 from ._optional_annotation import OPTIONAL_ABSENT
 from ._template_mapper_hotpath import (
@@ -47,7 +47,6 @@ def _destroy_callback(template_mapper_ref: ReferenceType["TemplateMapper"], ref:
     maybe_template_mapper = template_mapper_ref()
     if maybe_template_mapper is not None:
         maybe_template_mapper._mapping_cache.clear()
-        maybe_template_mapper._alias_key_by_args_hash.clear()
         maybe_template_mapper._mapping_cache_tracker.clear()
         maybe_template_mapper._prog_weakref = None
 
@@ -70,7 +69,6 @@ class TemplateMapper:
         self.template_slot_locations: list[int] = template_slot_locations
         self.mapping: dict[Key, int] = {}
         self._mapping_cache: dict[ArgsHash, tuple[int, Key]] = {}
-        self._alias_key_by_args_hash: AliasKeyCache = {}
         self._mapping_cache_tracker: dict[ArgsHash, list[ReferenceType | None]] = {}
         self._prog_weakref: ReferenceType[Program] | None = None
         # Whether a Final-bearing argument disables the instance-keyed ``_mapping_cache`` (see
@@ -159,7 +157,7 @@ class TemplateMapper:
             if mapping_cache_tracker:
                 return self._mapping_cache[args_hash]
 
-        alias_key = get_cached_container_alias_key(args, args_hash, self._alias_key_by_args_hash)
+        alias_key = get_cached_container_alias_key(args)
         key = self.extract(raise_on_templated_floats, args) + (alias_key,)
         try:
             count = self.mapping[key]

@@ -13,6 +13,10 @@ class WeakIdentityCache(Generic[_T]):
         """Create an empty identity-indexed cache."""
         self._entries: dict[int, tuple[weakref.ReferenceType, _T]] = {}
 
+    def clear(self) -> None:
+        """Drop all identity-indexed entries."""
+        self._entries.clear()
+
     def get(self, obj: object) -> _T | None:
         """Return the cached value only if the entry still belongs to this exact object."""
         entry = self._entries.get(id(obj))

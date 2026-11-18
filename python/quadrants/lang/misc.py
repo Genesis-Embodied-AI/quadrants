@@ -9,7 +9,7 @@ from quadrants import _logging, _snode
 from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import Extension
 from quadrants._lib.utils import get_os_name
-from quadrants.lang import impl, util
+from quadrants.lang import _container_aliases, impl, util
 from quadrants.lang._environment_configurator import _EnvironmentConfigurator
 from quadrants.lang.checkpoint import checkpoint
 from quadrants.lang.expr import Expr
@@ -18,6 +18,9 @@ from quadrants.lang.graph_status import GraphStatus
 from quadrants.lang.impl import axes, get_runtime
 from quadrants.profiler.kernel_profiler import get_default_kernel_profiler
 from quadrants.types.primitive_types import f32, f64, i32, i64
+
+impl.on_reset(_container_aliases.clear_container_alias_cache)
+atexit.register(_container_aliases.clear_container_alias_cache)
 
 warnings.filterwarnings("once", category=DeprecationWarning, module="quadrants")
 
@@ -246,6 +249,7 @@ class _SpecialConfig:
         self.short_circuit_operators = True
         self.print_full_traceback = False
         self.unrolling_limit = 32
+        self.container_alias_cache_size = _container_aliases.DEFAULT_CONTAINER_ALIAS_CACHE_SIZE
 
 
 def prepare_sandbox():
@@ -429,6 +433,7 @@ def init(
     env_spec.configure("short_circuit_operators")
     env_spec.configure("print_full_traceback")
     env_spec.configure("unrolling_limit")
+    env_spec.configure("container_alias_cache_size")
 
     normalize_deprecated_cpu_scheduling_aliases(env_comp)
 
@@ -458,6 +463,7 @@ def init(
         runtime.short_circuit_operators = spec_cfg.short_circuit_operators
         runtime.print_full_traceback = spec_cfg.print_full_traceback
         runtime.unrolling_limit = spec_cfg.unrolling_limit
+        _container_aliases.set_container_alias_cache_size(spec_cfg.container_alias_cache_size)
         runtime.src_ll_cache = src_ll_cache
         runtime.print_non_pure = print_non_pure
         _logging.set_logging_level(spec_cfg.log_level.lower())
