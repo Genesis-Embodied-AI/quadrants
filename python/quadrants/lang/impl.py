@@ -229,9 +229,9 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
     # Ndarray from struct template field: resolve via the AnyArray cache populated by _predeclare_struct_ndarrays
     # during kernel compilation.
     if isinstance(value, Ndarray):
-        gc = getattr(get_runtime(), "_current_kernel_compile_context", None)
-        if gc is not None:
-            arr = gc.current_pass.ndarray_to_any_array.get(id(value))
+        kernel_ctx = get_runtime()._current_kernel_compile_context
+        if kernel_ctx is not None:
+            arr = kernel_ctx.current_pass.ndarray_to_any_array.get(id(value))
             if arr is not None:
                 value = arr
         if isinstance(value, Ndarray):
