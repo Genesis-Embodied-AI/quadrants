@@ -108,7 +108,9 @@ def cached_get_container_alias_key(py_args: tuple[Any, ...]) -> AliasKey:
 
         grid = Grid(size=4)
         state = State(grid=grid)
-        print(cached_get_container_alias_key((state, state.grid)))  # ((0, 1), (1,))
+        print(cached_get_container_alias_key((state, 7, state.grid)))  # ((0, 1), (), (1,))
+
+    The integer contributes an empty tuple because it is a non-container argument.
 
     Reuse the cached key when the same container objects occupy the same argument positions.
     """
