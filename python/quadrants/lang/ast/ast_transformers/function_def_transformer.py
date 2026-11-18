@@ -198,6 +198,7 @@ class FunctionDefTransformer:
                 arg_value,
             )
             if not result:
+                # Function call
                 decl_type_func, type_args = obj
                 obj = decl_type_func(*type_args)
             ctx.create_variable(argument_name, obj)
