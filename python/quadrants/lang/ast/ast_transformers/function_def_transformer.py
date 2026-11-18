@@ -143,7 +143,7 @@ class FunctionDefTransformer:
         return True, kernel_arguments.decl_scalar_arg(annotation, name)
 
     @staticmethod
-    def _transform_kernel_arg(
+    def _bind_kernel_arg_or_nested_dataclass(
         ctx: FuncCompilePassContext,
         argument_name: str,
         argument_type: Any,
@@ -171,7 +171,7 @@ class FunctionDefTransformer:
                 if field.name in final_names:
                     value = child
                 elif dataclasses.is_dataclass(field.type):
-                    FunctionDefTransformer._transform_kernel_arg(
+                    FunctionDefTransformer._bind_kernel_arg_or_nested_dataclass(
                         ctx, flat_name, field.type, this_arg_features[field_idx], child
                     )
                     value = child
@@ -217,7 +217,7 @@ class FunctionDefTransformer:
 
         for i in range(len(args.args)):
             arg_meta = ctx.func.arg_metas[i]
-            FunctionDefTransformer._transform_kernel_arg(
+            FunctionDefTransformer._bind_kernel_arg_or_nested_dataclass(
                 ctx,
                 arg_meta.name,
                 arg_meta.annotation,

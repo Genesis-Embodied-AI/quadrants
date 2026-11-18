@@ -3575,7 +3575,7 @@ def test_final_field_propagates_through_qd_func_call():
 @test_utils.test()
 def test_final_field_on_nested_dataclass():
     """Final fields work at any depth: the top-level kernel arg is a dataclass whose field is another dataclass,
-    whose field is ``Final[T]``. The recursive ``_transform_kernel_arg`` walker threads the sub-instance's runtime
+    whose field is ``Final[T]``. The recursive argument binder threads the sub-instance's runtime
     value through so ``getattr(sub, final_field_name)`` reads the baked value."""
     from typing import Final
 
