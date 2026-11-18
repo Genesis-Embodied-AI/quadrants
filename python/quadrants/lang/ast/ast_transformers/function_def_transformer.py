@@ -72,10 +72,9 @@ class FunctionDefTransformer:
         full_name = prefix_name + "_" + name
         if not isinstance(annotation, primitive_types.RefType):
             ctx.kernel_args.append(name)
-        # Optional ndarray + None declares no runtime arg; bind the name to the injected None global so
-        # qd.static(x is not None) specializes the present-only body away.
+        # Bind an absent optional ndarray directly to None so qd.static(x is not None) evaluates to False.
         if this_arg_features is OPTIONAL_ABSENT:
-            return False, py_value
+            return False, None
         # qd.Tensor value-dispatch. The first slot of this_arg_features is a string marker placed by
         # _template_mapper_hotpath. The annotation is the wrapper class itself (``qd.Tensor``).
         if annotation is _TensorClass:
