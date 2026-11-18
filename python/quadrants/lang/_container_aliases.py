@@ -92,17 +92,21 @@ def cached_get_container_alias_key(py_args: tuple[Any, ...]) -> AliasKey:
     The outer tuple has one entry per kernel argument. Each inner tuple lists the container labels encountered
     while walking that argument, including the argument itself. Labels are numbered from zero within the call.
 
-    >>> from dataclasses import dataclass
-    >>> @dataclass
-    ... class Grid:
-    ...     size: int
-    >>> @dataclass
-    ... class State:
-    ...     grid: Grid
-    >>> grid = Grid(size=4)
-    >>> state = State(grid=grid)
-    >>> cached_get_container_alias_key((state, state.grid))
-    ((0, 1), (1,))
+    Example::
+
+        from dataclasses import dataclass
+
+        @dataclass
+        class Grid:
+            size: int
+
+        @dataclass
+        class State:
+            grid: Grid
+
+        grid = Grid(size=4)
+        state = State(grid=grid)
+        print(cached_get_container_alias_key((state, state.grid)))  # ((0, 1), (1,))
 
     Reuse the cached key when the same container objects occupy the same argument positions.
     """
