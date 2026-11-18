@@ -431,8 +431,6 @@ def init(
     env_spec.configure("print_full_traceback")
     env_spec.configure("unrolling_limit")
     env_spec.configure("container_alias_cache_size")
-    if type(spec_cfg.container_alias_cache_size) is not int or spec_cfg.container_alias_cache_size < 1:
-        raise ValueError("container_alias_cache_size must be a positive integer")
 
     normalize_deprecated_cpu_scheduling_aliases(env_comp)
 
@@ -447,6 +445,9 @@ def init(
 
     if len(unexpected_keys):
         raise KeyError(f'Unrecognized keyword argument(s) for qd.init: {", ".join(unexpected_keys)}')
+
+    if type(spec_cfg.container_alias_cache_size) is not int or spec_cfg.container_alias_cache_size < 1:
+        raise ValueError("container_alias_cache_size must be a positive integer")
 
     if (cfg.print_ir or os.getenv("QD_DUMP_IR") == "1") and cfg.offline_cache:
         util.warning(
