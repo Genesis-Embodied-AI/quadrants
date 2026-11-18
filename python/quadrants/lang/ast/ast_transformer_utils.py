@@ -197,6 +197,10 @@ class KernelCompilePassContext:
         self.struct_ndarray_launch_info: list[tuple] = []
         # Shared identity-based lookup for dataclass members and data-oriented runtime scalars.
         self.member_bindings: dict[tuple[int, str], MemberBinding] = {}
+        # IDs of dataclass instances registered in this pass.
+        # Instance                          Discovery              Enforcement
+        # Dataclass-annotated kernel arg    Always                 Always, even if unused
+        # Nested dataclass-typed field      Every declared path    Only paths kept by pruning
         self.bound_dataclass_ids: set[int] = set()
         # (arg_id, template_arg_idx, attr_chain, kind) entries locate live values at launch; kind is 'f', 'i', or 'u'.
         self.runtime_scalar_launch_infos: list[tuple] = []
