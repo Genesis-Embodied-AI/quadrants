@@ -79,10 +79,10 @@ def get_container_alias_key(args: Sequence[Any]) -> AliasKey:
     return tuple(result)
 
 
-def _evict_alias_key(container_ids: tuple[int | None, ...], expired: ReferenceType[Any]) -> None:
+def _evict_alias_key(container_ids: tuple[int | None, ...], expired_ref: ReferenceType[Any]) -> None:
     """Remove only the entry containing the expired reference, protecting against recycled object IDs."""
     entry = _alias_key_by_container_ids.get(container_ids)
-    if entry is not None and any(item is expired for item in entry[1]):
+    if entry is not None and any(item is expired_ref for item in entry[1]):
         del _alias_key_by_container_ids[container_ids]
 
 
