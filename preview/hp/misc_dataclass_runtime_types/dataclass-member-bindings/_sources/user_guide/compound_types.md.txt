@@ -150,6 +150,8 @@ A `dataclasses.dataclass` may be either non-frozen (the default) or frozen (`@da
 
 To speed up repeated kernel calls, Quadrants caches which arguments share the same dataclass or data-oriented object, including objects nested inside those arguments. If you repeatedly create new containers to pass to kernels and keep many different argument combinations alive, the cache can fill up. Quadrants then reports a warning at reset or process exit. Your kernels still run correctly, but recomputing entries can slow down later calls. Where practical, create these containers during setup and reuse them across calls. You can raise the default limit of 1,024 entries with `qd.init(container_alias_cache_size=4096)`.
 
+Quadrants warns when a dataclass or data-oriented container passed to a kernel, directly or through another container, cannot be weakly referenced. For a slotted dataclass, use `@dataclass(slots=True, weakref_slot=True)`. For a regular class with `__slots__`, include `"__weakref__"` in its slots. A nested container can still be cached as part of its owner's argument combination.
+
 ### Subclasses
 
 You are able to pass any subclass of the annotated dataclass type. This is especially useful for cases where only a subset of your class is valid in quadrants, as below:
