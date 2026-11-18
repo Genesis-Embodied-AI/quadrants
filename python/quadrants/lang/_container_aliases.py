@@ -78,11 +78,17 @@ def get_container_alias_key(args: Sequence[Any]) -> AliasKey:
     return tuple(result)
 
 
-def _evict_alias_key(container_ids: tuple[int | None, ...], expired: ReferenceType[Any]) -> None:
-    """Remove only the entry containing the expired reference, protecting against recycled object IDs."""
-    entry = _alias_key_by_container_ids.get(container_ids)
-    if entry is not None and any(item is expired for item in entry[1]):
-        del _alias_key_by_container_ids[container_ids]
+@dataclasses.dataclass(slots=True, eq=False)
+class _EvictAliasKeyOnCollection:
+    """Weakref callback shared by the containers in one cache entry."""
+
+    container_ids: tuple[int | None, ...]
+
+    def __call__(self, expired: ReferenceType[Any]) -> None:
+        """Remove only the entry containing the expired reference, protecting against recycled object IDs."""
+        entry = _alias_key_by_container_ids.get(self.container_ids)
+        if entry is not None and any(item is expired for item in entry[1]):
+            del _alias_key_by_container_ids[self.container_ids]
 
 
 def cached_get_container_alias_key(py_args: tuple[Any, ...]) -> AliasKey:
@@ -117,13 +123,10 @@ def cached_get_container_alias_key(py_args: tuple[Any, ...]) -> AliasKey:
 
     alias_key = get_container_alias_key(py_args)
 
-    def _on_container_collected(expired: ReferenceType[Any]) -> None:
-        """Evict this entry when one of its containers is collected."""
-        _evict_alias_key(container_ids, expired)
-
+    on_container_collected = _EvictAliasKeyOnCollection(container_ids)
     try:
         references = tuple(
-            ref(arg, _on_container_collected) for arg, identity in zip(py_args, container_ids) if identity is not None
+            ref(arg, on_container_collected) for arg, identity in zip(py_args, container_ids) if identity is not None
         )
     except TypeError:
         return alias_key
