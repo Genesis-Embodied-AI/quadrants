@@ -19,9 +19,6 @@ from quadrants.lang.impl import axes, get_runtime
 from quadrants.profiler.kernel_profiler import get_default_kernel_profiler
 from quadrants.types.primitive_types import f32, f64, i32, i64
 
-impl.on_reset(_container_aliases.clear_container_alias_cache)
-atexit.register(_container_aliases.clear_container_alias_cache)
-
 warnings.filterwarnings("once", category=DeprecationWarning, module="quadrants")
 
 # ----------------------

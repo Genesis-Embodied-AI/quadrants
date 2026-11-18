@@ -1,5 +1,6 @@
 """Describe shared containers so cached kernels retain compatible member bindings."""
 
+import atexit
 import dataclasses
 from collections.abc import Sequence
 from functools import partial
@@ -7,6 +8,7 @@ from typing import Any, TypeAlias
 from weakref import ReferenceType, ref
 
 from quadrants import _logging
+from quadrants.lang import impl
 from quadrants.lang._weak_identity_cache import WeakIdentityCache
 from quadrants.lang.util import is_data_oriented, is_dataclass_instance
 
@@ -17,6 +19,7 @@ DEFAULT_CONTAINER_ALIAS_CACHE_SIZE = 1024
 _alias_key_by_container_ids: dict[_ContainerIds, tuple[AliasKey, tuple[ReferenceType, ...]]] = {}
 _cache_capacity = DEFAULT_CONTAINER_ALIAS_CACHE_SIZE
 _capacity_evictions = 0
+_cleanup_hooks_registered = False
 
 # Container references are fixed after first use; scalar values do not affect these identities.
 _graph_ids_by_instance: WeakIdentityCache[tuple[int, ...]] = WeakIdentityCache()
@@ -52,6 +55,12 @@ def get_container_alias_key(args: Sequence[Any]) -> AliasKey:
 
     Container references must remain fixed after first use. Weak keys release graphs when their owners die.
     """
+    global _cleanup_hooks_registered
+    if not _cleanup_hooks_registered:
+        impl.on_reset(_clear_container_alias_cache)
+        atexit.register(_clear_container_alias_cache)
+        _cleanup_hooks_registered = True
+
     serials: dict[int, int] = {}
     result: list[tuple[int, ...]] = []
     for arg in args:
@@ -108,7 +117,7 @@ def set_container_alias_cache_size(size: int) -> None:
     _cache_capacity = size
 
 
-def clear_container_alias_cache() -> None:
+def _clear_container_alias_cache() -> None:
     """Report capacity evictions and clear cached argument combinations and container graphs."""
     global _capacity_evictions
     _alias_key_by_container_ids.clear()
