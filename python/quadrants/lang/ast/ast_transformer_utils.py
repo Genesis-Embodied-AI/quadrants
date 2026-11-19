@@ -508,5 +508,6 @@ def resolve_bound_member(func_ctx: FuncCompilePassContext, parent: Any, node: as
         )
     pruning = func_ctx.kernel_compile_context.pruning
     if not pruning.enforcing:
+        # The kernel declares this input even when a @qd.func reads it.
         pruning.mark_used(pruning.KERNEL_FUNC_ID, binding.name)
     return binding.member_access_result
