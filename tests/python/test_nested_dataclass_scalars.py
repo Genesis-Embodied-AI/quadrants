@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from typing import Final
 
+import numpy as np
 import pytest
 
 import quadrants as qd
@@ -22,8 +23,8 @@ def test_nested_scalar_aliases(fastcache: bool, monkeypatch: pytest.MonkeyPatch)
     @qd.data_oriented
     class Owner:
         def __init__(self, shared: bool) -> None:
-            self.first = State(2**33)
-            self.second = self.first if shared else State(7)
+            self.first = State(np.int64(2**33))
+            self.second = self.first if shared else State(np.int64(7))
             self.aliases = (self.second,)
 
     @qd.kernel(fastcache=fastcache)
@@ -33,7 +34,7 @@ def test_nested_scalar_aliases(fastcache: bool, monkeypatch: pytest.MonkeyPatch)
     for shared in (False, True, False, True):
         owner = Owner(shared)
         assert read(owner) == (2**34 if shared else 2**33 + 7)
-        owner.second.value = 11
+        owner.second.value = np.int64(11)
         count = len(read._primal.materialized_kernels)
         assert read(owner) == (22 if shared else 2**33 + 11)
         assert len(read._primal.materialized_kernels) == count
@@ -98,12 +99,12 @@ def test_nested_scalar_cross_argument_alias() -> None:
 
 @test_utils.test()
 def test_nested_scalar_static_constants() -> None:
-    """Final and Template members remain constants; ordinary owner scalars keep their existing policy."""
+    """Final members remain constants; ordinary owner scalars keep their existing policy."""
 
     @dataclass(frozen=True)
     class State:
         count: Final[int]
-        enabled: qd.Template
+        enabled: Final[bool]
         value: float
 
     @qd.data_oriented

@@ -5,7 +5,6 @@ structure lets compilation, inlined calls, dispatch and launch packing share pre
 without modifying the user's class or its annotations.
 """
 
-import ast
 import copy
 import dataclasses
 from collections.abc import Iterator, Sequence
@@ -22,7 +21,6 @@ from quadrants.lang._final.final_dataclass_fields import (
     get_final_field_names,
     infer_final_field_annotation,
 )
-from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang._runtime_typing.deferred_errors import (
     DeferredMemberType,
@@ -370,35 +368,21 @@ def prepare_kernel_dataclass_args_for_mapper(
     return final_value_key_by_value_id
 
 
-def is_runtime_member_name(arg_metas: list[ArgMetadata], name: str) -> bool:
-    """Whether a flattened AST name belongs to an inferred dataclass argument (including inlined functions)."""
-    for arg_meta in arg_metas:
-        if not hasattr(arg_meta.annotation, "_qd_runtime_origin"):
-            continue
-        for field in dataclasses.fields(arg_meta.annotation):
-            child_name = create_flat_name(arg_meta.name, field.name)
-            if name == child_name:
-                return True
-            if is_runtime_member_name([ArgMetadata(field.type, child_name)], name):
-                return True
-    return False
-
-
 @contextmanager
 def dataclass_call_arguments(
     func: "QuadrantsCallable | BoundQuadrantsCallable",
-    args: Sequence[ast.expr],
-    keywords: Sequence[ast.keyword],
+    args: Sequence[Any],
+    keywords: dict[str, Any],
     bound: bool = False,
 ) -> Iterator[None]:
-    """Carry a caller's inferred structures across the pre-flattening boundary of an inlined function call."""
+    """Use the arriving dataclasses' schemas while compiling an inlined call."""
     wrapper = cast("FuncBase", func.wrapper)
     original_arg_metas = wrapper.arg_metas
     declared_arg_metas = wrapper.orig_arguments
     arg_metas = list(declared_arg_metas)
     offset = int(bound)
-    py_objs = {meta.name: getattr(arg, "ptr") for meta, arg in zip(arg_metas[offset:], args)}
-    py_objs.update((kw.arg, getattr(kw, "ptr")[kw.arg]) for kw in keywords)
+    py_objs = {meta.name: arg for meta, arg in zip(arg_metas[offset:], args)}
+    py_objs.update(keywords)
     for i, meta in enumerate(arg_metas):
         if meta.name not in py_objs:
             if hasattr(type(meta.default), "__dataclass_fields__"):

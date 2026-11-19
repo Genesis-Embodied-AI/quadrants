@@ -55,7 +55,10 @@ def _collect_scalars_in_single_data_oriented(
 
     seen_ids.add(obj_id)
     if is_dataclass_instance(py_obj):
-        schema, _ = schema_by_id[obj_id]
+        entry = schema_by_id.get(obj_id)
+        if entry is None:
+            return
+        schema, _ = entry
         final_names = final_field_names(schema)
         for field in dataclasses.fields(schema):
             value = getattr(py_obj, field.name)

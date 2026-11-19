@@ -581,6 +581,11 @@ class Kernel(FuncBase):
                     # CPU / unbatched genesis steps that launch many tiny kernels.
                     runtime_scalar_launch_infos = kernel_ctx.current_pass.runtime_scalar_launch_infos
                     if runtime_scalar_launch_infos:
+                        # The source cache hashes dotted argument paths; scalar bindings have separate native names.
+                        pruning.fold_struct_nd_paths(
+                            [(slot, index, path) for slot, index, path, _kind in runtime_scalar_launch_infos],
+                            self.arg_metas,
+                        )
                         self._runtime_scalar_launch_infos_by_compiled_kernel_key[key] = runtime_scalar_launch_infos
                 else:
                     # Propagate used-sets across call edges to a fixpoint (order-independent) before

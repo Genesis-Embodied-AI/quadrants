@@ -507,7 +507,7 @@ def resolve_bound_member(func_ctx: FuncCompilePassContext, parent: Any, node: as
     if binding.reject_in_static_scope and func_ctx.is_in_static_scope():
         raise QuadrantsSyntaxError(
             f"{ast.unparse(node)!r} is a runtime kernel argument and cannot be used inside qd.static(). "
-            "Use Final[T] or qd.Template for dataclass constants, or template_primitives=True for data-oriented scalars."
+            "Use Final for dataclass constants, or template_primitives=True for data-oriented scalars."
         )
     pruning = func_ctx.kernel_compile_context.pruning
     if not pruning.enforcing:
