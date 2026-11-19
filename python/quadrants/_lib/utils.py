@@ -40,7 +40,10 @@ def import_qd_python_core():
     if get_os_name() != "win":
         # pylint: disable=E1101
         old_flags = sys.getdlopenflags()
-        sys.setdlopenflags(2 | 8)  # RTLD_NOW | RTLD_DEEPBIND
+        # Not RTLD_DEEPBIND on Linux: it binds the library's malloc/free to glibc's while the rest of the process
+        # uses a preloaded allocator such as jemalloc, and freeing across the two aborts at exit. Elsewhere, 8 is
+        # another flag (RTLD_GLOBAL on macOS), kept as it was.
+        sys.setdlopenflags(os.RTLD_NOW if get_os_name() == "linux" else 2 | 8)
     else:
         pyddir = os.path.dirname(os.path.realpath(__file__))
         os.environ["PATH"] += os.pathsep + pyddir
