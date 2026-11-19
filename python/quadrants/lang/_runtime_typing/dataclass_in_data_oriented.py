@@ -118,6 +118,6 @@ def reject_computed_dataclass_alias(py_obj: Any, bound_objects: set[int]) -> Non
     """Reject computed routes that could borrow an unrelated runtime dataclass binding."""
     if id(py_obj) in bound_objects:
         raise QuadrantsRuntimeTypeError(
-            "A runtime dataclass alias reached through a call or indexing is unsupported. "
+            "A runtime dataclass alias returned by a Python call is unsupported. "
             "Access the dataclass through its ordinary stored attributes instead."
         )
