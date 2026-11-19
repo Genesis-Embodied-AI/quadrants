@@ -22,15 +22,13 @@ from quadrants.lang import (
     matrix,
 )
 from quadrants.lang import ops as qd_ops
-from quadrants.lang._final.final_dataclass_fields import (
-    final_field_names,
-    is_final_annotation,
-)
+from quadrants.lang._final.final_dataclass_fields import is_final_annotation
 from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._optional_annotation import OPTIONAL_ABSENT
 from quadrants.lang.ast.ast_transformer_utils import (
     FuncCompilePassContext,
     MemberBinding,
+    iter_dataclass_fields,
 )
 from quadrants.lang.ast.ast_transformers import graph_api
 from quadrants.lang.ast.ast_transformers.checkpoint_transformer import (
@@ -158,12 +156,11 @@ class FunctionDefTransformer:
         if dataclasses.is_dataclass(argument_type):
             ctx.create_variable(argument_name, arg_value)
             ctx.kernel_compile_context.current_pass.bound_dataclass_ids.add(id(arg_value))
-            final_names = final_field_names(argument_type)
             bindings = ctx.kernel_compile_context.current_pass.binding_by_member
-            for field_idx, field in enumerate(dataclasses.fields(argument_type)):
-                flat_name = create_flat_name(argument_name, field.name)
-                if pruning.enforcing and flat_name not in pruning.used_vars_by_func_id[func_id]:
-                    continue
+            used_names = pruning.used_vars_by_func_id[func_id] if pruning.enforcing else None
+            for field_idx, field, flat_name, is_final in iter_dataclass_fields(
+                argument_type, create_flat_name(argument_name, ""), used_names
+            ):
                 member_key = (id(arg_value), field.name)
                 existing = bindings.get(member_key)
                 if existing is not None:
@@ -171,7 +168,7 @@ class FunctionDefTransformer:
                         raise QuadrantsSyntaxError(f"Conflicting annotations for shared member {flat_name!r}")
                     continue
                 child = getattr(arg_value, field.name)
-                if field.name in final_names:
+                if is_final:
                     value = child
                 elif dataclasses.is_dataclass(field.type):
                     FunctionDefTransformer._bind_kernel_arg_or_nested_dataclass(

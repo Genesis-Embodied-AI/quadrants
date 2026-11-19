@@ -4,6 +4,7 @@ import ast
 import builtins
 import dataclasses
 import traceback
+from collections.abc import Iterator
 from enum import Enum
 from textwrap import TextWrapper
 from typing import TYPE_CHECKING, Any, List, NamedTuple
@@ -11,6 +12,7 @@ from typing import TYPE_CHECKING, Any, List, NamedTuple
 from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import ASTBuilder
 from quadrants.lang import expr, impl
+from quadrants.lang._final.final_dataclass_fields import final_field_names
 from quadrants.lang._ndrange import ndrange
 from quadrants.lang.ast.symbol_resolver import ASTResolver
 from quadrants.lang.exception import (
@@ -185,6 +187,19 @@ class KernelCompileContext:
         self.pruning: "Pruning" = pruning
         self.currently_compiling_materialize_key = currently_compiling_materialize_key
         self.current_pass: KernelCompilePassContext
+
+
+def iter_dataclass_fields(
+    dataclass_type: type,
+    member_name_prefix: str,
+    used_names: set[str] | None,
+) -> Iterator[tuple[int, dataclasses.Field[Any], str, bool]]:
+    """Yield field indices, metadata, binding names, and Final flags, skipping pruned fields before value access."""
+    final_names = final_field_names(dataclass_type)
+    for field_idx, field in enumerate(dataclasses.fields(dataclass_type)):
+        member_name = member_name_prefix + field.name
+        if used_names is None or member_name in used_names:
+            yield field_idx, field, member_name, field.name in final_names
 
 
 class MemberBinding(NamedTuple):

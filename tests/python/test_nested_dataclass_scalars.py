@@ -1,7 +1,8 @@
 """Dataclass scalar parameters retain live values and compatible alias bindings beneath data-oriented owners."""
 
-from dataclasses import dataclass
-from typing import Final
+from collections.abc import Iterator
+from dataclasses import Field, dataclass
+from typing import Any, Final
 
 import pytest
 
@@ -211,3 +212,53 @@ def test_alias_cache_reuses_graphs_and_releases_owners(
     del args, changed_args, first, second
     gc.collect()
     assert first_ref() is None
+
+
+@test_utils.test(offline_cache=True)
+def test_scalar_pruning_skips_unused_dataclasses_and_keeps_aliases(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Enforcement skips an unused subtree and keeps the canonical binding when only the second alias is read."""
+    from quadrants.lang.ast.ast_transformers import (
+        data_oriented_runtime_scalar_binder as binder,
+    )
+
+    @dataclass
+    class Unused:
+        value: int
+
+    @dataclass
+    class State:
+        value: int
+        unused: Unused
+
+    @qd.data_oriented
+    class Owner:
+        def __init__(self, value: int) -> None:
+            self.first = State(value, Unused(99))
+            self.second = self.first
+
+    original = binder.iter_dataclass_fields
+    enforcing_visits = []
+
+    def checked_fields(
+        dataclass_type: type, member_name_prefix: str, used_names: set[str] | None
+    ) -> Iterator[tuple[int, Field[Any], str, bool]]:
+        if used_names is not None:
+            assert dataclass_type is not Unused
+            enforcing_visits.append(dataclass_type)
+        return original(dataclass_type, member_name_prefix, used_names)
+
+    monkeypatch.setattr(binder, "iter_dataclass_fields", checked_fields)
+
+    @qd.kernel(fastcache=True)
+    def read(owner: qd.Template) -> qd.i32:
+        return owner.second.value
+
+    owner = Owner(3)
+    assert read(owner) == 3
+    assert enforcing_visits == [State]
+    owner.first.value = 7
+    assert read(owner) == 7
+    assert enforcing_visits == [State]
+    assert read(Owner(11)) == 11
+    assert read._primal.src_ll_cache_observations.cache_loaded
+    assert enforcing_visits == [State, State]
