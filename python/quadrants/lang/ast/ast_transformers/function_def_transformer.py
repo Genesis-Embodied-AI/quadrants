@@ -167,7 +167,10 @@ class FunctionDefTransformer:
             ctx.create_variable(argument_name, arg_value)
             pass_ctx = ctx.kernel_compile_context.current_pass
             pass_ctx.bound_dataclass_ids.add(id(arg_value))
-            pass_ctx.runtime_schema_by_id[id(arg_value)] = (argument_type, dotted_argument_path_from_flat_name(argument_name))
+            pass_ctx.runtime_schema_by_id[id(arg_value)] = (
+                argument_type,
+                dotted_argument_path_from_flat_name(argument_name),
+            )
             final_names = final_field_names(argument_type)
             bindings = ctx.kernel_compile_context.current_pass.binding_by_member
             for field_idx, field in enumerate(dataclasses.fields(argument_type)):
@@ -394,7 +397,9 @@ class FunctionDefTransformer:
             if not isinstance(data, getattr(argument_type, "_qd_runtime_origin", argument_type)):
                 raise QuadrantsSyntaxError(f"Argument {argument_name!r} requires {argument_type.__name__}")
             if hasattr(argument_type, "_qd_runtime_origin"):
-                register_runtime_dataclass_schema(ctx.kernel_compile_context.current_pass, data, argument_type, argument_name)
+                register_runtime_dataclass_schema(
+                    ctx.kernel_compile_context.current_pass, data, argument_type, argument_name
+                )
             ctx.create_variable(argument_name, data)
             return None
 
