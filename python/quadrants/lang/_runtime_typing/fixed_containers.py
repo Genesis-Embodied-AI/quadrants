@@ -66,7 +66,9 @@ def fix_container_references(owner: Any, fixed_names: frozenset[str]) -> None:
 def validate_immutable_container(value: Any) -> None:
     """Reject mutable collections under data-oriented attributes, including inside tuples."""
     if isinstance(value, (list, dict, set)):
-        raise QuadrantsRuntimeTypeError("Mutable Python containers in runtime container graphs are unsupported; use tuples.")
+        raise QuadrantsRuntimeTypeError(
+            "Mutable Python containers in runtime container graphs are unsupported; use tuples."
+        )
     if isinstance(value, tuple):
         for item in value:
             validate_immutable_container(item)

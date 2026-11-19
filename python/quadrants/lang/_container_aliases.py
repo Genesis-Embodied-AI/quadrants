@@ -9,7 +9,11 @@ from weakref import ReferenceType, ref
 
 from quadrants import _logging, _warnings
 from quadrants.lang import impl
-from quadrants.lang._runtime_typing.fixed_containers import _is_container, fix_container_references, validate_immutable_container
+from quadrants.lang._runtime_typing.fixed_containers import (
+    _is_container,
+    fix_container_references,
+    validate_immutable_container,
+)
 from quadrants.lang._weak_identity_cache import WeakIdentityCache
 from quadrants.lang.util import is_data_oriented, is_dataclass_instance
 
