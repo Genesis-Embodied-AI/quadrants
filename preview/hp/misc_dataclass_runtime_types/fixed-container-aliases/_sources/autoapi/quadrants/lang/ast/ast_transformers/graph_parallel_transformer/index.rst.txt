@@ -50,7 +50,7 @@ Module Contents
 
 
 
-   .. py:method:: build_graph_parallel_context_with(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.With, build_stmts) -> None
+   .. py:method:: build_graph_parallel_context_with(ctx: quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext, node: ast.With, build_stmts) -> None
       :staticmethod:
 
 
@@ -65,7 +65,7 @@ Module Contents
 
 
 
-   .. py:method:: validate_region(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.With) -> None
+   .. py:method:: validate_region(ctx: quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext, node: ast.With) -> None
       :staticmethod:
 
 
@@ -74,7 +74,7 @@ Module Contents
 
 
 
-   .. py:method:: build_parallel_section_with(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.With, build_stmts) -> None
+   .. py:method:: build_parallel_section_with(ctx: quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext, node: ast.With, build_stmts) -> None
       :staticmethod:
 
 

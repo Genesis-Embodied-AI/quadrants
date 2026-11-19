@@ -29,8 +29,10 @@ Classes
    quadrants.lang.ast.ast_transformer_utils.NonStaticIfGuard
    quadrants.lang.ast.ast_transformer_utils.ReturnStatus
    quadrants.lang.ast.ast_transformer_utils.PureViolation
-   quadrants.lang.ast.ast_transformer_utils.ASTTransformerGlobalContext
-   quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext
+   quadrants.lang.ast.ast_transformer_utils.KernelCompileContext
+   quadrants.lang.ast.ast_transformer_utils.MemberBinding
+   quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext
+   quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext
 
 
 Functions
@@ -39,7 +41,7 @@ Functions
 .. autoapisummary::
 
    quadrants.lang.ast.ast_transformer_utils.get_decorator
-   quadrants.lang.ast.ast_transformer_utils.maybe_lifted_primitive
+   quadrants.lang.ast.ast_transformer_utils.resolve_bound_member
 
 
 Module Contents
@@ -236,10 +238,13 @@ Module Contents
       :type:  str
 
 
-.. py:class:: ASTTransformerGlobalContext(current_kernel: Kernel, pruning: quadrants.lang._pruning.Pruning, currently_compiling_materialize_key, pass_idx: int)
+.. py:class:: KernelCompileContext(current_kernel: quadrants.lang.kernel.Kernel, pruning: quadrants.lang._pruning.Pruning, currently_compiling_materialize_key)
+
+   State shared by all passes of one kernel compilation.
+
 
    .. py:attribute:: current_kernel
-      :type:  Kernel
+      :type:  quadrants.lang.kernel.Kernel
 
 
    .. py:attribute:: pruning
@@ -247,6 +252,41 @@ Module Contents
 
 
    .. py:attribute:: currently_compiling_materialize_key
+
+
+   .. py:attribute:: current_pass
+      :type:  KernelCompilePassContext
+
+
+.. py:class:: MemberBinding
+
+   Bases: :py:obj:`NamedTuple`
+
+
+   A member's pruning name, declared type, and result of compiling an access.
+
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: annotation
+      :type:  Any
+
+
+   .. py:attribute:: member_access_result
+      :type:  Any
+
+
+   .. py:attribute:: reject_in_static_scope
+      :type:  bool
+      :value: False
+
+
+
+.. py:class:: KernelCompilePassContext(pass_idx: int)
+
+   State shared by the kernel and its function calls during one compilation pass.
 
 
    .. py:attribute:: pass_idx
@@ -263,26 +303,30 @@ Module Contents
 
 
 
-   .. py:attribute:: struct_primitive_provenance
-      :type:  dict[tuple[int, str], tuple]
-
-
-   .. py:attribute:: struct_primitive_to_expr
-      :type:  dict[tuple[int, str], Any]
-
-
-   .. py:attribute:: struct_primitive_launch_info
-      :type:  list[tuple]
-      :value: []
-
-
-
    .. py:attribute:: runtime_dataclass_members
       :type:  set[tuple[int, str]]
 
 
    .. py:attribute:: runtime_dataclass_binding_objects
       :type:  set[int]
+
+
+   .. py:attribute:: runtime_schema_by_id
+      :type:  dict[int, tuple[type, str]]
+
+
+   .. py:attribute:: binding_by_member
+      :type:  dict[tuple[int, str], MemberBinding]
+
+
+   .. py:attribute:: bound_dataclass_ids
+      :type:  set[int]
+
+
+   .. py:attribute:: runtime_scalar_launch_infos
+      :type:  list[tuple]
+      :value: []
+
 
 
    .. py:attribute:: caller_loop_depth
@@ -297,10 +341,13 @@ Module Contents
 
 
 
-.. py:class:: ASTTransformerFuncContext(global_context: ASTTransformerGlobalContext, template_slot_locations, end_lineno: int, is_kernel: bool, func: quadrants.lang._func_base.FuncBase, arg_features: list[tuple[Any, ...]] | None, global_vars: dict[str, Any], template_vars: dict[str, Any], is_pure: bool, py_args: tuple[Any, ...], file: str, src: list[str], start_lineno: int, ast_builder: quadrants._lib.core.quadrants_python.ASTBuilder | None, is_real_function: bool, autodiff_mode: AutodiffMode, raise_on_templated_floats: bool)
+.. py:class:: FuncCompilePassContext(kernel_compile_context: KernelCompileContext, template_slot_locations, end_lineno: int, is_kernel: bool, func: quadrants.lang._func_base.FuncBase, arg_features: list[tuple[Any, ...]] | None, global_vars: dict[str, Any], template_vars: dict[str, Any], is_pure: bool, py_args: tuple[Any, ...], file: str, src: list[str], start_lineno: int, ast_builder: quadrants._lib.core.quadrants_python.ASTBuilder | None, is_real_function: bool, autodiff_mode: AutodiffMode, raise_on_templated_floats: bool)
 
-   .. py:attribute:: global_context
-      :type:  ASTTransformerGlobalContext
+   State for compiling one kernel or qd.func invocation during one compiler pass.
+
+
+   .. py:attribute:: kernel_compile_context
+      :type:  KernelCompileContext
 
 
    .. py:attribute:: func
@@ -510,20 +557,10 @@ Module Contents
 
 
 
-.. py:function:: get_decorator(ctx: ASTTransformerFuncContext, node) -> str
+.. py:function:: get_decorator(ctx: FuncCompilePassContext, node) -> str
 
-.. py:function:: maybe_lifted_primitive(ctx: ASTTransformerFuncContext, parent: Any, attr: str)
+.. py:function:: resolve_bound_member(func_ctx: FuncCompilePassContext, parent: Any, node: ast.Attribute) -> Any
 
-   Handle access to a primitive member that ``@qd.data_oriented(template_primitives=False)`` lifted into a
-   runtime scalar kernel arg (see ``predeclare_struct_primitives``).
-
-   Returns the arg-load ``Expr`` to substitute for the baked value in the enforcing pass; returns ``None`` when
-   the attribute is not a lifted primitive, or during the non-enforcing discovery pass (where the access is
-   instead recorded via ``mark_used`` and the caller falls back to baking the throw-away discovery-pass IR).
-
-   Raises ``QuadrantsSyntaxError`` if the lifted primitive is used inside ``qd.static(...)``: that context
-   requires a compile-time constant, which a runtime-lifted primitive is not. Under this flag there is no
-   per-attribute baked escape hatch, so a ``qd.static`` use is unambiguously a mistake and we surface it loudly
-   rather than silently baking a value that will not track mutations.
+   Read a registered member and record its kernel input as used during discovery.
 
 

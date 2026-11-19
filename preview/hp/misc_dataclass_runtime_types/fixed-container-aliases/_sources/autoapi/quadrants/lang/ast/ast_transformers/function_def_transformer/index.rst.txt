@@ -17,7 +17,7 @@ Module Contents
 
 .. py:class:: FunctionDefTransformer
 
-   .. py:method:: build_FunctionDef(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.FunctionDef, build_stmts: Callable[[quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, list[ast.stmt]], None]) -> None
+   .. py:method:: build_FunctionDef(ctx: quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext, node: ast.FunctionDef, build_stmts: Callable[[quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext, list[ast.stmt]], None]) -> None
       :staticmethod:
 
 

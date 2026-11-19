@@ -413,7 +413,7 @@
 <span class="p">)</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">ASTTransformerGlobalContext</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">KernelCompileContext</span>
 
 
 <span class="nd">@quadrants_scope</span>
@@ -561,9 +561,9 @@
     <span class="c1"># Ndarray from struct template field: resolve via the AnyArray cache populated by _predeclare_struct_ndarrays</span>
     <span class="c1"># during kernel compilation.</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">Ndarray</span><span class="p">):</span>
-        <span class="n">gc</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">get_runtime</span><span class="p">(),</span> <span class="s2">"_current_global_context"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">gc</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">arr</span> <span class="o">=</span> <span class="n">gc</span><span class="o">.</span><span class="n">ndarray_to_any_array</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+        <span class="n">kernel_ctx</span> <span class="o">=</span> <span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">_current_kernel_compile_context</span>
+        <span class="k">if</span> <span class="n">kernel_ctx</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">arr</span> <span class="o">=</span> <span class="n">kernel_ctx</span><span class="o">.</span><span class="n">current_pass</span><span class="o">.</span><span class="n">ndarray_to_any_array</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
             <span class="k">if</span> <span class="n">arr</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="n">value</span> <span class="o">=</span> <span class="n">arr</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">Ndarray</span><span class="p">):</span>
@@ -738,6 +738,9 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">info_stack</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
 
 
+<span class="n">DEFAULT_CONTAINER_ALIAS_CACHE_SIZE</span> <span class="o">=</span> <span class="mi">1024</span>
+
+
 <span class="k">class</span><span class="w"> </span><span class="nc">PyQuadrants</span><span class="p">:</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">kernels</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">materialized</span> <span class="o">=</span> <span class="kc">False</span>
@@ -746,7 +749,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">inside_kernel</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">compilation_lock</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">RLock</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_compiling_callable</span><span class="p">:</span> <span class="n">KernelCxx</span> <span class="o">|</span> <span class="n">Kernel</span> <span class="o">|</span> <span class="n">Function</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_current_global_context</span><span class="p">:</span> <span class="s2">"ASTTransformerGlobalContext | None"</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_current_kernel_compile_context</span><span class="p">:</span> <span class="s2">"KernelCompileContext | None"</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">global_vars</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">grad_vars</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">dual_vars</span> <span class="o">=</span> <span class="p">[]</span>
@@ -765,6 +768,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">unfinalized_fields_builder</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">print_non_pure</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">short_circuit_operators</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">container_alias_cache_size</span> <span class="o">=</span> <span class="n">DEFAULT_CONTAINER_ALIAS_CACHE_SIZE</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">unrolling_limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
 

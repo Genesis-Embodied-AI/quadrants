@@ -366,7 +366,7 @@
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor_wrapper</span><span class="w"> </span><span class="kn">import</span> <span class="n">_TENSOR_WRAPPER_TYPES</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor_wrapper</span><span class="w"> </span><span class="kn">import</span> <span class="n">Tensor</span> <span class="k">as</span> <span class="n">_TensorClass</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">_kernel_impl_dataclass</span><span class="p">,</span> <span class="n">impl</span><span class="p">,</span> <span class="n">runtime_ops</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span><span class="p">,</span> <span class="n">runtime_ops</span>
 
 <span class="c1"># `qd.checkpoint` pause / resume model helpers. See `kernel_checkpoint.py` for the full extracted surface; `Kernel`</span>
 <span class="c1"># delegates the resume-cookie validation, label translation, per-launch yield_on= arg-id table build, and GraphStatus</span>
@@ -381,7 +381,7 @@
     <span class="n">transform_tree</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-    <span class="n">ASTTransformerFuncContext</span><span class="p">,</span>
+    <span class="n">FuncCompilePassContext</span><span class="p">,</span>
     <span class="n">ReturnStatus</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.exception</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
@@ -413,6 +413,7 @@
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">._pruning</span><span class="w"> </span><span class="kn">import</span> <span class="n">Pruning</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">._quadrants_callable</span><span class="w"> </span><span class="kn">import</span> <span class="n">QuadrantsCallable</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">KernelCompileContext</span><span class="p">,</span> <span class="n">KernelCompilePassContext</span>
 
 <span class="c1"># Define proxies for fast lookup</span>
 <span class="n">_NONE</span><span class="p">,</span> <span class="n">_VALIDATION</span> <span class="o">=</span> <span class="n">AutodiffMode</span><span class="o">.</span><span class="n">NONE</span><span class="p">,</span> <span class="n">AutodiffMode</span><span class="o">.</span><span class="n">VALIDATION</span>
@@ -534,7 +535,7 @@
 <span class="k">class</span><span class="w"> </span><span class="nc">ASTGenerator</span><span class="p">:</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span>
         <span class="n">kernel_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">current_kernel</span><span class="p">:</span> <span class="s2">"Kernel"</span><span class="p">,</span>
         <span class="n">only_parse_function_def</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
@@ -587,7 +588,6 @@
             <span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">current_kernel</span><span class="o">.</span><span class="n">kernel_cpp</span> <span class="o">=</span> <span class="n">kernel_cxx</span>
         <span class="n">ctx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span>
-        <span class="n">pruning</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">pruning</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">inside_kernel</span> <span class="o">=</span> <span class="kc">True</span>
         <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">_compiling_callable</span> <span class="ow">is</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">_compiling_callable</span> <span class="o">=</span> <span class="n">kernel_cxx</span>
@@ -595,14 +595,7 @@
             <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span> <span class="o">=</span> <span class="n">kernel_cxx</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dump_ast</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">_dump_ast</span><span class="p">()</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">pruning</span><span class="o">.</span><span class="n">enforcing</span><span class="p">:</span>
-                <span class="n">struct_locals</span> <span class="o">=</span> <span class="n">_kernel_impl_dataclass</span><span class="o">.</span><span class="n">extract_struct_locals_from_context</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">struct_locals</span> <span class="o">=</span> <span class="n">pruning</span><span class="o">.</span><span class="n">used_vars_by_func_id</span><span class="p">[</span><span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">func_id</span><span class="p">]</span>
-            <span class="c1"># struct locals are the expanded py dataclass fields that we will write to local variables, and will then</span>
-            <span class="c1"># be available to use in build_Call, later.</span>
-            <span class="n">ctx</span><span class="o">.</span><span class="n">struct_locals</span> <span class="o">=</span> <span class="n">struct_locals</span>
-            <span class="n">tree</span> <span class="o">=</span> <span class="n">_kernel_impl_dataclass</span><span class="o">.</span><span class="n">unpack_ast_struct_expressions</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tree</span><span class="p">,</span> <span class="n">struct_locals</span><span class="o">=</span><span class="n">struct_locals</span><span class="p">)</span>
+            <span class="n">tree</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tree</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">only_parse_function_def</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">only_parse_function_def</span>
             <span class="c1"># Rebuild the graph_do_while level table from scratch each compilation pass (build_While appends to it as it</span>
             <span class="c1"># walks the AST). Skip when only_parse_function_def: the body is not walked, so build_While never runs to</span>
@@ -617,7 +610,7 @@
                     <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"Kernel has a return type but does not have a return statement"</span><span class="p">)</span>
         <span class="k">finally</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">current_kernel</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">inside_kernel</span> <span class="o">=</span> <span class="kc">False</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">_current_global_context</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">_current_kernel_compile_context</span> <span class="o">=</span> <span class="kc">None</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">current_kernel</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">_compiling_callable</span> <span class="o">=</span> <span class="kc">None</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_dump_ast</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -811,7 +804,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">_last_launch_key</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># for dev/debug</span>
 
         <span class="c1"># next two parameters are ONLY used at kernel launch time,</span>
-        <span class="c1"># NOT for compilation. (for compilation, global_context.pruning is used).</span>
+        <span class="c1"># NOT for compilation. (for compilation, kernel_compile_context.pruning is used).</span>
         <span class="c1"># These parameters here are used to filter args passed into the already-compiled kernel.</span>
         <span class="c1"># used_py_dataclass_parameters_by_key_enforcing will also be serialized with fast cache.</span>
 <div class="viewcode-block" id="Kernel.used_py_dataclass_parameters_by_key_enforcing">
@@ -838,8 +831,8 @@
 
         <span class="bp">self</span><span class="o">.</span><span class="n">_struct_ndarray_launch_info_by_key</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">CompiledKernelKeyType</span><span class="p">,</span> <span class="nb">list</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="c1"># Launch info for primitives lifted from ``@qd.data_oriented(template_primitives=False)`` template args (see</span>
-        <span class="c1"># ``predeclare_struct_primitives``). Maps key -&gt; list of ``(arg_id, template_arg_idx, attr_chain, kind)``.</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_struct_primitive_launch_info_by_key</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">CompiledKernelKeyType</span><span class="p">,</span> <span class="nb">list</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="c1"># ``bind_data_oriented_runtime_scalars``). Maps key -&gt; list of ``(arg_id, template_arg_idx, attr_chain, kind)``.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_runtime_scalar_launch_infos_by_compiled_kernel_key</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">CompiledKernelKeyType</span><span class="p">,</span> <span class="nb">list</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_mutable_nd_cached_key</span><span class="p">:</span> <span class="n">CompiledKernelKeyType</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_mutable_nd_cached_val</span><span class="p">:</span> <span class="nb">list</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_tensor_unwrap_indices</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
@@ -997,21 +990,20 @@
             <span class="n">pruning</span> <span class="o">=</span> <span class="n">Pruning</span><span class="p">(</span><span class="n">kernel_used_parameters</span><span class="o">=</span><span class="n">used_py_dataclass_parameters</span><span class="p">)</span>
             <span class="n">range_begin</span> <span class="o">=</span> <span class="mi">0</span> <span class="k">if</span> <span class="n">used_py_dataclass_parameters</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="mi">1</span>
             <span class="n">runtime</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span>
+            <span class="n">kernel_ctx</span> <span class="o">=</span> <span class="n">KernelCompileContext</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pruning</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
             <span class="k">for</span> <span class="n">_pass</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">range_begin</span><span class="p">,</span> <span class="mi">2</span><span class="p">):</span>
+                <span class="n">kernel_ctx</span><span class="o">.</span><span class="n">current_pass</span> <span class="o">=</span> <span class="n">KernelCompilePassContext</span><span class="p">(</span><span class="n">_pass</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">_pass</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
                     <span class="n">pruning</span><span class="o">.</span><span class="n">pass_0_ran</span> <span class="o">=</span> <span class="kc">True</span>
                 <span class="k">if</span> <span class="n">_pass</span> <span class="o">&gt;=</span> <span class="mi">1</span><span class="p">:</span>
                     <span class="n">pruning</span><span class="o">.</span><span class="n">enforce</span><span class="p">()</span>
                 <span class="n">tree</span><span class="p">,</span> <span class="n">ctx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_tree_and_ctx</span><span class="p">(</span>
-                    <span class="n">pass_idx</span><span class="o">=</span><span class="n">_pass</span><span class="p">,</span>
+                    <span class="n">kernel_compile_context</span><span class="o">=</span><span class="n">kernel_ctx</span><span class="p">,</span>
                     <span class="n">py_args</span><span class="o">=</span><span class="n">py_args</span><span class="p">,</span>
                     <span class="n">template_slot_locations</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">template_slot_locations</span><span class="p">,</span>
                     <span class="n">arg_features</span><span class="o">=</span><span class="n">arg_features</span><span class="p">,</span>
-                    <span class="n">current_kernel</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span>
-                    <span class="n">pruning</span><span class="o">=</span><span class="n">pruning</span><span class="p">,</span>
-                    <span class="n">currently_compiling_materialize_key</span><span class="o">=</span><span class="n">key</span><span class="p">,</span>
                 <span class="p">)</span>
-                <span class="n">runtime</span><span class="o">.</span><span class="n">_current_global_context</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span>
+                <span class="n">runtime</span><span class="o">.</span><span class="n">_current_kernel_compile_context</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span>
 
                 <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">autodiff_mode</span> <span class="o">!=</span> <span class="n">_NONE</span><span class="p">:</span>
                     <span class="n">KernelSimplicityASTChecker</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="p">)</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">tree</span><span class="p">)</span>
@@ -1030,9 +1022,7 @@
                 <span class="k">if</span> <span class="n">_pass</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
                     <span class="k">assert</span> <span class="n">key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">materialized_kernels</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">materialized_kernels</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">quadrants_kernel</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">_struct_ndarray_launch_info_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span>
-                        <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="p">,</span> <span class="s2">"struct_ndarray_launch_info"</span><span class="p">,</span> <span class="p">[]</span>
-                    <span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_struct_ndarray_launch_info_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">kernel_ctx</span><span class="o">.</span><span class="n">current_pass</span><span class="o">.</span><span class="n">struct_ndarray_launch_info</span>
                     <span class="c1"># Both folds bring data_oriented member accesses into the kernel's used-flat-names set, which</span>
                     <span class="c1"># dataclass-arg expansion is the only other contributor to. Without them the narrow args hash walks</span>
                     <span class="c1"># nothing for a data_oriented arg, and a change of member dtype or value cannot invalidate the cache</span>
@@ -1044,9 +1034,14 @@
                     <span class="c1"># skip the whole primitive-binding path with a single empty-dict check instead of paying a</span>
                     <span class="c1"># per-launch ``.get(key)`` (tuple hash) on every cache-missing launch -- which is the hot path for</span>
                     <span class="c1"># CPU / unbatched genesis steps that launch many tiny kernels.</span>
-                    <span class="n">struct_primitive_launch_info</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="p">,</span> <span class="s2">"struct_primitive_launch_info"</span><span class="p">,</span> <span class="p">[])</span>
-                    <span class="k">if</span> <span class="n">struct_primitive_launch_info</span><span class="p">:</span>
-                        <span class="bp">self</span><span class="o">.</span><span class="n">_struct_primitive_launch_info_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">struct_primitive_launch_info</span>
+                    <span class="n">runtime_scalar_launch_infos</span> <span class="o">=</span> <span class="n">kernel_ctx</span><span class="o">.</span><span class="n">current_pass</span><span class="o">.</span><span class="n">runtime_scalar_launch_infos</span>
+                    <span class="k">if</span> <span class="n">runtime_scalar_launch_infos</span><span class="p">:</span>
+                        <span class="c1"># The source cache hashes dotted argument paths; scalar bindings have separate native names.</span>
+                        <span class="n">pruning</span><span class="o">.</span><span class="n">fold_struct_nd_paths</span><span class="p">(</span>
+                            <span class="p">[(</span><span class="n">slot</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">path</span><span class="p">)</span> <span class="k">for</span> <span class="n">slot</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">_kind</span> <span class="ow">in</span> <span class="n">runtime_scalar_launch_infos</span><span class="p">],</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">,</span>
+                        <span class="p">)</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">_runtime_scalar_launch_infos_by_compiled_kernel_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">runtime_scalar_launch_infos</span>
                 <span class="k">else</span><span class="p">:</span>
                     <span class="c1"># Propagate used-sets across call edges to a fixpoint (order-independent) before</span>
                     <span class="c1"># collapsing flat names to their used prefixes below.</span>
@@ -1065,7 +1060,7 @@
                     <span class="bp">self</span><span class="o">.</span><span class="n">used_py_dataclass_parameters_by_key_enforcing</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">pruning</span><span class="o">.</span><span class="n">used_vars_by_func_id</span><span class="p">[</span>
                         <span class="n">Pruning</span><span class="o">.</span><span class="n">KERNEL_FUNC_ID</span>
                     <span class="p">]</span>
-                <span class="n">runtime</span><span class="o">.</span><span class="n">_current_global_context</span> <span class="o">=</span> <span class="kc">None</span>
+                <span class="n">runtime</span><span class="o">.</span><span class="n">_current_kernel_compile_context</span> <span class="o">=</span> <span class="kc">None</span>
 
             <span class="bp">self</span><span class="o">.</span><span class="n">_maybe_persist_l1_and_set_l2_key</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">py_args</span><span class="p">)</span></div>
 
@@ -1203,12 +1198,11 @@
             <span class="k">if</span> <span class="n">struct_nd_info</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">_set_struct_ndarray_args</span><span class="p">(</span><span class="n">struct_nd_info</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">launch_ctx_buffer</span><span class="p">,</span> <span class="n">is_launch_ctx_cacheable</span><span class="p">)</span>
 
-            <span class="c1"># Empty for every kernel that doesn't use template_primitives=False (the common case), so this guard</span>
-            <span class="c1"># short-circuits without hashing ``key`` -- keeping the per-launch hot path free of added overhead.</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_struct_primitive_launch_info_by_key</span><span class="p">:</span>
-                <span class="n">struct_prim_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_struct_primitive_launch_info_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">struct_prim_info</span><span class="p">:</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">_set_struct_primitive_args</span><span class="p">(</span><span class="n">struct_prim_info</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">launch_ctx_buffer</span><span class="p">)</span>
+            <span class="c1"># Kernels without registered scalar members skip the per-key lookup.</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_runtime_scalar_launch_infos_by_compiled_kernel_key</span><span class="p">:</span>
+                <span class="n">runtime_scalar_launch_infos</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_runtime_scalar_launch_infos_by_compiled_kernel_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">runtime_scalar_launch_infos</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_set_struct_primitive_args</span><span class="p">(</span><span class="n">runtime_scalar_launch_infos</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">launch_ctx_buffer</span><span class="p">)</span>
                     <span class="c1"># Lifted primitives are read fresh from the live object on every launch (that is the whole point),</span>
                     <span class="c1"># so the prepared launch context must not be cached under ``args_hash`` (the hash keys on object</span>
                     <span class="c1"># id, not primitive value, so a cached context would serve stale values when the user mutates the</span>
@@ -1338,7 +1332,7 @@
 <span class="w">        </span><span class="sd">"""Walk a struct's attribute chain to find the live ndarray (or Tensor wrapper)."""</span>
         <span class="n">obj</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="n">template_arg_idx</span><span class="p">]</span>
         <span class="k">for</span> <span class="n">attr_name</span> <span class="ow">in</span> <span class="n">attr_chain</span><span class="p">:</span>
-            <span class="n">obj</span> <span class="o">=</span> <span class="n">obj</span><span class="p">[</span><span class="n">attr_name</span><span class="p">]</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">attr_name</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="k">else</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">)</span>
+            <span class="n">obj</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span> <span class="ow">in</span> <span class="n">_TENSOR_WRAPPER_TYPES</span><span class="p">:</span>
             <span class="n">obj</span> <span class="o">=</span> <span class="n">obj</span><span class="o">.</span><span class="n">_unwrap</span><span class="p">()</span>
         <span class="k">return</span> <span class="n">obj</span>
@@ -1356,7 +1350,7 @@
         <span class="k">for</span> <span class="n">arg_id</span><span class="p">,</span> <span class="n">template_arg_idx</span><span class="p">,</span> <span class="n">attr_chain</span> <span class="ow">in</span> <span class="n">launch_info</span><span class="p">:</span>
             <span class="n">obj</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="n">template_arg_idx</span><span class="p">]</span>
             <span class="k">for</span> <span class="n">attr_name</span> <span class="ow">in</span> <span class="n">attr_chain</span><span class="p">:</span>
-                <span class="n">obj</span> <span class="o">=</span> <span class="n">obj</span><span class="p">[</span><span class="n">attr_name</span><span class="p">]</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">attr_name</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="k">else</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">)</span>
+                <span class="n">obj</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">)</span>
             <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span> <span class="ow">in</span> <span class="n">_TENSOR_WRAPPER_TYPES</span><span class="p">:</span>
                 <span class="n">obj</span> <span class="o">=</span> <span class="n">obj</span><span class="o">.</span><span class="n">_unwrap</span><span class="p">()</span>
             <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">Ndarray</span><span class="p">),</span> <span class="sa">f</span><span class="s2">"Expected Ndarray at </span><span class="si">{</span><span class="n">attr_chain</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
@@ -1373,28 +1367,28 @@
         <span class="n">args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">,</span>
         <span class="n">launch_ctx_buffer</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">"""Set scalar kernel args lifted from ``@qd.data_oriented(template_primitives=False)`` template-arg primitive</span>
-<span class="sd">        members. Walks each recorded attr-chain to read the live value and buckets it by declared dtype kind (``'f'``</span>
-<span class="sd">        float, ``'i'`` signed int, ``'u'`` unsigned int), so the value is bound fresh on every launch.</span>
+<span class="w">        </span><span class="sd">"""Read current scalar member values and supply them to their declared kernel inputs.</span>
 
-<span class="sd">        The dtype kind is frozen at first compile (see ``struct_primitive_predeclarer``). Binding a ``float`` to an</span>
-<span class="sd">        arg that was lifted as an integer would silently truncate (``int(1.5) == 1``), so that one lossy direction is</span>
-<span class="sd">        rejected here rather than corrupting the value; the lossless directions (``int``/``bool`` -&gt; float, and</span>
-<span class="sd">        ``bool`` &lt;-&gt; ``int``) still coerce, matching typed-scalar-arg semantics."""</span>
+<span class="sd">        Each attribute chain starts at a data-oriented argument. Values are grouped by dtype kind: ``'f'`` for float,</span>
+<span class="sd">        ``'i'`` for signed int, and ``'u'`` for unsigned int.</span>
+
+<span class="sd">        The dtype kind is frozen at first compile (see ``data_oriented_runtime_scalar_binder``). Binding a ``float`` to</span>
+<span class="sd">        an arg that was lifted as an integer would silently truncate (``int(1.5) == 1``), so that one lossy direction is</span>
+<span class="sd">        rejected here rather than corrupting the value; the lossless directions (``int``/``bool`` -&gt; float, and ``bool``</span>
+<span class="sd">        &lt;-&gt; ``int``) still coerce, matching typed-scalar-arg semantics."""</span>
         <span class="k">for</span> <span class="n">arg_id</span><span class="p">,</span> <span class="n">template_arg_idx</span><span class="p">,</span> <span class="n">attr_chain</span><span class="p">,</span> <span class="n">kind</span> <span class="ow">in</span> <span class="n">launch_info</span><span class="p">:</span>
             <span class="n">obj</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="n">template_arg_idx</span><span class="p">]</span>
             <span class="k">for</span> <span class="n">attr_name</span> <span class="ow">in</span> <span class="n">attr_chain</span><span class="p">:</span>
-                <span class="n">obj</span> <span class="o">=</span> <span class="n">obj</span><span class="p">[</span><span class="n">attr_name</span><span class="p">]</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">attr_name</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="k">else</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">)</span>
+                <span class="n">obj</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">"f"</span><span class="p">:</span>
                 <span class="n">launch_ctx_buffer</span><span class="p">[</span><span class="n">_FLOAT</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">arg_id</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="n">obj</span><span class="p">)))</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span> <span class="ow">is</span> <span class="nb">float</span><span class="p">:</span>
                     <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
-                        <span class="sa">f</span><span class="s2">"Primitive member '</span><span class="si">{</span><span class="s1">'.'</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span><span class="w"> </span><span class="n">attr_chain</span><span class="p">))</span><span class="si">}</span><span class="s2">' of a "</span>
-                        <span class="sa">f</span><span class="s2">"@qd.data_oriented(template_primitives=False) "</span>
-                        <span class="sa">f</span><span class="s2">"object was lifted as an integer kernel argument (its type at first compile), but is now a "</span>
+                        <span class="sa">f</span><span class="s2">"Scalar member '</span><span class="si">{</span><span class="s1">'.'</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">attr_chain</span><span class="p">)</span><span class="si">}</span><span class="s2">' of a data-oriented argument "</span>
+                        <span class="sa">f</span><span class="s2">"was declared as an integer kernel argument, but is now a "</span>
                         <span class="sa">f</span><span class="s2">"float (</span><span class="si">{</span><span class="n">obj</span><span class="si">!r}</span><span class="s2">); coercing it would truncate. Keep the member's type stable across launches, "</span>
-                        <span class="sa">f</span><span class="s2">"or use the default template_primitives=True to re-specialise the kernel per type."</span>
+                        <span class="sa">f</span><span class="s2">"or declare a floating-point dataclass field if fractional values are needed."</span>
                     <span class="p">)</span>
                 <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">"u"</span><span class="p">:</span>
                     <span class="n">launch_ctx_buffer</span><span class="p">[</span><span class="n">_UINT</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">arg_id</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">obj</span><span class="p">)))</span>
@@ -1448,7 +1442,9 @@
         <span class="n">config</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">raise_on_templated_floats</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">raise_on_templated_floats</span>
-        <span class="n">py_args</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fuse_args</span><span class="p">(</span><span class="n">is_func</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_pyfunc</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">py_args</span><span class="o">=</span><span class="n">py_args</span><span class="p">,</span> <span class="n">kwargs</span><span class="o">=</span><span class="n">kwargs</span><span class="p">,</span> <span class="n">global_context</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+        <span class="n">py_args</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fuse_args</span><span class="p">(</span>
+            <span class="n">is_func</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_pyfunc</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">py_args</span><span class="o">=</span><span class="n">py_args</span><span class="p">,</span> <span class="n">kwargs</span><span class="o">=</span><span class="n">kwargs</span><span class="p">,</span> <span class="n">kernel_compile_context</span><span class="o">=</span><span class="kc">None</span>
+        <span class="p">)</span>
         <span class="c1"># Tensor-wrapper unwrap. Canonicalize ``qd.Tensor`` slots, plus wrapper positions discovered on</span>
         <span class="c1"># the first launch, before the autograd tape and identity-keyed caches observe the arg tuple.</span>
         <span class="c1">#</span>
