@@ -1313,7 +1313,9 @@ def static(x, *xs) -> Any:
     if isinstance(x, (FunctionType, MethodType, BoundQuadrantsCallable, QuadrantsCallable)):
         return x
 
-    raise ValueError(f"Input to qd.static must be compile-time constants or global pointers, instead of {type(x)}")
+    raise QuadrantsSyntaxError(
+        f"Input to qd.static must be compile-time constants or global pointers, instead of {type(x)}"
+    )
 
 
 @quadrants_scope

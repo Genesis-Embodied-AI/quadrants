@@ -129,8 +129,7 @@ def test_dataclass_runtime_scalar_rejects_static(in_data_oriented: bool) -> None
         return qd.static(arg.value)
 
     state = State(3)
-    expected_error = qd.QuadrantsSyntaxError if in_data_oriented else ValueError
-    with pytest.raises(expected_error, match=r"qd\.static"):
+    with pytest.raises(qd.QuadrantsSyntaxError, match=r"qd\.static"):
         read(DataOriented(state) if in_data_oriented else state)
 
 
