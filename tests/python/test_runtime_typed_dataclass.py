@@ -479,9 +479,13 @@ def test_runtime_frozen_guard_detects_mutable_child_cycle_and_bad_type() -> None
     child = Inner(1.5)
     state = Outer(child)
     assert read(state) == 1.5
-    child.value = state
+    with pytest.raises(qd.QuadrantsRuntimeTypeError, match="Cannot add container reference"):
+        child.value = state
+    cyclic_child = Inner(None)
+    cyclic_state = Outer(cyclic_child)
+    cyclic_child.value = cyclic_state
     with pytest.raises(qd.QuadrantsRuntimeTypeError, match="cycle"):
-        read(state)
+        read(cyclic_state)
     child.value = []
     with pytest.raises(qd.QuadrantsRuntimeTypeError, match="state.inner.value.*unsupported runtime type list"):
         read(state)

@@ -209,7 +209,9 @@ def test_unused_final_below_mutable_ancestor() -> None:
 
     state = Outer(Inner(7, 1))
     assert run(state) == 7
-    state.child = Inner(9, 2)
+    with pytest.raises(qd.QuadrantsRuntimeTypeError, match="fixed after first kernel use"):
+        state.child = Inner(9, 2)
+    state = Outer(Inner(9, 2))
     assert run(state) == 9
 
     @qd.kernel
