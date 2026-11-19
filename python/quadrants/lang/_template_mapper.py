@@ -187,6 +187,6 @@ class TemplateMapper:
                 self._mapping_cache_tracker[args_hash] = mapping_cache_tracker_
                 self._mapping_cache[args_hash] = (count, key)
             except TypeError as e:
-                _warnings.warn_once(f"{e}. Template mapper caching disabled.")
+                _warnings.warn_uncacheable_weakref(e)
 
         return (count, key)
