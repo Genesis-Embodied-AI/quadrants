@@ -16,10 +16,8 @@ from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import (
     _ndarray,
     any_array,
-    expr,
     impl,
     kernel_arguments,
-    matrix,
 )
 from quadrants.lang._final.final_dataclass_fields import (
     final_field_names,

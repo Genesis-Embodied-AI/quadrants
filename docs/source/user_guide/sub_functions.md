@@ -24,7 +24,7 @@ def compute(a: qd.Template) -> None:
 
 ### Runtime typing in inlined functions
 
-`@qd.func` ignores parameter and return type annotations. The same applies to `@qd.pyfunc` calls inside kernels. Arguments are matched to parameter names using positional arguments, keywords, and defaults; their actual values determine how they are used. Annotations can still document interfaces for Python type checkers, including `Protocol` interfaces, without restricting Quadrants compilation. String annotations are not evaluated.
+`@qd.func` ignores parameter, return, and local variable type annotations. The same applies to `@qd.pyfunc` calls inside kernels. Arguments are matched to parameter names using positional arguments, keywords, and defaults; their actual values determine how they are used. Annotations can still document interfaces for Python type checkers, including `Protocol` interfaces, without restricting Quadrants compilation. String annotations are not evaluated.
 
 For example, a function annotated with a base dataclass can access any member present on the actual argument, including members added by a subclass. An unrelated dataclass with the required members works too. Missing members produce an error when accessed. Nested dataclasses follow the same rules. Dataclass arguments must still be passed explicitly; omitted dataclass defaults remain unsupported.
 

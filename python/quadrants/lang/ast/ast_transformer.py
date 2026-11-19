@@ -155,6 +155,13 @@ class ASTTransformer(Builder):
 
     @staticmethod
     def build_AnnAssign(ctx: FuncCompilePassContext, node: ast.AnnAssign):
+        if not ctx.is_kernel and not ctx.is_real_function:
+            # Inlined annotations are Python typing metadata, including local variable annotations. Do not evaluate
+            # their ASTs or insert casts. A declaration without a value does not create a runtime variable.
+            if node.value is not None:
+                assignment = ast.copy_location(ast.Assign(targets=[node.target], value=node.value), node)
+                ASTTransformer.build_Assign(ctx, assignment)
+            return None
         build_stmt(ctx, node.value)
         build_stmt(ctx, node.annotation)
 

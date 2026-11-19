@@ -16,6 +16,21 @@ from quadrants.lang.struct import Struct
 from quadrants.lang.util import is_dataclass_instance
 
 
+class _AssignedNames(ast.NodeVisitor):
+    def __init__(self) -> None:
+        self.names: set[str] = set()
+
+    def visit_Name(self, node: ast.Name) -> None:
+        if isinstance(node.ctx, ast.Store):
+            self.names.add(node.id)
+
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
+        # A type-only declaration neither writes the parameter nor evaluates its annotation.
+        if node.value is not None:
+            self.visit(node.target)
+            self.visit(node.value)
+
+
 def _bind_value(ctx: FuncCompilePassContext, name: str, value: Any, assigned_names: set[str]) -> None:
     """Keep object references and compile-time values; copy runtime expressions into local variables."""
     ctx.fn_param_names.add(name)
@@ -29,7 +44,7 @@ def _bind_value(ctx: FuncCompilePassContext, name: str, value: Any, assigned_nam
         value = pass_ctx.ndarray_to_any_array.get(id(value), value)
         if isinstance(value, (Expr, Matrix, Struct)):
             value = impl.expr_init_func(value)
-        elif name in assigned_names and isinstance(value, (bool, int, float, np.number)):
+        elif name in assigned_names and isinstance(value, (bool, int, float, np.number, np.bool_)):
             # Allocate at function entry, before any runtime branch, so reassignment never changes a compile-time
             # binding conditionally. Read-only Python scalars remain available to qd.static without a template hint.
             value = impl.expr_init_func(value)
@@ -39,11 +54,8 @@ def _bind_value(ctx: FuncCompilePassContext, name: str, value: Any, assigned_nam
 def bind_inline_arguments(ctx: FuncCompilePassContext, node: ast.FunctionDef) -> None:
     """Bind already-fused positional, keyword, default, and self arguments to their parameter names."""
     assert ctx.py_args is not None
-    assigned_names = {
-        child.id
-        for statement in node.body
-        for child in ast.walk(statement)
-        if isinstance(child, ast.Name) and isinstance(child.ctx, ast.Store)
-    }
+    assigned = _AssignedNames()
+    for statement in node.body:
+        assigned.visit(statement)
     for meta, value in zip(ctx.func.arg_metas, ctx.py_args):
-        _bind_value(ctx, meta.name, value, assigned_names)
+        _bind_value(ctx, meta.name, value, assigned.names)
