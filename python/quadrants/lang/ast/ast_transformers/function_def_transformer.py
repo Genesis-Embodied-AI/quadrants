@@ -31,6 +31,7 @@ from quadrants.lang._name_utils import (
     dotted_argument_path_from_flat_name,
 )
 from quadrants.lang._optional_annotation import OPTIONAL_ABSENT
+from quadrants.lang._runtime_tuple import predeclare_tuple_scalars
 from quadrants.lang._runtime_typing.deferred_errors import (
     DeferredMemberError,
     DeferredMemberType,
@@ -246,6 +247,7 @@ class FunctionDefTransformer:
 
         FunctionDefTransformer._predeclare_struct_ndarrays(ctx)
         bind_data_oriented_runtime_scalars(ctx)
+        predeclare_tuple_scalars(ctx)
         compiling_callable.finalize_params()
         # remove original args
         node.args.args = []
@@ -283,7 +285,18 @@ class FunctionDefTransformer:
         # Sharing it across the whole arg is safe because the ndarray set rooted at a node does not depend on the path
         # taken to reach it.
         def _walk_obj(obj, arg_idx, path, seen):
-            if is_dataclass_instance(obj):
+            if isinstance(obj, tuple) and not is_data_oriented(obj):
+                for index, child in enumerate(obj):
+                    if isinstance(child, _TensorClass):
+                        child = child._unwrap()
+                    if isinstance(child, _ndarray.Ndarray):
+                        _register_ndarray(child, arg_idx, (*path, index))
+                    elif (isinstance(child, tuple) or is_dataclass_instance(child) or is_data_oriented(child)) and id(
+                        child
+                    ) not in seen:
+                        seen.add(id(child))
+                        _walk_obj(child, arg_idx, (*path, index), seen)
+            elif is_dataclass_instance(obj):
                 for field in dataclasses.fields(obj):
                     child = getattr(obj, field.name)
                     if isinstance(child, _TensorClass):
@@ -302,7 +315,11 @@ class FunctionDefTransformer:
                         attr_val = attr_val._unwrap()
                     if isinstance(attr_val, _ndarray.Ndarray):
                         _register_ndarray(attr_val, arg_idx, (*path, attr_name))
-                    elif is_dataclass_instance(attr_val) or is_data_oriented(attr_val):
+                    elif (
+                        is_dataclass_instance(attr_val)
+                        or is_data_oriented(attr_val)
+                        or (isinstance(attr_val, tuple) and is_data_oriented(obj))
+                    ):
                         attr_id = id(attr_val)
                         if attr_id in seen:
                             continue
@@ -323,7 +340,7 @@ class FunctionDefTransformer:
                     return
                 flat = arg_name
                 for attr in attr_chain:
-                    flat = create_flat_name(flat, attr)
+                    flat = create_flat_name(flat, str(attr))
                 if flat not in kernel_used_flat_names:
                     return
             from quadrants._lib import core as _qd_core  # pylint: disable=C0415
@@ -349,6 +366,11 @@ class FunctionDefTransformer:
         assert ctx.py_args is not None
         for i, arg_meta in enumerate(ctx.func.arg_metas):
             anno = arg_meta.annotation
+            plan = getattr(anno, "_qd_tuple_plan", None)
+            if plan is not None:
+                for path, nd in plan.arrays:
+                    _register_ndarray(nd, i, path)
+                continue
             is_template = anno is annotations.template or isinstance(anno, annotations.template)
             is_tensor_anno = anno is _TensorClass
             if hasattr(anno, "_qd_runtime_origin"):

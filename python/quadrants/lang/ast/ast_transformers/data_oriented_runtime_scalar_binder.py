@@ -55,6 +55,13 @@ def _collect_scalars_in_single_data_oriented(
         return
 
     seen_ids.add(obj_id)
+    if isinstance(py_obj, tuple) and not is_data_oriented(py_obj):
+        for index, child in enumerate(py_obj):
+            if isinstance(child, tuple) or is_dataclass_instance(child) or is_data_oriented(child):
+                _collect_scalars_in_single_data_oriented(
+                    child, arg_idx, (*path, index), seen_ids, scalar_members, lift_plain, schema_by_id
+                )
+        return
     if is_dataclass_instance(py_obj):
         entry = schema_by_id.get(obj_id)
         if entry is None:
@@ -93,7 +100,7 @@ def _collect_scalars_in_single_data_oriented(
         # compile-time behavior.
         if lift_plain and attr_type in (bool, int, float):
             scalar_members.append(_ScalarMember(py_obj, attr_name, attr_val, arg_idx, (*path, attr_name)))
-        elif is_dataclass_instance(attr_val) or is_data_oriented(attr_val):
+        elif is_dataclass_instance(attr_val) or is_data_oriented(attr_val) or isinstance(attr_val, tuple):
             _collect_scalars_in_single_data_oriented(
                 attr_val, arg_idx, (*path, attr_name), seen_ids, scalar_members, lift_plain, schema_by_id
             )
@@ -158,7 +165,7 @@ def _create_runtime_scalar_bindings(func_ctx: FuncCompilePassContext, scalar_mem
             dtype, kind = runtime.default_fp, "f"
         else:
             continue
-        flat_name = f"__qd_doprim_{arg_idx}__{'__'.join(attr_chain)}"
+        flat_name = f"__qd_doprim_{arg_idx}__{'__'.join(map(str, attr_chain))}"
         # Add only members marked used during discovery, avoiding MAX_ARG_NUM for large containers.
         if not pruning.enforcing or not pruning.is_used(func_id, flat_name):
             # Discovery reads the Python scalar, while enforcement reads an Expr. Reject static reads so the two passes
@@ -199,8 +206,8 @@ def bind_data_oriented_runtime_scalars(func_ctx: FuncCompilePassContext) -> None
         for attr in path:
             pass_ctx.runtime_dataclass_binding_objects.add(id(obj))
             pass_ctx.runtime_dataclass_members.add((id(obj), attr))
-            obj = getattr(obj, attr)
-            name += "." + attr
+            obj = obj[attr] if isinstance(attr, int) else getattr(obj, attr)
+            name += "." + str(attr)
         register_runtime_dataclass_schema(pass_ctx, obj, schema, name)
     scalar_members = _collect_runtime_scalars_from_data_oriented_args(
         func_ctx.py_args, func_ctx.func.arg_metas, pass_ctx.runtime_schema_by_id

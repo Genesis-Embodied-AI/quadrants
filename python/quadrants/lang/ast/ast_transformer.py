@@ -43,6 +43,7 @@ from quadrants.lang.ast.ast_transformers.function_def_transformer import (
 from quadrants.lang.ast.ast_transformers.graph_parallel_transformer import (
     GraphParallelTransformer,
 )
+from quadrants.lang.ast.ast_transformers.runtime_tuple_transform import build_tuple_for
 from quadrants.lang.exception import (
     QuadrantsIndexError,
     QuadrantsRuntimeTypeError,
@@ -1093,7 +1094,7 @@ class ASTTransformer(Builder):
         return [name.id for name in node.target.elts]
 
     @staticmethod
-    def build_static_for(ctx: FuncCompilePassContext, node: ast.For, is_grouped: bool) -> None:
+    def build_static_for(ctx: FuncCompilePassContext, node: ast.For, is_grouped: bool, iter_built=False) -> None:
         qd_unroll_limit = impl.get_runtime().unrolling_limit
         if is_grouped:
             assert len(node.iter.args[0].args) == 1
@@ -1131,7 +1132,8 @@ class ASTTransformer(Builder):
                     elif status == LoopStatus.Continue:
                         ctx.set_loop_status(LoopStatus.Normal)
         else:
-            build_stmt(ctx, node.iter)
+            if not iter_built:
+                build_stmt(ctx, node.iter)
             targets = ASTTransformer.get_for_loop_targets(node)
 
             iter_time = 0
@@ -1434,6 +1436,9 @@ class ASTTransformer(Builder):
                 raise QuadrantsSyntaxError("'qd.static' cannot be nested")
             with ctx.loop_scope_guard(is_static=True):
                 return ASTTransformer.build_static_for(ctx, node, double_decorator == "grouped")
+        iter_built, handled = build_tuple_for(ctx, node, decorator, build_stmt, ASTTransformer.build_static_for)
+        if handled:
+            return None
         with ctx.loop_scope_guard():
             if decorator == "ndrange":
                 if double_decorator != "":
@@ -1485,7 +1490,8 @@ class ASTTransformer(Builder):
                 )
                 return ASTTransformer.build_For(ctx, new_for)
             else:
-                build_stmt(ctx, node.iter)
+                if not iter_built:
+                    build_stmt(ctx, node.iter)
                 if isinstance(node.iter.ptr, mesh.MeshElementField):
                     if not _qd_core.is_extension_supported(impl.default_cfg().arch, _qd_core.Extension.mesh):
                         raise Exception(

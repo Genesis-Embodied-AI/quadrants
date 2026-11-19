@@ -4,7 +4,7 @@ import atexit
 import dataclasses
 from collections.abc import Sequence
 from functools import partial
-from typing import Any, TypeAlias
+from typing import Any, TypeAlias, cast
 from weakref import ReferenceType, ref
 
 from quadrants import _logging, _warnings
@@ -37,6 +37,12 @@ def _collect_container_ids(py_obj: Any) -> tuple[int, ...]:
     pending = [py_obj]
     while pending:
         child = pending.pop()
+        if isinstance(child, tuple) and not is_data_oriented(child):
+            if id(child) not in seen_ids:
+                seen_ids.add(id(child))
+                pending.extend(child)
+            identities.append(id(child))
+            continue
         is_dataclass = is_dataclass_instance(child)
         if not is_dataclass and not is_data_oriented(child):
             continue
@@ -48,9 +54,10 @@ def _collect_container_ids(py_obj: Any) -> tuple[int, ...]:
 
         seen_ids.add(identity)
         if is_dataclass:
-            members = ((field.name, getattr(child, field.name)) for field in dataclasses.fields(child))
+            members = ((field.name, getattr(child, field.name)) for field in dataclasses.fields(cast(Any, child)))
         else:
-            attrs = child._asdict() if hasattr(child, "_asdict") else vars(child)
+            asdict = getattr(child, "_asdict", None)
+            attrs = asdict() if asdict is not None else vars(child)
             members = ((name, value) for name, value in attrs.items() if not name.startswith("_qd_"))
         fixed = set()
         for name, value in members:
@@ -81,6 +88,10 @@ def get_container_alias_key(py_args: Sequence[Any]) -> AliasKey:
     serials: dict[int, int] = {}
     result: list[tuple[int, ...]] = []
     for py_arg in py_args:
+        if isinstance(py_arg, tuple) and not is_data_oriented(py_arg):
+            identities = _collect_container_ids(py_arg)
+            result.append(tuple(serials.setdefault(identity, len(serials)) for identity in identities))
+            continue
         if not (is_dataclass_instance(py_arg) or is_data_oriented(py_arg)):
             result.append(())
             continue
@@ -133,6 +144,8 @@ def cached_get_container_alias_key(py_args: tuple[Any, ...]) -> AliasKey:
     container_ids = tuple(
         id(py_arg) if is_dataclass_instance(py_arg) or is_data_oriented(py_arg) else None for py_arg in py_args
     )
+    if any(isinstance(arg, tuple) and not is_data_oriented(arg) for arg in py_args):
+        return get_container_alias_key(py_args)
     cached_alias_key_entry = _alias_key_by_container_ids.get(container_ids)
     if cached_alias_key_entry is not None:
         alias_key, _ = cached_alias_key_entry

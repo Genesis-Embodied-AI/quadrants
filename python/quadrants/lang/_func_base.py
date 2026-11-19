@@ -293,6 +293,8 @@ class FuncBase:
                     raise QuadrantsSyntaxError("Quadrants kernels parameters must be type annotated")
             else:
                 annotation, optional = split_optional(annotation)
+                if annotation is tuple or typing.get_origin(annotation) is tuple:
+                    annotation = template()
                 annotation_type = type(annotation)
                 if annotation_type is ndarray_type.NdarrayType:
                     pass

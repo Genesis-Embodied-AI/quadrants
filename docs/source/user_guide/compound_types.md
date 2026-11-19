@@ -17,10 +17,12 @@ The following compound types are available:
 | `@qd.kernel` instance methods       | no                                    | yes                                   | no                                  |
 | `@qd.func` instance methods         | no                                    | yes                                   | yes                                 |
 | Member declaration                  | type-annotated class fields           | live attributes (no annotations)      | type-annotated class fields         |
-| Kernel-arg annotation               | `qd.RuntimeTyped` or `MyStruct`       | `qd.Template`                       | `MyStruct` (the struct type)        |
+| Kernel-arg annotation               | [`qd.RuntimeTyped`](#runtime-member-types) or `MyStruct`       | `qd.Template`                       | `MyStruct` (the struct type)        |
 | Primitive members are               | runtime args, or compile-time constants when annotated [`Final[T]`](#compile-time-constant-fields-typingfinal) | compile-time constants by default ([opt out](#runtime-primitives-template_primitivesfalse)) | fields of the in-kernel struct |
 
 See [Nesting compatibility](#nesting-compatibility) below for a per-container × per-member-type breakdown, including the constraints on the outer kernel-arg annotation and ndarray reassignment.
+
+For ordered sequences of callable objects with captured dataclass data, see [tuples of handlers](handler_tuples.md).
 
 ## How to choose a compound type?
 
