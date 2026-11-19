@@ -173,8 +173,9 @@ def test_one_func_accepts_dataclasses_and_scalars():
 @pytest.mark.parametrize("annotation", [qd.Template, qd.i32, object, qd.ref(qd.i32)])
 @test_utils.test()
 def test_expression_parameters_are_local_values(annotation):
-    def update(value):
-        value += 4
+    def update(value, enabled=True):
+        if enabled:
+            value += 4
         return value
 
     update.__annotations__["value"] = annotation
@@ -187,6 +188,13 @@ def test_expression_parameters_are_local_values(annotation):
         return value * 100 + result * 10 + update(2)
 
     assert run() == 376
+
+    @qd.kernel
+    def conditional(enabled: qd.i32) -> qd.i32:
+        return update(2, enabled)
+
+    assert conditional(0) == 2
+    assert conditional(1) == 6
 
 
 @test_utils.test()
