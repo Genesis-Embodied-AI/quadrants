@@ -313,7 +313,9 @@ def infer_kernel_dataclass_arg_types(
         elif hasattr(type(py_obj), "__dataclass_fields__"):
             arg_meta = ArgMetadata(
                 cached_infer_dataclass_type(
-                    py_obj, arg_meta.name, final_value_key_by_value_id=final_value_key_by_value_id
+                    cast(DataclassInstance, py_obj),
+                    arg_meta.name,
+                    final_value_key_by_value_id=final_value_key_by_value_id,
                 ),
                 arg_meta.name,
                 arg_meta.default,
