@@ -46,10 +46,6 @@ def _collect_runtime_members_in_data_oriented(
         return
 
     seen_ids.add(obj_id)
-    if is_dataclass_instance(py_obj):
-        dataclass_members.append((arg_idx, path, py_obj))
-        return
-
     if hasattr(py_obj, "_asdict"):
         items = py_obj._asdict().items()
     elif hasattr(py_obj, "__dict__"):
@@ -67,7 +63,11 @@ def _collect_runtime_members_in_data_oriented(
         # compile-time behavior.
         if not data_oriented_template_primitives and attr_type in (bool, int, float):
             scalar_members.append(_ScalarMember(py_obj, attr_name, attr_val, arg_idx, (*path, attr_name)))
-        elif is_dataclass_instance(attr_val) or is_data_oriented(attr_val):
+        elif is_dataclass_instance(attr_val):
+            if id(attr_val) not in seen_ids:
+                seen_ids.add(id(attr_val))
+                dataclass_members.append((arg_idx, (*path, attr_name), attr_val))
+        elif is_data_oriented(attr_val):
             _collect_runtime_members_in_data_oriented(
                 attr_val,
                 arg_idx,
