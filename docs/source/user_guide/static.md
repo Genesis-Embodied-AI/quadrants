@@ -26,7 +26,7 @@ Because `use_fast_path` is a templated parameter, it is known at compile time. T
 
 Without `qd.static`, the condition would be evaluated at runtime for every thread, which is slower. In addition, the kernel will contain the code for both branches, which will increase register pressure, and likely reduce occupancy.
 
-`is None` and `is not None` are supported inside `qd.static()` for direct `qd.Template` and `qd.Tensor` kernel arguments, and for optional [`qd.types.NDArray`](tensor_types.md) arguments declared `qd.types.NDArray[...] | None`. Passing `None` specializes away any branch guarded with `if qd.static(some_nullable_param is not None):`. Other identity comparisons and runtime operands remain unsupported.
+`is None` and `is not None` are supported inside `qd.static()` for direct `qd.Template` and `qd.Tensor` kernel arguments, for optional [`qd.types.NDArray`](tensor_types.md) arguments declared `qd.types.NDArray[...] | None`, and for Python dataclass kernel arguments. Passing `None` specializes away any branch guarded with `if qd.static(some_nullable_param is not None):`. Other identity comparisons and runtime operands remain unsupported.
 
 ## Loop unrolling
 
@@ -75,3 +75,27 @@ def compute(val: float) -> None:
 ```
 
 This will raise a `QuadrantsCompilationError` with a message indicating that the argument must be a compile-time constant.
+
+## Optional Python dataclass arguments
+
+A kernel parameter annotated with a Python dataclass type can accept `None` using `State | None` or `typing.Optional[State]`. Guard member access with `qd.static(state is not None)`. Quadrants specializes on absence or on the present value's runtime schema, and skips compilation of the unused branch. An absent struct consumes no runtime argument slots.
+
+```python
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class State:
+    value: qd.Tensor
+
+@qd.kernel
+def add(out: qd.Tensor, state: State | None):
+    for i in range(out.shape[0]):
+        out[i] = 1.0
+        if qd.static(state is not None):
+            out[i] += state.value[i]
+
+add(out, None)
+add(out, State(value))
+```
+
+Pass `None` explicitly when the component is absent. Kernel parameters still require explicit arguments.

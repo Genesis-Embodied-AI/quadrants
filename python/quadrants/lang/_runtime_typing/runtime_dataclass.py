@@ -38,7 +38,7 @@ from quadrants.lang.matrix import Matrix, MatrixType, VectorType
 from quadrants.lang.struct import Struct, StructType
 from quadrants.lang.util import is_data_oriented, to_quadrants_type
 from quadrants.types import buffer_view_type, ndarray_type, primitive_types
-from quadrants.types.annotations import RuntimeTyped
+from quadrants.types.annotations import RuntimeTyped, template
 
 if TYPE_CHECKING:
     from quadrants.lang._func_base import FuncBase
@@ -307,10 +307,15 @@ def infer_kernel_dataclass_arg_types(
     """Replace kernel dataclass parameter annotations with schemas inferred from their arriving values."""
     resolved_arg_metas = []
     for arg_meta, py_obj in zip(arg_metas, py_objs):
-        if hasattr(type(py_obj), "__dataclass_fields__"):
+        if py_obj is None and arg_meta.optional and is_dataclass_annotation(arg_meta.annotation):
+            # Absence is a compile-time value with no members or runtime argument slots.
+            arg_meta = ArgMetadata(template(), arg_meta.name, arg_meta.default, optional=True)
+        elif hasattr(type(py_obj), "__dataclass_fields__"):
             arg_meta = ArgMetadata(
                 cached_infer_dataclass_type(
-                    py_obj, arg_meta.name, final_value_key_by_value_id=final_value_key_by_value_id
+                    cast(DataclassInstance, py_obj),
+                    arg_meta.name,
+                    final_value_key_by_value_id=final_value_key_by_value_id,
                 ),
                 arg_meta.name,
                 arg_meta.default,
