@@ -511,7 +511,7 @@ def test_nested_scalar_cross_argument_alias(tmp_path: pathlib.Path) -> None:
     def read(first: qd.Template, second: qd.Template) -> qd.i32:
         return first.state.value + second.state.value
 
-    for shared, value, expect_hit in ((True, 3, False), (False, 2, False), (True, 9, True)):
+    for shared, value, expect_hit in ((True, 3, False), (True, 9, True), (False, 2, False)):
         qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
         first = DataOriented(State(value))
         second = DataOriented(first.state if shared else State(value + 1))

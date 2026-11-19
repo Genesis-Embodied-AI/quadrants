@@ -10,31 +10,31 @@ import quadrants as qd
 from tests.helpers import test_utils
 
 
-@test_utils.test(offline_cache=False, require=qd.extension.data64)
+@test_utils.test(offline_cache=False)
 def test_nested_scalar_aliases(monkeypatch: pytest.MonkeyPatch) -> None:
     """Shared and separate containers use compatible kernels; warmed calls reuse the alias key."""
 
     @dataclass
     class State:
-        value: qd.i64
+        value: int
 
     @qd.data_oriented
     class DataOriented:
         def __init__(self, shared: bool) -> None:
-            self.first = State(2**33)
+            self.first = State(3)
             self.second = self.first if shared else State(7)
             self.aliases = (self.second,)
 
     @qd.kernel
-    def read(data_oriented_obj: qd.Template) -> qd.i64:
+    def read(data_oriented_obj: qd.Template) -> int:
         return data_oriented_obj.first.value + data_oriented_obj.aliases[0].value
 
     for shared in (False, True, False, True):
         data_oriented_obj = DataOriented(shared)
-        assert read(data_oriented_obj) == (2**34 if shared else 2**33 + 7)
+        assert read(data_oriented_obj) == (6 if shared else 3 + 7)
         data_oriented_obj.second.value = 11
         count = len(read._primal.materialized_kernels)
-        assert read(data_oriented_obj) == (22 if shared else 2**33 + 11)
+        assert read(data_oriented_obj) == (22 if shared else 3 + 11)
         assert len(read._primal.materialized_kernels) == count
 
     def unexpected_walk(args: tuple[object, ...]) -> None:
@@ -42,6 +42,26 @@ def test_nested_scalar_aliases(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr("quadrants.lang._container_aliases.get_container_alias_key", unexpected_walk)
     assert read(data_oriented_obj) == 22
+
+
+@test_utils.test(require=qd.extension.data64)
+def test_dataclass_in_data_oriented_preserves_i64() -> None:
+    """A dataclass scalar keeps its declared 64-bit width inside a data-oriented object."""
+
+    @dataclass
+    class State:
+        value: qd.i64
+
+    @qd.data_oriented
+    class DataOriented:
+        def __init__(self) -> None:
+            self.state = State(2**33)
+
+    @qd.kernel
+    def read(data_oriented_obj: qd.Template) -> qd.i64:
+        return data_oriented_obj.state.value
+
+    assert read(DataOriented()) == 2**33
 
 
 @test_utils.test()
