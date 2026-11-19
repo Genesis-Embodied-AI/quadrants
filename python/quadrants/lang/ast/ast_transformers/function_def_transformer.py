@@ -189,12 +189,7 @@ class FunctionDefTransformer:
                     )
                     value = child
                 elif is_data_oriented(child):
-                    # Discovery determines whether this unsupported member is used.
-                    if pruning.enforcing:
-                        raise QuadrantsSyntaxError(
-                            "Data-oriented objects inside Python dataclass fields are unsupported. "
-                            "Store the dataclass on the data-oriented object instead."
-                        )
+                    # Attribute access rejects this member if the kernel uses it.
                     value = child
                 else:
                     features = (
