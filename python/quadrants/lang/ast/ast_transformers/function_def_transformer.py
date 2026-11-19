@@ -21,10 +21,8 @@ from quadrants.lang import (
     kernel_arguments,
     matrix,
 )
-from quadrants.lang import ops as qd_ops
 from quadrants.lang._final.final_dataclass_fields import (
     final_field_names,
-    is_final_annotation,
 )
 from quadrants.lang._name_utils import (
     create_flat_name,
@@ -32,8 +30,8 @@ from quadrants.lang._name_utils import (
 )
 from quadrants.lang._optional_annotation import OPTIONAL_ABSENT
 from quadrants.lang._runtime_tuple import predeclare_tuple_scalars
+from quadrants.lang._runtime_typing.inline_arguments import bind_inline_arguments
 from quadrants.lang._runtime_typing.deferred_errors import (
-    DeferredMemberError,
     DeferredMemberType,
 )
 from quadrants.lang.ast.ast_transformer_utils import (
@@ -46,7 +44,6 @@ from quadrants.lang.ast.ast_transformers.checkpoint_transformer import (
 )
 from quadrants.lang.ast.ast_transformers.data_oriented_runtime_scalar_binder import (
     bind_data_oriented_runtime_scalars,
-    register_runtime_dataclass_schema,
 )
 from quadrants.lang.ast.symbol_resolver import ASTResolver
 from quadrants.lang.buffer_view import BufferView
@@ -395,167 +392,6 @@ class FunctionDefTransformer:
         return data
 
     @staticmethod
-    def _transform_func_arg(
-        ctx: FuncCompilePassContext,
-        argument_name: str,
-        argument_type: Any,
-        data: Any,
-    ) -> None:
-        # Lets ``build_Name`` seed ``_qd_arg_chain`` for chains rooted at this param, so that a member read inside a
-        # ``@qd.func`` (``static_rigid_sim_config.para_level``) reaches the kernel's pruning set - without it the
-        # args-hasher never sees the value and configurations that differ only there collide in the fastcache key.
-        ctx.fn_param_names.add(argument_name)
-        if isinstance(argument_type, DeferredMemberType):
-            # Captured Python dataclasses enter inlined calls before any kernel-argument binding exists.
-            binding = (
-                data
-                if isinstance(data, DeferredMemberError)
-                else argument_type.bind(dotted_argument_path_from_flat_name(argument_name))
-            )
-            ctx.create_variable(argument_name, binding)
-            return None
-
-        if dataclasses.is_dataclass(argument_type):
-            if not isinstance(data, getattr(argument_type, "_qd_runtime_origin", argument_type)):
-                raise QuadrantsSyntaxError(f"Argument {argument_name!r} requires {argument_type.__name__}")
-            if hasattr(argument_type, "_qd_runtime_origin"):
-                register_runtime_dataclass_schema(
-                    ctx.kernel_compile_context.current_pass, data, argument_type, argument_name
-                )
-            ctx.create_variable(argument_name, data)
-            return None
-
-        # A ``Final[T]`` leaf @qd.func arg: ``data`` already carries the resolved Python value, so bind it directly for
-        # ``qd.static(cfg.field)``. Before the ``annotations.template`` check (``Final[T]`` is not a ``template``).
-        if is_final_annotation(argument_type):
-            ctx.create_variable(argument_name, data)
-            return None
-        # Template arguments are passed by reference.
-        if argument_type is annotations.Template or type(argument_type) is annotations.template:
-            ctx.create_variable(argument_name, data)
-            return None
-
-        # qd.Tensor in @qd.func context: polymorphic pass-by-reference. No template-mapper features are available
-        # (those only exist for top-level @qd.kernel args). Unwrap any Tensor wrapper, then create the variable
-        # directly — ndarray and field impls are both valid pass-by-reference arguments.
-        if argument_type is _TensorClass:
-            data = FunctionDefTransformer._unwrap_tensor(data)
-            promoted = ctx.kernel_compile_context.current_pass.ndarray_to_any_array.get(id(data))
-            ctx.create_variable(argument_name, promoted if promoted is not None else data)
-            return None
-
-        if dataclasses.is_dataclass(argument_type):
-            for field in dataclasses.fields(argument_type):
-                flat_name = create_flat_name(argument_name, field.name)
-                data_child = FunctionDefTransformer._unwrap_tensor(getattr(data, field.name))
-                if isinstance(
-                    data_child,
-                    (
-                        _ndarray.ScalarNdarray,
-                        matrix.VectorNdarray,
-                        matrix.MatrixNdarray,
-                        any_array.AnyArray,
-                    ),
-                ):
-                    # qd.Tensor struct fields skip check_matched (the Tensor class has no such method — it is
-                    # polymorphic).
-                    if field.type is not _TensorClass and hasattr(field.type, "check_matched"):
-                        field.type.check_matched(data_child.get_type(), field.name)
-                    promoted = ctx.kernel_compile_context.current_pass.ndarray_to_any_array.get(id(data_child))
-                    ctx.create_variable(flat_name, promoted if promoted is not None else data_child)
-                elif dataclasses.is_dataclass(data_child):
-                    FunctionDefTransformer._transform_func_arg(
-                        ctx,
-                        flat_name,
-                        field.type,
-                        data_child,
-                    )
-                else:
-                    raise QuadrantsSyntaxError(
-                        f"Argument {field.name} of type {argument_type} {field.type} is not recognized."
-                    )
-            return None
-
-        # Ndarray arguments are passed by reference.
-        if isinstance(argument_type, (ndarray_type.NdarrayType)):
-            if not isinstance(
-                data,
-                (
-                    _ndarray.ScalarNdarray,
-                    matrix.VectorNdarray,
-                    matrix.MatrixNdarray,
-                    any_array.AnyArray,
-                ),
-            ):
-                raise QuadrantsSyntaxError(f"Argument {argument_name} of type {argument_type} is not recognized.")
-            argument_type.check_matched(data.get_type(), argument_name)
-            ctx.create_variable(argument_name, data)
-            return None
-
-        # BufferView arguments are passed by reference.
-        # Dtype validation happens at the kernel boundary (_template_mapper_hotpath._extract_arg),
-        # not here — data.arr is an Expr node during func compilation, not a real Ndarray.
-        if isinstance(argument_type, buffer_view_type.BufferViewType):
-            if not isinstance(data, BufferView):
-                raise QuadrantsSyntaxError(f"Argument {argument_name} expects a BufferView, got {type(data).__name__}")
-            ctx.create_variable(argument_name, data)
-            return None
-
-        # Matrix arguments are passed by value.
-        if isinstance(argument_type, (MatrixType)):
-            # "data" is expected to be an Expr here,
-            # so we simply call "impl.expr_init_func(data)" to perform:
-            #
-            # TensorType* t = alloca()
-            # assign(t, data)
-            #
-            # We created local variable "t" - a copy of the passed-in argument "data"
-            if not isinstance(data, expr.Expr) or not data.ptr.is_tensor():
-                raise QuadrantsSyntaxError(
-                    f"Argument {argument_name} of type {argument_type} is expected to be a Matrix, but got {type(data)}."
-                )
-
-            element_shape = data.ptr.get_rvalue_type().shape()
-            if len(element_shape) != argument_type.ndim:
-                raise QuadrantsSyntaxError(
-                    f"Argument {argument_name} of type {argument_type} is expected to be a Matrix with ndim {argument_type.ndim}, but got {len(element_shape)}."
-                )
-
-            assert argument_type.ndim > 0
-            if element_shape[0] != argument_type.n:
-                raise QuadrantsSyntaxError(
-                    f"Argument {argument_name} of type {argument_type} is expected to be a Matrix with n {argument_type.n}, but got {element_shape[0]}."
-                )
-
-            if argument_type.ndim == 2 and element_shape[1] != argument_type.m:
-                raise QuadrantsSyntaxError(
-                    f"Argument {argument_name} of type {argument_type} is expected to be a Matrix with m {argument_type.m}, but got {element_shape[0]}."
-                )
-
-            ctx.create_variable(argument_name, impl.expr_init_func(data))
-            return None
-
-        if id(argument_type) in primitive_types.type_ids:
-            ctx.create_variable(argument_name, impl.expr_init_func(qd_ops.cast(data, argument_type)))
-            return None
-        # Create a copy for non-template arguments,
-        # so that they are passed by value.
-        var_name = argument_name
-        ctx.create_variable(var_name, impl.expr_init_func(data))
-        return None
-
-    @staticmethod
-    def _transform_as_func(ctx: FuncCompilePassContext, node: ast.FunctionDef, args: ast.arguments) -> None:
-        # pylint: disable=import-outside-toplevel
-        from quadrants.lang.kernel_impl import Func
-
-        assert isinstance(ctx.func, Func)
-        assert ctx.py_args is not None
-        for py_arg_i, py_arg in enumerate(ctx.py_args):
-            argument = ctx.func.arg_metas[py_arg_i]
-            FunctionDefTransformer._transform_func_arg(ctx, argument.name, argument.annotation, py_arg)
-
-    @staticmethod
     def build_FunctionDef(
         ctx: FuncCompilePassContext,
         node: ast.FunctionDef,
@@ -585,7 +421,7 @@ class FunctionDefTransformer:
             if ctx.is_real_function:
                 FunctionDefTransformer._transform_as_kernel(ctx, node, args)
             else:
-                FunctionDefTransformer._transform_as_func(ctx, node, args)
+                bind_inline_arguments(ctx, node)
 
         if ctx.is_kernel:
             FunctionDefTransformer._validate_stream_parallel_exclusivity(node.body, ctx.global_vars)
