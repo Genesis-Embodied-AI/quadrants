@@ -2007,6 +2007,29 @@ def test_container_weakref_warning(nested: bool, expected_warnings: int, monkeyp
     assert len(weakref_warnings) == expected_warnings
 
 
+@test_utils.test(arch=qd.cpu, container_alias_cache_size=1)
+def test_container_alias_cache_lifetime(monkeypatch: pytest.MonkeyPatch) -> None:
+    from quadrants import _logging
+    from quadrants.lang._container_aliases import cached_get_container_alias_key
+
+    @dataclass
+    class Node:
+        child: "Node | None" = dataclasses.field(default=None, compare=False)
+
+    assert cached_get_container_alias_key((Node(),)) == ((0,),)  # Released before the next insertion.
+    leaf, cycle = Node(), Node()
+    cycle.child = cycle
+    assert cached_get_container_alias_key((leaf,)) == ((0,),)
+    assert cached_get_container_alias_key((cycle,)) == ((0, 0),)
+
+    messages = []
+    monkeypatch.setattr(_logging, "warn", messages.append)
+    qd.reset()
+    assert sum("evicted 1 entries at capacity 1" in message for message in messages) == 1
+    with pytest.raises(ValueError, match="container_alias_cache_size must be a positive integer"):
+        qd.init(arch=qd.cpu, container_alias_cache_size=0)
+
+
 @test_utils.test(arch=qd.cpu)
 def test_dataclass_alias_layout_and_live_values() -> None:
     """Shared and independent dataclass arguments select compatible bindings, including through functions."""
