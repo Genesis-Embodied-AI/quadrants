@@ -42,6 +42,7 @@ from quadrants.lang import impl, runtime_ops
 from quadrants.lang import kernel_checkpoint as _checkpoint_helpers
 from quadrants.lang._fast_caching import src_hasher
 from quadrants.lang._fast_caching.args_hasher import LaunchArgSchemas
+from quadrants.lang._template_mapper import TemplateMapper
 from quadrants.lang._template_mapper_hotpath import chain_has_mutable_container
 from quadrants.lang._wrap_inspect import FunctionSourceInfo, get_source_info_and_src
 from quadrants.lang.ast import (
@@ -317,15 +318,7 @@ class Kernel(FuncBase):
         self.grad: "Kernel | None" = None
         impl.get_runtime().kernels.append(self)  # type: ignore[arg-type]
         self.reset()
-        self.kernel_cpp: None | KernelCxx = None
-        # A materialized kernel is a KernelCxx object which may or may not have been compiled. It generally has been
-        # converted at least as far as AST and front-end IR, but not necessarily any further.
-        self.materialized_kernels: dict[CompiledKernelKeyType, KernelCxx] = {}
         self.has_print = False
-        self._runtime_has_deferred = False
-        self._launch_arg_schemas: LaunchArgSchemas = ()
-        self._runtime_metadata_args_hash: tuple[int, ...] | None = None
-        self._runtime_metadata_defaults: tuple[int, int] | None = None
         self.use_graph: bool = False
         # Opt-in flag set by `@qd.kernel(graph=True, checkpoints=True)`. When True, the AST transformer enables
         # `qd.checkpoint(...)` recognition AND auto-wraps every top-level for-loop that isn't already inside a `with
@@ -366,9 +359,31 @@ class Kernel(FuncBase):
         self.quadrants_callable: QuadrantsCallable | None = None
         self.visited_functions: set[FunctionSourceInfo] = set()
         self.kernel_function_info: FunctionSourceInfo | None = None
+        self.launch_observations = LaunchObservations()
+        self._tensor_unwrap_indices: tuple[int, ...] | None = None
+
+    def ast_builder(self) -> ASTBuilder:
+        assert self.kernel_cpp is not None
+        return self.kernel_cpp.ast_builder()
+
+    def reset(self) -> None:
+        self.runtime = impl.get_runtime()
+        # Template features can own fields. Drop them with the program and clear all specialization-dependent state
+        # together: a fresh mapper reuses instance ids, so surviving entries could describe different arguments.
+        self.arg_metas = list(self.orig_arguments)
+        self.template_slot_locations = list(self.original_template_slot_locations)
+        self.mapper = TemplateMapper(self.arg_metas, self.template_slot_locations)
+        self.kernel_cpp: None | KernelCxx = None
+        # A materialized kernel is a KernelCxx object which may or may not have been compiled. It generally has been
+        # converted at least as far as AST and front-end IR, but not necessarily any further.
+        self.materialized_kernels: dict[CompiledKernelKeyType, KernelCxx] = {}
         self.compiled_kernel_data_by_key: dict[CompiledKernelKeyType, CompiledKernelData] = {}
         self._last_compiled_kernel_data: CompiledKernelData | None = None  # for dev/debug
         self._last_launch_key = None  # for dev/debug
+        self._runtime_has_deferred = False
+        self._launch_arg_schemas: LaunchArgSchemas = ()
+        self._runtime_metadata_args_hash: tuple[int, ...] | None = None
+        self._runtime_metadata_defaults: tuple[int, int] | None = None
 
         # next two parameters are ONLY used at kernel launch time,
         # NOT for compilation. (for compilation, kernel_compile_context.pruning is used).
@@ -378,7 +393,6 @@ class Kernel(FuncBase):
 
         self.src_ll_cache_observations: SrcLlCacheObservations = SrcLlCacheObservations()
         self.fe_ll_cache_observations: FeLlCacheObservations = FeLlCacheObservations()
-        self.launch_observations = LaunchObservations()
 
         self.launch_context_buffer_cache = LaunchContextBufferCache()
         self._struct_ndarray_launch_info_by_key: dict[CompiledKernelKeyType, list] = {}
@@ -387,19 +401,6 @@ class Kernel(FuncBase):
         self._runtime_scalar_launch_infos_by_compiled_kernel_key: dict[CompiledKernelKeyType, list] = {}
         self._mutable_nd_cached_key: CompiledKernelKeyType | None = None
         self._mutable_nd_cached_val: list = []
-        self._tensor_unwrap_indices: tuple[int, ...] | None = None
-
-    def ast_builder(self) -> ASTBuilder:
-        assert self.kernel_cpp is not None
-        return self.kernel_cpp.ast_builder()
-
-    def reset(self) -> None:
-        self.runtime = impl.get_runtime()
-        self.materialized_kernels = {}
-        self.compiled_kernel_data_by_key = {}
-        self._last_compiled_kernel_data = None
-        self.src_ll_cache_observations = SrcLlCacheObservations()
-        self.fe_ll_cache_observations = FeLlCacheObservations()
 
     def _try_load_fastcache(self, args: tuple[Any, ...], key: "CompiledKernelKeyType") -> set[str] | None:
         """Two-phase fastcache lookup: L1 (source+config, no args) for pruning info, then a narrow args walk over
