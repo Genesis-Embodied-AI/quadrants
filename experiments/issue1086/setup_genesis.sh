@@ -8,7 +8,7 @@ source "$workspace/perso_hugh/ai/scripts/python_cache.sh"
 cd "$workspace/quadrants"
 source "$workspace/.venv/bin/activate"
 export LLVM_DIR=/mnt/data/hugh/.cache/qd-build-cache/llvm-22.1.0-x86-202603120808
-export CMAKE_ARGS="-DCLANG_EXECUTABLE=$LLVM_DIR/bin/clang -DQD_WITH_VULKAN=OFF -DQD_WITH_OPENGL=OFF -DQD_WITH_AMDGPU=OFF -DQD_WITH_CUDA=ON"
+export CMAKE_ARGS="-DQD_GLSLANG_EXECUTABLE=/mnt/data/hugh/.cache/qd-build-cache/vulkan-1.4.321.1/x86_64/bin/glslang -DCLANG_EXECUTABLE=$LLVM_DIR/bin/clang -DQD_WITH_VULKAN=OFF -DQD_WITH_OPENGL=OFF -DQD_WITH_AMDGPU=OFF -DQD_WITH_CUDA=ON"
 export CMAKE_BUILD_PARALLEL_LEVEL=16
 python -m pip wheel --no-deps --no-build-isolation -w "$workspace/tmp/wheels" .
 cd "$workspace/genesis"
