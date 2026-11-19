@@ -1,4 +1,5 @@
 #include <functional>
+#include <type_traits>
 #include "quadrants/ir/frontend_ir.h"
 #include "quadrants/ir/ir.h"
 #include "quadrants/ir/expression_ops.h"
@@ -60,6 +61,12 @@ sifakis_svd_export(ASTBuilder *ast_builder, const Expr &mat, int num_iters) {
   constexpr Tf Four_Gamma_Squared = 5.82842712474619f;
   constexpr Tf Sine_Pi_Over_Eight = 0.3826834323650897f;
   constexpr Tf Cosine_Pi_Over_Eight = 0.9238795325112867f;
+  // A Jacobi rotation is skipped where the square of the entry it would zero is under Tiny_Number, and a QR rotation
+  // where it is under Small_Number, which also bounds the pivot from below. Both only keep rsqrt away from zero and
+  // denormals, so each type takes values far above its smallest normal. The fp32 values leave entries up to 1e-6
+  // unrotated, which would cap an fp64 decomposition at that accuracy.
+  constexpr Tf Tiny_Number = std::is_same_v<Tf, double> ? Tf(1e-150) : Tf(1e-20f);
+  constexpr Tf Small_Number = std::is_same_v<Tf, double> ? Tf(1e-75) : Tf(1e-12f);
 
   auto Var = [ast_builder](const quadrants::lang::Expr &x) { return ast_builder->make_var(x); };
 
@@ -121,8 +128,8 @@ sifakis_svd_export(ASTBuilder *ast_builder, const Expr &mat, int num_iters) {
   ast_builder->insert_assignment(Scosine_pi_over_eight, Expr(Cosine_Pi_Over_Eight));
   ast_builder->insert_assignment(Sone_half, Expr(Tf(0.5f)));
   ast_builder->insert_assignment(Sone, Expr(Tf(1.0f)));
-  ast_builder->insert_assignment(Stiny_number, Expr(Tf(1.e-20f)));
-  ast_builder->insert_assignment(Ssmall_number, Expr(Tf(1.e-12f)));
+  ast_builder->insert_assignment(Stiny_number, Expr(Tiny_Number));
+  ast_builder->insert_assignment(Ssmall_number, Expr(Small_Number));
   ast_builder->insert_assignment(Sa11, a00);
   ast_builder->insert_assignment(Sa21, a10);
   ast_builder->insert_assignment(Sa31, a20);
