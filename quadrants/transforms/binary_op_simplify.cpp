@@ -1,3 +1,4 @@
+#include "quadrants/util/fast_math_experiment.h"
 #include "quadrants/ir/analysis.h"
 #include "quadrants/ir/ir.h"
 #include "quadrants/ir/statements.h"
@@ -84,7 +85,7 @@ class BinaryOpSimp : public BasicStmtVisitor {
     }
     // Disable other optimizations if fast_math=True and the data type is not
     // integral.
-    if (!fast_math && !is_integral(stmt->ret_type)) {
+    if ((!fast_math || experiment_disable_reassociation()) && !is_integral(stmt->ret_type)) {
       return;
     }
 

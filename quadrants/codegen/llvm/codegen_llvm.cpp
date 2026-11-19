@@ -1,3 +1,4 @@
+#include "quadrants/util/fast_math_experiment.h"
 #include "quadrants/codegen/llvm/codegen_llvm.h"
 
 #include <algorithm>
@@ -3152,7 +3153,7 @@ void TaskCodeGenLLVM::initialize_context() {
     llvm::FastMathFlags fast_flags;
     fast_flags.setNoInfs();
     fast_flags.setNoSignedZeros();
-    fast_flags.setAllowReassoc();
+    fast_flags.setAllowReassoc(!experiment_disable_reassociation());
     fast_flags.setApproxFunc();
     builder->setFastMathFlags(fast_flags);
   }
