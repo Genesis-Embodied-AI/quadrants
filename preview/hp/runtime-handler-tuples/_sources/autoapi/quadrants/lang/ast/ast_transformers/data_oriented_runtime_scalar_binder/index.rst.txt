@@ -1,0 +1,33 @@
+quadrants.lang.ast.ast_transformers.data_oriented_runtime_scalar_binder
+=======================================================================
+
+.. py:module:: quadrants.lang.ast.ast_transformers.data_oriented_runtime_scalar_binder
+
+.. autoapi-nested-parse::
+
+   Bind dataclass scalars and opted-in data-oriented primitives as runtime kernel inputs.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.lang.ast.ast_transformers.data_oriented_runtime_scalar_binder.register_runtime_dataclass_schema
+   quadrants.lang.ast.ast_transformers.data_oriented_runtime_scalar_binder.bind_data_oriented_runtime_scalars
+
+
+Module Contents
+---------------
+
+.. py:function:: register_runtime_dataclass_schema(pass_ctx: quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext, obj: Any, schema: type, name: str) -> None
+
+   Index stored dataclasses and their inferred member types for this pass.
+
+
+.. py:function:: bind_data_oriented_runtime_scalars(func_ctx: quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext) -> None
+
+   Find opted-in scalar members, then create their compiler bindings.
+
+
