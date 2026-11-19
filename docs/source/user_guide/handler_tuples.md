@@ -49,4 +49,6 @@ You can reassign `Bound.func`. To change the captured `Bound.data` tuple after f
 
 ## Caching and limitations
 
+Use [`kernel.get_member_access(...)`](member_access.md) to inspect the arrays read or written through handler captures before launching. Paths include integer tuple indices, such as `("handlers", 0, "data", 0, "increments")`, and reflect the selected handlers and static configuration.
+
 Compiled specializations are reused within the current runtime. Handler tuple arguments currently disable [offline caching](fastcache.md): the disk cache does not yet record enough information about the selected functions and where their captured values occur in the tuple. Other kernel arguments retain their existing caching behavior. Captured external NumPy/PyTorch arrays, arbitrary lists/dictionaries, and opaque application objects are not supported by this tuple path; use Quadrants tensors and supported containers.
