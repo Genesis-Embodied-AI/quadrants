@@ -149,6 +149,27 @@ def test_annotations_do_not_cast_or_require_returns(decorate):
     assert run(1.25) == 1.75
 
 
+@test_utils.test()
+def test_one_func_accepts_dataclasses_and_scalars():
+    @dataclass
+    class State:
+        value: str
+
+    @qd.func
+    def read(value: State, is_container: bool):
+        if qd.static(is_container):
+            return value.value
+        else:
+            return value
+
+    @qd.kernel
+    def run(state: State, scalar: qd.f32) -> qd.f32:
+        return read(state, True) + read(scalar, False) + read(state, True)
+
+    assert run(State(2), 1.25) == 5.25
+    assert run(State(3.5), 2.25) == 9.25
+
+
 @pytest.mark.parametrize("annotation", [qd.Template, qd.i32, object, qd.ref(qd.i32)])
 @test_utils.test()
 def test_expression_parameters_are_local_values(annotation):
