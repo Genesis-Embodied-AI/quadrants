@@ -247,3 +247,32 @@ def test_direct_and_owned_dataclasses_share_binding(shared: bool) -> None:
         assert read(first, owner, 13) == first.child.count + count + 20
         owner.offset += 1
         array[0] -= 1
+
+
+@pytest.mark.parametrize("runtime_scalar", [False, True])
+@test_utils.test()
+def test_owned_dataclass_launch_cache(runtime_scalar: bool) -> None:
+    """Array-only owners keep cached launches; unsafe_hash dataclass scalars are read fresh."""
+
+    @dataclass(unsafe_hash=True)
+    class State:
+        array: qd.Tensor
+        count: int if runtime_scalar else qd.Template
+
+    @qd.data_oriented
+    class Owner:
+        def __init__(self) -> None:
+            self.state = State(qd.ndarray(qd.i32, shape=1), 3)
+
+    @qd.kernel
+    def read(owner: qd.Template) -> qd.i32:
+        return owner.state.array[0] + owner.state.count
+
+    owner = Owner()
+    owner.state.array[0] = 2
+    assert read(owner) == 5
+    assert bool(read._primal.launch_context_buffer_cache._launch_ctx_cache) is not runtime_scalar
+    owner.state.array[0] = 7
+    if runtime_scalar:
+        owner.state.count = 9
+    assert read(owner) == (16 if runtime_scalar else 10)
