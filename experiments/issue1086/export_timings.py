@@ -35,7 +35,7 @@ for path in args.inputs:
             }
         )
 with args.output.open("w", newline="") as stream:
-    writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
+    writer = csv.DictWriter(stream, fieldnames=list(rows[0]), lineterminator="\n")
     writer.writeheader()
     writer.writerows(rows)
 for row in rows:
