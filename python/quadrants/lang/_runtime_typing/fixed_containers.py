@@ -19,8 +19,8 @@ def _install_assignment_guards(cls: type) -> None:
     if vars(cls).get("_qd_fixed_reference_guards", False):
         return
 
-    original_setattr = cls.__setattr__
-    original_delattr = cls.__delattr__
+    original_setattr = getattr(cls, "__setattr__")
+    original_delattr = getattr(cls, "__delattr__")
 
     def guarded_setattr(self: Any, name: str, value: Any) -> None:
         """Reject replacement of fixed references and introduction of new container attributes."""
@@ -46,8 +46,8 @@ def _install_assignment_guards(cls: type) -> None:
             )
         original_delattr(self, name)
 
-    cls.__setattr__ = guarded_setattr
-    cls.__delattr__ = guarded_delattr
+    setattr(cls, "__setattr__", guarded_setattr)
+    setattr(cls, "__delattr__", guarded_delattr)
     cls._qd_fixed_reference_guards = True
 
 
