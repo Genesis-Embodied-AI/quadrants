@@ -30,6 +30,7 @@ Classes
    quadrants.lang.ast.ast_transformer_utils.ReturnStatus
    quadrants.lang.ast.ast_transformer_utils.PureViolation
    quadrants.lang.ast.ast_transformer_utils.KernelCompileContext
+   quadrants.lang.ast.ast_transformer_utils.MemberBinding
    quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext
    quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext
 
@@ -40,7 +41,7 @@ Functions
 .. autoapisummary::
 
    quadrants.lang.ast.ast_transformer_utils.get_decorator
-   quadrants.lang.ast.ast_transformer_utils.maybe_lifted_primitive
+   quadrants.lang.ast.ast_transformer_utils.resolve_bound_member
 
 
 Module Contents
@@ -257,6 +258,32 @@ Module Contents
       :type:  KernelCompilePassContext
 
 
+.. py:class:: MemberBinding
+
+   Bases: :py:obj:`NamedTuple`
+
+
+   A member's pruning name, declared type, and result of compiling an access.
+
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: annotation
+      :type:  Any
+
+
+   .. py:attribute:: member_access_result
+      :type:  Any
+
+
+   .. py:attribute:: reject_in_static_scope
+      :type:  bool
+      :value: False
+
+
+
 .. py:class:: KernelCompilePassContext(pass_idx: int)
 
    State shared by the kernel and its function calls during one compilation pass.
@@ -276,12 +303,12 @@ Module Contents
 
 
 
-   .. py:attribute:: runtime_scalar_arg_info_by_member
-      :type:  dict[tuple[int, str], tuple]
+   .. py:attribute:: binding_by_member
+      :type:  dict[tuple[int, str], MemberBinding]
 
 
-   .. py:attribute:: runtime_scalar_arg_expr_by_member
-      :type:  dict[tuple[int, str], Any]
+   .. py:attribute:: bound_dataclass_ids
+      :type:  set[int]
 
 
    .. py:attribute:: runtime_scalar_launch_infos
@@ -520,18 +547,8 @@ Module Contents
 
 .. py:function:: get_decorator(ctx: FuncCompilePassContext, node) -> str
 
-.. py:function:: maybe_lifted_primitive(ctx: FuncCompilePassContext, parent: Any, attr: str)
+.. py:function:: resolve_bound_member(func_ctx: FuncCompilePassContext, parent: Any, node: ast.Attribute) -> Any
 
-   Handle access to a primitive member that ``@qd.data_oriented(template_primitives=False)`` lifted into a runtime
-   scalar kernel arg (see ``bind_data_oriented_runtime_scalars``).
-
-   Returns the arg-load ``Expr`` to substitute for the baked value in the enforcing pass; returns ``None`` when the
-   attribute is not a lifted primitive, or during the non-enforcing discovery pass (where the access is instead
-   recorded via ``mark_used`` and the caller falls back to baking the throw-away discovery-pass IR).
-
-   Raises ``QuadrantsSyntaxError`` if the lifted primitive is used inside ``qd.static(...)``: that context requires a
-   compile-time constant, which a runtime-lifted primitive is not. Under this flag there is no per-attribute baked
-   escape hatch, so a ``qd.static`` use is unambiguously a mistake and we surface it loudly rather than silently baking
-   a value that will not track mutations.
+   Read a registered member and record its kernel input as used during discovery.
 
 

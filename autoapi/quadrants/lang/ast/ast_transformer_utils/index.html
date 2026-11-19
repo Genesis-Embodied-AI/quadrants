@@ -419,10 +419,13 @@
 <tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ast.ast_transformer_utils.KernelCompileContext" title="quadrants.lang.ast.ast_transformer_utils.KernelCompileContext"><code class="xref py py-obj docutils literal notranslate"><span class="pre">KernelCompileContext</span></code></a></p></td>
 <td><p>State shared by all passes of one kernel compilation.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext" title="quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext"><code class="xref py py-obj docutils literal notranslate"><span class="pre">KernelCompilePassContext</span></code></a></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.ast.ast_transformer_utils.MemberBinding" title="quadrants.lang.ast.ast_transformer_utils.MemberBinding"><code class="xref py py-obj docutils literal notranslate"><span class="pre">MemberBinding</span></code></a></p></td>
+<td><p>A member's pruning name, declared type, and result of compiling an access.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext" title="quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext"><code class="xref py py-obj docutils literal notranslate"><span class="pre">KernelCompilePassContext</span></code></a></p></td>
 <td><p>State shared by the kernel and its function calls during one compilation pass.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext" title="quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FuncCompilePassContext</span></code></a></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext" title="quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FuncCompilePassContext</span></code></a></p></td>
 <td><p>State for compiling one kernel or qd.func invocation during one compiler pass.</p></td>
 </tr>
 </tbody>
@@ -436,8 +439,8 @@
 <tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ast.ast_transformer_utils.get_decorator" title="quadrants.lang.ast.ast_transformer_utils.get_decorator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_decorator</span></code></a>(ctx, node) → str</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.ast.ast_transformer_utils.maybe_lifted_primitive" title="quadrants.lang.ast.ast_transformer_utils.maybe_lifted_primitive"><code class="xref py py-obj docutils literal notranslate"><span class="pre">maybe_lifted_primitive</span></code></a>(ctx, parent, attr)</p></td>
-<td><p>Handle access to a primitive member that <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented(template_primitives=False)</span></code> lifted into a runtime</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.ast.ast_transformer_utils.resolve_bound_member" title="quadrants.lang.ast.ast_transformer_utils.resolve_bound_member"><code class="xref py py-obj docutils literal notranslate"><span class="pre">resolve_bound_member</span></code></a>(func_ctx, parent, node) → Any</p></td>
+<td><p>Read a registered member and record its kernel input as used during discovery.</p></td>
 </tr>
 </tbody>
 </table>
@@ -719,6 +722,33 @@ attributes – see the documentation for details.</p>
 </dd></dl>
 
 <dl class="py class">
+<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformer_utils.MemberBinding">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">quadrants.lang.ast.ast_transformer_utils.</span></span><span class="sig-name descname"><span class="pre">MemberBinding</span></span><a class="reference internal" href="../../../../../_modules/quadrants/lang/ast/ast_transformer_utils.html#MemberBinding"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformer_utils.MemberBinding" title="Link to this definition">#</a></dt>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">NamedTuple</span></code></p>
+<p>A member’s pruning name, declared type, and result of compiling an access.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformer_utils.MemberBinding.name">
+<span class="sig-name descname"><span class="pre">name</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></span><a class="reference internal" href="../../../../../_modules/quadrants/lang/ast/ast_transformer_utils.html#MemberBinding.name"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformer_utils.MemberBinding.name" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformer_utils.MemberBinding.annotation">
+<span class="sig-name descname"><span class="pre">annotation</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Any</span></span><a class="reference internal" href="../../../../../_modules/quadrants/lang/ast/ast_transformer_utils.html#MemberBinding.annotation"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformer_utils.MemberBinding.annotation" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformer_utils.MemberBinding.member_access_result">
+<span class="sig-name descname"><span class="pre">member_access_result</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Any</span></span><a class="reference internal" href="../../../../../_modules/quadrants/lang/ast/ast_transformer_utils.html#MemberBinding.member_access_result"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformer_utils.MemberBinding.member_access_result" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformer_utils.MemberBinding.reject_in_static_scope">
+<span class="sig-name descname"><span class="pre">reject_in_static_scope</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">False</span></span><a class="reference internal" href="../../../../../_modules/quadrants/lang/ast/ast_transformer_utils.html#MemberBinding.reject_in_static_scope"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformer_utils.MemberBinding.reject_in_static_scope" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
 <dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">quadrants.lang.ast.ast_transformer_utils.</span></span><span class="sig-name descname"><span class="pre">KernelCompilePassContext</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pass_idx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/ast/ast_transformer_utils.html#KernelCompilePassContext"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext" title="Link to this definition">#</a></dt>
 <dd><p>State shared by the kernel and its function calls during one compilation pass.</p>
@@ -738,13 +768,13 @@ attributes – see the documentation for details.</p>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext.runtime_scalar_arg_info_by_member">
-<span class="sig-name descname"><span class="pre">runtime_scalar_arg_info_by_member</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">]</span></span></span><a class="reference internal" href="../../../../../_modules/quadrants/lang/ast/ast_transformer_utils.html#KernelCompilePassContext.runtime_scalar_arg_info_by_member"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext.runtime_scalar_arg_info_by_member" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext.binding_by_member">
+<span class="sig-name descname"><span class="pre">binding_by_member</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="#quadrants.lang.ast.ast_transformer_utils.MemberBinding" title="quadrants.lang.ast.ast_transformer_utils.MemberBinding"><span class="pre">MemberBinding</span></a><span class="p"><span class="pre">]</span></span></span><a class="reference internal" href="../../../../../_modules/quadrants/lang/ast/ast_transformer_utils.html#KernelCompilePassContext.binding_by_member"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext.binding_by_member" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext.runtime_scalar_arg_expr_by_member">
-<span class="sig-name descname"><span class="pre">runtime_scalar_arg_expr_by_member</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span><a class="reference internal" href="../../../../../_modules/quadrants/lang/ast/ast_transformer_utils.html#KernelCompilePassContext.runtime_scalar_arg_expr_by_member"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext.runtime_scalar_arg_expr_by_member" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext.bound_dataclass_ids">
+<span class="sig-name descname"><span class="pre">bound_dataclass_ids</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">set</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span><a class="reference internal" href="../../../../../_modules/quadrants/lang/ast/ast_transformer_utils.html#KernelCompilePassContext.bound_dataclass_ids"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext.bound_dataclass_ids" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
@@ -1047,17 +1077,9 @@ attributes – see the documentation for details.</p>
 <dd></dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformer_utils.maybe_lifted_primitive">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ast.ast_transformer_utils.</span></span><span class="sig-name descname"><span class="pre">maybe_lifted_primitive</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext" title="quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext"><span class="pre">FuncCompilePassContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">parent</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">attr</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/ast/ast_transformer_utils.html#maybe_lifted_primitive"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformer_utils.maybe_lifted_primitive" title="Link to this definition">#</a></dt>
-<dd><p>Handle access to a primitive member that <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented(template_primitives=False)</span></code> lifted into a runtime
-scalar kernel arg (see <code class="docutils literal notranslate"><span class="pre">bind_data_oriented_runtime_scalars</span></code>).</p>
-<p>Returns the arg-load <code class="docutils literal notranslate"><span class="pre">Expr</span></code> to substitute for the baked value in the enforcing pass; returns <code class="docutils literal notranslate"><span class="pre">None</span></code> when the
-attribute is not a lifted primitive, or during the non-enforcing discovery pass (where the access is instead
-recorded via <code class="docutils literal notranslate"><span class="pre">mark_used</span></code> and the caller falls back to baking the throw-away discovery-pass IR).</p>
-<p>Raises <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code> if the lifted primitive is used inside <code class="docutils literal notranslate"><span class="pre">qd.static(...)</span></code>: that context requires a
-compile-time constant, which a runtime-lifted primitive is not. Under this flag there is no per-attribute baked
-escape hatch, so a <code class="docutils literal notranslate"><span class="pre">qd.static</span></code> use is unambiguously a mistake and we surface it loudly rather than silently baking
-a value that will not track mutations.</p>
+<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformer_utils.resolve_bound_member">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ast.ast_transformer_utils.</span></span><span class="sig-name descname"><span class="pre">resolve_bound_member</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">func_ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext" title="quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext"><span class="pre">FuncCompilePassContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">parent</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.Attribute</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Any</span></span></span><a class="reference internal" href="../../../../../_modules/quadrants/lang/ast/ast_transformer_utils.html#resolve_bound_member"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformer_utils.resolve_bound_member" title="Link to this definition">#</a></dt>
+<dd><p>Read a registered member and record its kernel input as used during discovery.</p>
 </dd></dl>
 
 </section>
@@ -1176,12 +1198,19 @@ a value that will not track mutations.</p>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformer_utils.KernelCompileContext.current_pass"><code class="docutils literal notranslate"><span class="pre">KernelCompileContext.current_pass</span></code></a></li>
 </ul>
 </li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformer_utils.MemberBinding"><code class="docutils literal notranslate"><span class="pre">MemberBinding</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformer_utils.MemberBinding.name"><code class="docutils literal notranslate"><span class="pre">MemberBinding.name</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformer_utils.MemberBinding.annotation"><code class="docutils literal notranslate"><span class="pre">MemberBinding.annotation</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformer_utils.MemberBinding.member_access_result"><code class="docutils literal notranslate"><span class="pre">MemberBinding.member_access_result</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformer_utils.MemberBinding.reject_in_static_scope"><code class="docutils literal notranslate"><span class="pre">MemberBinding.reject_in_static_scope</span></code></a></li>
+</ul>
+</li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext"><code class="docutils literal notranslate"><span class="pre">KernelCompilePassContext</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext.pass_idx"><code class="docutils literal notranslate"><span class="pre">KernelCompilePassContext.pass_idx</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext.ndarray_to_any_array"><code class="docutils literal notranslate"><span class="pre">KernelCompilePassContext.ndarray_to_any_array</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext.struct_ndarray_launch_info"><code class="docutils literal notranslate"><span class="pre">KernelCompilePassContext.struct_ndarray_launch_info</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext.runtime_scalar_arg_info_by_member"><code class="docutils literal notranslate"><span class="pre">KernelCompilePassContext.runtime_scalar_arg_info_by_member</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext.runtime_scalar_arg_expr_by_member"><code class="docutils literal notranslate"><span class="pre">KernelCompilePassContext.runtime_scalar_arg_expr_by_member</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext.binding_by_member"><code class="docutils literal notranslate"><span class="pre">KernelCompilePassContext.binding_by_member</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext.bound_dataclass_ids"><code class="docutils literal notranslate"><span class="pre">KernelCompilePassContext.bound_dataclass_ids</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext.runtime_scalar_launch_infos"><code class="docutils literal notranslate"><span class="pre">KernelCompilePassContext.runtime_scalar_launch_infos</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext.caller_loop_depth"><code class="docutils literal notranslate"><span class="pre">KernelCompilePassContext.caller_loop_depth</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext.caller_in_non_static_control_flow"><code class="docutils literal notranslate"><span class="pre">KernelCompilePassContext.caller_in_non_static_control_flow</span></code></a></li>
@@ -1245,7 +1274,7 @@ a value that will not track mutations.</p>
 </ul>
 </li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformer_utils.get_decorator"><code class="docutils literal notranslate"><span class="pre">get_decorator()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformer_utils.maybe_lifted_primitive"><code class="docutils literal notranslate"><span class="pre">maybe_lifted_primitive()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformer_utils.resolve_bound_member"><code class="docutils literal notranslate"><span class="pre">resolve_bound_member()</span></code></a></li>
 </ul>
 </li>
 </ul>

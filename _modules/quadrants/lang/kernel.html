@@ -367,7 +367,7 @@
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor_wrapper</span><span class="w"> </span><span class="kn">import</span> <span class="n">_TENSOR_WRAPPER_TYPES</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor_wrapper</span><span class="w"> </span><span class="kn">import</span> <span class="n">Tensor</span> <span class="k">as</span> <span class="n">_TensorClass</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">_kernel_impl_dataclass</span><span class="p">,</span> <span class="n">impl</span><span class="p">,</span> <span class="n">runtime_ops</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span><span class="p">,</span> <span class="n">runtime_ops</span>
 
 <span class="c1"># `qd.checkpoint` pause / resume model helpers. See `kernel_checkpoint.py` for the full extracted surface; `Kernel`</span>
 <span class="c1"># delegates the resume-cookie validation, label translation, per-launch yield_on= arg-id table build, and GraphStatus</span>
@@ -596,14 +596,7 @@
             <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span> <span class="o">=</span> <span class="n">kernel_cxx</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dump_ast</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">_dump_ast</span><span class="p">()</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">pruning</span><span class="o">.</span><span class="n">enforcing</span><span class="p">:</span>
-                <span class="n">struct_locals</span> <span class="o">=</span> <span class="n">_kernel_impl_dataclass</span><span class="o">.</span><span class="n">extract_struct_locals_from_context</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">struct_locals</span> <span class="o">=</span> <span class="n">pruning</span><span class="o">.</span><span class="n">used_vars_by_func_id</span><span class="p">[</span><span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">func_id</span><span class="p">]</span>
-            <span class="c1"># struct locals are the expanded py dataclass fields that we will write to local variables, and will then</span>
-            <span class="c1"># be available to use in build_Call, later.</span>
-            <span class="n">ctx</span><span class="o">.</span><span class="n">struct_locals</span> <span class="o">=</span> <span class="n">struct_locals</span>
-            <span class="n">tree</span> <span class="o">=</span> <span class="n">_kernel_impl_dataclass</span><span class="o">.</span><span class="n">unpack_ast_struct_expressions</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tree</span><span class="p">,</span> <span class="n">struct_locals</span><span class="o">=</span><span class="n">struct_locals</span><span class="p">)</span>
+            <span class="n">tree</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tree</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">only_parse_function_def</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">only_parse_function_def</span>
             <span class="c1"># Rebuild the graph_do_while level table from scratch each compilation pass (build_While appends to it as it</span>
             <span class="c1"># walks the AST). Skip when only_parse_function_def: the body is not walked, so build_While never runs to</span>
