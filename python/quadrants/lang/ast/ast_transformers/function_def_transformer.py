@@ -259,7 +259,7 @@ class FunctionDefTransformer:
             has_runtime_scalars = FunctionDefTransformer._bind_kernel_arg_or_nested_dataclass(
                 ctx, flat_name, type(dataclass_instance), None, dataclass_instance, reject_in_static_scope=True
             )
-            ctx.kernel_compile_context.current_pass.nested_dataclass_launch_infos.append(
+            ctx.kernel_compile_context.current_pass.launch_infos_for_root_dataclasses_in_data_oriented.append(
                 (arg_idx, path, flat_name, type(dataclass_instance), has_runtime_scalars)
             )
         FunctionDefTransformer._predeclare_struct_ndarrays(ctx)

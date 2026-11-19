@@ -216,7 +216,7 @@ class KernelCompilePassContext:
         # (arg_id, template_arg_idx, attr_chain, kind) entries locate live values at launch; kind is 'f', 'i', or 'u'.
         self.runtime_scalar_launch_infos: list[tuple] = []
         # Dataclass roots: (argument index, attribute path, flat name, declared type, has_runtime_scalars).
-        self.nested_dataclass_launch_infos: list[tuple[int, tuple[str, ...], str, type, bool]] = []
+        self.launch_infos_for_root_dataclasses_in_data_oriented: list[tuple[int, tuple[str, ...], str, type, bool]] = []
         # Carry caller loop depth into fresh qd.func contexts so backward-mode dynamic-range checks see outer loops.
         # Saved and restored around each call.
         self.caller_loop_depth: int = 0

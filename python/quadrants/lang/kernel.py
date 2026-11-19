@@ -379,7 +379,7 @@ class Kernel(FuncBase):
 
         self.launch_context_buffer_cache = LaunchContextBufferCache()
         self._struct_ndarray_launch_info_by_key: dict[CompiledKernelKeyType, list] = {}
-        self._nested_dataclass_launch_infos_by_key: dict[CompiledKernelKeyType, list] = {}
+        self._launch_infos_for_root_dataclasses_in_data_oriented_by_key: dict[CompiledKernelKeyType, list] = {}
         # Launch info for primitives lifted from ``@qd.data_oriented(template_primitives=False)`` template args (see
         # ``bind_data_oriented_runtime_scalars``). Maps key -> list of ``(arg_id, template_arg_idx, attr_chain, kind)``.
         self._runtime_scalar_launch_infos_by_compiled_kernel_key: dict[CompiledKernelKeyType, list] = {}
@@ -587,9 +587,9 @@ class Kernel(FuncBase):
                     pruning.fold_struct_nd_paths(self._struct_ndarray_launch_info_by_key.get(key, []), self.arg_metas)
                     pruning.fold_kernel_arg_chain_paths()
                     # Keep these maps empty for kernels without member inputs, avoiding per-key lookups at launch.
-                    if kernel_ctx.current_pass.nested_dataclass_launch_infos:
-                        self._nested_dataclass_launch_infos_by_key[key] = (
-                            kernel_ctx.current_pass.nested_dataclass_launch_infos
+                    if kernel_ctx.current_pass.launch_infos_for_root_dataclasses_in_data_oriented:
+                        self._launch_infos_for_root_dataclasses_in_data_oriented_by_key[key] = (
+                            kernel_ctx.current_pass.launch_infos_for_root_dataclasses_in_data_oriented
                         )
                     runtime_scalar_launch_infos = kernel_ctx.current_pass.runtime_scalar_launch_infos
                     if runtime_scalar_launch_infos:
@@ -742,8 +742,8 @@ class Kernel(FuncBase):
                 i_out += num_args_
                 is_launch_ctx_cacheable &= is_launch_ctx_cacheable_
 
-            if self._nested_dataclass_launch_infos_by_key:
-                launch_infos = self._nested_dataclass_launch_infos_by_key.get(key, ())
+            if self._launch_infos_for_root_dataclasses_in_data_oriented_by_key:
+                launch_infos = self._launch_infos_for_root_dataclasses_in_data_oriented_by_key.get(key, ())
                 for arg_idx, path, flat_name, dataclass_type, has_runtime_scalars in launch_infos:
                     dataclass_instance = self._get_live_container_member(args, arg_idx, path)
                     num_args, cacheable = self._recursive_set_args(
