@@ -27,7 +27,7 @@ for precision in ("32", "64"):
             env.update(QD_DUMP_IR="1", QD_DEBUG_DUMP_PATH=str(dump_path.resolve()))
         command = [
             sys.executable,
-            str(Path(__file__).with_name(args.probe + ".py")),
+            str(Path(__file__).resolve().with_name(args.probe + ".py")),
             "--arch",
             args.arch,
             "--precision",
@@ -38,7 +38,9 @@ for precision in ("32", "64"):
         ]
         print("RUN " + json.dumps(command), flush=True)
         with (args.output / (label + ".log")).open("w") as log:
-            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
+            process = subprocess.Popen(
+                command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env, cwd=args.output.resolve()
+            )
             for line in process.stdout:
                 print(line, end="", flush=True)
                 log.write(line)

@@ -79,6 +79,8 @@ for arch in (qd.cpu if args.arch == "cpu" else qd.cuda,):
             src_ll_cache=False,
             cpu_max_num_threads=16,
             enable_fallback=False,
+            print_kernel_asm=args.arch == "cpu",
+            print_kernel_llvm_ir_optimized=True,
         )
         # Pose of a body, and pose and inertia of its center of mass in the body frame
         body_pos = qd.Vector.field(3, FP, N)
