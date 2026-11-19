@@ -373,9 +373,9 @@
     <span class="n">path</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
     <span class="n">seen_ids</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span>
     <span class="n">scalar_members</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">_ScalarMember</span><span class="p">],</span>
-    <span class="n">lift_plain</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="n">data_oriented_template_primitives</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">"""Collect annotated dataclass scalars and, when lift_plain is True, plain Python scalars beneath an owner.</span>
+<span class="w">    </span><span class="sd">"""Collect annotated dataclass scalars and data-oriented scalars with data_oriented_template_primitives=False.</span>
 
 <span class="sd">    Walk stored data-oriented and dataclass attributes, stopping at previously visited objects. Skip Final fields and</span>
 <span class="sd">    do not descend into lists, tuples, or dicts.</span>
@@ -398,7 +398,7 @@
                 <span class="p">)</span>
             <span class="k">elif</span> <span class="n">is_dataclass_instance</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
                 <span class="n">_collect_scalars_in_single_data_oriented</span><span class="p">(</span>
-                    <span class="n">value</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="p">(</span><span class="o">*</span><span class="n">path</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">),</span> <span class="n">seen_ids</span><span class="p">,</span> <span class="n">scalar_members</span><span class="p">,</span> <span class="n">lift_plain</span>
+                    <span class="n">value</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="p">(</span><span class="o">*</span><span class="n">path</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">),</span> <span class="n">seen_ids</span><span class="p">,</span> <span class="n">scalar_members</span><span class="p">,</span> <span class="n">data_oriented_template_primitives</span>
                 <span class="p">)</span>
         <span class="k">return</span>
 
@@ -417,11 +417,11 @@
         <span class="n">attr_type</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">attr_val</span><span class="p">)</span>
         <span class="c1"># Only exact plain Python primitives become runtime parameters; NumPy scalars and subclasses retain their</span>
         <span class="c1"># compile-time behavior.</span>
-        <span class="k">if</span> <span class="n">lift_plain</span> <span class="ow">and</span> <span class="n">attr_type</span> <span class="ow">in</span> <span class="p">(</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">data_oriented_template_primitives</span> <span class="ow">and</span> <span class="n">attr_type</span> <span class="ow">in</span> <span class="p">(</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">):</span>
             <span class="n">scalar_members</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_ScalarMember</span><span class="p">(</span><span class="n">py_obj</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">,</span> <span class="n">attr_val</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="p">(</span><span class="o">*</span><span class="n">path</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">)))</span>
         <span class="k">elif</span> <span class="n">is_dataclass_instance</span><span class="p">(</span><span class="n">attr_val</span><span class="p">)</span> <span class="ow">or</span> <span class="n">is_data_oriented</span><span class="p">(</span><span class="n">attr_val</span><span class="p">):</span>
             <span class="n">_collect_scalars_in_single_data_oriented</span><span class="p">(</span>
-                <span class="n">attr_val</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="p">(</span><span class="o">*</span><span class="n">path</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">),</span> <span class="n">seen_ids</span><span class="p">,</span> <span class="n">scalar_members</span><span class="p">,</span> <span class="n">lift_plain</span>
+                <span class="n">attr_val</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="p">(</span><span class="o">*</span><span class="n">path</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">),</span> <span class="n">seen_ids</span><span class="p">,</span> <span class="n">scalar_members</span><span class="p">,</span> <span class="n">data_oriented_template_primitives</span>
             <span class="p">)</span>
 
 
@@ -444,9 +444,7 @@
 
     <span class="n">scalar_members</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">_ScalarMember</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="k">for</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">owners</span><span class="p">:</span>
-        <span class="n">_collect_scalars_in_single_data_oriented</span><span class="p">(</span>
-            <span class="n">val</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="p">(),</span> <span class="nb">set</span><span class="p">(),</span> <span class="n">scalar_members</span><span class="p">,</span> <span class="ow">not</span> <span class="n">uses_template_primitives</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
-        <span class="p">)</span>
+        <span class="n">_collect_scalars_in_single_data_oriented</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="p">(),</span> <span class="nb">set</span><span class="p">(),</span> <span class="n">scalar_members</span><span class="p">,</span> <span class="n">uses_template_primitives</span><span class="p">(</span><span class="n">val</span><span class="p">))</span>
     <span class="k">return</span> <span class="n">scalar_members</span>
 
 

@@ -1166,6 +1166,7 @@
         <span class="p">)</span>
     <span class="n">pruning</span> <span class="o">=</span> <span class="n">func_ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="o">.</span><span class="n">pruning</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">pruning</span><span class="o">.</span><span class="n">enforcing</span><span class="p">:</span>
+        <span class="c1"># The kernel declares this input even when a @qd.func reads it.</span>
         <span class="n">pruning</span><span class="o">.</span><span class="n">mark_used</span><span class="p">(</span><span class="n">pruning</span><span class="o">.</span><span class="n">KERNEL_FUNC_ID</span><span class="p">,</span> <span class="n">binding</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">binding</span><span class="o">.</span><span class="n">reject_in_static_scope</span> <span class="ow">and</span> <span class="n">binding</span><span class="o">.</span><span class="n">member_access_result</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">is_dataclass</span><span class="p">(</span><span class="n">parent</span><span class="p">):</span>
             <span class="c1"># Preserve the declared width when discovery reads a nested scalar such as an i64.</span>
