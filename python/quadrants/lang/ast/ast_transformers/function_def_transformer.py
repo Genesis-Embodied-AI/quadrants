@@ -176,6 +176,7 @@ class FunctionDefTransformer:
                     continue
                 child = getattr(arg_value, field.name)
                 if field.name in final_names:
+                    # Keep the Python value so qd.static(config.field) can evaluate it at compile time.
                     value = child
                 elif dataclasses.is_dataclass(field.type):
                     FunctionDefTransformer._bind_kernel_arg_or_nested_dataclass(
