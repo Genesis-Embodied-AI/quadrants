@@ -10,6 +10,8 @@ import numpy as np
 from quadrants import _logging, _tensor_wrapper
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorWrapper
+from quadrants.lang._container_aliases import get_container_alias_key
+from quadrants.types import primitive_types
 from quadrants.types.annotations import Template
 
 from .._final.final_constant_values import validate_value_for_final_field_and_get_key
@@ -22,7 +24,7 @@ from .._runtime_typing.runtime_dataclass import RuntimeDataclassSchema
 from ..field import ScalarField
 from ..kernel_arguments import ArgMetadata
 from ..matrix import MatrixField, MatrixNdarray, VectorNdarray
-from ..util import is_data_oriented, is_dataclass_instance, wants_runtime_primitives
+from ..util import is_data_oriented, is_dataclass_instance, uses_template_primitives
 from .hash_utils import hash_iterable_strings
 
 _FIELD_TYPES = (ScalarField, MatrixField)
@@ -276,6 +278,8 @@ def dataclass_to_repr(
             if isinstance(child_value, _FIELD_TYPES) and field.type is not _TensorWrapper:
                 _mark_should_warn()
             return _FAIL_FASTCACHE
+        if id(field.type) in primitive_types.type_ids:
+            _repr = f"{field.type}:{_repr}"
         full_repr = f"{field.name}: ({_repr})"
         if field.metadata.get(FIELD_METADATA_CACHE_VALUE, False):
             full_repr += f" = {child_value}"
@@ -387,7 +391,7 @@ def stringify_obj_type(
         # A normal @qd.data_oriented bakes primitive members into the kernel (value in the cache key); one declared
         # with template_primitives=False lifts them to runtime args (type only - value must NOT enter the key, or it
         # would recompile on every value change, defeating the feature). Decide per object, since the flag is per class.
-        child_meta = _NON_TEMPLATE_CHILD_META if wants_runtime_primitives(obj) else ArgMetadata(Template, "")
+        child_meta = ArgMetadata(Template, "") if uses_template_primitives(obj) else _NON_TEMPLATE_CHILD_META
         for k, v in _dict.items():
             # ``QuadrantsCallable.__get__`` stashes bound callables on ``instance.__dict__``; they are not data.
             v_type = type(v)
@@ -459,7 +463,7 @@ def hash_args(
     g_num_calls += 1
     g_num_args += len(args)
     launch_arg_schema_by_index_and_path = {(str(index), *path): schema for index, path, schema in launch_arg_schemas}
-    hash_l = []
+    hash_l = [repr(get_container_alias_key(args))]
     if len(args) != len(arg_metas):
         raise RuntimeError(
             f"Number of args passed in {len(args)} doesnt match number of declared args {len(arg_metas)}"
@@ -479,7 +483,7 @@ def hash_args(
             launch_arg_schema_by_index_and_path,
         )
         g_repr_time += time.time() - start
-        if _hash is _FAIL_FASTCACHE:
+        if isinstance(_hash, _FailFastcache):
             g_num_ignored_calls += 1
             return FastcacheSkip.WARN if _should_warn else FastcacheSkip.FIELD_VIA_TENSOR
         hash_l.append(_hash)

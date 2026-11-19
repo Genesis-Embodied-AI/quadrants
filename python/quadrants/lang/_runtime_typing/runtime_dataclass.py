@@ -394,7 +394,6 @@ def dataclass_call_arguments(
     """Carry a caller's inferred structures across the pre-flattening boundary of an inlined function call."""
     wrapper = cast("FuncBase", func.wrapper)
     original_arg_metas = wrapper.arg_metas
-    expanded_arg_metas = wrapper.arg_metas_expanded
     declared_arg_metas = wrapper.orig_arguments
     arg_metas = list(declared_arg_metas)
     offset = int(bound)
@@ -426,4 +425,3 @@ def dataclass_call_arguments(
     finally:
         wrapper.arg_metas = original_arg_metas
         wrapper.orig_arguments = declared_arg_metas
-        wrapper.arg_metas_expanded = expanded_arg_metas

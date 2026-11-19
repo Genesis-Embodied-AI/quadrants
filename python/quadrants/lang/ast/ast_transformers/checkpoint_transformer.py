@@ -15,7 +15,7 @@ from __future__ import annotations
 import ast
 from dataclasses import dataclass
 
-from quadrants.lang.ast.ast_transformer_utils import ASTTransformerFuncContext
+from quadrants.lang.ast.ast_transformer_utils import FuncCompilePassContext
 from quadrants.lang.exception import QuadrantsSyntaxError
 
 # Sentinel name used by `_kernel_coverage.py` (`FIELD_VAR_NAME`) for the probe-tracking field. The checkpoint validator
@@ -191,7 +191,7 @@ class CheckpointTransformer:
 
     @staticmethod
     def build_checkpoint_with(
-        ctx: ASTTransformerFuncContext,
+        ctx: FuncCompilePassContext,
         node: ast.With,
         info: CheckpointCallInfo,
         build_stmts,
@@ -207,7 +207,7 @@ class CheckpointTransformer:
         """
         if not ctx.is_kernel:
             raise QuadrantsSyntaxError("qd.checkpoint() can only be used inside @qd.kernel, not @qd.func")
-        kernel = ctx.global_context.current_kernel
+        kernel = ctx.kernel_compile_context.current_kernel
         if not kernel.use_graph:
             raise QuadrantsSyntaxError(
                 "qd.checkpoint() requires @qd.kernel(graph=True); the resume model only applies to graph kernels"

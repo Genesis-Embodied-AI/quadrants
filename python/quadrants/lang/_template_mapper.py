@@ -15,6 +15,7 @@ from quadrants.lang.util import get_member_at_path, is_data_oriented
 from quadrants.types import ndarray_type
 
 from .. import _warnings
+from ._container_aliases import cached_get_container_alias_key
 from ._kernel_types import ArgsHash
 from ._optional_annotation import OPTIONAL_ABSENT
 from ._template_mapper_hotpath import (
@@ -184,7 +185,7 @@ class TemplateMapper:
                 schema._qd_runtime_has_deferred for _, _, schema in launch_arg_schemas
             )
 
-        key = self.extract(raise_on_templated_floats, args, final_value_key_by_value_id)
+        key = self.extract(raise_on_templated_floats, args, final_value_key_by_value_id) + (cached_get_container_alias_key(args),)
         if launch_arg_schemas:
             key += tuple(
                 (
@@ -228,6 +229,6 @@ class TemplateMapper:
                 self._mapping_cache_tracker[args_hash] = mapping_cache_tracker_
                 self._mapping_cache[args_hash] = (count, key)
             except TypeError as e:
-                _warnings.warn_once(f"{e}. Template mapper caching disabled.")
+                _warnings.warn_uncacheable_weakref(e)
 
         return (count, key)
