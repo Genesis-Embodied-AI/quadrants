@@ -2010,6 +2010,8 @@ def test_container_weakref_warning(nested: bool, expected_warnings: int, monkeyp
 
 @test_utils.test(arch=qd.cpu, container_alias_cache_size=1)
 def test_container_alias_cache_lifetime(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The temporary node must release its cache entry without an eviction. Keeping leaf and cycle alive then forces
+    # one capacity eviction, reported by the reset callback. The self-cycle also checks that graph traversal terminates.
     from quadrants import _logging
     from quadrants.lang._container_aliases import cached_get_container_alias_key
 
