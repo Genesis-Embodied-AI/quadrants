@@ -368,8 +368,9 @@ class Kernel(FuncBase):
 
     def reset(self) -> None:
         self.runtime = impl.get_runtime()
-        # Template features can own fields. Drop them with the program and clear all specialization-dependent state
-        # together: a fresh mapper reuses instance ids, so surviving entries could describe different arguments.
+        # Template features and inferred tuple annotations can own fields. Drop them with the program and clear all
+        # specialization-dependent state together: a fresh mapper reuses instance ids, so surviving entries could
+        # describe different arguments.
         self.arg_metas = list(self.orig_arguments)
         self.template_slot_locations = list(self.original_template_slot_locations)
         self.mapper = TemplateMapper(self.arg_metas, self.template_slot_locations)
