@@ -46,7 +46,7 @@ g_num_ignored_calls = 0
 
 FIELD_METADATA_CACHE_VALUE = "add_value_to_cache_key"
 
-LaunchArgSchemas: TypeAlias = Sequence[tuple[int, tuple[str, ...], type[RuntimeDataclassSchema]]]
+LaunchArgSchemas: TypeAlias = Sequence[tuple[int, tuple[str | int, ...], type[RuntimeDataclassSchema]]]
 LaunchArgSchemaByIndexAndPath: TypeAlias = Mapping[tuple[str, ...], type[RuntimeDataclassSchema]]
 
 
@@ -78,6 +78,7 @@ class FastcacheSkip(enum.Enum):
     """Why fastcache does not apply to this call."""
 
     FIELD_VIA_TENSOR = "field_via_tensor"
+    RUNTIME_TUPLE = "runtime_tuple"
     WARN = "warn"
 
 
@@ -357,6 +358,17 @@ def stringify_obj_type(
         # TODO: think about whether there is a way to include fields
         _mark_warn_if_not_tensor_annotation(arg_meta)
         return _FAIL_FASTCACHE
+    if isinstance(obj, tuple) and not is_data_oriented(obj):
+        parts = []
+        for index, child in enumerate(obj):
+            child_repr = stringify_obj_type(
+                raise_on_templated_floats, (*index_and_path, str(index)), child, arg_meta,
+                None, _child_flat(parent_flat, str(index)), launch_arg_schema_by_index_and_path,
+            )
+            if child_repr is _FAIL_FASTCACHE:
+                return _FAIL_FASTCACHE
+            parts.append(child_repr)
+        return f"tuple({parts!r})"
     if is_dataclass_instance(obj):
         # Hash only with schemas supplied by discovery or argument metadata.
         schema = (
@@ -462,7 +474,7 @@ def hash_args(
     _should_warn = False
     g_num_calls += 1
     g_num_args += len(args)
-    launch_arg_schema_by_index_and_path = {(str(index), *path): schema for index, path, schema in launch_arg_schemas}
+    launch_arg_schema_by_index_and_path = {(str(index), *map(str, path)): schema for index, path, schema in launch_arg_schemas}
     hash_l = [repr(get_container_alias_key(args))]
     if len(args) != len(arg_metas):
         raise RuntimeError(
@@ -471,6 +483,8 @@ def hash_args(
     for i_arg, arg in enumerate(args):
         start = time.time()
         arg_meta = arg_metas[i_arg]
+        if arg_meta is not None and hasattr(arg_meta.annotation, "_qd_tuple_plan"):
+            return FastcacheSkip.RUNTIME_TUPLE
         # Root flat name carries no ``__qd_`` prefix, matching ``pruning.used_vars_by_func_id``.
         top_flat = arg_meta.name if arg_meta is not None else None
         _hash = stringify_obj_type(

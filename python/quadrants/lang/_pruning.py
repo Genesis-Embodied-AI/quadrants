@@ -147,7 +147,7 @@ class Pruning:
                 continue
             flat = arg_name
             for attr in attr_chain:
-                flat = create_flat_name(flat, attr)
+                flat = create_flat_name(flat, str(attr))
                 kernel_used.add(flat)
 
     def fold_kernel_arg_chain_paths(self) -> None:

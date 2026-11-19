@@ -33,6 +33,12 @@ def _collect_container_ids(py_obj: Any) -> tuple[int, ...]:
     while pending:
         child = pending.pop()
         is_dataclass = is_dataclass_instance(child)
+        if isinstance(child, tuple) and not is_data_oriented(child):
+            if id(child) not in seen_ids:
+                seen_ids.add(id(child))
+                pending.extend(child)
+            identities.append(id(child))
+            continue
         if not is_dataclass and not is_data_oriented(child):
             continue
 

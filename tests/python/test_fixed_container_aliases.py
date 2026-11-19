@@ -143,3 +143,29 @@ def test_alias_key_tracks_whole_argument_combination() -> None:
     first.state.value = 5
     assert read(first, shared) == 10
     assert read(first, independent) == 12
+@test_utils.test(arch=qd.cpu)
+def test_tuple_only_dataclass() -> None:
+    """A tuple can be the only route to a runtime dataclass."""
+
+    @dataclass
+    class State:
+        value: int
+        array: qd.Tensor
+
+    @qd.data_oriented
+    class Owner:
+        def __init__(self) -> None:
+            self.states = (State(3, qd.ndarray(qd.i32, shape=1)),)
+
+    @qd.kernel
+    def read(owner: qd.Template) -> qd.i32:
+        return owner.states[0].value + owner.states[0].array[0]
+
+    owner = Owner()
+    owner.states[0].array[0] = 4
+    assert read(owner) == 7
+    owner.states[0].value = 6
+    owner.states[0].array[0] = 8
+    assert read(owner) == 14
+
+
