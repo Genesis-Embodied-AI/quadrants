@@ -44,9 +44,10 @@ def test_nested_scalar_aliases(monkeypatch: pytest.MonkeyPatch) -> None:
     assert read(data_oriented_obj) == 22
 
 
+@pytest.mark.parametrize("in_data_oriented", [False, True])
 @test_utils.test(require=qd.extension.data64)
-def test_dataclass_in_data_oriented_preserves_i64() -> None:
-    """A dataclass scalar keeps its declared 64-bit width inside a data-oriented object."""
+def test_dataclass_preserves_i64(in_data_oriented: bool) -> None:
+    """A dataclass scalar keeps its declared 64-bit width through either argument route."""
 
     @dataclass
     class State:
@@ -54,19 +55,25 @@ def test_dataclass_in_data_oriented_preserves_i64() -> None:
 
     @qd.data_oriented
     class DataOriented:
-        def __init__(self) -> None:
-            self.state = State(2**33)
+        def __init__(self, state: State) -> None:
+            self.state = state
+
+    argument_type = qd.Template if in_data_oriented else State
 
     @qd.kernel
-    def read(data_oriented_obj: qd.Template) -> qd.i64:
-        return data_oriented_obj.state.value
+    def read(arg: argument_type) -> qd.i64:
+        if qd.static(in_data_oriented):
+            return arg.state.value
+        return arg.value
 
-    assert read(DataOriented()) == 2**33
+    state = State(2**33)
+    assert read(DataOriented(state) if in_data_oriented else state) == 2**33
 
 
+@pytest.mark.parametrize("in_data_oriented", [False, True])
 @test_utils.test()
-def test_nested_scalar_static_constants() -> None:
-    """Final and Template members remain constants; scalars directly on data-oriented objects keep their existing policy."""
+def test_dataclass_scalar_static_constants(in_data_oriented: bool) -> None:
+    """Final and Template members remain compile-time constants through either argument route."""
 
     @dataclass(frozen=True)
     class State:
@@ -76,23 +83,32 @@ def test_nested_scalar_static_constants() -> None:
 
     @qd.data_oriented
     class DataOriented:
-        def __init__(self) -> None:
-            self.state = State(3, True, 2.5)
+        def __init__(self, state: State) -> None:
+            self.state = state
             self.offset = 4
 
+    argument_type = qd.Template if in_data_oriented else State
+
     @qd.kernel
-    def read(data_oriented_obj: qd.Template) -> qd.f32:
+    def read(arg: argument_type) -> qd.f32:
         result = 0.0
-        if qd.static(data_oriented_obj.state.enabled):
-            for _ in qd.static(range(data_oriented_obj.state.count)):
-                result += data_oriented_obj.state.value
-        return result + qd.static(data_oriented_obj.offset)
+        if qd.static(in_data_oriented):
+            if qd.static(arg.state.enabled):
+                for _ in qd.static(range(arg.state.count)):
+                    result += arg.state.value
+            return result + qd.static(arg.offset)
+        if qd.static(arg.enabled):
+            for _ in qd.static(range(arg.count)):
+                result += arg.value
+        return result + 4
 
-    assert read(DataOriented()) == 11.5
+    state = State(3, True, 2.5)
+    assert read(DataOriented(state) if in_data_oriented else state) == 11.5
 
 
+@pytest.mark.parametrize("in_data_oriented", [False, True])
 @test_utils.test()
-def test_nested_runtime_scalar_rejects_static() -> None:
+def test_dataclass_runtime_scalar_rejects_static(in_data_oriented: bool) -> None:
     """A runtime dataclass scalar cannot control a static expression."""
 
     @dataclass
@@ -101,15 +117,20 @@ def test_nested_runtime_scalar_rejects_static() -> None:
 
     @qd.data_oriented
     class DataOriented:
-        def __init__(self) -> None:
-            self.state = State(3)
+        def __init__(self, state: State) -> None:
+            self.state = state
+
+    argument_type = qd.Template if in_data_oriented else State
 
     @qd.kernel
-    def read(data_oriented_obj: qd.Template) -> qd.i32:
-        return qd.static(data_oriented_obj.state.value)
+    def read(arg: argument_type) -> qd.i32:
+        if qd.static(in_data_oriented):
+            return qd.static(arg.state.value)
+        return qd.static(arg.value)
 
-    with pytest.raises(qd.QuadrantsSyntaxError, match="runtime kernel argument"):
-        read(DataOriented())
+    state = State(3)
+    with pytest.raises(qd.QuadrantsCompilationError, match=r"qd\.static"):
+        read(DataOriented(state) if in_data_oriented else state)
 
 
 @test_utils.test()
@@ -223,9 +244,10 @@ def test_direct_dataclasses_and_dataclasses_in_data_oriented_share_binding(share
         array[0] -= 1
 
 
+@pytest.mark.parametrize("in_data_oriented", [False, True])
 @pytest.mark.parametrize("frozen,unsafe_hash", [(False, False), (True, False), (False, True)])
 @test_utils.test()
-def test_dataclass_in_data_oriented_launch_cache(frozen: bool, unsafe_hash: bool) -> None:
+def test_dataclass_launch_cache(in_data_oriented: bool, frozen: bool, unsafe_hash: bool) -> None:
     """Mutable dataclasses read live scalars; frozen and unsafe_hash dataclasses reuse cached launches."""
 
     @dataclass(frozen=frozen, unsafe_hash=unsafe_hash)
@@ -235,19 +257,24 @@ def test_dataclass_in_data_oriented_launch_cache(frozen: bool, unsafe_hash: bool
 
     @qd.data_oriented
     class DataOriented:
-        def __init__(self) -> None:
-            self.state = State(qd.ndarray(qd.i32, shape=1), 3)
+        def __init__(self, state: State) -> None:
+            self.state = state
+
+    argument_type = qd.Template if in_data_oriented else State
 
     @qd.kernel
-    def read(data_oriented_obj: qd.Template) -> qd.i32:
-        return data_oriented_obj.state.array[0] + data_oriented_obj.state.count
+    def read(arg: argument_type) -> qd.i32:
+        if qd.static(in_data_oriented):
+            return arg.state.array[0] + arg.state.count
+        return arg.array[0] + arg.count
 
-    data_oriented_obj = DataOriented()
-    data_oriented_obj.state.array[0] = 2
-    assert read(data_oriented_obj) == 5
+    state = State(qd.ndarray(qd.i32, shape=1), 3)
+    arg = DataOriented(state) if in_data_oriented else state
+    state.array[0] = 2
+    assert read(arg) == 5
     immutable = frozen or unsafe_hash
     assert bool(read._primal.launch_context_buffer_cache._launch_ctx_cache) is immutable
-    data_oriented_obj.state.array[0] = 7
+    state.array[0] = 7
     if not immutable:
-        data_oriented_obj.state.count = 9
-    assert read(data_oriented_obj) == (10 if immutable else 16)
+        state.count = 9
+    assert read(arg) == (10 if immutable else 16)

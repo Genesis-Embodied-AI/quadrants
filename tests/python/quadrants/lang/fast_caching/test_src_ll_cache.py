@@ -494,9 +494,10 @@ def test_nested_scalar_disk_cache(tmp_path: pathlib.Path) -> None:
         assert read._primal.src_ll_cache_observations.cache_loaded == expect_hit
 
 
+@pytest.mark.parametrize("in_data_oriented", [False, True])
 @test_utils.test(arch=qd.cpu)
-def test_nested_scalar_cross_argument_alias(tmp_path: pathlib.Path) -> None:
-    """Dataclasses shared between data-oriented arguments survive disk reuse and live scalar updates."""
+def test_nested_scalar_cross_argument_alias(tmp_path: pathlib.Path, in_data_oriented: bool) -> None:
+    """Shared dataclasses survive disk reuse and live scalar updates through either argument route."""
 
     @dataclasses.dataclass
     class State:
@@ -507,54 +508,77 @@ def test_nested_scalar_cross_argument_alias(tmp_path: pathlib.Path) -> None:
         def __init__(self, state: State) -> None:
             self.state = state
 
+    argument_type = qd.Template if in_data_oriented else State
+
     @qd.kernel(fastcache=True)
-    def read(first: qd.Template, second: qd.Template) -> qd.i32:
-        return first.state.value + second.state.value
+    def read(first: argument_type, second: argument_type) -> qd.i32:
+        if qd.static(in_data_oriented):
+            return first.state.value + second.state.value
+        return first.value + second.value
 
     for shared, value, expect_hit in ((True, 3, False), (True, 9, True), (False, 2, False)):
         qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
-        first = DataOriented(State(value))
-        second = DataOriented(first.state if shared else State(value + 1))
-        assert read(first, second) == (2 * value if shared else 2 * value + 1)
+        first = State(value)
+        second = first if shared else State(value + 1)
+        args = (DataOriented(first), DataOriented(second)) if in_data_oriented else (first, second)
+        assert read(*args) == (2 * value if shared else 2 * value + 1)
         assert read._primal.src_ll_cache_observations.cache_loaded == expect_hit
-        first.state.value += 1
-        assert read(first, second) == first.state.value + second.state.value
+        first.value += 1
+        assert read(*args) == first.value + second.value
 
 
+@pytest.mark.parametrize("in_data_oriented", [False, True])
 @test_utils.test(arch=qd.cpu)
-def test_src_ll_cache_distinguishes_dataclass_template_values(tmp_path: pathlib.Path) -> None:
+def test_src_ll_cache_distinguishes_dataclass_template_values(tmp_path: pathlib.Path, in_data_oriented: bool) -> None:
     """Changing a dataclass Template value must select a different disk-cache entry."""
 
     @dataclasses.dataclass(frozen=True)
     class Config:
         count: qd.Template
 
+    @qd.data_oriented
+    class DataOriented:
+        def __init__(self, state: Config) -> None:
+            self.state = state
+
+    argument_type = qd.Template if in_data_oriented else Config
+
     @qd.kernel(fastcache=True)
-    def read(config: Config) -> int:
-        return config.count
+    def read(arg: argument_type) -> int:
+        if qd.static(in_data_oriented):
+            return arg.state.count
+        return arg.count
 
     for count, expect_hit in ((3, False), (7, False), (7, True)):
         qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
-        assert read(Config(count)) == count
+        state = Config(count)
+        assert read(DataOriented(state) if in_data_oriented else state) == count
         assert read._primal.src_ll_cache_observations.cache_loaded == expect_hit
 
 
+@pytest.mark.parametrize("in_data_oriented", [False, True])
 @test_utils.test(arch=qd.cpu)
-def test_src_ll_cache_distinguishes_dataclass_integer_types(tmp_path: pathlib.Path) -> None:
+def test_src_ll_cache_distinguishes_dataclass_integer_types(tmp_path: pathlib.Path, in_data_oriented: bool) -> None:
     """An i64 field must not load a kernel compiled for an i32 field."""
 
     @qd.data_oriented
-    class Simulation:
-        def __init__(self, dtype, value):
-            self.state = dataclasses.make_dataclass("State", [("value", dtype)])(value)
-
-    @qd.kernel(fastcache=True)
-    def read(sim: qd.Template) -> qd.i64:
-        return sim.state.value
+    class DataOriented:
+        def __init__(self, state: object) -> None:
+            self.state = state
 
     for dtype, value, expect_hit in ((qd.i32, 3, False), (qd.i64, 2**32 + 3, False), (qd.i64, 2**32 + 3, True)):
         qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
-        assert read(Simulation(dtype, value)) == value
+        State = dataclasses.make_dataclass("State", [("value", dtype)])
+        argument_type = qd.Template if in_data_oriented else State
+
+        @qd.kernel(fastcache=True)
+        def read(arg: argument_type) -> qd.i64:
+            if qd.static(in_data_oriented):
+                return arg.state.value
+            return arg.value
+
+        state = State(value)
+        assert read(DataOriented(state) if in_data_oriented else state) == value
         assert read._primal.src_ll_cache_observations.cache_loaded == expect_hit
 
 
