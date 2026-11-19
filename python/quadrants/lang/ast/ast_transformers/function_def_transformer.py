@@ -301,6 +301,7 @@ class FunctionDefTransformer:
         # Sharing it across the whole arg is safe because the ndarray set rooted at a node does not depend on the path
         # taken to reach it.
         def _walk_obj(obj, arg_idx, path, seen):
+            # Already handled by _bind_kernel_arg_or_nested_dataclass.
             if id(obj) in ctx.kernel_compile_context.current_pass.bound_dataclass_ids:
                 return
 
