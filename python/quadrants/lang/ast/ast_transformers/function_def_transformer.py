@@ -22,15 +22,13 @@ from quadrants.lang import (
     matrix,
 )
 from quadrants.lang import ops as qd_ops
-from quadrants.lang._final.final_dataclass_fields import (
-    final_field_names,
-    is_final_annotation,
-)
+from quadrants.lang._final.final_dataclass_fields import is_final_annotation
 from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._optional_annotation import OPTIONAL_ABSENT
 from quadrants.lang.ast.ast_transformer_utils import (
     FuncCompilePassContext,
     MemberBinding,
+    walk_dataclass_members,
 )
 from quadrants.lang.ast.ast_transformers import graph_api
 from quadrants.lang.ast.ast_transformers.checkpoint_transformer import (
@@ -158,25 +156,29 @@ class FunctionDefTransformer:
         if dataclasses.is_dataclass(argument_type):
             ctx.create_variable(argument_name, arg_value)
             ctx.kernel_compile_context.current_pass.bound_dataclass_ids.add(id(arg_value))
-            final_names = final_field_names(argument_type)
             bindings = ctx.kernel_compile_context.current_pass.binding_by_member
-            for field_idx, field in enumerate(dataclasses.fields(argument_type)):
-                flat_name = create_flat_name(argument_name, field.name)
-                if pruning.enforcing and flat_name not in pruning.used_vars_by_func_id[func_id]:
-                    continue
-                member_key = (id(arg_value), field.name)
+            used_names = pruning.used_vars_by_func_id[func_id] if pruning.enforcing else None
+            features_by_path = {(): this_arg_features}
+            for member in walk_dataclass_members(
+                arg_value, create_flat_name(argument_name, ""), used_names, "__qd_", dataclass_type=argument_type
+            ):
+                field = member.field
+                flat_name = member.name
+                member_key = (id(member.parent), field.name)
+                field_features = features_by_path[member.path[:-1]][member.field_index]
+                if not member.is_final and dataclasses.is_dataclass(field.type):
+                    features_by_path[member.path] = field_features
                 existing = bindings.get(member_key)
                 if existing is not None:
                     if existing.annotation is not field.type:
                         raise QuadrantsSyntaxError(f"Conflicting annotations for shared member {flat_name!r}")
                     continue
-                child = getattr(arg_value, field.name)
-                if field.name in final_names:
+                child = member.value
+                if member.is_final:
                     value = child
                 elif dataclasses.is_dataclass(field.type):
-                    FunctionDefTransformer._bind_kernel_arg_or_nested_dataclass(
-                        ctx, flat_name, field.type, this_arg_features[field_idx], child
-                    )
+                    ctx.create_variable(flat_name, child)
+                    ctx.kernel_compile_context.current_pass.bound_dataclass_ids.add(id(child))
                     value = child
                 elif is_data_oriented(child):
                     raise QuadrantsSyntaxError(
@@ -185,7 +187,7 @@ class FunctionDefTransformer:
                     )
                 else:
                     needs_declaration_call, value = FunctionDefTransformer._decl_and_create_variable(
-                        ctx, field.type, flat_name, this_arg_features[field_idx], "", child
+                        ctx, field.type, flat_name, field_features, "", child
                     )
                     if needs_declaration_call:
                         decl_type_func, type_args = value
