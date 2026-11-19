@@ -2,14 +2,16 @@
 
 import ast
 import inspect
+import math
 import operator
 import re
 import warnings
 from ast import unparse
 from collections import ChainMap
-from collections.abc import Callable
 from contextlib import nullcontext
 from typing import Any
+
+import numpy as np
 
 from quadrants.lang import (
     expr,
@@ -170,7 +172,6 @@ class CallTransformer:
         example ast:
         Call(func=Name(id='f2', ctx=Load()), args=[Name(id='my_struct_ab', ctx=Load())], keywords=[])
         """
-        is_func_base_wrapper = False
         is_static = get_decorator(ctx, node) in ("static", "static_assert")
 
         with ctx.static_scope_guard() if is_static else nullcontext():
@@ -180,27 +181,6 @@ class CallTransformer:
             build_stmts(ctx, node.args)
             build_stmts(ctx, node.keywords)
         func = node.func.ptr
-        func_type = type(func)
-
-        is_func_base_wrapper = func_type in {QuadrantsCallable, BoundQuadrantsCallable} and func._is_quadrants_function
-
-        with (
-            dataclass_call_arguments(func, node.args, node.keywords, func_type is BoundQuadrantsCallable)
-            if is_func_base_wrapper
-            else nullcontext()
-        ):
-            return CallTransformer._build_resolved_call(ctx, node, build_stmt, is_func_base_wrapper)
-
-    @staticmethod
-    def _build_resolved_call(
-        ctx: FuncCompilePassContext,
-        node: ast.Call,
-        build_stmt: Callable[[FuncCompilePassContext, ast.AST], Any],
-        is_func_base_wrapper: bool,
-    ) -> Any:
-        """Expand dataclass arguments and compile a call whose callee has already been resolved."""
-        func = node.func.ptr
-
         # A ``@qd.func(requires_top_level=True)`` may only be called at the top level of a kernel (or
         # directly inside a ``graph_do_while`` body). Nesting it in a runtime for / if / while demotes
         # its phase loops out of top-level position, collapsing the per-phase grid-wide barriers and
@@ -286,7 +266,12 @@ class CallTransformer:
         try:
             try:
                 pruning = ctx.kernel_compile_context.pruning
-                node.ptr = func(*py_args, **py_kwargs)
+                with (
+                    dataclass_call_arguments(func, py_args, py_kwargs, isinstance(func, BoundQuadrantsCallable))
+                    if isinstance(func, (QuadrantsCallable, BoundQuadrantsCallable)) and func._is_quadrants_function
+                    else nullcontext()
+                ):
+                    node.ptr = func(*py_args, **py_kwargs)
 
                 if not pruning.enforcing:
                     pruning.record_after_call(ctx, func, node, node_args, node_keywords)
@@ -296,7 +281,7 @@ class CallTransformer:
                 func_name = getattr(func, "__name__", func.__class__.__name__)
                 msg = f"TypeError when calling `{func_name}`: {error_msg}."
                 if CallTransformer._is_external_func(ctx, node.func.ptr):
-                    args_has_expr = any([isinstance(arg, Expr) for arg in args])
+                    args_has_expr = any([isinstance(arg, Expr) for arg in py_args])
                     if args_has_expr and (module == math or module == np):
                         exec_str = f"from quadrants import {func.__name__}"
                         try:

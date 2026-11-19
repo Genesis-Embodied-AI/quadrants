@@ -11,6 +11,7 @@ from quadrants.lang import expr, impl
 from quadrants.lang._final.final_dataclass_fields import final_field_names
 from quadrants.lang.ast.ast_transformer_utils import (
     FuncCompilePassContext,
+    KernelCompilePassContext,
     MemberBinding,
 )
 from quadrants.lang.kernel_arguments import ArgMetadata
@@ -55,7 +56,10 @@ def _collect_scalars_in_single_data_oriented(
 
     seen_ids.add(obj_id)
     if is_dataclass_instance(py_obj):
-        schema, _ = schema_by_id[obj_id]
+        entry = schema_by_id.get(obj_id)
+        if entry is None:
+            return
+        schema, _ = entry
         final_names = final_field_names(schema)
         for field in dataclasses.fields(schema):
             value = getattr(py_obj, field.name)
@@ -174,7 +178,7 @@ def _create_runtime_scalar_bindings(func_ctx: FuncCompilePassContext, scalar_mem
         runtime_scalar_launch_infos.append((arg_id[0], arg_idx, attr_chain, kind))
 
 
-def _register_nested_schema(pass_ctx, obj, schema, name):
+def register_runtime_dataclass_schema(pass_ctx: KernelCompilePassContext, obj: Any, schema: type, name: str) -> None:
     """Index stored dataclasses and their inferred member types for this pass."""
     if id(obj) in pass_ctx.runtime_schema_by_id:
         return
@@ -182,7 +186,7 @@ def _register_nested_schema(pass_ctx, obj, schema, name):
     pass_ctx.runtime_dataclass_binding_objects.add(id(obj))
     for field in dataclasses.fields(schema):
         if dataclasses.is_dataclass(field.type):
-            _register_nested_schema(pass_ctx, getattr(obj, field.name), field.type, f"{name}.{field.name}")
+            register_runtime_dataclass_schema(pass_ctx, getattr(obj, field.name), field.type, f"{name}.{field.name}")
 
 
 def bind_data_oriented_runtime_scalars(func_ctx: FuncCompilePassContext) -> None:
@@ -197,7 +201,7 @@ def bind_data_oriented_runtime_scalars(func_ctx: FuncCompilePassContext) -> None
             pass_ctx.runtime_dataclass_members.add((id(obj), attr))
             obj = getattr(obj, attr)
             name += "." + attr
-        _register_nested_schema(pass_ctx, obj, schema, name)
+        register_runtime_dataclass_schema(pass_ctx, obj, schema, name)
     scalar_members = _collect_runtime_scalars_from_data_oriented_args(
         func_ctx.py_args, func_ctx.func.arg_metas, pass_ctx.runtime_schema_by_id
     )
