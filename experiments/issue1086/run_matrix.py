@@ -12,11 +12,12 @@ parser.add_argument("--arch", choices=("cpu", "cuda"), required=True)
 parser.add_argument("--probe", choices=("reproduce", "genesis_probe"), default="reproduce")
 parser.add_argument("--output", type=Path, required=True)
 parser.add_argument("--modes", nargs="+", default=["fast", "no_reassoc", "no_reassoc_no_contract", "strict"])
+parser.add_argument("--precisions", nargs="+", choices=("32", "64"), default=["32", "64"])
 args, extra = parser.parse_known_args()
 args.output.mkdir(parents=True, exist_ok=True)
 records = []
 failures = []
-for precision in ("32", "64"):
+for precision in args.precisions:
     for mode in args.modes:
         label = f"{args.probe}_{args.arch}_{precision}_{mode}"
         env = os.environ.copy()
