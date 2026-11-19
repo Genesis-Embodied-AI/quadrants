@@ -9,6 +9,7 @@ from weakref import ReferenceType, ref
 
 from quadrants import _logging, _warnings
 from quadrants.lang import impl
+from quadrants.lang._runtime_typing.fixed_containers import _is_container, fix_container_references, validate_immutable_container
 from quadrants.lang._weak_identity_cache import WeakIdentityCache
 from quadrants.lang.util import is_data_oriented, is_dataclass_instance
 
@@ -42,10 +43,18 @@ def _collect_container_ids(py_obj: Any) -> tuple[int, ...]:
 
         seen_ids.add(identity)
         if is_dataclass:
-            pending.extend(getattr(child, field.name) for field in dataclasses.fields(child))
+            members = ((field.name, getattr(child, field.name)) for field in dataclasses.fields(child))
         else:
-            members = child._asdict() if hasattr(child, "_asdict") else vars(child)
-            pending.extend(value for name, value in members.items() if not name.startswith("_qd_"))
+            attrs = child._asdict() if hasattr(child, "_asdict") else vars(child)
+            members = ((name, value) for name, value in attrs.items() if not name.startswith("_qd_"))
+        fixed = set()
+        for name, value in members:
+            if not is_dataclass:
+                validate_immutable_container(value)
+            if _is_container(value):
+                fixed.add(name)
+            pending.append(value)
+        fix_container_references(child, frozenset(fixed))
     return tuple(identities)
 
 
