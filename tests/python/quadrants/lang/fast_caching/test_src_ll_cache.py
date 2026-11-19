@@ -471,6 +471,57 @@ def test_prune_used_parameters_fastcache_forward_same_name_same_call_two_slots(t
 
 
 @test_utils.test(arch=qd.cpu)
+def test_nested_scalar_disk_cache(tmp_path: pathlib.Path) -> None:
+    """Disk reuse distinguishes alias layouts but accepts new scalar values in the same layout."""
+
+    @dataclasses.dataclass
+    class State:
+        value: int
+
+    @qd.data_oriented
+    class DataOriented:
+        def __init__(self, shared: bool, value: int) -> None:
+            self.first = State(value)
+            self.second = self.first if shared else State(value + 1)
+
+    @qd.kernel(fastcache=True)
+    def read(data_oriented_obj: qd.Template) -> qd.i32:
+        return data_oriented_obj.second.value
+
+    for shared, value, expect_hit in ((False, 2, False), (True, 2, False), (True, 8, True)):
+        qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+        assert read(DataOriented(shared, value)) == (value if shared else value + 1)
+        assert read._primal.src_ll_cache_observations.cache_loaded == expect_hit
+
+
+@test_utils.test(arch=qd.cpu)
+def test_nested_scalar_cross_argument_alias(tmp_path: pathlib.Path) -> None:
+    """Dataclasses shared between data-oriented arguments survive disk reuse and live scalar updates."""
+
+    @dataclasses.dataclass
+    class State:
+        value: int
+
+    @qd.data_oriented
+    class DataOriented:
+        def __init__(self, state: State) -> None:
+            self.state = state
+
+    @qd.kernel(fastcache=True)
+    def read(first: qd.Template, second: qd.Template) -> qd.i32:
+        return first.state.value + second.state.value
+
+    for shared, value, expect_hit in ((True, 3, False), (False, 2, False), (True, 9, True)):
+        qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+        first = DataOriented(State(value))
+        second = DataOriented(first.state if shared else State(value + 1))
+        assert read(first, second) == (2 * value if shared else 2 * value + 1)
+        assert read._primal.src_ll_cache_observations.cache_loaded == expect_hit
+        first.state.value += 1
+        assert read(first, second) == first.state.value + second.state.value
+
+
+@test_utils.test(arch=qd.cpu)
 def test_src_ll_cache_distinguishes_dataclass_template_values(tmp_path: pathlib.Path) -> None:
     """Changing a dataclass Template value must select a different disk-cache entry."""
 
