@@ -1,8 +1,4 @@
-"""Runtime descriptions and indexed bindings for host tuples containing inlined callable objects.
-
-Only tuple arguments enter this path. A description is rebuilt for each launch because callable objects and their
-scalar values and selected functions can change. Keys describe code and alias topology without retaining the captured object graph.
-"""
+"""Bind tuple captures and describe their specialization using current scalar values and selected functions."""
 
 from quadrants.lang.util import get_member_at_path
 from quadrants.types.annotations import template
@@ -20,13 +16,16 @@ def tuple_annotation(value, name, raise_on_templated_floats=False):
 
 
 def predeclare_tuple_scalars(ctx):
+    # Runtime dataclass inference imports this module to build tuple annotations.
+    # pylint: disable=import-outside-toplevel
+    from quadrants.lang._runtime_typing.runtime_dataclass import (
+        cached_infer_dataclass_type,
+    )
     from quadrants.lang.ast.ast_transformers.data_oriented_runtime_scalar_binder import (
-        _ScalarMember,
         _create_runtime_scalar_bindings,
+        _ScalarMember,
         register_runtime_dataclass_schema,
     )
-
-    from quadrants.lang._runtime_typing.runtime_dataclass import cached_infer_dataclass_type
 
     pass_ctx = ctx.kernel_compile_context.current_pass
     members = []

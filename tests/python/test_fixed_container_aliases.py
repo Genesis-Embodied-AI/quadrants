@@ -144,6 +144,8 @@ def test_alias_key_tracks_whole_argument_combination() -> None:
     first.state.value = 5
     assert read(first, shared) == 10
     assert read(first, independent) == 12
+
+
 @test_utils.test(arch=qd.cpu)
 def test_tuple_only_dataclass() -> None:
     """A tuple can be the only route to a runtime dataclass."""
@@ -168,5 +170,3 @@ def test_tuple_only_dataclass() -> None:
     owner.states[0].value = 6
     owner.states[0].array[0] = 8
     assert read(owner) == 14
-
-

@@ -5,11 +5,13 @@ import dataclasses
 import numpy as np
 
 from quadrants._tensor_wrapper import Tensor
-from quadrants.lang._final.final_constant_values import validate_value_for_final_field_and_get_key
+from quadrants.lang._final.final_constant_values import (
+    validate_value_for_final_field_and_get_key,
+)
+from quadrants.lang._final.final_dataclass_fields import final_field_names
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
 from quadrants.lang._runtime_typing.runtime_dataclass import infer_member_type
-from quadrants.lang._final.final_dataclass_fields import final_field_names
 from quadrants.lang._template_mapper_hotpath import _ExprCxx, _extract_arg
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.expr import Expr
