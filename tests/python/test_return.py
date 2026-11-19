@@ -142,20 +142,15 @@ def test_kernel_no_return():
 
 @test_utils.test()
 def test_func_no_return():
-    with pytest.raises(
-        qd.QuadrantsCompilationError,
-        match="Function has a return type but does not have a return statement",
-    ):
+    @qd.func
+    def bar() -> qd.i32:
+        pass
 
-        @qd.func
-        def bar() -> qd.i32:
-            pass
+    @qd.kernel
+    def foo():
+        bar()
 
-        @qd.kernel
-        def foo() -> qd.i32:
-            return bar()
-
-        foo()
+    foo()
 
 
 @test_utils.test()
@@ -317,7 +312,7 @@ def test_return_type_mismatch_3():
 
 
 @test_utils.test()
-def test_func_scalar_return_cast():
+def test_func_scalar_return_ignores_annotation():
     @qd.func
     def bar(a: qd.f32) -> qd.i32:
         return a
@@ -326,7 +321,7 @@ def test_func_scalar_return_cast():
     def foo(a: qd.f32) -> qd.f32:
         return bar(a)
 
-    assert foo(1.5) == 1.0
+    assert foo(1.5) == 1.5
 
 
 @test_utils.test()

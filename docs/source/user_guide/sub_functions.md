@@ -22,6 +22,18 @@ def compute(a: qd.Template) -> None:
         a[i] = add(i, 1)
 ```
 
+### Runtime typing in inlined functions
+
+`@qd.func` ignores parameter, return, and local variable type annotations. The same applies to `@qd.pyfunc` calls inside kernels. Arguments are matched to parameter names using positional arguments, keywords, and defaults; their actual values determine how they are used. Annotations can still document interfaces for Python type checkers, including `Protocol` interfaces, without restricting Quadrants compilation. String annotations are not evaluated.
+
+For example, a function annotated with a base dataclass can access any member present on the actual argument, including members added by a subclass. An unrelated dataclass with the required members works too. Missing members produce an error when accessed. Nested dataclasses follow the same rules. Dataclass arguments must still be passed explicitly; omitted dataclass defaults remain unsupported.
+
+Scalar, vector, and Quadrants struct expressions are copied into local function parameters. Arrays, Python dataclasses, and data-oriented objects retain their references, so writes to their contents reach the caller. `qd.Template` and `qd.ref` annotations no longer change this behavior in an inlined function. Return updated scalar, vector, or Quadrants struct values explicitly when the caller needs them.
+
+Python values already known during compilation, such as literal integers, callables, and configuration tuples, remain available to `qd.static` without a template annotation. A numeric parameter assigned inside the function is instead initialized as a local runtime variable at function entry. Values loaded from runtime kernel arguments remain runtime values.
+
+Type annotations do not insert scalar conversions; use `qd.cast` when a conversion is required. Kernel entry points and `@qd.real_func` retain their separate annotation requirements.
+
 ### Passing fields and ndarrays
 
 Fields and ndarrays can be passed to `@qd.func` functions:

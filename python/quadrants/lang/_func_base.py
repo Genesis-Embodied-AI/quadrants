@@ -240,21 +240,23 @@ class FuncBase:
 
     def check_parameter_annotations(self) -> None:
         """
-        Look at annotations of function parameters, and store into self.arg_metas
-        and self.orig_arguments (both are identical after this call)
-        - they just contain the original parameter annotations after this call, unexpanded
-        - this function mostly just does checking
+        Record parameter names and defaults in self.arg_metas and self.orig_arguments (identical after this call).
+        Validate the supported signature forms. Kernels and real functions retain their annotations; inlined functions
+        discard them and bind arriving values when compiling each call.
 
         Note: NOT in the hot path. Just run once, on function registration
         """
-        sig = get_func_signature(self.func)
+        # Inlined functions use arriving values, including when annotations are unresolved strings. Kernel and real
+        # function signatures still describe their external calling convention.
+        inline = not self.is_kernel and not self.is_real_function
+        sig = inspect.signature(self.func, eval_str=False) if inline else get_func_signature(self.func)
         if hasattr(self.func, "__wrapped__"):
             raise_exception(
                 QuadrantsSyntaxError,
                 msg="Cant put kernel in front of other annotations",
                 err_code="KERNEL_ANNOTATION_ORDER",
             )
-        if sig.return_annotation not in {inspect._empty, None}:
+        if not inline and sig.return_annotation not in {inspect._empty, None}:
             self.return_type = sig.return_annotation
             if (
                 isinstance(self.return_type, (types.GenericAlias, typing._GenericAlias))  # type: ignore
@@ -286,7 +288,9 @@ class FuncBase:
                 raise QuadrantsSyntaxError('Quadrants kernels only support "positional or keyword" parameters')
             annotation = param.annotation
             optional = False
-            if param.annotation is inspect.Parameter.empty:
+            if inline:
+                annotation = inspect.Parameter.empty
+            elif param.annotation is inspect.Parameter.empty:
                 if i == 0 and (self.is_classkernel or self.is_classfunc):  # The |self| parameter
                     annotation = template()
                 elif self.is_kernel or self.is_real_function:

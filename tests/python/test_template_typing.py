@@ -174,8 +174,8 @@ def test_template_callable(decorate):
 
 @pytest.mark.parametrize("decorate", [qd.func, qd.pyfunc], ids=["func", "pyfunc"])
 @test_utils.test()
-def test_template_reference_mutation(decorate):
-    """Check that changing a vector or struct passed as qd.Template changes the caller's value."""
+def test_template_value_mutation(decorate):
+    """Template annotations do not make vector or struct expressions alias the caller's value."""
 
     @decorate
     def update(vector: qd.Template, struct: qd.Template):
@@ -189,4 +189,4 @@ def test_template_reference_mutation(decorate):
         update(vector, struct)
         return vector[0] + struct.value
 
-    assert run() == 65
+    assert run() == 60

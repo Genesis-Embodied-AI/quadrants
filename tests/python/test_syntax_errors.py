@@ -156,12 +156,16 @@ def test_kernel_bad_argument_annotation():
 
 
 @test_utils.test(arch=qd.cpu)
-def test_func_bad_argument_annotation():
-    with pytest.raises(qd.QuadrantsSyntaxError, match="annotation"):
+def test_func_unresolved_argument_annotation():
+    @qd.func
+    def func(x: "foo"):
+        return x + 1
 
-        @qd.func
-        def func(x: "foo"):
-            print(x)
+    @qd.kernel
+    def run() -> qd.i32:
+        return func(2)
+
+    assert run() == 3
 
 
 @test_utils.test()
