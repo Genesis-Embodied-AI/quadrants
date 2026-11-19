@@ -508,13 +508,17 @@ def test_nested_scalar_cross_argument_alias(tmp_path: pathlib.Path, in_data_orie
         def __init__(self, state: State) -> None:
             self.state = state
 
-    argument_type = qd.Template if in_data_oriented else State
+    if in_data_oriented:
 
-    @qd.kernel(fastcache=True)
-    def read(first: argument_type, second: argument_type) -> qd.i32:
-        if qd.static(in_data_oriented):
+        @qd.kernel(fastcache=True)
+        def read(first: qd.Template, second: qd.Template) -> qd.i32:
             return first.state.value + second.state.value
-        return first.value + second.value
+
+    else:
+
+        @qd.kernel(fastcache=True)
+        def read(first: State, second: State) -> qd.i32:
+            return first.value + second.value
 
     for shared, value, expect_hit in ((True, 3, False), (True, 9, True), (False, 2, False)):
         qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
@@ -541,13 +545,17 @@ def test_src_ll_cache_distinguishes_dataclass_template_values(tmp_path: pathlib.
         def __init__(self, state: Config) -> None:
             self.state = state
 
-    argument_type = qd.Template if in_data_oriented else Config
+    if in_data_oriented:
 
-    @qd.kernel(fastcache=True)
-    def read(arg: argument_type) -> int:
-        if qd.static(in_data_oriented):
+        @qd.kernel(fastcache=True)
+        def read(arg: qd.Template) -> int:
             return arg.state.count
-        return arg.count
+
+    else:
+
+        @qd.kernel(fastcache=True)
+        def read(arg: Config) -> int:
+            return arg.count
 
     for count, expect_hit in ((3, False), (7, False), (7, True)):
         qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
@@ -569,13 +577,17 @@ def test_src_ll_cache_distinguishes_dataclass_integer_types(tmp_path: pathlib.Pa
     for dtype, value, expect_hit in ((qd.i32, 3, False), (qd.i64, 2**32 + 3, False), (qd.i64, 2**32 + 3, True)):
         qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
         State = dataclasses.make_dataclass("State", [("value", dtype)])
-        argument_type = qd.Template if in_data_oriented else State
+        if in_data_oriented:
 
-        @qd.kernel(fastcache=True)
-        def read(arg: argument_type) -> qd.i64:
-            if qd.static(in_data_oriented):
+            @qd.kernel(fastcache=True)
+            def read(arg: qd.Template) -> qd.i64:
                 return arg.state.value
-            return arg.value
+
+        else:
+
+            @qd.kernel(fastcache=True)
+            def read(arg: State) -> qd.i64:
+                return arg.value
 
         state = State(value)
         assert read(DataOriented(state) if in_data_oriented else state) == value
