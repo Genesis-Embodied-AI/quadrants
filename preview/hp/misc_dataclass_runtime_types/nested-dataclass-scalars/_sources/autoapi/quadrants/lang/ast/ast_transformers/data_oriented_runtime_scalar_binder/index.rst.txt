@@ -5,7 +5,7 @@ quadrants.lang.ast.ast_transformers.data_oriented_runtime_scalar_binder
 
 .. autoapi-nested-parse::
 
-   Bind dataclass scalars and opted-in data-oriented primitives as runtime kernel inputs.
+   Discover dataclass roots and bind opted-in data-oriented runtime scalars.
 
 
 
@@ -14,14 +14,28 @@ Functions
 
 .. autoapisummary::
 
+   quadrants.lang.ast.ast_transformers.data_oriented_runtime_scalar_binder.collect_runtime_members_from_data_oriented_args
    quadrants.lang.ast.ast_transformers.data_oriented_runtime_scalar_binder.bind_data_oriented_runtime_scalars
 
 
 Module Contents
 ---------------
 
-.. py:function:: bind_data_oriented_runtime_scalars(func_ctx: quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext) -> None
+.. py:function:: collect_runtime_members_from_data_oriented_args(py_args: tuple[Any, ...], arg_metas: list[quadrants.lang.kernel_arguments.ArgMetadata]) -> tuple[list[_ScalarMember], list[tuple[int, tuple[str, ...], Any]]]
 
-   Find opted-in scalar members, then create their compiler bindings.
+   Return runtime scalars and dataclass roots found beneath data-oriented arguments.
+
+
+.. py:function:: bind_data_oriented_runtime_scalars(func_ctx: quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext, scalar_members: list[_ScalarMember]) -> None
+
+   Record scalar members and create kernel parameters for those used by the compiled kernel.
+
+   During discovery, record each member's location and scalar kind so accesses can be marked as used.
+
+   During the enforcing pass, for each used member:
+
+   - Append a scalar parameter to the callable's parameter list and get its index.
+   - Record launch info describing how to populate that parameter from the Python object at each launch.
+   - Create an expression that reads the parameter inside the compiled kernel.
 
 

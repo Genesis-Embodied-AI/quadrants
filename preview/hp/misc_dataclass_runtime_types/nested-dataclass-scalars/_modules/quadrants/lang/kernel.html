@@ -342,7 +342,7 @@
 
 <span class="c1"># Must import 'partial' directly instead of the entire module to avoid attribute lookup overhead.</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">partial</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Literal</span>
 
 <span class="c1"># Must import 'ReferenceType' directly instead of the entire module to avoid attribute lookup overhead.</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">weakref</span><span class="w"> </span><span class="kn">import</span> <span class="n">ReferenceType</span>
@@ -826,12 +826,19 @@
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.launch_context_buffer_cache">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">launch_context_buffer_cache</span> <span class="o">=</span> <span class="n">LaunchContextBufferCache</span><span class="p">()</span></div>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">_struct_ndarray_launch_info_by_key</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">CompiledKernelKeyType</span><span class="p">,</span> <span class="nb">list</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_struct_ndarray_launch_info_by_key</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">CompiledKernelKeyType</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]]]]</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="p">{}</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_launch_infos_for_root_dataclasses_in_data_oriented_by_key</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span>
+            <span class="n">CompiledKernelKeyType</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">type</span><span class="p">]]</span>
+        <span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="c1"># Launch info for primitives lifted from ``@qd.data_oriented(template_primitives=False)`` template args (see</span>
         <span class="c1"># ``bind_data_oriented_runtime_scalars``). Maps key -&gt; list of ``(arg_id, template_arg_idx, attr_chain, kind)``.</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_runtime_scalar_launch_infos_by_compiled_kernel_key</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">CompiledKernelKeyType</span><span class="p">,</span> <span class="nb">list</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_runtime_scalar_launch_infos_by_compiled_kernel_key</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span>
+            <span class="n">CompiledKernelKeyType</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"f"</span><span class="p">,</span> <span class="s2">"i"</span><span class="p">,</span> <span class="s2">"u"</span><span class="p">]]]</span>
+        <span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_mutable_nd_cached_key</span><span class="p">:</span> <span class="n">CompiledKernelKeyType</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_mutable_nd_cached_val</span><span class="p">:</span> <span class="nb">list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_mutable_nd_cached_val</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]]]</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_tensor_unwrap_indices</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
 
 <div class="viewcode-block" id="Kernel.ast_builder">
@@ -1041,11 +1048,11 @@
                     <span class="c1"># entry.</span>
                     <span class="n">pruning</span><span class="o">.</span><span class="n">fold_struct_nd_paths</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_struct_ndarray_launch_info_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="p">[]),</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">)</span>
                     <span class="n">pruning</span><span class="o">.</span><span class="n">fold_kernel_arg_chain_paths</span><span class="p">()</span>
-                    <span class="c1"># Only record an entry when this key actually lifts primitives, so the dict stays empty for the</span>
-                    <span class="c1"># overwhelming majority of kernels (none use template_primitives=False). launch_kernel can then</span>
-                    <span class="c1"># skip the whole primitive-binding path with a single empty-dict check instead of paying a</span>
-                    <span class="c1"># per-launch ``.get(key)`` (tuple hash) on every cache-missing launch -- which is the hot path for</span>
-                    <span class="c1"># CPU / unbatched genesis steps that launch many tiny kernels.</span>
+                    <span class="c1"># Keep these maps empty for kernels without member inputs, avoiding per-key lookups at launch.</span>
+                    <span class="k">if</span> <span class="n">kernel_ctx</span><span class="o">.</span><span class="n">current_pass</span><span class="o">.</span><span class="n">launch_infos_for_root_dataclasses_in_data_oriented</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">_launch_infos_for_root_dataclasses_in_data_oriented_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+                            <span class="n">kernel_ctx</span><span class="o">.</span><span class="n">current_pass</span><span class="o">.</span><span class="n">launch_infos_for_root_dataclasses_in_data_oriented</span>
+                        <span class="p">)</span>
                     <span class="n">runtime_scalar_launch_infos</span> <span class="o">=</span> <span class="n">kernel_ctx</span><span class="o">.</span><span class="n">current_pass</span><span class="o">.</span><span class="n">runtime_scalar_launch_infos</span>
                     <span class="k">if</span> <span class="n">runtime_scalar_launch_infos</span><span class="p">:</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">_runtime_scalar_launch_infos_by_compiled_kernel_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">runtime_scalar_launch_infos</span>
@@ -1148,7 +1155,7 @@
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mutable_nd_cached_val</span><span class="p">:</span>
             <span class="n">args_hash</span> <span class="o">=</span> <span class="p">(</span>
                 <span class="o">*</span><span class="n">args_hash</span><span class="p">,</span>
-                <span class="o">*</span><span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_resolve_struct_ndarray</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">idx</span><span class="p">,</span> <span class="n">chain</span><span class="p">))</span> <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">chain</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mutable_nd_cached_val</span><span class="p">),</span>
+                <span class="o">*</span><span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_get_live_container_member</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">idx</span><span class="p">,</span> <span class="n">chain</span><span class="p">))</span> <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">chain</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mutable_nd_cached_val</span><span class="p">),</span>
             <span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">launch_context_buffer_cache</span><span class="o">.</span><span class="n">populate_launch_ctx_from_cache</span><span class="p">(</span><span class="n">args_hash</span><span class="p">,</span> <span class="n">launch_ctx</span><span class="p">):</span>
             <span class="n">launch_ctx_buffer</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">KernelBatchedArgType</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">]]</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">list</span><span class="p">)</span>
@@ -1199,6 +1206,25 @@
                 <span class="p">)</span>
                 <span class="n">i_out</span> <span class="o">+=</span> <span class="n">num_args_</span>
                 <span class="n">is_launch_ctx_cacheable</span> <span class="o">&amp;=</span> <span class="n">is_launch_ctx_cacheable_</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_launch_infos_for_root_dataclasses_in_data_oriented_by_key</span><span class="p">:</span>
+                <span class="n">launch_infos</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_launch_infos_for_root_dataclasses_in_data_oriented_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="p">())</span>
+                <span class="k">for</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">flat_name</span><span class="p">,</span> <span class="n">dataclass_type</span> <span class="ow">in</span> <span class="n">launch_infos</span><span class="p">:</span>
+                    <span class="n">dataclass_instance</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_live_container_member</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="n">path</span><span class="p">)</span>
+                    <span class="n">num_args</span><span class="p">,</span> <span class="n">cacheable</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_recursive_set_args</span><span class="p">(</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">used_py_dataclass_parameters_by_key_enforcing</span><span class="p">[</span><span class="n">key</span><span class="p">],</span>
+                        <span class="n">flat_name</span><span class="p">,</span>
+                        <span class="n">launch_ctx</span><span class="p">,</span>
+                        <span class="n">launch_ctx_buffer</span><span class="p">,</span>
+                        <span class="n">dataclass_type</span><span class="p">,</span>
+                        <span class="nb">type</span><span class="p">(</span><span class="n">dataclass_instance</span><span class="p">),</span>
+                        <span class="n">dataclass_instance</span><span class="p">,</span>
+                        <span class="n">i_out</span> <span class="o">-</span> <span class="n">template_num</span><span class="p">,</span>
+                        <span class="n">actual_argument_slot</span><span class="p">,</span>
+                        <span class="n">callbacks</span><span class="p">,</span>
+                    <span class="p">)</span>
+                    <span class="n">i_out</span> <span class="o">+=</span> <span class="n">num_args</span>
+                    <span class="n">is_launch_ctx_cacheable</span> <span class="o">&amp;=</span> <span class="n">cacheable</span>
 
             <span class="n">struct_nd_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_struct_ndarray_launch_info_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">struct_nd_info</span><span class="p">:</span>
@@ -1334,8 +1360,8 @@
 
 
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_struct_ndarray</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">template_arg_idx</span><span class="p">,</span> <span class="n">attr_chain</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">"""Walk a struct's attribute chain to find the live ndarray (or Tensor wrapper)."""</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_live_container_member</span><span class="p">(</span><span class="n">args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">template_arg_idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">attr_chain</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Read a live member through stored attributes and unwrap a Tensor result."""</span>
         <span class="n">obj</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="n">template_arg_idx</span><span class="p">]</span>
         <span class="k">for</span> <span class="n">attr_name</span> <span class="ow">in</span> <span class="n">attr_chain</span><span class="p">:</span>
             <span class="n">obj</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">)</span>

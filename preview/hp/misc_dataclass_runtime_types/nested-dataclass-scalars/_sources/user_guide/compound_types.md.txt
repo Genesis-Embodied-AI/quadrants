@@ -304,7 +304,7 @@ Simulation(200).step()   # compiles kernel #2 with n=200 baked in
 
 `template_primitives` controls scalar attributes of data-oriented objects. Dataclass fields follow the same rules as dataclasses passed directly to a kernel.
 
-If you want to change a primitive member's value **from Python between launches without triggering a recompile**, decorate the class with `@qd.data_oriented(template_primitives=False)`. Every primitive member the kernel actually accesses (`int`, `float`, `bool`, including those reached through nested `@qd.data_oriented` members) is then lifted into a runtime scalar kernel argument and read fresh on every launch, instead of being compiled into the kernel as a constant. The member stays read-only inside the kernel (it is a kernel argument, not a writable variable): you mutate it in Python, and the kernel sees the new value on the next launch.
+If you want to change a primitive member's value **from Python between launches without triggering a recompile**, decorate the data_oriented class with `@qd.data_oriented(template_primitives=False)`. The member stays read-only inside the kernel.
 
 ```python
 @qd.data_oriented(template_primitives=False)

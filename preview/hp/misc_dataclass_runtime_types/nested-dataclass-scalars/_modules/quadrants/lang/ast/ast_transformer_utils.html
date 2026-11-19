@@ -338,11 +338,11 @@
 <span class="kn">import</span><span class="w"> </span><span class="nn">traceback</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">enum</span><span class="w"> </span><span class="kn">import</span> <span class="n">Enum</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">textwrap</span><span class="w"> </span><span class="kn">import</span> <span class="n">TextWrapper</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">NamedTuple</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">NamedTuple</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib.core.quadrants_python</span><span class="w"> </span><span class="kn">import</span> <span class="n">ASTBuilder</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">expr</span><span class="p">,</span> <span class="n">impl</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._ndrange</span><span class="w"> </span><span class="kn">import</span> <span class="n">ndrange</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.symbol_resolver</span><span class="w"> </span><span class="kn">import</span> <span class="n">ASTResolver</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.exception</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
@@ -676,7 +676,7 @@
 
 <div class="viewcode-block" id="KernelCompilePassContext.struct_ndarray_launch_info">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext.struct_ndarray_launch_info">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">struct_ndarray_launch_info</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">struct_ndarray_launch_info</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]]]</span> <span class="o">=</span> <span class="p">[]</span></div>
 
         <span class="c1"># Shared identity-based lookup for dataclass members and data-oriented runtime scalars.</span>
 <div class="viewcode-block" id="KernelCompilePassContext.binding_by_member">
@@ -694,7 +694,12 @@
         <span class="c1"># (arg_id, template_arg_idx, attr_chain, kind) entries locate live values at launch; kind is 'f', 'i', or 'u'.</span>
 <div class="viewcode-block" id="KernelCompilePassContext.runtime_scalar_launch_infos">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext.runtime_scalar_launch_infos">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">runtime_scalar_launch_infos</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">runtime_scalar_launch_infos</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"f"</span><span class="p">,</span> <span class="s2">"i"</span><span class="p">,</span> <span class="s2">"u"</span><span class="p">]]]</span> <span class="o">=</span> <span class="p">[]</span></div>
+
+        <span class="c1"># Dataclass roots: (argument index, attribute path, flat name, declared type).</span>
+<div class="viewcode-block" id="KernelCompilePassContext.launch_infos_for_root_dataclasses_in_data_oriented">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext.launch_infos_for_root_dataclasses_in_data_oriented">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">launch_infos_for_root_dataclasses_in_data_oriented</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">type</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span></div>
 
         <span class="c1"># Carry caller loop depth into fresh qd.func contexts so backward-mode dynamic-range checks see outer loops.</span>
         <span class="c1"># Saved and restored around each call.</span>
@@ -1168,9 +1173,6 @@
     <span class="k">if</span> <span class="ow">not</span> <span class="n">pruning</span><span class="o">.</span><span class="n">enforcing</span><span class="p">:</span>
         <span class="c1"># The kernel declares this input even when a @qd.func reads it.</span>
         <span class="n">pruning</span><span class="o">.</span><span class="n">mark_used</span><span class="p">(</span><span class="n">pruning</span><span class="o">.</span><span class="n">KERNEL_FUNC_ID</span><span class="p">,</span> <span class="n">binding</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">binding</span><span class="o">.</span><span class="n">reject_in_static_scope</span> <span class="ow">and</span> <span class="n">binding</span><span class="o">.</span><span class="n">member_access_result</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">is_dataclass</span><span class="p">(</span><span class="n">parent</span><span class="p">):</span>
-            <span class="c1"># Preserve the declared width when discovery reads a nested scalar such as an i64.</span>
-            <span class="k">return</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">parent</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">attr</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">binding</span><span class="o">.</span><span class="n">annotation</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">binding</span><span class="o">.</span><span class="n">member_access_result</span></div>
 
 </pre></div>
