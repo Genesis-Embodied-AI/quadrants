@@ -249,15 +249,15 @@ def test_direct_and_owned_dataclasses_share_binding(shared: bool) -> None:
         array[0] -= 1
 
 
-@pytest.mark.parametrize("runtime_scalar", [False, True])
+@pytest.mark.parametrize("frozen,unsafe_hash", [(False, False), (True, False), (False, True)])
 @test_utils.test()
-def test_owned_dataclass_launch_cache(runtime_scalar: bool) -> None:
-    """Array-only owners keep cached launches; unsafe_hash dataclass scalars are read fresh."""
+def test_dataclass_in_data_oriented_launch_cache(frozen: bool, unsafe_hash: bool) -> None:
+    """Mutable dataclasses read live scalars; frozen and unsafe_hash dataclasses reuse cached launches."""
 
-    @dataclass(unsafe_hash=True)
+    @dataclass(frozen=frozen, unsafe_hash=unsafe_hash)
     class State:
         array: qd.Tensor
-        count: int if runtime_scalar else qd.Template
+        count: int
 
     @qd.data_oriented
     class Owner:
@@ -271,8 +271,9 @@ def test_owned_dataclass_launch_cache(runtime_scalar: bool) -> None:
     owner = Owner()
     owner.state.array[0] = 2
     assert read(owner) == 5
-    assert bool(read._primal.launch_context_buffer_cache._launch_ctx_cache) is not runtime_scalar
+    immutable = frozen or unsafe_hash
+    assert bool(read._primal.launch_context_buffer_cache._launch_ctx_cache) is immutable
     owner.state.array[0] = 7
-    if runtime_scalar:
+    if not immutable:
         owner.state.count = 9
-    assert read(owner) == (16 if runtime_scalar else 10)
+    assert read(owner) == (10 if immutable else 16)

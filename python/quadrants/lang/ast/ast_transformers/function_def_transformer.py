@@ -155,9 +155,8 @@ class FunctionDefTransformer:
         this_arg_features: tuple[Any, ...] | None,
         arg_value: Any = None,
         reject_in_static_scope: bool = False,
-    ) -> bool:
-        """Bind an argument's members and return whether new bindings include runtime scalars."""
-        has_runtime_scalars = False
+    ) -> None:
+        """Bind an argument and its nested dataclass members to compiler values."""
         pruning = ctx.kernel_compile_context.pruning
         func_id = ctx.func.func_id
         if dataclasses.is_dataclass(argument_type):
@@ -179,7 +178,7 @@ class FunctionDefTransformer:
                 if field.name in final_names:
                     value = child
                 elif dataclasses.is_dataclass(field.type):
-                    has_runtime_scalars |= FunctionDefTransformer._bind_kernel_arg_or_nested_dataclass(
+                    FunctionDefTransformer._bind_kernel_arg_or_nested_dataclass(
                         ctx,
                         flat_name,
                         field.type,
@@ -206,7 +205,6 @@ class FunctionDefTransformer:
                         decl_type_func, type_args = value
                         value = decl_type_func(*type_args)
                 is_scalar = id(field.type) in primitive_types.type_ids or isinstance(field.type, DataTypeCxx)
-                has_runtime_scalars |= is_scalar
                 bindings[member_key] = MemberBinding(flat_name, field.type, value, reject_in_static_scope and is_scalar)
         else:
             needs_declaration_call, obj = FunctionDefTransformer._decl_and_create_variable(
@@ -222,7 +220,6 @@ class FunctionDefTransformer:
                 decl_type_func, type_args = obj
                 obj = decl_type_func(*type_args)
             ctx.create_variable(argument_name, obj)
-        return has_runtime_scalars
 
     @staticmethod
     def _transform_as_kernel(ctx: FuncCompilePassContext, node: ast.FunctionDef, args: ast.arguments) -> None:
@@ -256,11 +253,11 @@ class FunctionDefTransformer:
                 ctx.func.func_id, flat_name
             ):
                 continue
-            has_runtime_scalars = FunctionDefTransformer._bind_kernel_arg_or_nested_dataclass(
+            FunctionDefTransformer._bind_kernel_arg_or_nested_dataclass(
                 ctx, flat_name, type(dataclass_instance), None, dataclass_instance, reject_in_static_scope=True
             )
             ctx.kernel_compile_context.current_pass.launch_infos_for_root_dataclasses_in_data_oriented.append(
-                (arg_idx, path, flat_name, type(dataclass_instance), has_runtime_scalars)
+                (arg_idx, path, flat_name, type(dataclass_instance))
             )
         FunctionDefTransformer._predeclare_struct_ndarrays(ctx)
         bind_data_oriented_runtime_scalars(ctx, scalar_members)

@@ -544,7 +544,6 @@ class FuncBase:
         index: int,
         actual_argument_slot: int,
         callbacks: list[Callable[[], Any]],
-        cache_dataclass_values: bool = True,
     ) -> tuple[int, bool]:
         """
         This function processes all the input python-side arguments of a given kernel so as to add them to the current
@@ -642,12 +641,9 @@ class FuncBase:
                 plan = _get_frozen_dc_plan(
                     used_py_dataclass_parameters, needed_arg_type, py_dataclass_basename, needed_arg_fields
                 )
-                # Owned dataclass scalars need live reads, including mutable unsafe_hash dataclasses.
-                unwrapped = (
-                    _get_frozen_dc_unwrapped(v, needed_arg_type, needed_arg_fields) if cache_dataclass_values else None
-                )
+                unwrapped = _get_frozen_dc_unwrapped(v, needed_arg_type, needed_arg_fields)
                 for field_name, field_full_name, field_type in plan:
-                    field_value = unwrapped[field_name] if unwrapped is not None else getattr(v, field_name)
+                    field_value = unwrapped[field_name]
                     num_args_, _ = FuncBase._recursive_set_args(
                         used_py_dataclass_parameters,
                         field_full_name,
@@ -659,7 +655,6 @@ class FuncBase:
                         index + idx,
                         actual_argument_slot,
                         callbacks,
-                        cache_dataclass_values,
                     )
                     idx += num_args_
                 # A Final-bearing subtree must not cache its launch context (``args_hash`` keys on ``id(arg)``, so a
@@ -691,7 +686,6 @@ class FuncBase:
                     index + idx,
                     actual_argument_slot,
                     callbacks,
-                    cache_dataclass_values,
                 )
                 idx += num_args_
                 is_launch_ctx_cacheable &= is_launch_ctx_cacheable_

@@ -744,7 +744,7 @@ class Kernel(FuncBase):
 
             if self._launch_infos_for_root_dataclasses_in_data_oriented_by_key:
                 launch_infos = self._launch_infos_for_root_dataclasses_in_data_oriented_by_key.get(key, ())
-                for arg_idx, path, flat_name, dataclass_type, has_runtime_scalars in launch_infos:
+                for arg_idx, path, flat_name, dataclass_type in launch_infos:
                     dataclass_instance = self._get_live_container_member(args, arg_idx, path)
                     num_args, cacheable = self._recursive_set_args(
                         self.used_py_dataclass_parameters_by_key_enforcing[key],
@@ -757,11 +757,9 @@ class Kernel(FuncBase):
                         i_out - template_num,
                         actual_argument_slot,
                         callbacks,
-                        cache_dataclass_values=not has_runtime_scalars,
                     )
                     i_out += num_args
-                    # The owner's identity does not change when its dataclass scalar values change.
-                    is_launch_ctx_cacheable &= cacheable and not has_runtime_scalars
+                    is_launch_ctx_cacheable &= cacheable
 
             struct_nd_info = self._struct_ndarray_launch_info_by_key.get(key)
             if struct_nd_info:
