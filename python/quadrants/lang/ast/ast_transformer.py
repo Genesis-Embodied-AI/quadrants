@@ -25,7 +25,7 @@ from quadrants.lang.ast.ast_transformer_utils import (
     LoopStatus,
     ReturnStatus,
     get_decorator,
-    maybe_lifted_primitive,
+    resolve_bound_member,
 )
 from quadrants.lang.ast.ast_transformers import graph_api
 from quadrants.lang.ast.ast_transformers.call_transformer import CallTransformer
@@ -805,7 +805,7 @@ class ASTTransformer(Builder):
                 raise exception.QuadrantsRuntimeTypeError(
                     "A class cannot be both a Python dataclass and data-oriented."
                 )
-            lifted = maybe_lifted_primitive(ctx, node.value.ptr, node.attr)
+            lifted = resolve_bound_member(ctx, node.value.ptr, node)
             if lifted is not None:
                 node.ptr = lifted
                 return node.ptr
@@ -833,7 +833,7 @@ class ASTTransformer(Builder):
                 count, dtype, naming_fn = groups[node.attr]
                 node.ptr = _UnpackedVectorRef(node.value.ptr, node.attr, count, dtype, naming_fn)
                 return node.ptr
-            lifted = maybe_lifted_primitive(ctx, node.value.ptr, node.attr)
+            lifted = resolve_bound_member(ctx, node.value.ptr, node)
             if lifted is not None:
                 node.ptr = lifted
                 return node.ptr

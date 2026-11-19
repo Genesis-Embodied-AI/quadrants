@@ -33,7 +33,7 @@ from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import KernelLaunchContext
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorClass
-from quadrants.lang import _kernel_impl_dataclass, impl
+from quadrants.lang import impl
 from quadrants.lang._final.final_dataclass_fields import (
     final_field_names,
     subtree_has_final_fields,
@@ -223,7 +223,6 @@ class FuncBase:
         self.is_classkernel = is_classkernel
         self.is_classfunc = is_classfunc
         self.arg_metas: list[ArgMetadata] = []
-        self.arg_metas_expanded: list[ArgMetadata] = []
         self.orig_arguments: list[ArgMetadata] = []
         self.return_type = None
         # Shared by every AST transform of this function; see
@@ -344,37 +343,12 @@ class FuncBase:
         template_slot_locations: list[int],
         argument_metas: list[ArgMetadata],
         global_vars: dict[str, Any],
-        fn: Callable,
         py_args: tuple[Any, ...],
     ):
-        """
-        Inject template parameters into globals
-
-        Globals are being abused to store the python objects associated
-        with templates. We continue this approach, and in addition this function
-        handles injecting expanded python variables from dataclasses.
-        """
+        """Expose template argument objects to the compiler."""
         for i in template_slot_locations:
             template_var_name = argument_metas[i].name
             global_vars[template_var_name] = py_args[i]
-        parameters = get_func_signature(fn).parameters
-        for i, (parameter_name, parameter) in enumerate(parameters.items()):
-            anno = parameter.annotation
-            if is_dataclass(anno):
-                _kernel_impl_dataclass.populate_global_vars_from_dataclass(
-                    parameter_name,
-                    anno,
-                    py_args[i],
-                    global_vars=global_vars,
-                )
-            elif (anno is template or isinstance(anno, template) or anno is _TensorClass) and is_dataclass(py_args[i]):
-                _kernel_impl_dataclass.populate_global_vars_from_dataclass(
-                    parameter_name,
-                    type(py_args[i]),
-                    py_args[i],
-                    global_vars=global_vars,
-                    populate_all_fields=True,
-                )
 
     def get_tree_and_ctx(
         self,
@@ -427,7 +401,6 @@ class FuncBase:
                 template_slot_locations=self.template_slot_locations,
                 argument_metas=self.arg_metas,
                 global_vars=template_vars,
-                fn=self.func,
                 py_args=py_args,
             )
 
@@ -475,58 +448,17 @@ class FuncBase:
         py_args: tuple[Any, ...],
         kwargs,
     ) -> tuple[Any, ...]:
-        """
-        - for functions, expand dataclass arg_metas
-        - fuse incoming args and kwargs into a single list of args
-
-        The output of this function is arguments which are:
-        - a sequence (not a dict)
-        - fused args + kwargs
-        - in the exact same order as self.arg_metas_expanded
-            - and with the exact same number of elements
-
-        Quadrants doesn't allow defaults, so we don't need to consider default options here,
-        but if we did, we'd still have output exactly matching the order and size of
-        self.arg_metas_expanded, just with some of the values coming from defaults.
-
-        for kernels, kernel_compile_context is None. We aren't compiling yet. This is only called once
-        per launch, but it is called every launch, even if we already compiled.
-
-        For funcs, this is only called during compilation, once per pass.
-
-        For kernels, the args are NOT expanded at this point, and pruning changes nothing.
-
-        For funcs, the args are expanded at the start of this function
-        - first pass, no pruning
-        - second pass - with enforcing on - the expanded parameters are pruned
-        """
-        if is_func and not is_pyfunc:
-            assert kernel_compile_context is not None
-            current_kernel = kernel_compile_context.current_kernel
-            assert current_kernel is not None
-            pruning = kernel_compile_context.pruning
-            used_by_dataclass_parameters_enforcing = None
-            if pruning.enforcing:
-                used_by_dataclass_parameters_enforcing = kernel_compile_context.pruning.used_vars_by_func_id[
-                    self.func_id
-                ]
-            self.arg_metas_expanded = _kernel_impl_dataclass.expand_func_arguments(
-                used_by_dataclass_parameters_enforcing,
-                self.arg_metas,
-            )
-        else:
-            self.arg_metas_expanded = list(self.arg_metas)
-
+        """Combine positional arguments, keyword arguments, and defaults in parameter order."""
         num_args = len(py_args)
-        num_arg_metas = len(self.arg_metas_expanded)
+        num_arg_metas = len(self.arg_metas)
         if num_args > num_arg_metas:
             arg_str = ", ".join(map(str, py_args))
-            expected_str = ", ".join(f"{arg.name} : {arg.annotation}" for arg in self.arg_metas_expanded)
+            expected_str = ", ".join(f"{arg.name} : {arg.annotation}" for arg in self.arg_metas)
             msg_l = []
             msg_l.append(f"Too many arguments. Expected ({expected_str}), got ({arg_str}).")
             for i in range(num_args):
                 if i < num_arg_metas:
-                    msg_l.append(f" - {i} arg meta: {self.arg_metas_expanded[i].name} arg type: {type(py_args[i])}")
+                    msg_l.append(f" - {i} arg meta: {self.arg_metas[i].name} arg type: {type(py_args[i])}")
                 else:
                     msg_l.append(f" - {i} arg meta: <out of arg metas> arg type: {type(py_args[i])}")
             msg_l.append(f"In function: {self.func}")
@@ -536,12 +468,12 @@ class FuncBase:
         if not (kwargs or num_arg_metas > num_args):
             return py_args
 
-        fused_py_args: list[Any] = [*py_args, *[arg_meta.default for arg_meta in self.arg_metas_expanded[num_args:]]]
+        fused_py_args: list[Any] = [*py_args, *[arg_meta.default for arg_meta in self.arg_metas[num_args:]]]
         errors_l: list[str] = []
         if kwargs:
             num_invalid_kwargs_args = len(kwargs)
             for i in range(num_args, num_arg_metas):
-                arg_meta = self.arg_metas_expanded[i]
+                arg_meta = self.arg_metas[i]
                 py_arg = kwargs.get(arg_meta.name, _ARG_EMPTY)
                 if py_arg is not _ARG_EMPTY:
                     fused_py_args[i] = py_arg
@@ -551,7 +483,7 @@ class FuncBase:
                     continue
             if num_invalid_kwargs_args:
                 for key, py_arg in kwargs.items():
-                    for i, arg_meta in enumerate(self.arg_metas_expanded):
+                    for i, arg_meta in enumerate(self.arg_metas):
                         if key == arg_meta.name:
                             if i < num_args:
                                 errors_l.append(f"Multiple values for argument '{key}'.")
@@ -561,7 +493,7 @@ class FuncBase:
         else:
             for i in range(num_args, num_arg_metas):
                 if fused_py_args[i] is _ARG_EMPTY:
-                    arg_meta = self.arg_metas_expanded[i]
+                    arg_meta = self.arg_metas[i]
                     errors_l.append(f"Missing argument '{arg_meta.name}'.")
                     continue
 

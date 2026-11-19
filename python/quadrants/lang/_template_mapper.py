@@ -9,6 +9,7 @@ from quadrants.lang.util import is_data_oriented
 from quadrants.types import ndarray_type
 
 from .. import _warnings
+from ._container_aliases import cached_get_container_alias_key
 from ._kernel_types import ArgsHash
 from ._optional_annotation import OPTIONAL_ABSENT
 from ._template_mapper_hotpath import (
@@ -156,7 +157,8 @@ class TemplateMapper:
             if mapping_cache_tracker:
                 return self._mapping_cache[args_hash]
 
-        key = self.extract(raise_on_templated_floats, args)
+        alias_key = cached_get_container_alias_key(args)
+        key = self.extract(raise_on_templated_floats, args) + (alias_key,)
         try:
             count = self.mapping[key]
         except KeyError:
@@ -185,6 +187,6 @@ class TemplateMapper:
                 self._mapping_cache_tracker[args_hash] = mapping_cache_tracker_
                 self._mapping_cache[args_hash] = (count, key)
             except TypeError as e:
-                _warnings.warn_once(f"{e}. Template mapper caching disabled.")
+                _warnings.warn_uncacheable_weakref(e)
 
         return (count, key)

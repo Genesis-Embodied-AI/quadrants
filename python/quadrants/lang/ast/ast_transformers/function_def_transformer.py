@@ -30,6 +30,7 @@ from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._optional_annotation import OPTIONAL_ABSENT
 from quadrants.lang.ast.ast_transformer_utils import (
     FuncCompilePassContext,
+    MemberBinding,
 )
 from quadrants.lang.ast.ast_transformers import graph_api
 from quadrants.lang.ast.ast_transformers.checkpoint_transformer import (
@@ -62,17 +63,18 @@ class FunctionDefTransformer:
         name: str,
         this_arg_features: tuple[tuple[Any, ...], ...] | None,
         prefix_name: str,
+        py_value: Any = None,
     ) -> tuple[bool, Any]:
+        """Return (needs_declaration_call, value).
+
+        If needs_declaration_call is True, unpack value as (func, args) and bind func(*args). Otherwise bind value.
+        """
         full_name = prefix_name + "_" + name
         if not isinstance(annotation, primitive_types.RefType):
             ctx.kernel_args.append(name)
-        # Optional ndarray + None declares no runtime arg; bind the name to the injected None global so
-        # qd.static(x is not None) specializes the present-only body away.
+        # Bind an absent optional ndarray directly to None so qd.static(x is not None) evaluates to False.
         if this_arg_features is OPTIONAL_ABSENT:
-            if name in ctx.template_vars:
-                return True, ctx.template_vars[name]
-            assert ctx.global_vars is not None
-            return True, ctx.global_vars.get(name)
+            return False, None
         # qd.Tensor value-dispatch. The first slot of this_arg_features is a string marker placed by
         # _template_mapper_hotpath. The annotation is the wrapper class itself (``qd.Tensor``).
         if annotation is _TensorClass:
@@ -80,7 +82,7 @@ class FunctionDefTransformer:
             marker = this_arg_features[0]
             if marker == _TENSOR_T_NDARRAY_MARKER:
                 raw_element_type, ndim, needs_grad, boundary, layout = this_arg_features[1:]
-                return False, (
+                return True, (
                     kernel_arguments.decl_ndarray_arg,
                     (
                         to_quadrants_type(raw_element_type),
@@ -93,18 +95,12 @@ class FunctionDefTransformer:
                 )
             if marker == _TENSOR_T_FIELD_MARKER:
                 # Field branch: behave exactly like a template arg.
-                if name in ctx.template_vars:
-                    return True, ctx.template_vars[name]
-                assert ctx.global_vars is not None
-                return True, ctx.global_vars.get(name)
+                return False, py_value._unwrap() if isinstance(py_value, _TensorClass) else py_value
             raise AssertionError(f"unknown qd.Tensor marker: {marker!r}")
         if annotation == annotations.template or isinstance(annotation, annotations.template):
-            if name in ctx.template_vars:
-                return True, ctx.template_vars[name]
-            assert ctx.global_vars is not None
-            return True, ctx.global_vars.get(name)
+            return False, py_value
         if isinstance(annotation, annotations.sparse_matrix_builder):
-            return False, (
+            return True, (
                 kernel_arguments.decl_sparse_matrix,
                 (
                     to_quadrants_type(this_arg_features),
@@ -123,7 +119,7 @@ class FunctionDefTransformer:
             )
             offset = kernel_arguments.decl_scalar_arg(primitive_types.i32, full_name + "_offset")
             size = kernel_arguments.decl_scalar_arg(primitive_types.i32, full_name + "_size")
-            return True, BufferView(arr, offset, size)
+            return False, BufferView(arr, offset, size)
         if isinstance(annotation, ndarray_type.NdarrayType):
             assert this_arg_features is not None
             raw_element_type: DataTypeCxx
@@ -132,7 +128,7 @@ class FunctionDefTransformer:
             boundary: int
             # Tensors layout is the trailing slot; None for legacy / identity.
             raw_element_type, ndim, needs_grad, boundary, layout = this_arg_features
-            return False, (
+            return True, (
                 kernel_arguments.decl_ndarray_arg,
                 (
                     to_quadrants_type(raw_element_type),
@@ -144,13 +140,13 @@ class FunctionDefTransformer:
                 ),
             )
         if isinstance(annotation, MatrixType):
-            return True, kernel_arguments.decl_matrix_arg(annotation, name)
+            return False, kernel_arguments.decl_matrix_arg(annotation, name)
         if isinstance(annotation, StructType):
-            return True, kernel_arguments.decl_struct_arg(annotation, name)
-        return True, kernel_arguments.decl_scalar_arg(annotation, name)
+            return False, kernel_arguments.decl_struct_arg(annotation, name)
+        return False, kernel_arguments.decl_scalar_arg(annotation, name)
 
     @staticmethod
-    def _transform_kernel_arg(
+    def _bind_kernel_arg_or_nested_dataclass(
         ctx: FuncCompilePassContext,
         argument_name: str,
         argument_type: Any,
@@ -160,61 +156,53 @@ class FunctionDefTransformer:
         pruning = ctx.kernel_compile_context.pruning
         func_id = ctx.func.func_id
         if dataclasses.is_dataclass(argument_type):
-            ctx.create_variable(argument_name, argument_type)
+            ctx.create_variable(argument_name, arg_value)
+            ctx.kernel_compile_context.current_pass.bound_dataclass_ids.add(id(arg_value))
             final_names = final_field_names(argument_type)
+            bindings = ctx.kernel_compile_context.current_pass.binding_by_member
             for field_idx, field in enumerate(dataclasses.fields(argument_type)):
                 flat_name = create_flat_name(argument_name, field.name)
                 if pruning.enforcing and flat_name not in pruning.used_vars_by_func_id[func_id]:
                     continue
-                # Bind ``flat_name`` to the value off the instance so a rewritten ``config.field`` resolves to a Python
-                # constant in ``build_Name`` - what makes ``qd.static(config.field)`` legal on a plain frozen dataclass.
-                if field.name in final_names:
-                    assert arg_value is not None, (
-                        f"Final-annotated dataclass field {field.name!r} needs the runtime dataclass instance to "
-                        f"bake its value; kernel-arg dispatch omitted ``arg_value``"
-                    )
-                    ctx.create_variable(flat_name, getattr(arg_value, field.name))
+                member_key = (id(arg_value), field.name)
+                existing = bindings.get(member_key)
+                if existing is not None:
+                    if existing.annotation is not field.type:
+                        raise QuadrantsSyntaxError(f"Conflicting annotations for shared member {flat_name!r}")
                     continue
-                # if a field is a dataclass, then feed back into process_kernel_arg recursively
-                if dataclasses.is_dataclass(field.type):
-                    FunctionDefTransformer._transform_kernel_arg(
-                        ctx,
-                        flat_name,
-                        field.type,
-                        this_arg_features[field_idx],
-                        getattr(arg_value, field.name) if arg_value is not None else None,
+                child = getattr(arg_value, field.name)
+                if field.name in final_names:
+                    # Keep the Python value so qd.static(config.field) can evaluate it at compile time.
+                    value = child
+                elif dataclasses.is_dataclass(field.type):
+                    FunctionDefTransformer._bind_kernel_arg_or_nested_dataclass(
+                        ctx, flat_name, field.type, this_arg_features[field_idx], child
                     )
-                elif isinstance(field.type, type) and getattr(field.type, "_data_oriented", False):
-                    # Typed dataclass fields are validated before unused members are pruned.
+                    value = child
+                elif is_data_oriented(child):
                     raise QuadrantsSyntaxError(
-                        f"Kernel arg {argument_name!r}: field {field.name!r} has @qd.data_oriented type "
-                        f"{field.type.__name__!r}, which cannot be flattened into a typed-dataclass kernel arg. "
-                        "This annotation is rejected even if the field is unused. "
+                        "Data-oriented objects inside Python dataclass fields are unsupported. "
                         "Store the dataclass on the data-oriented object instead."
                     )
                 else:
-                    result, obj = FunctionDefTransformer._decl_and_create_variable(
-                        ctx,
-                        field.type,
-                        flat_name,
-                        this_arg_features[field_idx],
-                        "",
+                    needs_declaration_call, value = FunctionDefTransformer._decl_and_create_variable(
+                        ctx, field.type, flat_name, this_arg_features[field_idx], "", child
                     )
-                    if result:
-                        ctx.create_variable(flat_name, obj)
-                    else:
-                        decl_type_func, type_args = obj
-                        obj = decl_type_func(*type_args)
-                        ctx.create_variable(flat_name, obj)
+                    if needs_declaration_call:
+                        decl_type_func, type_args = value
+                        value = decl_type_func(*type_args)
+                bindings[member_key] = MemberBinding(flat_name, field.type, value)
         else:
-            result, obj = FunctionDefTransformer._decl_and_create_variable(
+            needs_declaration_call, obj = FunctionDefTransformer._decl_and_create_variable(
                 ctx,
                 argument_type,
                 argument_name,
                 this_arg_features if ctx.arg_features is not None else None,
                 "",
+                arg_value,
             )
-            if not result:
+            if needs_declaration_call:
+                # Function call
                 decl_type_func, type_args = obj
                 obj = decl_type_func(*type_args)
             ctx.create_variable(argument_name, obj)
@@ -234,7 +222,7 @@ class FunctionDefTransformer:
 
         for i in range(len(args.args)):
             arg_meta = ctx.func.arg_metas[i]
-            FunctionDefTransformer._transform_kernel_arg(
+            FunctionDefTransformer._bind_kernel_arg_or_nested_dataclass(
                 ctx,
                 arg_meta.name,
                 arg_meta.annotation,
@@ -380,6 +368,12 @@ class FunctionDefTransformer:
         # args-hasher never sees the value and configurations that differ only there collide in the fastcache key.
         ctx.fn_param_names.add(argument_name)
 
+        if dataclasses.is_dataclass(argument_type):
+            if not isinstance(data, argument_type):
+                raise QuadrantsSyntaxError(f"Argument {argument_name!r} requires {argument_type.__name__}")
+            ctx.create_variable(argument_name, data)
+            return None
+
         # A ``Final[T]`` leaf @qd.func arg: ``data`` already carries the resolved Python value, so bind it directly for
         # ``qd.static(cfg.field)``. Before the ``annotations.template`` check (``Final[T]`` is not a ``template``).
         if is_final_annotation(argument_type):
@@ -500,24 +494,6 @@ class FunctionDefTransformer:
         return None
 
     @staticmethod
-    def _bind_intermediate_dataclass_sentinels(ctx: FuncCompilePassContext, basename: str, dc_type: Any) -> None:
-        """Recursively bind every nested dataclass node ``__qd_<basename>__qd_<field>`` to its dataclass type, so
-        AST-flattened intermediate names (e.g. ``s.child`` rewritten to ``Name("__qd_s__qd_child")`` by
-        FlattenAttributeNameTransformer) resolve at lookup time and call-site expansion in
-        ``_expand_Call_dataclass_args`` triggers correctly.
-
-        Mirrors what ``_transform_kernel_arg`` already does kernel-side via its recursion (each recursive call's first
-        action is ``ctx.create_variable(flat_name, field.type)``). On the func side these intermediates are missing,
-        because ``_transform_func_arg`` is invoked once per *leaf* arg (``fuse_args`` has already expanded the dataclass
-        into leaf arg-metas by then).
-        """
-        for field in dataclasses.fields(dc_type):
-            if dataclasses.is_dataclass(field.type):
-                child_name = create_flat_name(basename, field.name)
-                ctx.create_variable(child_name, field.type)
-                FunctionDefTransformer._bind_intermediate_dataclass_sentinels(ctx, child_name, field.type)
-
-    @staticmethod
     def _transform_as_func(ctx: FuncCompilePassContext, node: ast.FunctionDef, args: ast.arguments) -> None:
         # pylint: disable=import-outside-toplevel
         from quadrants.lang.kernel_impl import Func
@@ -525,14 +501,8 @@ class FunctionDefTransformer:
         assert isinstance(ctx.func, Func)
         assert ctx.py_args is not None
         for py_arg_i, py_arg in enumerate(ctx.py_args):
-            argument = ctx.func.arg_metas_expanded[py_arg_i]
+            argument = ctx.func.arg_metas[py_arg_i]
             FunctionDefTransformer._transform_func_arg(ctx, argument.name, argument.annotation, py_arg)
-
-        # deal with dataclasses
-        for v in ctx.func.orig_arguments:
-            if dataclasses.is_dataclass(v.annotation):
-                ctx.create_variable(v.name, v.annotation)
-                FunctionDefTransformer._bind_intermediate_dataclass_sentinels(ctx, v.name, v.annotation)
 
     @staticmethod
     def build_FunctionDef(

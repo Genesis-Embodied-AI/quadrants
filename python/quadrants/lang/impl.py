@@ -406,6 +406,9 @@ class SrcInfoGuard:
         self.info_stack.pop()
 
 
+DEFAULT_CONTAINER_ALIAS_CACHE_SIZE = 1024
+
+
 class PyQuadrants:
     def __init__(self, kernels=None):
         self.materialized = False
@@ -433,6 +436,7 @@ class PyQuadrants:
         self.unfinalized_fields_builder = {}
         self.print_non_pure: bool = False
         self.short_circuit_operators: bool = False
+        self.container_alias_cache_size = DEFAULT_CONTAINER_ALIAS_CACHE_SIZE
         self.unrolling_limit: int = 0
         self.src_ll_cache: bool = True
 

@@ -6,7 +6,7 @@ import dataclasses
 import traceback
 from enum import Enum
 from textwrap import TextWrapper
-from typing import TYPE_CHECKING, Any, List
+from typing import TYPE_CHECKING, Any, List, NamedTuple
 
 from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import ASTBuilder
@@ -187,6 +187,18 @@ class KernelCompileContext:
         self.current_pass: KernelCompilePassContext
 
 
+class MemberBinding(NamedTuple):
+    """A member's pruning name, declared type, and result of compiling an access."""
+
+    name: str
+    annotation: Any
+    # Result of compiling a member access: an Expr for a runtime scalar, an array representation, a Python constant, or
+    # a nested dataclass instance.
+    member_access_result: Any
+    # Reject every static-scope read of this member.
+    reject_in_static_scope: bool = False
+
+
 class KernelCompilePassContext:
     """State shared by the kernel and its function calls during one compilation pass."""
 
@@ -194,11 +206,13 @@ class KernelCompilePassContext:
         self.pass_idx: int = pass_idx
         self.ndarray_to_any_array: dict[int, Any] = {}
         self.struct_ndarray_launch_info: list[tuple] = []
-        # For template_primitives=False, map (id(parent), attr_name) to (flat_name, arg_idx, attr_chain, kind). Rebuilt
-        # each pass without declaring arguments; discovery uses it to record which primitive members are read.
-        self.runtime_scalar_arg_info_by_member: dict[tuple[int, str], tuple] = {}
-        # Map the same member keys to runtime argument expressions, only for used members in the enforcing pass.
-        self.runtime_scalar_arg_expr_by_member: dict[tuple[int, str], Any] = {}
+        # Shared identity-based lookup for dataclass members and data-oriented runtime scalars.
+        self.binding_by_member: dict[tuple[int, str], MemberBinding] = {}
+        # IDs of dataclass instances registered in this pass.
+        # Instance                          Discovery              Enforcement
+        # Dataclass-annotated kernel arg    Always                 Always, even if unused
+        # Nested dataclass-typed field      Every declared path    Only paths kept by pruning
+        self.bound_dataclass_ids: set[int] = set()
         # (arg_id, template_arg_idx, attr_chain, kind) entries locate live values at launch; kind is 'f', 'i', or 'u'.
         self.runtime_scalar_launch_infos: list[tuple] = []
         # Carry caller loop depth into fresh qd.func contexts so backward-mode dynamic-range checks see outer loops.
@@ -479,37 +493,21 @@ def get_decorator(ctx: FuncCompilePassContext, node) -> str:
     return ""
 
 
-def maybe_lifted_primitive(ctx: FuncCompilePassContext, parent: Any, attr: str):
-    """Handle access to a primitive member that ``@qd.data_oriented(template_primitives=False)`` lifted into a runtime
-    scalar kernel arg (see ``bind_data_oriented_runtime_scalars``).
-
-    Returns the arg-load ``Expr`` to substitute for the baked value in the enforcing pass; returns ``None`` when the
-    attribute is not a lifted primitive, or during the non-enforcing discovery pass (where the access is instead
-    recorded via ``mark_used`` and the caller falls back to baking the throw-away discovery-pass IR).
-
-    Raises ``QuadrantsSyntaxError`` if the lifted primitive is used inside ``qd.static(...)``: that context requires a
-    compile-time constant, which a runtime-lifted primitive is not. Under this flag there is no per-attribute baked
-    escape hatch, so a ``qd.static`` use is unambiguously a mistake and we surface it loudly rather than silently baking
-    a value that will not track mutations.
-    """
-    runtime_scalar_arg_info_by_member = ctx.kernel_compile_context.current_pass.runtime_scalar_arg_info_by_member
-    if not runtime_scalar_arg_info_by_member:
+def resolve_bound_member(func_ctx: FuncCompilePassContext, parent: Any, node: ast.Attribute) -> Any:
+    """Read a registered member and record its kernel input as used during discovery."""
+    binding = func_ctx.kernel_compile_context.current_pass.binding_by_member.get((id(parent), node.attr))
+    if binding is None:
+        if id(parent) in func_ctx.kernel_compile_context.current_pass.bound_dataclass_ids:
+            raise QuadrantsSyntaxError(f"Member {ast.unparse(node)!r} is absent from the declared dataclass fields")
         return None
-    key = (id(parent), attr)
-    entry = runtime_scalar_arg_info_by_member.get(key)
-    if entry is None:
-        return None
-    if ctx.is_in_static_scope():
+
+    if binding.reject_in_static_scope and func_ctx.is_in_static_scope():
         raise QuadrantsSyntaxError(
-            f"'{attr}' is a primitive member of a @qd.data_oriented(template_primitives=False) object, so it is "
-            f"a runtime kernel argument and cannot be used inside qd.static(). Either remove qd.static(), or "
-            f"decorate the class @qd.data_oriented (the default, template_primitives=True) to bake '{attr}' as a "
-            f"compile-time constant."
+            f"{ast.unparse(node)!r} is a runtime kernel argument and cannot be used inside qd.static(). "
+            "Use template_primitives=True for compile-time data-oriented scalars."
         )
-    pruning = ctx.kernel_compile_context.pruning
+    pruning = func_ctx.kernel_compile_context.pruning
     if not pruning.enforcing:
-        # Record under the kernel's func id (see ``bind_data_oriented_runtime_scalars``) so the enforcing pass declares
-        # this primitive and the existing fastcache serialisation captures it.
-        pruning.mark_used(pruning.KERNEL_FUNC_ID, entry[0])
-        return None
-    return ctx.kernel_compile_context.current_pass.runtime_scalar_arg_expr_by_member.get(key)
+        # The kernel declares this input even when a @qd.func reads it.
+        pruning.mark_used(pruning.KERNEL_FUNC_ID, binding.name)
+    return binding.member_access_result

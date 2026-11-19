@@ -280,7 +280,7 @@ def test_runtime_primitive_in_static_raises():
         for i in range(qd.static(s.n)):
             s.out[i] = i
 
-    with pytest.raises(Exception, match="runtime kernel argument"):
+    with pytest.raises(Exception, match=r"'s\.n' is a runtime kernel argument"):
         step(sim)
 
 

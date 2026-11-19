@@ -17,7 +17,10 @@ from typing import Any, NamedTuple
 from quadrants._lib import core as _qd_core
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import expr, impl
-from quadrants.lang.ast.ast_transformer_utils import FuncCompilePassContext
+from quadrants.lang.ast.ast_transformer_utils import (
+    FuncCompilePassContext,
+    MemberBinding,
+)
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import (
     cook_dtype,
@@ -112,8 +115,7 @@ def _create_runtime_scalar_bindings(func_ctx: FuncCompilePassContext, scalar_mem
     - Create an expression that reads the parameter inside the compiled kernel.
     """
     runtime = impl.get_runtime()
-    runtime_scalar_arg_info_by_member = func_ctx.kernel_compile_context.current_pass.runtime_scalar_arg_info_by_member
-    runtime_scalar_arg_expr_by_member = func_ctx.kernel_compile_context.current_pass.runtime_scalar_arg_expr_by_member
+    bindings = func_ctx.kernel_compile_context.current_pass.binding_by_member
     runtime_scalar_launch_infos = func_ctx.kernel_compile_context.current_pass.runtime_scalar_launch_infos
     pruning = func_ctx.kernel_compile_context.pruning
     # The kernel ID preserves uses inside inlined qd.func calls and includes them in fastcache pruning metadata.
@@ -123,7 +125,7 @@ def _create_runtime_scalar_bindings(func_ctx: FuncCompilePassContext, scalar_mem
     for parent, attr_name, value, arg_idx, attr_chain in scalar_members:
         # Interned scalar values can be shared by unrelated members.
         key = (id(parent), attr_name)
-        if key in runtime_scalar_arg_info_by_member:
+        if key in bindings:
             continue
         value_type = type(value)
         if value_type is bool or value_type is int:
@@ -133,17 +135,22 @@ def _create_runtime_scalar_bindings(func_ctx: FuncCompilePassContext, scalar_mem
         else:
             continue
         flat_name = f"__qd_doprim_{arg_idx}__{'__'.join(attr_chain)}"
-        runtime_scalar_arg_info_by_member[key] = (flat_name, arg_idx, attr_chain, kind)
         # Add only members marked used during discovery, avoiding MAX_ARG_NUM for large containers.
         if not pruning.enforcing or not pruning.is_used(func_id, flat_name):
+            # Discovery reads the Python scalar, while enforcement reads an Expr. Reject static reads so the two passes
+            # cannot choose different branches.
+            # FIXME: Represent the scalar as an Expr during discovery too, so qd.static((s.n,)) can build a tuple
+            # whose element still reads the runtime value.
+            bindings[key] = MemberBinding(flat_name, dtype, None, reject_in_static_scope=True)
             continue
         cooked = cook_dtype(dtype)
         # Argument loads use the full ID vector; launches use its first integer slot.
         arg_id = impl.get_runtime().compiling_callable.insert_scalar_param(cooked, flat_name)
         argload_di = _qd_core.DebugInfo(impl.get_runtime().get_current_src_info())
-        runtime_scalar_arg_expr_by_member[key] = expr.Expr(
+        value_expr = expr.Expr(
             _qd_core.make_arg_load_expr(arg_id, cooked, False, create_load=True, dbg_info=argload_di)
         )
+        bindings[key] = MemberBinding(flat_name, dtype, value_expr, reject_in_static_scope=True)
         runtime_scalar_launch_infos.append((arg_id[0], arg_idx, attr_chain, kind))
 
 
