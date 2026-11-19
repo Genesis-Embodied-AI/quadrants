@@ -200,7 +200,9 @@ def bind_data_oriented_runtime_scalars(func_ctx: FuncCompilePassContext) -> None
     """Find opted-in scalar members, then create their compiler bindings."""
     assert func_ctx.py_args is not None
     pass_ctx = func_ctx.kernel_compile_context.current_pass
-    for index, path, schema in func_ctx.func._launch_arg_schemas:
+    # Real functions share argument lowering with kernels, but have no Python-launch schema metadata.
+    launch_arg_schemas = func_ctx.func._launch_arg_schemas if func_ctx.is_kernel else ()
+    for index, path, schema in launch_arg_schemas:
         obj = func_ctx.py_args[index]
         name = func_ctx.func.arg_metas[index].name
         for attr in path:
