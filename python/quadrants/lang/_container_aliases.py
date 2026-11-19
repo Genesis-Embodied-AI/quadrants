@@ -33,6 +33,7 @@ def _collect_container_ids(py_obj: Any) -> tuple[int, ...]:
     """Walk stored dataclass and data-oriented attributes, recording shared references and stopping at cycles."""
     identities: list[int] = []
     seen_ids: set[int] = set()
+    owners: list[tuple[Any, frozenset[str]]] = []
     pending = [py_obj]
     while pending:
         child = pending.pop()
@@ -64,7 +65,9 @@ def _collect_container_ids(py_obj: Any) -> tuple[int, ...]:
             if _is_container(value):
                 fixed.add(name)
             pending.append(value)
-        fix_container_references(child, frozenset(fixed))
+        owners.append((child, frozenset(fixed)))
+    for owner, fixed_names in owners:
+        fix_container_references(owner, fixed_names)
     return tuple(identities)
 
 
