@@ -287,7 +287,13 @@ class FunctionDefTransformer:
         def _walk_obj(obj, arg_idx, path, seen):
             if isinstance(obj, tuple) and not is_data_oriented(obj):
                 for index, child in enumerate(obj):
-                    if id(child) not in seen:
+                    if isinstance(child, _TensorClass):
+                        child = child._unwrap()
+                    if isinstance(child, _ndarray.Ndarray):
+                        _register_ndarray(child, arg_idx, (*path, index))
+                    elif (isinstance(child, tuple) or is_dataclass_instance(child) or is_data_oriented(child)) and id(
+                        child
+                    ) not in seen:
                         seen.add(id(child))
                         _walk_obj(child, arg_idx, (*path, index), seen)
             elif is_dataclass_instance(obj):
@@ -309,7 +315,11 @@ class FunctionDefTransformer:
                         attr_val = attr_val._unwrap()
                     if isinstance(attr_val, _ndarray.Ndarray):
                         _register_ndarray(attr_val, arg_idx, (*path, attr_name))
-                    elif is_dataclass_instance(attr_val) or is_data_oriented(attr_val) or isinstance(attr_val, tuple):
+                    elif (
+                        is_dataclass_instance(attr_val)
+                        or is_data_oriented(attr_val)
+                        or (isinstance(attr_val, tuple) and is_data_oriented(obj))
+                    ):
                         attr_id = id(attr_val)
                         if attr_id in seen:
                             continue
