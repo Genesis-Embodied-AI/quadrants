@@ -10,8 +10,8 @@ from weakref import ReferenceType, ref
 from quadrants import _logging, _warnings
 from quadrants.lang import impl
 from quadrants.lang._runtime_typing.fixed_containers import (
-    _is_container,
     fix_container_references,
+    is_fixed_container_reference,
     validate_immutable_container,
 )
 from quadrants.lang._weak_identity_cache import WeakIdentityCache
@@ -63,9 +63,9 @@ def _collect_container_ids(py_obj: Any) -> tuple[int, ...]:
         for name, value in members:
             if not is_dataclass:
                 validate_immutable_container(value)
-            if _is_container(value):
+            if is_fixed_container_reference(child, value):
                 fixed.add(name)
-            pending.append(value)
+                pending.append(value)
         owners.append((child, frozenset(fixed)))
     for owner, fixed_names in owners:
         fix_container_references(owner, fixed_names)

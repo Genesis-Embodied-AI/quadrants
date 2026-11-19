@@ -9,9 +9,11 @@ from quadrants.lang.util import is_data_oriented, is_dataclass_instance
 _fixed_names: WeakIdentityCache[frozenset[str]] = WeakIdentityCache()
 
 
-def _is_container(py_obj: Any) -> bool:
+def is_fixed_container_reference(owner: Any, py_obj: Any) -> bool:
     """Recognize references whose replacement could change a dataclass access route."""
-    return isinstance(py_obj, (tuple, list, dict, set)) or is_dataclass_instance(py_obj) or is_data_oriented(py_obj)
+    if isinstance(py_obj, (tuple, list, dict, set)) and not is_dataclass_instance(owner):
+        return True
+    return is_dataclass_instance(py_obj) or is_data_oriented(py_obj)
 
 
 def _install_assignment_guards(cls: type) -> None:
@@ -31,7 +33,7 @@ def _install_assignment_guards(cls: type) -> None:
                     raise QuadrantsRuntimeTypeError(
                         f"Container reference {type(self).__name__}.{name} is fixed after first kernel use."
                     )
-            elif _is_container(value):
+            elif is_fixed_container_reference(self, value):
                 raise QuadrantsRuntimeTypeError(
                     f"Cannot add container reference {type(self).__name__}.{name} after first kernel use."
                 )
