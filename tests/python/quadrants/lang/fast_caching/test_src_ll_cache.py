@@ -489,6 +489,25 @@ def test_src_ll_cache_distinguishes_dataclass_template_values(tmp_path: pathlib.
 
 
 @test_utils.test(arch=qd.cpu)
+def test_src_ll_cache_distinguishes_dataclass_integer_types(tmp_path: pathlib.Path) -> None:
+    """An i64 field must not load a kernel compiled for an i32 field."""
+
+    @qd.data_oriented
+    class Simulation:
+        def __init__(self, dtype, value):
+            self.state = dataclasses.make_dataclass("State", [("value", dtype)])(value)
+
+    @qd.kernel(fastcache=True)
+    def read(sim: qd.Template) -> qd.i64:
+        return sim.state.value
+
+    for dtype, value, expect_hit in ((qd.i32, 3, False), (qd.i64, 2**32 + 3, False), (qd.i64, 2**32 + 3, True)):
+        qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+        assert read(Simulation(dtype, value)) == value
+        assert read._primal.src_ll_cache_observations.cache_loaded == expect_hit
+
+
+@test_utils.test(arch=qd.cpu)
 def test_src_ll_cache_distinguishes_dataclass_alias_layouts(tmp_path: pathlib.Path) -> None:
     """A shared pair and a separate pair each need their own disk entry."""
 
