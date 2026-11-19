@@ -10,7 +10,7 @@ from dataclasses import _FIELDS  # type: ignore[reportAttributeAccessIssue]
 
 # Must import 'partial' directly instead of the entire module to avoid attribute lookup overhead.
 from functools import partial
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 # Must import 'ReferenceType' directly instead of the entire module to avoid attribute lookup overhead.
 from weakref import ReferenceType
@@ -378,12 +378,19 @@ class Kernel(FuncBase):
         self.launch_observations = LaunchObservations()
 
         self.launch_context_buffer_cache = LaunchContextBufferCache()
-        self._struct_ndarray_launch_info_by_key: dict[CompiledKernelKeyType, list] = {}
+        self._struct_ndarray_launch_info_by_key: dict[CompiledKernelKeyType, list[tuple[int, int, tuple[str, ...]]]] = (
+            {}
+        )
+        self._launch_infos_for_root_dataclasses_in_data_oriented_by_key: dict[
+            CompiledKernelKeyType, list[tuple[int, tuple[str, ...], str, type]]
+        ] = {}
         # Launch info for primitives lifted from ``@qd.data_oriented(template_primitives=False)`` template args (see
         # ``bind_data_oriented_runtime_scalars``). Maps key -> list of ``(arg_id, template_arg_idx, attr_chain, kind)``.
-        self._runtime_scalar_launch_infos_by_compiled_kernel_key: dict[CompiledKernelKeyType, list] = {}
+        self._runtime_scalar_launch_infos_by_compiled_kernel_key: dict[
+            CompiledKernelKeyType, list[tuple[int, int, tuple[str, ...], Literal["f", "i", "u"]]]
+        ] = {}
         self._mutable_nd_cached_key: CompiledKernelKeyType | None = None
-        self._mutable_nd_cached_val: list = []
+        self._mutable_nd_cached_val: list[tuple[int, tuple[str, ...]]] = []
         self._tensor_unwrap_indices: tuple[int, ...] | None = None
 
     def ast_builder(self) -> ASTBuilder:
@@ -585,11 +592,11 @@ class Kernel(FuncBase):
                     # entry.
                     pruning.fold_struct_nd_paths(self._struct_ndarray_launch_info_by_key.get(key, []), self.arg_metas)
                     pruning.fold_kernel_arg_chain_paths()
-                    # Only record an entry when this key actually lifts primitives, so the dict stays empty for the
-                    # overwhelming majority of kernels (none use template_primitives=False). launch_kernel can then
-                    # skip the whole primitive-binding path with a single empty-dict check instead of paying a
-                    # per-launch ``.get(key)`` (tuple hash) on every cache-missing launch -- which is the hot path for
-                    # CPU / unbatched genesis steps that launch many tiny kernels.
+                    # Keep these maps empty for kernels without member inputs, avoiding per-key lookups at launch.
+                    if kernel_ctx.current_pass.launch_infos_for_root_dataclasses_in_data_oriented:
+                        self._launch_infos_for_root_dataclasses_in_data_oriented_by_key[key] = (
+                            kernel_ctx.current_pass.launch_infos_for_root_dataclasses_in_data_oriented
+                        )
                     runtime_scalar_launch_infos = kernel_ctx.current_pass.runtime_scalar_launch_infos
                     if runtime_scalar_launch_infos:
                         self._runtime_scalar_launch_infos_by_compiled_kernel_key[key] = runtime_scalar_launch_infos
@@ -689,7 +696,7 @@ class Kernel(FuncBase):
         if self._mutable_nd_cached_val:
             args_hash = (
                 *args_hash,
-                *(id(self._resolve_struct_ndarray(args, idx, chain)) for idx, chain in self._mutable_nd_cached_val),
+                *(id(self._get_live_container_member(args, idx, chain)) for idx, chain in self._mutable_nd_cached_val),
             )
         if not self.launch_context_buffer_cache.populate_launch_ctx_from_cache(args_hash, launch_ctx):
             launch_ctx_buffer: dict[KernelBatchedArgType, list[tuple]] = defaultdict(list)
@@ -740,6 +747,25 @@ class Kernel(FuncBase):
                 )
                 i_out += num_args_
                 is_launch_ctx_cacheable &= is_launch_ctx_cacheable_
+
+            if self._launch_infos_for_root_dataclasses_in_data_oriented_by_key:
+                launch_infos = self._launch_infos_for_root_dataclasses_in_data_oriented_by_key.get(key, ())
+                for arg_idx, path, flat_name, dataclass_type in launch_infos:
+                    dataclass_instance = self._get_live_container_member(args, arg_idx, path)
+                    num_args, cacheable = self._recursive_set_args(
+                        self.used_py_dataclass_parameters_by_key_enforcing[key],
+                        flat_name,
+                        launch_ctx,
+                        launch_ctx_buffer,
+                        dataclass_type,
+                        type(dataclass_instance),
+                        dataclass_instance,
+                        i_out - template_num,
+                        actual_argument_slot,
+                        callbacks,
+                    )
+                    i_out += num_args
+                    is_launch_ctx_cacheable &= cacheable
 
             struct_nd_info = self._struct_ndarray_launch_info_by_key.get(key)
             if struct_nd_info:
@@ -871,8 +897,8 @@ class Kernel(FuncBase):
         raise QuadrantsRuntimeTypeError(f"Invalid return type on index={indices}")
 
     @staticmethod
-    def _resolve_struct_ndarray(args, template_arg_idx, attr_chain):
-        """Walk a struct's attribute chain to find the live ndarray (or Tensor wrapper)."""
+    def _get_live_container_member(args: tuple[Any, ...], template_arg_idx: int, attr_chain: tuple[str, ...]) -> Any:
+        """Read a live member through stored attributes and unwrap a Tensor result."""
         obj = args[template_arg_idx]
         for attr_name in attr_chain:
             obj = getattr(obj, attr_name)

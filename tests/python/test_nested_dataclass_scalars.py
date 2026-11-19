@@ -211,3 +211,69 @@ def test_alias_cache_reuses_graphs_and_releases_owners(
     del args, changed_args, first, second
     gc.collect()
     assert first_ref() is None
+
+
+@pytest.mark.parametrize("shared", [False, True])
+@test_utils.test(offline_cache=True, require=qd.extension.data64)
+def test_direct_and_owned_dataclasses_share_binding(shared: bool) -> None:
+    """Direct and owned dataclasses bind scalars and arrays in the same order, including shared nested children."""
+
+    @dataclass
+    class Child:
+        count: qd.i64
+        array: qd.Tensor
+
+    @dataclass
+    class State:
+        unused: int
+        child: Child
+
+    @qd.data_oriented(template_primitives=False)
+    class Owner:
+        def __init__(self, state: State) -> None:
+            self.state = state
+            self.offset = 2
+
+    @qd.kernel(fastcache=True)
+    def read(first: State, owner: qd.Template, last: qd.i64) -> qd.i64:
+        return first.child.count + owner.state.child.count + owner.state.child.array[0] + owner.offset + last
+
+    array = qd.ndarray(qd.i64, shape=1)
+    array[0] = 5
+    first = State(0, Child(2**33, array))
+    owner = Owner(State(1, first.child if shared else Child(7, array)))
+    for count in (9, 11):
+        owner.state.child.count = count
+        assert read(first, owner, 13) == first.child.count + count + 20
+        owner.offset += 1
+        array[0] -= 1
+
+
+@pytest.mark.parametrize("frozen,unsafe_hash", [(False, False), (True, False), (False, True)])
+@test_utils.test()
+def test_dataclass_in_data_oriented_launch_cache(frozen: bool, unsafe_hash: bool) -> None:
+    """Mutable dataclasses read live scalars; frozen and unsafe_hash dataclasses reuse cached launches."""
+
+    @dataclass(frozen=frozen, unsafe_hash=unsafe_hash)
+    class State:
+        array: qd.Tensor
+        count: int
+
+    @qd.data_oriented
+    class Owner:
+        def __init__(self) -> None:
+            self.state = State(qd.ndarray(qd.i32, shape=1), 3)
+
+    @qd.kernel
+    def read(owner: qd.Template) -> qd.i32:
+        return owner.state.array[0] + owner.state.count
+
+    owner = Owner()
+    owner.state.array[0] = 2
+    assert read(owner) == 5
+    immutable = frozen or unsafe_hash
+    assert bool(read._primal.launch_context_buffer_cache._launch_ctx_cache) is immutable
+    owner.state.array[0] = 7
+    if not immutable:
+        owner.state.count = 9
+    assert read(owner) == (10 if immutable else 16)
