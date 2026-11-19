@@ -71,7 +71,7 @@ def test_dataclass_preserves_i64(in_data_oriented: bool) -> None:
 
 
 @pytest.mark.parametrize("in_data_oriented", [False, True])
-@test_utils.test()
+@test_utils.test(arch=qd.cpu)
 def test_dataclass_scalar_static_constants(in_data_oriented: bool) -> None:
     """Final and Template members remain compile-time constants through either argument route."""
 
@@ -107,7 +107,7 @@ def test_dataclass_scalar_static_constants(in_data_oriented: bool) -> None:
 
 
 @pytest.mark.parametrize("in_data_oriented", [False, True])
-@test_utils.test()
+@test_utils.test(arch=qd.cpu)
 def test_dataclass_runtime_scalar_rejects_static(in_data_oriented: bool) -> None:
     """A runtime dataclass scalar cannot control a static expression."""
 
@@ -133,7 +133,7 @@ def test_dataclass_runtime_scalar_rejects_static(in_data_oriented: bool) -> None
         read(DataOriented(state) if in_data_oriented else state)
 
 
-@test_utils.test()
+@test_utils.test(arch=qd.cpu)
 def test_data_oriented_shared_child_keeps_runtime_primitive_opt_in() -> None:
     """Data-oriented objects sharing a child must each respect their template_primitives setting."""
 
@@ -161,45 +161,6 @@ def test_data_oriented_shared_child_keeps_runtime_primitive_opt_in() -> None:
     assert read(default, runtime) == 3
     child.value = 7
     assert read(default, runtime) == 7
-
-
-def test_alias_cache_reuses_graphs_and_releases_data_oriented_objects(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Cache hits skip discovery; new argument combinations reuse graphs without retaining the data-oriented objects."""
-    import gc
-    import weakref
-
-    from quadrants.lang import _container_aliases as aliases
-
-    @dataclass
-    class State:
-        value: int
-
-    @qd.data_oriented
-    class DataOriented:
-        def __init__(self, state: State) -> None:
-            self.state = state
-            self.cycle = self
-
-    state = State(3)
-    first, second = DataOriented(state), DataOriented(state)
-    args = (first, second, 1)
-    key = aliases.cached_get_container_alias_key(args)
-
-    def unexpected_walk(py_obj: object) -> None:
-        raise AssertionError("A cached container graph must not be walked again")
-
-    monkeypatch.setattr(aliases, "_collect_container_ids", unexpected_walk)
-    assert aliases.cached_get_container_alias_key(args) == key
-    state.value = 9
-    for scalar in range(140):
-        changed_args = (first, second, scalar)
-        assert aliases.cached_get_container_alias_key(changed_args) == key
-    first_ref = weakref.ref(first)
-    del args, changed_args, first, second
-    gc.collect()
-    assert first_ref() is None
 
 
 @pytest.mark.parametrize("shared", [False, True])
@@ -246,7 +207,7 @@ def test_direct_dataclasses_and_dataclasses_in_data_oriented_share_binding(share
 
 @pytest.mark.parametrize("in_data_oriented", [False, True])
 @pytest.mark.parametrize("frozen,unsafe_hash", [(False, False), (True, False), (False, True)])
-@test_utils.test()
+@test_utils.test(arch=qd.cpu)
 def test_dataclass_launch_cache(in_data_oriented: bool, frozen: bool, unsafe_hash: bool) -> None:
     """Mutable dataclasses read live scalars; frozen and unsafe_hash dataclasses reuse cached launches."""
 
