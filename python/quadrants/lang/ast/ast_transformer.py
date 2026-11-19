@@ -1064,13 +1064,17 @@ class ASTTransformer(Builder):
                     and not any(template_node.id in scope for scope in ctx.local_scopes[1:])
                     and id(template_node.ptr) in ctx.kernel_compile_context.current_pass.runtime_schema_by_id
                 )
-                if not runtime_member and not runtime_dataclass and (
-                    not ctx.is_kernel
-                    or not isinstance(template_node, ast.Name)
-                    or template_node.id.startswith("__qd_")
-                    or any(template_node.id in scope for scope in ctx.local_scopes[1:])
-                    or template_node.id not in template_arg_names
-                    or template_node.id not in ctx.template_vars
+                if (
+                    not runtime_member
+                    and not runtime_dataclass
+                    and (
+                        not ctx.is_kernel
+                        or not isinstance(template_node, ast.Name)
+                        or template_node.id.startswith("__qd_")
+                        or any(template_node.id in scope for scope in ctx.local_scopes[1:])
+                        or template_node.id not in template_arg_names
+                        or template_node.id not in ctx.template_vars
+                    )
                 ):
                     raise QuadrantsSyntaxError(
                         f'Operator "{name}" inside `qd.static` compares a direct kernel argument against `None`. '
