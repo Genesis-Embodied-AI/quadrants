@@ -20,6 +20,8 @@ parser.add_argument("--n-envs", type=int, default=4)
 parser.add_argument("--performance", action="store_true")
 parser.add_argument("--scene", choices=("boxes", "anymal"), default="boxes")
 parser.add_argument("--benchmark", action="store_true")
+parser.add_argument("--timing-steps", type=int, default=200)
+parser.add_argument("--excite", action="store_true", help="Use an asymmetric ANYmal pose and joint targets")
 args = parser.parse_args()
 os.environ["QD_EXPERIMENT_NO_REASSOC"] = str(int(args.mode in ("no_reassoc", "no_reassoc_no_contract")))
 os.environ["QD_EXPERIMENT_NO_CONTRACT"] = str(int(args.mode == "no_reassoc_no_contract"))
@@ -80,11 +82,17 @@ if args.scene == "boxes":
     scene.add_entity(gs.morphs.Box(size=(0.1, 0.1, 0.1), pos=(0, 0, 0.5)))
     scene.add_entity(gs.morphs.Box(size=(0.1, 0.1, 0.1), pos=(2, 0, 0.5)))
 else:
-    robot = scene.add_entity(gs.morphs.URDF(file="urdf/anymal_c/urdf/anymal_c.urdf", pos=(0, 0, 0.8)))
+    robot = scene.add_entity(
+        gs.morphs.URDF(
+            file="urdf/anymal_c/urdf/anymal_c.urdf",
+            pos=(0, 0, 0.8),
+            euler=(13, 7, 21) if args.excite else (0, 0, 0),
+        )
+    )
 scene.build(n_envs=args.n_envs)
 if args.scene == "anymal":
     robot.set_dofs_kp(1000.0, slice(6, None))
-    robot.control_dofs_position(0.0, slice(6, None))
+    robot.control_dofs_position(np.linspace(-0.15, 0.15, 12) if args.excite else 0.0, slice(6, None))
 for _ in range(60):
     scene.step()
 saved = scene.get_state()
@@ -108,6 +116,7 @@ result = {
     "performance": args.performance,
     "n_envs": args.n_envs,
     "scene": args.scene,
+    "excite": args.excite,
     "hostname": platform.node(),
     "restore": compare(at_restore, at_capture),
     "replay": replay,
@@ -120,10 +129,11 @@ if args.benchmark:
     for _ in range(5):
         qd.sync()
         start = time.perf_counter()
-        for _ in range(200):
+        for _ in range(args.timing_steps):
             scene.step()
         qd.sync()
-        samples.append((time.perf_counter() - start) / 200)
+        samples.append((time.perf_counter() - start) / args.timing_steps)
+    result["timing_steps"] = args.timing_steps
     result["step_seconds"] = samples
     result["median_step_seconds"] = statistics.median(samples)
 print("RESULT " + json.dumps(result), flush=True)
