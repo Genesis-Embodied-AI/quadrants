@@ -11,6 +11,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--arch", choices=("cpu", "cuda"), required=True)
 parser.add_argument("--precision", choices=("32", "64"), required=True)
 parser.add_argument("--mode", choices=("fast", "no_reassoc", "no_reassoc_no_contract", "strict"), required=True)
+parser.add_argument("--dump-code", action="store_true")
 args = parser.parse_args()
 os.environ["QD_EXPERIMENT_NO_REASSOC"] = str(int(args.mode in ("no_reassoc", "no_reassoc_no_contract")))
 os.environ["QD_EXPERIMENT_NO_CONTRACT"] = str(int(args.mode == "no_reassoc_no_contract"))
@@ -79,8 +80,8 @@ for arch in (qd.cpu if args.arch == "cpu" else qd.cuda,):
             src_ll_cache=False,
             cpu_max_num_threads=16,
             enable_fallback=False,
-            print_kernel_asm=args.arch == "cpu",
-            print_kernel_llvm_ir_optimized=True,
+            print_kernel_asm=args.dump_code and args.arch == "cpu",
+            print_kernel_llvm_ir_optimized=args.dump_code,
         )
         # Pose of a body, and pose and inertia of its center of mass in the body frame
         body_pos = qd.Vector.field(3, FP, N)
