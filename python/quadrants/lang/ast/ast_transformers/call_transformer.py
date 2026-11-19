@@ -25,6 +25,7 @@ from quadrants.lang.ast.ast_transformer_utils import (
     get_decorator,
 )
 from quadrants.lang.exception import (
+    QuadrantsRuntimeTypeError,
     QuadrantsSyntaxError,
     QuadrantsTypeError,
 )
@@ -275,6 +276,8 @@ class CallTransformer:
 
                 if not pruning.enforcing:
                     pruning.record_after_call(ctx, func, node, node_args, node_keywords)
+            except QuadrantsRuntimeTypeError:
+                raise
             except TypeError as e:
                 module = inspect.getmodule(func)
                 error_msg = re.sub(r"\bExpr\b", "Quadrants Expression", str(e))
