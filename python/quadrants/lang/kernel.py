@@ -379,6 +379,7 @@ class Kernel(FuncBase):
 
         self.launch_context_buffer_cache = LaunchContextBufferCache()
         self._struct_ndarray_launch_info_by_key: dict[CompiledKernelKeyType, list] = {}
+        self._nested_dataclass_launch_infos_by_key: dict[CompiledKernelKeyType, list] = {}
         # Launch info for primitives lifted from ``@qd.data_oriented(template_primitives=False)`` template args (see
         # ``bind_data_oriented_runtime_scalars``). Maps key -> list of ``(arg_id, template_arg_idx, attr_chain, kind)``.
         self._runtime_scalar_launch_infos_by_compiled_kernel_key: dict[CompiledKernelKeyType, list] = {}
@@ -590,6 +591,10 @@ class Kernel(FuncBase):
                     # skip the whole primitive-binding path with a single empty-dict check instead of paying a
                     # per-launch ``.get(key)`` (tuple hash) on every cache-missing launch -- which is the hot path for
                     # CPU / unbatched genesis steps that launch many tiny kernels.
+                    if kernel_ctx.current_pass.nested_dataclass_launch_infos:
+                        self._nested_dataclass_launch_infos_by_key[key] = (
+                            kernel_ctx.current_pass.nested_dataclass_launch_infos
+                        )
                     runtime_scalar_launch_infos = kernel_ctx.current_pass.runtime_scalar_launch_infos
                     if runtime_scalar_launch_infos:
                         self._runtime_scalar_launch_infos_by_compiled_kernel_key[key] = runtime_scalar_launch_infos
@@ -740,6 +745,25 @@ class Kernel(FuncBase):
                 )
                 i_out += num_args_
                 is_launch_ctx_cacheable &= is_launch_ctx_cacheable_
+
+            if self._nested_dataclass_launch_infos_by_key:
+                for arg_idx, path, flat_name, dataclass_type in self._nested_dataclass_launch_infos_by_key.get(key, ()):
+                    dataclass_instance = self._resolve_struct_ndarray(args, arg_idx, path)
+                    num_args, _ = self._recursive_set_args(
+                        self.used_py_dataclass_parameters_by_key_enforcing[key],
+                        flat_name,
+                        launch_ctx,
+                        launch_ctx_buffer,
+                        dataclass_type,
+                        type(dataclass_instance),
+                        dataclass_instance,
+                        i_out - template_num,
+                        actual_argument_slot,
+                        callbacks,
+                    )
+                    i_out += num_args
+                    # The owner's identity does not change when its dataclass scalar values change.
+                    is_launch_ctx_cacheable = False
 
             struct_nd_info = self._struct_ndarray_launch_info_by_key.get(key)
             if struct_nd_info:
