@@ -471,6 +471,24 @@ def test_prune_used_parameters_fastcache_forward_same_name_same_call_two_slots(t
 
 
 @test_utils.test(arch=qd.cpu)
+def test_src_ll_cache_distinguishes_dataclass_template_values(tmp_path: pathlib.Path) -> None:
+    """Changing a dataclass Template value must select a different disk-cache entry."""
+
+    @dataclasses.dataclass(frozen=True)
+    class Config:
+        count: qd.Template
+
+    @qd.kernel(fastcache=True)
+    def read(config: Config) -> int:
+        return config.count
+
+    for count, expect_hit in ((3, False), (7, False), (7, True)):
+        qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+        assert read(Config(count)) == count
+        assert read._primal.src_ll_cache_observations.cache_loaded == expect_hit
+
+
+@test_utils.test(arch=qd.cpu)
 def test_src_ll_cache_distinguishes_dataclass_alias_layouts(tmp_path: pathlib.Path) -> None:
     """A shared pair and a separate pair each need their own disk entry."""
 
