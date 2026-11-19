@@ -656,6 +656,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">short_circuit_operators</span> <span class="o">=</span> <span class="kc">True</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">print_full_traceback</span> <span class="o">=</span> <span class="kc">False</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">unrolling_limit</span> <span class="o">=</span> <span class="mi">32</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">container_alias_cache_size</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">DEFAULT_CONTAINER_ALIAS_CACHE_SIZE</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">prepare_sandbox</span><span class="p">():</span>
@@ -841,6 +842,7 @@
     <span class="n">env_spec</span><span class="o">.</span><span class="n">configure</span><span class="p">(</span><span class="s2">"short_circuit_operators"</span><span class="p">)</span>
     <span class="n">env_spec</span><span class="o">.</span><span class="n">configure</span><span class="p">(</span><span class="s2">"print_full_traceback"</span><span class="p">)</span>
     <span class="n">env_spec</span><span class="o">.</span><span class="n">configure</span><span class="p">(</span><span class="s2">"unrolling_limit"</span><span class="p">)</span>
+    <span class="n">env_spec</span><span class="o">.</span><span class="n">configure</span><span class="p">(</span><span class="s2">"container_alias_cache_size"</span><span class="p">)</span>
 
     <span class="n">normalize_deprecated_cpu_scheduling_aliases</span><span class="p">(</span><span class="n">env_comp</span><span class="p">)</span>
 
@@ -856,6 +858,9 @@
     <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">unexpected_keys</span><span class="p">):</span>
         <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="sa">f</span><span class="s1">'Unrecognized keyword argument(s) for qd.init: </span><span class="si">{</span><span class="s2">", "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">unexpected_keys</span><span class="p">)</span><span class="si">}</span><span class="s1">'</span><span class="p">)</span>
 
+    <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">spec_cfg</span><span class="o">.</span><span class="n">container_alias_cache_size</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="nb">int</span> <span class="ow">or</span> <span class="n">spec_cfg</span><span class="o">.</span><span class="n">container_alias_cache_size</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"container_alias_cache_size must be a positive integer"</span><span class="p">)</span>
+
     <span class="k">if</span> <span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">print_ir</span> <span class="ow">or</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">"QD_DUMP_IR"</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"1"</span><span class="p">)</span> <span class="ow">and</span> <span class="n">cfg</span><span class="o">.</span><span class="n">offline_cache</span><span class="p">:</span>
         <span class="n">util</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
             <span class="s2">"Even with print_ir/QD_DUMP_IR enabled, already cached kernels won't get their IRs shown. "</span>
@@ -870,6 +875,7 @@
         <span class="n">runtime</span><span class="o">.</span><span class="n">short_circuit_operators</span> <span class="o">=</span> <span class="n">spec_cfg</span><span class="o">.</span><span class="n">short_circuit_operators</span>
         <span class="n">runtime</span><span class="o">.</span><span class="n">print_full_traceback</span> <span class="o">=</span> <span class="n">spec_cfg</span><span class="o">.</span><span class="n">print_full_traceback</span>
         <span class="n">runtime</span><span class="o">.</span><span class="n">unrolling_limit</span> <span class="o">=</span> <span class="n">spec_cfg</span><span class="o">.</span><span class="n">unrolling_limit</span>
+        <span class="n">runtime</span><span class="o">.</span><span class="n">container_alias_cache_size</span> <span class="o">=</span> <span class="n">spec_cfg</span><span class="o">.</span><span class="n">container_alias_cache_size</span>
         <span class="n">runtime</span><span class="o">.</span><span class="n">src_ll_cache</span> <span class="o">=</span> <span class="n">src_ll_cache</span>
         <span class="n">runtime</span><span class="o">.</span><span class="n">print_non_pure</span> <span class="o">=</span> <span class="n">print_non_pure</span>
         <span class="n">_logging</span><span class="o">.</span><span class="n">set_logging_level</span><span class="p">(</span><span class="n">spec_cfg</span><span class="o">.</span><span class="n">log_level</span><span class="o">.</span><span class="n">lower</span><span class="p">())</span>

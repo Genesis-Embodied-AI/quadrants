@@ -26,7 +26,7 @@ Module Contents
    .. py:method:: populate_launch_ctx_from_cache(args_hash: quadrants.lang._kernel_types.ArgsHash, launch_ctx: quadrants._lib.core.quadrants_python.KernelLaunchContext) -> bool
 
 
-.. py:class:: ASTGenerator(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, kernel_name: str, current_kernel: Kernel, only_parse_function_def: bool, tree: ast.Module, dump_ast: bool)
+.. py:class:: ASTGenerator(ctx: quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext, kernel_name: str, current_kernel: Kernel, only_parse_function_def: bool, tree: ast.Module, dump_ast: bool)
 
    .. py:attribute:: runtime
 

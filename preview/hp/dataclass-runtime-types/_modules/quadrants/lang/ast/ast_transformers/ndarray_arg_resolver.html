@@ -350,14 +350,14 @@
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">ast</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">ASTTransformerFuncContext</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">FuncCompilePassContext</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.exception</span><span class="w"> </span><span class="kn">import</span> <span class="n">QuadrantsSyntaxError</span>
 
 
 <div class="viewcode-block" id="resolve_ndarray_kernel_arg_id">
 <a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/ndarray_arg_resolver/index.html#quadrants.lang.ast.ast_transformers.ndarray_arg_resolver.resolve_ndarray_kernel_arg_id">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">resolve_ndarray_kernel_arg_id</span><span class="p">(</span>
-    <span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span>
+    <span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span>
     <span class="n">kernel</span><span class="p">,</span>
     <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">,</span>
     <span class="n">usage</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>

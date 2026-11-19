@@ -32,7 +32,7 @@ Functions
 Module Contents
 ---------------
 
-.. py:function:: resolve_ndarray_kernel_arg_id(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, kernel, node: ast.expr, usage: str) -> tuple[str, int]
+.. py:function:: resolve_ndarray_kernel_arg_id(ctx: quadrants.lang.ast.ast_transformer_utils.FuncCompilePassContext, kernel, node: ast.expr, usage: str) -> tuple[str, int]
 
    Resolve ``node`` to ``(label, flat_cpp_arg_id)`` at AST-build time.
 

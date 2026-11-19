@@ -347,7 +347,7 @@
 <span class="kn">import</span><span class="w"> </span><span class="nn">ast</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">ASTTransformerFuncContext</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">FuncCompilePassContext</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.exception</span><span class="w"> </span><span class="kn">import</span> <span class="n">QuadrantsSyntaxError</span>
 
 <span class="c1"># Sentinel name used by `_kernel_coverage.py` (`FIELD_VAR_NAME`) for the probe-tracking field. The checkpoint validator</span>
@@ -545,7 +545,7 @@
 <div class="viewcode-block" id="CheckpointTransformer.build_checkpoint_with">
 <a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/checkpoint_transformer/index.html#quadrants.lang.ast.ast_transformers.checkpoint_transformer.CheckpointTransformer.build_checkpoint_with">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">build_checkpoint_with</span><span class="p">(</span>
-        <span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span>
         <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">,</span>
         <span class="n">info</span><span class="p">:</span> <span class="n">CheckpointCallInfo</span><span class="p">,</span>
         <span class="n">build_stmts</span><span class="p">,</span>
@@ -561,7 +561,7 @@
 <span class="sd">        """</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_kernel</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"qd.checkpoint() can only be used inside @qd.kernel, not @qd.func"</span><span class="p">)</span>
-        <span class="n">kernel</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">current_kernel</span>
+        <span class="n">kernel</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="o">.</span><span class="n">current_kernel</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">kernel</span><span class="o">.</span><span class="n">use_graph</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
                 <span class="s2">"qd.checkpoint() requires @qd.kernel(graph=True); the resume model only applies to graph kernels"</span>

@@ -628,6 +628,11 @@ my_struct.b[37] 5
 <section id="frozen-vs-non-frozen">
 <h3>Frozen vs non-frozen<a class="headerlink" href="#frozen-vs-non-frozen" title="Link to this heading">#</a></h3>
 <p>A <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> may be either non-frozen (the default) or frozen (<code class="docutils literal notranslate"><span class="pre">&#64;dataclass(frozen=True)</span></code>). Both work as kernel arguments. Frozen containers with stable members enable cached type resolution and launch arguments. A frozen outer container does not freeze its children: if a nested dataclass is mutable, Quadrants re-reads its members on each launch. <code class="docutils literal notranslate"><span class="pre">unsafe_hash=True</span></code> alone does not enable these caches.</p>
+<p><strong>Important.</strong> Once a dataclass or <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> object has been used in a kernel call, keep its references to nested dataclass and data-oriented objects fixed. For example, if <code class="docutils literal notranslate"><span class="pre">state.grid</span></code> holds a dataclass, assigning <code class="docutils literal notranslate"><span class="pre">state.grid</span> <span class="pre">=</span> <span class="pre">another_grid</span></code> between launches is unsupported and can give incorrect results. You can pass a different <code class="docutils literal notranslate"><span class="pre">state</span></code> instance on the next call, or update an ordinary runtime scalar such as <code class="docutils literal notranslate"><span class="pre">state.grid.n</span></code> on a mutable dataclass.</p>
+</section>
+<section id="container-alias-cache">
+<h3>Container alias cache<a class="headerlink" href="#container-alias-cache" title="Link to this heading">#</a></h3>
+<p>To speed up repeated kernel calls, Quadrants caches which arguments share the same dataclass or data-oriented object, including objects nested inside those arguments. If you repeatedly create new containers to pass to kernels and keep many different argument combinations alive, the cache can fill up. Quadrants then reports a warning at reset or process exit. Your kernels still run correctly, but recomputing entries can slow down later calls. Where practical, create these containers during setup and reuse them across calls. You can raise the default limit of 1,024 entries with <code class="docutils literal notranslate"><span class="pre">qd.init(container_alias_cache_size=4096)</span></code>.</p>
 </section>
 <section id="subclasses">
 <h3>Subclasses<a class="headerlink" href="#subclasses" title="Link to this heading">#</a></h3>
@@ -773,22 +778,30 @@ my_struct.b[37] 5
 <span class="n">Simulation</span><span class="p">(</span><span class="mi">200</span><span class="p">)</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>   <span class="c1"># compiles kernel #2 with n=200 baked in</span>
 </pre></div>
 </div>
-<section id="dataclass-aliases-and-fixed-container-references">
-<h4>Dataclass aliases and fixed container references<a class="headerlink" href="#dataclass-aliases-and-fixed-container-references" title="Link to this heading">#</a></h4>
-<p>The intended contract for dataclasses inside data-oriented arguments allows aliases: multiple references to the same object. After initialization, references connecting these objects and their containing collections must remain fixed. Replacing those references is unsupported and may produce incorrect results without an error. Initialization includes assembling the objects before their first kernel call; it need not happen entirely inside <code class="docutils literal notranslate"><span class="pre">__init__</span></code>.</p>
-<p>Ordinary runtime scalar values and tensor contents may still change. For example, given a data-oriented <code class="docutils literal notranslate"><span class="pre">owner</span></code> whose <code class="docutils literal notranslate"><span class="pre">state</span></code> is a dataclass with an ordinary integer member <code class="docutils literal notranslate"><span class="pre">value</span></code>:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># During initialization:</span>
-<span class="n">owner</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">State</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
-<span class="n">owner</span><span class="o">.</span><span class="n">states</span> <span class="o">=</span> <span class="p">(</span><span class="n">owner</span><span class="o">.</span><span class="n">state</span><span class="p">,)</span>
+<section id="dataclasses-stored-on-data-oriented-objects">
+<h4>Dataclasses stored on data-oriented objects<a class="headerlink" href="#dataclasses-stored-on-data-oriented-objects" title="Link to this heading">#</a></h4>
+<p>Scalar fields of a Python dataclass stored on a data-oriented object are runtime kernel parameters, just as when passing the dataclass directly. Their arriving values determine the parameter types. Updating an ordinary scalar value between launches takes effect without recompilation. This applies regardless of <code class="docutils literal notranslate"><span class="pre">template_primitives</span></code> on the owner. Use <code class="docutils literal notranslate"><span class="pre">Final</span></code> for dataclass fields needed in <code class="docutils literal notranslate"><span class="pre">qd.static(...)</span></code>.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@dataclasses</span><span class="o">.</span><span class="n">dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">State</span><span class="p">:</span>
+    <span class="n">count</span><span class="p">:</span> <span class="nb">int</span>
 
-<span class="c1"># After initialization:</span>
-<span class="n">owner</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="mi">7</span>       <span class="c1"># Allowed: update an ordinary runtime scalar.</span>
-<span class="n">owner</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">State</span><span class="p">(</span><span class="mi">9</span><span class="p">)</span>      <span class="c1"># Unsupported: replace a container reference.</span>
-<span class="n">owner</span><span class="o">.</span><span class="n">states</span> <span class="o">=</span> <span class="p">(</span><span class="n">State</span><span class="p">(</span><span class="mi">9</span><span class="p">),)</span>  <span class="c1"># Unsupported: replace a container reference.</span>
+<span class="nd">@qd</span><span class="o">.</span><span class="n">data_oriented</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Owner</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">State</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">alias</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span>
+
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">read</span><span class="p">(</span><span class="n">owner</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">owner</span><span class="o">.</span><span class="n">alias</span><span class="o">.</span><span class="n">count</span>
+
+<span class="n">owner</span> <span class="o">=</span> <span class="n">Owner</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">read</span><span class="p">(</span><span class="n">owner</span><span class="p">))</span>  <span class="c1"># 3</span>
+<span class="n">owner</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">count</span> <span class="o">=</span> <span class="mi">7</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">read</span><span class="p">(</span><span class="n">owner</span><span class="p">))</span>  <span class="c1"># 7, using the same compiled kernel</span>
 </pre></div>
 </div>
-<p>A tuple prevents replacing its entries, but does not make objects inside it immutable. Mutating a nested collection to replace a referenced object also violates this contract. Existing restrictions on <code class="docutils literal notranslate"><span class="pre">Final</span></code> fields and compile-time values still apply. This contract concerns container references used to reach dataclasses; the separately documented ndarray reassignment behavior is unchanged.</p>
-<p><strong>Current implementation:</strong> some alias accesses are still rejected, including aliases reached through calls or indexing and used scalar members reached through multiple stored attribute paths. The fixed-reference contract is the intended basis for relaxing those checks; it does not mean those accesses are accepted yet. Arbitrary calls and properties are not guaranteed to return a fixed object and remain outside this promise.</p>
+<p>Stored aliases are supported. Keep references to their containing objects fixed after the first kernel call; replacing containers or changing their layout after that point is unsupported. Ordinary scalar values may change. This does not add discovery through tuples or lists: an indexed alias must refer to a dataclass already reachable through stored attributes.</p>
 </section>
 <section id="runtime-primitives-template-primitives-false">
 <span id="runtime-primitives-template_primitivesfalse"></span><h4>Runtime primitives: <code class="docutils literal notranslate"><span class="pre">template_primitives=False</span></code><a class="headerlink" href="#runtime-primitives-template-primitives-false" title="Link to this heading">#</a></h4>
@@ -1054,6 +1067,7 @@ my_struct.b[37] 5
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nesting">Nesting</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#passing-nested-sub-structs-to-a-qd-func">Passing nested sub-structs to a <code class="docutils literal notranslate"><span class="pre">qd.func</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#frozen-vs-non-frozen">Frozen vs non-frozen</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#container-alias-cache">Container alias cache</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#subclasses">Subclasses</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#compile-time-constant-fields-typing-final">Compile-time constant fields: <code class="docutils literal notranslate"><span class="pre">typing.Final</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#under-the-hood">Under the hood</a></li>
@@ -1062,7 +1076,7 @@ my_struct.b[37] 5
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-data-oriented">qd.data_oriented</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#stable-members">stable_members</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#primitive-members">Primitive members</a><ul class="nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#dataclass-aliases-and-fixed-container-references">Dataclass aliases and fixed container references</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#dataclasses-stored-on-data-oriented-objects">Dataclasses stored on data-oriented objects</a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#runtime-primitives-template-primitives-false">Runtime primitives: <code class="docutils literal notranslate"><span class="pre">template_primitives=False</span></code></a></li>
 </ul>
 </li>

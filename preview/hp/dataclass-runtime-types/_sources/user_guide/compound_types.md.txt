@@ -168,6 +168,12 @@ Note: assigning a sub-struct to a local variable and then passing it (`t = s.inn
 
 A `dataclasses.dataclass` may be either non-frozen (the default) or frozen (`@dataclass(frozen=True)`). Both work as kernel arguments. Frozen containers with stable members enable cached type resolution and launch arguments. A frozen outer container does not freeze its children: if a nested dataclass is mutable, Quadrants re-reads its members on each launch. `unsafe_hash=True` alone does not enable these caches.
 
+**Important.** Once a dataclass or `@qd.data_oriented` object has been used in a kernel call, keep its references to nested dataclass and data-oriented objects fixed. For example, if `state.grid` holds a dataclass, assigning `state.grid = another_grid` between launches is unsupported and can give incorrect results. You can pass a different `state` instance on the next call, or update an ordinary runtime scalar such as `state.grid.n` on a mutable dataclass.
+
+### Container alias cache
+
+To speed up repeated kernel calls, Quadrants caches which arguments share the same dataclass or data-oriented object, including objects nested inside those arguments. If you repeatedly create new containers to pass to kernels and keep many different argument combinations alive, the cache can fill up. Quadrants then reports a warning at reset or process exit. Your kernels still run correctly, but recomputing entries can slow down later calls. Where practical, create these containers during setup and reuse them across calls. You can raise the default limit of 1,024 entries with `qd.init(container_alias_cache_size=4096)`.
+
 ### Subclasses
 
 You are able to pass any subclass of the annotated dataclass type. This is especially useful for cases where only a subset of your class is valid in quadrants, as below:
@@ -318,26 +324,32 @@ Simulation(100).step()   # compiles kernel #1 with n=100 baked in
 Simulation(200).step()   # compiles kernel #2 with n=200 baked in
 ```
 
-#### Dataclass aliases and fixed container references
+#### Dataclasses stored on data-oriented objects
 
-The intended contract for dataclasses inside data-oriented arguments allows aliases: multiple references to the same object. After initialization, references connecting these objects and their containing collections must remain fixed. Replacing those references is unsupported and may produce incorrect results without an error. Initialization includes assembling the objects before their first kernel call; it need not happen entirely inside `__init__`.
-
-Ordinary runtime scalar values and tensor contents may still change. For example, given a data-oriented `owner` whose `state` is a dataclass with an ordinary integer member `value`:
+Scalar fields of a Python dataclass stored on a data-oriented object are runtime kernel parameters, just as when passing the dataclass directly. Their arriving values determine the parameter types. Updating an ordinary scalar value between launches takes effect without recompilation. This applies regardless of `template_primitives` on the owner. Use `Final` for dataclass fields needed in `qd.static(...)`.
 
 ```python
-# During initialization:
-owner.state = State(3)
-owner.states = (owner.state,)
+@dataclasses.dataclass
+class State:
+    count: int
 
-# After initialization:
-owner.state.value = 7       # Allowed: update an ordinary runtime scalar.
-owner.state = State(9)      # Unsupported: replace a container reference.
-owner.states = (State(9),)  # Unsupported: replace a container reference.
+@qd.data_oriented
+class Owner:
+    def __init__(self):
+        self.state = State(3)
+        self.alias = self.state
+
+@qd.kernel
+def read(owner: qd.Template) -> qd.i32:
+    return owner.alias.count
+
+owner = Owner()
+print(read(owner))  # 3
+owner.state.count = 7
+print(read(owner))  # 7, using the same compiled kernel
 ```
 
-A tuple prevents replacing its entries, but does not make objects inside it immutable. Mutating a nested collection to replace a referenced object also violates this contract. Existing restrictions on `Final` fields and compile-time values still apply. This contract concerns container references used to reach dataclasses; the separately documented ndarray reassignment behavior is unchanged.
-
-**Current implementation:** some alias accesses are still rejected, including aliases reached through calls or indexing and used scalar members reached through multiple stored attribute paths. The fixed-reference contract is the intended basis for relaxing those checks; it does not mean those accesses are accepted yet. Arbitrary calls and properties are not guaranteed to return a fixed object and remain outside this promise.
+Stored aliases are supported. Keep references to their containing objects fixed after the first kernel call; replacing containers or changing their layout after that point is unsupported. Ordinary scalar values may change. This does not add discovery through tuples or lists: an indexed alias must refer to a dataclass already reachable through stored attributes.
 
 #### Runtime primitives: `template_primitives=False`
 
