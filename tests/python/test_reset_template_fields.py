@@ -12,9 +12,11 @@ from tests.helpers import test_utils
 
 @pytest.mark.parametrize("field_kind", ["scalar", "vector", "matrix"])
 @pytest.mark.parametrize("nested", [False, True])
+@pytest.mark.parametrize("offline_cache", [False, True])
 @test_utils.test()
-def test_reset_releases_template_fields(field_kind, nested):
+def test_reset_releases_template_fields(field_kind, nested, offline_cache, monkeypatch):
     arch = qd.cfg.arch
+    monkeypatch.setenv("QD_OFFLINE_CACHE", str(int(offline_cache)))
 
     @qd.kernel
     def fill(x: qd.Template, value: qd.i32):
@@ -27,7 +29,7 @@ def test_reset_releases_template_fields(field_kind, nested):
 
     refs = []
     for value in (1, 2, 3):
-        qd.init(arch=arch, offline_cache=False)
+        qd.init(arch=arch)
         if field_kind == "scalar":
             x = qd.field(qd.i32, shape=4)
         elif field_kind == "vector":
@@ -57,7 +59,7 @@ def test_reset_releases_gradient_template_fields():
 
     refs = []
     for _ in range(3):
-        qd.init(arch=arch, offline_cache=False)
+        qd.init(arch=arch)
         x = qd.field(qd.f32, shape=4, needs_grad=True)
         loss = qd.field(qd.f32, shape=(), needs_grad=True)
         x.fill(2)
@@ -100,7 +102,7 @@ def test_reset_reuses_specialization_ids_with_new_member_paths():
         return value + state.offset
 
     for cls, member in ((Left, "left"), (Right, "right"), (Left, "left")):
-        qd.init(arch=arch, offline_cache=False)
+        qd.init(arch=arch)
         state = cls()
         getattr(state, member)[0] = 10
         assert read(state) == 10 + state.offset
@@ -130,7 +132,7 @@ def test_reset_releases_runtime_dataclass_fields():
 
     refs = []
     for value in (1, 2, 3):
-        qd.init(arch=arch, offline_cache=False)
+        qd.init(arch=arch)
         x = qd.field(qd.i32, shape=1)
         x[0] = value
         state = State(x)
