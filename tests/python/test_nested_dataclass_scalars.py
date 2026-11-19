@@ -145,8 +145,8 @@ def test_nested_runtime_scalar_rejects_static() -> None:
 
 
 @test_utils.test()
-def test_shared_owner_keeps_runtime_primitive_opt_in() -> None:
-    """A default owner visited first must not hide the runtime opt-in of another owner sharing its child."""
+def test_data_oriented_shared_child_keeps_runtime_primitive_opt_in() -> None:
+    """Data-oriented objects sharing a child must each respect their template_primitives setting."""
 
     @qd.data_oriented
     class Child:
@@ -154,12 +154,12 @@ def test_shared_owner_keeps_runtime_primitive_opt_in() -> None:
             self.value = 3
 
     @qd.data_oriented
-    class DefaultOwner:
+    class DefaultDataOriented:
         def __init__(self, child: Child) -> None:
             self.child = child
 
     @qd.data_oriented(template_primitives=False)
-    class RuntimeOwner:
+    class RuntimeDataOriented:
         def __init__(self, child: Child) -> None:
             self.child = child
 
@@ -168,7 +168,7 @@ def test_shared_owner_keeps_runtime_primitive_opt_in() -> None:
         return runtime.child.value
 
     child = Child()
-    default, runtime = DefaultOwner(child), RuntimeOwner(child)
+    default, runtime = DefaultDataOriented(child), RuntimeDataOriented(child)
     assert read(default, runtime) == 3
     child.value = 7
     assert read(default, runtime) == 7
