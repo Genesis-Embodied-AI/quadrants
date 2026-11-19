@@ -9,6 +9,7 @@ import pytest
 import quadrants as qd
 
 from tests.helpers import test_utils
+from tests.helpers.runtime import qd_init_same_arch
 
 
 def _receiver_example():
@@ -55,8 +56,10 @@ def _receiver_example():
 
 
 @pytest.mark.parametrize("call_kind", range(3))
-@test_utils.test(arch=qd.cpu, offline_cache=False)
-def test_fastcache_receiver_constants(call_kind):
+@test_utils.test(arch=qd.cpu)
+def test_fastcache_receiver_constants(call_kind, monkeypatch):
+    monkeypatch.setenv("QD_OFFLINE_CACHE", "0")
+    qd_init_same_arch(offline_cache=False)
     kernels, holder_type = _receiver_example()
     kernel = kernels[call_kind]
     out = qd.ndarray(qd.i32, shape=1)
@@ -107,8 +110,10 @@ def test_fastcache_receiver_across_processes(tmp_path, call_kind):
         assert "receiver cache child passed" in result.stdout
 
 
-@test_utils.test(arch=qd.cpu, offline_cache=False)
-def test_fastcache_receiver_field_fallback():
+@test_utils.test(arch=qd.cpu)
+def test_fastcache_receiver_field_fallback(monkeypatch):
+    monkeypatch.setenv("QD_OFFLINE_CACHE", "0")
+    qd_init_same_arch(offline_cache=False)
     @qd.data_oriented
     class Item:
         def __init__(self, n, value):
@@ -131,8 +136,11 @@ def test_fastcache_receiver_field_fallback():
         assert run._primal.fast_checksum is None
 
 
-@test_utils.test(arch=qd.cpu, offline_cache=False)
-def test_fastcache_receiver_alias_fallback():
+@pytest.mark.parametrize("alias_kind", ["object", "method", "subscript"])
+@test_utils.test(arch=qd.cpu)
+def test_fastcache_receiver_alias_fallback(alias_kind, monkeypatch):
+    monkeypatch.setenv("QD_OFFLINE_CACHE", "0")
+    qd_init_same_arch(offline_cache=False)
     @qd.data_oriented
     class Item:
         def __init__(self, k):
@@ -143,12 +151,18 @@ def test_fastcache_receiver_alias_fallback():
             return self.k
 
     @qd.kernel(fastcache=True)
-    def run(out: qd.types.NDArray[qd.i32, 1], item: qd.Template):
-        alias = item
-        out[0] = alias.read()
+    def run(out: qd.types.NDArray[qd.i32, 1], item: qd.Template, kind: qd.Template):
+        if qd.static(kind == "object"):
+            alias = item
+            out[0] = alias.read()
+        elif qd.static(kind == "method"):
+            method = qd.static(item.read)
+            out[0] = method()
+        else:
+            out[0] = (item,)[0].read()
 
     out = qd.ndarray(qd.i32, shape=1)
     for k in (2, 3):
-        run(out, Item(k))
+        run(out, Item(k), alias_kind)
         assert out[0] == k
         assert run._primal.fast_checksum is None
