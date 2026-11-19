@@ -23,6 +23,7 @@ from quadrants.lang.exception import (
 if TYPE_CHECKING:
     from .._func_base import FuncBase
     from .._pruning import Pruning
+    from ..kernel import Kernel
 
 AutodiffMode = _qd_core.AutodiffMode
 
