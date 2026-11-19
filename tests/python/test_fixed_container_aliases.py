@@ -144,3 +144,21 @@ def test_alias_key_tracks_whole_argument_combination() -> None:
     first.state.value = 5
     assert read(first, shared) == 10
     assert read(first, independent) == 12
+
+
+@test_utils.test(arch=qd.cpu)
+def test_slotted_mutable_owner_requires_weak_references() -> None:
+    @dataclass
+    class Child:
+        value: int
+
+    @dataclass(slots=True)
+    class Owner:
+        child: Child
+
+    @qd.kernel
+    def read(owner: qd.RuntimeTyped) -> int:
+        return owner.child.value
+
+    with pytest.raises(Exception, match="must support weak references"):
+        read(Owner(Child(3)))

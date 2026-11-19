@@ -349,7 +349,7 @@ owner.state.count = 7
 print(read(owner))  # 7, using the same compiled kernel
 ```
 
-Stored aliases are supported. The first kernel use fixes the references between containers. Replacing or deleting these references, or adding a container attribute, raises on ordinary assignment to a tracked object. Runtime scalar values may change. Keep references fixed on objects that cannot be weakly referenced. Lists, dictionaries, and sets under data-oriented attributes are unsupported.
+Stored aliases are supported. The first kernel use fixes the references between containers. Replacing or deleting these references, or adding a container attribute, raises on ordinary assignment to a tracked object. Runtime scalar values may change. Mutable owners with stored container references must support weak references. Lists, dictionaries, and sets under data-oriented attributes are unsupported.
 
 #### Runtime primitives: `template_primitives=False`
 
