@@ -523,10 +523,13 @@
                     <span class="p">)</span>
                     <span class="n">value</span> <span class="o">=</span> <span class="n">child</span>
                 <span class="k">elif</span> <span class="n">is_data_oriented</span><span class="p">(</span><span class="n">child</span><span class="p">):</span>
-                    <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                        <span class="s2">"Data-oriented objects inside Python dataclass fields are unsupported. "</span>
-                        <span class="s2">"Store the dataclass on the data-oriented object instead."</span>
-                    <span class="p">)</span>
+                    <span class="c1"># Discovery determines whether this unsupported member is used.</span>
+                    <span class="k">if</span> <span class="n">pruning</span><span class="o">.</span><span class="n">enforcing</span><span class="p">:</span>
+                        <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+                            <span class="s2">"Data-oriented objects inside Python dataclass fields are unsupported. "</span>
+                            <span class="s2">"Store the dataclass on the data-oriented object instead."</span>
+                        <span class="p">)</span>
+                    <span class="n">value</span> <span class="o">=</span> <span class="n">child</span>
                 <span class="k">else</span><span class="p">:</span>
                     <span class="n">features</span> <span class="o">=</span> <span class="p">(</span>
                         <span class="n">this_arg_features</span><span class="p">[</span><span class="n">field_idx</span><span class="p">]</span>
