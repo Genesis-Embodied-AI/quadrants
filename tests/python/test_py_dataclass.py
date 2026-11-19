@@ -2029,9 +2029,13 @@ def test_container_alias_cache_lifetime(monkeypatch: pytest.MonkeyPatch) -> None
     qd.reset()
     # Coverage harvesting can insert one more cache entry during reset.
     expected_evictions = (1, 2) if os.environ.get("QD_KERNEL_COVERAGE") == "1" else (1,)
-    assert sum(
-        any(f"evicted {count} entries at capacity 1" in message for count in expected_evictions) for message in messages
-    ) == 1, messages
+    assert (
+        sum(
+            any(f"evicted {count} entries at capacity 1" in message for count in expected_evictions)
+            for message in messages
+        )
+        == 1
+    ), messages
     with pytest.raises(ValueError, match="container_alias_cache_size must be a positive integer"):
         qd.init(arch=qd.cpu, container_alias_cache_size=0)
 
