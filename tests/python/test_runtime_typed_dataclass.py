@@ -239,7 +239,7 @@ def test_runtime_scalar_precision() -> None:
 
 
 @pytest.mark.parametrize("annotation_kind", ["marker", "concrete"])
-@test_utils.test()
+@test_utils.test(print_full_traceback=False)
 def test_runtime_bad_inputs(annotation_kind: str) -> None:
     @dataclass
     class State:
@@ -261,7 +261,7 @@ def test_runtime_bad_inputs(annotation_kind: str) -> None:
 
     with pytest.raises(qd.QuadrantsRuntimeTypeError, match="Argument 'state' requires a Python dataclass instance"):
         read(1)
-    with pytest.raises(qd.QuadrantsRuntimeTypeError, match="Argument 'state' requires a Python dataclass instance"):
+    with pytest.raises(qd.QuadrantsCompilationError, match="has no attribute 'value'"):
         invalid_func_argument()
     with pytest.raises(Exception, match="state.value.*unsupported runtime type"):
         read(State(object()))

@@ -240,10 +240,9 @@ class FuncBase:
 
     def check_parameter_annotations(self) -> None:
         """
-        Look at annotations of function parameters, and store into self.arg_metas
-        and self.orig_arguments (both are identical after this call)
-        - they just contain the original parameter annotations after this call, unexpanded
-        - this function mostly just does checking
+        Record parameter names and defaults in self.arg_metas and self.orig_arguments (identical after this call).
+        Validate the supported signature forms. Kernels and real functions retain their annotations; inlined functions
+        discard them and bind arriving values when compiling each call.
 
         Note: NOT in the hot path. Just run once, on function registration
         """
