@@ -24,6 +24,8 @@ See [Nesting compatibility](#nesting-compatibility) below for a per-container ×
 
 For ordered sequences of callable objects with captured dataclass data, see [tuples of handlers](handler_tuples.md).
 
+Use [`kernel.get_member_access(...)`](member_access.md) to query which array members a kernel uses, reads, and writes for a static configuration. The query accepts small ndarray placeholders, so allocation planning can precede full-sized buffer allocation.
+
 ## How to choose a compound type?
 
 It's of course very subjective, but some guidelines you could consider:
