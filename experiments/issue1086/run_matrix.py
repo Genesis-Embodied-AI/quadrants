@@ -39,7 +39,12 @@ for precision in ("32", "64"):
         print("RUN " + json.dumps(command), flush=True)
         with (args.output / (label + ".log")).open("w") as log:
             process = subprocess.Popen(
-                command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env, cwd=args.output.resolve()
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                env=env,
+                cwd=dump_path.resolve() if args.probe == "reproduce" else args.output.resolve(),
             )
             for line in process.stdout:
                 print(line, end="", flush=True)

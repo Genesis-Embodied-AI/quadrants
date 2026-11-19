@@ -80,8 +80,11 @@ if args.scene == "boxes":
     scene.add_entity(gs.morphs.Box(size=(0.1, 0.1, 0.1), pos=(0, 0, 0.5)))
     scene.add_entity(gs.morphs.Box(size=(0.1, 0.1, 0.1), pos=(2, 0, 0.5)))
 else:
-    scene.add_entity(gs.morphs.URDF(file="urdf/anymal_c/urdf/anymal_c.urdf", pos=(0, 0, 0.8)))
+    robot = scene.add_entity(gs.morphs.URDF(file="urdf/anymal_c/urdf/anymal_c.urdf", pos=(0, 0, 0.8)))
 scene.build(n_envs=args.n_envs)
+if args.scene == "anymal":
+    robot.set_dofs_kp(1000.0, slice(6, None))
+    robot.control_dofs_position(0.0, slice(6, None))
 for _ in range(60):
     scene.step()
 saved = scene.get_state()
