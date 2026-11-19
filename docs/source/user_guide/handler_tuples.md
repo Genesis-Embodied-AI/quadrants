@@ -45,7 +45,7 @@ Captured data may contain tuples, Python dataclasses, data-oriented objects, Qua
 
 Changing tensor contents or an ordinary scalar dataclass value updates the next launch without requiring another compilation. Rebinding a tensor with the same element type, rank, and layout also reuses compiled code. Changing a selected function, handler order, tuple structure, captured runtime type, or compile-time constant selects a matching specialization. Equivalent fresh handler objects can reuse compiled code; object identity alone is not the specialization key. Sharing captured objects is tracked because it affects which kernel arguments can be shared.
 
-`Bound.func` and `Bound.data` may be reassigned. Quadrants checks the captured structure on each launch, so this flexibility has Python dispatch cost proportional to the captured structure. Keep handler sequences small when launch overhead matters. Cycles and unsupported capture types produce an error identifying the capture path. Mutation during an active launch is not supported.
+You can reassign `Bound.func`. To change the captured `Bound.data` tuple after first use, create a new handler. Quadrants checks the captured structure on each launch, so this flexibility has Python dispatch cost proportional to the captured structure. Keep handler sequences small when launch overhead matters. Cycles and unsupported capture types produce an error identifying the capture path. Mutation during an active launch is not supported.
 
 ## Caching and limitations
 
