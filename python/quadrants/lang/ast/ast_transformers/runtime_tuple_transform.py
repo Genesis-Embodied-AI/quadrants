@@ -6,12 +6,17 @@ from quadrants.lang._quadrants_callable import BoundQuadrantsCallable, Quadrants
 from quadrants.lang.util import is_data_oriented
 
 
-def resolve_callable(func):
+def resolve_callable(node):
+    """Resolve a callable and preserve the expression supplying its implicit receiver."""
+    func = node.ptr
     if is_data_oriented(func):
         method = getattr(func, "__call__", None)
         if isinstance(method, (QuadrantsCallable, BoundQuadrantsCallable)) and method._is_quadrants_function:
-            return method
-    return func
+            return method, node
+    if isinstance(func, BoundQuadrantsCallable) and isinstance(node, ast.Attribute):
+        if getattr(node.value, "ptr", None) is func.instance:
+            return func, node.value
+    return func, None
 
 
 def build_tuple_for(ctx, node, decorator, build_stmt, build_static_for):
