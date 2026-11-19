@@ -31,7 +31,7 @@ def test_classfunc():
 def test_class_with_field():
     @qd.data_oriented
     class B(object):
-        def __init__(self):
+        def init(self):
             self.x = qd.field(int)
             fb = qd.FieldsBuilder()
             fb.dense(qd.i, 1).place(self.x)
@@ -44,9 +44,11 @@ def test_class_with_field():
     class A(object):
         def __init__(self):
             self.n = 12345
+            self.b = B()
 
         def init(self):
-            self.b = B()
+            # Keep the nested owner fixed while destroying and recreating its field storage.
+            self.b.init()
             self.x = qd.field(int)
             fb = qd.FieldsBuilder()
             fb.dense(qd.i, self.n).place(self.x)
@@ -55,7 +57,6 @@ def test_class_with_field():
         def clear(self):
             self.snode_tree.destroy()
             self.b.clear()
-            del self.b
 
         @qd.kernel
         def k(self, m: int):
