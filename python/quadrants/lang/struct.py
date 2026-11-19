@@ -164,6 +164,7 @@ _
         for k in self.keys:
             self[k] = value[k]
         self.__dtype = value.__dtype
+        self._qd_struct_type = getattr(value, "_qd_struct_type", None)
 
     @staticmethod
     def _make_getter(key):
@@ -192,6 +193,7 @@ _
         for k, v in self.items:
             v._assign(other.__entries[k])
         self.__dtype = other.__dtype
+        self._qd_struct_type = getattr(other, "_qd_struct_type", None)
         return self
 
     def __len__(self):
@@ -703,6 +705,7 @@ class StructType(CompoundType):
 
         struct = Struct(d)
         struct._Struct__dtype = self.dtype
+        struct._qd_struct_type = self
         return struct
 
     def from_kernel_struct_ret(self, launch_ctx, ret_index=()):
@@ -726,6 +729,7 @@ class StructType(CompoundType):
 
         struct = Struct(d)
         struct._Struct__dtype = self.dtype
+        struct._qd_struct_type = self
         return struct
 
     def set_kernel_struct_args(self, struct, launch_ctx, ret_index=()):
@@ -765,6 +769,9 @@ class StructType(CompoundType):
         entries["__struct_methods"] = self.methods
         struct = Struct(entries)
         struct._Struct__dtype = self.dtype
+        # Keep the Python type description alongside the native dtype so a containing Python dataclass can infer
+        # this value's scalar/member types without consulting the container's annotations.
+        struct._qd_struct_type = self
         attach_unpacked_groups(struct, self._unpacked_groups)
         return struct
 

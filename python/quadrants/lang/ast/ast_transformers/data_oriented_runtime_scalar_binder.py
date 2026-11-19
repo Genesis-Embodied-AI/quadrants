@@ -11,6 +11,7 @@ from quadrants.lang import expr, impl
 from quadrants.lang._final.final_dataclass_fields import final_field_names
 from quadrants.lang.ast.ast_transformer_utils import (
     FuncCompilePassContext,
+    KernelCompilePassContext,
     MemberBinding,
 )
 from quadrants.lang.kernel_arguments import ArgMetadata
@@ -42,6 +43,7 @@ def _collect_scalars_in_single_data_oriented(
     seen_ids: set[int],
     scalar_members: list[_ScalarMember],
     lift_plain: bool,
+    schema_by_id: dict[int, tuple[type, str]],
 ) -> None:
     """Collect annotated dataclass scalars and, when lift_plain is True, plain Python scalars beneath an owner.
 
@@ -54,8 +56,12 @@ def _collect_scalars_in_single_data_oriented(
 
     seen_ids.add(obj_id)
     if is_dataclass_instance(py_obj):
-        final_names = final_field_names(type(py_obj))
-        for field in dataclasses.fields(py_obj):
+        entry = schema_by_id.get(obj_id)
+        if entry is None:
+            return
+        schema, _ = entry
+        final_names = final_field_names(schema)
+        for field in dataclasses.fields(schema):
             value = getattr(py_obj, field.name)
             if field.name in final_names:
                 continue
@@ -66,7 +72,7 @@ def _collect_scalars_in_single_data_oriented(
                 )
             elif is_dataclass_instance(value):
                 _collect_scalars_in_single_data_oriented(
-                    value, arg_idx, (*path, field.name), seen_ids, scalar_members, lift_plain
+                    value, arg_idx, (*path, field.name), seen_ids, scalar_members, lift_plain, schema_by_id
                 )
         return
 
@@ -89,12 +95,12 @@ def _collect_scalars_in_single_data_oriented(
             scalar_members.append(_ScalarMember(py_obj, attr_name, attr_val, arg_idx, (*path, attr_name)))
         elif is_dataclass_instance(attr_val) or is_data_oriented(attr_val):
             _collect_scalars_in_single_data_oriented(
-                attr_val, arg_idx, (*path, attr_name), seen_ids, scalar_members, lift_plain
+                attr_val, arg_idx, (*path, attr_name), seen_ids, scalar_members, lift_plain, schema_by_id
             )
 
 
 def _collect_runtime_scalars_from_data_oriented_args(
-    py_args: tuple[Any, ...], arg_metas: list[ArgMetadata]
+    py_args: tuple[Any, ...], arg_metas: list[ArgMetadata], schema_by_id: dict[int, tuple[type, str]]
 ) -> list[_ScalarMember]:
     """Collect dataclass scalars beneath data-oriented arguments and plain scalars when their owner opts in."""
     owners: list[tuple[int, Any]] = []
@@ -113,7 +119,7 @@ def _collect_runtime_scalars_from_data_oriented_args(
     scalar_members: list[_ScalarMember] = []
     for arg_idx, val in owners:
         _collect_scalars_in_single_data_oriented(
-            val, arg_idx, (), set(), scalar_members, not uses_template_primitives(val)
+            val, arg_idx, (), set(), scalar_members, not uses_template_primitives(val), schema_by_id
         )
     return scalar_members
 
@@ -172,9 +178,32 @@ def _create_runtime_scalar_bindings(func_ctx: FuncCompilePassContext, scalar_mem
         runtime_scalar_launch_infos.append((arg_id[0], arg_idx, attr_chain, kind))
 
 
+def register_runtime_dataclass_schema(pass_ctx: KernelCompilePassContext, obj: Any, schema: type, name: str) -> None:
+    """Index stored dataclasses and their inferred member types for this pass."""
+    if id(obj) in pass_ctx.runtime_schema_by_id:
+        return
+    pass_ctx.runtime_schema_by_id[id(obj)] = (schema, name)
+    pass_ctx.runtime_dataclass_binding_objects.add(id(obj))
+    for field in dataclasses.fields(schema):
+        if dataclasses.is_dataclass(field.type):
+            register_runtime_dataclass_schema(pass_ctx, getattr(obj, field.name), field.type, f"{name}.{field.name}")
+
+
 def bind_data_oriented_runtime_scalars(func_ctx: FuncCompilePassContext) -> None:
     """Find opted-in scalar members, then create their compiler bindings."""
     assert func_ctx.py_args is not None
-    scalar_members = _collect_runtime_scalars_from_data_oriented_args(func_ctx.py_args, func_ctx.func.arg_metas)
+    pass_ctx = func_ctx.kernel_compile_context.current_pass
+    for index, path, schema in func_ctx.func._launch_arg_schemas:
+        obj = func_ctx.py_args[index]
+        name = func_ctx.func.arg_metas[index].name
+        for attr in path:
+            pass_ctx.runtime_dataclass_binding_objects.add(id(obj))
+            pass_ctx.runtime_dataclass_members.add((id(obj), attr))
+            obj = getattr(obj, attr)
+            name += "." + attr
+        register_runtime_dataclass_schema(pass_ctx, obj, schema, name)
+    scalar_members = _collect_runtime_scalars_from_data_oriented_args(
+        func_ctx.py_args, func_ctx.func.arg_metas, pass_ctx.runtime_schema_by_id
+    )
     if scalar_members:
         _create_runtime_scalar_bindings(func_ctx, scalar_members)

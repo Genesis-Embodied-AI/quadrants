@@ -77,6 +77,7 @@ user_api[qd] = [
     "Mesh",
     "MeshInstance",
     "Ndarray",
+    "RuntimeTyped",
     "SNode",
     "ScalarField",
     "ScalarNdarray",

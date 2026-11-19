@@ -18,6 +18,11 @@ from quadrants.lang import exception, expr, impl, matrix, mesh
 from quadrants.lang import ops as qd_ops
 from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._ndrange import _Ndrange
+from quadrants.lang._runtime_typing.dataclass_in_data_oriented import (
+    reject_computed_dataclass_alias,
+    reject_undiscovered_dataclass_member,
+)
+from quadrants.lang._runtime_typing.deferred_errors import DeferredMemberType
 from quadrants.lang._unpacked import _UnpackedVectorRef
 from quadrants.lang.ast.ast_transformer_utils import (
     Builder,
@@ -539,7 +544,11 @@ class ASTTransformer(Builder):
 
     @staticmethod
     def build_Call(ctx: FuncCompilePassContext, node: ast.Call) -> Any | None:
-        return CallTransformer.build_Call(ctx, node, build_stmt, build_stmts)
+        value = CallTransformer.build_Call(ctx, node, build_stmt, build_stmts)
+        reject_computed_dataclass_alias(
+            value, ctx.kernel_compile_context.current_pass.runtime_dataclass_binding_objects
+        )
+        return value
 
     @staticmethod
     def build_FunctionDef(ctx: FuncCompilePassContext, node: ast.FunctionDef) -> None:
@@ -801,6 +810,12 @@ class ASTTransformer(Builder):
                 node.ptr = getattr(tensor_ops, node.attr)
                 setattr(node, "caller", node.value.ptr)
         elif dataclasses.is_dataclass(node.value.ptr):
+            schema_entry = ctx.kernel_compile_context.current_pass.runtime_schema_by_id.get(id(node.value.ptr))
+            if schema_entry is not None:
+                schema, path = schema_entry
+                field = schema.__dataclass_fields__.get(node.attr)
+                if field is not None and isinstance(field.type, DeferredMemberType):
+                    field.type.bind(f"{path}.{node.attr}").reject()
             if is_data_oriented(node.value.ptr):
                 raise exception.QuadrantsRuntimeTypeError(
                     "A class cannot be both a Python dataclass and data-oriented."
@@ -815,6 +830,9 @@ class ASTTransformer(Builder):
                     "Data-oriented objects inside Python dataclass fields are unsupported. "
                     "Store the dataclass on the data-oriented object instead."
                 )
+            reject_undiscovered_dataclass_member(
+                node.value.ptr, node.attr, node.ptr, ctx.kernel_compile_context.current_pass.runtime_dataclass_members
+            )
             from quadrants._tensor_wrapper import (  # pylint: disable=C0415
                 Tensor as _TensorClass,
             )
@@ -838,6 +856,9 @@ class ASTTransformer(Builder):
                 node.ptr = lifted
                 return node.ptr
             node.ptr = getattr(node.value.ptr, node.attr)
+            reject_undiscovered_dataclass_member(
+                node.value.ptr, node.attr, node.ptr, ctx.kernel_compile_context.current_pass.runtime_dataclass_members
+            )
             # ``qd.Tensor`` wrappers reached via attribute access on a ``@qd.data_oriented`` struct field at AST-build
             # time. The IR layer downstream (``build_Subscript`` -> ``impl.subscript``) only knows about ``Ndarray`` /
             # ``Field`` / ``Expr``; the wrapper is host-side. Unwrap here so ``state.a[i, j]`` inside a kernel body
@@ -1032,7 +1053,10 @@ class ASTTransformer(Builder):
                     template_node = None
                     template_side = None
                 template_arg_names = {ctx.func.arg_metas[index].name for index in ctx.template_slot_locations}
-                if (
+                runtime_member = isinstance(template_node, ast.Attribute) and id(template_node.value.ptr) in (
+                    ctx.kernel_compile_context.current_pass.runtime_schema_by_id
+                )
+                if not runtime_member and (
                     not ctx.is_kernel
                     or not isinstance(template_node, ast.Name)
                     or template_node.id.startswith("__qd_")
@@ -1045,7 +1069,9 @@ class ASTTransformer(Builder):
                         "The argument must be annotated `qd.Tensor | None`, `qd.types.Template | None`, "
                         "or `qd.types.NDArray[...] | None`."
                     )
-                if template_side == "left":
+                if runtime_member:
+                    pass  # The inferred member's bound value already distinguishes None from present values.
+                elif template_side == "left":
                     l = ctx.template_vars[template_node.id]
                 else:
                     r = ctx.template_vars[template_node.id]

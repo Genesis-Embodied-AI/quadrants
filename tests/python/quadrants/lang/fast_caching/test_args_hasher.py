@@ -7,6 +7,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang._fast_caching import FIELD_METADATA_CACHE_VALUE, args_hasher
 from quadrants.lang._fast_caching.args_hasher import FastcacheSkip
+from quadrants.lang._runtime_typing.runtime_dataclass import cached_infer_dataclass_type
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import has_pytorch
 
@@ -14,6 +15,12 @@ from tests.helpers import test_utils
 
 if has_pytorch():
     import torch
+
+
+def _hash_dataclass(value: object) -> str | FastcacheSkip:
+    """Supply inferred argument metadata, as kernel dispatch does before hashing."""
+    meta = ArgMetadata(cached_infer_dataclass_type(value, "state"), "state")
+    return args_hasher.hash_args(False, [value], [meta])
 
 
 @test_utils.test()
@@ -307,11 +314,10 @@ def test_cache_values_unchecked() -> None:
     same = MyConfigNoCheckedSame(some_int_unchecked=6)
     diff = MyConfigNoCheckedDiff(some_int_new=3)
 
-    h = args_hasher.hash_args
-    h_base = h(False, [base], [None])
-    assert h_base is not None
-    assert h_base == h(False, [same], [None])
-    assert h_base != h(False, [diff], [None])
+    h_base = _hash_dataclass(base)
+    assert isinstance(h_base, str)
+    assert h_base == _hash_dataclass(same)
+    assert h_base != _hash_dataclass(diff)
 
 
 @test_utils.test()
@@ -324,11 +330,10 @@ def test_cache_values_checked() -> None:
     same = MyConfigChecked(some_int_checked=5)
     diff = MyConfigChecked(some_int_checked=7)
 
-    h = args_hasher.hash_args
-    h_base = h(False, [base], [None])
-    assert h_base is not None
-    assert h_base == h(False, [same], [None])
-    assert h_base != h(False, [diff], [None])
+    h_base = _hash_dataclass(base)
+    assert isinstance(h_base, str)
+    assert h_base == _hash_dataclass(same)
+    assert h_base != _hash_dataclass(diff)
 
 
 @pytest.mark.needs_torch
@@ -380,7 +385,7 @@ def test_args_hasher_dataclass_with_field_child_returns_none() -> None:
 
     f = qd.field(qd.i32, shape=(4,))
     state = State(a=f)
-    h = args_hasher.hash_args(False, [state], [None])
+    h = _hash_dataclass(state)
     assert isinstance(h, FastcacheSkip), f"Dataclass with ScalarField child must disable fastcache, got {h!r}"
 
 
@@ -395,7 +400,7 @@ def test_args_hasher_dataclass_with_tensor_field_child_returns_none() -> None:
     f = qd.field(qd.i32, shape=(4,))
     t = qd.Tensor(f)
     state = State(a=t)
-    h = args_hasher.hash_args(False, [state], [None])
+    h = _hash_dataclass(state)
     assert isinstance(h, FastcacheSkip), f"Dataclass with Tensor-wrapped ScalarField must disable fastcache, got {h!r}"
 
 
@@ -411,8 +416,8 @@ def test_args_hasher_dataclass_with_ndarray_child_returns_hash() -> None:
     a = qd.ndarray(qd.i32, (4,))
     b = qd.ndarray(qd.f32, (4,))
     state = State(a=a, b=b)
-    h = args_hasher.hash_args(False, [state], [None])
-    assert h is not None, "Dataclass with ndarray children should be fast-cacheable"
+    h = _hash_dataclass(state)
+    assert isinstance(h, str), "Dataclass with ndarray children should be fast-cacheable"
 
 
 @test_utils.test()
@@ -430,10 +435,10 @@ def test_args_hasher_dataclass_field_none_not_collide_with_ndarray() -> None:
     nd = qd.ndarray(qd.i32, (4,))
     f = qd.field(qd.i32, shape=(4,))
 
-    h_nd = args_hasher.hash_args(False, [State(a=nd)], [None])
-    h_f = args_hasher.hash_args(False, [State(a=f)], [None])
+    h_nd = _hash_dataclass(State(a=nd))
+    h_f = _hash_dataclass(State(a=f))
 
-    assert h_nd is not None
+    assert isinstance(h_nd, str)
     assert isinstance(h_f, FastcacheSkip)
     assert h_nd != h_f
 
@@ -470,7 +475,7 @@ def test_args_hasher_frozen_dataclass_failure_does_not_poison_narrower_walk() ->
         y: qd.types.NDArray[qd.i32, 1]  # cacheable ndarray
 
     state = State(x=qd.field(qd.i32, shape=(4,)), y=qd.ndarray(qd.i32, (4,)))
-    arg_meta = ArgMetadata(name="state", annotation=State)
+    arg_meta = ArgMetadata(name="state", annotation=cached_infer_dataclass_type(state, "state"))
 
     # Kernel A: pruning set includes both fields; walking hits the qd.field and fails.
     paths_a = {"__qd_state__qd_x", "__qd_state__qd_y"}
@@ -488,3 +493,50 @@ def test_args_hasher_frozen_dataclass_failure_does_not_poison_narrower_walk() ->
     # And unpruned walks are unaffected: no ``pruning_paths`` -> walk everything -> fail (same as A).
     h_none = args_hasher.hash_args(False, [state], [arg_meta])
     assert isinstance(h_none, FastcacheSkip), f"unpruned walk should fail fastcache; got {h_none!r}"
+
+
+@test_utils.test()
+def test_discovered_schemas_follow_argument_indices_and_member_paths() -> None:
+    """Forward each schema through owner recursion without confusing equal paths in different arguments."""
+    from quadrants.lang._runtime_typing.dataclass_in_data_oriented import (
+        infer_nested_dataclass_schemas,
+    )
+
+    @dataclasses.dataclass
+    class State:
+        value: object
+
+    @qd.data_oriented
+    class Owner:
+        def __init__(self, state: object) -> None:
+            self.child = state
+
+    owners = (Owner(Owner(State(3))), Owner(Owner(State(2.5))))
+    metas = [ArgMetadata(qd.Template, "first"), ArgMetadata(qd.Template, "second")]
+    schemas = infer_nested_dataclass_schemas(owners, metas, [0, 1])
+    assert isinstance(args_hasher.hash_args(False, owners, metas), FastcacheSkip)
+    expected = args_hasher.hash_args(False, owners, metas, launch_arg_schemas=schemas)
+    assert isinstance(expected, str)
+    assert args_hasher.hash_args(False, owners, metas, launch_arg_schemas=schemas) == expected
+
+    owners[0].child.child = State(1.5)
+    replacement_schemas = infer_nested_dataclass_schemas(owners, metas, [0, 1])
+    assert args_hasher.hash_args(False, owners, metas, launch_arg_schemas=replacement_schemas) != expected
+
+
+@test_utils.test()
+def test_dataclass_without_schema_skips_fastcache() -> None:
+    """Missing schemas must fail closed for direct arguments and property results."""
+
+    @dataclasses.dataclass
+    class State:
+        value: int
+
+    @qd.data_oriented
+    class Owner:
+        @property
+        def state(self) -> State:
+            return State(3)
+
+    assert isinstance(args_hasher.hash_args(False, [State(3)], [None]), FastcacheSkip)
+    assert isinstance(args_hasher.hash_args(False, [Owner()], [ArgMetadata(qd.Template, "owner")]), FastcacheSkip)

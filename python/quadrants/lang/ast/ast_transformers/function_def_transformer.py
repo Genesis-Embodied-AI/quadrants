@@ -26,8 +26,15 @@ from quadrants.lang._final.final_dataclass_fields import (
     final_field_names,
     is_final_annotation,
 )
-from quadrants.lang._name_utils import create_flat_name
+from quadrants.lang._name_utils import (
+    create_flat_name,
+    dotted_argument_path_from_flat_name,
+)
 from quadrants.lang._optional_annotation import OPTIONAL_ABSENT
+from quadrants.lang._runtime_typing.deferred_errors import (
+    DeferredMemberError,
+    DeferredMemberType,
+)
 from quadrants.lang.ast.ast_transformer_utils import (
     FuncCompilePassContext,
     MemberBinding,
@@ -38,6 +45,7 @@ from quadrants.lang.ast.ast_transformers.checkpoint_transformer import (
 )
 from quadrants.lang.ast.ast_transformers.data_oriented_runtime_scalar_binder import (
     bind_data_oriented_runtime_scalars,
+    register_runtime_dataclass_schema,
 )
 from quadrants.lang.ast.symbol_resolver import ASTResolver
 from quadrants.lang.buffer_view import BufferView
@@ -157,7 +165,12 @@ class FunctionDefTransformer:
         func_id = ctx.func.func_id
         if dataclasses.is_dataclass(argument_type):
             ctx.create_variable(argument_name, arg_value)
-            ctx.kernel_compile_context.current_pass.bound_dataclass_ids.add(id(arg_value))
+            pass_ctx = ctx.kernel_compile_context.current_pass
+            pass_ctx.bound_dataclass_ids.add(id(arg_value))
+            pass_ctx.runtime_schema_by_id[id(arg_value)] = (
+                argument_type,
+                dotted_argument_path_from_flat_name(argument_name),
+            )
             final_names = final_field_names(argument_type)
             bindings = ctx.kernel_compile_context.current_pass.binding_by_member
             for field_idx, field in enumerate(dataclasses.fields(argument_type)):
@@ -171,7 +184,9 @@ class FunctionDefTransformer:
                         raise QuadrantsSyntaxError(f"Conflicting annotations for shared member {flat_name!r}")
                     continue
                 child = getattr(arg_value, field.name)
-                if field.name in final_names:
+                if isinstance(field.type, DeferredMemberType):
+                    value = field.type.bind(dotted_argument_path_from_flat_name(flat_name))
+                elif field.name in final_names:
                     value = child
                 elif dataclasses.is_dataclass(field.type):
                     FunctionDefTransformer._bind_kernel_arg_or_nested_dataclass(
@@ -336,6 +351,8 @@ class FunctionDefTransformer:
             anno = arg_meta.annotation
             is_template = anno is annotations.template or isinstance(anno, annotations.template)
             is_tensor_anno = anno is _TensorClass
+            if hasattr(anno, "_qd_runtime_origin"):
+                continue
             if not (is_template or is_tensor_anno):
                 continue
             val = ctx.py_args[i]
@@ -366,10 +383,23 @@ class FunctionDefTransformer:
         # ``@qd.func`` (``static_rigid_sim_config.para_level``) reaches the kernel's pruning set - without it the
         # args-hasher never sees the value and configurations that differ only there collide in the fastcache key.
         ctx.fn_param_names.add(argument_name)
+        if isinstance(argument_type, DeferredMemberType):
+            # Captured Python dataclasses enter inlined calls before any kernel-argument binding exists.
+            binding = (
+                data
+                if isinstance(data, DeferredMemberError)
+                else argument_type.bind(dotted_argument_path_from_flat_name(argument_name))
+            )
+            ctx.create_variable(argument_name, binding)
+            return None
 
         if dataclasses.is_dataclass(argument_type):
-            if not isinstance(data, argument_type):
+            if not isinstance(data, getattr(argument_type, "_qd_runtime_origin", argument_type)):
                 raise QuadrantsSyntaxError(f"Argument {argument_name!r} requires {argument_type.__name__}")
+            if hasattr(argument_type, "_qd_runtime_origin"):
+                register_runtime_dataclass_schema(
+                    ctx.kernel_compile_context.current_pass, data, argument_type, argument_name
+                )
             ctx.create_variable(argument_name, data)
             return None
 
