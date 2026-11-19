@@ -130,7 +130,7 @@ def k2(s: Outer) -> None:
 
 ### Passing nested sub-structs to a `qd.func`
 
-You can pass either a whole nested-dataclass argument or one of its sub-struct members to a `qd.func`. The callee declares the sub-struct's type as the parameter annotation; the caller writes the attribute access at the call site:
+You can pass either a whole nested-dataclass argument or one of its sub-struct members to a `qd.func`. The caller writes the attribute access at the call site. The callee's annotations are optional typing documentation; its member types come from the actual argument, as described in [runtime typing in inlined functions](sub_functions.md#runtime-typing-in-inlined-functions):
 
 ```python
 @dataclass

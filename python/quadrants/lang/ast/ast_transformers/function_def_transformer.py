@@ -28,10 +28,10 @@ from quadrants.lang._name_utils import (
 )
 from quadrants.lang._optional_annotation import OPTIONAL_ABSENT
 from quadrants.lang._runtime_tuple import predeclare_tuple_scalars
-from quadrants.lang._runtime_typing.inline_arguments import bind_inline_arguments
 from quadrants.lang._runtime_typing.deferred_errors import (
     DeferredMemberType,
 )
+from quadrants.lang._runtime_typing.inline_arguments import bind_inline_arguments
 from quadrants.lang.ast.ast_transformer_utils import (
     FuncCompilePassContext,
     MemberBinding,

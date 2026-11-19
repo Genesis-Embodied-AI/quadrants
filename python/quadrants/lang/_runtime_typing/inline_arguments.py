@@ -9,7 +9,9 @@ from quadrants._tensor_wrapper import Tensor
 from quadrants.lang import impl
 from quadrants.lang._runtime_typing.runtime_dataclass import cached_infer_dataclass_type
 from quadrants.lang.ast.ast_transformer_utils import FuncCompilePassContext
-from quadrants.lang.ast.ast_transformers.data_oriented_runtime_scalar_binder import register_runtime_dataclass_schema
+from quadrants.lang.ast.ast_transformers.data_oriented_runtime_scalar_binder import (
+    register_runtime_dataclass_schema,
+)
 from quadrants.lang.expr import Expr
 from quadrants.lang.matrix import Matrix
 from quadrants.lang.struct import Struct
