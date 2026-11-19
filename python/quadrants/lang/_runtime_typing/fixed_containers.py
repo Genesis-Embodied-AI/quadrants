@@ -57,8 +57,13 @@ def fix_container_references(owner: Any, fixed_names: frozenset[str]) -> None:
         return
     try:
         _fixed_names[owner] = fixed_names
-    except TypeError:
-        # The alias cache reports non-weak-referenceable arguments. Their references must remain fixed by convention.
+    except TypeError as error:
+        if fixed_names:
+            raise QuadrantsRuntimeTypeError(
+                f"{type(owner).__name__} must support weak references to guard its container attributes. "
+                "For a slotted dataclass, use weakref_slot=True."
+            ) from error
+        # Leaf arguments can still run uncached. The alias cache warns about those arguments.
         return
     _install_assignment_guards(type(owner))
 

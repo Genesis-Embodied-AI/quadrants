@@ -170,3 +170,21 @@ def test_tuple_only_dataclass() -> None:
     owner.states[0].value = 6
     owner.states[0].array[0] = 8
     assert read(owner) == 14
+
+
+@test_utils.test(arch=qd.cpu)
+def test_slotted_mutable_owner_requires_weak_references() -> None:
+    @dataclass
+    class Child:
+        value: int
+
+    @dataclass(slots=True)
+    class Owner:
+        child: Child
+
+    @qd.kernel
+    def read(owner: qd.RuntimeTyped) -> int:
+        return owner.child.value
+
+    with pytest.raises(Exception, match="must support weak references"):
+        read(Owner(Child(3)))
