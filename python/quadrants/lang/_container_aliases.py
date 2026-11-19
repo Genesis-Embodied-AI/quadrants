@@ -37,13 +37,13 @@ def _collect_container_ids(py_obj: Any) -> tuple[int, ...]:
     pending = [py_obj]
     while pending:
         child = pending.pop()
-        is_dataclass = is_dataclass_instance(child)
         if isinstance(child, tuple) and not is_data_oriented(child):
             if id(child) not in seen_ids:
                 seen_ids.add(id(child))
                 pending.extend(child)
             identities.append(id(child))
             continue
+        is_dataclass = dataclasses.is_dataclass(child) and not isinstance(child, type)
         if not is_dataclass and not is_data_oriented(child):
             continue
 
@@ -56,7 +56,8 @@ def _collect_container_ids(py_obj: Any) -> tuple[int, ...]:
         if is_dataclass:
             members = ((field.name, getattr(child, field.name)) for field in dataclasses.fields(child))
         else:
-            attrs = child._asdict() if hasattr(child, "_asdict") else vars(child)
+            asdict = getattr(child, "_asdict", None)
+            attrs = asdict() if asdict is not None else vars(child)
             members = ((name, value) for name, value in attrs.items() if not name.startswith("_qd_"))
         fixed = set()
         for name, value in members:

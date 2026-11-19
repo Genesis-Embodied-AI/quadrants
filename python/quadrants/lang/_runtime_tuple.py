@@ -1,16 +1,11 @@
 """Runtime descriptions and indexed bindings for host tuples containing inlined callable objects.
 
 Only tuple arguments enter this path. A description is rebuilt for each launch because callable objects and their
-captures can be reassigned. Keys describe code and alias topology without retaining the captured object graph.
+scalar values and selected functions can change. Keys describe code and alias topology without retaining the captured object graph.
 """
 
+from quadrants.lang.util import get_member_at_path
 from quadrants.types.annotations import template
-
-
-def path_value(root, path):
-    for step in path:
-        root = root[step] if type(step) is int else getattr(root, step)
-    return root
 
 
 def tuple_annotation(value, name, raise_on_templated_floats=False):
@@ -40,13 +35,13 @@ def predeclare_tuple_scalars(ctx):
         if plan is None:
             continue
         for path in plan.dataclass_paths:
-            parent = path_value(ctx.py_args[arg_idx], path[:-1])
+            parent = get_member_at_path(ctx.py_args[arg_idx], path[:-1])
             if isinstance(path[-1], str):
                 pass_ctx.runtime_dataclass_members.add((id(parent), path[-1]))
-            obj = path_value(ctx.py_args[arg_idx], path)
+            obj = get_member_at_path(ctx.py_args[arg_idx], path)
             name = ".".join((meta.name, *map(str, path)))
             register_runtime_dataclass_schema(pass_ctx, obj, cached_infer_dataclass_type(obj, name), name)
         for path, dtype in plan.scalars:
-            parent = path_value(ctx.py_args[arg_idx], path[:-1])
+            parent = get_member_at_path(ctx.py_args[arg_idx], path[:-1])
             members.append(_ScalarMember(parent, path[-1], getattr(parent, path[-1]), arg_idx, path, dtype))
     _create_runtime_scalar_bindings(ctx, members)
