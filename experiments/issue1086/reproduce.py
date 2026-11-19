@@ -146,8 +146,11 @@ for arch in (qd.cpu if args.arch == "cpu" else qd.cuda,):
         # The inputs of 'inertia_about_origin' are bitwise identical in both kernels
         pos_equal = world_pos.to_numpy().tobytes() == pos_ref.tobytes()
         quat_equal = world_quat.to_numpy().tobytes() == quat_ref.tobytes()
-        n_diff = (out.to_numpy() != out_ref).any(axis=(1, 2)).sum()
-        max_diff = np.abs(out.to_numpy() - out_ref).max()
+        out_value = out.to_numpy()
+        n_diff = (out_value != out_ref).any(axis=(1, 2)).sum()
+        uint_dtype = np.uint32 if args.precision == "32" else np.uint64
+        n_bitwise_diff = (out_value.view(uint_dtype) != out_ref.view(uint_dtype)).any(axis=(1, 2)).sum()
+        max_diff = np.abs(out_value - out_ref).max()
         arch_name = qd.lang.impl.current_cfg().arch.name
         print(f"{arch_name:5s} fast_math={fast_math!s:5s}: {n_diff:5d} of {N} results differ (max {max_diff:.1e})")
         result = dict(
@@ -157,6 +160,8 @@ for arch in (qd.cpu if args.arch == "cpu" else qd.cuda,):
             pos_equal=pos_equal,
             quat_equal=quat_equal,
             differing_rows=int(n_diff),
+            bitwise_differing_rows=int(n_bitwise_diff),
+            output_bitwise_equal=out_value.tobytes() == out_ref.tobytes(),
             max_abs=float(max_diff),
             n=N,
             hostname=platform.node(),
