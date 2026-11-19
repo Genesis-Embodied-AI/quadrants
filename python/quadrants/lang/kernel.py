@@ -694,7 +694,7 @@ class Kernel(FuncBase):
         if self._mutable_nd_cached_val:
             args_hash = (
                 *args_hash,
-                *(id(self._resolve_struct_ndarray(args, idx, chain)) for idx, chain in self._mutable_nd_cached_val),
+                *(id(self._get_live_container_member(args, idx, chain)) for idx, chain in self._mutable_nd_cached_val),
             )
         if not self.launch_context_buffer_cache.populate_launch_ctx_from_cache(args_hash, launch_ctx):
             launch_ctx_buffer: dict[KernelBatchedArgType, list[tuple]] = defaultdict(list)
@@ -748,7 +748,7 @@ class Kernel(FuncBase):
 
             if self._nested_dataclass_launch_infos_by_key:
                 for arg_idx, path, flat_name, dataclass_type in self._nested_dataclass_launch_infos_by_key.get(key, ()):
-                    dataclass_instance = self._resolve_struct_ndarray(args, arg_idx, path)
+                    dataclass_instance = self._get_live_container_member(args, arg_idx, path)
                     num_args, _ = self._recursive_set_args(
                         self.used_py_dataclass_parameters_by_key_enforcing[key],
                         flat_name,
@@ -895,8 +895,8 @@ class Kernel(FuncBase):
         raise QuadrantsRuntimeTypeError(f"Invalid return type on index={indices}")
 
     @staticmethod
-    def _resolve_struct_ndarray(args, template_arg_idx, attr_chain):
-        """Walk a struct's attribute chain to find the live ndarray (or Tensor wrapper)."""
+    def _get_live_container_member(args: tuple[Any, ...], template_arg_idx: int, attr_chain: tuple[str, ...]) -> Any:
+        """Read a live member through stored attributes and unwrap a Tensor result."""
         obj = args[template_arg_idx]
         for attr_name in attr_chain:
             obj = getattr(obj, attr_name)

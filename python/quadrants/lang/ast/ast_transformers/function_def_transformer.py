@@ -26,7 +26,7 @@ from quadrants.lang._final.final_dataclass_fields import (
     final_field_names,
     is_final_annotation,
 )
-from quadrants.lang._name_utils import create_flat_name
+from quadrants.lang._name_utils import create_flat_name, create_flat_name_from_parts
 from quadrants.lang._optional_annotation import OPTIONAL_ABSENT
 from quadrants.lang._template_mapper_hotpath import _extract_arg
 from quadrants.lang.ast.ast_transformer_utils import (
@@ -247,9 +247,7 @@ class FunctionDefTransformer:
             ctx.py_args, ctx.func.arg_metas
         )
         for arg_idx, path, dataclass_instance in dataclass_members:
-            flat_name = ctx.func.arg_metas[arg_idx].name
-            for member_name in path:
-                flat_name = create_flat_name(flat_name, member_name)
+            flat_name = create_flat_name_from_parts([ctx.func.arg_metas[arg_idx].name, *path])
             if ctx.kernel_compile_context.pruning.enforcing and not ctx.kernel_compile_context.pruning.is_used(
                 ctx.func.func_id, flat_name
             ):

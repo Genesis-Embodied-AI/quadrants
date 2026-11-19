@@ -1,5 +1,5 @@
 # type: ignore
-"""Bind dataclass scalars and opted-in data-oriented primitives as runtime kernel inputs."""
+"""Discover dataclass roots and bind opted-in data-oriented runtime scalars."""
 
 from typing import Any, NamedTuple
 
@@ -26,12 +26,12 @@ class _ScalarMember(NamedTuple):
 
     parent: Any
     attr_name: str
-    value: Any
+    value: bool | int | float
     arg_idx: int
     attr_chain: tuple[str, ...]
 
 
-def _collect_scalars_in_single_data_oriented(
+def _collect_runtime_members_in_data_oriented(
     py_obj: Any,
     arg_idx: int,
     path: tuple[str, ...],
@@ -68,7 +68,7 @@ def _collect_scalars_in_single_data_oriented(
         if not data_oriented_template_primitives and attr_type in (bool, int, float):
             scalar_members.append(_ScalarMember(py_obj, attr_name, attr_val, arg_idx, (*path, attr_name)))
         elif is_dataclass_instance(attr_val) or is_data_oriented(attr_val):
-            _collect_scalars_in_single_data_oriented(
+            _collect_runtime_members_in_data_oriented(
                 attr_val,
                 arg_idx,
                 (*path, attr_name),
@@ -99,7 +99,7 @@ def collect_runtime_members_from_data_oriented_args(
     scalar_members: list[_ScalarMember] = []
     dataclass_members: list[tuple[int, tuple[str, ...], Any]] = []
     for arg_idx, val in owners:
-        _collect_scalars_in_single_data_oriented(
+        _collect_runtime_members_in_data_oriented(
             val, arg_idx, (), set(), scalar_members, uses_template_primitives(val), dataclass_members
         )
     return scalar_members, dataclass_members
