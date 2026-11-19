@@ -10,7 +10,7 @@ from dataclasses import _FIELDS  # type: ignore[reportAttributeAccessIssue]
 
 # Must import 'partial' directly instead of the entire module to avoid attribute lookup overhead.
 from functools import partial
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 # Must import 'ReferenceType' directly instead of the entire module to avoid attribute lookup overhead.
 from weakref import ReferenceType
@@ -378,13 +378,19 @@ class Kernel(FuncBase):
         self.launch_observations = LaunchObservations()
 
         self.launch_context_buffer_cache = LaunchContextBufferCache()
-        self._struct_ndarray_launch_info_by_key: dict[CompiledKernelKeyType, list] = {}
-        self._launch_infos_for_root_dataclasses_in_data_oriented_by_key: dict[CompiledKernelKeyType, list] = {}
+        self._struct_ndarray_launch_info_by_key: dict[CompiledKernelKeyType, list[tuple[int, int, tuple[str, ...]]]] = (
+            {}
+        )
+        self._launch_infos_for_root_dataclasses_in_data_oriented_by_key: dict[
+            CompiledKernelKeyType, list[tuple[int, tuple[str, ...], str, type]]
+        ] = {}
         # Launch info for primitives lifted from ``@qd.data_oriented(template_primitives=False)`` template args (see
         # ``bind_data_oriented_runtime_scalars``). Maps key -> list of ``(arg_id, template_arg_idx, attr_chain, kind)``.
-        self._runtime_scalar_launch_infos_by_compiled_kernel_key: dict[CompiledKernelKeyType, list] = {}
+        self._runtime_scalar_launch_infos_by_compiled_kernel_key: dict[
+            CompiledKernelKeyType, list[tuple[int, int, tuple[str, ...], Literal["f", "i", "u"]]]
+        ] = {}
         self._mutable_nd_cached_key: CompiledKernelKeyType | None = None
-        self._mutable_nd_cached_val: list = []
+        self._mutable_nd_cached_val: list[tuple[int, tuple[str, ...]]] = []
         self._tensor_unwrap_indices: tuple[int, ...] | None = None
 
     def ast_builder(self) -> ASTBuilder:
