@@ -11,7 +11,6 @@ import pytest
 
 import quadrants as qd
 from quadrants.lang._kernel_types import KernelBatchedArgType
-from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.impl import Kernel
 
 from tests.helpers import test_utils

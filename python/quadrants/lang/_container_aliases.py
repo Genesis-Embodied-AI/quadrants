@@ -80,6 +80,10 @@ def get_container_alias_key(py_args: Sequence[Any]) -> AliasKey:
     serials: dict[int, int] = {}
     result: list[tuple[int, ...]] = []
     for py_arg in py_args:
+        if isinstance(py_arg, tuple) and not is_data_oriented(py_arg):
+            identities = _collect_container_ids(py_arg)
+            result.append(tuple(serials.setdefault(identity, len(serials)) for identity in identities))
+            continue
         if not (is_dataclass_instance(py_arg) or is_data_oriented(py_arg)):
             result.append(())
             continue
@@ -132,6 +136,8 @@ def cached_get_container_alias_key(py_args: tuple[Any, ...]) -> AliasKey:
     container_ids = tuple(
         id(py_arg) if is_dataclass_instance(py_arg) or is_data_oriented(py_arg) else None for py_arg in py_args
     )
+    if any(isinstance(arg, tuple) and not is_data_oriented(arg) for arg in py_args):
+        return get_container_alias_key(py_args)
     cached_alias_key_entry = _alias_key_by_container_ids.get(container_ids)
     if cached_alias_key_entry is not None:
         alias_key, _ = cached_alias_key_entry

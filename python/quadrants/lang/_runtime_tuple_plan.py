@@ -26,6 +26,7 @@ class TuplePlan:
     def __init__(self, value, name, raise_on_templated_floats):
         self.arrays = []
         self.scalars = []
+        self.dataclass_paths = []
         self._seen = {}
         self._visiting = set()
         self.name = name
@@ -58,6 +59,8 @@ class TuplePlan:
             return ("field", value)
         if isinstance(value, (Expr, _ExprCxx, SNode)):
             return ("native", type(value), _extract_arg(False, value, template, self.name))
+        if dataclasses.is_dataclass(value):
+            self.dataclass_paths.append(path)
         identity = id(value)
         if identity in self._visiting:
             raise QuadrantsRuntimeTypeError(f"Tuple member {self.name}{path} contains a cycle")

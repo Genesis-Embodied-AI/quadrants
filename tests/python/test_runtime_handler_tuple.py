@@ -147,7 +147,10 @@ def test_runtime_handler_tuple_mutation_and_specialization():
     run(handlers, output)
     assert output[0] == 7
     assert len(run._primal.materialized_kernels) == count
-    handler.data = (Data(array(4), 3.0, array(999)),)
+    with pytest.raises(Exception, match="fixed after first kernel use"):
+        handler.data = (Data(array(4), 3.0, array(999)),)
+    handler = Bound(add, Data(array(4), 3.0, array(999)))
+    handlers = (handler,)
     run(handlers, output)
     assert output[0] == 13
     assert len(run._primal.materialized_kernels) == count
@@ -206,10 +209,10 @@ def test_runtime_handler_tuple_order_nested_and_aliases():
     second.bias = 4
     run(((first, second),), output)
     assert output[0] == 13
-    first.data = second.data
+    first = Handler(second.data[0], 1)
     run(((first, second),), output)
     assert output[0] == 16
-    second.data = (data(5),)
+    second = Handler(data(5), 4)
     run(((first, second),), output)
     assert output[0] == 24
 
@@ -352,12 +355,12 @@ def test_runtime_handler_tuple_final_field_and_tensor_wrapper():
     field[0] = 4
     assert run(handlers) == 7
     assert len(run._primal.materialized_kernels) == count
-    handler.data = Data(qd.wrap(field), 7)
+    handlers = (Handler(Data(qd.wrap(field), 7)),)
     assert run(handlers) == 11
     assert len(run._primal.materialized_kernels) == count + 1
     array = qd.tensor(qd.f32, shape=1, backend=qd.Backend.NDARRAY)
     array[0] = 8
-    handler.data = Data(array, 7)
+    handlers = (Handler(Data(array, 7)),)
     assert run(handlers) == 15
 
 

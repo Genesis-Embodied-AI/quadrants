@@ -13,7 +13,6 @@ import warnings
 from dataclasses import (
     _FIELD,  # type: ignore[reportAttributeAccessIssue]
     _FIELDS,  # type: ignore[reportAttributeAccessIssue]
-    is_dataclass,
 )
 
 # Must import 'partial' directly instead of the entire module to avoid attribute lookup overhead.

@@ -46,6 +46,7 @@ from quadrants.lang.ast.ast_transformers.checkpoint_transformer import (
 )
 from quadrants.lang.ast.ast_transformers.data_oriented_runtime_scalar_binder import (
     bind_data_oriented_runtime_scalars,
+    register_runtime_dataclass_schema,
 )
 from quadrants.lang.ast.symbol_resolver import ASTResolver
 from quadrants.lang.buffer_view import BufferView
@@ -61,17 +62,6 @@ from quadrants.lang.util import (
     to_quadrants_type,
 )
 from quadrants.types import annotations, buffer_view_type, ndarray_type, primitive_types
-
-
-def _register_runtime_schemas(ctx: FuncCompilePassContext, obj: Any, schema: type, path: str) -> None:
-    """Record captured dataclass schemas so reading an unsupported member reports its argument path."""
-    schemas = ctx.kernel_compile_context.current_pass.runtime_schema_by_id
-    if id(obj) in schemas:
-        return
-    schemas[id(obj)] = (schema, path)
-    for field in dataclasses.fields(schema):
-        if dataclasses.is_dataclass(field.type):
-            _register_runtime_schemas(ctx, getattr(obj, field.name), field.type, f"{path}.{field.name}")
 
 
 class FunctionDefTransformer:
@@ -416,7 +406,7 @@ class FunctionDefTransformer:
             if not isinstance(data, getattr(argument_type, "_qd_runtime_origin", argument_type)):
                 raise QuadrantsSyntaxError(f"Argument {argument_name!r} requires {argument_type.__name__}")
             if hasattr(argument_type, "_qd_runtime_origin"):
-                _register_runtime_schemas(ctx, data, argument_type, argument_name)
+                register_runtime_dataclass_schema(ctx.kernel_compile_context.current_pass, data, argument_type, argument_name)
             ctx.create_variable(argument_name, data)
             return None
 
