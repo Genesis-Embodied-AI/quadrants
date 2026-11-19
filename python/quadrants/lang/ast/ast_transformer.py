@@ -545,7 +545,9 @@ class ASTTransformer(Builder):
     @staticmethod
     def build_Call(ctx: FuncCompilePassContext, node: ast.Call) -> Any | None:
         value = CallTransformer.build_Call(ctx, node, build_stmt, build_stmts)
-        reject_computed_dataclass_alias(value, ctx.kernel_compile_context.current_pass.runtime_dataclass_binding_objects)
+        reject_computed_dataclass_alias(
+            value, ctx.kernel_compile_context.current_pass.runtime_dataclass_binding_objects
+        )
         return value
 
     @staticmethod

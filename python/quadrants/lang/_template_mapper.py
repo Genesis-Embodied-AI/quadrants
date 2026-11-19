@@ -185,7 +185,9 @@ class TemplateMapper:
                 schema._qd_runtime_has_deferred for _, _, schema in launch_arg_schemas
             )
 
-        key = self.extract(raise_on_templated_floats, args, final_value_key_by_value_id) + (cached_get_container_alias_key(args),)
+        key = self.extract(raise_on_templated_floats, args, final_value_key_by_value_id) + (
+            cached_get_container_alias_key(args),
+        )
         if launch_arg_schemas:
             key += tuple(
                 (

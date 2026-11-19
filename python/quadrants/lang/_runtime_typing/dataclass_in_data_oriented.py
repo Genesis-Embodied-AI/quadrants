@@ -41,7 +41,8 @@ def _collect_dataclass_paths_in_data_oriented(
 
     active_ids.add(id(py_obj))
     try:
-        members = py_obj._asdict() if isinstance(py_obj, tuple) and hasattr(py_obj, "_asdict") else vars(py_obj)
+        asdict = getattr(py_obj, "_asdict", None) if isinstance(py_obj, tuple) else None
+        members = asdict() if asdict is not None else vars(py_obj)
         for name, child in members.items():
             if not name.startswith("_qd_"):
                 _collect_dataclass_paths_in_data_oriented(child, (*path, name), dataclass_paths, active_ids)
