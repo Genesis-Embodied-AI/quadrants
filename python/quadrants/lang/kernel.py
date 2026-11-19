@@ -606,6 +606,9 @@ class Kernel(FuncBase):
                     ]
                 runtime._current_kernel_compile_context = None
 
+            if pruning.has_untracked_receiver:
+                self._l1_key = None
+                self.fast_checksum = None
             self._maybe_persist_l1_and_set_l2_key(key, py_args)
 
     def _maybe_persist_l1_and_set_l2_key(self, key: "CompiledKernelKeyType", py_args: tuple[Any, ...]) -> None:

@@ -112,6 +112,7 @@ class Pruning:
         # A fastcache hit skips pass 0, leaving ``used_struct_ndarray_ids`` unpopulated rather than empty-because-
         # unused; ``_predeclare_struct_ndarrays`` then has to register every reachable ndarray.
         self.pass_0_ran: bool = False
+        self.has_untracked_receiver: bool = False
         # Kernel-arg-rooted attribute chains used by each func, in flat-name form (``__qd_self__qd_dofs__qd_x``).
         # Deliberately not in ``used_vars_by_func_id``: that set becomes ``struct_locals`` on the enforcing pass, and
         # ``FlattenAttributeNameTransformer`` would then rewrite ``s.x`` to a ``Name('__qd_s__qd_x')`` that no scope
@@ -194,6 +195,7 @@ class Pruning:
         node: "ast.Call",
         node_args: list[expr],
         node_keywords: list[keyword],
+        receiver: expr | None = None,
     ) -> None:
         """
         called from build_Call, after making the call, in the discovery pass (pass 0)
@@ -212,6 +214,15 @@ class Pruning:
         self_offset = 1 if has_self else 0
 
         edge = CallEdge(caller_func_id, callee_func_id)
+        if has_self:
+            # A bound receiver is an implicit argument, including for callable-object syntax (obj(...)).
+            # Only parameter-rooted chains have a path that fastcache can hash; local aliases and computed
+            # receivers must not leave behind an apparently complete dependency set.
+            flat = _flatten_arg_node(receiver) if receiver is not None else None
+            if flat is not None and (flat[1] in ctx.fn_param_names or flat[1] in ctx.kernel_args):
+                edge.chain_pairs.append((callee_func.arg_metas[0].name, flat[0]))
+            else:
+                self.has_untracked_receiver = True
         for arg_id, arg in enumerate(node_args):
             if type(arg) in {Name}:
                 caller_arg_name = arg.id  # type: ignore

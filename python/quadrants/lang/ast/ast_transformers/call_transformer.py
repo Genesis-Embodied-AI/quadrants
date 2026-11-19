@@ -184,7 +184,8 @@ class CallTransformer:
             # not related to dataclasses). Necessary for calling further child functions
             build_stmts(ctx, node.args)
             build_stmts(ctx, node.keywords)
-        func = node.func.ptr = resolve_callable(node.func.ptr)
+        func, receiver = resolve_callable(node.func)
+        node.func.ptr = func
         # A ``@qd.func(requires_top_level=True)`` may only be called at the top level of a kernel (or
         # directly inside a ``graph_do_while`` body). Nesting it in a runtime for / if / while demotes
         # its phase loops out of top-level position, collapsing the per-phase grid-wide barriers and
@@ -278,7 +279,7 @@ class CallTransformer:
                     node.ptr = func(*py_args, **py_kwargs)
 
                 if not pruning.enforcing:
-                    pruning.record_after_call(ctx, func, node, node_args, node_keywords)
+                    pruning.record_after_call(ctx, func, node, node_args, node_keywords, receiver)
             except QuadrantsRuntimeTypeError:
                 raise
             except TypeError as e:
