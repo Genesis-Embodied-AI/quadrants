@@ -586,11 +586,7 @@ class Kernel(FuncBase):
                     # entry.
                     pruning.fold_struct_nd_paths(self._struct_ndarray_launch_info_by_key.get(key, []), self.arg_metas)
                     pruning.fold_kernel_arg_chain_paths()
-                    # Only record an entry when this key actually lifts primitives, so the dict stays empty for the
-                    # overwhelming majority of kernels (none use template_primitives=False). launch_kernel can then
-                    # skip the whole primitive-binding path with a single empty-dict check instead of paying a
-                    # per-launch ``.get(key)`` (tuple hash) on every cache-missing launch -- which is the hot path for
-                    # CPU / unbatched genesis steps that launch many tiny kernels.
+                    # Keep these maps empty for kernels without member inputs, avoiding per-key lookups at launch.
                     if kernel_ctx.current_pass.nested_dataclass_launch_infos:
                         self._nested_dataclass_launch_infos_by_key[key] = (
                             kernel_ctx.current_pass.nested_dataclass_launch_infos
