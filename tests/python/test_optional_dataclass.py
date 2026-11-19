@@ -73,3 +73,53 @@ def test_required_dataclass_still_rejects_none():
 
     with pytest.raises(QuadrantsRuntimeTypeError, match="requires a Python dataclass instance"):
         required(None)
+
+
+@test_utils.test(arch=qd.cpu)
+def test_optional_dataclass_cache_across_processes(tmp_path):
+    import os
+    import subprocess
+    import sys
+    import textwrap
+
+    script = tmp_path / "optional_dataclass_cache.py"
+    script.write_text(
+        textwrap.dedent(
+            """
+            import dataclasses
+            import sys
+            import quadrants as qd
+
+            qd.init(arch=qd.cpu, offline_cache=True, offline_cache_file_path=sys.argv[1])
+
+            @dataclasses.dataclass(frozen=True)
+            class State:
+                value: object
+
+            @qd.kernel(fastcache=True)
+            def read(state: State | None, out: qd.Tensor, offset: int):
+                out[0] = offset
+                if qd.static(state is not None):
+                    out[0] += state.value[0]
+
+            out = qd.ndarray(qd.i32, shape=1)
+            value = qd.ndarray(qd.i32, shape=1)
+            value[0] = 12
+            states = [None, State(value)]
+            if sys.argv[2] == "reverse":
+                states.reverse()
+            for state in states * 2:
+                read(state, out, 5)
+                assert out[0] == (5 if state is None else 17)
+            """
+        )
+    )
+    for order in ("forward", "reverse"):
+        result = subprocess.run(
+            [sys.executable, str(script), str(tmp_path / "cache"), order],
+            env={**os.environ, "QD_OFFLINE_CACHE": "1"},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
