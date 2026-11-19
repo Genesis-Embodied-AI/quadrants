@@ -35,9 +35,9 @@ def test_schema_cache_does_not_modify_instances(slots: bool) -> None:
 
 @test_utils.test(arch=qd.cpu)
 def test_guard_cache_does_not_retain_parent_through_child() -> None:
-    @qd.data_oriented
+    @dataclass
     class Child:
-        pass
+        value: int = 0
 
     @dataclass(frozen=True)
     class State:
