@@ -1,0 +1,21 @@
+{
+  "date": "2026-11-19",
+  "quadrants_base": "2a2391b043a1afb61a4ccb9b790b3bd4934da9b5",
+  "quadrants_compiled": "af5f72af7e71ba2b67f20e513609fab0996f12b6",
+  "genesis": "439a26f56097c4178fbabf6a45f9d01662288be3",
+  "harness_with_long_timings": "e0e2e8ad5c2b9798365ec0fb3840d6e4bcb448ef",
+  "harness_with_byte_checks": "0cf28e01c9eadcee118b5d02e33cbe71f1c36ea2",
+  "python": "3.12.14",
+  "llvm": "22.1.0",
+  "numpy": "2.5.5",
+  "torch": "2.13.0+cu129",
+  "cpu": "AMD EPYC 9454",
+  "cpu_node": "cpu-207-199",
+  "byte_check_cpu_node": "cpu-208-039",
+  "gpu": "NVIDIA RTX PRO 6000 Blackwell Server Edition",
+  "gpu_node": "rtx-209-191",
+  "driver": "595.71.05",
+  "container": "/mnt/data/images/genesis-v1_25.sqsh",
+  "artifact_archive": "/mnt/data/hugh/ais/handler_arch_1086_fast_math/tmp/experiment_artifacts.tar.gz",
+  "partial_runs": "Box controls and 200-step-per-sample preliminary benchmarks were intentionally stopped; committed partial records contain completed cells only."
+}

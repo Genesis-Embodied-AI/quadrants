@@ -19,7 +19,11 @@ cp -u "$LLVM_DIR/bin/clang" "$workspace/tmp/toolchain/bin/clang"
 chmod +x "$workspace/tmp/toolchain/bin/clang"
 ln -sfn "$LLVM_DIR/lib/clang" "$workspace/tmp/toolchain/lib/clang"
 "$workspace/tmp/toolchain/bin/clang" --version
-export CMAKE_ARGS="-DQD_GLSLANG_EXECUTABLE=/mnt/data/hugh/.cache/qd-build-cache/vulkan-1.4.321.1/x86_64/bin/glslang -DCLANG_EXECUTABLE=$workspace/tmp/toolchain/bin/clang -DQD_WITH_VULKAN=OFF -DQD_WITH_OPENGL=OFF -DQD_WITH_AMDGPU=OFF -DQD_WITH_CUDA=ON"
+shader_compiler=/mnt/data/hugh/.cache/qd-build-cache/vulkan-1.4.321.1/x86_64/bin/glslang
+CMAKE_ARGS="-DQD_GLSLANG_EXECUTABLE=$shader_compiler"
+CMAKE_ARGS+=" -DCLANG_EXECUTABLE=$workspace/tmp/toolchain/bin/clang"
+CMAKE_ARGS+=" -DQD_WITH_VULKAN=OFF -DQD_WITH_OPENGL=OFF -DQD_WITH_AMDGPU=OFF -DQD_WITH_CUDA=ON"
+export CMAKE_ARGS
 export CMAKE_BUILD_PARALLEL_LEVEL=16
 python -m pip install --no-build-isolation -e . -v
 printf 'BUILD_COMPLETE\n'

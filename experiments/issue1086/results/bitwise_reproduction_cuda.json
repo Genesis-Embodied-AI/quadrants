@@ -1,0 +1,13 @@
+{
+  "results": [
+    {"arch": "cuda", "precision": "32", "mode": "fast", "pos_equal": true, "quat_equal": true, "differing_rows": 823, "bitwise_differing_rows": 823, "output_bitwise_equal": false, "max_abs": 1.9073486328125e-06, "n": 20000, "hostname": "rtx-209-191", "version": [1, 4, 1]},
+    {"arch": "cuda", "precision": "32", "mode": "no_reassoc", "pos_equal": true, "quat_equal": true, "differing_rows": 0, "bitwise_differing_rows": 0, "output_bitwise_equal": true, "max_abs": 0.0, "n": 20000, "hostname": "rtx-209-191", "version": [1, 4, 1]},
+    {"arch": "cuda", "precision": "32", "mode": "no_reassoc_no_contract", "pos_equal": true, "quat_equal": true, "differing_rows": 0, "bitwise_differing_rows": 0, "output_bitwise_equal": true, "max_abs": 0.0, "n": 20000, "hostname": "rtx-209-191", "version": [1, 4, 1]},
+    {"arch": "cuda", "precision": "32", "mode": "strict", "pos_equal": true, "quat_equal": true, "differing_rows": 0, "bitwise_differing_rows": 0, "output_bitwise_equal": true, "max_abs": 0.0, "n": 20000, "hostname": "rtx-209-191", "version": [1, 4, 1]},
+    {"arch": "cuda", "precision": "64", "mode": "fast", "pos_equal": true, "quat_equal": true, "differing_rows": 823, "bitwise_differing_rows": 823, "output_bitwise_equal": false, "max_abs": 3.552713678800501e-15, "n": 20000, "hostname": "rtx-209-191", "version": [1, 4, 1]},
+    {"arch": "cuda", "precision": "64", "mode": "no_reassoc", "pos_equal": true, "quat_equal": true, "differing_rows": 0, "bitwise_differing_rows": 0, "output_bitwise_equal": true, "max_abs": 0.0, "n": 20000, "hostname": "rtx-209-191", "version": [1, 4, 1]},
+    {"arch": "cuda", "precision": "64", "mode": "no_reassoc_no_contract", "pos_equal": true, "quat_equal": true, "differing_rows": 0, "bitwise_differing_rows": 0, "output_bitwise_equal": true, "max_abs": 0.0, "n": 20000, "hostname": "rtx-209-191", "version": [1, 4, 1]},
+    {"arch": "cuda", "precision": "64", "mode": "strict", "pos_equal": true, "quat_equal": true, "differing_rows": 0, "bitwise_differing_rows": 0, "output_bitwise_equal": true, "max_abs": 0.0, "n": 20000, "hostname": "rtx-209-191", "version": [1, 4, 1]}
+  ],
+  "failures": []
+}

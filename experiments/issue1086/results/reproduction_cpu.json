@@ -1,0 +1,13 @@
+{
+  "results": [
+    {"arch": "x64", "precision": "32", "mode": "fast", "pos_equal": true, "quat_equal": true, "differing_rows": 18387, "max_abs": 7.62939453125e-06, "n": 20000, "hostname": "cpu-207-199", "version": [1, 4, 1]},
+    {"arch": "x64", "precision": "32", "mode": "no_reassoc", "pos_equal": true, "quat_equal": true, "differing_rows": 0, "max_abs": 0.0, "n": 20000, "hostname": "cpu-207-199", "version": [1, 4, 1]},
+    {"arch": "x64", "precision": "32", "mode": "no_reassoc_no_contract", "pos_equal": true, "quat_equal": true, "differing_rows": 0, "max_abs": 0.0, "n": 20000, "hostname": "cpu-207-199", "version": [1, 4, 1]},
+    {"arch": "x64", "precision": "32", "mode": "strict", "pos_equal": true, "quat_equal": true, "differing_rows": 0, "max_abs": 0.0, "n": 20000, "hostname": "cpu-207-199", "version": [1, 4, 1]},
+    {"arch": "x64", "precision": "64", "mode": "fast", "pos_equal": true, "quat_equal": true, "differing_rows": 18333, "max_abs": 2.842170943040401e-14, "n": 20000, "hostname": "cpu-207-199", "version": [1, 4, 1]},
+    {"arch": "x64", "precision": "64", "mode": "no_reassoc", "pos_equal": true, "quat_equal": true, "differing_rows": 0, "max_abs": 0.0, "n": 20000, "hostname": "cpu-207-199", "version": [1, 4, 1]},
+    {"arch": "x64", "precision": "64", "mode": "no_reassoc_no_contract", "pos_equal": true, "quat_equal": true, "differing_rows": 0, "max_abs": 0.0, "n": 20000, "hostname": "cpu-207-199", "version": [1, 4, 1]},
+    {"arch": "x64", "precision": "64", "mode": "strict", "pos_equal": true, "quat_equal": true, "differing_rows": 0, "max_abs": 0.0, "n": 20000, "hostname": "cpu-207-199", "version": [1, 4, 1]}
+  ],
+  "failures": []
+}
