@@ -4,7 +4,7 @@ import atexit
 import dataclasses
 from collections.abc import Sequence
 from functools import partial
-from typing import Any, TypeAlias
+from typing import Any, TypeAlias, cast
 from weakref import ReferenceType, ref
 
 from quadrants import _logging, _warnings
@@ -43,7 +43,7 @@ def _collect_container_ids(py_obj: Any) -> tuple[int, ...]:
                 pending.extend(child)
             identities.append(id(child))
             continue
-        is_dataclass = dataclasses.is_dataclass(child) and not isinstance(child, type)
+        is_dataclass = is_dataclass_instance(child)
         if not is_dataclass and not is_data_oriented(child):
             continue
 
@@ -54,7 +54,7 @@ def _collect_container_ids(py_obj: Any) -> tuple[int, ...]:
 
         seen_ids.add(identity)
         if is_dataclass:
-            members = ((field.name, getattr(child, field.name)) for field in dataclasses.fields(child))
+            members = ((field.name, getattr(child, field.name)) for field in dataclasses.fields(cast(Any, child)))
         else:
             asdict = getattr(child, "_asdict", None)
             attrs = asdict() if asdict is not None else vars(child)
