@@ -1,5 +1,6 @@
 """Unwrap the optional (``T | None``) spelling of a kernel-argument annotation."""
 
+import dataclasses
 import types
 import typing
 
@@ -34,6 +35,8 @@ def _is_optional_capable(inner) -> bool:
     # NDArray annotations are instances (``NDArray[dtype, ndim]``), so accept the bare class too.
     if inner is ndarray_type.NdarrayType or type(inner) is ndarray_type.NdarrayType:
         return True
+    if isinstance(inner, type) and dataclasses.is_dataclass(inner):
+        return True
     return False
 
 
@@ -55,8 +58,8 @@ def split_optional(annotation):
         inner = non_none[0]
         if not _is_optional_capable(inner):
             raise QuadrantsSyntaxError(
-                "Optional ('T | None') kernel arguments are only supported for qd.Tensor, qd.types.Template and "
-                f"qd.types.NDArray, got: {inner}"
+                "Optional ('T | None') kernel arguments are only supported for qd.Tensor, qd.types.Template, "
+                f"qd.types.NDArray and Python dataclasses, got: {inner}"
             )
         return inner, True
     return annotation, False

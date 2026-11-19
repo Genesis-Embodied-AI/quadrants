@@ -342,6 +342,7 @@ class FuncBase:
                 or arg.annotation is _TensorClass
                 # An optional ndarray registers as a template slot so presence (None vs array) can specialize.
                 or (arg.optional and type(arg.annotation) is ndarray_type.NdarrayType)
+                or (arg.optional and is_dataclass_annotation(arg.annotation))
             ):
                 self.template_slot_locations.append(i)
 

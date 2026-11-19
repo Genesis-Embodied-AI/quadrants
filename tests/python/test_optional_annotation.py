@@ -97,18 +97,11 @@ def test_multi_member_optional_union_is_rejected():
 
 
 def test_optional_unsupported_family_is_rejected():
-    """A family with no absent-value path (here a dataclass) must be rejected at registration, not silently recorded
-    as optional."""
-    import dataclasses
-
-    @dataclasses.dataclass
-    class State:
-        a: qd.Tensor
-
+    """Scalar optional annotations remain unsupported."""
     with pytest.raises(QuadrantsSyntaxError, match="only supported for qd.Tensor"):
 
         @qd.kernel
-        def k(s: State | None):
+        def k(s: int | None):
             pass
 
 

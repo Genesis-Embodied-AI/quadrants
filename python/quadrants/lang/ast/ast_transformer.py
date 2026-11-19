@@ -1057,7 +1057,14 @@ class ASTTransformer(Builder):
                 runtime_member = isinstance(template_node, ast.Attribute) and id(template_node.value.ptr) in (
                     ctx.kernel_compile_context.current_pass.runtime_schema_by_id
                 )
-                if not runtime_member and (
+                runtime_dataclass = (
+                    ctx.is_kernel
+                    and isinstance(template_node, ast.Name)
+                    and template_node.id in {meta.name for meta in ctx.func.arg_metas}
+                    and not any(template_node.id in scope for scope in ctx.local_scopes[1:])
+                    and id(template_node.ptr) in ctx.kernel_compile_context.current_pass.runtime_schema_by_id
+                )
+                if not runtime_member and not runtime_dataclass and (
                     not ctx.is_kernel
                     or not isinstance(template_node, ast.Name)
                     or template_node.id.startswith("__qd_")
@@ -1068,9 +1075,9 @@ class ASTTransformer(Builder):
                     raise QuadrantsSyntaxError(
                         f'Operator "{name}" inside `qd.static` compares a direct kernel argument against `None`. '
                         "The argument must be annotated `qd.Tensor | None`, `qd.types.Template | None`, "
-                        "or `qd.types.NDArray[...] | None`."
+                        "`qd.types.NDArray[...] | None`, or a Python dataclass with `| None`."
                     )
-                if runtime_member:
+                if runtime_member or runtime_dataclass:
                     pass  # The inferred member's bound value already distinguishes None from present values.
                 elif template_side == "left":
                     l = ctx.template_vars[template_node.id]

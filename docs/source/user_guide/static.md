@@ -75,3 +75,27 @@ def compute(val: float) -> None:
 ```
 
 This will raise a `QuadrantsCompilationError` with a message indicating that the argument must be a compile-time constant.
+
+## Optional Python dataclass arguments
+
+A kernel parameter annotated with a Python dataclass type can accept `None` using `State | None` or `typing.Optional[State]`. Guard member access with `qd.static(state is not None)`. Quadrants specializes on absence or on the present value's runtime schema, and skips compilation of the unused branch. An absent struct consumes no runtime argument slots.
+
+```python
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class State:
+    value: qd.Tensor
+
+@qd.kernel
+def add(out: qd.Tensor, state: State | None):
+    for i in range(out.shape[0]):
+        out[i] = 1.0
+        if qd.static(state is not None):
+            out[i] += state.value[i]
+
+add(out, None)
+add(out, State(value))
+```
+
+Pass `None` explicitly when the component is absent. Kernel parameters still require explicit arguments.
