@@ -114,6 +114,7 @@ def test_fastcache_receiver_across_processes(tmp_path, call_kind):
 def test_fastcache_receiver_field_fallback(monkeypatch):
     monkeypatch.setenv("QD_OFFLINE_CACHE", "0")
     qd_init_same_arch(offline_cache=False)
+
     @qd.data_oriented
     class Item:
         def __init__(self, n, value):
@@ -141,6 +142,7 @@ def test_fastcache_receiver_field_fallback(monkeypatch):
 def test_fastcache_receiver_alias_fallback(alias_kind, monkeypatch):
     monkeypatch.setenv("QD_OFFLINE_CACHE", "0")
     qd_init_same_arch(offline_cache=False)
+
     @qd.data_oriented
     class Item:
         def __init__(self, k):
