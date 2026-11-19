@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, List, Literal, NamedTuple
 
 from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import ASTBuilder
-from quadrants.lang import expr, impl
+from quadrants.lang import impl
 from quadrants.lang._ndrange import ndrange
 from quadrants.lang.ast.symbol_resolver import ASTResolver
 from quadrants.lang.exception import (
@@ -512,7 +512,4 @@ def resolve_bound_member(func_ctx: FuncCompilePassContext, parent: Any, node: as
     if not pruning.enforcing:
         # The kernel declares this input even when a @qd.func reads it.
         pruning.mark_used(pruning.KERNEL_FUNC_ID, binding.name)
-        if binding.reject_in_static_scope and binding.member_access_result is None and dataclasses.is_dataclass(parent):
-            # Preserve the declared width when discovery reads a nested scalar such as an i64.
-            return expr.Expr(getattr(parent, node.attr), dtype=binding.annotation)
     return binding.member_access_result
