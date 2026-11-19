@@ -189,17 +189,61 @@ class KernelCompileContext:
         self.current_pass: KernelCompilePassContext
 
 
-def iter_dataclass_fields(
-    dataclass_type: type,
+class DataclassMember(NamedTuple):
+    """A visited field, its current value, and its route from the traversal root."""
+
+    parent: Any
+    field_index: int
+    field: dataclasses.Field[Any]
+    name: str
+    path: tuple[str, ...]
+    value: Any
+    is_final: bool
+
+
+def walk_dataclass_members(
+    py_obj: Any,
     member_name_prefix: str,
     used_names: set[str] | None,
-) -> Iterator[tuple[int, dataclasses.Field[Any], str, bool]]:
-    """Yield field indices, metadata, binding names, and Final flags, skipping pruned fields before value access."""
-    final_names = final_field_names(dataclass_type)
-    for field_idx, field in enumerate(dataclasses.fields(dataclass_type)):
-        member_name = member_name_prefix + field.name
-        if used_names is None or member_name in used_names:
-            yield field_idx, field, member_name, field.name in final_names
+    separator: str,
+    path: tuple[str, ...] = (),
+    dataclass_type: type | None = None,
+    seen_ids: set[int] | None = None,
+) -> Iterator[DataclassMember]:
+    """Walk dataclass fields recursively, skipping pruned fields before reading their values.
+
+    A supplied dataclass_type selects the declared layout, including nested declarations. Otherwise, use each
+    arriving dataclass's class. Final fields are yielded without descending into their values. seen_ids lets a
+    data-oriented traversal share its visited objects with this walk.
+    """
+    if seen_ids is not None:
+        if id(py_obj) in seen_ids:
+            return
+
+        seen_ids.add(id(py_obj))
+    source_type = type(py_obj) if dataclass_type is None else dataclass_type
+    final_names = final_field_names(source_type)
+    for field_index, field in enumerate(dataclasses.fields(source_type)):
+        name = member_name_prefix + field.name
+        if used_names is not None and name not in used_names:
+            continue
+        value = getattr(py_obj, field.name)
+        member_path = (*path, field.name)
+        is_final = field.name in final_names
+        yield DataclassMember(py_obj, field_index, field, name, member_path, value, is_final)
+        if is_final:
+            continue
+        nested_type = field.type if dataclass_type is not None else type(value)
+        if dataclasses.is_dataclass(nested_type):
+            yield from walk_dataclass_members(
+                value,
+                name + separator,
+                used_names,
+                separator,
+                member_path,
+                nested_type if dataclass_type is not None else None,
+                seen_ids,
+            )
 
 
 class MemberBinding(NamedTuple):

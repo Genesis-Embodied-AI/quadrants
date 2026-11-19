@@ -10,7 +10,7 @@ from quadrants.lang import expr, impl
 from quadrants.lang.ast.ast_transformer_utils import (
     FuncCompilePassContext,
     MemberBinding,
-    iter_dataclass_fields,
+    walk_dataclass_members,
 )
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import (
@@ -45,8 +45,8 @@ def _collect_scalars_in_single_data_oriented(
 ) -> None:
     """Collect annotated dataclass scalars and data-oriented scalars with data_oriented_template_primitives=False.
 
-    Walk stored data-oriented and dataclass attributes, stopping at previously visited objects. Skip Final fields and
-    do not descend into lists, tuples, or dicts.
+    Walk stored data-oriented attributes and hand dataclasses to walk_dataclass_members.
+    Stop at previously visited objects and do not descend into lists, tuples, or dicts.
     """
     flat_name = f"__qd_doprim_{arg_idx}" + "".join(f"__{part}" for part in path)
     if used_names is not None and flat_name not in used_names:
@@ -57,28 +57,6 @@ def _collect_scalars_in_single_data_oriented(
         return
 
     seen_ids.add(obj_id)
-    if is_dataclass_instance(py_obj):
-        for _, field, _, is_final in iter_dataclass_fields(type(py_obj), flat_name + "__", used_names):
-            if is_final:
-                continue
-            value = getattr(py_obj, field.name)
-            annotation = field.type
-            if id(annotation) in primitive_types.type_ids or isinstance(annotation, DataTypeCxx):
-                scalar_members.append(
-                    _ScalarMember(py_obj, field.name, value, arg_idx, (*path, field.name), cook_dtype(annotation))
-                )
-            elif is_dataclass_instance(value):
-                _collect_scalars_in_single_data_oriented(
-                    value,
-                    arg_idx,
-                    (*path, field.name),
-                    seen_ids,
-                    scalar_members,
-                    data_oriented_template_primitives,
-                    used_names,
-                )
-        return
-
     if hasattr(py_obj, "_asdict"):
         items = py_obj._asdict().items()
     elif hasattr(py_obj, "__dict__"):
@@ -98,7 +76,23 @@ def _collect_scalars_in_single_data_oriented(
             if used_names is not None and flat_name + "__" + attr_name not in used_names:
                 continue
             scalar_members.append(_ScalarMember(py_obj, attr_name, attr_val, arg_idx, (*path, attr_name)))
-        elif is_dataclass_instance(attr_val) or is_data_oriented(attr_val):
+        elif is_dataclass_instance(attr_val):
+            child_name = flat_name + "__" + attr_name
+            if used_names is not None and child_name not in used_names:
+                continue
+            for member in walk_dataclass_members(
+                attr_val, child_name + "__", used_names, "__", (*path, attr_name), seen_ids=seen_ids
+            ):
+                if member.is_final:
+                    continue
+                annotation = member.field.type
+                if id(annotation) in primitive_types.type_ids or isinstance(annotation, DataTypeCxx):
+                    scalar_members.append(
+                        _ScalarMember(
+                            member.parent, member.field.name, member.value, arg_idx, member.path, cook_dtype(annotation)
+                        )
+                    )
+        elif is_data_oriented(attr_val):
             _collect_scalars_in_single_data_oriented(
                 attr_val,
                 arg_idx,

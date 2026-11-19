@@ -1,7 +1,7 @@
 """Dataclass scalar parameters retain live values and compatible alias bindings beneath data-oriented owners."""
 
 from collections.abc import Iterator
-from dataclasses import Field, dataclass
+from dataclasses import dataclass
 from typing import Any, Final
 
 import pytest
@@ -226,39 +226,52 @@ def test_scalar_pruning_skips_unused_dataclasses_and_keeps_aliases(monkeypatch: 
         value: int
 
     @dataclass
-    class State:
+    class Child:
         value: int
+
+    @dataclass
+    class State:
+        child: Child
         unused: Unused
 
     @qd.data_oriented
     class Owner:
         def __init__(self, value: int) -> None:
-            self.first = State(value, Unused(99))
+            self.first = State(Child(value), Unused(99))
             self.second = self.first
 
-    original = binder.iter_dataclass_fields
+    from quadrants.lang.ast import ast_transformer_utils as utils
+
+    original_walk = utils.walk_dataclass_members
     enforcing_visits = []
 
-    def checked_fields(
-        dataclass_type: type, member_name_prefix: str, used_names: set[str] | None
-    ) -> Iterator[tuple[int, Field[Any], str, bool]]:
+    def checked_walk(
+        py_obj: Any,
+        member_name_prefix: str,
+        used_names: set[str] | None,
+        separator: str,
+        path: tuple[str, ...] = (),
+        dataclass_type: type | None = None,
+        seen_ids: set[int] | None = None,
+    ) -> Iterator[utils.DataclassMember]:
         if used_names is not None:
-            assert dataclass_type is not Unused
-            enforcing_visits.append(dataclass_type)
-        return original(dataclass_type, member_name_prefix, used_names)
+            assert type(py_obj) is not Unused
+            enforcing_visits.append(type(py_obj))
+        return original_walk(py_obj, member_name_prefix, used_names, separator, path, dataclass_type, seen_ids)
 
-    monkeypatch.setattr(binder, "iter_dataclass_fields", checked_fields)
+    monkeypatch.setattr(utils, "walk_dataclass_members", checked_walk)
+    monkeypatch.setattr(binder, "walk_dataclass_members", checked_walk)
 
     @qd.kernel(fastcache=True)
     def read(owner: qd.Template) -> qd.i32:
-        return owner.second.value
+        return owner.second.child.value
 
     owner = Owner(3)
     assert read(owner) == 3
-    assert enforcing_visits == [State]
-    owner.first.value = 7
+    assert enforcing_visits == [State, Child]
+    owner.first.child.value = 7
     assert read(owner) == 7
-    assert enforcing_visits == [State]
+    assert enforcing_visits == [State, Child]
     assert read(Owner(11)) == 11
     assert read._primal.src_ll_cache_observations.cache_loaded
-    assert enforcing_visits == [State, State]
+    assert enforcing_visits == [State, Child, State, Child]
