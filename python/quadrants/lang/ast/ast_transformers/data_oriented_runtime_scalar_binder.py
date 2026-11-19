@@ -41,9 +41,9 @@ def _collect_scalars_in_single_data_oriented(
     path: tuple[str, ...],
     seen_ids: set[int],
     scalar_members: list[_ScalarMember],
-    lift_plain: bool,
+    data_oriented_template_primitives: bool,
 ) -> None:
-    """Collect annotated dataclass scalars and, when lift_plain is True, plain Python scalars beneath an owner.
+    """Collect annotated dataclass scalars and data-oriented scalars with data_oriented_template_primitives=False.
 
     Walk stored data-oriented and dataclass attributes, stopping at previously visited objects. Skip Final fields and
     do not descend into lists, tuples, or dicts.
@@ -66,7 +66,7 @@ def _collect_scalars_in_single_data_oriented(
                 )
             elif is_dataclass_instance(value):
                 _collect_scalars_in_single_data_oriented(
-                    value, arg_idx, (*path, field.name), seen_ids, scalar_members, lift_plain
+                    value, arg_idx, (*path, field.name), seen_ids, scalar_members, data_oriented_template_primitives
                 )
         return
 
@@ -85,11 +85,11 @@ def _collect_scalars_in_single_data_oriented(
         attr_type = type(attr_val)
         # Only exact plain Python primitives become runtime parameters; NumPy scalars and subclasses retain their
         # compile-time behavior.
-        if lift_plain and attr_type in (bool, int, float):
+        if not data_oriented_template_primitives and attr_type in (bool, int, float):
             scalar_members.append(_ScalarMember(py_obj, attr_name, attr_val, arg_idx, (*path, attr_name)))
         elif is_dataclass_instance(attr_val) or is_data_oriented(attr_val):
             _collect_scalars_in_single_data_oriented(
-                attr_val, arg_idx, (*path, attr_name), seen_ids, scalar_members, lift_plain
+                attr_val, arg_idx, (*path, attr_name), seen_ids, scalar_members, data_oriented_template_primitives
             )
 
 
@@ -112,9 +112,7 @@ def _collect_runtime_scalars_from_data_oriented_args(
 
     scalar_members: list[_ScalarMember] = []
     for arg_idx, val in owners:
-        _collect_scalars_in_single_data_oriented(
-            val, arg_idx, (), set(), scalar_members, not uses_template_primitives(val)
-        )
+        _collect_scalars_in_single_data_oriented(val, arg_idx, (), set(), scalar_members, uses_template_primitives(val))
     return scalar_members
 
 
