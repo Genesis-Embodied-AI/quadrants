@@ -130,10 +130,6 @@ Runs `pre-commit run -a` which enforces:
 
 You can run these locally with `pre-commit run -a` after `pip install pre-commit`.
 
-### Genesis benchmarks
-
-See [Genesis performance baselines](genesis_benchmarks.md) for the PR benchmark comparison, selecting a Genesis version, promoting merged results, and staging retention.
-
 ### Other CI jobs
 
 - **pyright** (`pyright_linter.yml`) — Python type checking
