@@ -1,0 +1,87 @@
+# Benchmark Quadrants main against a chosen Genesis commit, then activate that baseline on success.
+name: Generate Genesis benchmark baseline
+
+on:
+  workflow_dispatch:
+    inputs:
+      genesis_ref:
+        description: Genesis tag, branch, or commit to benchmark and activate after success.
+        required: true
+        type: string
+
+concurrency:
+  group: genesis-benchmark-bootstrap
+  cancel-in-progress: false
+
+env:
+  BENCHMARK_REPOSITORY: ${{ github.repository }}
+  GENESIS_REPOSITORY: Genesis-Embodied-AI/genesis-world
+  BENCHMARK_PROJECT: genesis-ai-company/quadrants-genesis-benchmarks
+  BENCHMARK_STAGING_PROJECT: genesis-ai-company/quadrants-genesis-benchmarks-staging
+  BENCHMARK_STATE_BRANCH: genesis-benchmark-state
+  BENCHMARK_WHEEL_ARTIFACT: manylinux_wheel_cp312_ubuntu-22.04
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      genesis_sha: ${{ steps.prepare.outputs.genesis_sha }}
+      image_version: ${{ steps.prepare.outputs.image_version }}
+      wheel_run: ${{ steps.prepare.outputs.wheel_run }}
+      wheel_artifact: ${{ steps.prepare.outputs.wheel_artifact }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install 'wandb<0.25'
+      - id: prepare
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python .github/scripts/genesis_benchmarks.py prepare
+      - uses: actions/upload-artifact@v4
+        if: steps.prepare.outputs.snapshot_exists != 'true'
+        with:
+          name: benchmark-input
+          path: benchmark-results/manifest.json
+          if-no-files-found: error
+
+  benchmarks:
+    needs: prepare
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    uses: Genesis-Embodied-AI/genesis-world/.github/workflows/production.yml@main
+    with:
+      quadrants_run_id: ${{ fromJSON(needs.prepare.outputs.wheel_run) }}
+      quadrants_artifact_id: ${{ fromJSON(needs.prepare.outputs.wheel_artifact) }}
+      benchmark_sha: ${{ needs.prepare.outputs.genesis_sha }}
+      benchmark_image_ver: ${{ needs.prepare.outputs.image_version }}
+      benchmark_only: true
+    secrets: inherit
+
+  activate:
+    needs: benchmarks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install 'wandb<0.25'
+      - name: Restore this run's configuration
+        run: python .github/scripts/genesis_benchmarks.py prepare
+      - name: Publish complete baseline
+        run: python .github/scripts/genesis_benchmarks.py publish
+      - name: Activate Genesis version
+        run: python .github/scripts/genesis_benchmarks.py activate

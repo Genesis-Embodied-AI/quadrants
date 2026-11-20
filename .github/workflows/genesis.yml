@@ -15,9 +15,51 @@ concurrency:
     ${{ github.event.workflow_run.head_branch }}
   cancel-in-progress: true
 
+env:
+  BENCHMARK_REPOSITORY: ${{ github.repository }}
+  GENESIS_REPOSITORY: Genesis-Embodied-AI/genesis-world
+  BENCHMARK_PROJECT: genesis-ai-company/quadrants-genesis-benchmarks
+  BENCHMARK_STAGING_PROJECT: genesis-ai-company/quadrants-genesis-benchmarks-staging
+  BENCHMARK_STATE_BRANCH: genesis-benchmark-state
+  BENCHMARK_WHEEL_ARTIFACT: manylinux_wheel_cp312_ubuntu-22.04
+
 jobs:
+  # Load the active Genesis configuration, validate the PR wheel, and save the inputs for benchmarks and retries.
+  prepare:
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    outputs:
+      genesis_sha: ${{ steps.prepare.outputs.genesis_sha }}
+      image_version: ${{ steps.prepare.outputs.image_version }}
+      constraints: ${{ steps.prepare.outputs.constraints }}
+      wheel_run: ${{ steps.prepare.outputs.wheel_run }}
+      wheel_artifact: ${{ steps.prepare.outputs.wheel_artifact }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install 'wandb<0.25'
+      - id: prepare
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python .github/scripts/genesis_benchmarks.py prepare
+      - uses: actions/upload-artifact@v4
+        if: steps.prepare.outputs.snapshot_exists != 'true'
+        with:
+          name: benchmark-input
+          path: benchmark-results/manifest.json
+          if-no-files-found: error
+
   tests-and-benchmarks:
     name: genesis-tests_and_benchmarks
+    needs: prepare
 
     # Only a pull request is worth checking, Genesis being validated before a change lands rather than after.
     # 'completed' is the one terminal activity type of 'workflow_run', fired for every conclusion, so the conclusion
@@ -38,7 +80,11 @@ jobs:
     # in turn, oldest first, which requires the secrets passed on below.
     uses: Genesis-Embodied-AI/genesis-world/.github/workflows/production.yml@main
     with:
-      quadrants_run_id: ${{ github.event.workflow_run.id }}
+      quadrants_run_id: ${{ fromJSON(needs.prepare.outputs.wheel_run) }}
+      quadrants_artifact_id: ${{ fromJSON(needs.prepare.outputs.wheel_artifact) }}
+      benchmark_sha: ${{ needs.prepare.outputs.genesis_sha }}
+      benchmark_image_ver: ${{ needs.prepare.outputs.image_version }}
+      benchmark_constraints: ${{ needs.prepare.outputs.constraints }}
       # Only the minimal set of tests Genesis requires to pass on any environment, in the dynamic array mode alone:
       # the full matrix belongs to the CI of Genesis.
       unit_tests_markexpr: required and not slow
@@ -83,23 +129,93 @@ jobs:
                 : `Genesis unit tests or benchmarks failed (${process.env.RESULT}).`,
             });
 
-  # The comparison is the one the CI of Genesis runs on its own pull requests, down to the tolerances, the baseline
-  # being the history of the default branch of Genesis with the release of Quadrants it pins.
-  benchmark-comparison:
-    name: genesis-benchmark_comparison
-
-    needs: tests-and-benchmarks
-    # A closed pull request leaves no benchmark results to compare.
+  # Publish complete measurements and select the main baseline for the shared comparison workflow.
+  publish-benchmarks:
+    name: genesis-publish_benchmarks
+    needs: [prepare, tests-and-benchmarks]
     if: needs.tests-and-benchmarks.outputs.is_skipped != 'true'
-
+    runs-on: ubuntu-latest
     permissions:
       contents: read
-      # To download the benchmark results of this very run.
       actions: read
-      # FIXME: Remove checks: write after genesis-world PR #3626 switches the shared workflow to commit statuses.
-      checks: write
+      statuses: write
+      pull-requests: read
+    outputs:
+      wandb_project: ${{ steps.select.outputs.wandb_project }}
+      wandb_filters: ${{ steps.select.outputs.wandb_filters }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install 'wandb<0.25'
+      - name: Mark comparison pending
+        uses: actions/github-script@v8
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              ...context.repo, sha: context.payload.workflow_run.head_sha,
+              context: '_Artifact: Benchmark Comparison', state: 'pending',
+              description: 'Publishing measurements and selecting a matching main baseline.',
+            });
+      - name: Restore this run's configuration
+        run: python .github/scripts/genesis_benchmarks.py prepare
+      - name: Publish measurements and reconcile merge
+        run: python .github/scripts/genesis_benchmarks.py publish
+      - name: Select eligible main baseline
+        id: select
+        run: python .github/scripts/genesis_benchmarks.py select
+      # Restore the selected complete attempt under the artifact names expected by alarm.yml.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: speed-test-0
+          overwrite: true
+          path: benchmark-results/speed-test-0/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: speed-test-1
+          overwrite: true
+          path: benchmark-results/speed-test-1/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mem-test-0
+          overwrite: true
+          path: benchmark-results/mem-test-0/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mem-test-1
+          overwrite: true
+          path: benchmark-results/mem-test-1/
+          if-no-files-found: error
+      - name: Report comparison infrastructure failure
+        if: failure()
+        uses: actions/github-script@v8
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              ...context.repo, sha: context.payload.workflow_run.head_sha,
+              context: '_Artifact: Benchmark Comparison', state: 'failure',
+              description: 'Benchmark comparison unavailable. See the workflow log.',
+            });
+
+  benchmark-comparison:
+    name: genesis-benchmark_comparison
+    needs: publish-benchmarks
+    permissions:
+      contents: read
+      actions: read
       statuses: write
       pull-requests: write
-
     uses: Genesis-Embodied-AI/genesis-world/.github/workflows/alarm.yml@main
+    with:
+      wandb_project: ${{ needs.publish-benchmarks.outputs.wandb_project }}
+      wandb_filters: ${{ needs.publish-benchmarks.outputs.wandb_filters }}
     secrets: inherit
