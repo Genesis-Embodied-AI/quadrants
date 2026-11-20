@@ -806,15 +806,15 @@ class ASTTransformer(Builder):
                     "A class cannot be both a Python dataclass and data-oriented."
                 )
             lifted = resolve_bound_member(ctx, node.value.ptr, node)
-            if lifted is not None:
-                node.ptr = lifted
-                return node.ptr
-            node.ptr = getattr(node.value.ptr, node.attr)
-            if ctx.kernel_compile_context.pruning.enforcing and is_data_oriented(node.ptr):
+            node.ptr = lifted if lifted is not None else getattr(node.value.ptr, node.attr)
+            if is_data_oriented(node.ptr):
                 raise exception.QuadrantsRuntimeTypeError(
                     "Data-oriented objects inside Python dataclass fields are unsupported. "
                     "Store the dataclass on the data-oriented object instead."
                 )
+            if lifted is not None:
+                return node.ptr
+
             from quadrants._tensor_wrapper import (  # pylint: disable=C0415
                 Tensor as _TensorClass,
             )
