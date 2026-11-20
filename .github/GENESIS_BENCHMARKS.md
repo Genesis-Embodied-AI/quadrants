@@ -64,10 +64,10 @@ Run initial bootstrap before requiring the new performance comparison. Verify on
 and a failed bootstrap before enabling it as a merge gate. An arbitrary older Genesis version may be incompatible with
 the maintained build tooling or current Quadrants. Such a bootstrap fails explicitly and leaves the selection intact.
 
-The infrastructure tests require Python 3.12, `wandb<0.25`, and `frozendict`, without a Quadrants build:
+The infrastructure tests require Python 3.12, `pytest`, `wandb<0.25`, and `frozendict`, without a Quadrants build:
 
 ```sh
-python -m unittest discover -s .github/scripts/tests -v
+python -m pytest .github/scripts/tests/test_genesis_benchmarks.py -v
 ```
 
 Run the Genesis explicit-baseline tests from that repository:
