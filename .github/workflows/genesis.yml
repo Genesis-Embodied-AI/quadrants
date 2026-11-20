@@ -15,6 +15,14 @@ concurrency:
     ${{ github.event.workflow_run.head_branch }}
   cancel-in-progress: true
 
+env:
+  BENCHMARK_REPOSITORY: ${{ github.repository }}
+  GENESIS_REPOSITORY: Genesis-Embodied-AI/genesis-world
+  BENCHMARK_PROJECT: genesis-ai-company/quadrants-genesis-benchmarks
+  BENCHMARK_STAGING_PROJECT: genesis-ai-company/quadrants-genesis-benchmarks-staging
+  BENCHMARK_STATE_BRANCH: genesis-benchmark-state
+  BENCHMARK_WHEEL_ARTIFACT: manylinux_wheel_cp312_ubuntu-22.04
+
 jobs:
   # Load the active Genesis configuration, validate the PR wheel, and save the inputs for benchmarks and retries.
   prepare:

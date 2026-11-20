@@ -16,6 +16,14 @@ permissions:
   contents: read
   pull-requests: read
 
+env:
+  BENCHMARK_REPOSITORY: ${{ github.repository }}
+  GENESIS_REPOSITORY: Genesis-Embodied-AI/genesis-world
+  BENCHMARK_PROJECT: genesis-ai-company/quadrants-genesis-benchmarks
+  BENCHMARK_STAGING_PROJECT: genesis-ai-company/quadrants-genesis-benchmarks-staging
+  BENCHMARK_STATE_BRANCH: genesis-benchmark-state
+  BENCHMARK_WHEEL_ARTIFACT: manylinux_wheel_cp312_ubuntu-22.04
+
 jobs:
   promote:
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged

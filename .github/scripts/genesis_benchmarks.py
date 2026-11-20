@@ -17,13 +17,13 @@ from urllib.parse import quote
 
 import wandb
 
-REPOSITORY = "Genesis-Embodied-AI/quadrants"
-GENESIS = "Genesis-Embodied-AI/genesis-world"
-PROJECT = "genesis-ai-company/quadrants-genesis-benchmarks"
-STAGING_PROJECT = f"{PROJECT}-staging"
-STATE_BRANCH = "genesis-benchmark-state"
+REPOSITORY = os.environ["BENCHMARK_REPOSITORY"]
+GENESIS = os.environ["GENESIS_REPOSITORY"]
+PROJECT = os.environ["BENCHMARK_PROJECT"]
+STAGING_PROJECT = os.environ["BENCHMARK_STAGING_PROJECT"]
+STATE_BRANCH = os.environ["BENCHMARK_STATE_BRANCH"]
 STATE_PATH = f"repos/{REPOSITORY}/contents/active.json"
-WHEEL_ARTIFACT = "manylinux_wheel_cp312_ubuntu-22.04"
+WHEEL_ARTIFACT = os.environ["BENCHMARK_WHEEL_ARTIFACT"]
 
 
 def github(endpoint, payload=None, method=None):

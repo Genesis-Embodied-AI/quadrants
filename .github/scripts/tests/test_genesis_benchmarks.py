@@ -14,7 +14,16 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import genesis_benchmarks as benchmarks
+with patch.dict(
+    os.environ,
+    BENCHMARK_REPOSITORY="Genesis-Embodied-AI/quadrants",
+    GENESIS_REPOSITORY="Genesis-Embodied-AI/genesis-world",
+    BENCHMARK_PROJECT="genesis-ai-company/quadrants-genesis-benchmarks",
+    BENCHMARK_STAGING_PROJECT="genesis-ai-company/quadrants-genesis-benchmarks-staging",
+    BENCHMARK_STATE_BRANCH="genesis-benchmark-state",
+    BENCHMARK_WHEEL_ARTIFACT="manylinux_wheel_cp312_ubuntu-22.04",
+):
+    import genesis_benchmarks as benchmarks
 
 
 @pytest.fixture

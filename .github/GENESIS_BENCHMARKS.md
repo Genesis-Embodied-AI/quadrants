@@ -5,6 +5,10 @@ main. The active selection is stored in `active.json` on the `genesis-benchmark-
 and their provenance are stored in W&B. PR results use `genesis-ai-company/quadrants-genesis-benchmarks-staging`;
 verified main baselines use `genesis-ai-company/quadrants-genesis-benchmarks`.
 
+The workflows supply repository, W&B project, state-branch, and wheel-artifact settings through their top-level
+`env` blocks. Keep these settings consistent across the PR, bootstrap, promotion, and cleanup workflows. The helper
+derives the state API path from the configured repository.
+
 ## Bootstrap or switch Genesis
 
 Run **Generate Genesis benchmark baseline** from the Actions page on main, or:
