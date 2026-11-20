@@ -1,5 +1,8 @@
 """Exercise benchmark lifecycle decisions without GitHub or W&B writes."""
 
+# Currently run manually, not as part of CI:
+# python -m pytest .github/scripts/tests/test_genesis_benchmarks.py -v
+
 import base64
 import json
 import os
