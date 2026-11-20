@@ -40,9 +40,14 @@ def import_qd_python_core():
     if get_os_name() != "win":
         # pylint: disable=E1101
         old_flags = sys.getdlopenflags()
-        # Avoid RTLD_DEEPBIND on Linux: it breaks preloaded allocators such as jemalloc. Preserve existing flags
-        # elsewhere (8 is RTLD_GLOBAL on macOS).
-        sys.setdlopenflags(os.RTLD_NOW if get_os_name() == "linux" else 2 | 8)
+        # Avoid RTLD_DEEPBIND on Linux: it breaks preloaded allocators such as jemalloc.
+        flags = os.RTLD_NOW
+        if get_os_name() == "osx":
+            flags |= os.RTLD_GLOBAL
+        elif get_os_name() == "unix":
+            legacy_bsd_flag = 8  # Preserve the existing bitmask; this is not RTLD_GLOBAL on BSD.
+            flags |= legacy_bsd_flag
+        sys.setdlopenflags(flags)
     else:
         pyddir = os.path.dirname(os.path.realpath(__file__))
         os.environ["PATH"] += os.pathsep + pyddir
