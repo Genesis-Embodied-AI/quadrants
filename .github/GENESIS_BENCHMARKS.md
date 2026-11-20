@@ -2,7 +2,8 @@
 
 Quadrants performance checks use a manually activated Genesis commit. Compatibility unit tests continue using Genesis
 main. The active selection is stored in `active.json` on the `genesis-benchmark-state` branch. Complete measurements
-and their provenance are stored as artifacts in W&B project `genesis-ai-company/quadrants-genesis-benchmarks`.
+and their provenance are stored in W&B. PR results use `genesis-ai-company/quadrants-genesis-benchmarks-staging`;
+verified main baselines use `genesis-ai-company/quadrants-genesis-benchmarks`.
 
 ## Bootstrap or switch Genesis
 
@@ -38,8 +39,10 @@ Selection uses main history, with the PR's recorded cutoff, rather than completi
 serve comparisons while newer results are pending. Reports identify the actual baseline and cutoff. Candidate results
 are excluded from their own comparison. A missing baseline or incompatible environment is an explicit failure.
 
-Quadrants publishes candidate and selected baseline artifacts, then calls Genesis's reusable `alarm.yml` to compare
-them. That workflow owns the comparison tables, commit status, and PR comments for regressions or large improvements.
+Quadrants publishes baseline summary metrics in the format read by Genesis's reusable `alarm.yml`. It passes the
+baseline project and a JSON filter selecting one publication and its compatibility key. Genesis retains its default
+five-revision threshold: with one selected baseline, reports show results and percentage differences without automatic
+regression flags. Selection provenance is written to the Quadrants publication job's summary.
 
 The environment manifest records resolved dependencies, Python, container version, GPU model, driver, and the build
 script digest. Candidates constrain dependencies to the activated versions. An environment mismatch requires another
@@ -51,7 +54,12 @@ To reconcile a merge manually:
 gh workflow run genesis_promote.yml --repo Genesis-Embodied-AI/quadrants --ref main -f pr=1234
 ```
 
-Results from older configurations remain stored and cannot reactivate those configurations. There is no automatic
+Promotion uploads independent copies into the baseline project. The daily **Clean up Genesis benchmark staging**
+workflow deletes staging runs and artifacts older than seven days, including unmerged PR results. Baseline copies
+are retained. A PR merged after its staging results expire cannot contribute a baseline without another measurement;
+older baselines remain available. Manual bootstrap publishes directly to the baseline project.
+
+Results from older baseline configurations remain stored and cannot reactivate those configurations. There is no automatic
 bootstrap dispatch or retry of comparisons waiting for a baseline. To retry a failed comparison without rerunning
 benchmarks, rerun its comparison job. A benchmark retry must rerun both modes in one attempt. Earlier measurements
 cannot be combined with new ones. The input snapshot retains the original Genesis selection.
