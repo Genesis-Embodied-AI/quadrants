@@ -1,0 +1,35 @@
+name: Promote merged Genesis benchmarks
+
+on:
+  pull_request_target:
+    types: [closed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Merged PR whose results should be reconciled.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  promote:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged
+    runs-on: ubuntu-latest
+    steps:
+      # Promotion executes trusted main code and reads the PR's source identity through the API.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install 'wandb<0.25'
+      - name: Reconcile completed measurements
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+        run: python .github/scripts/genesis_benchmarks.py reconcile

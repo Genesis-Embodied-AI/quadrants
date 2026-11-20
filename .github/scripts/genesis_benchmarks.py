@@ -1,0 +1,424 @@
+"""Manage Genesis benchmark selection, publication, promotion, and comparison."""
+
+import argparse
+import base64
+import hashlib
+import io
+import json
+import math
+import os
+from pathlib import Path
+import subprocess
+import sys
+from urllib.parse import quote
+import zipfile
+
+import wandb
+
+REPOSITORY = "Genesis-Embodied-AI/quadrants"
+GENESIS = "Genesis-Embodied-AI/genesis-world"
+PROJECT = "genesis-ai-company/quadrants-genesis-benchmarks"
+STATE_BRANCH = "genesis-benchmark-state"
+STATE_PATH = f"repos/{REPOSITORY}/contents/active.json"
+WHEEL_ARTIFACT = "manylinux_wheel_cp312_ubuntu-22.04"
+
+
+def github(endpoint, payload=None, method=None):
+    command = ["gh", "api", endpoint]
+    if payload is not None:
+        command += ["--input", "-"]
+    if method:
+        command += ["--method", method]
+    result = subprocess.run(
+        command, input=json.dumps(payload) if payload is not None else None, text=True, capture_output=True
+    )
+    if result.returncode:
+        raise RuntimeError(f"GitHub request failed: {endpoint}\n{result.stderr}")
+    return json.loads(result.stdout) if result.stdout.strip() else None
+
+
+def pages(endpoint, key=None):
+    separator = "&" if "?" in endpoint else "?"
+    for page in range(1, 1001):
+        result = github(f"{endpoint}{separator}per_page=100&page={page}")
+        values = result[key] if key else result
+        yield from values
+        if len(values) < 100:
+            return
+    raise RuntimeError(f"Pagination limit reached: {endpoint}")
+
+
+def artifact_files(run_id, name, directory, started_after=None):
+    artifacts = list(pages(f"repos/{REPOSITORY}/actions/runs/{run_id}/artifacts", "artifacts"))
+    matches = [artifact for artifact in artifacts if artifact["name"] == name and not artifact["expired"]]
+    if len(matches) != 1:
+        raise ValueError(f"Run {run_id} needs exactly one available {name} artifact.")
+    if started_after and matches[0]["created_at"] < started_after:
+        raise ValueError(f"Artifact {name} belongs to an earlier benchmark attempt.")
+    archive = subprocess.check_output(["gh", "api", f"repos/{REPOSITORY}/actions/artifacts/{matches[0]['id']}/zip"])
+    directory.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(io.BytesIO(archive)) as bundle:
+        for member in bundle.infolist():
+            path = Path(member.filename)
+            if member.is_dir() or path.name != member.filename or path.name in ("", ".", ".."):
+                raise ValueError(f"Unexpected artifact path: {member.filename}")
+            (directory / path.name).write_bytes(bundle.read(member))
+    return matches[0]["id"]
+
+
+def active_state():
+    # Listing the branch distinguishes an absent selection from authentication or service failures.
+    branches = pages(f"repos/{REPOSITORY}/branches")
+    if not any(branch["name"] == STATE_BRANCH for branch in branches):
+        return None, None
+    files = github(f"repos/{REPOSITORY}/contents?ref={STATE_BRANCH}")
+    if not any(file["name"] == "active.json" for file in files):
+        return None, None
+    file = github(f"{STATE_PATH}?ref={STATE_BRANCH}")
+    return json.loads(base64.b64decode(file["content"])), file["sha"]
+
+
+def validate_wheel(run, directory):
+    if run["path"] != ".github/workflows/manylinux_wheel.yml" or run["conclusion"] != "success":
+        raise ValueError("A successful Manylinux wheel build is required.")
+    artifact_id = artifact_files(run["id"], WHEEL_ARTIFACT, directory)
+    manifests = list(directory.glob("*.json"))
+    if len(manifests) != 1:
+        raise ValueError("Build a wheel with source provenance before running Genesis benchmarks.")
+    metadata = json.loads(manifests[0].read_text())
+    if metadata["run_id"] != run["id"] or metadata["attempt"] != run["run_attempt"]:
+        raise ValueError("Wheel metadata belongs to another run or attempt.")
+    if Path(metadata["wheel"]).name != metadata["wheel"]:
+        raise ValueError("Invalid wheel filename.")
+    digest = hashlib.sha256((directory / metadata["wheel"]).read_bytes()).hexdigest()
+    if digest != metadata["sha256"]:
+        raise ValueError("Wheel digest differs from its provenance.")
+    commit = github(f"repos/{REPOSITORY}/git/commits/{metadata['commit']}")
+    if commit["tree"]["sha"] != metadata["tree"]:
+        raise ValueError("Wheel tree differs from its source commit.")
+    if metadata["commit"] != run["head_sha"]:
+        parents = [parent["sha"] for parent in commit["parents"]]
+        if run["event"] != "pull_request" or len(parents) != 2 or parents[1] != run["head_sha"]:
+            raise ValueError("Wheel source does not match the triggering commit or its PR merge checkout.")
+    return {**metadata, "artifact_id": artifact_id}
+
+
+def prepare(directory, event, run_id, attempt):
+    artifacts = list(pages(f"repos/{REPOSITORY}/actions/runs/{run_id}/artifacts", "artifacts"))
+    if any(artifact["name"] == "benchmark-input" for artifact in artifacts):
+        artifact_files(run_id, "benchmark-input", directory)
+        manifest = json.loads((directory / "manifest.json").read_text())
+    else:
+        main_sha = github(f"repos/{REPOSITORY}/commits/main")["sha"]
+        if "workflow_run" in event:
+            active, _ = active_state()
+            if active is None:
+                raise ValueError("Baseline unavailable. Run Generate Genesis benchmark baseline first.")
+            wheel_run = event["workflow_run"]
+            pulls = list(pages(f"repos/{REPOSITORY}/commits/{wheel_run['head_sha']}/pulls"))
+            pulls = [
+                pull
+                for pull in pulls
+                if pull["head"]["sha"] == wheel_run["head_sha"]
+                and pull["base"]["ref"] == "main"
+                and pull["base"]["repo"]["full_name"] == REPOSITORY
+            ]
+            pulls.sort(key=lambda pull: pull["state"] != "open")
+            if not pulls or (pulls[0]["state"] != "open" and not pulls[0]["merged_at"]):
+                raise ValueError("The wheel must belong to an open or merged PR targeting main.")
+            manifest = {**active, "pr": pulls[0]["number"], "main_cutoff": main_sha, "bootstrap": False}
+        else:
+            requested = event["inputs"]["genesis_ref"]
+            genesis_sha = github(f"repos/{GENESIS}/commits/{quote(requested, safe='')}")["sha"]
+            image = github(f"repos/{GENESIS}/contents/.github/genesis_image_ver?ref=main")
+            runs = pages(
+                f"repos/{REPOSITORY}/actions/workflows/manylinux_wheel.yml/runs?head_sha={main_sha}", "workflow_runs"
+            )
+            wheel_run = next(
+                (
+                    run
+                    for run in runs
+                    if run["head_branch"] == "main"
+                    and run["event"] != "pull_request"
+                    and run["conclusion"] == "success"
+                ),
+                None,
+            )
+            if wheel_run is None:
+                raise ValueError(f"Build the Manylinux wheel on main ({main_sha}) before bootstrapping.")
+            manifest = dict(
+                genesis_ref=requested,
+                genesis_sha=genesis_sha,
+                main_cutoff=main_sha,
+                pr=None,
+                bootstrap=True,
+                image_version=base64.b64decode(image["content"]).decode().strip(),
+                activation=str(run_id),
+                constraints="",
+            )
+        manifest["wheel"] = validate_wheel(wheel_run, directory / "wheel")
+        manifest["head_sha"] = wheel_run["head_sha"]
+        if manifest["bootstrap"] and manifest["wheel"]["commit"] != main_sha:
+            raise ValueError("Bootstrap wheel must represent the selected main commit.")
+    manifest["run_id"] = run_id
+    manifest["attempt"] = attempt
+    manifest["record_id"] = f"{run_id}-{attempt}"
+    (directory / "manifest.json").write_text(json.dumps(manifest, sort_keys=True) + "\n")
+    outputs = dict(
+        genesis_sha=manifest["genesis_sha"],
+        image_version=manifest["image_version"],
+        wheel_run=manifest["wheel"]["run_id"],
+        wheel_artifact=manifest["wheel"]["artifact_id"],
+        constraints=manifest["constraints"],
+        snapshot_exists=str(bool(artifacts and any(a["name"] == "benchmark-input" for a in artifacts))).lower(),
+    )
+    with open(os.environ["GITHUB_OUTPUT"], "a") as stream:
+        for key, value in outputs.items():
+            delimiter = hashlib.sha256(str(value).encode()).hexdigest()
+            stream.write(f"{key}<<{delimiter}\n{value}\n{delimiter}\n")
+
+
+def collect_results(directory, manifest):
+    run_id = manifest["run_id"]
+    jobs = list(pages(f"repos/{REPOSITORY}/actions/runs/{run_id}/attempts/{manifest['attempt']}/jobs", "jobs"))
+    if not any("production-benchmarks-" in job["name"] for job in jobs):
+        return None
+    for mode, label in (("0", "field"), ("1", "ndarray")):
+        matches = [job for job in jobs if job["name"].endswith(f"production-benchmarks-{label}")]
+        if len(matches) != 1 or matches[0]["conclusion"] != "success":
+            raise ValueError(f"Both benchmark modes must succeed in attempt {manifest['attempt']}.")
+        for name in (f"speed-test-{mode}", f"mem-test-{mode}", f"benchmark-environment-{mode}"):
+            artifact_files(run_id, name, directory / name, started_after=matches[0]["started_at"])
+    environments = [
+        json.loads(next((directory / f"benchmark-environment-{mode}").glob("*.json")).read_text())
+        for mode in ("0", "1")
+    ]
+    if environments[0] != environments[1]:
+        raise ValueError("Field and ndarray environments differ.")
+    environment = environments[0]
+    key = hashlib.sha256(json.dumps([manifest["genesis_sha"], environment], sort_keys=True).encode()).hexdigest()
+    if not manifest["bootstrap"] and key != manifest["compatibility_key"]:
+        raise ValueError("Benchmark environment changed. Run manual bootstrap before activating it.")
+    for kind, metrics in (("speed", ("runtime_fps", "compile_time")), ("mem", ("max_mem_mb",))):
+        for mode in ("0", "1"):
+            files = list((directory / f"{kind}-test-{mode}").glob(f"{kind}_test*.txt"))
+            if len(files) != 1:
+                raise ValueError(f"Missing {kind} measurements for mode {mode}.")
+            rows = [
+                dict(part.strip().split("=", 1) for part in line.split("|") if "=" in part)
+                for line in files[0].read_text().splitlines()
+                if line.strip()
+            ]
+            if not rows:
+                raise ValueError("Empty benchmark result.")
+            for row in rows:
+                values = [float(row[metric].strip()) for metric in metrics]
+                if any(not math.isfinite(value) or value <= 0 for value in values):
+                    raise ValueError("Benchmark measurements must be positive and finite.")
+    manifest.update(
+        compatibility_key=key,
+        environment=environment,
+        constraints="\n".join(environment["packages"]),
+        baseline_sha=None,
+    )
+    if manifest["bootstrap"]:
+        manifest["baseline_sha"] = manifest["wheel"]["commit"]
+    return manifest
+
+
+def promote(manifest):
+    if manifest["bootstrap"]:
+        return manifest["baseline_sha"]
+    pull = github(f"repos/{REPOSITORY}/pulls/{manifest['pr']}")
+    if not pull["merged"] or pull["head"]["sha"] != manifest["head_sha"]:
+        return None
+    landed = github(f"repos/{REPOSITORY}/git/commits/{pull['merge_commit_sha']}")
+    if landed["tree"]["sha"] != manifest["wheel"]["tree"]:
+        return None
+    return pull["merge_commit_sha"]
+
+
+def publish(directory, manifest):
+    collected = collect_results(directory, manifest)
+    if collected is None:
+        # A comparison-only retry reuses one complete published attempt instead of combining old job artifacts.
+        records = [
+            dict(run.config)
+            for run in wandb.Api().runs(PROJECT, filters={"config.run_id": manifest["run_id"], "state": "finished"})
+            if run.config["genesis_sha"] == manifest["genesis_sha"] and run.config["wheel"] == manifest["wheel"]
+        ]
+        if not records:
+            raise ValueError("No complete published attempt. Rerun both benchmark modes before publication.")
+        published = max(records, key=lambda record: record["attempt"])
+        wandb.Api().artifact(published["artifact"]).download(root=str(directory))
+        (directory / "manifest.json").write_text(json.dumps(published, sort_keys=True) + "\n")
+        return published
+    manifest = collected
+    manifest["baseline_sha"] = promote(manifest)
+    (directory / "manifest.json").write_text(json.dumps(manifest, sort_keys=True) + "\n")
+    entity, project = PROJECT.split("/")
+    with wandb.init(entity=entity, project=project, id=manifest["record_id"], resume="allow", config=manifest) as run:
+        artifact = wandb.Artifact(f"measurements-{manifest['record_id']}", type="genesis-benchmarks")
+        artifact.add_dir(str(directory))
+        logged = run.log_artifact(artifact).wait()
+        artifact_path = f"{PROJECT}/{logged.name}"
+        run.config.update({"artifact": artifact_path}, allow_val_change=True)
+    manifest["artifact"] = artifact_path
+    # Recheck after publication so a merge concurrent with upload is handled by at least one event.
+    landed = promote(manifest)
+    if landed and manifest["baseline_sha"] != landed:
+        published = wandb.Api().run(f"{PROJECT}/{manifest['record_id']}")
+        published.config["baseline_sha"] = landed
+        published.update()
+        manifest["baseline_sha"] = landed
+    (directory / "manifest.json").write_text(json.dumps(manifest, sort_keys=True) + "\n")
+    return manifest
+
+
+def activate(manifest):
+    current, file_sha = active_state()
+    if current and int(current["activation"]) > manifest["run_id"]:
+        raise ValueError("A newer bootstrap is active. This request has been superseded.")
+    if current and current["record_id"] == manifest["record_id"]:
+        return
+    if current is None and not any(branch["name"] == STATE_BRANCH for branch in pages(f"repos/{REPOSITORY}/branches")):
+        # The branch starts at a known main commit and is advanced only by normal contents commits.
+        github(f"repos/{REPOSITORY}/git/refs", {"ref": f"refs/heads/{STATE_BRANCH}", "sha": manifest["main_cutoff"]})
+    payload = dict(
+        message=f"Activate Genesis {manifest['genesis_sha']} for Quadrants benchmarks.",
+        branch=STATE_BRANCH,
+        content=base64.b64encode(json.dumps(manifest, sort_keys=True).encode()).decode(),
+    )
+    if file_sha:
+        payload["sha"] = file_sha
+    github(STATE_PATH, payload, method="PUT")
+    with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as stream:
+        stream.write(f"Activated Genesis `{manifest['genesis_sha']}` with baseline `{manifest['baseline_sha']}`.\n")
+
+
+def reconcile(pr):
+    active, _ = active_state()
+    if active is None:
+        print("No active benchmark configuration. Manual bootstrap is required.")
+        return
+    runs = wandb.Api().runs(PROJECT, filters={"config.pr": pr, "state": "finished"})
+    for run in runs:
+        manifest = dict(run.config)
+        landed = promote(manifest)
+        if landed and manifest.get("baseline_sha") != landed:
+            run.config["baseline_sha"] = landed
+            run.update()
+            print(f"Promoted {run.id} to main baseline {landed}")
+
+
+def select_baseline(manifest, records, history, landed=None):
+    if landed in history:
+        history = history[history.index(landed) + 1 :]
+    positions = {sha: index for index, sha in enumerate(history)}
+    candidates = [
+        record
+        for record in records
+        if record.get("compatibility_key") == manifest["compatibility_key"]
+        and record.get("baseline_sha") in positions
+        and record["record_id"] != manifest["record_id"]
+    ]
+    return min(
+        candidates,
+        key=lambda record: (positions[record["baseline_sha"]], -int(record["run_id"]), -int(record["attempt"])),
+        default=None,
+    )
+
+
+def compare(directory, manifest):
+    subprocess.run(["git", "fetch", "origin", manifest["main_cutoff"]], check=True)
+    history = subprocess.check_output(
+        ["git", "rev-list", "--first-parent", manifest["main_cutoff"]], text=True
+    ).splitlines()
+    pull = github(f"repos/{REPOSITORY}/pulls/{manifest['pr']}")
+    landed = pull["merge_commit_sha"] if pull["merged"] else None
+    records = [
+        dict(run.config)
+        for run in wandb.Api().runs(
+            PROJECT, filters={"config.compatibility_key": manifest["compatibility_key"], "state": "finished"}
+        )
+    ]
+    baseline = select_baseline(manifest, records, history, landed)
+    report = Path("benchmark-report.md")
+    provenance = (
+        f"Genesis: `{manifest['genesis_ref']}` (`{manifest['genesis_sha']}`)\n\n"
+        f"Quadrants candidate: `{manifest['wheel']['commit']}`\n\n"
+        f"Environment: `{manifest['compatibility_key']}`\n\n"
+    )
+    if baseline is None:
+        report.write_text(
+            provenance + "Baseline unavailable. Run manual bootstrap or retry with an eligible baseline.\n"
+        )
+        code = 1
+    else:
+        baseline_dir = Path("baseline-results")
+        wandb.Api().artifact(baseline["artifact"]).download(root=str(baseline_dir))
+        command = [
+            sys.executable,
+            "genesis-ci/.github/workflows/scripts/alarm.py",
+            "--baseline-artifacts-dir",
+            str(baseline_dir),
+            "--baseline-revision",
+            baseline["baseline_sha"],
+            "--speed-artifacts-dir",
+            str(directory),
+            "--mem-artifacts-dir",
+            str(directory),
+            "--runtime-fps-regression-tolerance-pct",
+            "8",
+            "--compile-time-regression-tolerance-pct",
+            "30",
+            "--mem-regression-tolerance-pct",
+            "4",
+            "--check-body-path",
+            str(report),
+        ]
+        for metric in ("runtime-fps", "compile-time", "mem"):
+            command += [f"--csv-{metric}-path", f"benchmark-{metric}.csv"]
+        code = subprocess.run(command, check=False).returncode
+        provenance += (
+            f"Quadrants baseline: `{baseline['baseline_sha']}`\n\n"
+            f"Main cutoff: `{manifest['main_cutoff']}`\n\n"
+            f"[Baseline run](https://github.com/{REPOSITORY}/actions/runs/{baseline['run_id']})\n\n"
+        )
+        report.write_text(provenance + (report.read_text() if report.exists() else "Comparison failed.\n"))
+    with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as stream:
+        stream.write(report.read_text())
+    github(
+        f"repos/{REPOSITORY}/statuses/{manifest['head_sha']}",
+        dict(
+            state="success" if code in (0, 43) else "failure",
+            context="_Artifact: Benchmark Comparison",
+            target_url=f"https://github.com/{REPOSITORY}/actions/runs/{manifest['run_id']}",
+            description=(
+                "No regressions detected." if code == 0 else "See benchmark report for deviations or unavailable data."
+            ),
+        ),
+    )
+    if code not in (0, 42, 43):
+        raise RuntimeError("Benchmark comparison failed or baseline is unavailable.")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("command", choices=("prepare", "publish", "activate", "compare", "reconcile"))
+    parser.add_argument("--directory", type=Path, default=Path("benchmark-results"))
+    args = parser.parse_args()
+    event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
+    args.directory.mkdir(parents=True, exist_ok=True)
+    if args.command == "prepare":
+        prepare(args.directory, event, int(os.environ["GITHUB_RUN_ID"]), int(os.environ["GITHUB_RUN_ATTEMPT"]))
+    elif args.command == "reconcile":
+        reconcile(event.get("number") or int(event["inputs"]["pr"]))
+    else:
+        manifest = json.loads((args.directory / "manifest.json").read_text())
+        if args.command == "publish":
+            publish(args.directory, manifest)
+        elif args.command == "activate":
+            activate(manifest)
+        else:
+            compare(args.directory, manifest)
