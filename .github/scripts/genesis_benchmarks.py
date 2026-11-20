@@ -26,6 +26,7 @@ STATE_PATH = f"repos/{REPOSITORY}/contents/active.json"
 WHEEL_ARTIFACT = os.environ["BENCHMARK_WHEEL_ARTIFACT"]
 
 
+# Call the GitHub API through gh and return the decoded response, raising on request failure.
 def github(endpoint, payload=None, method=None):
     command = ["gh", "api", endpoint]
     if payload is not None:
@@ -40,6 +41,7 @@ def github(endpoint, payload=None, method=None):
     return json.loads(result.stdout) if result.stdout.strip() else None
 
 
+# Yield all items from a paginated GitHub API endpoint.
 def pages(endpoint, key=None):
     separator = "&" if "?" in endpoint else "?"
     for page in range(1, 1001):
@@ -51,6 +53,7 @@ def pages(endpoint, key=None):
     raise RuntimeError(f"Pagination limit reached: {endpoint}")
 
 
+# Download and unpack one unexpired artifact, optionally rejecting earlier attempts, and return its ID.
 def artifact_files(run_id, name, directory, started_after=None):
     artifacts = list(pages(f"repos/{REPOSITORY}/actions/runs/{run_id}/artifacts", "artifacts"))
     matches = [artifact for artifact in artifacts if artifact["name"] == name and not artifact["expired"]]
@@ -69,6 +72,7 @@ def artifact_files(run_id, name, directory, started_after=None):
     return matches[0]["id"]
 
 
+# Read the active benchmark configuration and its file SHA, or return (None, None) if not configured.
 def active_state():
     # Listing the branch distinguishes an absent selection from authentication or service failures.
     branches = pages(f"repos/{REPOSITORY}/branches")
@@ -81,6 +85,7 @@ def active_state():
     return json.loads(base64.b64decode(file["content"])), file["sha"]
 
 
+# Verify the wheel digest and source against its successful build, then return its provenance and merge base parent.
 def validate_wheel(run, directory):
     if run["path"] != ".github/workflows/manylinux_wheel.yml" or run["conclusion"] != "success":
         raise ValueError("A successful Manylinux wheel build is required.")
@@ -108,6 +113,7 @@ def validate_wheel(run, directory):
     return {**metadata, "artifact_id": artifact_id, "base_commit": base_commit}
 
 
+# Create or restore the run configuration, pin its Genesis and wheel inputs, and export workflow outputs.
 def prepare(directory, event, run_id, attempt):
     artifacts = list(pages(f"repos/{REPOSITORY}/actions/runs/{run_id}/artifacts", "artifacts"))
     if any(artifact["name"] == "benchmark-input" for artifact in artifacts):
@@ -189,6 +195,7 @@ def prepare(directory, event, run_id, attempt):
             stream.write(f"{key}<<{delimiter}\n{value}\n{delimiter}\n")
 
 
+# Validate both benchmark modes and their environment, or return None when this attempt only retries comparison.
 def collect_results(directory, manifest):
     run_id = manifest["run_id"]
     jobs = list(pages(f"repos/{REPOSITORY}/actions/runs/{run_id}/attempts/{manifest['attempt']}/jobs", "jobs"))
@@ -237,6 +244,7 @@ def collect_results(directory, manifest):
     return manifest
 
 
+# Return the eligible main commit when the tested tree matches merged code; this does not publish measurements.
 def promote(manifest):
     if manifest["bootstrap"]:
         return manifest["baseline_sha"]
@@ -249,6 +257,7 @@ def promote(manifest):
     return pull["merge_commit_sha"]
 
 
+# Upload raw measurements to W&B, publishing baseline summaries before making a baseline record selectable.
 def store_measurements(directory, manifest, project):
     # Each publication has its own identity, so simultaneous promotion handlers cannot mix partial uploads.
     publication = uuid.uuid4().hex
@@ -280,6 +289,7 @@ def store_measurements(directory, manifest, project):
     return config
 
 
+# Copy measurements into the baseline project unless a completed record already exists for this attempt.
 def publish_baseline(directory, manifest):
     existing = wandb.Api().runs(
         PROJECT,
@@ -290,6 +300,7 @@ def publish_baseline(directory, manifest):
         store_measurements(directory, manifest, PROJECT)
 
 
+# Store complete measurements or restore a retained attempt, then publish a baseline if the PR has merged.
 def publish(directory, manifest):
     project = PROJECT if manifest["bootstrap"] else STAGING_PROJECT
     collected = collect_results(directory, manifest)
@@ -319,6 +330,7 @@ def publish(directory, manifest):
     return manifest
 
 
+# Activate a successful bootstrap configuration without allowing an older request to replace a newer selection.
 def activate(manifest):
     current, file_sha = active_state()
     if current and int(current["activation"]) > manifest["run_id"]:
@@ -340,6 +352,7 @@ def activate(manifest):
         stream.write(f"Activated Genesis `{manifest['genesis_sha']}` with baseline `{manifest['baseline_sha']}`.\n")
 
 
+# Find retained measurements for a merged PR and copy eligible results into the baseline project.
 def reconcile(pr):
     runs = wandb.Api().runs(STAGING_PROJECT, filters={"config.pr": pr, "config.kind": "record", "state": "finished"})
     for run in runs:
@@ -353,6 +366,7 @@ def reconcile(pr):
             print(f"Promoted {run.id} to main baseline {landed}")
 
 
+# Delete staging runs and their artifacts older than seven days, leaving baseline copies untouched.
 def cleanup():
     cutoff = datetime.now(timezone.utc) - timedelta(days=7)
     # Materialize before deleting so pagination cannot skip runs as the result set shrinks.
@@ -363,6 +377,7 @@ def cleanup():
             print(f"Deleted expired staging run {run.id}")
 
 
+# Choose the newest compatible baseline in the supplied main history, excluding the candidate and later commits.
 def select_baseline(manifest, records, history, landed=None):
     if landed in history:
         history = history[history.index(landed) + 1 :]
@@ -381,6 +396,7 @@ def select_baseline(manifest, records, history, landed=None):
     )
 
 
+# Select the baseline within the tested cutoff, write its provenance, and export the W&B project and filter.
 def prepare_comparison(manifest):
     subprocess.run(["git", "fetch", "origin", manifest["main_cutoff"]], check=True)
     history = subprocess.check_output(
