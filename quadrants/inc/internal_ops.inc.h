@@ -83,6 +83,8 @@ PER_INTERNAL_OP(warp_barrier)
 
 // AMDGPU
 PER_INTERNAL_OP(amdgpu_clock_i64)
+// `shuffle_down` for the `reduce_*_tiled` trees only: lanes at 16-lane row boundaries may keep their own value.
+PER_INTERNAL_OP(amdgpu_reduce_shuffle_down)
 
 // CPU
 PER_INTERNAL_OP(cpu_clock_i64)

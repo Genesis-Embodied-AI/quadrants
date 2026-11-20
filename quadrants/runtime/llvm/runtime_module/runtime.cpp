@@ -1146,9 +1146,9 @@ f64 amdgpu_shuffle_f64(i32 index, f64 value) {
   return u.d;
 }
 
-// FIXME: Currently emulates shuffle_down via the cross-half ``ds_bpermute`` + ``permlane64`` helper (~50-60 cycle
-// latency). Should be upgraded to use DPP ROW_SHR instructions (~4-12 cycles) for reduction-pattern offsets (1, 2, 4,
-// 8, 16); the cross-half case (offset >= 32) still needs the helper.
+// `shuffle_down` reads lane `i + offset` for every in-range source lane, so it uses the general shuffle
+// implementation selected for the target. The DPP optimization is restricted to the reduction-tree helpers
+// `amdgpu_reduce_shuffle_down_*` below.
 i32 amdgpu_shuffle_down_i32(i32 offset, i32 value) {
   return amdgpu_shuffle_i32(amdgpu_lane_id() + offset, value);
 }
@@ -1181,8 +1181,68 @@ f64 amdgpu_shuffle_down_f64(i32 offset, f64 value) {
   return u.d;
 }
 
+// ``shuffle_down`` for the reduction trees in ``reductions.py``, which only read lane 0 of each
+// ``2**log2_size`` tile. For offsets {1, 2, 4, 8} it emits one DPP ``row_shl:N`` (lane ``i`` reads lane ``i + N``
+// within its 16-lane row); a lane whose source is in the next row keeps its own value. At offsets <= 8 every lane that
+// lane 0 of a tile still depends on reads from its own row (larger tiles fold their other rows in at offsets 32 and 16
+// first), so the tile result is unchanged. Offset 16 crosses a row and offset >= 32 crosses the wave half, so both use
+// the generic helper. Inline asm rather than ``__builtin_amdgcn_update_dpp`` because this file is compiled
+// to host bitcode and retargeted to amdgcn only at JIT time; ``offset`` folds to a constant after inlining. The
+// backend's hazard recognizer cannot see a DPP read inside inline asm, so ``s_nop 1`` supplies the 2 wait states GFX9
+// requires between a VALU write of ``value`` (usually the previous tree step's ``op``) and the DPP read of it.
+i32 amdgpu_reduce_shuffle_down_i32(i32 offset, i32 value) {
+#if defined(ARCH_amdgpu) && (defined(__x86_64__) || defined(__i386__) || defined(__amdgcn__))
+  i32 r = value;
+  if (offset == 1) {
+    __asm__ volatile("s_nop 1\n\tv_mov_b32_dpp %0, %1 row_shl:1 row_mask:0xf bank_mask:0xf" : "+v"(r) : "v"(value));
+    return r;
+  }
+  if (offset == 2) {
+    __asm__ volatile("s_nop 1\n\tv_mov_b32_dpp %0, %1 row_shl:2 row_mask:0xf bank_mask:0xf" : "+v"(r) : "v"(value));
+    return r;
+  }
+  if (offset == 4) {
+    __asm__ volatile("s_nop 1\n\tv_mov_b32_dpp %0, %1 row_shl:4 row_mask:0xf bank_mask:0xf" : "+v"(r) : "v"(value));
+    return r;
+  }
+  if (offset == 8) {
+    __asm__ volatile("s_nop 1\n\tv_mov_b32_dpp %0, %1 row_shl:8 row_mask:0xf bank_mask:0xf" : "+v"(r) : "v"(value));
+    return r;
+  }
+#endif
+  return amdgpu_shuffle_down_i32(offset, value);
+}
+
+f32 amdgpu_reduce_shuffle_down_f32(i32 offset, f32 value) {
+  union {
+    f32 f;
+    i32 i;
+  } u;
+  u.f = value;
+  u.i = amdgpu_reduce_shuffle_down_i32(offset, u.i);
+  return u.f;
+}
+
+i64 amdgpu_reduce_shuffle_down_i64(i32 offset, i64 value) {
+  i32 lo = (i32)(u64)value;
+  i32 hi = (i32)((u64)value >> 32);
+  lo = amdgpu_reduce_shuffle_down_i32(offset, lo);
+  hi = amdgpu_reduce_shuffle_down_i32(offset, hi);
+  return (i64)(((u64)(u32)hi << 32) | (u64)(u32)lo);
+}
+
+f64 amdgpu_reduce_shuffle_down_f64(i32 offset, f64 value) {
+  union {
+    f64 d;
+    i64 i;
+  } u;
+  u.d = value;
+  u.i = amdgpu_reduce_shuffle_down_i64(offset, u.i);
+  return u.d;
+}
+
 // Mirrors `amdgpu_shuffle_down`: the cross-half helper is a generic gather, so `shuffle_up` is just `shuffle_down`
-// with the source lane index decremented instead of incremented. The same DPP fast-path FIXME applies here too.
+// with the source lane index decremented instead of incremented.
 i32 amdgpu_shuffle_up_i32(i32 offset, i32 value) {
   return amdgpu_shuffle_i32(amdgpu_lane_id() - offset, value);
 }

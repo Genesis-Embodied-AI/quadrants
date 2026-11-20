@@ -39,6 +39,16 @@ from quadrants.types.primitive_types import i32, u32, u64
 # --- Reductions ------------------------------------------------------------------------
 
 
+def _tree_shuffle_down(value, offset):
+    """``shuffle_down`` for the lane-0 reduction trees below.  On AMDGPU, offsets 1, 2, 4 and 8 lower to a single DPP
+    ``row_shl``, which leaves lanes whose source is in the next 16-lane row with their own value.  Lane 0 of every
+    ``2**log2_size`` tile never reads such a lane, so only the partial values in the other lanes differ from
+    ``shuffle_down``."""
+    if impl.current_cfg().arch == _qd_core.amdgpu:
+        return impl.call_internal("amdgpu_reduce_shuffle_down", value, offset, with_runtime_context=False)
+    return shuffle_down(value, offset)
+
+
 @func
 def _reduce_tiled(value, op: template(), log2_size: template()):
     """Tree-reduce ``value`` across ``2**log2_size`` consecutive lanes via ``shuffle_down`` under a caller-supplied
@@ -57,7 +67,7 @@ def _reduce_tiled(value, op: template(), log2_size: template()):
     """
     for i in impl.static(range(log2_size)):
         offset = impl.static(1 << (log2_size - 1 - i))
-        value = op(value, shuffle_down(value, u32(offset)))
+        value = op(value, _tree_shuffle_down(value, u32(offset)))
     return value
 
 
@@ -74,7 +84,7 @@ def reduce_add_tiled(value, log2_size: template()):
     """
     for i in impl.static(range(log2_size)):
         offset = impl.static(1 << (log2_size - 1 - i))
-        value = value + shuffle_down(value, u32(offset))
+        value = value + _tree_shuffle_down(value, u32(offset))
     return value
 
 
@@ -111,7 +121,7 @@ def reduce_min_tiled(value, log2_size: template()):
     """
     for i in impl.static(range(log2_size)):
         offset = impl.static(1 << (log2_size - 1 - i))
-        value = min(value, shuffle_down(value, u32(offset)))
+        value = min(value, _tree_shuffle_down(value, u32(offset)))
     return value
 
 
@@ -124,7 +134,7 @@ def reduce_max_tiled(value, log2_size: template()):
     """
     for i in impl.static(range(log2_size)):
         offset = impl.static(1 << (log2_size - 1 - i))
-        value = max(value, shuffle_down(value, u32(offset)))
+        value = max(value, _tree_shuffle_down(value, u32(offset)))
     return value
 
 
