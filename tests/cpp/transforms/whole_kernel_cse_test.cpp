@@ -27,9 +27,8 @@ bool is_const_i32(Stmt *s, int32 value) {
 
 }  // namespace
 
-// merge_global_ptrs (pointers-only WholeKernelCSE): every user of an eliminated statement is rewritten wherever it
-// is - nested loop/branch bodies, operands of container statements, users that only become eliminable after an
-// earlier rewrite - while sibling scopes are never merged into each other.
+// Check that merge_global_ptrs updates users across nested scopes, including container operands and dependent
+// expressions, without merging statements from sibling scopes.
 TEST(WholeKernelCSE, MergeGlobalPtrsRewritesUsersAcrossScopes) {
   TestProgram test_prog;
   test_prog.setup();
@@ -112,8 +111,7 @@ TEST(WholeKernelCSE, MergeGlobalPtrsRewritesUsersAcrossScopes) {
   EXPECT_NE(body2->locate(k5_loop2), -1);
 }
 
-// Full WholeKernelCSE: hoisting an if's common first statement changes the tree mid-round; eliminations after it in
-// the same round must still rewrite every user and the result must verify.
+// Checks that CSE still replaces duplicate expressions correctly after hoisting has happened in the same round.
 TEST(WholeKernelCSE, FullModeHoistThenEliminate) {
   TestProgram test_prog;
   test_prog.setup();
@@ -161,10 +159,9 @@ TEST(WholeKernelCSE, FullModeHoistThenEliminate) {
   EXPECT_EQ(adds, 1);
 }
 
-// Exercise both an index built by an earlier elimination and one first built by hoisting. Each branch hoists a
-// prefix constant and a suffix store; the second branch repeats this while the first branch's insertions are pending.
 class WholeKernelCSEHoistIndex : public ::testing::TestWithParam<bool> {};
 
+// Checks that the users index stays usable through several hoists and subsequent duplicate elimination.
 TEST_P(WholeKernelCSEHoistIndex, MultipleHoistsRewriteScalarAndContainerUsers) {
   TestProgram test_prog;
   test_prog.setup();
@@ -246,8 +243,7 @@ TEST_P(WholeKernelCSEHoistIndex, MultipleHoistsRewriteScalarAndContainerUsers) {
 
 INSTANTIATE_TEST_SUITE_P(IndexBuiltBeforeOrDuringHoisting, WholeKernelCSEHoistIndex, ::testing::Bool());
 
-// Moving a whole container preserves the indexed operands in its body, even while insertion is queued. The
-// discarded container's descendants remain alive in the block's trash bin until the next round clears the index.
+// Checks that moving a whole loop out of an if preserves the users index for statements inside that loop.
 TEST(WholeKernelCSE, HoistedContainersKeepNestedUsersValid) {
   TestProgram test_prog;
   test_prog.setup();

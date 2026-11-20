@@ -151,8 +151,8 @@ class WholeKernelCSE : public BasicStmtVisitor {
     users_built_ = false;
   }
 
-  // Build before extracting hoisted statements so their operands remain indexed while insertion is pending.
   void replace_uses_and_mark_users_dirty(Stmt *duplicate_stmt, Stmt *replacement_stmt) {
+    // Build before extracting hoisted statements so their operands remain indexed while insertion is pending.
     if (!users_built_) {
       CollectUsers collect(&users_);
       root_->accept(&collect);
@@ -180,6 +180,7 @@ class WholeKernelCSE : public BasicStmtVisitor {
     if (to_erase_.empty()) {
       return false;
     }
+    // Group statements selected for removal by their parent block.
     std::unordered_map<Block *, std::unordered_set<Stmt *>> by_block;
     for (auto *stmt : to_erase_) {
       by_block[stmt->parent].insert(stmt);
@@ -249,7 +250,7 @@ class WholeKernelCSE : public BasicStmtVisitor {
   }
 
   void hoist_common_branch_statements(IfStmt *if_stmt) {
-    // Hoist matching branch prefixes and suffixes. Skip in pointers-only mode to avoid relocating other computation.
+    // Skip in pointers-only mode to avoid relocating other computation.
     if (!ptrs_only_ && if_stmt->true_statements && if_stmt->false_statements) {
       auto &true_clause = if_stmt->true_statements;
       auto &false_clause = if_stmt->false_statements;
@@ -325,7 +326,6 @@ class WholeKernelCSE : public BasicStmtVisitor {
     while (true) {
       eliminator.begin_round(node);
       node->accept(&eliminator);
-      // Inserts (if-branch hoisting) first, then erasures, as in DelayedIRModifier::modify_ir.
       bool round_modified = eliminator.modifier_.modify_ir();
       round_modified |= eliminator.erase_eliminated();
       if (round_modified)
