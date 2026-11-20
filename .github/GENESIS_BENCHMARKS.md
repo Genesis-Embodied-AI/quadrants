@@ -26,6 +26,9 @@ ordering. Check the Actions run status and activation summary. An older request 
 
 ## Baseline promotion and comparisons
 
+New runs for the same source repository and branch cancel superseded runs to release GPU capacity. A PR merge alone
+does not cancel its running benchmarks. Cancelled or incomplete measurements cannot become a baseline.
+
 Complete PR measurements are published before comparison. If the PR merges, they become eligible as a main baseline
 only when the wheel's source tree matches the landed tree. The merge handler and publication handler both reconcile
 this condition, so either event order works. A reported performance regression does not invalidate measurements of
