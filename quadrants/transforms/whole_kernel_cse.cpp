@@ -248,23 +248,13 @@ class WholeKernelCSE : public BasicStmtVisitor {
     scope_inserts_.pop_back();
   }
 
-  void visit(IfStmt *if_stmt) override {
-    if (if_stmt->true_statements) {
-      if (if_stmt->true_statements->statements.empty()) {
-        if_stmt->set_true_statements(nullptr);
-      }
-    }
-
-    if (if_stmt->false_statements) {
-      if (if_stmt->false_statements->statements.empty()) {
-        if_stmt->set_false_statements(nullptr);
-      }
-    }
-
+  void hoist_common_branch_statements(IfStmt *if_stmt) {
     // Hoist matching branch prefixes and suffixes. Skip in pointers-only mode to avoid relocating other computation.
     if (!ptrs_only_ && if_stmt->true_statements && if_stmt->false_statements) {
       auto &true_clause = if_stmt->true_statements;
       auto &false_clause = if_stmt->false_statements;
+      // Both hoists keep the true-branch copy and discard the false-branch copy. Redirect the false copy's users to
+      // the true copy before removal, updating the use index and marking those users dirty for another CSE check.
       // Rewrite each matching pair before comparing the next, so dependent expressions can match too.
       std::size_t prefix_size = 0;
       while (prefix_size < true_clause->size() && prefix_size < false_clause->size() &&
@@ -294,6 +284,22 @@ class WholeKernelCSE : public BasicStmtVisitor {
         false_clause->erase((int)false_clause->size() - 1);
       }
     }
+  }
+
+  void visit(IfStmt *if_stmt) override {
+    if (if_stmt->true_statements) {
+      if (if_stmt->true_statements->statements.empty()) {
+        if_stmt->set_true_statements(nullptr);
+      }
+    }
+
+    if (if_stmt->false_statements) {
+      if (if_stmt->false_statements->statements.empty()) {
+        if_stmt->set_false_statements(nullptr);
+      }
+    }
+
+    hoist_common_branch_statements(if_stmt);
 
     if (if_stmt->true_statements)
       if_stmt->true_statements->accept(this);
