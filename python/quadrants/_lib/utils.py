@@ -44,9 +44,6 @@ def import_qd_python_core():
         flags = os.RTLD_NOW
         if get_os_name() == "osx":
             flags |= os.RTLD_GLOBAL
-        elif get_os_name() == "unix":
-            legacy_bsd_flag = 8  # Preserve the existing bitmask; this is not RTLD_GLOBAL on BSD.
-            flags |= legacy_bsd_flag
         sys.setdlopenflags(flags)
     else:
         pyddir = os.path.dirname(os.path.realpath(__file__))
