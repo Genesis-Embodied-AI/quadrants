@@ -70,7 +70,9 @@ class BenchmarkLifecycleTests(unittest.TestCase):
         with (
             tempfile.TemporaryDirectory() as directory,
             patch.dict(os.environ, GITHUB_STEP_SUMMARY=str(Path(directory) / "summary")),
-            patch.object(benchmarks, "active_state", return_value=(dict(activation="99"), "old-blob")),
+            patch.object(
+                benchmarks, "active_state", return_value=(dict(activation="99", record_id="99-1"), "old-blob")
+            ),
             patch.object(benchmarks, "github") as github,
         ):
             benchmarks.activate(self.manifest)
@@ -151,6 +153,48 @@ class BenchmarkLifecycleTests(unittest.TestCase):
                 self.assertEqual(saved["genesis_sha"], "original")
                 self.assertEqual(saved["record_id"], "100-2")
                 active.assert_not_called()
+
+    def test_comparison_retry_reuses_complete_published_attempt(self):
+        published = dict(self.manifest, artifact="project/measurements:v0")
+        run = MagicMock()
+        run.config = published
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(benchmarks, "collect_results", return_value=None),
+            patch.object(benchmarks.wandb, "Api") as api,
+            patch.object(benchmarks.wandb, "init") as initialize,
+        ):
+            api.return_value.runs.return_value = [run]
+            result = benchmarks.publish(Path(directory), dict(self.manifest, attempt=2, record_id="100-2"))
+            self.assertEqual(result["record_id"], "100-1")
+            initialize.assert_not_called()
+            self.assertEqual(json.loads((Path(directory) / "manifest.json").read_text()), published)
+
+    def test_complete_modes_produce_a_bootstrap_key(self):
+        jobs = [
+            dict(name=f"production-benchmarks-{label}", conclusion="success", started_at="now")
+            for label in ("field", "ndarray")
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for mode in ("0", "1"):
+                for name in ("speed-test", "mem-test", "benchmark-environment"):
+                    (root / f"{name}-{mode}").mkdir()
+                (root / f"speed-test-{mode}" / "speed_test.txt").write_text(
+                    f"env=anymal | dtype={mode} | runtime_fps=100 | compile_time=10 | realtime_factor=1\n"
+                )
+                (root / f"mem-test-{mode}" / "mem_test.txt").write_text(f"env=anymal | dtype={mode} | max_mem_mb=100\n")
+                (root / f"benchmark-environment-{mode}" / "environment.json").write_text(
+                    json.dumps(dict(packages=["numpy==2.0"], image_version="1_25"))
+                )
+            with patch.object(benchmarks, "pages", return_value=iter(jobs)), patch.object(benchmarks, "artifact_files"):
+                result = benchmarks.collect_results(root, dict(self.manifest, bootstrap=True))
+                self.assertEqual(result["baseline_sha"], "tested")
+                self.assertEqual(result["constraints"], "numpy==2.0")
+                self.assertEqual(len(result["compatibility_key"]), 64)
+            with patch.object(benchmarks, "pages", return_value=iter(jobs)), patch.object(benchmarks, "artifact_files"):
+                with self.assertRaisesRegex(ValueError, "environment changed"):
+                    benchmarks.collect_results(root, self.manifest)
 
 
 if __name__ == "__main__":

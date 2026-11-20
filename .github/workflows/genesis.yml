@@ -145,6 +145,15 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install 'wandb<0.25' frozendict
+      - name: Mark comparison pending
+        uses: actions/github-script@v8
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              ...context.repo, sha: context.payload.workflow_run.head_sha,
+              context: '_Artifact: Benchmark Comparison', state: 'pending',
+              description: 'Publishing measurements and selecting a matching main baseline.',
+            });
       - name: Restore this run's configuration
         run: python .github/scripts/genesis_benchmarks.py prepare
       - name: Publish measurements and reconcile merge
@@ -159,3 +168,13 @@ jobs:
           path: |
             benchmark-*.csv
             benchmark-report.md
+      - name: Report comparison infrastructure failure
+        if: failure()
+        uses: actions/github-script@v8
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              ...context.repo, sha: context.payload.workflow_run.head_sha,
+              context: '_Artifact: Benchmark Comparison', state: 'failure',
+              description: 'Benchmark comparison unavailable. See the workflow log.',
+            });
