@@ -40,7 +40,6 @@ def import_qd_python_core():
     if get_os_name() != "win":
         # pylint: disable=E1101
         old_flags = sys.getdlopenflags()
-        # Avoid RTLD_DEEPBIND on Linux: it breaks preloaded allocators such as jemalloc.
         flags = os.RTLD_NOW
         if get_os_name() == "osx":
             flags |= os.RTLD_GLOBAL
