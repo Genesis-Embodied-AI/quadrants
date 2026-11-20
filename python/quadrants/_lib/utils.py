@@ -40,10 +40,7 @@ def import_qd_python_core():
     if get_os_name() != "win":
         # pylint: disable=E1101
         old_flags = sys.getdlopenflags()
-        flags = os.RTLD_NOW
-        if get_os_name() == "osx":
-            flags |= os.RTLD_GLOBAL
-        sys.setdlopenflags(flags)
+        sys.setdlopenflags(os.RTLD_NOW)
     else:
         pyddir = os.path.dirname(os.path.realpath(__file__))
         os.environ["PATH"] += os.pathsep + pyddir
