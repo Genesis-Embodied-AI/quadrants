@@ -25,11 +25,20 @@ def run_tool(*args: str) -> str:
 def audit_library(library: Path) -> list[str]:
     """Report LLVM symbols and shared LLVM dependencies exposed by an ELF library."""
     failures = []
-    for label, selection in (("exported", "--defined-only"), ("undefined", "--undefined-only")):
-        symbols = run_tool("nm", "--dynamic", "--extern-only", "--demangle", selection, str(library))
-        failures.extend(
-            f"{label} LLVM symbol: {line.strip()}" for line in symbols.splitlines() if LLVM_SYMBOL.search(line)
-        )
+
+    # Check for exported LLVM symbols that could expose our private LLVM to other libraries in the process.
+    symbols = run_tool("nm", "--dynamic", "--extern-only", "--demangle", "--defined-only", str(library))
+    failures.extend(
+        f"exported LLVM symbol: {line.strip()}" for line in symbols.splitlines() if LLVM_SYMBOL.search(line)
+    )
+
+    # Check for undefined LLVM symbols that need resolution outside this library, risking LLVM version conflicts.
+    symbols = run_tool("nm", "--dynamic", "--extern-only", "--demangle", "--undefined-only", str(library))
+    failures.extend(
+        f"undefined LLVM symbol: {line.strip()}" for line in symbols.splitlines() if LLVM_SYMBOL.search(line)
+    )
+
+    # Check DT_NEEDED for shared LLVM dependencies, even if no LLVM symbols appear in the dynamic symbol table.
     dynamic = run_tool("readelf", "--dynamic", "--wide", str(library))
     for dependency in re.findall(r"\(NEEDED\).*?\[([^]]+)\]", dynamic):
         if Path(dependency).name.startswith("libLLVM"):
