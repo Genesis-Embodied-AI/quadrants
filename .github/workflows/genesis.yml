@@ -121,8 +121,9 @@ jobs:
                 : `Genesis unit tests or benchmarks failed (${process.env.RESULT}).`,
             });
 
-  benchmark-comparison:
-    name: genesis-benchmark_comparison
+  # Publish complete measurements and select the main baseline for the shared comparison workflow.
+  publish-benchmarks:
+    name: genesis-publish_benchmarks
     needs: [prepare, tests-and-benchmarks]
     if: needs.tests-and-benchmarks.outputs.is_skipped != 'true'
     runs-on: ubuntu-latest
@@ -131,6 +132,9 @@ jobs:
       actions: read
       statuses: write
       pull-requests: read
+    outputs:
+      baseline_revision: ${{ steps.select.outputs.baseline_revision }}
+      comparison_context: ${{ steps.select.outputs.comparison_context }}
     env:
       GH_TOKEN: ${{ github.token }}
       WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
@@ -138,14 +142,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/checkout@v4
-        with:
-          repository: Genesis-Embodied-AI/genesis-world
-          path: genesis-ci
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install 'wandb<0.25' frozendict
+      - run: pip install 'wandb<0.25'
       - name: Mark comparison pending
         uses: actions/github-script@v8
         with:
@@ -159,16 +159,21 @@ jobs:
         run: python .github/scripts/genesis_benchmarks.py prepare
       - name: Publish measurements and reconcile merge
         run: python .github/scripts/genesis_benchmarks.py publish
-      - name: Compare with eligible main baseline
-        run: python .github/scripts/genesis_benchmarks.py compare
+      - name: Select eligible main baseline
+        id: select
+        run: python .github/scripts/genesis_benchmarks.py select
       - uses: actions/upload-artifact@v4
-        if: always()
         with:
-          name: benchmark-comparison-tables
+          name: benchmark-candidate
           overwrite: true
-          path: |
-            benchmark-*.csv
-            benchmark-report.md
+          path: benchmark-results/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-baseline
+          overwrite: true
+          path: baseline-results/
+          if-no-files-found: error
       - name: Report comparison infrastructure failure
         if: failure()
         uses: actions/github-script@v8
@@ -179,3 +184,19 @@ jobs:
               context: '_Artifact: Benchmark Comparison', state: 'failure',
               description: 'Benchmark comparison unavailable. See the workflow log.',
             });
+
+  benchmark-comparison:
+    name: genesis-benchmark_comparison
+    needs: publish-benchmarks
+    permissions:
+      contents: read
+      actions: read
+      statuses: write
+      pull-requests: write
+    uses: Genesis-Embodied-AI/genesis-world/.github/workflows/alarm.yml@main
+    with:
+      candidate_artifact: benchmark-candidate
+      baseline_artifact: benchmark-baseline
+      baseline_revision: ${{ needs.publish-benchmarks.outputs.baseline_revision }}
+      comparison_context: ${{ needs.publish-benchmarks.outputs.comparison_context }}
+    secrets: inherit

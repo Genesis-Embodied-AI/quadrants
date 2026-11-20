@@ -38,6 +38,9 @@ Selection uses main history, with the PR's recorded cutoff, rather than completi
 serve comparisons while newer results are pending. Reports identify the actual baseline and cutoff. Candidate results
 are excluded from their own comparison. A missing baseline or incompatible environment is an explicit failure.
 
+Quadrants publishes candidate and selected baseline artifacts, then calls Genesis's reusable `alarm.yml` to compare
+them. That workflow owns the comparison tables, commit status, and PR comments for regressions or large improvements.
+
 The environment manifest records resolved dependencies, Python, container version, GPU model, driver, and the build
 script digest. Candidates constrain dependencies to the activated versions. An environment mismatch requires another
 manual bootstrap. Bootstrap can also refresh a baseline when merged code differs from a PR's tested tree.
@@ -73,5 +76,5 @@ python -m pytest .github/scripts/tests/test_genesis_benchmarks.py -v
 Run the Genesis explicit-baseline tests from that repository:
 
 ```sh
-python -m unittest discover -s .github/workflows/scripts/tests -v
+python -m pytest .github/workflows/scripts/tests/test_alarm_baseline.py -v
 ```

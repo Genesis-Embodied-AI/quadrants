@@ -8,7 +8,6 @@ import json
 import math
 import os
 import subprocess
-import sys
 import zipfile
 from pathlib import Path
 from urllib.parse import quote
@@ -327,7 +326,7 @@ def select_baseline(manifest, records, history, landed=None):
     )
 
 
-def compare(directory, manifest):
+def prepare_comparison(manifest):
     subprocess.run(["git", "fetch", "origin", manifest["main_cutoff"]], check=True)
     history = subprocess.check_output(
         ["git", "rev-list", "--first-parent", manifest["main_cutoff"]], text=True
@@ -341,69 +340,26 @@ def compare(directory, manifest):
         )
     ]
     baseline = select_baseline(manifest, records, history, landed)
-    report = Path("benchmark-report.md")
-    provenance = (
+    if baseline is None:
+        raise ValueError("Baseline unavailable. Run manual bootstrap or retry with an eligible baseline.")
+    wandb.Api().artifact(baseline["artifact"]).download(root="baseline-results")
+    context = (
         f"Genesis: `{manifest['genesis_ref']}` (`{manifest['genesis_sha']}`)\n\n"
         f"Quadrants candidate: `{manifest['wheel']['commit']}`\n\n"
         f"Environment: `{manifest['compatibility_key']}`\n\n"
+        f"Quadrants baseline: `{baseline['baseline_sha']}`\n\n"
+        f"Main cutoff: `{manifest['main_cutoff']}`\n\n"
+        f"[Baseline run](https://github.com/{REPOSITORY}/actions/runs/{baseline['run_id']})"
     )
-    if baseline is None:
-        report.write_text(
-            provenance + "Baseline unavailable. Run manual bootstrap or retry with an eligible baseline.\n"
-        )
-        code = 1
-    else:
-        baseline_dir = Path("baseline-results")
-        wandb.Api().artifact(baseline["artifact"]).download(root=str(baseline_dir))
-        command = [
-            sys.executable,
-            "genesis-ci/.github/workflows/scripts/alarm.py",
-            "--baseline-artifacts-dir",
-            str(baseline_dir),
-            "--baseline-revision",
-            baseline["baseline_sha"],
-            "--speed-artifacts-dir",
-            str(directory),
-            "--mem-artifacts-dir",
-            str(directory),
-            "--runtime-fps-regression-tolerance-pct",
-            "8",
-            "--compile-time-regression-tolerance-pct",
-            "30",
-            "--mem-regression-tolerance-pct",
-            "4",
-            "--check-body-path",
-            str(report),
-        ]
-        for metric in ("runtime-fps", "compile-time", "mem"):
-            command += [f"--csv-{metric}-path", f"benchmark-{metric}.csv"]
-        code = subprocess.run(command, check=False).returncode
-        provenance += (
-            f"Quadrants baseline: `{baseline['baseline_sha']}`\n\n"
-            f"Main cutoff: `{manifest['main_cutoff']}`\n\n"
-            f"[Baseline run](https://github.com/{REPOSITORY}/actions/runs/{baseline['run_id']})\n\n"
-        )
-        report.write_text(provenance + (report.read_text() if report.exists() else "Comparison failed.\n"))
-    with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as stream:
-        stream.write(report.read_text())
-    github(
-        f"repos/{REPOSITORY}/statuses/{manifest['head_sha']}",
-        dict(
-            state="success" if code in (0, 43) else "failure",
-            context="_Artifact: Benchmark Comparison",
-            target_url=f"https://github.com/{REPOSITORY}/actions/runs/{manifest['run_id']}",
-            description=(
-                "No regressions detected." if code == 0 else "See benchmark report for deviations or unavailable data."
-            ),
-        ),
-    )
-    if code not in (0, 42, 43):
-        raise RuntimeError("Benchmark comparison failed or baseline is unavailable.")
+    with open(os.environ["GITHUB_OUTPUT"], "a") as stream:
+        for key, value in dict(baseline_revision=baseline["baseline_sha"], comparison_context=context).items():
+            delimiter = hashlib.sha256(value.encode()).hexdigest()
+            stream.write(f"{key}<<{delimiter}\n{value}\n{delimiter}\n")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("prepare", "publish", "activate", "compare", "reconcile"))
+    parser.add_argument("command", choices=("prepare", "publish", "activate", "select", "reconcile"))
     parser.add_argument("--directory", type=Path, default=Path("benchmark-results"))
     args = parser.parse_args()
     event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
@@ -419,4 +375,4 @@ if __name__ == "__main__":
         elif args.command == "activate":
             activate(manifest)
         else:
-            compare(args.directory, manifest)
+            prepare_comparison(manifest)

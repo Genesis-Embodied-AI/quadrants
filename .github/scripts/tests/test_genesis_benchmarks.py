@@ -45,6 +45,26 @@ def test_baseline_uses_main_order_and_excludes_candidate(manifest):
     assert benchmarks.select_baseline(manifest, [candidate], history, "candidate") is None
 
 
+def test_comparison_exports_baseline_and_provenance(manifest, tmp_path):
+    record = dict(manifest, record_id="90-1", run_id=90, baseline_sha="older", artifact="measurements:v0")
+    with (
+        patch.object(benchmarks.subprocess, "run"),
+        patch.object(benchmarks.subprocess, "check_output", return_value="main\nolder\n"),
+        patch.object(benchmarks, "github", return_value=dict(merged=False)),
+        patch.object(benchmarks.wandb, "Api") as api,
+        patch.dict(os.environ, GITHUB_OUTPUT=str(tmp_path / "outputs")),
+    ):
+        api.return_value.runs.return_value = [MagicMock(config=record)]
+        benchmarks.prepare_comparison(dict(manifest, genesis_ref="v1.0"))
+        outputs = (tmp_path / "outputs").read_text()
+        assert "baseline_revision<<" in outputs
+        assert "\nolder\n" in outputs
+        assert "Genesis: `v1.0` (`genesis`)" in outputs
+        assert "Quadrants candidate: `tested`" in outputs
+        api.return_value.artifact.assert_called_once_with("measurements:v0")
+        api.return_value.artifact.return_value.download.assert_called_once_with(root="baseline-results")
+
+
 def test_merge_requires_head_and_tree_match(manifest):
     pull = dict(merged=True, head=dict(sha="head"), base=dict(ref="main"), merge_commit_sha="landed")
     with patch.object(benchmarks, "github", side_effect=[pull, dict(tree=dict(sha="tree"))]):
