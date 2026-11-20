@@ -265,12 +265,24 @@ class WholeKernelCSE : public BasicStmtVisitor {
     if (!ptrs_only_ && if_stmt->true_statements && if_stmt->false_statements) {
       auto &true_clause = if_stmt->true_statements;
       auto &false_clause = if_stmt->false_statements;
-      if (irpass::analysis::same_statements(true_clause->statements[0].get(), false_clause->statements[0].get())) {
-        // These branch edits do not invalidate the enclosing traversal.
-        replace_uses_and_mark_users_dirty(false_clause->statements[0].get(), true_clause->statements[0].get());
-        auto common_stmt = true_clause->extract(0);
-        modifier_.insert_before(if_stmt, std::move(common_stmt));
-        false_clause->erase(0);
+      // Rewrite each matching pair before comparing the next, so dependent expressions can match too.
+      int prefix_size = 0;
+      while (prefix_size < true_clause->size() && prefix_size < false_clause->size() &&
+             irpass::analysis::same_statements(true_clause->statements[prefix_size].get(),
+                                               false_clause->statements[prefix_size].get())) {
+        replace_uses_and_mark_users_dirty(false_clause->statements[prefix_size].get(),
+                                          true_clause->statements[prefix_size].get());
+        ++prefix_size;
+      }
+      if (prefix_size != 0) {
+        // Move the prefix in order and compact each branch once, avoiding a vector shift per statement.
+        VecStatement prefix;
+        for (int i = 0; i < prefix_size; ++i) {
+          prefix.push_back(std::move(true_clause->statements[i]));
+        }
+        true_clause->statements.erase(true_clause->statements.begin(), true_clause->statements.begin() + prefix_size);
+        false_clause->erase_range(false_clause->statements.begin(), false_clause->statements.begin() + prefix_size);
+        modifier_.insert_before(if_stmt, std::move(prefix));
       }
       if (!true_clause->statements.empty() && !false_clause->statements.empty() &&
           irpass::analysis::same_statements(true_clause->statements.back().get(),

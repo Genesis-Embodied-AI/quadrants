@@ -288,4 +288,113 @@ TEST(WholeKernelCSE, HoistedContainersKeepNestedUsersValid) {
   EXPECT_FALSE(irpass::whole_kernel_cse(ir.get()));
 }
 
+// Prefix stores make statement order observable; the differing stores stop prefix hoisting before a shared suffix.
+class WholeKernelCSEPrefix : public ::testing::TestWithParam<int> {};
+
+TEST_P(WholeKernelCSEPrefix, DependentPrefixPreservesOrderAndStopsAtMismatch) {
+  TestProgram test_prog;
+  test_prog.setup();
+  IRBuilder b;
+  auto *zero = b.get_int32(0);
+  auto *one = b.get_int32(1);
+  auto *two = b.get_int32(2);
+  auto *arr = b.create_ndarray_arg_load({0}, PrimitiveType::i32, 1);
+  auto *out = b.create_external_ptr(arr, {zero});
+  auto *true_out = b.create_external_ptr(arr, {one});
+  auto *false_out = b.create_external_ptr(arr, {two});
+  auto *x = b.create_arg_load({1}, PrimitiveType::i32, false);
+  auto *scale = b.create_arg_load({2}, PrimitiveType::i32, false);
+  auto *branch = b.create_if(b.create_arg_load({3}, PrimitiveType::i32, false));
+  std::vector<Stmt *> retained_prefix;
+  GlobalStoreStmt *true_store = nullptr, *false_store = nullptr, *suffix = nullptr;
+  Stmt *result = x;
+  for (bool true_branch : {true, false}) {
+    auto guard = b.get_if_guard(branch, true_branch);
+    auto *body = true_branch ? branch->true_statements.get() : branch->false_statements.get();
+    Stmt *value = x;
+    for (int i = 0; i < GetParam(); ++i) {
+      value = b.create_mul(value, scale);
+      b.create_global_store(out, value);
+      auto *store = body->statements.back()->as<GlobalStoreStmt>();
+      if (true_branch) {
+        retained_prefix.push_back(value);
+        retained_prefix.push_back(store);
+      }
+    }
+    b.create_global_store(true_branch ? true_out : false_out, value);
+    auto *different = body->statements.back()->as<GlobalStoreStmt>();
+    b.create_global_store(out, scale);
+    auto *shared_suffix = body->statements.back()->as<GlobalStoreStmt>();
+    if (true_branch) {
+      true_store = different;
+      suffix = shared_suffix;
+      result = value;
+    } else {
+      false_store = different;
+    }
+  }
+
+  auto ir = b.extract_ir();
+  irpass::type_check(ir.get(), test_prog.prog()->compile_config());
+  EXPECT_TRUE(irpass::whole_kernel_cse(ir.get()));
+  irpass::analysis::verify(ir.get());
+
+  const int branch_position = ir->locate(branch);
+  ASSERT_GE(branch_position, static_cast<int>(retained_prefix.size()));
+  for (int i = 0; i < static_cast<int>(retained_prefix.size()); ++i) {
+    EXPECT_EQ(ir->statements[branch_position - retained_prefix.size() + i].get(), retained_prefix[i]);
+  }
+  ASSERT_NE(branch->true_statements, nullptr);
+  ASSERT_NE(branch->false_statements, nullptr);
+  ASSERT_EQ(branch->true_statements->size(), 1);
+  ASSERT_EQ(branch->false_statements->size(), 1);
+  EXPECT_EQ(branch->true_statements->statements[0].get(), true_store);
+  EXPECT_EQ(branch->false_statements->statements[0].get(), false_store);
+  EXPECT_EQ(true_store->val, result);
+  EXPECT_EQ(false_store->val, result);
+  EXPECT_EQ(ir->locate(suffix), branch_position + 1);
+  EXPECT_FALSE(irpass::whole_kernel_cse(ir.get()));
+}
+
+INSTANTIATE_TEST_SUITE_P(EmptySingleAndLongChain, WholeKernelCSEPrefix, ::testing::Values(0, 1, 32));
+
+TEST(WholeKernelCSE, PrefixCanExhaustOneBranch) {
+  TestProgram test_prog;
+  test_prog.setup();
+  IRBuilder b;
+  auto *zero = b.get_int32(0);
+  auto *arr = b.create_ndarray_arg_load({0}, PrimitiveType::i32, 1);
+  auto *out = b.create_external_ptr(arr, {zero});
+  auto *x = b.create_arg_load({1}, PrimitiveType::i32, false);
+  auto *branch = b.create_if(b.create_arg_load({2}, PrimitiveType::i32, false));
+  Stmt *retained = nullptr;
+  GlobalStoreStmt *remaining_store = nullptr;
+  for (bool true_branch : {true, false}) {
+    auto guard = b.get_if_guard(branch, true_branch);
+    auto *body = true_branch ? branch->true_statements.get() : branch->false_statements.get();
+    Stmt *value = x;
+    for (int i = 0; i < 8; ++i) {
+      value = b.create_add(value, x);
+    }
+    b.create_global_store(out, value);
+    if (true_branch) {
+      retained = value;
+    } else {
+      b.create_global_store(out, x);
+      remaining_store = body->statements.back()->as<GlobalStoreStmt>();
+    }
+  }
+
+  auto ir = b.extract_ir();
+  irpass::type_check(ir.get(), test_prog.prog()->compile_config());
+  EXPECT_TRUE(irpass::whole_kernel_cse(ir.get()));
+  irpass::analysis::verify(ir.get());
+  EXPECT_EQ(retained->parent, ir.get());
+  EXPECT_EQ(branch->true_statements, nullptr);
+  ASSERT_NE(branch->false_statements, nullptr);
+  ASSERT_EQ(branch->false_statements->size(), 1);
+  EXPECT_EQ(branch->false_statements->statements[0].get(), remaining_store);
+  EXPECT_FALSE(irpass::whole_kernel_cse(ir.get()));
+}
+
 }  // namespace quadrants::lang
