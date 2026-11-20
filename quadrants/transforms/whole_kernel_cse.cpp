@@ -248,29 +248,39 @@ class WholeKernelCSE : public BasicStmtVisitor {
     scope_inserts_.pop_back();
   }
 
+  enum class BranchEnd { kFront, kBack };
+
+  void hoist_matching_branch_statement(IfStmt *if_stmt, BranchEnd end) {
+    auto &true_clause = if_stmt->true_statements;
+    auto &false_clause = if_stmt->false_statements;
+    if (true_clause->statements.empty() || false_clause->statements.empty()) {
+      return;
+    }
+    const int true_index = end == BranchEnd::kFront ? 0 : (int)true_clause->size() - 1;
+    const int false_index = end == BranchEnd::kFront ? 0 : (int)false_clause->size() - 1;
+    auto *true_stmt = true_clause->statements[true_index].get();
+    auto *false_stmt = false_clause->statements[false_index].get();
+    if (!irpass::analysis::same_statements(true_stmt, false_stmt)) {
+      return;
+    }
+
+    // Keep the true-branch copy and discard the false-branch copy. Redirect the false copy's users before removal,
+    // updating the use index and marking those users dirty for another CSE check.
+    replace_uses_and_mark_users_dirty(false_stmt, true_stmt);
+    auto common_stmt = true_clause->extract(true_index);
+    if (end == BranchEnd::kFront) {
+      modifier_.insert_before(if_stmt, std::move(common_stmt));
+    } else {
+      modifier_.insert_after(if_stmt, std::move(common_stmt));
+    }
+    false_clause->erase(false_index);
+  }
+
   void hoist_common_branch_statements(IfStmt *if_stmt) {
-    // Hoist matching branch prefixes and suffixes. Skip in pointers-only mode to avoid relocating other computation.
+    // Skip in pointers-only mode to avoid relocating other computation.
     if (!ptrs_only_ && if_stmt->true_statements && if_stmt->false_statements) {
-      auto &true_clause = if_stmt->true_statements;
-      auto &false_clause = if_stmt->false_statements;
-      // Both hoists keep the true-branch copy and discard the false-branch copy. Redirect the false copy's users to
-      // the true copy before removal, updating the use index and marking those users dirty for another CSE check.
-      if (irpass::analysis::same_statements(true_clause->statements[0].get(), false_clause->statements[0].get())) {
-        // These branch edits do not invalidate the enclosing traversal.
-        replace_uses_and_mark_users_dirty(false_clause->statements[0].get(), true_clause->statements[0].get());
-        auto common_stmt = true_clause->extract(0);
-        modifier_.insert_before(if_stmt, std::move(common_stmt));
-        false_clause->erase(0);
-      }
-      if (!true_clause->statements.empty() && !false_clause->statements.empty() &&
-          irpass::analysis::same_statements(true_clause->statements.back().get(),
-                                            false_clause->statements.back().get())) {
-        // These branch edits do not invalidate the enclosing traversal.
-        replace_uses_and_mark_users_dirty(false_clause->statements.back().get(), true_clause->statements.back().get());
-        auto common_stmt = true_clause->extract((int)true_clause->size() - 1);
-        modifier_.insert_after(if_stmt, std::move(common_stmt));
-        false_clause->erase((int)false_clause->size() - 1);
-      }
+      hoist_matching_branch_statement(if_stmt, BranchEnd::kFront);
+      hoist_matching_branch_statement(if_stmt, BranchEnd::kBack);
     }
   }
 
