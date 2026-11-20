@@ -585,6 +585,8 @@ def test_grid_mem_fence():
             # Execute a prefix sum after all blocks finish
             actual_order_of_block = qd.atomic_add(block_counter, 1)
             if actual_order_of_block == N - 1:
+                # The atomic is not a fence: the last block needs its own fence before it reads the other blocks' stores
+                qd.simt.grid.mem_fence()
                 for j in range(1, N):
                     a[j] += a[j - 1]
 
