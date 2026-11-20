@@ -266,7 +266,7 @@ class WholeKernelCSE : public BasicStmtVisitor {
       auto &true_clause = if_stmt->true_statements;
       auto &false_clause = if_stmt->false_statements;
       // Rewrite each matching pair before comparing the next, so dependent expressions can match too.
-      int prefix_size = 0;
+      std::size_t prefix_size = 0;
       while (prefix_size < true_clause->size() && prefix_size < false_clause->size() &&
              irpass::analysis::same_statements(true_clause->statements[prefix_size].get(),
                                                false_clause->statements[prefix_size].get())) {
@@ -277,7 +277,7 @@ class WholeKernelCSE : public BasicStmtVisitor {
       if (prefix_size != 0) {
         // Move the prefix in order and compact each branch once, avoiding a vector shift per statement.
         VecStatement prefix;
-        for (int i = 0; i < prefix_size; ++i) {
+        for (std::size_t i = 0; i < prefix_size; ++i) {
           prefix.push_back(std::move(true_clause->statements[i]));
         }
         true_clause->statements.erase(true_clause->statements.begin(), true_clause->statements.begin() + prefix_size);
