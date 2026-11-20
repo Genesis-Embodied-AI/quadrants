@@ -14,16 +14,15 @@ import quadrants as qd
 
 from tests.helpers import test_utils
 
+if sys.platform != "linux":
+    pytest.skip("Linux ELF wheel audit", allow_module_level=True)
+
 _tool_path = Path(__file__).parents[2] / "python/tools/check_llvm_isolation.py"
 _spec = importlib.util.spec_from_file_location("check_llvm_isolation", _tool_path)
 assert _spec is not None and _spec.loader is not None
 audit = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(audit)
 LibraryBuilder = Callable[..., Path]
-
-
-# Skip every test in this file on non-Linux platforms (pytestmark applies to the entire module).
-pytestmark = pytest.mark.skipif(sys.platform != "linux", reason="Linux ELF wheel audit")
 
 
 @pytest.fixture
