@@ -113,6 +113,7 @@ optimization_passes
 :titlesonly:
 
 contributing
+genesis_benchmarks
 ```
 
 ```{toctree}
