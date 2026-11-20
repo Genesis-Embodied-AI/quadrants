@@ -111,8 +111,7 @@ TEST(WholeKernelCSE, MergeGlobalPtrsRewritesUsersAcrossScopes) {
   EXPECT_NE(body2->locate(k5_loop2), -1);
 }
 
-// Full WholeKernelCSE: hoisting an if's common first statement changes the tree mid-round; eliminations after it in
-// the same round must still rewrite every user and the result must verify.
+// Checks that CSE still replaces duplicate expressions correctly after hoisting has happened in the same round.
 TEST(WholeKernelCSE, FullModeHoistThenEliminate) {
   TestProgram test_prog;
   test_prog.setup();
