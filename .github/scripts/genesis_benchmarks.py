@@ -8,7 +8,10 @@ import json
 import math
 import os
 import subprocess
+import tempfile
+import uuid
 import zipfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote
 
@@ -17,6 +20,7 @@ import wandb
 REPOSITORY = "Genesis-Embodied-AI/quadrants"
 GENESIS = "Genesis-Embodied-AI/genesis-world"
 PROJECT = "genesis-ai-company/quadrants-genesis-benchmarks"
+STAGING_PROJECT = f"{PROJECT}-staging"
 STATE_BRANCH = "genesis-benchmark-state"
 STATE_PATH = f"repos/{REPOSITORY}/contents/active.json"
 WHEEL_ARTIFACT = "manylinux_wheel_cp312_ubuntu-22.04"
@@ -235,39 +239,72 @@ def promote(manifest):
     return pull["merge_commit_sha"]
 
 
+def store_measurements(directory, manifest, project):
+    # Each publication has its own identity, so simultaneous promotion handlers cannot mix partial uploads.
+    publication = uuid.uuid4().hex
+    config = {**manifest, "publication": publication}
+    entity, project_name = project.split("/")
+    if project == PROJECT:
+        config["revision"] = f"{manifest['baseline_sha']}@{REPOSITORY}/main"
+        for kind, metrics in (("speed", ("runtime_fps", "compile_time", "realtime_factor")), ("mem", ("max_mem_mb",))):
+            summary = {}
+            for path in directory.glob(f"{kind}-test-*/*.txt"):
+                for line in path.read_text().splitlines():
+                    if not line.strip():
+                        continue
+                    row = dict(part.strip().split("=", 1) for part in line.split("|") if "=" in part)
+                    values = {metric: float(row.pop(metric)) for metric in metrics}
+                    suffix = "-".join(f"{key}={value}" for key, value in sorted(row.items()))
+                    summary.update({f"{metric}-{suffix}": value for metric, value in values.items()})
+            if not summary:
+                raise ValueError(f"Missing {kind} measurements for baseline publication.")
+            with wandb.init(entity=entity, project=project_name, name=f"{kind}-{publication}", config=config) as run:
+                run.summary.update(summary)
+    # Publish the record last: selection must never see a partially published speed/memory baseline.
+    with wandb.init(entity=entity, project=project_name, config={**config, "kind": "record"}) as run:
+        artifact = wandb.Artifact(f"measurements-{publication}", type="genesis-benchmarks")
+        artifact.add_dir(str(directory))
+        logged = run.log_artifact(artifact).wait()
+        config["artifact"] = f"{project}/{logged.name}"
+        run.config.update({"artifact": config["artifact"]}, allow_val_change=True)
+    return config
+
+
+def publish_baseline(directory, manifest):
+    existing = wandb.Api().runs(
+        PROJECT,
+        filters={"config.record_id": manifest["record_id"], "config.kind": "record", "state": "finished"},
+    )
+    if next(iter(existing), None) is None:
+        # Upload local bytes into the baseline project; never reference an expiring staging artifact.
+        store_measurements(directory, manifest, PROJECT)
+
+
 def publish(directory, manifest):
+    project = PROJECT if manifest["bootstrap"] else STAGING_PROJECT
     collected = collect_results(directory, manifest)
     if collected is None:
         # A comparison-only retry reuses one complete published attempt instead of combining old job artifacts.
         records = [
             dict(run.config)
-            for run in wandb.Api().runs(PROJECT, filters={"config.run_id": manifest["run_id"], "state": "finished"})
+            for run in wandb.Api().runs(
+                project, filters={"config.run_id": manifest["run_id"], "config.kind": "record", "state": "finished"}
+            )
             if run.config["genesis_sha"] == manifest["genesis_sha"] and run.config["wheel"] == manifest["wheel"]
         ]
         if not records:
-            raise ValueError("No complete published attempt. Rerun both benchmark modes before publication.")
-        published = max(records, key=lambda record: record["attempt"])
-        wandb.Api().artifact(published["artifact"]).download(root=str(directory))
-        (directory / "manifest.json").write_text(json.dumps(published, sort_keys=True) + "\n")
-        return published
-    manifest = collected
-    manifest["baseline_sha"] = promote(manifest)
-    (directory / "manifest.json").write_text(json.dumps(manifest, sort_keys=True) + "\n")
-    entity, project = PROJECT.split("/")
-    with wandb.init(entity=entity, project=project, id=manifest["record_id"], resume="allow", config=manifest) as run:
-        artifact = wandb.Artifact(f"measurements-{manifest['record_id']}", type="genesis-benchmarks")
-        artifact.add_dir(str(directory))
-        logged = run.log_artifact(artifact).wait()
-        artifact_path = f"{PROJECT}/{logged.name}"
-        run.config.update({"artifact": artifact_path}, allow_val_change=True)
-    manifest["artifact"] = artifact_path
-    # Recheck after publication so a merge concurrent with upload is handled by at least one event.
+            raise ValueError("No retained complete attempt. Rerun both benchmark modes before publication.")
+        manifest = max(records, key=lambda record: record["attempt"])
+        wandb.Api().artifact(manifest["artifact"]).download(root=str(directory))
+    else:
+        manifest = collected
+        (directory / "manifest.json").write_text(json.dumps(manifest, sort_keys=True) + "\n")
+        manifest = store_measurements(directory, manifest, project)
+    # Check after publication: the merge handler covers earlier uploads, this covers merges during the upload.
     landed = promote(manifest)
-    if landed and manifest["baseline_sha"] != landed:
-        published = wandb.Api().run(f"{PROJECT}/{manifest['record_id']}")
-        published.config["baseline_sha"] = landed
-        published.update()
+    if landed and not manifest["bootstrap"]:
         manifest["baseline_sha"] = landed
+        publish_baseline(directory, manifest)
     (directory / "manifest.json").write_text(json.dumps(manifest, sort_keys=True) + "\n")
     return manifest
 
@@ -294,18 +331,26 @@ def activate(manifest):
 
 
 def reconcile(pr):
-    active, _ = active_state()
-    if active is None:
-        print("No active benchmark configuration. Manual bootstrap is required.")
-        return
-    runs = wandb.Api().runs(PROJECT, filters={"config.pr": pr, "state": "finished"})
+    runs = wandb.Api().runs(STAGING_PROJECT, filters={"config.pr": pr, "config.kind": "record", "state": "finished"})
     for run in runs:
         manifest = dict(run.config)
         landed = promote(manifest)
-        if landed and manifest.get("baseline_sha") != landed:
-            run.config["baseline_sha"] = landed
-            run.update()
+        if landed:
+            manifest["baseline_sha"] = landed
+            with tempfile.TemporaryDirectory() as directory:
+                wandb.Api().artifact(manifest["artifact"]).download(root=directory)
+                publish_baseline(Path(directory), manifest)
             print(f"Promoted {run.id} to main baseline {landed}")
+
+
+def cleanup():
+    cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+    # Materialize before deleting so pagination cannot skip runs as the result set shrinks.
+    runs = list(wandb.Api().runs(STAGING_PROJECT, filters={"createdAt": {"$lt": cutoff.isoformat()}}))
+    for run in runs:
+        if datetime.fromisoformat(run.created_at.replace("Z", "+00:00")) < cutoff:
+            run.delete(delete_artifacts=True)
+            print(f"Deleted expired staging run {run.id}")
 
 
 def select_baseline(manifest, records, history, landed=None):
@@ -336,13 +381,17 @@ def prepare_comparison(manifest):
     records = [
         dict(run.config)
         for run in wandb.Api().runs(
-            PROJECT, filters={"config.compatibility_key": manifest["compatibility_key"], "state": "finished"}
+            PROJECT,
+            filters={
+                "config.compatibility_key": manifest["compatibility_key"],
+                "config.kind": "record",
+                "state": "finished",
+            },
         )
     ]
     baseline = select_baseline(manifest, records, history, landed)
     if baseline is None:
         raise ValueError("Baseline unavailable. Run manual bootstrap or retry with an eligible baseline.")
-    wandb.Api().artifact(baseline["artifact"]).download(root="baseline-results")
     context = (
         f"Genesis: `{manifest['genesis_ref']}` (`{manifest['genesis_sha']}`)\n\n"
         f"Quadrants candidate: `{manifest['wheel']['commit']}`\n\n"
@@ -351,21 +400,28 @@ def prepare_comparison(manifest):
         f"Main cutoff: `{manifest['main_cutoff']}`\n\n"
         f"[Baseline run](https://github.com/{REPOSITORY}/actions/runs/{baseline['run_id']})"
     )
+    with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as stream:
+        stream.write(context + "\n")
+    filters = json.dumps(
+        {"config.publication": baseline["publication"], "config.compatibility_key": manifest["compatibility_key"]}
+    )
     with open(os.environ["GITHUB_OUTPUT"], "a") as stream:
-        for key, value in dict(baseline_revision=baseline["baseline_sha"], comparison_context=context).items():
+        for key, value in dict(wandb_project=PROJECT.split("/")[1], wandb_filters=filters).items():
             delimiter = hashlib.sha256(value.encode()).hexdigest()
             stream.write(f"{key}<<{delimiter}\n{value}\n{delimiter}\n")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("prepare", "publish", "activate", "select", "reconcile"))
+    parser.add_argument("command", choices=("prepare", "publish", "activate", "select", "reconcile", "cleanup"))
     parser.add_argument("--directory", type=Path, default=Path("benchmark-results"))
     args = parser.parse_args()
     event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
     args.directory.mkdir(parents=True, exist_ok=True)
     if args.command == "prepare":
         prepare(args.directory, event, int(os.environ["GITHUB_RUN_ID"]), int(os.environ["GITHUB_RUN_ATTEMPT"]))
+    elif args.command == "cleanup":
+        cleanup()
     elif args.command == "reconcile":
         reconcile(event.get("number") or int(event["inputs"]["pr"]))
     else:

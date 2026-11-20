@@ -133,8 +133,8 @@ jobs:
       statuses: write
       pull-requests: read
     outputs:
-      baseline_revision: ${{ steps.select.outputs.baseline_revision }}
-      comparison_context: ${{ steps.select.outputs.comparison_context }}
+      wandb_project: ${{ steps.select.outputs.wandb_project }}
+      wandb_filters: ${{ steps.select.outputs.wandb_filters }}
     env:
       GH_TOKEN: ${{ github.token }}
       WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
@@ -187,12 +187,6 @@ jobs:
           overwrite: true
           path: benchmark-results/mem-test-1/
           if-no-files-found: error
-      - uses: actions/upload-artifact@v4
-        with:
-          name: benchmark-baseline
-          overwrite: true
-          path: baseline-results/
-          if-no-files-found: error
       - name: Report comparison infrastructure failure
         if: failure()
         uses: actions/github-script@v8
@@ -214,7 +208,7 @@ jobs:
       pull-requests: write
     uses: Genesis-Embodied-AI/genesis-world/.github/workflows/alarm.yml@main
     with:
-      baseline_artifact: benchmark-baseline
-      baseline_revision: ${{ needs.publish-benchmarks.outputs.baseline_revision }}
-      comparison_context: ${{ needs.publish-benchmarks.outputs.comparison_context }}
+      wandb_project: ${{ needs.publish-benchmarks.outputs.wandb_project }}
+      wandb_filters: ${{ needs.publish-benchmarks.outputs.wandb_filters }}
+      max_valid_revisions: 1
     secrets: inherit

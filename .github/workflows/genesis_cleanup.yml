@@ -1,0 +1,30 @@
+# Delete staging benchmark runs and their artifacts after seven days; promoted baselines are retained.
+name: Clean up Genesis benchmark staging
+
+on:
+  schedule:
+    - cron: '23 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: genesis-benchmark-staging-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install 'wandb<0.25'
+      - name: Delete expired staging measurements
+        env:
+          WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+        run: python .github/scripts/genesis_benchmarks.py cleanup
