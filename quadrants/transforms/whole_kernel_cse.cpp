@@ -180,6 +180,7 @@ class WholeKernelCSE : public BasicStmtVisitor {
     if (to_erase_.empty()) {
       return false;
     }
+    // Group statements selected for removal by their parent block.
     std::unordered_map<Block *, std::unordered_set<Stmt *>> by_block;
     for (auto *stmt : to_erase_) {
       by_block[stmt->parent].insert(stmt);
