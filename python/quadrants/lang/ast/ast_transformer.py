@@ -16,16 +16,16 @@ import numpy as np
 from quadrants._lib import core as _qd_core
 from quadrants.lang import exception, expr, impl, matrix, mesh
 from quadrants.lang import ops as qd_ops
-from quadrants.lang._dataclass_util import create_flat_name
+from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._ndrange import _Ndrange
 from quadrants.lang._unpacked import _UnpackedVectorRef
 from quadrants.lang.ast.ast_transformer_utils import (
-    ASTTransformerFuncContext,
     Builder,
+    FuncCompilePassContext,
     LoopStatus,
     ReturnStatus,
     get_decorator,
-    maybe_lifted_primitive,
+    resolve_bound_member,
 )
 from quadrants.lang.ast.ast_transformers import graph_api
 from quadrants.lang.ast.ast_transformers.call_transformer import CallTransformer
@@ -50,6 +50,7 @@ from quadrants.lang.field import Field
 from quadrants.lang.matrix import Matrix, MatrixType
 from quadrants.lang.snode import append, deactivate, length
 from quadrants.lang.struct import Struct, StructType
+from quadrants.lang.util import is_data_oriented
 from quadrants.lang.util import (
     is_from_quadrants_module as _is_from_quadrants_module,
 )
@@ -95,10 +96,10 @@ def boundary_type_cast_warning(expression: Expr) -> None:
 
 class ASTTransformer(Builder):
     @staticmethod
-    def build_Name(ctx: ASTTransformerFuncContext, node: ast.Name):
-        pruning = ctx.global_context.pruning
+    def build_Name(ctx: FuncCompilePassContext, node: ast.Name):
+        pruning = ctx.kernel_compile_context.pruning
         if not pruning.enforcing and not ctx.expanding_dataclass_call_parameters and node.id.startswith("__qd_"):
-            ctx.global_context.pruning.mark_used(ctx.func.func_id, node.id)
+            ctx.kernel_compile_context.pruning.mark_used(ctx.func.func_id, node.id)
         # Seed the chain annotation that ``build_Attribute`` extends and records in pruning. Only non-flattened
         # parameters need it - a data_oriented kernel arg (``self``), or a ``qd.template()`` func param; dataclass args
         # arrive here already flattened and are handled by ``mark_used`` above.
@@ -107,6 +108,19 @@ class ASTTransformer(Builder):
         else:
             node._qd_arg_chain = None  # type: ignore[attr-defined]
         node.violates_pure, node.ptr, node.violates_pure_reason = ctx.get_var_by_name(node.id)
+        # Dataclass fields can arrive as flattened names instead of attribute accesses.
+        if (
+            # Check after discovery has determined which members are used.
+            pruning.enforcing
+            # Restrict this check to known dataclass members, not ordinary variables.
+            and node.id in ctx.struct_locals
+            # Reject a data-oriented object stored in the member.
+            and is_data_oriented(node.ptr)
+        ):
+            raise exception.QuadrantsRuntimeTypeError(
+                "Data-oriented objects inside Python dataclass fields are unsupported. "
+                "Store the dataclass on the data-oriented object instead."
+            )
         # Flattened struct fields (``__qd_foo__qd_bar``) injected by ``populate_global_vars_from_dataclass`` are raw
         # ``Ndarray`` instances.  ``build_Attribute`` already promotes these via ``_promote_ndarray_if_declared`` but
         # the flattened-name path bypasses ``build_Attribute`` entirely, so we must promote here too.
@@ -134,7 +148,7 @@ class ASTTransformer(Builder):
         return node.ptr
 
     @staticmethod
-    def build_AnnAssign(ctx: ASTTransformerFuncContext, node: ast.AnnAssign):
+    def build_AnnAssign(ctx: FuncCompilePassContext, node: ast.AnnAssign):
         build_stmt(ctx, node.value)
         build_stmt(ctx, node.annotation)
 
@@ -147,7 +161,7 @@ class ASTTransformer(Builder):
 
     @staticmethod
     def build_assign_annotated(
-        ctx: ASTTransformerFuncContext,
+        ctx: FuncCompilePassContext,
         target: ast.Name,
         value,
         is_static_assign: bool,
@@ -183,7 +197,7 @@ class ASTTransformer(Builder):
         return var
 
     @staticmethod
-    def build_Assign(ctx: ASTTransformerFuncContext, node: ast.Assign) -> None:
+    def build_Assign(ctx: FuncCompilePassContext, node: ast.Assign) -> None:
         build_stmt(ctx, node.value)
         is_static_assign = isinstance(node.value, ast.Call) and node.value.func.ptr is impl.static
 
@@ -197,7 +211,7 @@ class ASTTransformer(Builder):
 
     @staticmethod
     def build_assign_unpack(
-        ctx: ASTTransformerFuncContext,
+        ctx: FuncCompilePassContext,
         node_target: list | ast.Tuple,
         values,
         is_static_assign: bool,
@@ -247,7 +261,7 @@ class ASTTransformer(Builder):
         return None
 
     @staticmethod
-    def build_assign_basic(ctx: ASTTransformerFuncContext, target: ast.Name, value, is_static_assign: bool):
+    def build_assign_basic(ctx: FuncCompilePassContext, target: ast.Name, value, is_static_assign: bool):
         """Build basic assignment like this: target = value.
 
         Args:
@@ -282,7 +296,7 @@ class ASTTransformer(Builder):
         return var
 
     @staticmethod
-    def build_NamedExpr(ctx: ASTTransformerFuncContext, node: ast.NamedExpr):
+    def build_NamedExpr(ctx: FuncCompilePassContext, node: ast.NamedExpr):
         build_stmt(ctx, node.value)
         is_static_assign = isinstance(node.value, ast.Call) and node.value.func.ptr is impl.static
         node.ptr = ASTTransformer.build_assign_basic(ctx, node.target, node.value.ptr, is_static_assign)
@@ -322,7 +336,7 @@ class ASTTransformer(Builder):
         return [index]
 
     @staticmethod
-    def build_Subscript(ctx: ASTTransformerFuncContext, node: ast.Subscript):
+    def build_Subscript(ctx: FuncCompilePassContext, node: ast.Subscript):
         build_stmt(ctx, node.value)
         build_stmt(ctx, node.slice)
         # Unpacked-vector group subscript: rewrite ``obj.{group}[k]`` to a direct reference to the synthetic scalar
@@ -366,7 +380,7 @@ class ASTTransformer(Builder):
         return node.ptr
 
     @staticmethod
-    def build_Slice(ctx: ASTTransformerFuncContext, node: ast.Slice):
+    def build_Slice(ctx: FuncCompilePassContext, node: ast.Slice):
         if node.lower is not None:
             build_stmt(ctx, node.lower)
         if node.upper is not None:
@@ -382,19 +396,19 @@ class ASTTransformer(Builder):
         return node.ptr
 
     @staticmethod
-    def build_ExtSlice(ctx: ASTTransformerFuncContext, node: ast.ExtSlice):
+    def build_ExtSlice(ctx: FuncCompilePassContext, node: ast.ExtSlice):
         build_stmts(ctx, node.dims)
         node.ptr = tuple(dim.ptr for dim in node.dims)
         return node.ptr
 
     @staticmethod
-    def build_Tuple(ctx: ASTTransformerFuncContext, node: ast.Tuple):
+    def build_Tuple(ctx: FuncCompilePassContext, node: ast.Tuple):
         build_stmts(ctx, node.elts)
         node.ptr = tuple(elt.ptr for elt in node.elts)
         return node.ptr
 
     @staticmethod
-    def build_List(ctx: ASTTransformerFuncContext, node: ast.List):
+    def build_List(ctx: FuncCompilePassContext, node: ast.List):
         build_stmts(ctx, node.elts)
         reason = []
         for elt in node.elts:
@@ -406,7 +420,7 @@ class ASTTransformer(Builder):
         return node.ptr
 
     @staticmethod
-    def build_Dict(ctx: ASTTransformerFuncContext, node: ast.Dict):
+    def build_Dict(ctx: FuncCompilePassContext, node: ast.Dict):
         dic = {}
         for key, value in zip(node.keys, node.values):
             if key is None:
@@ -417,17 +431,17 @@ class ASTTransformer(Builder):
         return node.ptr
 
     @staticmethod
-    def process_listcomp(ctx: ASTTransformerFuncContext, node, result) -> None:
+    def process_listcomp(ctx: FuncCompilePassContext, node, result) -> None:
         result.append(build_stmt(ctx, node.elt))
 
     @staticmethod
-    def process_dictcomp(ctx: ASTTransformerFuncContext, node, result) -> None:
+    def process_dictcomp(ctx: FuncCompilePassContext, node, result) -> None:
         key = build_stmt(ctx, node.key)
         value = build_stmt(ctx, node.value)
         result[key] = value
 
     @staticmethod
-    def process_generators(ctx: ASTTransformerFuncContext, node: ast.GeneratorExp, now_comp, func, result):
+    def process_generators(ctx: FuncCompilePassContext, node: ast.GeneratorExp, now_comp, func, result):
         if now_comp >= len(node.generators):
             return func(ctx, node, result)
         with ctx.static_scope_guard():
@@ -447,7 +461,7 @@ class ASTTransformer(Builder):
         return None
 
     @staticmethod
-    def process_ifs(ctx: ASTTransformerFuncContext, node: ast.If, now_comp, now_if, func, result):
+    def process_ifs(ctx: FuncCompilePassContext, node: ast.If, now_comp, now_if, func, result):
         if now_if >= len(node.generators[now_comp].ifs):
             return ASTTransformer.process_generators(ctx, node, now_comp + 1, func, result)
         cond = node.generators[now_comp].ifs[now_if].ptr
@@ -457,31 +471,31 @@ class ASTTransformer(Builder):
         return None
 
     @staticmethod
-    def build_ListComp(ctx: ASTTransformerFuncContext, node: ast.ListComp):
+    def build_ListComp(ctx: FuncCompilePassContext, node: ast.ListComp):
         result = []
         ASTTransformer.process_generators(ctx, node, 0, ASTTransformer.process_listcomp, result)
         node.ptr = result
         return node.ptr
 
     @staticmethod
-    def build_DictComp(ctx: ASTTransformerFuncContext, node: ast.DictComp):
+    def build_DictComp(ctx: FuncCompilePassContext, node: ast.DictComp):
         result = {}
         ASTTransformer.process_generators(ctx, node, 0, ASTTransformer.process_dictcomp, result)
         node.ptr = result
         return node.ptr
 
     @staticmethod
-    def build_Index(ctx: ASTTransformerFuncContext, node: ast.Index):
+    def build_Index(ctx: FuncCompilePassContext, node: ast.Index):
         node.ptr = build_stmt(ctx, node.value)
         return node.ptr
 
     @staticmethod
-    def build_Constant(ctx: ASTTransformerFuncContext, node: ast.Constant):
+    def build_Constant(ctx: FuncCompilePassContext, node: ast.Constant):
         node.ptr = node.value
         return node.ptr
 
     @staticmethod
-    def build_keyword(ctx: ASTTransformerFuncContext, node: ast.keyword):
+    def build_keyword(ctx: FuncCompilePassContext, node: ast.keyword):
         build_stmt(ctx, node.value)
         if node.arg is None:
             node.ptr = node.value.ptr
@@ -490,12 +504,12 @@ class ASTTransformer(Builder):
         return node.ptr
 
     @staticmethod
-    def build_Starred(ctx: ASTTransformerFuncContext, node: ast.Starred):
+    def build_Starred(ctx: FuncCompilePassContext, node: ast.Starred):
         node.ptr = build_stmt(ctx, node.value)
         return node.ptr
 
     @staticmethod
-    def build_FormattedValue(ctx: ASTTransformerFuncContext, node: ast.FormattedValue):
+    def build_FormattedValue(ctx: FuncCompilePassContext, node: ast.FormattedValue):
         node.ptr = build_stmt(ctx, node.value)
         if node.format_spec is None or len(node.format_spec.values) == 0:
             return node.ptr
@@ -507,7 +521,7 @@ class ASTTransformer(Builder):
         return ["__qd_fmt_value__", node.ptr, format_str]
 
     @staticmethod
-    def build_JoinedStr(ctx: ASTTransformerFuncContext, node: ast.JoinedStr):
+    def build_JoinedStr(ctx: FuncCompilePassContext, node: ast.JoinedStr):
         str_spec = ""
         args = []
         for sub_node in node.values:
@@ -524,15 +538,15 @@ class ASTTransformer(Builder):
         return node.ptr
 
     @staticmethod
-    def build_Call(ctx: ASTTransformerFuncContext, node: ast.Call) -> Any | None:
+    def build_Call(ctx: FuncCompilePassContext, node: ast.Call) -> Any | None:
         return CallTransformer.build_Call(ctx, node, build_stmt, build_stmts)
 
     @staticmethod
-    def build_FunctionDef(ctx: ASTTransformerFuncContext, node: ast.FunctionDef) -> None:
+    def build_FunctionDef(ctx: FuncCompilePassContext, node: ast.FunctionDef) -> None:
         FunctionDefTransformer.build_FunctionDef(ctx, node, build_stmts)
 
     @staticmethod
-    def build_Return(ctx: ASTTransformerFuncContext, node: ast.Return) -> None:
+    def build_Return(ctx: FuncCompilePassContext, node: ast.Return) -> None:
         if not ctx.is_real_function:
             if ctx.is_in_non_static_control_flow():
                 raise QuadrantsSyntaxError("Return inside non-static if/for is not supported")
@@ -653,7 +667,7 @@ class ASTTransformer(Builder):
         return None
 
     @staticmethod
-    def build_Module(ctx: ASTTransformerFuncContext, node: ast.Module) -> None:
+    def build_Module(ctx: FuncCompilePassContext, node: ast.Module) -> None:
         with ctx.variable_scope_guard():
             # Do NOT use |build_stmts| which inserts 'del' statements to the
             # end and deletes parameters passed into the module
@@ -662,7 +676,7 @@ class ASTTransformer(Builder):
         return None
 
     @staticmethod
-    def build_attribute_if_is_dynamic_snode_method(ctx: ASTTransformerFuncContext, node) -> bool:
+    def build_attribute_if_is_dynamic_snode_method(ctx: FuncCompilePassContext, node) -> bool:
         is_subscript = isinstance(node.value, ast.Subscript)
         names = ("append", "deactivate", "length")
         if node.attr not in names:
@@ -691,7 +705,7 @@ class ASTTransformer(Builder):
         return True
 
     @staticmethod
-    def _promote_ndarray_if_declared(ctx: ASTTransformerFuncContext, value: Any) -> Any:
+    def _promote_ndarray_if_declared(ctx: FuncCompilePassContext, value: Any) -> Any:
         """If *value* is a bare ``Ndarray`` that was pre-declared as a kernel arg (in ``_predeclare_struct_ndarrays``),
         return the ``AnyArray`` proxy from the cache. Otherwise return *value* unchanged.
 
@@ -701,12 +715,12 @@ class ASTTransformer(Builder):
         """
         from quadrants.lang._ndarray import Ndarray  # pylint: disable=C0415
 
-        pruning = ctx.global_context.pruning
+        pruning = ctx.kernel_compile_context.pruning
         # Same gate as ``build_Name``'s mark_used: the callee body's own accesses are what count, not the synthetic
         # per-leaf expansion of a ``@qd.func`` call's arguments.
         should_mark = not pruning.enforcing and not ctx.expanding_dataclass_call_parameters
         if isinstance(value, Ndarray):
-            cache = ctx.global_context.ndarray_to_any_array
+            cache = ctx.kernel_compile_context.current_pass.ndarray_to_any_array
             key = id(value)
             arr = cache.get(key)
             if arr is not None:
@@ -721,7 +735,7 @@ class ASTTransformer(Builder):
         return value
 
     @staticmethod
-    def build_Attribute(ctx: ASTTransformerFuncContext, node: ast.Attribute):
+    def build_Attribute(ctx: FuncCompilePassContext, node: ast.Attribute):
         # There are two valid cases for the methods of Dynamic SNode:
         #
         # 1. x[i, j].append (where the dimension of the field (3 in this case) is equal to one plus the number of the
@@ -787,11 +801,20 @@ class ASTTransformer(Builder):
                 node.ptr = getattr(tensor_ops, node.attr)
                 setattr(node, "caller", node.value.ptr)
         elif dataclasses.is_dataclass(node.value.ptr):
-            lifted = maybe_lifted_primitive(ctx, node.value.ptr, node.attr)
+            if is_data_oriented(node.value.ptr):
+                raise exception.QuadrantsRuntimeTypeError(
+                    "A class cannot be both a Python dataclass and data-oriented."
+                )
+            lifted = resolve_bound_member(ctx, node.value.ptr, node)
             if lifted is not None:
                 node.ptr = lifted
                 return node.ptr
             node.ptr = getattr(node.value.ptr, node.attr)
+            if ctx.kernel_compile_context.pruning.enforcing and is_data_oriented(node.ptr):
+                raise exception.QuadrantsRuntimeTypeError(
+                    "Data-oriented objects inside Python dataclass fields are unsupported. "
+                    "Store the dataclass on the data-oriented object instead."
+                )
             from quadrants._tensor_wrapper import (  # pylint: disable=C0415
                 Tensor as _TensorClass,
             )
@@ -810,7 +833,7 @@ class ASTTransformer(Builder):
                 count, dtype, naming_fn = groups[node.attr]
                 node.ptr = _UnpackedVectorRef(node.value.ptr, node.attr, count, dtype, naming_fn)
                 return node.ptr
-            lifted = maybe_lifted_primitive(ctx, node.value.ptr, node.attr)
+            lifted = resolve_bound_member(ctx, node.value.ptr, node)
             if lifted is not None:
                 node.ptr = lifted
                 return node.ptr
@@ -856,7 +879,7 @@ class ASTTransformer(Builder):
         if parent_chain is not None:
             flat = create_flat_name(parent_chain, node.attr)
             node._qd_arg_chain = flat  # type: ignore[attr-defined]
-            pruning = ctx.global_context.pruning
+            pruning = ctx.kernel_compile_context.pruning
             if not pruning.enforcing and not ctx.expanding_dataclass_call_parameters:
                 pruning.mark_kernel_arg_chain_used(ctx.func.func_id, flat)
         else:
@@ -864,7 +887,7 @@ class ASTTransformer(Builder):
         return node.ptr
 
     @staticmethod
-    def build_BinOp(ctx: ASTTransformerFuncContext, node: ast.BinOp):
+    def build_BinOp(ctx: FuncCompilePassContext, node: ast.BinOp):
         build_stmt(ctx, node.left)
         build_stmt(ctx, node.right)
         # pylint: disable-msg=C0415
@@ -892,7 +915,7 @@ class ASTTransformer(Builder):
         return node.ptr
 
     @staticmethod
-    def build_AugAssign(ctx: ASTTransformerFuncContext, node: ast.AugAssign):
+    def build_AugAssign(ctx: FuncCompilePassContext, node: ast.AugAssign):
         build_stmt(ctx, node.target)
         build_stmt(ctx, node.value)
         if isinstance(node.target, ast.Name) and node.target.id in ctx.kernel_args:
@@ -904,7 +927,7 @@ class ASTTransformer(Builder):
         return node.ptr
 
     @staticmethod
-    def build_UnaryOp(ctx: ASTTransformerFuncContext, node: ast.UnaryOp):
+    def build_UnaryOp(ctx: FuncCompilePassContext, node: ast.UnaryOp):
         build_stmt(ctx, node.operand)
         op = {
             ast.UAdd: lambda l: l,
@@ -939,7 +962,7 @@ class ASTTransformer(Builder):
         return operands[-1].ptr
 
     @staticmethod
-    def build_BoolOp(ctx: ASTTransformerFuncContext, node: ast.BoolOp):
+    def build_BoolOp(ctx: FuncCompilePassContext, node: ast.BoolOp):
         build_stmts(ctx, node.values)
         if ctx.is_in_static_scope():
             ops = {
@@ -961,7 +984,7 @@ class ASTTransformer(Builder):
         return node.ptr
 
     @staticmethod
-    def build_Compare(ctx: ASTTransformerFuncContext, node: ast.Compare):
+    def build_Compare(ctx: FuncCompilePassContext, node: ast.Compare):
         build_stmt(ctx, node.left)
         build_stmts(ctx, node.comparators)
         ops = {
@@ -1044,7 +1067,7 @@ class ASTTransformer(Builder):
         return [name.id for name in node.target.elts]
 
     @staticmethod
-    def build_static_for(ctx: ASTTransformerFuncContext, node: ast.For, is_grouped: bool) -> None:
+    def build_static_for(ctx: FuncCompilePassContext, node: ast.For, is_grouped: bool) -> None:
         qd_unroll_limit = impl.get_runtime().unrolling_limit
         if is_grouped:
             assert len(node.iter.args[0].args) == 1
@@ -1117,7 +1140,7 @@ class ASTTransformer(Builder):
         return None
 
     @staticmethod
-    def build_range_for(ctx: ASTTransformerFuncContext, node: ast.For) -> None:
+    def build_range_for(ctx: FuncCompilePassContext, node: ast.For) -> None:
         with ctx.variable_scope_guard():
             loop_name = node.target.id
             ctx.check_loop_var(loop_name)
@@ -1154,7 +1177,7 @@ class ASTTransformer(Builder):
         return None
 
     @staticmethod
-    def build_ndrange_for(ctx: ASTTransformerFuncContext, node: ast.For) -> None:
+    def build_ndrange_for(ctx: FuncCompilePassContext, node: ast.For) -> None:
         with ctx.variable_scope_guard():
             ndrange_var = impl.expr_init(build_stmt(ctx, node.iter))
             ndrange_begin = qd_ops.cast(expr.Expr(0), primitive_types.i32)
@@ -1207,7 +1230,7 @@ class ASTTransformer(Builder):
         return None
 
     @staticmethod
-    def build_grouped_ndrange_for(ctx: ASTTransformerFuncContext, node: ast.For) -> None:
+    def build_grouped_ndrange_for(ctx: FuncCompilePassContext, node: ast.For) -> None:
         with ctx.variable_scope_guard():
             ndrange_var = impl.expr_init(build_stmt(ctx, node.iter.args[0]))
             ndrange_begin = qd_ops.cast(expr.Expr(0), primitive_types.i32)
@@ -1251,7 +1274,7 @@ class ASTTransformer(Builder):
         return None
 
     @staticmethod
-    def build_struct_for(ctx: ASTTransformerFuncContext, node: ast.For, is_grouped: bool) -> None:
+    def build_struct_for(ctx: FuncCompilePassContext, node: ast.For, is_grouped: bool) -> None:
         # for i, j in x
         # for I in qd.grouped(x)
         targets = ASTTransformer.get_for_loop_targets(node)
@@ -1313,7 +1336,7 @@ class ASTTransformer(Builder):
         return None
 
     @staticmethod
-    def build_mesh_for(ctx: ASTTransformerFuncContext, node: ast.For) -> None:
+    def build_mesh_for(ctx: FuncCompilePassContext, node: ast.For) -> None:
         targets = ASTTransformer.get_for_loop_targets(node)
         if len(targets) != 1:
             raise QuadrantsSyntaxError("Mesh for should have 1 loop target, found {len(targets)}")
@@ -1339,7 +1362,7 @@ class ASTTransformer(Builder):
         return None
 
     @staticmethod
-    def build_nested_mesh_for(ctx: ASTTransformerFuncContext, node: ast.For) -> None:
+    def build_nested_mesh_for(ctx: FuncCompilePassContext, node: ast.For) -> None:
         targets = ASTTransformer.get_for_loop_targets(node)
         if len(targets) != 1:
             raise QuadrantsSyntaxError("Nested-mesh for should have 1 loop target, found {len(targets)}")
@@ -1372,7 +1395,7 @@ class ASTTransformer(Builder):
         return None
 
     @staticmethod
-    def build_For(ctx: ASTTransformerFuncContext, node: ast.For) -> None:
+    def build_For(ctx: FuncCompilePassContext, node: ast.For) -> None:
         if node.orelse:
             raise QuadrantsSyntaxError("'else' clause for 'for' not supported in Quadrants kernels")
         decorator = get_decorator(ctx, node.iter)
@@ -1468,7 +1491,7 @@ class ASTTransformer(Builder):
 
     @staticmethod
     def _resolve_ndarray_kernel_arg_id(
-        ctx: ASTTransformerFuncContext,
+        ctx: FuncCompilePassContext,
         kernel,
         node: ast.expr,
         usage: str,
@@ -1492,7 +1515,7 @@ class ASTTransformer(Builder):
         return CheckpointTransformer.is_checkpoint_call(node, global_vars)
 
     @staticmethod
-    def build_While(ctx: ASTTransformerFuncContext, node: ast.While) -> None:
+    def build_While(ctx: FuncCompilePassContext, node: ast.While) -> None:
         if node.orelse:
             raise QuadrantsSyntaxError("'else' clause for 'while' not supported in Quadrants kernels")
 
@@ -1501,7 +1524,7 @@ class ASTTransformer(Builder):
             graph_api.warn_if_deprecated(node.test.func, "do_while")
             from quadrants.lang.kernel import GraphDoWhileLevel  # pylint: disable=C0415
 
-            kernel = ctx.global_context.current_kernel
+            kernel = ctx.kernel_compile_context.current_kernel
             if not kernel.use_graph:
                 raise QuadrantsSyntaxError("qd.graph.do_while() requires @qd.kernel(graph=True)")
             # graph_do_while emits no loop IR; its body's for-loops must be top-level (offloaded) tasks. So it may only
@@ -1553,7 +1576,7 @@ class ASTTransformer(Builder):
         return None
 
     @staticmethod
-    def build_If(ctx: ASTTransformerFuncContext, node: ast.If) -> ast.If | None:
+    def build_If(ctx: FuncCompilePassContext, node: ast.If) -> ast.If | None:
         build_stmt(ctx, node.test)
         is_static_if = get_decorator(ctx, node.test) == "static"
 
@@ -1576,12 +1599,12 @@ class ASTTransformer(Builder):
         return None
 
     @staticmethod
-    def build_Expr(ctx: ASTTransformerFuncContext, node: ast.Expr) -> None:
+    def build_Expr(ctx: FuncCompilePassContext, node: ast.Expr) -> None:
         build_stmt(ctx, node.value)
         return None
 
     @staticmethod
-    def build_IfExp(ctx: ASTTransformerFuncContext, node: ast.IfExp):
+    def build_IfExp(ctx: FuncCompilePassContext, node: ast.IfExp):
         build_stmt(ctx, node.test)
         build_stmt(ctx, node.body)
         build_stmt(ctx, node.orelse)
@@ -1630,7 +1653,7 @@ class ASTTransformer(Builder):
         return False
 
     @staticmethod
-    def _handle_string_mod_args(ctx: ASTTransformerFuncContext, node):
+    def _handle_string_mod_args(ctx: FuncCompilePassContext, node):
         msg = build_stmt(ctx, node.left)
         args = build_stmt(ctx, node.right)
         if not isinstance(args, collections.abc.Sequence):
@@ -1661,7 +1684,7 @@ class ASTTransformer(Builder):
         return msg, args
 
     @staticmethod
-    def build_Assert(ctx: ASTTransformerFuncContext, node: ast.Assert) -> None:
+    def build_Assert(ctx: FuncCompilePassContext, node: ast.Assert) -> None:
         u = platform.uname()
         if u.system == "linux" and u.machine in ("arm64", "aarch64"):
             build_stmt(ctx, node.test)
@@ -1691,7 +1714,7 @@ class ASTTransformer(Builder):
         return None
 
     @staticmethod
-    def build_Break(ctx: ASTTransformerFuncContext, node: ast.Break) -> None:
+    def build_Break(ctx: FuncCompilePassContext, node: ast.Break) -> None:
         if ctx.is_in_static_for():
             nearest_non_static_if = ctx.current_loop_scope().nearest_non_static_if
             if nearest_non_static_if:
@@ -1709,7 +1732,7 @@ class ASTTransformer(Builder):
         return None
 
     @staticmethod
-    def build_Continue(ctx: ASTTransformerFuncContext, node: ast.Continue) -> None:
+    def build_Continue(ctx: FuncCompilePassContext, node: ast.Continue) -> None:
         if ctx.is_in_static_for():
             nearest_non_static_if = ctx.current_loop_scope().nearest_non_static_if
             if nearest_non_static_if:
@@ -1727,7 +1750,7 @@ class ASTTransformer(Builder):
         return None
 
     @staticmethod
-    def build_With(ctx: ASTTransformerFuncContext, node: ast.With) -> None:
+    def build_With(ctx: FuncCompilePassContext, node: ast.With) -> None:
         if len(node.items) != 1:
             raise QuadrantsSyntaxError("'with' in Quadrants kernels only supports a single context manager")
         item = node.items[0]
@@ -1753,7 +1776,7 @@ class ASTTransformer(Builder):
             )
         if not ctx.is_kernel:
             raise QuadrantsSyntaxError("qd.stream_parallel() can only be used inside @qd.kernel, not @qd.func")
-        kernel = ctx.global_context.current_kernel
+        kernel = ctx.kernel_compile_context.current_kernel
         if kernel is not None and kernel.use_graph:
             raise QuadrantsSyntaxError(
                 "qd.stream_parallel() is not compatible with graph=True kernels. Streams and graphs cannot be "
@@ -1766,7 +1789,7 @@ class ASTTransformer(Builder):
 
     @staticmethod
     def _build_checkpoint_with(
-        ctx: ASTTransformerFuncContext,
+        ctx: FuncCompilePassContext,
         node: ast.With,
         info,
     ) -> None:
@@ -1775,14 +1798,14 @@ class ASTTransformer(Builder):
         return CheckpointTransformer.build_checkpoint_with(ctx, node, info, build_stmts)
 
     @staticmethod
-    def build_Pass(ctx: ASTTransformerFuncContext, node: ast.Pass) -> None:
+    def build_Pass(ctx: FuncCompilePassContext, node: ast.Pass) -> None:
         return None
 
 
 build_stmt = ASTTransformer()
 
 
-def build_stmts(ctx: ASTTransformerFuncContext, stmts: list[ast.stmt]):
+def build_stmts(ctx: FuncCompilePassContext, stmts: list[ast.stmt]):
     # TODO: Should we just make this part of ASTTransformer? Then, easier to pass around (just
     # pass the ASTTransformer object around)
     with ctx.variable_scope_guard():

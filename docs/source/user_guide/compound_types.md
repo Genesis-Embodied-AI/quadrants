@@ -144,6 +144,12 @@ Note: assigning a sub-struct to a local variable and then passing it (`t = s.inn
 
 A `dataclasses.dataclass` may be either non-frozen (the default) or frozen (`@dataclass(frozen=True)`). Both work as kernel arguments, but **kernel launch is faster with `frozen=True`** (because it enables some optimizations that would otherwise not be possible). Recommend `frozen=True` unless you specifically need to rebind members after construction. Note that rebinding members after construction contradicts certain best practices; for example, it is typically incompatible with type linters such as pyright and mypy.
 
+**Important.** Once a dataclass or `@qd.data_oriented` object has been used in a kernel call, keep its references to nested dataclass and data-oriented objects fixed. For example, if `state.grid` holds a dataclass, assigning `state.grid = another_grid` between launches is unsupported and can give incorrect results. You can pass a different `state` instance on the next call, or update an ordinary runtime scalar such as `state.grid.n` on a mutable dataclass.
+
+### Container alias cache
+
+To speed up repeated kernel calls, Quadrants caches which arguments share the same dataclass or data-oriented object, including objects nested inside those arguments. If you repeatedly create new containers to pass to kernels and keep many different argument combinations alive, the cache can fill up. Quadrants then reports a warning at reset or process exit. Your kernels still run correctly, but recomputing entries can slow down later calls. Where practical, create these containers during setup and reuse them across calls. You can raise the default limit of 1,024 entries with `qd.init(container_alias_cache_size=4096)`.
+
 ### Subclasses
 
 You are able to pass any subclass of the annotated dataclass type. This is especially useful for cases where only a subset of your class is valid in quadrants, as below:
@@ -168,6 +174,9 @@ def update_positions(pos: Position) -> None:
 Note: when the annotated type is frozen, the flattened launch arguments are cached on the instance on first use. Do not rebind a field after the first launch; the kernel would keep using the stale cached value. Frozen dataclasses forbid rebinding by design, so this only affects code that deliberately bypasses that (e.g. `object.__setattr__`, or an `unsafe_hash=True` non-frozen dataclass).
 
 ### Compile-time constant fields: `typing.Final`
+
+Final field values must be exact Python `bool`, `int`, `float`, or `str` objects, or supported enum members. NumPy scalars and custom non-enum scalar subclasses are rejected, including as enum underlying values. Convert NumPy scalars to the corresponding built-in Python type explicitly.
+
 
 By default a primitive dataclass field becomes a **runtime** kernel argument: you can change its value between launches without recompiling, and the kernel reads the fresh value each launch. That also means the value is not known at compile time, so it cannot be used inside [`qd.static(...)`](static.md), as a static loop bound, or to eliminate a branch at compile time.
 
@@ -429,7 +438,7 @@ This table summarizes which member types are allowed inside which container type
 
 | Container ↓ &nbsp;&nbsp;&nbsp; / &nbsp;&nbsp;&nbsp; Member → | `qd.ndarray` | `qd.field` | primitive | `dataclasses.dataclass` | `@qd.data_oriented` | `@qd.dataclass` |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|
-| `dataclasses.dataclass`         | yes | yes | yes | yes | deprecated | yes |
+| `dataclasses.dataclass`         | yes | yes | yes | yes | no | yes |
 | `@qd.data_oriented`             | yes | yes | yes | yes | yes      | yes |
 | `@qd.dataclass`                 | no  | yes | yes | no  | no       | yes |
 
@@ -450,8 +459,10 @@ This support is only available on `@qd.data_oriented` classes *without* the [`st
 
 ### Restrictions
 
+- **A class cannot be both a Python dataclass and data-oriented**, including through inheritance.
+
 - **`@qd.dataclass` cannot contain `qd.ndarray` or `qd.field` members.** See the [`@qd.dataclass`](#qddataclass-qdtypesstruct) section above for the full list of allowed member types. (The function-form factory `qd.types.struct(...)` has the same restrictions.)
-- **A typed-dataclass kernel-arg annotation cannot have a `@qd.data_oriented` member type** — errors clearly at compile time
+- **Kernel code cannot access a `@qd.data_oriented` object stored inside a Python dataclass.** Store the dataclass on the data-oriented object instead.
 - **Declare all ndarray members on a `@qd.data_oriented` class in `__init__`.**
     - **Deleting an ndarray attribute** that was present on an `@qd.data_oriented` instance's first launch raises `AttributeError` on the next launch on that instance.
     - **Adding a new ndarray attribute after first launch** on a given `@qd.data_oriented` instance will cause incorrect undefined behavior.

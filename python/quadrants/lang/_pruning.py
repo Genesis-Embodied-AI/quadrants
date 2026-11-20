@@ -1,11 +1,13 @@
-from ast import Attribute, Name, Starred, expr, keyword
+from ast import Name, expr, keyword
 from collections import defaultdict, deque
 from typing import TYPE_CHECKING, Any
 
-from ._dataclass_util import create_flat_name
-from ._exceptions import raise_exception
+from ._name_utils import (
+    create_flat_name,
+    create_flat_name_from_parts,
+    extract_dotted_name_parts,
+)
 from ._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
-from .exception import QuadrantsSyntaxError
 from .func import Func
 from .kernel_arguments import ArgMetadata
 
@@ -16,21 +18,16 @@ def _flatten_arg_node(node: expr) -> tuple[str, str] | None:
 
     The root id is returned because the flat name alone is ambiguous: ``__qd_self__qd_dofs`` is what both the chain
     ``self.dofs`` and an already-flattened dataclass-arg Name of that name produce."""
-    if isinstance(node, Name):
-        return node.id, node.id
-    if isinstance(node, Attribute):
-        parent = _flatten_arg_node(node.value)
-        if parent is None:
-            return None
-        parent_flat, root_id = parent
-        return create_flat_name(parent_flat, node.attr), root_id
-    return None
+    name_parts = extract_dotted_name_parts(node)
+    if name_parts is None:
+        return None
+    return create_flat_name_from_parts(name_parts), name_parts[0]
 
 
 if TYPE_CHECKING:
     import ast
 
-    from .ast.ast_transformer_utils import ASTTransformerFuncContext
+    from .ast.ast_transformer_utils import FuncCompilePassContext
 
 
 # (caller_func_id, callee_func_id, call node lineno, call node col_offset). We key call edges by the
@@ -177,10 +174,7 @@ class Pruning:
         for sub in callee_chain_paths:
             if sub.startswith(prefix):
                 rest = sub[len(prefix) :]
-                if caller_flat.startswith("__qd_"):
-                    new_flat = f"{caller_flat}__qd_{rest}"
-                else:
-                    new_flat = f"__qd_{caller_flat}__qd_{rest}"
+                new_flat = create_flat_name(caller_flat, rest)
                 chain_paths_to_propagate.add(new_flat)
 
     def enforce(self) -> None:
@@ -195,7 +189,7 @@ class Pruning:
 
     def record_after_call(
         self,
-        ctx: "ASTTransformerFuncContext",
+        ctx: "FuncCompilePassContext",
         func: "QuadrantsCallable",
         node: "ast.Call",
         node_args: list[expr],
@@ -212,12 +206,7 @@ class Pruning:
 
         caller_func_id = ctx.func.func_id
         callee_func_id = func.wrapper.func_id  # type: ignore
-        # node.args ordering will match that of the called function's arg_metas_expanded, because of
-        # the way calling with sequential args works. We read the callee's declared (flat) parameter
-        # name from its metas - we can't tell their name just by looking at our own metas.
-        #
-        # One issue is when calling data-oriented methods, there will be a `self`, which occupies the
-        # first callee meta slot; we skip it with self_offset.
+        # Match positional arguments to the callee's parameter names, skipping self for bound methods.
         callee_func: Func = node.func.ptr.wrapper  # type: ignore
         has_self = type(func) is BoundQuadrantsCallable
         self_offset = 1 if has_self else 0
@@ -226,7 +215,7 @@ class Pruning:
         for arg_id, arg in enumerate(node_args):
             if type(arg) in {Name}:
                 caller_arg_name = arg.id  # type: ignore
-                callee_param_name = callee_func.arg_metas_expanded[arg_id + self_offset].name  # type: ignore
+                callee_param_name = callee_func.arg_metas[arg_id + self_offset].name  # type: ignore
                 edge.pairs.append((caller_arg_name, callee_param_name))
                 if caller_arg_name.startswith("__qd_"):
                     edge.positional_map.setdefault(caller_arg_name, []).append(callee_param_name)
@@ -238,7 +227,7 @@ class Pruning:
             if flat is not None:
                 caller_flat, root_id = flat
                 if not root_id.startswith("__qd_"):
-                    callee_param_name = callee_func.arg_metas_expanded[arg_id + self_offset].name  # type: ignore
+                    callee_param_name = callee_func.arg_metas[arg_id + self_offset].name  # type: ignore
                     edge.chain_pairs.append((callee_param_name, caller_flat))
         # For keywords we don't need the callee metas (whose ordering need not match ours): the
         # callee's parameter name is available directly from our own keyword node.
@@ -296,65 +285,3 @@ class Pruning:
                 if grew and edge.caller_func_id not in queued:
                     worklist.append(edge.caller_func_id)
                     queued.add(edge.caller_func_id)
-
-    def filter_call_args(
-        self,
-        caller_func_id: int,
-        quadrants_callable: "QuadrantsCallable",
-        node: "ast.Call",
-        node_args: list[expr],
-        node_keywords: list[keyword],
-        py_args: list[Any],
-    ) -> list[Any]:
-        """
-        used in build_Call, before making the call, in the enforcing pass (pass 1)
-
-        Prunes positional args the callee does not need. Keyed per call site (via caller_func_id +
-        the call node position) so swapped-slot forwarding stays independent. When the same flat name is
-        forwarded into several slots (e.g. ``inner(md, md)``), the recorded callee params are consumed in
-        left-to-right order (one per occurrence) so each slot is decided against its own callee param.
-        Note that this ONLY handles args, not kwargs (kwargs are pruned in _expand_Call_dataclass_kwargs).
-        """
-        # We can be called with callables other than qd.func, so filter those out:
-        if (
-            type(quadrants_callable) not in {QuadrantsCallable, BoundQuadrantsCallable}
-            or type(quadrants_callable.wrapper) != Func
-        ):
-            return py_args
-        func: Func = quadrants_callable.wrapper  # type: ignore
-        callee_func_id = func.func_id
-        callee_used_args = self.used_vars_by_func_id[callee_func_id]
-        edge = self.edges_by_call_site.get(self._call_site_key(caller_func_id, callee_func_id, node))
-        positional_map = edge.positional_map if edge is not None else {}
-        # Per-name cursor: the k-th occurrence of a caller arg name consumes the k-th recorded callee
-        # param for that name. node_args is walked in the same left-to-right order as when the edge was
-        # recorded, so occurrences line up even if an upstream prune dropped some fields in between.
-        occurrence_by_name: dict[str, int] = {}
-
-        new_args = []
-        for i, arg in enumerate(node_args):
-            is_starred = type(arg) is Starred
-            if is_starred:
-                if i != len(node_args) - 1 or len(node_keywords) != 0:
-                    raise_exception(
-                        ExceptionClass=QuadrantsSyntaxError,
-                        msg="* args can only be present as the last argument of a function",
-                        err_code="STARNOTLAST",
-                    )
-
-                # we'll just dump the rest of the py_args in:
-                new_args.extend(py_args[i:])
-                break
-            if type(arg) in {Name}:
-                caller_arg_name = arg.id  # type: ignore
-                if caller_arg_name.startswith("__qd_"):
-                    mapped = positional_map.get(caller_arg_name)
-                    occurrence = occurrence_by_name.get(caller_arg_name, 0)
-                    occurrence_by_name[caller_arg_name] = occurrence + 1
-                    callee_param_name = mapped[occurrence] if mapped is not None and occurrence < len(mapped) else None
-                    if callee_param_name is None or (
-                        callee_param_name not in callee_used_args and callee_param_name.startswith("__qd_")
-                    ):
-                        continue
-            new_args.append(py_args[i])
-        return new_args
