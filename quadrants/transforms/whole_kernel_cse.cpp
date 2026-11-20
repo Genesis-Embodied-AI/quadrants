@@ -310,7 +310,6 @@ class WholeKernelCSE : public BasicStmtVisitor {
     while (true) {
       eliminator.begin_round(node);
       node->accept(&eliminator);
-      // Inserts (if-branch hoisting) first, then erasures, as in DelayedIRModifier::modify_ir.
       bool round_modified = eliminator.modifier_.modify_ir();
       round_modified |= eliminator.erase_eliminated();
       if (round_modified)
