@@ -72,9 +72,3 @@ The infrastructure tests require Python 3.12, `pytest`, `wandb<0.25`, and `froze
 ```sh
 python -m pytest .github/scripts/tests/test_genesis_benchmarks.py -v
 ```
-
-Run the Genesis explicit-baseline tests from that repository, also installing `PyYAML`:
-
-```sh
-python -m pytest -o addopts= .github/workflows/scripts/tests/test_alarm_baseline.py -v
-```
