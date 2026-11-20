@@ -159,8 +159,7 @@ TEST(WholeKernelCSE, FullModeHoistThenEliminate) {
   EXPECT_EQ(adds, 1);
 }
 
-// Exercise both an index built by an earlier elimination and one first built by hoisting. Each branch hoists a
-// prefix constant and a suffix store; the second branch repeats this while the first branch's insertions are pending.
+// Checks that the users index stays usable through several hoists and subsequent duplicate elimination.
 class WholeKernelCSEHoistIndex : public ::testing::TestWithParam<bool> {};
 
 TEST_P(WholeKernelCSEHoistIndex, MultipleHoistsRewriteScalarAndContainerUsers) {
