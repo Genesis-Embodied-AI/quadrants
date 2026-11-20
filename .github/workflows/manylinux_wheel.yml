@@ -109,6 +109,16 @@ jobs:
       - name: manylinux test
         run: |
           bash .github/workflows/scripts_new/manylinux_wheel/5_test.sh
+      - name: Linux allocator and LLVM coexistence
+        if: matrix.PYTHON_VERSION == '3.12' && matrix.os == 'ubuntu-22.04'
+        env:
+          QD_REQUIRE_LOADER_TESTS: '1'
+          QD_TEST_MESA_LOADER: '1'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libjemalloc2 libegl1 libgl1-mesa-dri
+          pip install numba
+          python tests/run_tests.py linux_loader --arch cpu -v -t 1
   api_docs:
     uses: ./.github/workflows/api_doc.yml
     permissions:
