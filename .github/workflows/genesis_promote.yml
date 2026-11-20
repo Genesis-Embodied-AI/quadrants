@@ -1,3 +1,4 @@
+# Promote completed PR benchmark results to a main baseline when their tested code matches the merged code.
 name: Promote merged Genesis benchmarks
 
 on:
