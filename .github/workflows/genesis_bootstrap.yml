@@ -1,3 +1,6 @@
+# Manually benchmark Quadrants main against a selected Genesis tag, branch, or commit using an existing main wheel.
+# Run speed and memory benchmarks in field and ndarray modes, then publish the baseline to W&B. Only after success,
+# activate that Genesis version for future PR benchmarks. Failed runs leave the previous configuration active.
 name: Generate Genesis benchmark baseline
 
 on:
