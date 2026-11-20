@@ -282,3 +282,74 @@ def test_complete_modes_produce_a_bootstrap_key(manifest, tmp_path):
     with patch.object(benchmarks, "pages", return_value=iter(jobs)), patch.object(benchmarks, "artifact_files"):
         with pytest.raises(ValueError, match="environment changed"):
             benchmarks.collect_results(tmp_path, manifest)
+
+
+@pytest.mark.parametrize("synthetic_merge", [True, False])
+def test_prepare_anchors_cutoff_to_tested_wheel_base(manifest, tmp_path, synthetic_merge):
+    import hashlib
+
+    commit = "merge" if synthetic_merge else "head"
+    run = dict(
+        id=20,
+        run_attempt=1,
+        event="pull_request",
+        head_sha="head",
+        conclusion="success",
+        path=".github/workflows/manylinux_wheel.yml",
+    )
+    pull = dict(number=12, state="open", head=dict(sha="head"), base=dict(repo=dict(full_name=benchmarks.REPOSITORY)))
+    metadata = dict(
+        commit=commit, tree="tree", run_id=20, attempt=1, wheel="wheel.whl", sha256=hashlib.sha256(b"wheel").hexdigest()
+    )
+    active = dict(manifest, image_version="1_25", constraints="numpy==2.0")
+
+    def download(run_id, name, directory):
+        directory.mkdir(parents=True)
+        (directory / "wheel.whl").write_bytes(b"wheel")
+        (directory / "wheel.json").write_text(json.dumps(metadata))
+        return 30
+
+    def request(endpoint):
+        if endpoint.endswith("/commits/main"):
+            return dict(sha="new-main")
+        if endpoint.endswith(f"/git/commits/{commit}"):
+            parents = ["tested-base", "head"] if synthetic_merge else ["pr-parent"]
+            return dict(tree=dict(sha="tree"), parents=[dict(sha=sha) for sha in parents])
+        assert endpoint.endswith("/compare/new-main...head")
+        return dict(merge_base_commit=dict(sha="tested-base"))
+
+    with (
+        patch.object(benchmarks, "pages", side_effect=[iter([]), iter([pull])]),
+        patch.object(benchmarks, "active_state", return_value=(active, "blob")),
+        patch.object(benchmarks, "artifact_files", side_effect=download),
+        patch.object(benchmarks, "github", side_effect=request),
+        patch.dict(os.environ, GITHUB_OUTPUT=str(tmp_path / "outputs")),
+    ):
+        benchmarks.prepare(tmp_path, dict(workflow_run=run), 100, 1)
+    saved = json.loads((tmp_path / "manifest.json").read_text())
+    assert saved["main_cutoff"] == "tested-base"
+    assert saved["wheel"]["commit"] == commit
+
+
+def test_bootstrap_uses_image_from_resolved_genesis_revision(tmp_path):
+    wheel_run = dict(head_branch="main", event="push", conclusion="success", head_sha="main")
+    wheel = dict(commit="main", artifact_id=30, run_id=20, base_commit=None)
+
+    def request(endpoint):
+        if endpoint.endswith("/commits/main"):
+            return dict(sha="main")
+        if endpoint.endswith("/commits/release"):
+            return dict(sha="selected-genesis")
+        assert endpoint.endswith("/contents/.github/genesis_image_ver?ref=selected-genesis")
+        return dict(content=base64.b64encode(b"selected-image\n").decode())
+
+    with (
+        patch.object(benchmarks, "pages", side_effect=[iter([]), iter([wheel_run])]),
+        patch.object(benchmarks, "github", side_effect=request),
+        patch.object(benchmarks, "validate_wheel", return_value=wheel),
+        patch.dict(os.environ, GITHUB_OUTPUT=str(tmp_path / "outputs")),
+    ):
+        benchmarks.prepare(tmp_path, dict(inputs=dict(genesis_ref="release")), 100, 1)
+    saved = json.loads((tmp_path / "manifest.json").read_text())
+    assert saved["genesis_sha"] == "selected-genesis"
+    assert saved["image_version"] == "selected-image"

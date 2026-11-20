@@ -99,11 +99,13 @@ def validate_wheel(run, directory):
     commit = github(f"repos/{REPOSITORY}/git/commits/{metadata['commit']}")
     if commit["tree"]["sha"] != metadata["tree"]:
         raise ValueError("Wheel tree differs from its source commit.")
+    base_commit = None
     if metadata["commit"] != run["head_sha"]:
         parents = [parent["sha"] for parent in commit["parents"]]
         if run["event"] != "pull_request" or len(parents) != 2 or parents[1] != run["head_sha"]:
             raise ValueError("Wheel source does not match the triggering commit or its PR merge checkout.")
-    return {**metadata, "artifact_id": artifact_id}
+        base_commit = parents[0]
+    return {**metadata, "artifact_id": artifact_id, "base_commit": base_commit}
 
 
 def prepare(directory, event, run_id, attempt):
@@ -131,7 +133,7 @@ def prepare(directory, event, run_id, attempt):
         else:
             requested = event["inputs"]["genesis_ref"]
             genesis_sha = github(f"repos/{GENESIS}/commits/{quote(requested, safe='')}")["sha"]
-            image = github(f"repos/{GENESIS}/contents/.github/genesis_image_ver?ref=main")
+            image = github(f"repos/{GENESIS}/contents/.github/genesis_image_ver?ref={genesis_sha}")
             runs = pages(
                 f"repos/{REPOSITORY}/actions/workflows/manylinux_wheel.yml/runs?head_sha={main_sha}", "workflow_runs"
             )
@@ -159,6 +161,14 @@ def prepare(directory, event, run_id, attempt):
             )
         manifest["wheel"] = validate_wheel(wheel_run, directory / "wheel")
         manifest["head_sha"] = wheel_run["head_sha"]
+        if not manifest["bootstrap"]:
+            # A synthetic merge wheel includes its first parent; a head-only wheel includes only the shared history.
+            manifest["main_cutoff"] = (
+                manifest["wheel"]["base_commit"]
+                or github(f"repos/{REPOSITORY}/compare/{main_sha}...{manifest['wheel']['commit']}")[
+                    "merge_base_commit"
+                ]["sha"]
+            )
         if manifest["bootstrap"] and manifest["wheel"]["commit"] != main_sha:
             raise ValueError("Bootstrap wheel must represent the selected main commit.")
     manifest["run_id"] = run_id

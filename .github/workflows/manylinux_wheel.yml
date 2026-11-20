@@ -62,7 +62,7 @@ jobs:
           python -V
           bash .github/workflows/scripts_new/manylinux_wheel/3_check.sh
       - name: Record wheel provenance
-        run: /opt/python/${{ matrix.PYTHON_CP_VERSION }}/bin/python .github/scripts/wheel_provenance.py
+        run: /opt/python/${{ matrix.PYTHON_CP_VERSION }}-${{ matrix.PYTHON_CP_VERSION }}/bin/python .github/scripts/wheel_provenance.py
       - uses: actions/upload-artifact@v4
         with:
           name: manylinux_wheel_${{ matrix.PYTHON_CP_VERSION }}_${{matrix.os}}
