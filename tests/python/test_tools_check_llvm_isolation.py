@@ -15,6 +15,7 @@ _spec = importlib.util.spec_from_file_location("check_llvm_isolation", _tool_pat
 assert _spec is not None and _spec.loader is not None
 audit = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(audit)
+# Pytest applies module-level pytestmark to every test in this file, skipping all of them on non-Linux platforms.
 pytestmark = pytest.mark.skipif(sys.platform != "linux", reason="Linux ELF wheel audit")
 LibraryBuilder = Callable[..., Path]
 
