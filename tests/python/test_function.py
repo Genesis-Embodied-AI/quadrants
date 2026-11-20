@@ -67,7 +67,7 @@ def test_call_expressions():
 @pytest.mark.parametrize("decorate", [qd.func, qd.pyfunc], ids=["func", "pyfunc"])
 @test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], debug=True)
 def test_default_templates(decorate):
-    """Check scalar and field reference mutation through funcs and kernel-side pyfuncs."""
+    """Scalar expressions are copied and fields retain references regardless of annotations."""
 
     @decorate
     def func1(x: qd.Template):
@@ -107,10 +107,10 @@ def test_default_templates(decorate):
     def run_func():
         a = 0
         func1(a)
-        assert a == 1
+        assert a == 0
         b = 0
         func2(b)
-        assert b == 1
+        assert b == 0
         c = 0
         func3(c)
         assert c == 0
@@ -417,7 +417,7 @@ def test_func_ndarray_arg():
 
     assert arr[0] == [20, 20, 20]
 
-    with pytest.raises(qd.QuadrantsCompilationError, match=r"Invalid value for argument a"):
+    with pytest.raises(qd.QuadrantsCompilationError):
         test_error(arr)
 
 
@@ -441,7 +441,7 @@ def test_func_matrix_arg():
 
 
 @test_utils.test()
-def test_func_matrix_arg_with_error():
+def test_func_matrix_arg_ignores_annotated_shape():
     vec3 = qd.types.vector(3, qd.f32)
 
     @qd.func
@@ -452,9 +452,9 @@ def test_func_matrix_arg_with_error():
     def test_error():
         x = qd.Matrix([3, 4])
         test(x)
+        assert x[0] == 3
 
-    with pytest.raises(qd.QuadrantsSyntaxError, match=r"is expected to be a Matrix with n 3, but got 2"):
-        test_error()
+    test_error()
 
 
 @test_utils.test(debug=True)

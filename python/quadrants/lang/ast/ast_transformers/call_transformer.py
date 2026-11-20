@@ -1,8 +1,8 @@
 # type: ignore
 
 import ast
-import dataclasses
 import inspect
+import math
 import operator
 import re
 import warnings
@@ -11,18 +11,24 @@ from collections import ChainMap
 from contextlib import nullcontext
 from typing import Any
 
+import numpy as np
+
 from quadrants.lang import (
     expr,
     impl,
     matrix,
 )
 from quadrants.lang import ops as qd_ops
-from quadrants.lang._name_utils import create_flat_name
+from quadrants.lang._runtime_typing.runtime_dataclass import dataclass_call_arguments
 from quadrants.lang.ast.ast_transformer_utils import (
-    ASTTransformerFuncContext,
+    FuncCompilePassContext,
     get_decorator,
 )
+from quadrants.lang.ast.ast_transformers.runtime_tuple_transform import (
+    resolve_callable,
+)
 from quadrants.lang.exception import (
+    QuadrantsRuntimeTypeError,
     QuadrantsSyntaxError,
     QuadrantsTypeError,
 )
@@ -36,7 +42,7 @@ from ..._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
 
 class CallTransformer:
     @staticmethod
-    def _build_call_if_is_builtin(ctx: ASTTransformerFuncContext, node, args, keywords):
+    def _build_call_if_is_builtin(ctx: FuncCompilePassContext, node, args, keywords):
         from quadrants.lang import matrix_ops  # pylint: disable=C0415
 
         func = node.func.ptr
@@ -66,7 +72,7 @@ class CallTransformer:
         return False
 
     @staticmethod
-    def _build_call_if_is_type(ctx: ASTTransformerFuncContext, node, args, keywords):
+    def _build_call_if_is_type(ctx: FuncCompilePassContext, node, args, keywords):
         func = node.func.ptr
         if id(func) in primitive_types.type_ids:
             if len(args) != 1 or keywords:
@@ -84,7 +90,7 @@ class CallTransformer:
         return False
 
     @staticmethod
-    def _is_external_func(ctx: ASTTransformerFuncContext, func) -> bool:
+    def _is_external_func(ctx: FuncCompilePassContext, func) -> bool:
         if ctx.is_in_static_scope():  # allow external function in static scope
             return False
         if hasattr(func, "_is_quadrants_function") or hasattr(func, "_is_wrapped_kernel"):  # quadrants func/kernel
@@ -94,7 +100,7 @@ class CallTransformer:
         return True
 
     @staticmethod
-    def _warn_if_is_external_func(ctx: ASTTransformerFuncContext, node):
+    def _warn_if_is_external_func(ctx: FuncCompilePassContext, node):
         func = node.func.ptr
         if not CallTransformer._is_external_func(ctx, func):
             return
@@ -165,202 +171,11 @@ class CallTransformer:
         return args
 
     @staticmethod
-    def _expand_Call_dataclass_args(
-        ctx: ASTTransformerFuncContext,
-        args: tuple[ast.stmt, ...],
-        called_needed: set[str] | None = None,
-        callee_arg_names: list[str] | None = None,
-    ) -> tuple[tuple[ast.stmt, ...], tuple[ast.stmt, ...]]:
-        """
-        We require that each node has a .ptr attribute added to it, that contains the associated Python object.
-
-        ``called_needed`` and ``callee_arg_names`` are used only for the attribute-accessed-instance branch (Option A
-        for data_oriented @qd.func calls): the caller cannot construct a flat name from its own ``arg.id`` (the arg is
-        an ast.Attribute), so we look up pruning against the callee's parameter name at the same positional index.
-        """
-        args_new = []
-        added_args = []
-        pruning = ctx.global_context.pruning
-        func_id = ctx.func.func_id
-        for arg_idx, arg in enumerate(args):
-            val = arg.ptr
-            if dataclasses.is_dataclass(val) and isinstance(val, type):
-                dataclass_type = val
-                for field in dataclasses.fields(dataclass_type):
-                    try:
-                        child_name = create_flat_name(arg.id, field.name)
-                    except Exception as e:
-                        raise RuntimeError(f"Exception whilst processing {field.name} in {type(dataclass_type)}") from e
-                    if pruning.enforcing and child_name not in pruning.used_vars_by_func_id[func_id]:
-                        continue
-                    load_ctx = ast.Load()
-                    arg_node = ast.Name(
-                        id=child_name,
-                        ctx=load_ctx,
-                        lineno=arg.lineno,
-                        end_lineno=arg.end_lineno,
-                        col_offset=arg.col_offset,
-                        end_col_offset=arg.end_col_offset,
-                    )
-                    if dataclasses.is_dataclass(field.type):
-                        arg_node.ptr = field.type
-                        _added_args, _args_new = CallTransformer._expand_Call_dataclass_args(ctx, (arg_node,))
-                        args_new.extend(_args_new)
-                        added_args.extend(_added_args)
-                    else:
-                        args_new.append(arg_node)
-                        added_args.append(arg_node)
-            elif dataclasses.is_dataclass(val) and not isinstance(val, type):
-                # Dataclass *instance* passed positionally (e.g. ``self.state``): expand to per-leaf ``ast.Attribute``
-                # children, where the typed-arg path above emits ``ast.Name``. Items appended to ``added_args`` must not
-                # carry ``.ptr`` - ``build_stmt`` populates it downstream.
-                dataclass_type = type(val)
-                # Flat names have to match the callee's, which may have pruned unused fields.
-                callee_param = (
-                    callee_arg_names[arg_idx]
-                    if (called_needed is not None and callee_arg_names is not None and arg_idx < len(callee_arg_names))
-                    else None
-                )
-                for field in dataclasses.fields(dataclass_type):
-                    if called_needed is not None and callee_param is not None:
-                        callee_flat_name = create_flat_name(callee_param, field.name)
-                        if callee_flat_name not in called_needed:
-                            continue
-                    child_val = getattr(val, field.name)
-                    load_ctx = ast.Load()
-                    child_node = ast.Attribute(
-                        value=arg,
-                        attr=field.name,
-                        ctx=load_ctx,
-                        lineno=arg.lineno,
-                        end_lineno=arg.end_lineno,
-                        col_offset=arg.col_offset,
-                        end_col_offset=arg.end_col_offset,
-                    )
-                    if dataclasses.is_dataclass(child_val) and not isinstance(child_val, type):
-                        child_node.ptr = child_val
-                        # The callee's expanded flat name is the synthetic param name at the nested level.
-                        nested_callee_param = (
-                            create_flat_name(callee_param, field.name) if callee_param is not None else None
-                        )
-                        _added_args, _args_new = CallTransformer._expand_Call_dataclass_args(
-                            ctx,
-                            (child_node,),
-                            called_needed=called_needed,
-                            callee_arg_names=[nested_callee_param] if nested_callee_param is not None else None,
-                        )
-                        args_new.extend(_args_new)
-                        added_args.extend(_added_args)
-                    else:
-                        args_new.append(child_node)
-                        added_args.append(child_node)
-            else:
-                args_new.append(arg)
-        return tuple(added_args), tuple(args_new)
-
-    @staticmethod
-    def _expand_Call_dataclass_kwargs(
-        ctx: ASTTransformerFuncContext,
-        kwargs: list[ast.keyword],
-        used_args: set[str] | None,
-    ) -> tuple[list[ast.keyword], list[ast.keyword]]:
-        """
-        We require that each node has a .ptr attribute added to it, that contains
-        the associated Python object
-
-        used_args are the names of parameters that are used, and should not be pruned.
-        """
-        kwargs_new = []
-        added_kwargs = []
-        for i, kwarg in enumerate(kwargs):
-            val = kwarg.ptr[kwarg.arg]
-            if dataclasses.is_dataclass(val) and isinstance(val, type):
-                dataclass_type = val
-                for field in dataclasses.fields(dataclass_type):
-                    src_name = create_flat_name(kwarg.value.id, field.name)
-                    child_name = create_flat_name(kwarg.arg, field.name)
-                    # Note: using `used_args` instead of `used_args is not None` will cause
-                    # a bug, when it is empty set.
-                    if used_args is not None and child_name not in used_args:
-                        continue
-                    load_ctx = ast.Load()
-                    src_node = ast.Name(
-                        id=src_name,
-                        ctx=load_ctx,
-                        lineno=kwarg.lineno,
-                        end_lineno=kwarg.end_lineno,
-                        col_offset=kwarg.col_offset,
-                        end_col_offset=kwarg.end_col_offset,
-                    )
-                    kwarg_node = ast.keyword(
-                        arg=child_name,
-                        value=src_node,
-                        ctx=load_ctx,
-                        lineno=kwarg.lineno,
-                        end_lineno=kwarg.end_lineno,
-                        col_offset=kwarg.col_offset,
-                        end_col_offset=kwarg.end_col_offset,
-                    )
-                    if dataclasses.is_dataclass(field.type):
-                        kwarg_node.ptr = {child_name: field.type}
-                        _added_kwargs, _kwargs_new = CallTransformer._expand_Call_dataclass_kwargs(
-                            ctx, [kwarg_node], used_args
-                        )
-                        kwargs_new.extend(_kwargs_new)
-                        added_kwargs.extend(_added_kwargs)
-                    else:
-                        kwargs_new.append(kwarg_node)
-                        added_kwargs.append(kwarg_node)
-            elif dataclasses.is_dataclass(val) and not isinstance(val, type):
-                # Dataclass *instance* passed as a keyword arg: expand to per-leaf keywords whose values are attribute
-                # accesses on the original node (``__qd_state__x=self.state.x``).
-                dataclass_type = type(val)
-                for field in dataclasses.fields(dataclass_type):
-                    child_name = create_flat_name(kwarg.arg, field.name)
-                    if used_args is not None and child_name not in used_args:
-                        continue
-                    child_val = getattr(val, field.name)
-                    load_ctx = ast.Load()
-                    src_node = ast.Attribute(
-                        value=kwarg.value,
-                        attr=field.name,
-                        ctx=load_ctx,
-                        lineno=kwarg.lineno,
-                        end_lineno=kwarg.end_lineno,
-                        col_offset=kwarg.col_offset,
-                        end_col_offset=kwarg.end_col_offset,
-                    )
-                    src_node.ptr = child_val
-                    kwarg_node = ast.keyword(
-                        arg=child_name,
-                        value=src_node,
-                        ctx=load_ctx,
-                        lineno=kwarg.lineno,
-                        end_lineno=kwarg.end_lineno,
-                        col_offset=kwarg.col_offset,
-                        end_col_offset=kwarg.end_col_offset,
-                    )
-                    if dataclasses.is_dataclass(child_val) and not isinstance(child_val, type):
-                        kwarg_node.ptr = {child_name: child_val}
-                        _added_kwargs, _kwargs_new = CallTransformer._expand_Call_dataclass_kwargs(
-                            ctx, [kwarg_node], used_args
-                        )
-                        kwargs_new.extend(_kwargs_new)
-                        added_kwargs.extend(_added_kwargs)
-                    else:
-                        kwargs_new.append(kwarg_node)
-                        added_kwargs.append(kwarg_node)
-            else:
-                kwargs_new.append(kwarg)
-        return added_kwargs, kwargs_new
-
-    @staticmethod
-    def build_Call(ctx: ASTTransformerFuncContext, node: ast.Call, build_stmt, build_stmts) -> Any | None:
+    def build_Call(ctx: FuncCompilePassContext, node: ast.Call, build_stmt, build_stmts) -> Any | None:
         """
         example ast:
         Call(func=Name(id='f2', ctx=Load()), args=[Name(id='my_struct_ab', ctx=Load())], keywords=[])
         """
-        is_func_base_wrapper = False
         is_static = get_decorator(ctx, node) in ("static", "static_assert")
 
         with ctx.static_scope_guard() if is_static else nullcontext():
@@ -369,11 +184,7 @@ class CallTransformer:
             # not related to dataclasses). Necessary for calling further child functions
             build_stmts(ctx, node.args)
             build_stmts(ctx, node.keywords)
-        func = node.func.ptr
-        func_type = type(func)
-
-        is_func_base_wrapper = func_type in {QuadrantsCallable, BoundQuadrantsCallable}
-
+        func = node.func.ptr = resolve_callable(node.func.ptr)
         # A ``@qd.func(requires_top_level=True)`` may only be called at the top level of a kernel (or
         # directly inside a ``graph_do_while`` body). Nesting it in a runtime for / if / while demotes
         # its phase loops out of top-level position, collapsing the per-phase grid-wide barriers and
@@ -389,45 +200,8 @@ class CallTransformer:
                 f"cannot be nested inside a runtime for / if / while: that demotes its phase loops out of "
                 f"top-level position, collapsing the per-phase grid-wide barriers and corrupting the result."
             )
-        pruning = ctx.global_context.pruning
-        called_needed = None
-        callee_arg_names: list[str] | None = None
-        if pruning.enforcing and is_func_base_wrapper:
-            called_func_id_ = func.wrapper.func_id  # type: ignore
-            called_needed = pruning.used_vars_by_func_id[called_func_id_]
-        if is_func_base_wrapper:
-            # Positional indexing has to line up with the callee's non-self parameter list, hence dropping the implicit
-            # ``self`` here (as ``Pruning.record_after_call`` does with ``self_offset``): otherwise
-            # ``self.write(self.state)`` builds flat names rooted at ``self`` that match nothing in the callee's pruning
-            # set, silently dropping the fields it needs.
-            try:
-                callee_arg_names = [m.name for m in func.wrapper.arg_metas]  # type: ignore[attr-defined]
-                if type(func) is BoundQuadrantsCallable:
-                    callee_arg_names = callee_arg_names[1:]
-            except AttributeError:
-                callee_arg_names = None
-
-        added_args, node_args = CallTransformer._expand_Call_dataclass_args(
-            ctx, node.args, called_needed=called_needed, callee_arg_names=callee_arg_names
-        )
-        added_keywords, node_keywords = CallTransformer._expand_Call_dataclass_kwargs(ctx, node.keywords, called_needed)
-
-        # Create variables for the now-expanded dataclass members.
-        # We don't want to include these now-expanded dataclass members in
-        # the list of used variables (ie to not prune), because passing input arguments to
-        # a function does not mean that they are actually used anywhere in that function.
-        # Setting 'expanding_dataclass_call_parameters' to True during this expansion is
-        # used to achieve the desired behaviour. If parameters are actually used in that function,
-        # they will be added to the list of used variables later on, when traversing
-        # the source code of the function body.
-        ctx.expanding_dataclass_call_parameters = True
-        for arg in added_args:
-            assert not hasattr(arg, "ptr")
-            build_stmt(ctx, arg)
-        for arg in added_keywords:
-            assert not hasattr(arg, "ptr")
-            build_stmt(ctx, arg)
-        ctx.expanding_dataclass_call_parameters = False
+        pruning = ctx.kernel_compile_context.pruning
+        node_args, node_keywords = node.args, node.keywords
 
         # Check for pure violations.
         # We have to do this after building the statements.
@@ -481,34 +255,39 @@ class CallTransformer:
 
         CallTransformer._warn_if_is_external_func(ctx, node)
         # Snapshot the caller's `loop_depth` on the global context so a `@qd.func` invocation routed through
-        # `func(*py_args, **py_kwargs)` below can seed its fresh `ASTTransformerFuncContext` from this value in
+        # `func(*py_args, **py_kwargs)` below can seed its fresh `FuncCompilePassContext` from this value in
         # `_func_base.py` and inherit any outer for-loops we are already inside. Save/restore unconditionally because
         # we cannot tell from this site whether `func` is a Quadrants func, a builtin, or a Python callable; the
         # snapshot is harmless for non-func callables and nests correctly through chained calls.
-        prev_caller_loop_depth = ctx.global_context.caller_loop_depth
-        ctx.global_context.caller_loop_depth = ctx.loop_depth
+        current_pass = ctx.kernel_compile_context.current_pass
+        prev_caller_loop_depth = current_pass.caller_loop_depth
+        current_pass.caller_loop_depth = ctx.loop_depth
         # Likewise snapshot whether we are (transitively) inside non-static control flow, so a
         # `requires_top_level=True` func reached through an unmarked intermediate `@qd.func` still sees the caller's
         # control-flow context. OR with the existing value so it accumulates down a multi-level call chain.
-        prev_caller_in_non_static_control_flow = ctx.global_context.caller_in_non_static_control_flow
-        ctx.global_context.caller_in_non_static_control_flow = ctx.is_in_non_static_control_flow_including_caller()
+        prev_caller_in_non_static_control_flow = current_pass.caller_in_non_static_control_flow
+        current_pass.caller_in_non_static_control_flow = ctx.is_in_non_static_control_flow_including_caller()
         try:
             try:
-                pruning = ctx.global_context.pruning
-                if pruning.enforcing:
-                    py_args = pruning.filter_call_args(ctx.func.func_id, func, node, node_args, node_keywords, py_args)
-
-                node.ptr = func(*py_args, **py_kwargs)
+                pruning = ctx.kernel_compile_context.pruning
+                with (
+                    dataclass_call_arguments(func, py_args, py_kwargs, isinstance(func, BoundQuadrantsCallable))
+                    if isinstance(func, (QuadrantsCallable, BoundQuadrantsCallable)) and func._is_quadrants_function
+                    else nullcontext()
+                ):
+                    node.ptr = func(*py_args, **py_kwargs)
 
                 if not pruning.enforcing:
                     pruning.record_after_call(ctx, func, node, node_args, node_keywords)
+            except QuadrantsRuntimeTypeError:
+                raise
             except TypeError as e:
                 module = inspect.getmodule(func)
                 error_msg = re.sub(r"\bExpr\b", "Quadrants Expression", str(e))
                 func_name = getattr(func, "__name__", func.__class__.__name__)
                 msg = f"TypeError when calling `{func_name}`: {error_msg}."
                 if CallTransformer._is_external_func(ctx, node.func.ptr):
-                    args_has_expr = any([isinstance(arg, Expr) for arg in args])
+                    args_has_expr = any([isinstance(arg, Expr) for arg in py_args])
                     if args_has_expr and (module == math or module == np):
                         exec_str = f"from quadrants import {func.__name__}"
                         try:
@@ -519,8 +298,8 @@ class CallTransformer:
                             msg += f"\nDid you mean to use `qd.{func.__name__}` instead of `{module.__name__}.{func.__name__}`?"
                 raise QuadrantsTypeError(msg)
         finally:
-            ctx.global_context.caller_loop_depth = prev_caller_loop_depth
-            ctx.global_context.caller_in_non_static_control_flow = prev_caller_in_non_static_control_flow
+            current_pass.caller_loop_depth = prev_caller_loop_depth
+            current_pass.caller_in_non_static_control_flow = prev_caller_in_non_static_control_flow
 
         if getattr(func, "_is_quadrants_function", False):
             ctx.func.has_print |= func.wrapper.has_print

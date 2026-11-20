@@ -298,7 +298,7 @@ def test_struct_arg_with_matrix_real_func():
 
 
 @test_utils.test()
-def test_func_scalar_arg_cast():
+def test_func_scalar_arg_ignores_annotation():
     @qd.func
     def bar(a: qd.i32) -> qd.f32:
         return a
@@ -307,7 +307,7 @@ def test_func_scalar_arg_cast():
     def foo(a: qd.f32) -> qd.f32:
         return bar(a)
 
-    assert foo(1.5) == 1.0
+    assert foo(1.5) == 1.5
 
 
 @test_utils.test(exclude=[qd.amdgpu])

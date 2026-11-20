@@ -3,24 +3,28 @@ import enum
 import functools
 import numbers
 import time
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence, TypeAlias, cast
 
 import numpy as np
 
 from quadrants import _logging, _tensor_wrapper
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorWrapper
+from quadrants.lang._container_aliases import get_container_alias_key
+from quadrants.types import primitive_types
 from quadrants.types.annotations import Template
 
-from .._final.final_constant_values import final_scalar_key
-from .._final.final_dataclass_fields import final_field_names, subtree_has_final_fields
+from .._final.final_constant_values import validate_value_for_final_field_and_get_key
+from .._final.final_dataclass_fields import final_field_names
 from .._name_utils import create_flat_name
 from .._ndarray import ScalarNdarray
 from .._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
+from .._runtime_typing.deferred_errors import DeferredMemberType
+from .._runtime_typing.runtime_dataclass import RuntimeDataclassSchema
 from ..field import ScalarField
 from ..kernel_arguments import ArgMetadata
 from ..matrix import MatrixField, MatrixNdarray, VectorNdarray
-from ..util import is_data_oriented, is_dataclass_instance, wants_runtime_primitives
+from ..util import is_data_oriented, is_dataclass_instance, uses_template_primitives
 from .hash_utils import hash_iterable_strings
 
 _FIELD_TYPES = (ScalarField, MatrixField)
@@ -42,7 +46,9 @@ g_num_ignored_calls = 0
 
 FIELD_METADATA_CACHE_VALUE = "add_value_to_cache_key"
 
-_DC_REPR_NONE = object()
+LaunchArgSchemas: TypeAlias = Sequence[tuple[int, tuple[str | int, ...], type[RuntimeDataclassSchema]]]
+LaunchArgSchemaByIndexAndPath: TypeAlias = Mapping[tuple[str, ...], type[RuntimeDataclassSchema]]
+
 
 # arg_meta used when walking the children of a ``@qd.data_oriented(template_primitives=False)`` object. Its annotation
 # is non-Template (so primitive members contribute their *type* only, not their value, since they are lifted to runtime
@@ -72,6 +78,7 @@ class FastcacheSkip(enum.Enum):
     """Why fastcache does not apply to this call."""
 
     FIELD_VIA_TENSOR = "field_via_tensor"
+    RUNTIME_TUPLE = "runtime_tuple"
     WARN = "warn"
 
 
@@ -106,7 +113,7 @@ def _mark_should_warn() -> None:
     _should_warn = True
 
 
-def _fail_unknown_type(obj: object, path: tuple[str, ...]) -> _FailFastcache:
+def _fail_unknown_type(obj: object, index_and_path: tuple[str, ...]) -> _FailFastcache:
     """Disable fastcache for the call when an unrecognised type appears at a kernel-read path.
 
     Neither alternative is safe: a ``__qualname__`` fallback captures type identity only, and so hides a
@@ -118,7 +125,7 @@ def _fail_unknown_type(obj: object, path: tuple[str, ...]) -> _FailFastcache:
     if qualname not in _warned_unknown_types:
         _warned_unknown_types.add(qualname)
         _logging.warn(
-            f"[FASTCACHE][UNKNOWN_TYPE] Unrecognised type {qualname} reached at kernel-read path {path}. "
+            f"[FASTCACHE][UNKNOWN_TYPE] Unrecognised type {qualname} reached at kernel-read path {index_and_path}. "
             f"Fastcache is disabled for this call. Add explicit handling for this type to "
             f"``quadrants/lang/_fast_caching/args_hasher.py::stringify_obj_type``, or refactor the kernel "
             f"so it does not read this member."
@@ -150,7 +157,7 @@ def _is_path_used(pruning_paths: set[str] | None, child_flat: str | None) -> boo
 
 
 def _get_used_properties(
-    path: tuple[str, ...], obj: object, parent_flat: str | None, pruning_paths: set[str] | None
+    index_and_path: tuple[str, ...], obj: object, parent_flat: str | None, pruning_paths: set[str] | None
 ) -> list[str] | _FailFastcache:
     """Names of the properties of ``obj`` the kernel reads, sorted so the key is stable."""
     seen: set[str] = set()
@@ -171,7 +178,8 @@ def _get_used_properties(
                     _warned_cached_properties.add(qualname)
                     _logging.warn(
                         f"[FASTCACHE][CACHED_PROPERTY] Kernel reads functools.cached_property {qualname} at path "
-                        f"{path + (name,)}, which fastcache does not support. Fastcache is disabled for this call. "
+                        f"{index_and_path + (name,)}, which fastcache does not support. "
+                        f"Fastcache is disabled for this call. "
                         f"Use @property instead."
                     )
                 _mark_should_warn()
@@ -182,24 +190,25 @@ def _get_used_properties(
 
 def _stringify_used_properties(
     raise_on_templated_floats: bool,
-    path: tuple[str, ...],
+    index_and_path: tuple[str, ...],
     obj: object,
     pruning_paths: set[str] | None,
     parent_flat: str | None,
+    launch_arg_schema_by_index_and_path: LaunchArgSchemaByIndexAndPath | None = None,
 ) -> list[str] | _FailFastcache:
     """Represents names and values of used properties as a string."""
-    names = _get_used_properties(path, obj, parent_flat, pruning_paths)
+    names = _get_used_properties(index_and_path, obj, parent_flat, pruning_paths)
     if isinstance(names, _FailFastcache):
         return _FAIL_FASTCACHE
     repr_l = []
     for name in names:
-        child_path = path + (name,)
+        child_index_and_path = index_and_path + (name,)
         try:
             value = getattr(obj, name)
         except Exception as e:  # pylint: disable=broad-exception-caught
             _logging.warn(
-                f"[FASTCACHE][PROPERTY_RAISED] Property at kernel-read path {child_path} raised {e!r} while computing "
-                f"the fastcache key. Fastcache is disabled for this call."
+                f"[FASTCACHE][PROPERTY_RAISED] Property at kernel-read path {child_index_and_path} raised {e!r} "
+                f"while computing the fastcache key. Fastcache is disabled for this call."
             )
             _mark_should_warn()
             return _FAIL_FASTCACHE
@@ -207,11 +216,12 @@ def _stringify_used_properties(
         # key.
         _repr = stringify_obj_type(
             raise_on_templated_floats,
-            child_path,
+            child_index_and_path,
             value,
             ArgMetadata(Template, ""),
-            pruning_paths=pruning_paths,
-            parent_flat=_child_flat(parent_flat, name),
+            pruning_paths,
+            _child_flat(parent_flat, name),
+            launch_arg_schema_by_index_and_path,
         )
         if _repr is _FAIL_FASTCACHE:
             return _FAIL_FASTCACHE
@@ -221,47 +231,33 @@ def _stringify_used_properties(
 
 def dataclass_to_repr(
     raise_on_templated_floats: bool,
-    path: tuple[str, ...],
+    index_and_path: tuple[str, ...],
     arg: Any,
-    annotated_type: type | None = None,
+    schema: type[RuntimeDataclassSchema],
     pruning_paths: set[str] | None = None,
     parent_flat: str | None = None,
+    launch_arg_schema_by_index_and_path: LaunchArgSchemaByIndexAndPath | None = None,
 ) -> str | _FailFastcache:
-    """Hash a dataclass instance, descending only into fields listed in ``pruning_paths`` (when given).
+    """Hash a dataclass using its inferred schema and the fields selected by ``pruning_paths`` (when given).
 
     Returns ``_FAIL_FASTCACHE`` if any visited subtree holds an unsupported tensor type.
     """
     if is_data_oriented(arg):
         raise TypeError("A class cannot be both a Python dataclass and data-oriented.")
-    # PERF: a frozen dataclass's repr never changes, so cache it on the instance (``dataclasses.fields()`` is slow, see
-    # the _template_mapper_hotpath.py module docstring). ``_DC_REPR_NONE`` caches a failure verdict.
-    #
-    # Hash the *declared* type's fields (``annotated_type``, when given) rather than the runtime subclass's, so a
-    # subclass carrying extra app-only fields still fast-caches on the base's field set. Only the runtime type's own
-    # unpruned view is cacheable: the repr/verdict depend on the visited (pruning) set and the active field set, so a
-    # narrower pruning set - or a subclass passed under a different base - must not inherit another view's verdict.
-    # Final-bearing subtrees are excluded too (their repr recomputes each launch to re-run ``final_scalar_key``).
-    field_source = annotated_type if annotated_type is not None else type(arg)
-    is_frozen = type(arg).__hash__ is not None
-    final_names = final_field_names(field_source)
-    cacheable = (
-        is_frozen and field_source is type(arg) and pruning_paths is None and not subtree_has_final_fields(field_source)
-    )
-    if cacheable:
-        cached = getattr(arg, "_qd_dc_repr", None)
-        if cached is _DC_REPR_NONE:
-            return _FAIL_FASTCACHE
-        if cached is not None:
-            return cached
+    final_names = final_field_names(schema)
     repr_l = []
-    for field in dataclasses.fields(field_source):
+    for field in dataclasses.fields(schema):
         child_value = getattr(arg, field.name)
+        if isinstance(field.type, DeferredMemberType):
+            if _is_path_used(pruning_paths, _child_flat(parent_flat, field.name)):
+                return _FAIL_FASTCACHE
+            continue
         if field.name in final_names:
-            # ``final_scalar_key`` rather than ``stringify_obj_type``: the latter has no bare-``str`` case, so a
-            # ``Final[str]`` would disable fastcache for the whole arg. Included even when ``pruning_paths`` does not
-            # mention the field - the value is baked into the generated code, so a key that omits it could serve a
-            # kernel baked with a different constant.
-            repr_l.append(f"{field.name}: (final) = {final_scalar_key(child_value)}")
+            # ``validate_value_for_final_field_and_get_key`` rather than ``stringify_obj_type``: the latter has no
+            # bare-``str`` case, so a ``Final[str]`` would disable fastcache for the whole arg. Included even when
+            # ``pruning_paths`` does not mention the field - the value is baked into the generated code, so a key that
+            # omits it could serve a kernel baked with a different constant.
+            repr_l.append(f"{field.name}: (final) = {validate_value_for_final_field_and_get_key(child_value)}")
             continue
         child_flat = _child_flat(parent_flat, field.name)
         if not _is_path_used(pruning_paths, child_flat):
@@ -272,32 +268,24 @@ def dataclass_to_repr(
 
         _repr = stringify_obj_type(
             raise_on_templated_floats,
-            path + (field.name,),
+            index_and_path + (field.name,),
             child_value,
-            arg_meta=None,
-            pruning_paths=pruning_paths,
-            parent_flat=child_flat,
+            ArgMetadata(field.type, field.name),
+            pruning_paths,
+            child_flat,
+            launch_arg_schema_by_index_and_path,
         )
         if _repr is _FAIL_FASTCACHE:
             if isinstance(child_value, _FIELD_TYPES) and field.type is not _TensorWrapper:
                 _mark_should_warn()
-            if cacheable:
-                try:
-                    object.__setattr__(arg, "_qd_dc_repr", _DC_REPR_NONE)
-                except AttributeError:
-                    pass
             return _FAIL_FASTCACHE
+        if id(field.type) in primitive_types.type_ids:
+            _repr = f"{field.type}:{_repr}"
         full_repr = f"{field.name}: ({_repr})"
         if field.metadata.get(FIELD_METADATA_CACHE_VALUE, False):
             full_repr += f" = {child_value}"
         repr_l.append(full_repr)
-    result = "[" + ",".join(repr_l) + "]"
-    if cacheable:
-        try:
-            object.__setattr__(arg, "_qd_dc_repr", result)
-        except AttributeError:
-            pass
-    return result
+    return "[" + ",".join(repr_l) + "]"
 
 
 def _is_template(arg_meta: ArgMetadata | None) -> bool:
@@ -309,11 +297,12 @@ def _is_template(arg_meta: ArgMetadata | None) -> bool:
 
 def stringify_obj_type(
     raise_on_templated_floats: bool,
-    path: tuple[str, ...],
+    index_and_path: tuple[str, ...],
     obj: object,
     arg_meta: ArgMetadata | None,
     pruning_paths: set[str] | None = None,
     parent_flat: str | None = None,
+    launch_arg_schema_by_index_and_path: LaunchArgSchemaByIndexAndPath | None = None,
 ) -> str | _FailFastcache:
     """Convert ``obj`` into a deterministic string that contributes to the fastcache key.
 
@@ -369,16 +358,44 @@ def stringify_obj_type(
         # TODO: think about whether there is a way to include fields
         _mark_warn_if_not_tensor_annotation(arg_meta)
         return _FAIL_FASTCACHE
+    if isinstance(obj, tuple) and not is_data_oriented(obj):
+        parts = []
+        for index, child in enumerate(obj):
+            child_repr = stringify_obj_type(
+                raise_on_templated_floats,
+                (*index_and_path, str(index)),
+                child,
+                arg_meta,
+                None,
+                _child_flat(parent_flat, str(index)),
+                launch_arg_schema_by_index_and_path,
+            )
+            if child_repr is _FAIL_FASTCACHE:
+                return _FAIL_FASTCACHE
+            parts.append(child_repr)
+        return f"tuple({parts!r})"
     if is_dataclass_instance(obj):
-        # Pass the declared dataclass type so an annotated subclass hashes via the base's fields. Nested / data_oriented
-        # children have no dataclass annotation here (arg_meta is None or Template), so they fall back to runtime type.
-        annotated_type = None
-        if arg_meta is not None:
+        # Hash only with schemas supplied by discovery or argument metadata.
+        schema = (
+            launch_arg_schema_by_index_and_path.get(index_and_path)
+            if launch_arg_schema_by_index_and_path is not None
+            else None
+        )
+        if schema is None and arg_meta is not None:
             ann = arg_meta.annotation
-            if isinstance(ann, type) and dataclasses.is_dataclass(ann) and isinstance(obj, ann):
-                annotated_type = ann
+            if isinstance(ann, type) and dataclasses.is_dataclass(ann):
+                # Argument metadata already carries an inferred schema at this boundary.
+                schema = cast(type[RuntimeDataclassSchema], ann)
+        if schema is None:
+            return _FAIL_FASTCACHE
         return dataclass_to_repr(
-            raise_on_templated_floats, path, obj, annotated_type, pruning_paths=pruning_paths, parent_flat=parent_flat
+            raise_on_templated_floats,
+            index_and_path,
+            obj,
+            schema,
+            pruning_paths,
+            parent_flat,
+            launch_arg_schema_by_index_and_path,
         )
     if is_data_oriented(obj):
         # Narrowed by pruning info: a member the kernel cannot read cannot affect codegen, so it stays out of the key.
@@ -391,7 +408,7 @@ def stringify_obj_type(
         # A normal @qd.data_oriented bakes primitive members into the kernel (value in the cache key); one declared
         # with template_primitives=False lifts them to runtime args (type only - value must NOT enter the key, or it
         # would recompile on every value change, defeating the feature). Decide per object, since the flag is per class.
-        child_meta = _NON_TEMPLATE_CHILD_META if wants_runtime_primitives(obj) else ArgMetadata(Template, "")
+        child_meta = ArgMetadata(Template, "") if uses_template_primitives(obj) else _NON_TEMPLATE_CHILD_META
         for k, v in _dict.items():
             # ``QuadrantsCallable.__get__`` stashes bound callables on ``instance.__dict__``; they are not data.
             v_type = type(v)
@@ -402,16 +419,24 @@ def stringify_obj_type(
                 continue
             _child_repr = stringify_obj_type(
                 raise_on_templated_floats,
-                (*path, k),
+                (*index_and_path, k),
                 v,
                 child_meta,
-                pruning_paths=pruning_paths,
-                parent_flat=child_flat,
+                pruning_paths,
+                child_flat,
+                launch_arg_schema_by_index_and_path,
             )
             if _child_repr is _FAIL_FASTCACHE:
                 return _FAIL_FASTCACHE
             child_repr_l.append(f"{k}: {_child_repr}")
-        property_repr_l = _stringify_used_properties(raise_on_templated_floats, path, obj, pruning_paths, parent_flat)
+        property_repr_l = _stringify_used_properties(
+            raise_on_templated_floats,
+            index_and_path,
+            obj,
+            pruning_paths,
+            parent_flat,
+            launch_arg_schema_by_index_and_path,
+        )
         if isinstance(property_repr_l, _FailFastcache):
             return _FAIL_FASTCACHE
         child_repr_l.extend(property_repr_l)
@@ -434,7 +459,7 @@ def stringify_obj_type(
     if obj is None:
         # ``None`` is a singleton, so its type fully determines its value and a constant tag is a complete cache key.
         return "None"
-    return _fail_unknown_type(obj, path)
+    return _fail_unknown_type(obj, index_and_path)
 
 
 def hash_args(
@@ -442,6 +467,7 @@ def hash_args(
     args: Sequence[Any],
     arg_metas: Sequence[ArgMetadata | None],
     pruning_paths: set[str] | None = None,
+    launch_arg_schemas: LaunchArgSchemas = (),
 ) -> str | FastcacheSkip:
     """Return the args hash string, or a ``FastcacheSkip`` explaining why hashing failed.
 
@@ -453,7 +479,10 @@ def hash_args(
     _should_warn = False
     g_num_calls += 1
     g_num_args += len(args)
-    hash_l = []
+    launch_arg_schema_by_index_and_path = {
+        (str(index), *map(str, path)): schema for index, path, schema in launch_arg_schemas
+    }
+    hash_l = [repr(get_container_alias_key(args))]
     if len(args) != len(arg_metas):
         raise RuntimeError(
             f"Number of args passed in {len(args)} doesnt match number of declared args {len(arg_metas)}"
@@ -461,6 +490,8 @@ def hash_args(
     for i_arg, arg in enumerate(args):
         start = time.time()
         arg_meta = arg_metas[i_arg]
+        if arg_meta is not None and hasattr(arg_meta.annotation, "_qd_tuple_plan"):
+            return FastcacheSkip.RUNTIME_TUPLE
         # Root flat name carries no ``__qd_`` prefix, matching ``pruning.used_vars_by_func_id``.
         top_flat = arg_meta.name if arg_meta is not None else None
         _hash = stringify_obj_type(
@@ -468,11 +499,12 @@ def hash_args(
             (str(i_arg),),
             arg,
             arg_meta,
-            pruning_paths=pruning_paths,
-            parent_flat=top_flat,
+            pruning_paths,
+            top_flat,
+            launch_arg_schema_by_index_and_path,
         )
         g_repr_time += time.time() - start
-        if _hash is _FAIL_FASTCACHE:
+        if isinstance(_hash, _FailFastcache):
             g_num_ignored_calls += 1
             return FastcacheSkip.WARN if _should_warn else FastcacheSkip.FIELD_VIA_TENSOR
         hash_l.append(_hash)

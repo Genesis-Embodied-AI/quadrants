@@ -5,7 +5,7 @@ from quadrants._lib.core.quadrants_python import (
     Function as FunctionCxx,
 )
 from quadrants._lib.core.quadrants_python import FunctionKey
-from quadrants.lang import _kernel_impl_dataclass, impl, ops
+from quadrants.lang import impl, ops
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.ast import (
     transform_tree,
@@ -54,10 +54,14 @@ class Func(FuncBase):
 
     def __call__(self: "Func", *py_args, **kwargs) -> Any:
         runtime = impl.get_runtime()
-        global_context = runtime._current_global_context
-        current_kernel = global_context.current_kernel if global_context is not None else None
+        kernel_compile_context = runtime._current_kernel_compile_context
+        current_kernel = kernel_compile_context.current_kernel if kernel_compile_context is not None else None
         py_args = self.fuse_args(
-            is_func=True, is_pyfunc=self.pyfunc, py_args=py_args, kwargs=kwargs, global_context=global_context  # type: ignore[arg-type]
+            is_func=True,
+            is_pyfunc=self.pyfunc,
+            py_args=py_args,
+            kwargs=kwargs,
+            kernel_compile_context=kernel_compile_context,  # type: ignore[arg-type]
         )
 
         if not impl.inside_kernel():
@@ -66,7 +70,7 @@ class Func(FuncBase):
             return self.func(*py_args)
 
         assert current_kernel is not None
-        assert global_context is not None
+        assert kernel_compile_context is not None
         if self.is_real_function:
             if current_kernel.autodiff_mode != _NONE:
                 raise QuadrantsSyntaxError("Real function in gradient kernels unsupported.")
@@ -82,10 +86,6 @@ class Func(FuncBase):
             is_real_function=self.is_real_function,
         )
 
-        struct_locals = _kernel_impl_dataclass.extract_struct_locals_from_context(ctx)
-
-        ctx.struct_locals = struct_locals
-        tree = _kernel_impl_dataclass.unpack_ast_struct_expressions(tree, struct_locals=struct_locals)
         ret = transform_tree(tree, ctx)
         if not self.is_real_function:
             if self.return_type and ctx.returned != ReturnStatus.ReturnedValue:

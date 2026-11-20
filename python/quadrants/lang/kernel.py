@@ -4,7 +4,6 @@ import json
 import os
 import pathlib
 import time
-import warnings
 from collections import defaultdict
 from dataclasses import _FIELDS  # type: ignore[reportAttributeAccessIssue]
 
@@ -35,13 +34,14 @@ from quadrants._lib.core.quadrants_python import (
 )
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorClass
-from quadrants.lang import _kernel_impl_dataclass, impl, runtime_ops
+from quadrants.lang import impl, runtime_ops
 
 # `qd.checkpoint` pause / resume model helpers. See `kernel_checkpoint.py` for the full extracted surface; `Kernel`
 # delegates the resume-cookie validation, label translation, per-launch yield_on= arg-id table build, and GraphStatus
 # construction to those free functions so this hot file doesn't accrete checkpoint-feature-specific blocks.
 from quadrants.lang import kernel_checkpoint as _checkpoint_helpers
 from quadrants.lang._fast_caching import src_hasher
+from quadrants.lang._fast_caching.args_hasher import LaunchArgSchemas
 from quadrants.lang._template_mapper_hotpath import chain_has_mutable_container
 from quadrants.lang._wrap_inspect import FunctionSourceInfo, get_source_info_and_src
 from quadrants.lang.ast import (
@@ -49,7 +49,7 @@ from quadrants.lang.ast import (
     transform_tree,
 )
 from quadrants.lang.ast.ast_transformer_utils import (
-    ASTTransformerFuncContext,
+    FuncCompilePassContext,
     ReturnStatus,
 )
 from quadrants.lang.exception import (
@@ -59,7 +59,7 @@ from quadrants.lang.exception import (
 )
 from quadrants.lang.impl import Program
 from quadrants.lang.shell import _shell_pop_print
-from quadrants.lang.util import cook_dtype, is_data_oriented
+from quadrants.lang.util import cook_dtype
 from quadrants.types import (
     ndarray_type,
     primitive_types,
@@ -81,6 +81,7 @@ from ._kernel_types import (
 )
 from ._pruning import Pruning
 from ._quadrants_callable import QuadrantsCallable
+from .ast.ast_transformer_utils import KernelCompileContext, KernelCompilePassContext
 
 # Define proxies for fast lookup
 _NONE, _VALIDATION = AutodiffMode.NONE, AutodiffMode.VALIDATION
@@ -191,7 +192,7 @@ class LaunchContextBufferCache:
 class ASTGenerator:
     def __init__(
         self,
-        ctx: ASTTransformerFuncContext,
+        ctx: FuncCompilePassContext,
         kernel_name: str,
         current_kernel: "Kernel",
         only_parse_function_def: bool,
@@ -223,7 +224,6 @@ class ASTGenerator:
             )
         self.current_kernel.kernel_cpp = kernel_cxx
         ctx = self.ctx
-        pruning = ctx.global_context.pruning
         self.runtime.inside_kernel = True
         assert self.runtime._compiling_callable is None
         self.runtime._compiling_callable = kernel_cxx
@@ -231,14 +231,7 @@ class ASTGenerator:
             ctx.ast_builder = kernel_cxx.ast_builder()
             if self.dump_ast:
                 self._dump_ast()
-            if not pruning.enforcing:
-                struct_locals = _kernel_impl_dataclass.extract_struct_locals_from_context(ctx)
-            else:
-                struct_locals = pruning.used_vars_by_func_id[ctx.func.func_id]
-            # struct locals are the expanded py dataclass fields that we will write to local variables, and will then
-            # be available to use in build_Call, later.
-            ctx.struct_locals = struct_locals
-            tree = _kernel_impl_dataclass.unpack_ast_struct_expressions(self.tree, struct_locals=struct_locals)
+            tree = self.tree
             ctx.only_parse_function_def = self.only_parse_function_def
             # Rebuild the graph_do_while level table from scratch each compilation pass (build_While appends to it as it
             # walks the AST). Skip when only_parse_function_def: the body is not walked, so build_While never runs to
@@ -253,7 +246,7 @@ class ASTGenerator:
                     raise QuadrantsSyntaxError("Kernel has a return type but does not have a return statement")
         finally:
             self.current_kernel.runtime.inside_kernel = False
-            self.runtime._current_global_context = None
+            self.runtime._current_kernel_compile_context = None
             self.current_kernel.runtime._compiling_callable = None
 
     def _dump_ast(self) -> None:
@@ -329,6 +322,10 @@ class Kernel(FuncBase):
         # converted at least as far as AST and front-end IR, but not necessarily any further.
         self.materialized_kernels: dict[CompiledKernelKeyType, KernelCxx] = {}
         self.has_print = False
+        self._runtime_has_deferred = False
+        self._launch_arg_schemas: LaunchArgSchemas = ()
+        self._runtime_metadata_args_hash: tuple[int, ...] | None = None
+        self._runtime_metadata_defaults: tuple[int, int] | None = None
         self.use_graph: bool = False
         # Opt-in flag set by `@qd.kernel(graph=True, checkpoints=True)`. When True, the AST transformer enables
         # `qd.checkpoint(...)` recognition AND auto-wraps every top-level for-loop that isn't already inside a `with
@@ -374,7 +371,7 @@ class Kernel(FuncBase):
         self._last_launch_key = None  # for dev/debug
 
         # next two parameters are ONLY used at kernel launch time,
-        # NOT for compilation. (for compilation, global_context.pruning is used).
+        # NOT for compilation. (for compilation, kernel_compile_context.pruning is used).
         # These parameters here are used to filter args passed into the already-compiled kernel.
         # used_py_dataclass_parameters_by_key_enforcing will also be serialized with fast cache.
         self.used_py_dataclass_parameters_by_key_enforcing: dict[CompiledKernelKeyType, set[str]] = {}
@@ -386,8 +383,8 @@ class Kernel(FuncBase):
         self.launch_context_buffer_cache = LaunchContextBufferCache()
         self._struct_ndarray_launch_info_by_key: dict[CompiledKernelKeyType, list] = {}
         # Launch info for primitives lifted from ``@qd.data_oriented(template_primitives=False)`` template args (see
-        # ``predeclare_struct_primitives``). Maps key -> list of ``(arg_id, template_arg_idx, attr_chain, kind)``.
-        self._struct_primitive_launch_info_by_key: dict[CompiledKernelKeyType, list] = {}
+        # ``bind_data_oriented_runtime_scalars``). Maps key -> list of ``(arg_id, template_arg_idx, attr_chain, kind)``.
+        self._runtime_scalar_launch_infos_by_compiled_kernel_key: dict[CompiledKernelKeyType, list] = {}
         self._mutable_nd_cached_key: CompiledKernelKeyType | None = None
         self._mutable_nd_cached_val: list = []
         self._tensor_unwrap_indices: tuple[int, ...] | None = None
@@ -419,6 +416,8 @@ class Kernel(FuncBase):
         self._l1_key = None  # type: ignore[attr-defined]
         self._pruning_paths_from_l1 = None  # type: ignore[attr-defined]
         self.fast_checksum = None
+        if self._runtime_has_deferred:
+            return None
         if self.runtime.src_ll_cache and self.quadrants_callable and self.quadrants_callable.is_pure:
             kernel_source_info, _src = get_source_info_and_src(self.func)
             self._kernel_source_info_cached = kernel_source_info  # reused by materialize / launch_kernel
@@ -434,7 +433,12 @@ class Kernel(FuncBase):
 
             # Phase 2: narrow args hash + L2 lookup.
             narrow_args_hash = src_hasher.compute_narrow_args_hash(
-                self.raise_on_templated_floats, kernel_source_info, args, self.arg_metas, pruning_paths
+                self.raise_on_templated_floats,
+                kernel_source_info,
+                args,
+                self.arg_metas,
+                pruning_paths,
+                launch_arg_schemas=self._launch_arg_schemas,
             )
             if narrow_args_hash is None:
                 # Recognised-but-unsupported tensor-like (Field / MatrixField): leaving ``fast_checksum`` None keeps any
@@ -513,28 +517,6 @@ class Kernel(FuncBase):
         if key in self.materialized_kernels:
             return
 
-        # Deprecation warning: passing a ``@dataclasses.dataclass`` instance through a ``qd.Template``-annotated kernel
-        # parameter was never an intentional Quadrants pattern. It works inadvertently because the template walker
-        # happens to handle dataclass-shaped objects, but the supported annotation for a ``@dataclasses.dataclass`` is
-        # the dataclass type itself (flat-by-fields path). We fire the warning here, after the ``materialized_kernels``
-        # cache-hit early return above, so it only runs on the first compile for each unique spec-key — zero cost on the
-        # steady-state launch hot path. Doubly-decorated objects (``@qd.data_oriented`` over ``@dataclasses.dataclass``)
-        # are excluded because that combination is a legitimate pattern routed through the data-oriented path.
-        for arg_meta, val in zip(self.arg_metas, py_args):
-            ann = arg_meta.annotation
-            if ann is not template and type(ann) is not template:
-                continue
-            if dataclasses.is_dataclass(val) and not isinstance(val, type) and not is_data_oriented(val):
-                warnings.warn(
-                    f"Kernel {self.func.__qualname__!r} parameter {arg_meta.name!r}: passing a "
-                    "@dataclasses.dataclass instance into a qd.Template-annotated kernel parameter was "
-                    "never intended to be supported, and only works inadvertently. Use the dataclass type "
-                    f"itself as the annotation instead (e.g. `def {self.func.__name__}({arg_meta.name}: "
-                    f"{type(val).__name__}, ...)`). In a future release this will become an error.",
-                    DeprecationWarning,
-                    stacklevel=4,
-                )
-
         if _kernel_coverage_enabled():
             from . import _kernel_coverage  # pylint: disable=import-outside-toplevel
 
@@ -552,21 +534,20 @@ class Kernel(FuncBase):
             pruning = Pruning(kernel_used_parameters=used_py_dataclass_parameters)
             range_begin = 0 if used_py_dataclass_parameters is None else 1
             runtime = impl.get_runtime()
+            kernel_ctx = KernelCompileContext(self, pruning, key)
             for _pass in range(range_begin, 2):
+                kernel_ctx.current_pass = KernelCompilePassContext(_pass)
                 if _pass == 0:
                     pruning.pass_0_ran = True
                 if _pass >= 1:
                     pruning.enforce()
                 tree, ctx = self.get_tree_and_ctx(
-                    pass_idx=_pass,
+                    kernel_compile_context=kernel_ctx,
                     py_args=py_args,
                     template_slot_locations=self.template_slot_locations,
                     arg_features=arg_features,
-                    current_kernel=self,
-                    pruning=pruning,
-                    currently_compiling_materialize_key=key,
                 )
-                runtime._current_global_context = ctx.global_context
+                runtime._current_kernel_compile_context = ctx.kernel_compile_context
 
                 if self.autodiff_mode != _NONE:
                     KernelSimplicityASTChecker(self.func).visit(tree)
@@ -585,9 +566,7 @@ class Kernel(FuncBase):
                 if _pass == 1:
                     assert key not in self.materialized_kernels
                     self.materialized_kernels[key] = quadrants_kernel
-                    self._struct_ndarray_launch_info_by_key[key] = getattr(
-                        ctx.global_context, "struct_ndarray_launch_info", []
-                    )
+                    self._struct_ndarray_launch_info_by_key[key] = kernel_ctx.current_pass.struct_ndarray_launch_info
                     # Both folds bring data_oriented member accesses into the kernel's used-flat-names set, which
                     # dataclass-arg expansion is the only other contributor to. Without them the narrow args hash walks
                     # nothing for a data_oriented arg, and a change of member dtype or value cannot invalidate the cache
@@ -599,9 +578,14 @@ class Kernel(FuncBase):
                     # skip the whole primitive-binding path with a single empty-dict check instead of paying a
                     # per-launch ``.get(key)`` (tuple hash) on every cache-missing launch -- which is the hot path for
                     # CPU / unbatched genesis steps that launch many tiny kernels.
-                    struct_primitive_launch_info = getattr(ctx.global_context, "struct_primitive_launch_info", [])
-                    if struct_primitive_launch_info:
-                        self._struct_primitive_launch_info_by_key[key] = struct_primitive_launch_info
+                    runtime_scalar_launch_infos = kernel_ctx.current_pass.runtime_scalar_launch_infos
+                    if runtime_scalar_launch_infos:
+                        # The source cache hashes dotted argument paths; scalar bindings have separate native names.
+                        pruning.fold_struct_nd_paths(
+                            [(slot, index, path) for slot, index, path, _kind in runtime_scalar_launch_infos],
+                            self.arg_metas,
+                        )
+                        self._runtime_scalar_launch_infos_by_compiled_kernel_key[key] = runtime_scalar_launch_infos
                 else:
                     # Propagate used-sets across call edges to a fixpoint (order-independent) before
                     # collapsing flat names to their used prefixes below.
@@ -620,7 +604,7 @@ class Kernel(FuncBase):
                     self.used_py_dataclass_parameters_by_key_enforcing[key] = pruning.used_vars_by_func_id[
                         Pruning.KERNEL_FUNC_ID
                     ]
-                runtime._current_global_context = None
+                runtime._current_kernel_compile_context = None
 
             self._maybe_persist_l1_and_set_l2_key(key, py_args)
 
@@ -640,6 +624,7 @@ class Kernel(FuncBase):
             raise_on_templated_floats=self.raise_on_templated_floats,
             py_args=py_args,
             arg_metas=self.arg_metas,
+            launch_arg_schemas=self._launch_arg_schemas,
         )
         # Assigned even when ``generated`` is False: that is also how a re-keyed L2 entry comes back.
         self.fast_checksum = new_fast_checksum
@@ -754,12 +739,11 @@ class Kernel(FuncBase):
             if struct_nd_info:
                 self._set_struct_ndarray_args(struct_nd_info, args, launch_ctx_buffer, is_launch_ctx_cacheable)
 
-            # Empty for every kernel that doesn't use template_primitives=False (the common case), so this guard
-            # short-circuits without hashing ``key`` -- keeping the per-launch hot path free of added overhead.
-            if self._struct_primitive_launch_info_by_key:
-                struct_prim_info = self._struct_primitive_launch_info_by_key.get(key)
-                if struct_prim_info:
-                    self._set_struct_primitive_args(struct_prim_info, args, launch_ctx_buffer)
+            # Kernels without registered scalar members skip the per-key lookup.
+            if self._runtime_scalar_launch_infos_by_compiled_kernel_key:
+                runtime_scalar_launch_infos = self._runtime_scalar_launch_infos_by_compiled_kernel_key.get(key)
+                if runtime_scalar_launch_infos:
+                    self._set_struct_primitive_args(runtime_scalar_launch_infos, args, launch_ctx_buffer)
                     # Lifted primitives are read fresh from the live object on every launch (that is the whole point),
                     # so the prepared launch context must not be cached under ``args_hash`` (the hash keys on object
                     # id, not primitive value, so a cached context would serve stale values when the user mutates the
@@ -802,7 +786,7 @@ class Kernel(FuncBase):
                 compiled_kernel_data = compile_result.compiled_kernel_data
                 if compile_result.cache_hit:
                     self.fe_ll_cache_observations.cache_hit = True
-                if self.fast_checksum:
+                if self.fast_checksum and not self._runtime_has_deferred:
                     src_hasher.store(
                         compile_result.cache_key,
                         self.fast_checksum,
@@ -885,7 +869,7 @@ class Kernel(FuncBase):
         """Walk a struct's attribute chain to find the live ndarray (or Tensor wrapper)."""
         obj = args[template_arg_idx]
         for attr_name in attr_chain:
-            obj = getattr(obj, attr_name)
+            obj = obj[attr_name] if type(attr_name) is int else getattr(obj, attr_name)
         if type(obj) in _TENSOR_WRAPPER_TYPES:
             obj = obj._unwrap()
         return obj
@@ -903,7 +887,7 @@ class Kernel(FuncBase):
         for arg_id, template_arg_idx, attr_chain in launch_info:
             obj = args[template_arg_idx]
             for attr_name in attr_chain:
-                obj = getattr(obj, attr_name)
+                obj = obj[attr_name] if type(attr_name) is int else getattr(obj, attr_name)
             if type(obj) in _TENSOR_WRAPPER_TYPES:
                 obj = obj._unwrap()
             assert isinstance(obj, Ndarray), f"Expected Ndarray at {attr_chain}, got {type(obj)}"
@@ -920,27 +904,28 @@ class Kernel(FuncBase):
         args: tuple,
         launch_ctx_buffer: dict,
     ) -> None:
-        """Set scalar kernel args lifted from ``@qd.data_oriented(template_primitives=False)`` template-arg primitive
-        members. Walks each recorded attr-chain to read the live value and buckets it by declared dtype kind (``'f'``
-        float, ``'i'`` signed int, ``'u'`` unsigned int), so the value is bound fresh on every launch.
+        """Read current scalar member values and supply them to their declared kernel inputs.
 
-        The dtype kind is frozen at first compile (see ``struct_primitive_predeclarer``). Binding a ``float`` to an
-        arg that was lifted as an integer would silently truncate (``int(1.5) == 1``), so that one lossy direction is
-        rejected here rather than corrupting the value; the lossless directions (``int``/``bool`` -> float, and
-        ``bool`` <-> ``int``) still coerce, matching typed-scalar-arg semantics."""
+        Each attribute chain starts at a data-oriented argument. Values are grouped by dtype kind: ``'f'`` for float,
+        ``'i'`` for signed int, and ``'u'`` for unsigned int.
+
+        The dtype kind is frozen at first compile (see ``data_oriented_runtime_scalar_binder``). Binding a ``float`` to
+        an arg that was lifted as an integer would silently truncate (``int(1.5) == 1``), so that one lossy direction is
+        rejected here rather than corrupting the value; the lossless directions (``int``/``bool`` -> float, and ``bool``
+        <-> ``int``) still coerce, matching typed-scalar-arg semantics."""
         for arg_id, template_arg_idx, attr_chain, kind in launch_info:
             obj = args[template_arg_idx]
             for attr_name in attr_chain:
-                obj = getattr(obj, attr_name)
+                obj = obj[attr_name] if type(attr_name) is int else getattr(obj, attr_name)
             if kind == "f":
                 launch_ctx_buffer[_FLOAT].append((arg_id, float(obj)))
             else:
                 if type(obj) is float:
                     raise TypeError(
-                        f"Primitive member '{'.'.join(attr_chain)}' of a @qd.data_oriented(template_primitives=False) "
-                        f"object was lifted as an integer kernel argument (its type at first compile), but is now a "
+                        f"Scalar member '{'.'.join(attr_chain)}' of a data-oriented argument "
+                        f"was declared as an integer kernel argument, but is now a "
                         f"float ({obj!r}); coercing it would truncate. Keep the member's type stable across launches, "
-                        f"or use the default template_primitives=True to re-specialise the kernel per type."
+                        f"or declare a floating-point dataclass field if fractional values are needed."
                     )
                 if kind == "u":
                     launch_ctx_buffer[_UINT].append((arg_id, int(obj)))
@@ -949,7 +934,7 @@ class Kernel(FuncBase):
 
     def ensure_compiled(self, *py_args: tuple[Any, ...]) -> tuple[Callable, int, AutodiffMode]:
         try:
-            instance_id, arg_features = self.mapper.lookup(self.raise_on_templated_floats, py_args)
+            instance_id, arg_features = self.mapper.lookup(self.raise_on_templated_floats, py_args, runtime_kernel=self)
         except Exception as e:
             raise type(e)(f"exception while trying to ensure compiled {self.func}:\n{e}") from e
         key = (self.func, instance_id, self.autodiff_mode)
@@ -991,7 +976,9 @@ class Kernel(FuncBase):
         config = impl.current_cfg()
 
         self.raise_on_templated_floats = config.raise_on_templated_floats
-        py_args = self.fuse_args(is_func=False, is_pyfunc=False, py_args=py_args, kwargs=kwargs, global_context=None)
+        py_args = self.fuse_args(
+            is_func=False, is_pyfunc=False, py_args=py_args, kwargs=kwargs, kernel_compile_context=None
+        )
         # Tensor-wrapper unwrap. Canonicalize ``qd.Tensor`` slots, plus wrapper positions discovered on
         # the first launch, before the autograd tape and identity-keyed caches observe the arg tuple.
         #
