@@ -162,11 +162,30 @@ jobs:
       - name: Select eligible main baseline
         id: select
         run: python .github/scripts/genesis_benchmarks.py select
+      # Restore the selected complete attempt under the artifact names expected by alarm.yml.
       - uses: actions/upload-artifact@v4
         with:
-          name: benchmark-candidate
+          name: speed-test-0
           overwrite: true
-          path: benchmark-results/
+          path: benchmark-results/speed-test-0/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: speed-test-1
+          overwrite: true
+          path: benchmark-results/speed-test-1/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mem-test-0
+          overwrite: true
+          path: benchmark-results/mem-test-0/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mem-test-1
+          overwrite: true
+          path: benchmark-results/mem-test-1/
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
@@ -195,7 +214,6 @@ jobs:
       pull-requests: write
     uses: Genesis-Embodied-AI/genesis-world/.github/workflows/alarm.yml@main
     with:
-      candidate_artifact: benchmark-candidate
       baseline_artifact: benchmark-baseline
       baseline_revision: ${{ needs.publish-benchmarks.outputs.baseline_revision }}
       comparison_context: ${{ needs.publish-benchmarks.outputs.comparison_context }}
