@@ -7,11 +7,11 @@ import io
 import json
 import math
 import os
-from pathlib import Path
 import subprocess
 import sys
-from urllib.parse import quote
 import zipfile
+from pathlib import Path
+from urllib.parse import quote
 
 import wandb
 
