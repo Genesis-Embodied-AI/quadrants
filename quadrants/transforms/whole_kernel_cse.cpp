@@ -151,8 +151,8 @@ class WholeKernelCSE : public BasicStmtVisitor {
     users_built_ = false;
   }
 
-  // Build before extracting hoisted statements so their operands remain indexed while insertion is pending.
   void replace_uses_and_mark_users_dirty(Stmt *duplicate_stmt, Stmt *replacement_stmt) {
+    // Build before extracting hoisted statements so their operands remain indexed while insertion is pending.
     if (!users_built_) {
       CollectUsers collect(&users_);
       root_->accept(&collect);
