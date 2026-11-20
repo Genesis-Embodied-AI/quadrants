@@ -243,8 +243,7 @@ TEST_P(WholeKernelCSEHoistIndex, MultipleHoistsRewriteScalarAndContainerUsers) {
 
 INSTANTIATE_TEST_SUITE_P(IndexBuiltBeforeOrDuringHoisting, WholeKernelCSEHoistIndex, ::testing::Bool());
 
-// Moving a whole container preserves the indexed operands in its body, even while insertion is queued. The
-// discarded container's descendants remain alive in the block's trash bin until the next round clears the index.
+// Checks that moving a whole loop out of an if preserves the users index for statements inside that loop.
 TEST(WholeKernelCSE, HoistedContainersKeepNestedUsersValid) {
   TestProgram test_prog;
   test_prog.setup();
