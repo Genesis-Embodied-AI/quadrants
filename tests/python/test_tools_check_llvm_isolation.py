@@ -1,3 +1,5 @@
+"""Test the LLVM wheel-audit tool using synthetic libraries and wheels with known passing and failing properties."""
+
 import importlib.util
 import shutil
 import subprocess
