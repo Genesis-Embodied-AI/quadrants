@@ -27,9 +27,8 @@ bool is_const_i32(Stmt *s, int32 value) {
 
 }  // namespace
 
-// merge_global_ptrs (pointers-only WholeKernelCSE): every user of an eliminated statement is rewritten wherever it
-// is - nested loop/branch bodies, operands of container statements, users that only become eliminable after an
-// earlier rewrite - while sibling scopes are never merged into each other.
+// Check that merge_global_ptrs updates users across nested scopes, including container operands and dependent
+// expressions, without merging statements from sibling scopes.
 TEST(WholeKernelCSE, MergeGlobalPtrsRewritesUsersAcrossScopes) {
   TestProgram test_prog;
   test_prog.setup();
