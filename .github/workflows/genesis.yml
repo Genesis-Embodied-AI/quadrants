@@ -210,5 +210,4 @@ jobs:
     with:
       wandb_project: ${{ needs.publish-benchmarks.outputs.wandb_project }}
       wandb_filters: ${{ needs.publish-benchmarks.outputs.wandb_filters }}
-      max_valid_revisions: 1
     secrets: inherit
