@@ -51,26 +51,26 @@ jobs:
         run: |
           RESULT=$(agent -p "$(cat <<'PROMPT'
           The file /tmp/pr_diff.patch contains a unified diff of changes in this PR. Check whether changes to comments
-          or docstrings remove useful information that is still needed to understand or safely use the surviving code.
+          or docstrings remove non-obvious information still needed to understand or safely use the surviving code.
+          Comments should explain what is not readily apparent from nearby code or available in relevant API guides.
           Evaluate information lost from the resulting files, not deleted lines or reductions in comment length alone.
           Read replacement and nearby comments in the checked-out files, including explanations moved elsewhere.
           Check old comments against the code rather than assuming they are correct.
 
           A deletion is UNNECESSARY if:
-          - It removes a still-relevant explanation of non-obvious logic, a trade-off, or a constraint that is not
-            preserved in replacement or other relevant documentation
-          - It removes necessary API documentation, such as parameter semantics, return values, or side effects,
-            while the behavior remains and is not documented elsewhere
+          - It removes a still-relevant, non-obvious rationale, trade-off, or constraint that cannot readily be
+            inferred from nearby code and is not covered by replacement comments, API guides, or other relevant docs
 
           A deletion is FINE if:
           - The code the comment described was also deleted
           - The comment is no longer correct
+          - It restates nearby code, self-explanatory names or signatures, or information available in API guides
           - A shorter rewrite or consolidated explanation preserves the actionable information
           - It removes redundant prose or implementation history without losing a still-relevant rationale or constraint
           - It removes examples or historical performance figures while preserving the general constraint or trade-off
 
           For each finding, identify the specific missing fact and explain why a maintainer or caller still needs it.
-          Explain why replacement or other relevant documentation does not already convey that fact.
+          Explain why nearby code, replacement comments, or relevant documentation does not already convey that fact.
           Do not demand the original wording, repeated explanations, or historical detail for its own sake.
 
           Use the @@ hunk headers and --- file headers to determine file paths and line numbers.
