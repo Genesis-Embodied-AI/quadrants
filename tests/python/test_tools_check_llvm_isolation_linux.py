@@ -105,7 +105,10 @@ def test_wheel_audit_and_cli(build_library: LibraryBuilder, tmp_path: Path) -> N
 
 @test_utils.test(arch=qd.cpu)
 def test_missing_core_fails(tmp_path: Path) -> None:
-    """Reject a wheel without a core extension instead of reporting a successful audit."""
+    """Reject a wheel missing quadrants/_lib/core/quadrants_python*.so, the native library containing C++ code and LLVM.
+
+    Without that library, there is nothing to audit; this must be an error rather than a successful audit.
+    """
     wheel = tmp_path / "empty.whl"
     with ZipFile(wheel, "w"):
         pass
