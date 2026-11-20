@@ -40,7 +40,10 @@ def import_qd_python_core():
     if get_os_name() != "win":
         # pylint: disable=E1101
         old_flags = sys.getdlopenflags()
-        sys.setdlopenflags(2 | 8)  # RTLD_NOW | RTLD_DEEPBIND
+        # RTLD_NOW: resolve external symbols immediately when loading the library.
+        # RTLD_LAZY: defer function symbol resolution until the function is first called.
+        # RTLD_DEEPBIND (Linux): search the library and its dependencies before the global symbol scope.
+        sys.setdlopenflags(os.RTLD_NOW)
     else:
         pyddir = os.path.dirname(os.path.realpath(__file__))
         os.environ["PATH"] += os.pathsep + pyddir
