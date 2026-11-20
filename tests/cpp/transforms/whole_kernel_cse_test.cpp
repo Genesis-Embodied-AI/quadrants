@@ -159,9 +159,9 @@ TEST(WholeKernelCSE, FullModeHoistThenEliminate) {
   EXPECT_EQ(adds, 1);
 }
 
-// Checks that the users index stays usable through several hoists and subsequent duplicate elimination.
 class WholeKernelCSEHoistIndex : public ::testing::TestWithParam<bool> {};
 
+// Checks that the users index stays usable through several hoists and subsequent duplicate elimination.
 TEST_P(WholeKernelCSEHoistIndex, MultipleHoistsRewriteScalarAndContainerUsers) {
   TestProgram test_prog;
   test_prog.setup();
