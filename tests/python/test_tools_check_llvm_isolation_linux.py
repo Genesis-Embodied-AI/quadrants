@@ -76,7 +76,22 @@ def test_detects_shared_llvm_without_llvm_symbols(build_library: LibraryBuilder)
 
 @test_utils.test(arch=qd.cpu)
 def test_wheel_audit_and_cli(build_library: LibraryBuilder, tmp_path: Path) -> None:
-    """Check that the CLI accepts hidden LLVM symbols and rejects exported ones in packaged extensions."""
+    """It describes an end-to-end test of our **command-line audit tool** (`CLI`).
+
+    The test compiles a tiny library containing a function named `llvm::probe()`, then checks two versions:
+
+    - **Hidden:** compiled with `-fvisibility=hidden`. The function exists inside the library but is not exported
+      through its dynamic symbol table. The audit must report `PASS` and exit with code **0**.
+    - **Exported:** compiled with default visibility. Other libraries could resolve that symbol against this library.
+      The audit must report an exported LLVM symbol and exit with code **1**.
+
+    Each version is placed in a minimal `.whl` ZIP at the path where Quadrants' extension normally lives. The test then
+    launches `check_llvm_isolation.py` as a separate process, exercising extraction, symbol inspection, reporting, and
+    exit status together.
+
+    It uses a **synthetic LLVM-named function**, not an actual LLVM build or importable Python extension. Here, "accepts
+    hidden LLVM symbols" means private LLVM code is allowed; only exposing it is a failure for this check.
+    """
     source = 'namespace llvm { int probe() { return 1; } } extern "C" int unrelated() { return 2; }'
     for hidden in (True, False):
         library = build_library(source, flags=["-fvisibility=hidden"] if hidden else [])
@@ -90,7 +105,10 @@ def test_wheel_audit_and_cli(build_library: LibraryBuilder, tmp_path: Path) -> N
 
 @test_utils.test(arch=qd.cpu)
 def test_missing_core_fails(tmp_path: Path) -> None:
-    """Reject a wheel without a core extension instead of reporting a successful audit."""
+    """Reject a wheel missing quadrants/_lib/core/quadrants_python*.so, the native library containing C++ code and LLVM.
+
+    Without that library, there is nothing to audit; this must be an error rather than a successful audit.
+    """
     wheel = tmp_path / "empty.whl"
     with ZipFile(wheel, "w"):
         pass
