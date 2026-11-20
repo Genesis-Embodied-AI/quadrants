@@ -23,6 +23,10 @@ class SparseCG:
     """
 
     def __init__(self, A, b, x0=None, max_iter=50, atol=1e-6):
+        if hasattr(A, "matrix") and A.matrix is None:
+            raise QuadrantsRuntimeError(
+                "SparseCG requires a native SparseMatrix; SparseMatrix.from_csr(...) is not supported."
+            )
         self.dtype = A.dtype
         self.qd_arch = get_runtime().prog.config().arch
         self.matrix = A

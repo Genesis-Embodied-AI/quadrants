@@ -1,5 +1,6 @@
 # type: ignore
 
+import dataclasses
 from functools import reduce
 
 import numpy as np
@@ -9,9 +10,20 @@ from quadrants.lang._ndarray import Ndarray, ScalarNdarray
 from quadrants.lang.exception import QuadrantsRuntimeError
 from quadrants.lang.field import Field
 from quadrants.lang.impl import get_runtime
-from quadrants.types import f32
+from quadrants.types import f32, i32
+from quadrants.types.ndarray_type import NDArray
+
+_CSR_FIELDS = frozenset({"row_ptr", "col_idx", "values", "rows", "columns"})
 
 
+def _reject_csr_operand(other):
+    if isinstance(other, SparseMatrix) and other.matrix is None:
+        raise QuadrantsRuntimeError(
+            "Native SparseMatrix arithmetic does not support SparseMatrix.from_csr(...) operands."
+        )
+
+
+@dataclasses.dataclass(init=False, repr=False, eq=False)
 class SparseMatrix:
     """Quadrants's Sparse Matrix class
 
@@ -23,9 +35,22 @@ class SparseMatrix:
         sm (SparseMatrix): another sparse matrix that will be built from.
     """
 
-    def __init__(self, n=None, m=None, sm=None, dtype=f32, storage_format="col_major"):
+    row_ptr: NDArray[i32, 1]
+    col_idx: NDArray[i32, 1]
+    values: NDArray[f32, 1]
+    rows: i32
+    columns: i32
+
+    def __init__(self, n=None, m=None, sm=None, dtype=f32, storage_format="col_major", *, _csr=None):
         self.dtype = dtype
-        if sm is None:
+        if _csr is not None:
+            # from_csr validates the borrowed buffers before selecting this representation.
+            self.n = self.rows = n
+            self.m = self.columns = m
+            self.matrix = None
+            self.row_ptr, self.col_idx, self.values = _csr
+            self._is_csr = True
+        elif sm is None:
             self.n = n
             self.m = m if m else n
             self.matrix = get_runtime().prog.create_sparse_matrix(n, m, dtype, storage_format)
@@ -34,12 +59,46 @@ class SparseMatrix:
             self.m = sm.num_cols()
             self.matrix = sm
 
+    @staticmethod
+    def from_csr(row_ptr, col_idx, values, *, shape) -> "SparseMatrix":
+        """Return a buffer-backed ``SparseMatrix`` borrowing the three native ndarrays.
+
+        ``shape`` is ``(rows, columns)``. Multiply a dense ndarray into caller-owned output with
+        ``qd.matmul(A, X, out=Y)`` on the host or at the top level of a kernel.
+        """
+        from quadrants.linalg._csr import _from_csr  # noqa: I001  # pylint: disable=import-outside-toplevel
+
+        return _from_csr(SparseMatrix, row_ptr, col_idx, values, shape=shape)
+
+    def _require_native(self):
+        if self.matrix is None:
+            raise QuadrantsRuntimeError(
+                "This operation requires a native SparseMatrix, not SparseMatrix.from_csr(...)."
+            )
+
+    def __getattr__(self, name):
+        if name in _CSR_FIELDS:
+            raise QuadrantsRuntimeError("Kernel SparseMatrix arguments require SparseMatrix.from_csr(...).")
+        raise AttributeError(f"{type(self).__name__!r} object has no attribute {name!r}")
+
+    def __setattr__(self, name, value):
+        if self.__dict__.get("_is_csr", False):
+            raise dataclasses.FrozenInstanceError(f"cannot assign to field {name!r}")
+        object.__setattr__(self, name, value)
+
+    def __delattr__(self, name):
+        if self.__dict__.get("_is_csr", False):
+            raise dataclasses.FrozenInstanceError(f"cannot delete field {name!r}")
+        object.__delattr__(self, name)
+
     def __iadd__(self, other):
         """Addition operation for sparse matrix.
 
         Returns:
             The result sparse matrix of the addition.
         """
+        self._require_native()
+        _reject_csr_operand(other)
         assert (
             self.n == other.n and self.m == other.m
         ), f"Dimension mismatch between sparse matrices ({self.n}, {self.m}) and ({other.n}, {other.m})"
@@ -52,6 +111,8 @@ class SparseMatrix:
         Returns:
             The result sparse matrix of the addition.
         """
+        self._require_native()
+        _reject_csr_operand(other)
         assert (
             self.n == other.n and self.m == other.m
         ), f"Dimension mismatch between sparse matrices ({self.n}, {self.m}) and ({other.n}, {other.m})"
@@ -64,6 +125,8 @@ class SparseMatrix:
         Returns:
              The result sparse matrix of the subtraction.
         """
+        self._require_native()
+        _reject_csr_operand(other)
         assert (
             self.n == other.n and self.m == other.m
         ), f"Dimension mismatch between sparse matrices ({self.n}, {self.m}) and ({other.n}, {other.m})"
@@ -76,6 +139,8 @@ class SparseMatrix:
         Returns:
              The result sparse matrix of the subtraction.
         """
+        self._require_native()
+        _reject_csr_operand(other)
         assert (
             self.n == other.n and self.m == other.m
         ), f"Dimension mismatch between sparse matrices ({self.n}, {self.m}) and ({other.n}, {other.m})"
@@ -90,6 +155,8 @@ class SparseMatrix:
         Returns:
             The result of multiplication.
         """
+        self._require_native()
+        _reject_csr_operand(other)
         if isinstance(other, float):
             sm = other * self.matrix
             return SparseMatrix(sm=sm)
@@ -110,6 +177,8 @@ class SparseMatrix:
         Returns:
             The result of multiplication.
         """
+        self._require_native()
+        _reject_csr_operand(other)
         if isinstance(other, float):
             sm = self.matrix * other
             return SparseMatrix(sm=sm)
@@ -122,6 +191,7 @@ class SparseMatrix:
         Returns:
             The transposed sparse mastrix.
         """
+        self._require_native()
         sm = self.matrix.transpose()
         return SparseMatrix(sm=sm)
 
@@ -133,6 +203,9 @@ class SparseMatrix:
         Returns:
             The result of matrix multiplication.
         """
+        if self.matrix is None:
+            raise QuadrantsRuntimeError("SparseMatrix.from_csr(...) does not support `@`; use qd.matmul(A, X, out=Y).")
+        _reject_csr_operand(other)
         if isinstance(other, SparseMatrix):
             assert (
                 self.m == other.n
@@ -162,16 +235,22 @@ class SparseMatrix:
         )
 
     def __getitem__(self, indices):
+        self._require_native()
         return self.matrix.get_element(indices[0], indices[1])
 
     def __setitem__(self, indices, value):
+        self._require_native()
         self.matrix.set_element(indices[0], indices[1], value)
 
     def __str__(self):
         """Python scope matrix print support."""
+        if self.matrix is None:
+            return f"<SparseMatrix (CSR) shape=({self.n}, {self.m})>"
         return self.matrix.to_string()
 
     def __repr__(self):
+        if self.matrix is None:
+            return f"<SparseMatrix (CSR) shape=({self.n}, {self.m})>"
         return self.matrix.to_string()
 
     @property
@@ -205,6 +284,7 @@ class SparseMatrix:
             [0, 0, 0, 0, 4]
             [5, 0, 0, 0, 0]
         """
+        self._require_native()
         if isinstance(ndarray, Ndarray):
             num_scalars = reduce(lambda x, y: x * y, ndarray.shape + ndarray.element_shape)
             if num_scalars % 3 != 0:
@@ -221,6 +301,7 @@ class SparseMatrix:
         Args:
             filename (str): the file name to write the sparse matrix to.
         """
+        self._require_native()
         self.matrix.mmwrite(filename)
 
 
