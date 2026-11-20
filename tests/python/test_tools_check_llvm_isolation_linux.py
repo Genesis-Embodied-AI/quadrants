@@ -10,6 +10,10 @@ from zipfile import ZipFile
 
 import pytest
 
+import quadrants as qd
+
+from tests.helpers import test_utils
+
 _tool_path = Path(__file__).parents[2] / "python/tools/check_llvm_isolation.py"
 _spec = importlib.util.spec_from_file_location("check_llvm_isolation", _tool_path)
 assert _spec is not None and _spec.loader is not None
@@ -55,6 +59,7 @@ def build_library(tmp_path: Path) -> LibraryBuilder:
         ),
     ],
 )
+@test_utils.test(arch=qd.cpu)
 def test_detects_llvm_symbols(build_library: LibraryBuilder, source: str, label: str) -> None:
     """Reject exported and undefined LLVM symbols, including weak references and runtime entry points."""
     failures = audit.audit_library(build_library(source))
@@ -62,6 +67,7 @@ def test_detects_llvm_symbols(build_library: LibraryBuilder, source: str, label:
     assert failures[0].startswith(f"{label} LLVM symbol:")
 
 
+@test_utils.test(arch=qd.cpu)
 def test_detects_shared_llvm_without_llvm_symbols(build_library: LibraryBuilder) -> None:
     """Detect a shared LLVM dependency even when no LLVM-named symbols are visible."""
     dependency = build_library('extern "C" int ordinary() { return 1; }', name="libLLVM-test.so")
@@ -69,6 +75,7 @@ def test_detects_shared_llvm_without_llvm_symbols(build_library: LibraryBuilder)
     assert audit.audit_library(library) == [f"shared LLVM dependency: {dependency}"]
 
 
+@test_utils.test(arch=qd.cpu)
 def test_wheel_audit_and_cli(build_library: LibraryBuilder, tmp_path: Path) -> None:
     """Check that the CLI accepts hidden LLVM symbols and rejects exported ones in packaged extensions."""
     source = 'namespace llvm { int probe() { return 1; } } extern "C" int unrelated() { return 2; }'
@@ -82,6 +89,7 @@ def test_wheel_audit_and_cli(build_library: LibraryBuilder, tmp_path: Path) -> N
         assert ("PASS:" if hidden else "exported LLVM symbol:") in result.stdout
 
 
+@test_utils.test(arch=qd.cpu)
 def test_missing_core_fails(tmp_path: Path) -> None:
     """Reject a wheel without a core extension instead of reporting a successful audit."""
     wheel = tmp_path / "empty.whl"
