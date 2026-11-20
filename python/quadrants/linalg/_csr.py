@@ -7,21 +7,19 @@ from typing import Any
 
 from quadrants._lib import core as _qd_core
 from quadrants.lang._ndarray import ScalarNdarray
-from quadrants.lang._quadrants_callable import QuadrantsCallable
+from quadrants.lang.any_array import AnyArray
 from quadrants.lang.exception import (
     QuadrantsRuntimeError,
     QuadrantsSyntaxError,
     QuadrantsTypeError,
 )
-from quadrants.lang.func import Func
 from quadrants.lang.impl import (
     current_cfg,
     get_runtime,
     inside_kernel,
     static,
-    static_assert,
 )
-from quadrants.lang.kernel_impl import func, kernel
+from quadrants.lang.kernel_impl import func, kernel, pyfunc
 from quadrants.linalg.sparse_matrix import SparseMatrix
 from quadrants.types.ndarray_type import NDArray
 from quadrants.types.primitive_types import f32, i32
@@ -62,22 +60,28 @@ def _from_csr(
     if col_idx.shape != values.shape:
         raise ValueError("SparseMatrix.from_csr: col_idx and values must have equal capacity")
 
-    instance = object.__new__(cls)
-    object.__setattr__(instance, "dtype", f32)
-    object.__setattr__(instance, "n", rows)
-    object.__setattr__(instance, "m", columns)
-    object.__setattr__(instance, "matrix", None)
-    object.__setattr__(instance, "row_ptr", row_ptr)
-    object.__setattr__(instance, "col_idx", col_idx)
-    object.__setattr__(instance, "values", values)
-    object.__setattr__(instance, "rows", rows)
-    object.__setattr__(instance, "columns", columns)
-    object.__setattr__(instance, "_is_csr", True)
-    return instance
+    return cls(n=rows, m=columns, dtype=f32, _csr=(row_ptr, col_idx, values))
+
+
+def _require_csr(matrix: Any) -> None:
+    if not isinstance(matrix, SparseMatrix):
+        raise QuadrantsTypeError(
+            "matmul: first argument must be a SparseMatrix created with SparseMatrix.from_csr(...)"
+        )
+    if matrix.matrix is not None:
+        raise QuadrantsRuntimeError("matmul requires a CSR SparseMatrix created with SparseMatrix.from_csr(...)")
+
+
+def _check_kernel_array(array: Any, dtype: Any, rank: int, name: str) -> None:
+    # Inlined annotations do not validate operands; inspect their actual compiled types.
+    if not isinstance(array, AnyArray) or array.get_type().element_type != dtype or array.element_shape():
+        raise QuadrantsTypeError(f"matmul: {name} must be a scalar {dtype} ndarray")
+    if len(array.shape) != rank:
+        raise QuadrantsTypeError(f"matmul: {name} must have rank {rank}")
 
 
 def _require_forward() -> None:
-    context = get_runtime()._current_global_context
+    context = get_runtime()._current_kernel_compile_context
     assert context is not None and context.current_kernel is not None
     if context.current_kernel.autodiff_mode != _qd_core.AutodiffMode.NONE:
         raise QuadrantsSyntaxError("matmul with CSR SparseMatrix supports forward execution only")
@@ -94,12 +98,11 @@ def _write_csr(
     columns: i32,
 ) -> None:
     _require_forward()
-    # Nested functions can receive arrays whose ranks differ from their annotations.
-    static_assert(len(row_ptr.shape) == 1, "matmul: row_ptr must have rank 1")
-    static_assert(len(col_idx.shape) == 1, "matmul: col_idx must have rank 1")
-    static_assert(len(values.shape) == 1, "matmul: values must have rank 1")
-    static_assert(len(b.shape) == 2, "matmul: b must have rank 2")
-    static_assert(len(out.shape) == 2, "matmul: out must have rank 2")
+    _check_kernel_array(row_ptr, i32, 1, "row_ptr")
+    _check_kernel_array(col_idx, i32, 1, "col_idx")
+    _check_kernel_array(values, f32, 1, "values")
+    _check_kernel_array(b, f32, 2, "b")
+    _check_kernel_array(out, f32, 2, "out")
 
     width = out.shape[1]
     # Division keeps validation within i32 even for incompatible runtime dimensions.
@@ -143,10 +146,7 @@ def _launch_csr_matmul(a: SparseMatrix, b: NDArray[f32, 2], out: NDArray[f32, 2]
 
 
 def _host_matmul(a: Any, b: Any, *, out: Any) -> Any:
-    if not isinstance(a, SparseMatrix):
-        raise TypeError("matmul: first argument must be a SparseMatrix created with SparseMatrix.from_csr(...)")
-    if a.matrix is not None:
-        raise QuadrantsRuntimeError("matmul requires a CSR SparseMatrix created with SparseMatrix.from_csr(...)")
+    _require_csr(a)
     _check_array(b, f32, 2, "b", "matmul")
     _check_array(out, f32, 2, "out", "matmul")
     if b.shape[0] != a.columns:
@@ -160,43 +160,16 @@ def _host_matmul(a: Any, b: Any, *, out: Any) -> Any:
     return out
 
 
-_host_matmul.__name__ = "matmul"
-_host_matmul.__qualname__ = "matmul"
+@pyfunc
+def matmul(a: SparseMatrix, b: NDArray[f32, 2], out: NDArray[f32, 2]):
+    """Multiply a CSR ``SparseMatrix`` by a dense matrix into an existing output.
 
-
-def _matmul_kernel_body(a: SparseMatrix, b: NDArray[f32, 2], out: NDArray[f32, 2]) -> None:
-    """Multiply a CSR ``SparseMatrix`` ``a`` with dense ``f32`` matrix ``b`` into ``out``.
-
-    Callable from Python host scope or at the top level of a ``@qd.kernel`` as
-    ``qd.matmul(A, X, out=Y)``.
+    Call ``qd.matmul(A, X, out=Y)`` from Python or at kernel top level. Python calls
+    return ``Y``; kernel calls write it without returning a value.
     """
-    _write_csr(a.row_ptr, a.col_idx, a.values, b, out, a.rows, a.columns)
-
-
-_matmul_kernel_body.__name__ = "matmul"
-_matmul_kernel_body.__qualname__ = "matmul"
-
-
-class _MatmulFunc(Func):
-    def __call__(self, *py_args: Any, **kwargs: Any) -> Any:
-        if not inside_kernel():
-            return _host_matmul(*py_args, **kwargs)
-        if "out" not in kwargs:
-            raise QuadrantsSyntaxError("matmul requires keyword-only argument `out=`.")
-        if len(py_args) < 5 and not any(key.startswith("__qd_a__qd_") for key in kwargs):
-            raise QuadrantsTypeError(
-                "matmul expects a CSR SparseMatrix (from SparseMatrix.from_csr(...)) as its first argument."
-            )
-        return super().__call__(*py_args, **kwargs)
-
-
-def _build_matmul_callable() -> Any:
-    fn = _MatmulFunc(_matmul_kernel_body)
-    callable_obj = QuadrantsCallable(_matmul_kernel_body, fn)
-    callable_obj._is_quadrants_function = True
-    callable_obj._is_real_function = False
-    callable_obj._qd_requires_top_level = True
-    return callable_obj
-
-
-matmul = _build_matmul_callable()
+    if static(inside_kernel()):
+        _require_csr(a)
+        _write_csr(a.row_ptr, a.col_idx, a.values, b, out, a.rows, a.columns)
+    else:
+        return _host_matmul(a, b, out=out)
+    return None

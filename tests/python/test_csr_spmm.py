@@ -396,10 +396,8 @@ def test_csr_matmul_keyword_and_operand_checks():
     rp, ci, values, rhs, out = [_upload(array) for array in _host_case()]
     matrix = qd.linalg.SparseMatrix.from_csr(rp, ci, values, shape=(3, 3))
 
-    with pytest.raises(TypeError):
+    with pytest.raises(qd.QuadrantsSyntaxError, match="out"):
         qd.matmul(matrix, rhs)
-    with pytest.raises(TypeError):
-        qd.matmul(matrix, rhs, out)
     with pytest.raises(TypeError):
         qd.matmul(rhs, rhs, out=out)
 
@@ -408,19 +406,83 @@ def test_csr_matmul_keyword_and_operand_checks():
         qd.matmul(a, b)
 
     @qd.kernel
-    def positional_out(a: qd.linalg.SparseMatrix, b: qd.types.NDArray, c: qd.types.NDArray):
-        qd.matmul(a, b, c)
-
-    @qd.kernel
     def dense_lhs(a: qd.types.NDArray, b: qd.types.NDArray, c: qd.types.NDArray):
         qd.matmul(a, b, out=c)
 
-    with pytest.raises(qd.QuadrantsCompilationError, match="out="):
+    with pytest.raises(qd.QuadrantsCompilationError, match="out"):
         missing_out(matrix, rhs)
-    with pytest.raises(qd.QuadrantsCompilationError, match="out="):
-        positional_out(matrix, rhs, out)
     with pytest.raises(qd.QuadrantsCompilationError, match="SparseMatrix"):
         dense_lhs(rhs, rhs, out)
+
+
+@pytest.mark.parametrize("style", ["positional", "out_keyword", "all_keywords"])
+@test_utils.test(arch=[qd.cpu, qd.metal, qd.cuda])
+def test_csr_matmul_ordinary_argument_binding(style):
+    host = _host_case()
+    rp, ci, values, rhs, out = [_upload(array) for array in host]
+    matrix = qd.linalg.SparseMatrix.from_csr(rp, ci, values, shape=(3, 3))
+    if style == "positional":
+        result = qd.matmul(matrix, rhs, out)
+    elif style == "out_keyword":
+        result = qd.matmul(matrix, rhs, out=out)
+    else:
+        result = qd.matmul(out=out, b=rhs, a=matrix)
+    assert result is out
+    expected = _reference_dense_f64(*host[:-1])
+    np.testing.assert_array_equal(out.to_numpy(), expected)
+
+    @qd.func
+    def forward(matrix: int, source: int, target: int):
+        # Inlined annotations do not select types; the actual arguments must reach matmul intact.
+        if qd.static(style == "positional"):
+            qd.matmul(matrix, source, target)
+        elif qd.static(style == "out_keyword"):
+            qd.matmul(matrix, source, out=target)
+        else:
+            qd.matmul(out=target, b=source, a=matrix)
+
+    @qd.kernel
+    def apply(matrix: qd.linalg.SparseMatrix, source: qd.types.NDArray, target: qd.types.NDArray):
+        forward(target=target, source=source, matrix=matrix)
+
+    out.fill(-777)
+    apply(matrix, rhs, out)
+    np.testing.assert_array_equal(out.to_numpy(), expected)
+
+
+@test_utils.test(arch=[qd.cpu, qd.metal, qd.cuda])
+def test_csr_matmul_rejects_unrelated_dataclass():
+    @dataclass
+    class Unrelated:
+        row_ptr: qd.types.NDArray
+        col_idx: qd.types.NDArray
+        values: qd.types.NDArray
+        rows: int
+        columns: int
+
+    rp, ci, values, rhs, out = [_upload(array) for array in _host_case()]
+    unrelated = Unrelated(rp, ci, values, 3, 3)
+    # Matching field names/counts do not make this a SparseMatrix.
+    with pytest.raises(TypeError, match="SparseMatrix"):
+        qd.matmul(unrelated, rhs, out=out)
+    with pytest.raises(qd.QuadrantsCompilationError, match="SparseMatrix"):
+        _apply(unrelated, rhs, out)
+
+
+@pytest.mark.parametrize("operand", ["b", "out"])
+@pytest.mark.parametrize("invalid", ["dtype", "rank", "vector"])
+@test_utils.test(arch=[qd.cpu, qd.metal, qd.cuda])
+def test_csr_kernel_checks_actual_array_types(operand, invalid):
+    rp, ci, values, rhs, out = [_upload(array) for array in _host_case()]
+    matrix = qd.linalg.SparseMatrix.from_csr(rp, ci, values, shape=(3, 3))
+    if invalid == "dtype":
+        wrong = qd.ndarray(qd.i32, shape=(3, 2))
+    elif invalid == "rank":
+        wrong = qd.ndarray(qd.f32, shape=6)
+    else:
+        wrong = qd.Vector.ndarray(2, qd.f32, shape=(3, 2))
+    with pytest.raises(qd.QuadrantsCompilationError, match=f"{operand} must"):
+        _apply(matrix, wrong if operand == "b" else rhs, wrong if operand == "out" else out)
 
 
 @test_utils.test(arch=[qd.cpu, qd.metal, qd.cuda])

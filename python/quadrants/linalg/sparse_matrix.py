@@ -41,9 +41,16 @@ class SparseMatrix:
     rows: i32
     columns: i32
 
-    def __init__(self, n=None, m=None, sm=None, dtype=f32, storage_format="col_major"):
+    def __init__(self, n=None, m=None, sm=None, dtype=f32, storage_format="col_major", *, _csr=None):
         self.dtype = dtype
-        if sm is None:
+        if _csr is not None:
+            # from_csr validates the borrowed buffers before selecting this representation.
+            self.n = self.rows = n
+            self.m = self.columns = m
+            self.matrix = None
+            self.row_ptr, self.col_idx, self.values = _csr
+            self._is_csr = True
+        elif sm is None:
             self.n = n
             self.m = m if m else n
             self.matrix = get_runtime().prog.create_sparse_matrix(n, m, dtype, storage_format)
