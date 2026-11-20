@@ -249,37 +249,53 @@ class WholeKernelCSE : public BasicStmtVisitor {
     scope_inserts_.pop_back();
   }
 
-  void hoist_matching_branch_statement(IfStmt *if_stmt, bool from_front) {
-    auto &true_clause = if_stmt->true_statements;
-    auto &false_clause = if_stmt->false_statements;
-    if (true_clause->statements.empty() || false_clause->statements.empty()) {
-      return;
-    }
-    const int true_index = from_front ? 0 : (int)true_clause->size() - 1;
-    const int false_index = from_front ? 0 : (int)false_clause->size() - 1;
-    auto *true_stmt = true_clause->statements[true_index].get();
-    auto *false_stmt = false_clause->statements[false_index].get();
-    if (!irpass::analysis::same_statements(true_stmt, false_stmt)) {
-      return;
-    }
-
-    // Keep the true-branch copy and discard the false-branch copy. Redirect the false copy's users before removal,
-    // updating the use index and marking those users dirty for another CSE check.
-    replace_uses_and_mark_users_dirty(false_stmt, true_stmt);
-    auto common_stmt = true_clause->extract(true_index);
-    if (from_front) {
-      modifier_.insert_before(if_stmt, std::move(common_stmt));
-    } else {
-      modifier_.insert_after(if_stmt, std::move(common_stmt));
-    }
-    false_clause->erase(false_index);
-  }
-
   void hoist_common_branch_statements(IfStmt *if_stmt) {
     // Skip in pointers-only mode to avoid relocating other computation.
     if (!ptrs_only_ && if_stmt->true_statements && if_stmt->false_statements) {
-      hoist_matching_branch_statement(if_stmt, /*from_front=*/true);
-      hoist_matching_branch_statement(if_stmt, /*from_front=*/false);
+      auto &true_clause = if_stmt->true_statements;
+      auto &false_clause = if_stmt->false_statements;
+      // Both hoists keep the true-branch copy and discard the false-branch copy. Redirect the false copy's users to
+      // the true copy before removal, updating the use index and marking those users dirty for another CSE check.
+      // Rewrite each matching pair before comparing the next, so dependent expressions can match too.
+      std::size_t prefix_size = 0;
+      while (prefix_size < true_clause->size() && prefix_size < false_clause->size() &&
+             irpass::analysis::same_statements(true_clause->statements[prefix_size].get(),
+                                               false_clause->statements[prefix_size].get())) {
+        replace_uses_and_mark_users_dirty(false_clause->statements[prefix_size].get(),
+                                          true_clause->statements[prefix_size].get());
+        ++prefix_size;
+      }
+      if (prefix_size != 0) {
+        // Move the prefix in order and compact each branch once, avoiding a vector shift per statement.
+        VecStatement prefix;
+        for (std::size_t i = 0; i < prefix_size; ++i) {
+          prefix.push_back(std::move(true_clause->statements[i]));
+        }
+        true_clause->statements.erase(true_clause->statements.begin(), true_clause->statements.begin() + prefix_size);
+        false_clause->erase_range(false_clause->statements.begin(), false_clause->statements.begin() + prefix_size);
+        modifier_.insert_before(if_stmt, std::move(prefix));
+      }
+      // Discover the suffix backward, then move it forward to preserve execution order.
+      std::size_t suffix_size = 0;
+      while (suffix_size < true_clause->size() && suffix_size < false_clause->size()) {
+        auto *true_stmt = true_clause->statements[true_clause->size() - suffix_size - 1].get();
+        auto *false_stmt = false_clause->statements[false_clause->size() - suffix_size - 1].get();
+        if (!irpass::analysis::same_statements(true_stmt, false_stmt)) {
+          break;
+        }
+        replace_uses_and_mark_users_dirty(false_stmt, true_stmt);
+        ++suffix_size;
+      }
+      if (suffix_size != 0) {
+        VecStatement suffix;
+        auto true_begin = true_clause->statements.end() - suffix_size;
+        for (auto it = true_begin; it != true_clause->statements.end(); ++it) {
+          suffix.push_back(std::move(*it));
+        }
+        true_clause->statements.erase(true_begin, true_clause->statements.end());
+        false_clause->erase_range(false_clause->statements.end() - suffix_size, false_clause->statements.end());
+        modifier_.insert_after(if_stmt, std::move(suffix));
+      }
     }
   }
 
