@@ -17,11 +17,13 @@ from zipfile import BadZipFile, ZipFile
 LLVM_SYMBOL = re.compile(r"\b(?:llvm::|LLVM\w*|llvm_\w+|__llvm_\w+)")
 
 
-def run_tool(*args):
+def run_tool(*args: str) -> str:
+    """Run a binary inspection tool and return its output, raising if the command fails."""
     return subprocess.check_output(args, text=True, stderr=subprocess.STDOUT)
 
 
-def audit_library(library):
+def audit_library(library: Path) -> list[str]:
+    """Report LLVM symbols and shared LLVM dependencies exposed by an ELF library."""
     failures = []
     for label, selection in (("exported", "--defined-only"), ("undefined", "--undefined-only")):
         symbols = run_tool("nm", "--dynamic", "--extern-only", "--demangle", selection, str(library))
@@ -35,7 +37,8 @@ def audit_library(library):
     return failures
 
 
-def audit_wheel(wheel):
+def audit_wheel(wheel: Path) -> list[str]:
+    """Extract and audit the wheel's single Quadrants core extension, rejecting missing or ambiguous cores."""
     with ZipFile(wheel) as archive, tempfile.TemporaryDirectory() as directory:
         cores = [
             name for name in archive.namelist() if re.fullmatch(r"quadrants/_lib/core/quadrants_python[^/]*\.so", name)
@@ -47,7 +50,8 @@ def audit_wheel(wheel):
         return audit_library(library)
 
 
-def main():
+def main() -> int:
+    """Audit each wheel passed on the command line and return a nonzero status if any audit fails."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("wheels", nargs="+", type=Path)
     args = parser.parse_args()

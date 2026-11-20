@@ -2,6 +2,7 @@ import importlib.util
 import shutil
 import subprocess
 import sys
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from zipfile import ZipFile
 
@@ -9,18 +10,22 @@ import pytest
 
 _tool_path = Path(__file__).parents[2] / "python/tools/check_llvm_isolation.py"
 _spec = importlib.util.spec_from_file_location("check_llvm_isolation", _tool_path)
+assert _spec is not None and _spec.loader is not None
 audit = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(audit)
 pytestmark = pytest.mark.skipif(sys.platform != "linux", reason="Linux ELF wheel audit")
+LibraryBuilder = Callable[..., Path]
 
 
 @pytest.fixture
-def build_library(tmp_path):
+def build_library(tmp_path: Path) -> LibraryBuilder:
+    """Provide a compiler helper for small ELF fixtures, skipping when the required tools are unavailable."""
     for tool in ("c++", "nm", "readelf"):
         if not shutil.which(tool):
             pytest.skip(f"Requires {tool}")
 
-    def build(source, name="core.so", flags=()):
+    def build(source: str, name: str = "core.so", flags: Sequence[str] = ()) -> Path:
+        """Compile C++ source into a shared library with optional linker or visibility flags."""
         cpp = tmp_path / f"{name}.cpp"
         cpp.write_text(source)
         library = tmp_path / name
@@ -45,19 +50,22 @@ def build_library(tmp_path):
         ),
     ],
 )
-def test_detects_llvm_symbols(build_library, source, label):
+def test_detects_llvm_symbols(build_library: LibraryBuilder, source: str, label: str) -> None:
+    """Reject exported and undefined LLVM symbols, including weak references and runtime entry points."""
     failures = audit.audit_library(build_library(source))
     assert len(failures) == 1
     assert failures[0].startswith(f"{label} LLVM symbol:")
 
 
-def test_detects_shared_llvm_without_llvm_symbols(build_library):
+def test_detects_shared_llvm_without_llvm_symbols(build_library: LibraryBuilder) -> None:
+    """Detect a shared LLVM dependency even when no LLVM-named symbols are visible."""
     dependency = build_library('extern "C" int ordinary() { return 1; }', name="libLLVM-test.so")
     library = build_library("int use() { return 0; }", flags=["-Wl,--no-as-needed", str(dependency)])
     assert audit.audit_library(library) == [f"shared LLVM dependency: {dependency}"]
 
 
-def test_wheel_audit_and_cli(build_library, tmp_path):
+def test_wheel_audit_and_cli(build_library: LibraryBuilder, tmp_path: Path) -> None:
+    """Check that the CLI accepts hidden LLVM symbols and rejects exported ones in packaged extensions."""
     source = 'namespace llvm { int probe() { return 1; } } extern "C" int unrelated() { return 2; }'
     for hidden in (True, False):
         library = build_library(source, flags=["-fvisibility=hidden"] if hidden else [])
@@ -69,7 +77,8 @@ def test_wheel_audit_and_cli(build_library, tmp_path):
         assert ("PASS:" if hidden else "exported LLVM symbol:") in result.stdout
 
 
-def test_missing_core_fails(tmp_path):
+def test_missing_core_fails(tmp_path: Path) -> None:
+    """Reject a wheel without a core extension instead of reporting a successful audit."""
     wheel = tmp_path / "empty.whl"
     with ZipFile(wheel, "w"):
         pass
