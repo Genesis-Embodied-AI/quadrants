@@ -16,6 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Load the active Genesis configuration, validate the PR wheel, and save the inputs for benchmarks and retries.
   prepare:
     if: >-
       github.event.workflow_run.event == 'pull_request' &&
