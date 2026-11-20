@@ -305,8 +305,8 @@ TEST_P(WholeKernelCSEPrefix, DependentPrefixPreservesOrderAndStopsAtMismatch) {
   auto *x = b.create_arg_load({1}, PrimitiveType::i32, false);
   auto *scale = b.create_arg_load({2}, PrimitiveType::i32, false);
   auto *branch = b.create_if(b.create_arg_load({3}, PrimitiveType::i32, false));
-  std::vector<Stmt *> retained_prefix;
-  GlobalStoreStmt *true_store = nullptr, *false_store = nullptr, *suffix = nullptr;
+  std::vector<Stmt *> retained_prefix, retained_suffix;
+  GlobalStoreStmt *true_store = nullptr, *false_store = nullptr;
   Stmt *result = x;
   for (bool true_branch : {true, false}) {
     auto guard = b.get_if_guard(branch, true_branch);
@@ -323,11 +323,14 @@ TEST_P(WholeKernelCSEPrefix, DependentPrefixPreservesOrderAndStopsAtMismatch) {
     }
     b.create_global_store(true_branch ? true_out : false_out, value);
     auto *different = body->statements.back()->as<GlobalStoreStmt>();
-    b.create_global_store(out, scale);
-    auto *shared_suffix = body->statements.back()->as<GlobalStoreStmt>();
+    for (auto *stored_value : {value, static_cast<Stmt *>(scale), value}) {
+      b.create_global_store(out, stored_value);
+      if (true_branch) {
+        retained_suffix.push_back(body->statements.back().get());
+      }
+    }
     if (true_branch) {
       true_store = different;
-      suffix = shared_suffix;
       result = value;
     } else {
       false_store = different;
@@ -352,7 +355,9 @@ TEST_P(WholeKernelCSEPrefix, DependentPrefixPreservesOrderAndStopsAtMismatch) {
   EXPECT_EQ(branch->false_statements->statements[0].get(), false_store);
   EXPECT_EQ(true_store->val, result);
   EXPECT_EQ(false_store->val, result);
-  EXPECT_EQ(ir->locate(suffix), branch_position + 1);
+  for (int i = 0; i < static_cast<int>(retained_suffix.size()); ++i) {
+    EXPECT_EQ(ir->locate(retained_suffix[i]), branch_position + 1 + i);
+  }
   EXPECT_FALSE(irpass::whole_kernel_cse(ir.get()));
 }
 
@@ -396,5 +401,97 @@ TEST(WholeKernelCSE, PrefixCanExhaustOneBranch) {
   EXPECT_EQ(branch->false_statements->statements[0].get(), remaining_store);
   EXPECT_FALSE(irpass::whole_kernel_cse(ir.get()));
 }
+
+class WholeKernelCSESuffix : public ::testing::TestWithParam<int> {};
+
+TEST_P(WholeKernelCSESuffix, PreservesStoreOrderAndStopsAtMismatch) {
+  TestProgram test_prog;
+  test_prog.setup();
+  IRBuilder b;
+  auto *zero = b.get_int32(0);
+  auto *one = b.get_int32(1);
+  auto *two = b.get_int32(2);
+  auto *arr = b.create_ndarray_arg_load({0}, PrimitiveType::i32, 1);
+  auto *out = b.create_external_ptr(arr, {zero});
+  auto *branch = b.create_if(b.create_arg_load({1}, PrimitiveType::i32, false));
+  std::vector<Stmt *> retained_suffix;
+  for (bool true_branch : {true, false}) {
+    auto guard = b.get_if_guard(branch, true_branch);
+    auto *body = true_branch ? branch->true_statements.get() : branch->false_statements.get();
+    b.create_global_store(out, true_branch ? one : two);  // Neither scan may cross this mismatch.
+    for (int i = 0; i < GetParam(); ++i) {
+      b.create_global_store(out, i % 2 == 0 ? zero : one);
+      if (true_branch) {
+        retained_suffix.push_back(body->statements.back().get());
+      }
+    }
+  }
+
+  auto ir = b.extract_ir();
+  irpass::type_check(ir.get(), test_prog.prog()->compile_config());
+  EXPECT_EQ(irpass::whole_kernel_cse(ir.get()), GetParam() != 0);
+  irpass::analysis::verify(ir.get());
+  ASSERT_NE(branch->true_statements, nullptr);
+  ASSERT_NE(branch->false_statements, nullptr);
+  ASSERT_EQ(branch->true_statements->size(), 1);
+  ASSERT_EQ(branch->false_statements->size(), 1);
+  EXPECT_EQ(branch->true_statements->statements[0]->as<GlobalStoreStmt>()->val, one);
+  EXPECT_EQ(branch->false_statements->statements[0]->as<GlobalStoreStmt>()->val, two);
+  const int branch_position = ir->locate(branch);
+  for (int i = 0; i < GetParam(); ++i) {
+    EXPECT_EQ(ir->locate(retained_suffix[i]), branch_position + 1 + i);
+  }
+  EXPECT_FALSE(irpass::whole_kernel_cse(ir.get()));
+}
+
+INSTANTIATE_TEST_SUITE_P(EmptySingleAndLongSuffix, WholeKernelCSESuffix, ::testing::Values(0, 1, 32));
+
+class WholeKernelCSESuffixExhaustion : public ::testing::TestWithParam<bool> {};
+
+TEST_P(WholeKernelCSESuffixExhaustion, CanExhaustEitherBranch) {
+  TestProgram test_prog;
+  test_prog.setup();
+  IRBuilder b;
+  auto *zero = b.get_int32(0);
+  auto *one = b.get_int32(1);
+  auto *two = b.get_int32(2);
+  auto *arr = b.create_ndarray_arg_load({0}, PrimitiveType::i32, 1);
+  auto *out = b.create_external_ptr(arr, {zero});
+  auto *branch = b.create_if(b.create_arg_load({1}, PrimitiveType::i32, false));
+  std::vector<Stmt *> retained_suffix;
+  Stmt *remaining_store = nullptr;
+  for (bool true_branch : {true, false}) {
+    auto guard = b.get_if_guard(branch, true_branch);
+    auto *body = true_branch ? branch->true_statements.get() : branch->false_statements.get();
+    if (true_branch == GetParam()) {
+      b.create_global_store(out, two);  // The longer branch starts differently, preventing prefix hoisting.
+      remaining_store = body->statements.back().get();
+    }
+    for (int i = 0; i < 6; ++i) {
+      b.create_global_store(out, i % 2 == 0 ? zero : one);
+      if (true_branch) {
+        retained_suffix.push_back(body->statements.back().get());
+      }
+    }
+  }
+
+  auto ir = b.extract_ir();
+  irpass::type_check(ir.get(), test_prog.prog()->compile_config());
+  EXPECT_TRUE(irpass::whole_kernel_cse(ir.get()));
+  irpass::analysis::verify(ir.get());
+  auto *longer = GetParam() ? branch->true_statements.get() : branch->false_statements.get();
+  auto *shorter = GetParam() ? branch->false_statements.get() : branch->true_statements.get();
+  ASSERT_NE(longer, nullptr);
+  EXPECT_EQ(shorter, nullptr);
+  ASSERT_EQ(longer->size(), 1);
+  EXPECT_EQ(longer->statements[0].get(), remaining_store);
+  const int branch_position = ir->locate(branch);
+  for (int i = 0; i < static_cast<int>(retained_suffix.size()); ++i) {
+    EXPECT_EQ(ir->locate(retained_suffix[i]), branch_position + 1 + i);
+  }
+  EXPECT_FALSE(irpass::whole_kernel_cse(ir.get()));
+}
+
+INSTANTIATE_TEST_SUITE_P(LongerTrueOrFalseBranch, WholeKernelCSESuffixExhaustion, ::testing::Bool());
 
 }  // namespace quadrants::lang

@@ -274,14 +274,26 @@ class WholeKernelCSE : public BasicStmtVisitor {
         false_clause->erase_range(false_clause->statements.begin(), false_clause->statements.begin() + prefix_size);
         modifier_.insert_before(if_stmt, std::move(prefix));
       }
-      if (!true_clause->statements.empty() && !false_clause->statements.empty() &&
-          irpass::analysis::same_statements(true_clause->statements.back().get(),
-                                            false_clause->statements.back().get())) {
-        // These branch edits do not invalidate the enclosing traversal.
-        replace_uses_and_mark_users_dirty(false_clause->statements.back().get(), true_clause->statements.back().get());
-        auto common_stmt = true_clause->extract((int)true_clause->size() - 1);
-        modifier_.insert_after(if_stmt, std::move(common_stmt));
-        false_clause->erase((int)false_clause->size() - 1);
+      // Discover the suffix backward, then move it forward to preserve execution order.
+      std::size_t suffix_size = 0;
+      while (suffix_size < true_clause->size() && suffix_size < false_clause->size()) {
+        auto *true_stmt = true_clause->statements[true_clause->size() - suffix_size - 1].get();
+        auto *false_stmt = false_clause->statements[false_clause->size() - suffix_size - 1].get();
+        if (!irpass::analysis::same_statements(true_stmt, false_stmt)) {
+          break;
+        }
+        replace_uses_and_mark_users_dirty(false_stmt, true_stmt);
+        ++suffix_size;
+      }
+      if (suffix_size != 0) {
+        VecStatement suffix;
+        auto true_begin = true_clause->statements.end() - suffix_size;
+        for (auto it = true_begin; it != true_clause->statements.end(); ++it) {
+          suffix.push_back(std::move(*it));
+        }
+        true_clause->statements.erase(true_begin, true_clause->statements.end());
+        false_clause->erase_range(false_clause->statements.end() - suffix_size, false_clause->statements.end());
+        modifier_.insert_after(if_stmt, std::move(suffix));
       }
     }
   }
