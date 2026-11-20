@@ -41,7 +41,7 @@ class BenchmarkLifecycleTests(unittest.TestCase):
         self.assertIsNone(benchmarks.select_baseline(self.manifest, [candidate], history, "candidate"))
 
     def test_merge_requires_head_and_tree_match(self):
-        pull = dict(merged=True, head=dict(sha="head"), merge_commit_sha="landed")
+        pull = dict(merged=True, head=dict(sha="head"), base=dict(ref="main"), merge_commit_sha="landed")
         with patch.object(benchmarks, "github", side_effect=[pull, dict(tree=dict(sha="tree"))]):
             self.assertEqual(benchmarks.promote(self.manifest), "landed")
         with patch.object(benchmarks, "github", side_effect=[pull, dict(tree=dict(sha="different"))]):
@@ -49,6 +49,8 @@ class BenchmarkLifecycleTests(unittest.TestCase):
         with patch.object(benchmarks, "github", return_value=dict(pull, head=dict(sha="superseded"))):
             self.assertIsNone(benchmarks.promote(self.manifest))
         with patch.object(benchmarks, "github", return_value=dict(pull, merged=False)):
+            self.assertIsNone(benchmarks.promote(self.manifest))
+        with patch.object(benchmarks, "github", return_value=dict(pull, base=dict(ref="stack"))):
             self.assertIsNone(benchmarks.promote(self.manifest))
 
     def test_activation_rejects_stale_request_and_is_idempotent(self):

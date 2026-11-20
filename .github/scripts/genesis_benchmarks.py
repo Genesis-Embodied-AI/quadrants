@@ -119,13 +119,11 @@ def prepare(directory, event, run_id, attempt):
             pulls = [
                 pull
                 for pull in pulls
-                if pull["head"]["sha"] == wheel_run["head_sha"]
-                and pull["base"]["ref"] == "main"
-                and pull["base"]["repo"]["full_name"] == REPOSITORY
+                if pull["head"]["sha"] == wheel_run["head_sha"] and pull["base"]["repo"]["full_name"] == REPOSITORY
             ]
             pulls.sort(key=lambda pull: pull["state"] != "open")
             if not pulls or (pulls[0]["state"] != "open" and not pulls[0]["merged_at"]):
-                raise ValueError("The wheel must belong to an open or merged PR targeting main.")
+                raise ValueError("The wheel must belong to an open or merged PR in Quadrants.")
             manifest = {**active, "pr": pulls[0]["number"], "main_cutoff": main_sha, "bootstrap": False}
         else:
             requested = event["inputs"]["genesis_ref"]
@@ -230,7 +228,7 @@ def promote(manifest):
     if manifest["bootstrap"]:
         return manifest["baseline_sha"]
     pull = github(f"repos/{REPOSITORY}/pulls/{manifest['pr']}")
-    if not pull["merged"] or pull["head"]["sha"] != manifest["head_sha"]:
+    if not pull["merged"] or pull["base"]["ref"] != "main" or pull["head"]["sha"] != manifest["head_sha"]:
         return None
     landed = github(f"repos/{REPOSITORY}/git/commits/{pull['merge_commit_sha']}")
     if landed["tree"]["sha"] != manifest["wheel"]["tree"]:
