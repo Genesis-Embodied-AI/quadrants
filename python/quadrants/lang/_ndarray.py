@@ -53,6 +53,18 @@ def _is_identity_layout(layout):
     return layout is None or layout == tuple(range(len(layout)))
 
 
+def _sync_torch_stream(torch_view, src=None):
+    """Synchronize the relevant PyTorch stream after a direct tensor copy so subsequent
+    Quadrants kernels observe the updated bytes regardless of active stream."""
+    import torch  # pylint: disable=C0415
+
+    if torch_view.is_cuda:
+        torch.cuda.current_stream(torch_view.device).synchronize()
+    if src is not None and isinstance(src, torch.Tensor) and src.is_cuda and src.device != torch_view.device:
+        torch.cuda.current_stream(src.device).synchronize()
+    mps_sync_if_metal()
+
+
 class Ndarray:
     """Quadrants ndarray class.
 
@@ -294,7 +306,7 @@ class Ndarray:
                         end = min(offset + chunk_size, flat_dst.numel())
                         flat_dst[offset:end].copy_(flat_src[offset:end])
                 impl.get_runtime().sync()
-                mps_sync_if_metal()
+                _sync_torch_stream(torch_view)
                 return
             except Exception:
                 pass
@@ -362,7 +374,7 @@ class Ndarray:
                         end = min(offset + chunk_size, flat_dst.numel())
                         flat_dst[offset:end].copy_(flat_src[offset:end])
                 impl.get_runtime().sync()
-                mps_sync_if_metal()
+                _sync_torch_stream(torch_view, contig)
                 return
             except Exception:
                 pass
@@ -617,7 +629,7 @@ class ScalarNdarray(Ndarray):
                         end = min(offset + chunk_size, flat_dst.numel())
                         flat_dst[offset:end].copy_(flat_src[offset:end])
                 impl.get_runtime().sync()
-                mps_sync_if_metal()
+                _sync_torch_stream(torch_view, contig)
                 return
             except Exception:
                 pass
