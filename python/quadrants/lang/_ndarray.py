@@ -272,6 +272,33 @@ class Ndarray:
         if not arr.flags.c_contiguous:
             arr = np.ascontiguousarray(arr)
 
+        torch_view = None
+        to_torch_fn = getattr(self, "to_torch", None)
+        if to_torch_fn is not None:
+            try:
+                torch_view = to_torch_fn(copy=False)
+            except Exception:
+                torch_view = None
+
+        if torch_view is not None:
+            try:
+                import torch  # pylint: disable=C0415
+
+                flat_dst = torch_view.view(-1)
+                flat_src = torch.from_numpy(arr).view(-1)
+                chunk_size = 16 * 1024 * 1024
+                if flat_dst.numel() <= chunk_size:
+                    flat_dst.copy_(flat_src)
+                else:
+                    for offset in range(0, flat_dst.numel(), chunk_size):
+                        end = min(offset + chunk_size, flat_dst.numel())
+                        flat_dst[offset:end].copy_(flat_src[offset:end])
+                impl.get_runtime().sync()
+                mps_sync_if_metal()
+                return
+            except Exception:
+                pass
+
         from quadrants._kernels import (  # pylint: disable=C0415
             ext_arr_to_ndarray,
             ext_arr_to_ndarray_matrix,
@@ -314,6 +341,32 @@ class Ndarray:
         canonical_shape = self._total_canonical_shape()
         if canonical_shape != tuple(contig.shape):
             raise ValueError(f"Mismatch shape: {canonical_shape} expected, but {tuple(contig.shape)} provided")
+
+        torch_view = None
+        to_torch_fn = getattr(self, "to_torch", None)
+        if to_torch_fn is not None:
+            try:
+                torch_view = to_torch_fn(copy=False)
+            except Exception:
+                torch_view = None
+
+        if torch_view is not None:
+            try:
+                flat_dst = torch_view.view(-1)
+                flat_src = contig.view(-1)
+                chunk_size = 16 * 1024 * 1024
+                if flat_dst.numel() <= chunk_size:
+                    flat_dst.copy_(flat_src)
+                else:
+                    for offset in range(0, flat_dst.numel(), chunk_size):
+                        end = min(offset + chunk_size, flat_dst.numel())
+                        flat_dst[offset:end].copy_(flat_src[offset:end])
+                impl.get_runtime().sync()
+                mps_sync_if_metal()
+                return
+            except Exception:
+                pass
+
         from quadrants._kernels import (  # pylint: disable=C0415
             ext_arr_to_ndarray_matrix,  # pylint: disable=C0415
         )
@@ -543,6 +596,32 @@ class ScalarNdarray(Ndarray):
         canonical_shape = tuple(self.shape)
         if canonical_shape != tuple(contig.shape):
             raise ValueError(f"Mismatch shape: {canonical_shape} expected, but {tuple(contig.shape)} provided")
+
+        torch_view = None
+        to_torch_fn = getattr(self, "to_torch", None)
+        if to_torch_fn is not None:
+            try:
+                torch_view = to_torch_fn(copy=False)
+            except Exception:
+                torch_view = None
+
+        if torch_view is not None:
+            try:
+                flat_dst = torch_view.view(-1)
+                flat_src = contig.view(-1)
+                chunk_size = 16 * 1024 * 1024
+                if flat_dst.numel() <= chunk_size:
+                    flat_dst.copy_(flat_src)
+                else:
+                    for offset in range(0, flat_dst.numel(), chunk_size):
+                        end = min(offset + chunk_size, flat_dst.numel())
+                        flat_dst[offset:end].copy_(flat_src[offset:end])
+                impl.get_runtime().sync()
+                mps_sync_if_metal()
+                return
+            except Exception:
+                pass
+
         from quadrants._kernels import ext_arr_to_ndarray  # pylint: disable=C0415
 
         ext_arr_to_ndarray(contig, self)

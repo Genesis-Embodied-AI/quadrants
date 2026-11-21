@@ -1012,7 +1012,6 @@ def test_pass_ndarray_to_func():
 
 @test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_pass_ndarray_to_real_func():
-
     @qd.real_func
     def bar(weight: qd.types.NDArray[qd.f32, 3]) -> qd.f32:
         return weight[1, 1, 1]
@@ -1112,7 +1111,6 @@ def test_ndarray_arg_builtin_float_type():
 
 @test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_real_func_vector_ndarray_arg():
-
     @qd.real_func
     def foo(x: qd.types.NDArray[vec3, 1]) -> vec3:
         return x[0]
@@ -1214,3 +1212,24 @@ def test_matrix_ndarray_to_numpy_no_dtype_unchanged():
     m = qd.Matrix.ndarray(2, 2, qd.f32, shape=(3,))
     arr = m.to_numpy()
     assert arr.dtype == np.float32
+
+
+@test_utils.test(arch=supported_archs_quadrants_ndarray)
+def test_ndarray_from_numpy_large_and_chunked():
+    # Issue #1100: ensure from_numpy transfers correctly and handles chunking
+    N = 100_000
+    arr = qd.ndarray(qd.i32, shape=(N,))
+    data = np.arange(N, dtype=np.int32)
+    arr.from_numpy(data)
+    assert np.array_equal(arr.to_numpy(), data)
+
+    # Test type conversion during copy
+    arr_f = qd.ndarray(qd.f32, shape=(N,))
+    arr_f.from_numpy(data)
+    assert np.allclose(arr_f.to_numpy(), data.astype(np.float32))
+
+    # Test vector ndarray
+    vec = qd.Vector.ndarray(3, qd.f32, shape=(1000,))
+    vec_data = np.ones((1000, 3), dtype=np.float32) * 5.0
+    vec.from_numpy(vec_data)
+    assert np.allclose(vec.to_numpy(), vec_data)
