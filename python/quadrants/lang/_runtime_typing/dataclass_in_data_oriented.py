@@ -5,7 +5,7 @@ from typing import Any
 from quadrants import _warnings
 from quadrants.lang._runtime_typing.runtime_dataclass import (
     RuntimeDataclassSchema,
-    cached_infer_dataclass_type,
+    cached_infer_dataclass_schema,
 )
 from quadrants.lang._weak_identity_cache import WeakIdentityCache
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
@@ -81,7 +81,7 @@ def collect_dataclass_schemas_in_data_oriented_args(
             outermost_dataclass = get_member_at_path(data_oriented_obj, path)
             if not hasattr(type(outermost_dataclass), "__dataclass_fields__"):
                 raise TypeError("A data-oriented dataclass member must remain a dataclass between kernel calls.")
-            schema = cached_infer_dataclass_type(outermost_dataclass, ".".join((arg_metas[index].name, *path)))
+            schema = cached_infer_dataclass_schema(outermost_dataclass, ".".join((arg_metas[index].name, *path)))
             launch_arg_schemas.append((index, path, schema))
     return launch_arg_schemas
 

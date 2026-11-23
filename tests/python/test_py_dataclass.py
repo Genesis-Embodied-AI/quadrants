@@ -4770,7 +4770,7 @@ def test_offline_dataclass_repr_does_not_modify_instance() -> None:
 
     from quadrants.lang._fast_caching.args_hasher import dataclass_to_repr
     from quadrants.lang._runtime_typing.runtime_dataclass import (
-        cached_infer_dataclass_type,
+        cached_infer_dataclass_schema,
     )
 
     @dataclass(frozen=True)
@@ -4783,7 +4783,7 @@ def test_offline_dataclass_repr_does_not_modify_instance() -> None:
 
     for config in (PlainCfg(a=1), FinalCfg(x=1)):
         original_members = vars(config).copy()
-        schema = cached_infer_dataclass_type(config, "config")
+        schema = cached_infer_dataclass_schema(config, "config")
         assert isinstance(dataclass_to_repr(False, (), config, schema), str)
         assert vars(config) == original_members
 
@@ -4801,7 +4801,7 @@ def test_final_str_field_does_not_disable_offline_fastcache():
 
     from quadrants.lang._fast_caching.args_hasher import dataclass_to_repr
     from quadrants.lang._runtime_typing.runtime_dataclass import (
-        cached_infer_dataclass_type,
+        cached_infer_dataclass_schema,
     )
 
     @dataclass(frozen=True)
@@ -4810,7 +4810,7 @@ def test_final_str_field_does_not_disable_offline_fastcache():
         scale: int
 
     r_a, r_a2, r_b = [
-        dataclass_to_repr(False, (), config, cached_infer_dataclass_type(config, "config"))
+        dataclass_to_repr(False, (), config, cached_infer_dataclass_schema(config, "config"))
         for config in (Cfg(name="a", scale=1), Cfg(name="a", scale=1), Cfg(name="b", scale=1))
     ]
     assert isinstance(r_a, str), "a Final[str] field must not disable the offline fastcache"
@@ -4829,7 +4829,7 @@ def test_subclass_extra_field_offline_fastcache_uses_runtime_schema() -> None:
     )
     from quadrants.lang._name_utils import create_flat_name
     from quadrants.lang._runtime_typing.runtime_dataclass import (
-        cached_infer_dataclass_type,
+        cached_infer_dataclass_schema,
     )
 
     @dataclass(frozen=True)
@@ -4841,11 +4841,11 @@ def test_subclass_extra_field_offline_fastcache_uses_runtime_schema() -> None:
         name: list
 
     base = Base(scale=1)
-    base_repr = dataclass_to_repr(False, (), base, cached_infer_dataclass_type(base, "config"))
+    base_repr = dataclass_to_repr(False, (), base, cached_infer_dataclass_schema(base, "config"))
     assert isinstance(base_repr, str) and "scale" in base_repr
 
     config = Sub(scale=1, name=["a"])
-    schema = cached_infer_dataclass_type(config, "config")
+    schema = cached_infer_dataclass_schema(config, "config")
     assert "name" in schema.__dataclass_fields__
     assert dataclass_to_repr(False, (), config, schema) is _FAIL_FASTCACHE
     used_fields = {create_flat_name("config", "scale")}
@@ -4857,7 +4857,7 @@ def test_subclass_extra_field_offline_fastcache_uses_runtime_schema() -> None:
             False,
             (),
             config2,
-            cached_infer_dataclass_type(config2, "config"),
+            cached_infer_dataclass_schema(config2, "config"),
             pruning_paths=used_fields,
             parent_flat="config",
         )

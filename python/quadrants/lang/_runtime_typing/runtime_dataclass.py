@@ -108,7 +108,7 @@ def infer_member_type(
     if isinstance(py_obj, Tensor):
         py_obj = py_obj._unwrap()
     if hasattr(type(py_obj), "__dataclass_fields__"):
-        return cached_infer_dataclass_type(
+        return cached_infer_dataclass_schema(
             py_obj, path, ancestor_ids, non_frozen_ancestor_path, final_value_key_by_value_id
         )
     if is_data_oriented(py_obj):
@@ -162,7 +162,7 @@ def infer_member_type(
     )
 
 
-def cached_infer_dataclass_type(
+def cached_infer_dataclass_schema(
     dataclass_instance: DataclassInstance,
     path: str,
     ancestor_ids: frozenset[int] = frozenset(),
@@ -307,7 +307,7 @@ def infer_kernel_dataclass_arg_types(
     for arg_meta, py_obj in zip(arg_metas, py_objs):
         if hasattr(type(py_obj), "__dataclass_fields__"):
             arg_meta = ArgMetadata(
-                cached_infer_dataclass_type(
+                cached_infer_dataclass_schema(
                     py_obj, arg_meta.name, final_value_key_by_value_id=final_value_key_by_value_id
                 ),
                 arg_meta.name,
@@ -394,7 +394,7 @@ def dataclass_call_arguments(
         if isinstance(py_obj, type) and hasattr(py_obj, "_qd_runtime_origin"):
             schema = py_obj
         elif hasattr(type(py_obj), "__dataclass_fields__"):
-            schema = cached_infer_dataclass_type(cast(DataclassInstance, py_obj), meta.name)
+            schema = cached_infer_dataclass_schema(cast(DataclassInstance, py_obj), meta.name)
         elif is_dataclass_annotation(meta.annotation):
             raise QuadrantsRuntimeTypeError(
                 f"Argument {meta.name!r} requires a Python dataclass instance, got {type(py_obj).__name__}"

@@ -7,7 +7,9 @@ import pytest
 import quadrants as qd
 from quadrants.lang._fast_caching import FIELD_METADATA_CACHE_VALUE, args_hasher
 from quadrants.lang._fast_caching.args_hasher import FastcacheSkip
-from quadrants.lang._runtime_typing.runtime_dataclass import cached_infer_dataclass_type
+from quadrants.lang._runtime_typing.runtime_dataclass import (
+    cached_infer_dataclass_schema,
+)
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import has_pytorch
 
@@ -19,7 +21,7 @@ if has_pytorch():
 
 def _hash_dataclass(value: object) -> str | FastcacheSkip:
     """Supply inferred argument metadata, as kernel dispatch does before hashing."""
-    meta = ArgMetadata(cached_infer_dataclass_type(value, "state"), "state")
+    meta = ArgMetadata(cached_infer_dataclass_schema(value, "state"), "state")
     return args_hasher.hash_args(False, [value], [meta])
 
 
@@ -475,7 +477,7 @@ def test_args_hasher_frozen_dataclass_failure_does_not_poison_narrower_walk() ->
         y: qd.types.NDArray[qd.i32, 1]  # cacheable ndarray
 
     state = State(x=qd.field(qd.i32, shape=(4,)), y=qd.ndarray(qd.i32, (4,)))
-    arg_meta = ArgMetadata(name="state", annotation=cached_infer_dataclass_type(state, "state"))
+    arg_meta = ArgMetadata(name="state", annotation=cached_infer_dataclass_schema(state, "state"))
 
     # Kernel A: pruning set includes both fields; walking hits the qd.field and fails.
     paths_a = {"__qd_state__qd_x", "__qd_state__qd_y"}

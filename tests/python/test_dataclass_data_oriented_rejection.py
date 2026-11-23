@@ -4,7 +4,9 @@ import pytest
 
 import quadrants as qd
 from quadrants.lang._fast_caching.args_hasher import _FAIL_FASTCACHE, dataclass_to_repr
-from quadrants.lang._runtime_typing.runtime_dataclass import cached_infer_dataclass_type
+from quadrants.lang._runtime_typing.runtime_dataclass import (
+    cached_infer_dataclass_schema,
+)
 
 from tests.helpers import test_utils
 
@@ -61,7 +63,7 @@ def test_data_oriented_dataclass_member_disables_artifact_lookup() -> None:
         inner: qd.Template
 
     state = State(Inner())
-    schema = cached_infer_dataclass_type(state, "state")
+    schema = cached_infer_dataclass_schema(state, "state")
     assert dataclass_to_repr(False, ("0",), state, schema) is _FAIL_FASTCACHE
 
 
