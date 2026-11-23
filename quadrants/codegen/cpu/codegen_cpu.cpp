@@ -1,3 +1,4 @@
+#include "quadrants/util/fast_math_experiment.h"
 #include "quadrants/codegen/cpu/codegen_cpu.h"
 
 #include "quadrants/runtime/program_impls/llvm/llvm_program.h"
@@ -244,7 +245,7 @@ void KernelCodeGenCPU::optimize_module(llvm::Module *module) {
 
   llvm::TargetOptions options;
   if (compile_config.fast_math) {
-    options.AllowFPOpFusion = llvm::FPOpFusion::Fast;
+    options.AllowFPOpFusion = experiment_disable_contraction() ? llvm::FPOpFusion::Strict : llvm::FPOpFusion::Fast;
     options.NoInfsFPMath = 1;
     options.NoNaNsFPMath = 1;
   } else {

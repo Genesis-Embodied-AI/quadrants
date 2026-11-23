@@ -1,3 +1,4 @@
+#include "quadrants/util/fast_math_experiment.h"
 #include "quadrants/runtime/amdgpu/jit_amdgpu.h"
 #include "quadrants/runtime/llvm/amdgpu_libdevice_files.h"
 #include "quadrants/runtime/amdgpu/runtime_hsaco_cache_key.h"
@@ -73,7 +74,7 @@ std::string JITSessionAMDGPU::compile_module_to_hsaco(std::unique_ptr<llvm::Modu
   llvm::TargetOptions options;
   options.MCOptions.AsmVerbose = false;
   if (this->config_.fast_math) {
-    options.AllowFPOpFusion = FPOpFusion::Fast;
+    options.AllowFPOpFusion = experiment_disable_contraction() ? FPOpFusion::Strict : FPOpFusion::Fast;
     // UnsafeFPMath was removed in LLVM 22; set the individual flags it implied
     options.NoInfsFPMath = 1;
     options.NoNaNsFPMath = 1;

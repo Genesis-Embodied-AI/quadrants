@@ -35,6 +35,35 @@ Whether to run the control-flow-graph optimization (an internal compile-time opt
 
 Whether to enable relaxed floating-point optimizations (fusing multiply-add operations, and dropping NaN / infinity / signed-zero guarantees). Default `True`. Disable when investigating numerical anomalies or running deterministic-tolerance tests.
 
+#### Experimental reassociation controls
+
+Fast math permits regrouping floating-point expressions. The same function can therefore produce different last bits
+when inlined into different kernels, even with identical inputs.
+
+This draft implementation provides two diagnostic environment variables, both disabled by default:
+
+- `QD_EXPERIMENT_NO_REASSOC=1` disables LLVM reassociation and Quadrants floating-point expression regrouping while
+  retaining the other fast-math optimizations, including implicit fused multiply-add operations.
+- `QD_EXPERIMENT_NO_CONTRACT=1` additionally allows testing with implicit multiply-add contraction disabled in the LLVM
+  CPU, CUDA, and AMDGPU targets. Explicit fused-multiply-add intrinsics are unaffected. AMDGPU has not been validated.
+
+These are experimental controls, not `qd.init` keyword arguments or a supported public API. Set them before initialization
+and use a fresh process for each configuration. Both compilation caches must be disabled because these controls are not
+included in cache keys:
+
+```python
+import os
+
+os.environ["QD_EXPERIMENT_NO_REASSOC"] = "1"
+
+import quadrants as qd
+
+qd.init(arch=qd.cpu, fast_math=True, offline_cache=False, src_ll_cache=False)
+```
+
+Leave `QD_EXPERIMENT_NO_CONTRACT` unset or set it to `0` to retain contraction. Neither control establishes a general
+bitwise-reproducibility guarantee across kernels, backends, or compiler versions.
+
 ### `num_compile_threads`
 
 Number of host threads used to compile a single kernel's internal tasks in parallel. Default `4`. When Quadrants compiles a kernel it first splits it into several tasks (roughly one per parallel loop) and hands them to a pool of this many threads, so a kernel that splits into many tasks compiles faster on a machine with idle cores. (Distinct kernels are still each compiled lazily the first time they run; this option speeds up the compilation of one such kernel, not scheduling across kernels.) Lower it, or set `1`, on memory-constrained systems where many concurrent compilations would thrash memory. Only the CPU, CUDA, and AMDGPU backends use it.

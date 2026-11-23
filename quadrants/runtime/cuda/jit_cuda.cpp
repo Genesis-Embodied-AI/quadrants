@@ -1,3 +1,4 @@
+#include "quadrants/util/fast_math_experiment.h"
 #include <chrono>
 #include <random>
 
@@ -247,7 +248,7 @@ std::string JITSessionCUDA::compile_module_to_ptx(std::unique_ptr<llvm::Module> 
 
   TargetOptions options;
   if (this->config_.fast_math) {
-    options.AllowFPOpFusion = FPOpFusion::Fast;
+    options.AllowFPOpFusion = experiment_disable_contraction() ? FPOpFusion::Strict : FPOpFusion::Fast;
     // UnsafeFPMath was removed in LLVM 22; set the individual flags it implied
     options.NoInfsFPMath = 1;
     options.NoNaNsFPMath = 1;
