@@ -338,7 +338,7 @@
 <span class="kn">import</span><span class="w"> </span><span class="nn">traceback</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">enum</span><span class="w"> </span><span class="kn">import</span> <span class="n">Enum</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">textwrap</span><span class="w"> </span><span class="kn">import</span> <span class="n">TextWrapper</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">NamedTuple</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">NamedTuple</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib.core.quadrants_python</span><span class="w"> </span><span class="kn">import</span> <span class="n">ASTBuilder</span>
@@ -676,7 +676,7 @@
 
 <div class="viewcode-block" id="KernelCompilePassContext.struct_ndarray_launch_info">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext.struct_ndarray_launch_info">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">struct_ndarray_launch_info</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">struct_ndarray_launch_info</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]]]</span> <span class="o">=</span> <span class="p">[]</span></div>
 
         <span class="c1"># Shared identity-based lookup for dataclass members and data-oriented runtime scalars.</span>
 <div class="viewcode-block" id="KernelCompilePassContext.binding_by_member">
@@ -694,7 +694,12 @@
         <span class="c1"># (arg_id, template_arg_idx, attr_chain, kind) entries locate live values at launch; kind is 'f', 'i', or 'u'.</span>
 <div class="viewcode-block" id="KernelCompilePassContext.runtime_scalar_launch_infos">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext.runtime_scalar_launch_infos">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">runtime_scalar_launch_infos</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">runtime_scalar_launch_infos</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"f"</span><span class="p">,</span> <span class="s2">"i"</span><span class="p">,</span> <span class="s2">"u"</span><span class="p">]]]</span> <span class="o">=</span> <span class="p">[]</span></div>
+
+        <span class="c1"># Dataclass roots: (argument index, attribute path, flat name, declared type).</span>
+<div class="viewcode-block" id="KernelCompilePassContext.launch_infos_for_root_dataclasses_in_data_oriented">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.KernelCompilePassContext.launch_infos_for_root_dataclasses_in_data_oriented">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">launch_infos_for_root_dataclasses_in_data_oriented</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">type</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span></div>
 
         <span class="c1"># Carry caller loop depth into fresh qd.func contexts so backward-mode dynamic-range checks see outer loops.</span>
         <span class="c1"># Saved and restored around each call.</span>
@@ -1162,7 +1167,7 @@
     <span class="k">if</span> <span class="n">binding</span><span class="o">.</span><span class="n">reject_in_static_scope</span> <span class="ow">and</span> <span class="n">func_ctx</span><span class="o">.</span><span class="n">is_in_static_scope</span><span class="p">():</span>
         <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
             <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">ast</span><span class="o">.</span><span class="n">unparse</span><span class="p">(</span><span class="n">node</span><span class="p">)</span><span class="si">!r}</span><span class="s2"> is a runtime kernel argument and cannot be used inside qd.static(). "</span>
-            <span class="s2">"Use template_primitives=True for compile-time data-oriented scalars."</span>
+            <span class="s2">"Use Final[T] or qd.Template for dataclass constants, or template_primitives=True for data-oriented scalars."</span>
         <span class="p">)</span>
     <span class="n">pruning</span> <span class="o">=</span> <span class="n">func_ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="o">.</span><span class="n">pruning</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">pruning</span><span class="o">.</span><span class="n">enforcing</span><span class="p">:</span>
