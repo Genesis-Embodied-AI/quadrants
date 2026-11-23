@@ -72,10 +72,11 @@ def collect_dataclass_schemas_in_data_oriented_args(
     # Schemas for this launch, paired with argument indices and member paths.
     launch_arg_schemas: list[tuple[int, tuple[str, ...], type[RuntimeDataclassSchema]]] = []
     for index in template_slots:
-        data_oriented_obj = args[index]
-        if is_dataclass_instance(data_oriented_obj) or not is_data_oriented(data_oriented_obj):
+        py_arg = args[index]
+        if not is_data_oriented(py_arg):
             continue
 
+        data_oriented_obj = py_arg
         for path in _cached_collect_dataclass_paths_in_data_oriented(data_oriented_obj):
             child = get_member_at_path(data_oriented_obj, path)
             if not hasattr(type(child), "__dataclass_fields__"):
