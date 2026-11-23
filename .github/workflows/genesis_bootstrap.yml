@@ -61,7 +61,6 @@ jobs:
       quadrants_artifact_id: ${{ fromJSON(needs.prepare.outputs.wheel_artifact) }}
       benchmark_sha: ${{ needs.prepare.outputs.genesis_sha }}
       benchmark_image_ver: ${{ needs.prepare.outputs.image_version }}
-      benchmark_only: true
     secrets: inherit
 
   activate:
