@@ -36,7 +36,6 @@ jobs:
       pull-requests: read
     outputs:
       genesis_sha: ${{ steps.prepare.outputs.genesis_sha }}
-      image_version: ${{ steps.prepare.outputs.image_version }}
       wheel_run: ${{ steps.prepare.outputs.wheel_run }}
       wheel_artifact: ${{ steps.prepare.outputs.wheel_artifact }}
     steps:
@@ -82,7 +81,6 @@ jobs:
       quadrants_run_id: ${{ fromJSON(needs.prepare.outputs.wheel_run) }}
       quadrants_artifact_id: ${{ fromJSON(needs.prepare.outputs.wheel_artifact) }}
       benchmark_sha: ${{ needs.prepare.outputs.genesis_sha }}
-      benchmark_image_ver: ${{ needs.prepare.outputs.image_version }}
       # Only the minimal set of tests Genesis requires to pass on any environment, in the dynamic array mode alone:
       # the full matrix belongs to the CI of Genesis.
       unit_tests_markexpr: required and not slow

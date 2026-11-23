@@ -182,7 +182,6 @@ def prepare(directory, event, run_id, attempt):
     (directory / "manifest.json").write_text(json.dumps(manifest, sort_keys=True) + "\n")
     outputs = dict(
         genesis_sha=manifest["genesis_sha"],
-        image_version=manifest["image_version"],
         wheel_run=manifest["wheel"]["run_id"],
         wheel_artifact=manifest["wheel"]["artifact_id"],
         snapshot_exists=str(bool(artifacts and any(a["name"] == "benchmark-input" for a in artifacts))).lower(),
