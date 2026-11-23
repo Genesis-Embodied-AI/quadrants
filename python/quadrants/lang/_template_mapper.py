@@ -4,7 +4,7 @@ from weakref import ReferenceType, WeakKeyDictionary
 
 from quadrants.lang import impl
 from quadrants.lang._runtime_typing.dataclass_in_data_oriented import (
-    infer_nested_dataclass_schemas,
+    collect_dataclass_schemas_in_data_oriented_args,
 )
 from quadrants.lang._runtime_typing.runtime_dataclass import (
     prepare_kernel_dataclass_args_for_mapper,
@@ -178,7 +178,9 @@ class TemplateMapper:
                 return self._mapping_cache[args_hash]
 
         # Only calls without nested dataclasses enter the identity cache. Its hits can skip schema discovery.
-        launch_arg_schemas = infer_nested_dataclass_schemas(args, self.arguments, self.template_slot_locations)
+        launch_arg_schemas = collect_dataclass_schemas_in_data_oriented_args(
+            args, self.arguments, self.template_slot_locations
+        )
         if runtime_kernel is not None:
             runtime_kernel._launch_arg_schemas = launch_arg_schemas
             runtime_kernel._runtime_has_deferred |= any(

@@ -499,7 +499,7 @@ def test_args_hasher_frozen_dataclass_failure_does_not_poison_narrower_walk() ->
 def test_discovered_schemas_follow_argument_indices_and_member_paths() -> None:
     """Forward each schema through owner recursion without confusing equal paths in different arguments."""
     from quadrants.lang._runtime_typing.dataclass_in_data_oriented import (
-        infer_nested_dataclass_schemas,
+        collect_dataclass_schemas_in_data_oriented_args,
     )
 
     @dataclasses.dataclass
@@ -513,14 +513,14 @@ def test_discovered_schemas_follow_argument_indices_and_member_paths() -> None:
 
     owners = (Owner(Owner(State(3))), Owner(Owner(State(2.5))))
     metas = [ArgMetadata(qd.Template, "first"), ArgMetadata(qd.Template, "second")]
-    schemas = infer_nested_dataclass_schemas(owners, metas, [0, 1])
+    schemas = collect_dataclass_schemas_in_data_oriented_args(owners, metas, [0, 1])
     assert isinstance(args_hasher.hash_args(False, owners, metas), FastcacheSkip)
     expected = args_hasher.hash_args(False, owners, metas, launch_arg_schemas=schemas)
     assert isinstance(expected, str)
     assert args_hasher.hash_args(False, owners, metas, launch_arg_schemas=schemas) == expected
 
     owners[0].child.child = State(1.5)
-    replacement_schemas = infer_nested_dataclass_schemas(owners, metas, [0, 1])
+    replacement_schemas = collect_dataclass_schemas_in_data_oriented_args(owners, metas, [0, 1])
     assert args_hasher.hash_args(False, owners, metas, launch_arg_schemas=replacement_schemas) != expected
 
 

@@ -7,7 +7,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang._fast_caching import args_hasher
 from quadrants.lang._runtime_typing.dataclass_in_data_oriented import (
-    infer_nested_dataclass_schemas,
+    collect_dataclass_schemas_in_data_oriented_args,
 )
 from quadrants.lang.kernel_arguments import ArgMetadata
 
@@ -33,7 +33,7 @@ def test_nested_dataclass_hash_ignores_declared_child_type() -> None:
 
     owners = (Owner(),)
     metas = [ArgMetadata(qd.Template, "owner")]
-    launch_arg_schemas = infer_nested_dataclass_schemas(owners, metas, [0])
+    launch_arg_schemas = collect_dataclass_schemas_in_data_oriented_args(owners, metas, [0])
     result = args_hasher.hash_args(False, owners, metas, launch_arg_schemas=launch_arg_schemas)
     assert isinstance(result, str)
 

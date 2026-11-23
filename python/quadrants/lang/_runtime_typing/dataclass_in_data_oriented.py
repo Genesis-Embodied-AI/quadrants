@@ -65,10 +65,10 @@ def _cached_collect_dataclass_paths_in_data_oriented(data_oriented_obj: DataOrie
     return dataclass_paths
 
 
-def infer_nested_dataclass_schemas(
+def collect_dataclass_schemas_in_data_oriented_args(
     args: tuple[Any, ...], arg_metas: list[ArgMetadata], template_slots: list[int]
 ) -> list[tuple[int, tuple[str, ...], type[RuntimeDataclassSchema]]]:
-    """Infer current schemas for dataclasses reached through data-oriented arguments."""
+    """Collect inferred schemas for dataclasses reached through data-oriented arguments."""
     # Schemas for this launch, paired with argument indices and member paths.
     launch_arg_schemas: list[tuple[int, tuple[str, ...], type[RuntimeDataclassSchema]]] = []
     for index in template_slots:
